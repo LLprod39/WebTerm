@@ -5,7 +5,6 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-
 CLUSTER_ID = "c-webterm"
 CLUSTER_NAME = "webterm-k8s"
 NODE_NAME = "webterm-k8s-control-plane"

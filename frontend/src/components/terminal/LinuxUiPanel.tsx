@@ -146,7 +146,8 @@ export function LinuxUiPanel({ server, active = true, onClose }: LinuxUiPanelPro
 
   useEffect(() => {
     const app = appMap[activeApp];
-    if (app?.status === "unavailable") {
+    // Skip beta/hidden apps (e.g. Overview) and unavailable hosts.
+    if (!app || app.hidden || app.status === "unavailable") {
       setActiveApp(DEFAULT_ACTIVE_APP);
     }
   }, [activeApp, appMap]);

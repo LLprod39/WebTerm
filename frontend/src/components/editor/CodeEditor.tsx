@@ -5,10 +5,10 @@
  * bracket matching, folding, indent guides, dark theme.
  */
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, highlightSpecialChars } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
-import { defaultKeymap, indentWithTab, history, historyKeymap, undo, redo } from "@codemirror/commands";
+import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
 import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput, HighlightStyle } from "@codemirror/language";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
@@ -112,10 +112,6 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
 
-  // Stable callback for dispatching undo/redo from outside
-  const handleUndo = useCallback(() => { if (viewRef.current) undo(viewRef.current); }, []);
-  const handleRedo = useCallback(() => { if (viewRef.current) redo(viewRef.current); }, []);
-
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -177,8 +173,6 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
   return (
     <div
       ref={containerRef}
-      data-undo={handleUndo}
-      data-redo={handleRedo}
       className={`h-full w-full overflow-auto ${className ?? ""}`}
     />
   );

@@ -1,26 +1,15 @@
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { ConfirmDialog } from "@/components/system/ConfirmDialog";
 
+/**
+ * Thin adapter kept for backwards compatibility. The single source of truth for
+ * confirm/destructive dialogs is `ConfirmDialog` in `@/components/system/ConfirmDialog`.
+ * Prefer importing `ConfirmDialog` / `DeleteDialog` directly in new code.
+ */
 export function ConfirmActionDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
-  onConfirm,
   destructive = true,
-  contentClassName,
+  ...rest
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -33,24 +22,11 @@ export function ConfirmActionDialog({
   contentClassName?: string;
 }) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className={cn("rounded-lg border-border/80 bg-card/95", contentClassName)}>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          <AlertDialogDescription className="leading-6">
-            {description}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction
-            className={destructive ? buttonVariants({ variant: "destructive" }) : buttonVariants()}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDialog
+      {...rest}
+      confirmLabel={confirmLabel}
+      cancelLabel={cancelLabel}
+      tone={destructive ? "destructive" : "default"}
+    />
   );
 }

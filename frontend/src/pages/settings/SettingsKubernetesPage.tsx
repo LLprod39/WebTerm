@@ -92,6 +92,16 @@ function ProductionReleaseGate({
                 KUBERNETES_OPS_READY_FOR_SIDEBAR=true
               </code>
             </div>
+            <div>
+              <div className="font-semibold text-foreground">Pilot (closed 15–20) — без full production evidence</div>
+              <code className="mt-1 block overflow-auto rounded-md bg-secondary/30 px-3 py-2 text-foreground">
+                KUBERNETES_OPS_PILOT_SIDEBAR=true{"\n"}
+                KUBERNETES_OPS_READY_FOR_SIDEBAR=true
+              </code>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                Waives only production-scope release evidence. Runtime inventory, providers, and safety checks still required.
+              </p>
+            </div>
           </div>
         </div>
       </div>

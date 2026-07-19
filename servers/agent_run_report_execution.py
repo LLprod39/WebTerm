@@ -1,4 +1,27 @@
-from servers.agent_run_report_base import *  # noqa: F401,F403
+from typing import Any
+
+from django.utils import timezone
+
+from servers.agent_dispatch import serialize_agent_dispatch
+from servers.agent_execution_state import AGENT_EXECUTION_COMMAND, AGENT_OPS_SUPERVISOR_COMMAND
+from servers.agent_run_report_base import (
+    ACTIVE_STATUSES,
+    TERMINAL_STATUSES,
+    _age_ms,
+    _agent_run_stale_seconds_setting,
+    _duration_label,
+    _json_safe,
+    _latest_dispatch,
+    _run_severity,
+    _select_agent_execution_worker,
+    _serialize_worker_row,
+    _server_names,
+    _severity_rank,
+    _status_label,
+    _text,
+)
+from servers.models import AgentRun, AgentRunDispatch, BackgroundWorkerState
+
 
 def _build_execution_state(run: AgentRun) -> dict[str, Any]:
     now = timezone.now()
@@ -71,24 +94,19 @@ def _build_execution_state(run: AgentRun) -> dict[str, Any]:
         return state
 
     if dispatch is None:
-        if agent_mode in {"full", "multi"}:
-            state.update(
-                {
-                    "status": "dispatch_missing",
-                    "severity": "warning",
-                    "title": "Нет dispatch для активного запуска",
-                    "description": "Run активен, но в очереди execution-plane нет связанной задачи для worker.",
-                    "next_action": "Остановите этот run и запустите агент заново; если повторяется, проверьте создание AgentRunDispatch.",
-                }
-            )
-            return state
         state.update(
             {
-                "status": "inline",
-                "severity": "info",
-                "title": "Mini-агент выполняется inline",
-                "description": "Для mini-агента отдельный execution-plane dispatch не создаётся.",
-                "next_action": "Дождитесь завершения inline-команд.",
+                "status": "dispatch_missing",
+                "severity": "warning",
+                "title": "Нет dispatch для активного запуска",
+                "description": (
+                    f"Run ({agent_mode or 'agent'}) активен, но в очереди execution-plane "
+                    "нет связанной задачи для worker."
+                ),
+                "next_action": (
+                    "Остановите этот run и запустите агент заново; "
+                    "если повторяется, проверьте создание AgentRunDispatch."
+                ),
             }
         )
         return state

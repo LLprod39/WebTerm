@@ -1,5 +1,5 @@
-import base64
 import asyncio
+import base64
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -12,7 +12,14 @@ from django.test import override_settings
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sAdminAction, K8sAdminRecording, K8sAdminSession, K8sAuditEvent, K8sCluster, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminSession,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sProvider,
+)
 from kubernetes_ops.routing import websocket_urlpatterns as kubernetes_websocket_urlpatterns
 from kubernetes_ops.services.provider_port_forward_tunnels import ProviderPortForwardTunnelEvent
 

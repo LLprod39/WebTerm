@@ -73,7 +73,7 @@ export function TaskNode({ task, index, onEdit }: { task: PlanTask; index: numbe
 
           {task.thought && task.status === "running" && (
             <div className="rounded-2xl border border-violet-500/20 bg-violet-500/8 px-3 py-3">
-              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[color:var(--wt-ai)]">
+              <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ai">
                 <Brain className="h-3 w-3" />
                 {t("run.thinking")}
               </div>
@@ -159,7 +159,7 @@ export function OrchestratorDecisionNode({ decision }: { decision: { action: str
 
   return (
     <div className="ml-7 rounded-lg border border-dashed border-warning/35 bg-warning/10 px-4 py-3 text-sm">
-      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[color:var(--wt-ai)]">
+      <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ai">
         <Brain className="h-3.5 w-3.5" />
         {t("run.orchestrator_decision")}
       </div>

@@ -14,6 +14,10 @@ export const dashboardColSpanClasses: Record<number, string> = {
 };
 
 export const dashboardWidgetDescriptions: Record<string, string> = {
+  attention_panel: "Триаж-панель: все проблемы платформы в одном месте с кнопками быстрого перехода.",
+  fleet_heatmap: "Карта флота: плитка на каждый сервер с загрузкой CPU/RAM/диска и статусом.",
+  agents_trend: "Тренд запусков агентов за 7 дней: успешные и сбойные по дням.",
+  my_attention: "Ваши проблемы: сбои агентов, алерты и недоступные серверы с быстрыми действиями.",
   quick_stats: "Краткая сводка с ключевыми метриками ваших серверов, активных агентов и алертов.",
   servers_health: "Состояние и загрузка CPU/RAM серверов с быстрыми ссылками на терминал.",
   quick_tools: "Панель быстрых действий для мгновенного перехода в Хаб серверов, Студию или Настройки.",
@@ -33,6 +37,8 @@ export const dashboardWidgetDescriptions: Record<string, string> = {
 };
 
 export const dashboardLimitedListWidgetIds = new Set([
+  "attention_panel",
+  "my_attention",
   "active_runs",
   "recent_runs",
   "recent_activity",
@@ -54,25 +60,29 @@ export function getDashboardWidthLabel(width: number): string {
 export function getCuratedDefaultDashboardLayout(type: DashboardType): DashboardWidgetConfig[] {
   if (type === "user") {
     return [
-      { id: "quick_stats", x: 0, y: 0, w: 12, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "servers_health", x: 0, y: 1, w: 8, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "quick_tools", x: 8, y: 1, w: 4, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "active_runs", x: 0, y: 2, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "recent_runs", x: 6, y: 2, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "user_alerts", x: 0, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "recent_activity", x: 6, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "my_attention", x: 0, y: 0, w: 12, h: 1, props: { tone: "default", limit: 6 } },
+      { id: "quick_stats", x: 0, y: 1, w: 12, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "servers_health", x: 0, y: 2, w: 8, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "quick_tools", x: 8, y: 2, w: 4, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "active_runs", x: 0, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "recent_runs", x: 6, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "recent_servers", x: 0, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "recent_activity", x: 6, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
     ];
   }
   return [
-    { id: "fleet_metrics", x: 0, y: 0, w: 12, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "hourly_activity_chart", x: 0, y: 1, w: 8, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "active_providers", x: 8, y: 1, w: 4, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "top_users", x: 0, y: 2, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "online_users", x: 6, y: 2, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "ai_cost_tokens", x: 0, y: 3, w: 8, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "active_terminals", x: 8, y: 3, w: 4, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "system_alerts_list", x: 0, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-    { id: "recent_activity", x: 6, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "attention_panel", x: 0, y: 0, w: 12, h: 1, props: { tone: "default", limit: 6 } },
+    { id: "fleet_metrics", x: 0, y: 1, w: 12, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "fleet_heatmap", x: 0, y: 2, w: 8, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "agents_trend", x: 8, y: 2, w: 4, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "hourly_activity_chart", x: 0, y: 3, w: 8, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "active_providers", x: 8, y: 3, w: 4, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "ai_cost_tokens", x: 0, y: 4, w: 8, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "active_terminals", x: 8, y: 4, w: 4, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "top_users", x: 0, y: 5, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "online_users", x: 6, y: 5, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "system_alerts_list", x: 0, y: 6, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+    { id: "recent_activity", x: 6, y: 6, w: 6, h: 1, props: { tone: "default", limit: 5 } },
   ];
 }
 

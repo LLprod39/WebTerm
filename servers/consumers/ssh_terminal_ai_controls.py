@@ -247,6 +247,65 @@ class SSHTerminalAiControlsMixin:
         if selected_mode not in ("step", "fast"):
             selected_mode = "step"
 
+        # Complex goals on Fast: ask/upgrade instead of silent short linear execute.
+        if requested_mode in ("fast", "auto", "step", "") and mode == "execute":
+            from servers.services.terminal_ai.plan_items import apply_fast_complexity_routing
+
+            fast_policy = str(
+                (self._ai_settings or {}).get("fast_complex_policy")
+                or (self._ai_settings or {}).get("complex_policy")
+                or "ask"
+            ).strip().lower()
+            routing = apply_fast_complexity_routing(
+                user_message=msg,
+                requested_mode=requested_mode if requested_mode != "auto" else selected_mode,
+                plan_obj=plan_obj,
+                commands_raw=commands_raw,
+                policy=fast_policy if fast_policy in ("ask", "upgrade", "allow") else "ask",
+            )
+            if routing.get("action") == "upgrade":
+                upgrade_text = str(routing.get("assistant_text") or "").strip()
+                if upgrade_text:
+                    self._add_to_history("assistant", upgrade_text)
+                    await self._send_ai_event(
+                        terminal_events.ai_response(
+                            mode="answer",
+                            assistant_text=upgrade_text,
+                            commands=[],
+                            chat_mode=requested_chat_mode,
+                            execution_mode="agent",
+                            requested_execution_mode=requested_mode,
+                        )
+                    )
+                async with self._ai_lock:
+                    self._ai_execution_mode = "agent"
+                    self._ai_run.start_task(
+                        self._run_ai_agent_background(
+                            user_message=msg,
+                            chat_mode=requested_chat_mode,
+                        )
+                    )
+                return
+            if routing.get("action") == "ask":
+                ask_text = str(routing.get("assistant_text") or assistant_text or "").strip()
+                self._add_to_history("assistant", ask_text or "(уточнение)")
+                await self._send_ai_event(
+                    terminal_events.ai_response(
+                        mode="ask",
+                        assistant_text=ask_text,
+                        commands=[],
+                        chat_mode=requested_chat_mode,
+                        execution_mode=selected_mode,
+                        requested_execution_mode=requested_mode,
+                    )
+                )
+                await self._send_ai_event(terminal_events.ai_status("idle"))
+                return
+            # allow: if policy forced step for complex, honor it
+            routed_mode = str(routing.get("execution_mode") or selected_mode)
+            if routed_mode in ("step", "fast"):
+                selected_mode = routed_mode
+
         async with self._ai_lock:
             self._ai_execution_mode = selected_mode
 
@@ -433,7 +492,7 @@ class SSHTerminalAiControlsMixin:
         await self._send_ai_event(
             terminal_events.ai_response(
                 assistant_text="🧹 Память текущего чата очищена.",
-                execution_mode=str(getattr(self, "_ai_execution_mode", "step")),
+                execution_mode=str(getattr(self, "_ai_execution_mode", "agent")),
             )
         )
 

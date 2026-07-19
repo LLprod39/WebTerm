@@ -8,7 +8,9 @@ import {
   updateServer,
   type FrontendServer,
 } from "@/lib/api";
+import { localize } from "@/lib/i18n";
 import { notify } from "@/lib/notify";
+import { notifyWithUndo } from "@/lib/notify-undo";
 
 import { asPayload, initialForm } from "./serverForm";
 import type { ServerForm } from "./types";
@@ -128,16 +130,43 @@ export function useServerCrudController({
 
   const confirmDeleteServer = useCallback(async () => {
     if (!serverDeleteTarget?.id) return;
-    const targetId = serverDeleteTarget.id;
-    await deleteServer(targetId);
+    const target = serverDeleteTarget;
+    const targetId = target.id;
+    // Close confirm dialog; hard delete is delayed 5s so the operator can Undo.
+    setServerDeleteTarget(null);
     if (editingServer?.id === targetId) {
       setDialogOpen(false);
       setEditingServer(null);
     }
-    setServerDeleteTarget(null);
-    onServerDeleted?.(targetId);
-    await reload();
-  }, [editingServer?.id, onServerDeleted, reload, serverDeleteTarget]);
+
+    const lang = document.documentElement.lang === "en" ? "en" : "ru";
+    notifyWithUndo({
+      lang,
+      title: localize(lang, `Удаление «${target.name}»…`, `Deleting “${target.name}”…`),
+      description: localize(lang, "Нажмите «Отменить», чтобы оставить сервер", "Click Undo to keep the server"),
+      durationMs: 5000,
+      onCommit: async () => {
+        try {
+          await deleteServer(targetId);
+          onServerDeleted?.(targetId);
+          await reload();
+          notify.success({
+            title: localize(lang, `Сервер «${target.name}» удалён`, `Server “${target.name}” deleted`),
+          });
+        } catch (error) {
+          notify.error({
+            title: t("srv.save_failed"),
+            description: error instanceof Error ? error.message : t("srv.unknown_error"),
+          });
+        }
+      },
+      onUndo: () => {
+        notify.info({
+          title: localize(lang, `«${target.name}» сохранён`, `“${target.name}” kept`),
+        });
+      },
+    });
+  }, [editingServer?.id, onServerDeleted, reload, serverDeleteTarget, t]);
 
   const testConnection = useCallback(async (server: FrontendServer) => {
     setTestingConnection(true);

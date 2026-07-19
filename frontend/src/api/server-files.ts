@@ -134,16 +134,113 @@ export async function createServerFolder(serverId: number, path: string, name: s
   });
 }
 
-export async function readServerTextFile(serverId: number, path: string) {
-  const params = new URLSearchParams({ path }).toString();
-  return apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/read/?${params}`);
+export type ServerTextFileOptions = {
+  elevate?: boolean;
+  sudoPassword?: string;
+};
+
+export class ServerFileApiError extends Error {
+  code: string;
+  status: number;
+
+  constructor(message: string, opts?: { code?: string; status?: number }) {
+    super(message);
+    this.name = "ServerFileApiError";
+    this.code = opts?.code || "error";
+    this.status = opts?.status || 500;
+  }
 }
 
-export async function writeServerTextFile(serverId: number, path: string, content: string) {
-  return apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/write/`, {
-    method: "POST",
-    body: JSON.stringify({ path, content }),
-  });
+function isPermissionRelated(code: string, message: string): boolean {
+  if (code === "permission_denied" || code === "sudo_required" || code === "sudo_failed") return true;
+  return /недостаточно прав|permission denied|sudo|пароль/i.test(message);
+}
+
+function permissionErrorCode(message: string): string {
+  if (/пароль sudo|password is required|sudo_required|требуется пароль/i.test(message)) {
+    return "sudo_required";
+  }
+  if (/неверный пароль|incorrect password|sudo_failed/i.test(message)) {
+    return "sudo_failed";
+  }
+  return "permission_denied";
+}
+
+export async function readServerTextFile(
+  serverId: number,
+  path: string,
+  options: ServerTextFileOptions = {},
+) {
+  if (options.elevate) {
+    // POST keeps sudo password out of query string / access logs.
+    try {
+      return await apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/read/`, {
+        method: "POST",
+        body: JSON.stringify({
+          path,
+          elevate: true,
+          ...(options.sudoPassword ? { sudo_password: options.sudoPassword } : {}),
+        }),
+      });
+    } catch (err) {
+      if (err instanceof Error && isPermissionRelated("", err.message)) {
+        throw new ServerFileApiError(err.message, {
+          code: permissionErrorCode(err.message),
+          status: 403,
+        });
+      }
+      throw err;
+    }
+  }
+  const params = new URLSearchParams({ path }).toString();
+  try {
+    return await apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/read/?${params}`);
+  } catch (err) {
+    if (err instanceof Error && isPermissionRelated("", err.message)) {
+      throw new ServerFileApiError(err.message, {
+        code: permissionErrorCode(err.message),
+        status: 403,
+      });
+    }
+    throw err;
+  }
+}
+
+export async function writeServerTextFile(
+  serverId: number,
+  path: string,
+  content: string,
+  options: ServerTextFileOptions = {},
+) {
+  try {
+    return await apiFetch<SftpTextFileResponse>(`/servers/api/${serverId}/files/write/`, {
+      method: "POST",
+      body: JSON.stringify({
+        path,
+        content,
+        ...(options.elevate ? { elevate: true } : {}),
+        ...(options.sudoPassword ? { sudo_password: options.sudoPassword } : {}),
+      }),
+    });
+  } catch (err) {
+    if (err instanceof Error && isPermissionRelated("", err.message)) {
+      throw new ServerFileApiError(err.message, {
+        code: permissionErrorCode(err.message),
+        status: 403,
+      });
+    }
+    throw err;
+  }
+}
+
+export function isElevatableFileError(err: unknown): err is ServerFileApiError {
+  if (err instanceof ServerFileApiError) {
+    return err.code === "permission_denied" || err.code === "sudo_required" || err.code === "sudo_failed";
+  }
+  if (err instanceof Error) {
+    return isPermissionRelated("", err.message);
+  }
+  return false;
 }
 
 export async function chmodServerFile(serverId: number, path: string, mode: string) {

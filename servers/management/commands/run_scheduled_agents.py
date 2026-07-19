@@ -23,6 +23,7 @@ from servers.worker_state import (
     stop_background_worker,
 )
 
+
 class Command(BaseCommand):
     help = "Poll and dispatch scheduled server agents."
 
@@ -101,6 +102,15 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
             cycle_started=True,
         )
+        try:
+            from app.core.ops_controls import assert_schedulers_not_paused
+
+            paused = assert_schedulers_not_paused()
+        except Exception:
+            paused = None
+        if paused:
+            self.stdout.write(self.style.WARNING(paused))
+            return {"scanned": 0, "due": 0, "launched_agents": 0, "runs_created": 0, "skipped": 1, "paused": True}
         summary = dispatch_scheduled_agents(limit=limit, agent_ids=agent_ids, user_ids=user_ids)
         heartbeat_background_worker(
             worker_kind,

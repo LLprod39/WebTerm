@@ -95,7 +95,7 @@ function AgentSteps({ events, lang }: { events: AgentEvent[]; lang: string }) {
               <span className="font-mono text-foreground/80">
                 {iter && <span className="text-muted-foreground mr-1">{iter}</span>}
                 {tool}
-                {ev.data.args && (
+                {Boolean(ev.data.args) && (
                   <span className="text-muted-foreground ml-1 font-normal">
                     {JSON.stringify(ev.data.args).slice(0, 120)}
                   </span>

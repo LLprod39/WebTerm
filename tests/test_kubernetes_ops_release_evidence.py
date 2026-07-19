@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from types import SimpleNamespace
 
 import pytest
@@ -12,9 +13,8 @@ from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VER
 from kubernetes_ops.services.release_evidence import build_kubernetes_release_evidence
 from kubernetes_ops.services.sync import KubernetesSyncResult
 
-
 PRODUCTION_RELEASE_SETTINGS = {"KUBERNETES_OPS_RELEASE_ENVIRONMENT": "production", "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF": "CHG-K8S-1", "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF": "artifact:production-bundle", "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF": "artifact:sso-proof", "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF": "artifact:provider-proof", "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF": "artifact:rbac-proof", "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF": "artifact:mcp-proof", "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF": "artifact:rollback-proof", "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF": "artifact:native-verification-proof"}
-READY_PREFLIGHT_RESULT_IDS = "django_check architecture_guard migrations_dry_run kubernetes_backend_tests readonly_rbac_validate sync_prune_safety readonly_rbac_live local_platform_evidence live_provider_smoke interactive_transport_evidence interactive_live_smoke interactive_production_controls production_action_evidence external_evidence_bundle".split()
+READY_PREFLIGHT_RESULT_IDS = ["django_check", "architecture_guard", "migrations_dry_run", "kubernetes_backend_tests", "readonly_rbac_validate", "sync_prune_safety", "readonly_rbac_live", "local_platform_evidence", "live_provider_smoke", "interactive_transport_evidence", "interactive_live_smoke", "interactive_production_controls", "production_action_evidence", "external_evidence_bundle"]
 
 
 def _grant(user: User, *features: str) -> None:
@@ -38,6 +38,20 @@ def _ready_report(ready_for_sidebar: bool) -> dict:
 
 def _ready_rbac_live(context: str = "prod-kz") -> dict:
     return {"success": True, "status": "ready", "context": context, "applied": True, "service_account": "system:serviceaccount:webterm-system:webterm-kubernetes-readonly", "allowed_count": 7, "denied_count": 7, "errors": []}
+
+
+def _ready_interactive_transport() -> dict:
+    return {
+        "success": True,
+        "status": "ready",
+        "path": "artifacts/kubernetes_ops_interactive_transport_evidence.json",
+        "schema_version": "kubernetes_ops.interactive_transport_evidence.v1",
+        "age_seconds": 60,
+        "max_age_seconds": 86400,
+        "summary": {},
+        "admin_interactive_transport": {"status": "ready"},
+        "errors": [],
+    }
 
 
 def _ready_preflight() -> dict:
@@ -166,6 +180,10 @@ def test_kubernetes_release_evidence_green_before_sidebar_flag_when_all_runtime_
     monkeypatch.setattr("kubernetes_ops.services.release_evidence.call_mcp_tool", fake_call_mcp_tool)
     monkeypatch.setattr("kubernetes_ops.services.release_evidence._readonly_rbac_live_evidence", lambda _enabled: _ready_rbac_live())
     monkeypatch.setattr("kubernetes_ops.services.release_evidence.load_kubernetes_release_preflight_artifact", lambda: _ready_preflight())
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence.load_kubernetes_interactive_transport_evidence_artifact",
+        _ready_interactive_transport,
+    )
 
     with override_settings(**PRODUCTION_RELEASE_SETTINGS):
         evidence = build_kubernetes_release_evidence(user=user)
@@ -364,6 +382,10 @@ def test_kubernetes_release_evidence_redacts_studio_mcp_content_preview(monkeypa
     monkeypatch.setattr("kubernetes_ops.services.release_evidence.call_mcp_tool", fake_call_mcp_tool)
     monkeypatch.setattr("kubernetes_ops.services.release_evidence._readonly_rbac_live_evidence", lambda _enabled: _ready_rbac_live())
     monkeypatch.setattr("kubernetes_ops.services.release_evidence.load_kubernetes_release_preflight_artifact", lambda: _ready_preflight())
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence.load_kubernetes_interactive_transport_evidence_artifact",
+        _ready_interactive_transport,
+    )
 
     with override_settings(**PRODUCTION_RELEASE_SETTINGS):
         evidence = build_kubernetes_release_evidence(user=user)

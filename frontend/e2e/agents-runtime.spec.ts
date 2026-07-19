@@ -132,10 +132,11 @@ test("opens a live agent run and sends stop from the run page", async ({ page })
 
   await expect(page).toHaveURL(/\/agents\/run\/901$/);
   await expect(page.locator("h1", { hasText: "Patch Rollout" })).toBeVisible();
-  await expect(page.getByText("Отчёт формируется")).toBeVisible();
-  await expect(page.getByText("Execution worker не принимает запуск").first()).toBeVisible();
-  await expect(page.getByText("Доставка отчёта")).toBeVisible();
-  await expect(page.getByText("Ждёт отчёт").first()).toBeVisible();
+  // Simplified report shell: one status + live summary
+  await expect(page.getByText("В работе").first()).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Итог/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Ход/ })).toBeVisible();
+  await expect(page.getByRole("tab", { name: /Материалы/ })).toBeVisible();
 
   const scrollRoot = page.locator("[data-agent-run-scroll]");
   await expect.poll(() => scrollRoot.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
@@ -146,13 +147,11 @@ test("opens a live agent run and sends stop from the run page", async ({ page })
   await page.mouse.wheel(0, 700);
   await expect.poll(() => scrollRoot.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
 
-  await page.getByRole("button", { name: "События" }).first().click();
+  // Materials → Events
+  await page.getByRole("tab", { name: /Материалы/ }).click();
+  await page.getByRole("button", { name: /События/ }).first().click();
   await expect(page.getByText("Хронология событий")).toBeVisible();
-  await expect(page.getByText("Последний важный сигнал")).toBeVisible();
   await expect(page.getByText("Package lock check failed").first()).toBeVisible();
-  await expect(page.getByText("Старт", { exact: true })).toBeVisible();
-  await expect(page.getByText("Выполнение", { exact: true })).toBeVisible();
-  await expect(page.getByText("Выполнение: 2 · 1 проблем")).toBeVisible();
   await expect(page.getByText("Запуск создан")).toBeVisible();
   await page.getByPlaceholder("Поиск по событиям, задачам, фазам и payload").fill("apt-get");
   await expect(page.getByText("Package lock check failed").first()).toBeVisible();
@@ -160,8 +159,9 @@ test("opens a live agent run and sends stop from the run page", async ({ page })
   await page.getByRole("button", { name: "Debug" }).click();
   await expect(page.getByText("\"exit_code\": 100")).toBeVisible();
 
-  await page.getByRole("tab", { name: "Ход агента" }).click();
-  const agentTab = page.getByRole("tabpanel", { name: "Ход агента" });
+  // Progress (steps)
+  await page.getByRole("tab", { name: /Ход/ }).click();
+  const agentTab = page.getByRole("tabpanel").filter({ hasText: "Ход работы" });
   await expect(page.getByText("1 из 3 шагов завершено")).toBeVisible();
   await expect(page.getByText("Inspect service health").first()).toBeVisible();
   await expect(page.getByText("Apply patch window checks").first()).toBeVisible();
@@ -173,7 +173,9 @@ test("opens a live agent run and sends stop from the run page", async ({ page })
   await expect(agentTab.locator("article").filter({ hasText: "Write completion report" })).toBeVisible();
   await expect(agentTab.locator("article").filter({ hasText: "Inspect service health" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Артефакты" }).first().click();
+  // Materials → Artifacts
+  await page.getByRole("tab", { name: /Материалы/ }).click();
+  await page.getByRole("button", { name: /Файлы/ }).first().click();
   await expect(page.getByText("Артефакты появятся после финального отчёта").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /Скачать/ })).toHaveCount(0);
 
@@ -234,7 +236,8 @@ test("keeps artifacts hidden while live report is not ready", async ({ page }) =
 
   await page.goto("/agents/run/909");
   await expect(page.getByRole("heading", { name: "Premature Artifact Run" })).toBeVisible();
-  await page.getByRole("button", { name: "Артефакты" }).first().click();
+  await page.getByRole("tab", { name: /Материалы/ }).click();
+  await page.getByRole("button", { name: /Файлы/ }).first().click();
   await expect(page.getByText("Артефакты появятся после финального отчёта").first()).toBeVisible();
   await expect(page.getByText("final-report.md")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Скачать/ })).toHaveCount(0);
@@ -313,11 +316,11 @@ test("answers a pending agent question from the run page", async ({ page }) => {
   await expect(page).toHaveURL(/\/agents\/run\/907$/);
 
   await expect(page.locator("h1", { hasText: "Interactive Rollout" })).toBeVisible();
-  await expect(page.getByText("Агент ждёт ответа").first()).toBeVisible();
+  await expect(page.getByText("Нужен ваш ответ").first()).toBeVisible();
   await expect(page.getByText("Можно перезапустить nginx сейчас?").first()).toBeVisible();
 
   await page.getByLabel("Ответ агенту").fill("Да, перезапускай nginx в текущем окне.");
-  await page.getByRole("button", { name: "Отправить ответ" }).click();
+  await page.getByRole("button", { name: "Отправить" }).click();
 
   const replyPath = "/servers/api/agents/runs/907/reply/";
   await expect.poll(() => harness.getCalls(replyPath, "POST").length).toBe(1);
@@ -327,7 +330,8 @@ test("answers a pending agent question from the run page", async ({ page }) => {
   await expect(page.getByText("Ответ отправлен агенту.")).toBeVisible();
   await expect(page.getByText("Вопрос агента")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "События" }).first().click();
+  await page.getByRole("tab", { name: /Материалы/ }).click();
+  await page.getByRole("button", { name: /События/ }).first().click();
   await expect(page.getByText("Ответ отправлен агенту").first()).toBeVisible();
 });
 

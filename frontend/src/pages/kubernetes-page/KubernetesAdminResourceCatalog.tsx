@@ -53,7 +53,7 @@ export function ResourceCatalogPanel({
       <div className="space-y-1.5">
         <button type="button" className={catalogGroupClass(!selectedGroupId)} onClick={() => onSelectGroup("")}>
           <span>{localize(lang, "Все ресурсы", "All resources")}</span>
-          <span className="font-mono text-[11px] text-muted-foreground">{items.length}</span>
+          <span className="font-mono text-2xs text-muted-foreground">{items.length}</span>
         </button>
         {groups.map((group) => (
           <button
@@ -63,7 +63,7 @@ export function ResourceCatalogPanel({
             onClick={() => onSelectGroup(group.id)}
           >
             <span className="truncate">{group.label}</span>
-            <span className="font-mono text-[11px] text-muted-foreground">{group.item_count}</span>
+            <span className="font-mono text-2xs text-muted-foreground">{group.item_count}</span>
           </button>
         ))}
       </div>
@@ -85,7 +85,7 @@ export function ResourceCatalogPanel({
               <div className="flex min-w-0 items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{item.kind}</div>
-                  <div className="mt-1 truncate font-mono text-[11px]">{item.resource}</div>
+                  <div className="mt-1 truncate font-mono text-2xs">{item.resource}</div>
                 </div>
                 {item.custom ? <Braces className="h-4 w-4 text-primary" /> : null}
               </div>

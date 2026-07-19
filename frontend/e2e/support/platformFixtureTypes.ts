@@ -41,6 +41,8 @@ export type PlatformMockOptions = {
   features?: Partial<SessionUser["features"]>;
   agentList?: "default" | "empty";
   kubernetesState?: "empty" | "healthy" | "degraded";
+  /** Populate server-detail tabs (sharing, notes, AI memory) for the product demo tour. */
+  demoData?: boolean;
 };
 
 export type PlatformMockResult = {

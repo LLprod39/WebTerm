@@ -4,7 +4,7 @@ from django.test import Client
 
 from app.plugins.catalog import DEMO_PLUGIN_ID
 from core_ui.models import UserAppPermission
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent
 
 
 def _grant_feature(user: User, *features: str) -> None:

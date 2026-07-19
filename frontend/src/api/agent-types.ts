@@ -86,6 +86,11 @@ export interface AgentItem {
   last_run_status: string | null;
   last_run_id: number | null;
   active_run_id: number | null;
+  active_run_status?: string | null;
+  active_run_started_at?: string | null;
+  active_run_iterations?: number;
+  active_run_server_name?: string | null;
+  active_run_pending_question?: string;
   execution_readiness?: AgentExecutionReadiness;
   schedule_state?: "manual" | "paused" | "due" | "scheduled";
   due_now?: boolean;

@@ -3,6 +3,7 @@ import { Search, Shield } from "lucide-react";
 import { ACCESS_FEATURE_OPTIONS, type AccessUser } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { StatusBadge } from "@/components/ui/page-shell";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ACCESS_UI_TEXT } from "@/lib/accessUiText";
 import { cn } from "@/lib/utils";

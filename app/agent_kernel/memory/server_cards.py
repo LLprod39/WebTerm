@@ -5,6 +5,7 @@ from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.repair import compute_freshness_score
 from app.agent_kernel.memory.trust import (
     TRUST_AGENT_REPORTED,
+    TRUST_HUMAN_OBSERVED,
     TRUST_MANUAL_VERIFIED,
     TRUST_SYSTEM_MEASURED,
     VERIFICATION_MEASURED,

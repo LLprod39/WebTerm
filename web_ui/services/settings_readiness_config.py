@@ -10,7 +10,11 @@ from loguru import logger
 
 from app.core.model_config import model_manager
 from app.core.provider_registry import get_provider_registry
-from core_ui.managed_secrets import managed_secret_key_source, verify_managed_secret_roundtrip
+from core_ui.managed_secrets import (
+    list_undecryptable_secrets,
+    managed_secret_key_source,
+    verify_managed_secret_roundtrip,
+)
 from core_ui.services.notification_config import load_notification_config, notif_config_path
 from web_ui.services.settings_readiness_common import (
     has_value,
@@ -113,6 +117,27 @@ def managed_secret_check() -> dict[str, Any]:
             "error",
             "Managed secrets не проходят encrypt/decrypt roundtrip.",
             details={"key_source": source, "roundtrip_ok": False},
+        )
+    try:
+        undecryptable = list_undecryptable_secrets()
+    except Exception as exc:
+        logger.debug("Managed secret storage scan failed: {}", exc)
+        undecryptable = []
+    if undecryptable:
+        return readiness_check(
+            "managed_secret_key",
+            "Ключ шифрования секретов",
+            "error",
+            f"{len(undecryptable)} сохранённых секретов не расшифровываются текущим ключом. "
+            "Ключ менялся после сохранения, либо секреты писал процесс с другим "
+            "MANAGED_SECRET_KEY/SECRET_KEY (например web и workers с разным env). "
+            "Выровняйте ключ во всех процессах или пересохраните секреты.",
+            details={
+                "key_source": source,
+                "roundtrip_ok": True,
+                "undecryptable": undecryptable[:20],
+                "undecryptable_count": len(undecryptable),
+            },
         )
     if source == "SECRET_KEY":
         return readiness_check(
@@ -308,7 +333,7 @@ def domain_auth_check() -> dict[str, Any]:
             else getattr(settings, "DOMAIN_AUTH_AUTO_CREATE", True)
         ),
         "default_profile": getattr(config, "domain_auth_default_profile", None)
-        or str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only"),
+        or str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "pilot_user") or "pilot_user"),
     }
     if not enabled:
         return readiness_check(

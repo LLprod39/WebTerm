@@ -10,9 +10,9 @@ from django.conf import settings
 from django.utils import timezone
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
+from servers.agent_dispatch import serialize_agent_dispatch
 from servers.agent_execution_state import AGENT_EXECUTION_COMMAND, AGENT_OPS_SUPERVISOR_COMMAND
 from servers.agent_inputs import normalize_report_delivery
-from servers.agent_dispatch import serialize_agent_dispatch
 from servers.models import AgentRun, AgentRunArtifact, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState
 from servers.run_events import record_run_event, serialize_run_event
 

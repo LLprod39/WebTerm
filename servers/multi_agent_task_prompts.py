@@ -65,8 +65,14 @@ Attached skills:
 THOUGHT: <рассуждение>
 ACTION: tool_name {{"param1": "val1"}}
 
+Альтернатива JSON:
+{{"thinking": "<рассуждение>", "tool": "tool_name", "args": {{"param1": "val1"}}}}
+
 Если attached skills релевантны задаче, сначала открой нужный skill через read_skill перед сервис-специфичными изменениями.
 Если attached skills содержат runtime guardrails, соблюдай их как обязательные ограничения.
+Если есть operator materials (script/task_list/document): list_materials / read_material;
+готовые scripts запускай через run_script_material (не пиши свой bash вместо них);
+task_list обновляй через update_material_task с evidence.
 Нельзя вызывать инструменты вне выданного tool slice.
 {sudo_policy_prompt(sudo_policy)}
 

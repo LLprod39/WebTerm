@@ -23,6 +23,7 @@ import { I18nProvider } from "@/lib/i18n";
 import KubernetesClusterDetailPage from "@/pages/KubernetesClusterDetailPage";
 import KubernetesDevtronPage from "@/pages/KubernetesDevtronPage";
 import KubernetesFleetPage from "@/pages/KubernetesFleetPage";
+import { featureMap } from "@/test/featureFlags";
 
 vi.mock("@/api", () => ({
   approveExternalKubernetesAction: vi.fn(),
@@ -60,6 +61,10 @@ const cluster = {
   labels: {},
   links: {},
   last_sync_at: "2026-06-29T19:00:00Z",
+  sync_status: "fresh",
+  is_stale: false,
+  sync_age_seconds: 60,
+  sync_stale_after_seconds: 900,
   created_at: null,
   updated_at: null,
 };
@@ -82,7 +87,40 @@ const app = {
   links: {},
   labels: {},
   last_sync_at: "2026-06-29T19:00:00Z",
+  sync_status: "fresh",
+  is_stale: false,
+  sync_age_seconds: 60,
+  sync_stale_after_seconds: 900,
 };
+
+const actionRequestFixture = {
+  id: "11111111-1111-1111-1111-111111111111",
+  database_id: 1,
+  action: "k8s.rollout.restart",
+  status: "pending_approval",
+  risk_tier: "high",
+  cluster: "prod-kz-1",
+  target: { cluster_id: "cluster_1", namespace: "payments", kind: "deployment", name: "payments-api" },
+  preview: {
+    blast_radius: "single_workload",
+    affected: [{ cluster_id: "cluster_1", namespace: "payments", kind: "deployment", name: "payments-api" }],
+    expected_verification: ["workload rollout status", "pod readiness"],
+  },
+  execution_policy: {
+    approval_required: true,
+    dry_run_required: true,
+    verification_required: true,
+    native_execution_enabled: false,
+    blocked_reason: "WebTerm currently records the request only.",
+  },
+  report: {},
+  reason: "Operator requested restart approval for payments/payments-api",
+  approval_ref: "",
+  requested_by: "admin",
+  created_at: "2026-06-30T08:00:00Z",
+  updated_at: "2026-06-30T08:00:00Z",
+};
+
 
 function renderRoute(path: string, element: ReactNode) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -109,44 +147,19 @@ describe("Kubernetes inventory pages", () => {
         username: "admin",
         email: "admin@example.com",
         is_staff: true,
-        features: { kubernetes: true },
+        features: featureMap({ kubernetes: true }),
       },
     });
     vi.mocked(fetchKubernetesCluster).mockResolvedValue({ success: true, cluster });
     vi.mocked(createKubernetesActionRequest).mockResolvedValue({
       success: true,
-      request: {
-        id: "11111111-1111-1111-1111-111111111111",
-        database_id: 1,
-        action: "k8s.rollout.restart",
-        status: "pending_approval",
-        risk_tier: "high",
-        cluster: "prod-kz-1",
-        target: { cluster_id: "cluster_1", namespace: "payments", kind: "deployment", name: "payments-api" },
-        preview: {
-          blast_radius: "single_workload",
-          affected: [{ cluster_id: "cluster_1", namespace: "payments", kind: "deployment", name: "payments-api" }],
-          expected_verification: ["workload rollout status", "pod readiness"],
-        },
-        execution_policy: {
-          approval_required: true,
-          dry_run_required: true,
-          verification_required: true,
-          native_execution_enabled: false,
-          blocked_reason: "WebTerm currently records the request only.",
-        },
-        report: {},
-        reason: "Operator requested restart approval for payments/payments-api",
-        approval_ref: "",
-        requested_by: "admin",
-        created_at: "2026-06-30T08:00:00Z",
-        updated_at: "2026-06-30T08:00:00Z",
-      },
+      request: actionRequestFixture,
     });
     vi.mocked(fetchKubernetesActionReport).mockResolvedValue({
       success: true,
       request_id: "11111111-1111-1111-1111-111111111111",
       status: "pending_approval",
+      request: actionRequestFixture,
       report: {},
       execution_policy: {
         approval_required: true,
@@ -362,6 +375,10 @@ describe("Kubernetes inventory pages", () => {
           partitions: [],
           links: {},
           labels: {},
+          sync_status: "fresh",
+          is_stale: false,
+          sync_age_seconds: 60,
+          sync_stale_after_seconds: 900,
           last_sync_at: "2026-06-29T19:00:00Z",
         },
       ],
@@ -375,7 +392,7 @@ describe("Kubernetes inventory pages", () => {
     expect(await screen.findByRole("heading", { name: "prod-kz-1" })).toBeInTheDocument();
     expect(screen.getAllByText("payments-api").length).toBeGreaterThan(0);
     expect(screen.getByText("payments-api-abc123")).toBeInTheDocument();
-    expect(screen.getByText("ClusterIP")).toBeInTheDocument();
+    expect(screen.getAllByText("ClusterIP").length).toBeGreaterThan(0);
     expect(screen.getAllByText("k8s.cluster.view").length).toBeGreaterThan(0);
     expect(fetchKubernetesCluster).toHaveBeenCalledWith("cluster_1");
 

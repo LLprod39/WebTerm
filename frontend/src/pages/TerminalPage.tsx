@@ -440,6 +440,7 @@ export default function TerminalPage() {
         serverId={editorState.serverId ?? (activeTab?.serverId || 0)}
         open={editorState.isOpen}
         initialPath={editorState.filePath}
+        initialElevated={editorState.elevated}
         onClose={closeEditor}
       />
       <ConfirmDialog

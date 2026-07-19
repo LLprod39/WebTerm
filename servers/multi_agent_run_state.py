@@ -52,8 +52,15 @@ def append_task_result_context(
     *,
     retry: bool = False,
 ) -> str:
-    retry_label = " (повтор)" if retry else ""
-    return context_summary + f"\n\n### Задача {task['id']}: {task['name']}{retry_label}\nРезультат: {result[:1000]}"
+    """Append structured handoff from a completed task for later subagents."""
+    from servers.services.task_handoff import append_structured_task_context
+
+    return append_structured_task_context(
+        context_summary,
+        task,
+        result,
+        retry=retry,
+    )
 
 
 def append_user_answer_context(context_summary: str, task: dict[str, Any], answer: str) -> str:

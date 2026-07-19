@@ -8,13 +8,13 @@ from django.utils import timezone
 
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.snapshot_utils import content_delta
-from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
 from app.agent_kernel.memory.trust import (
     TRUST_LLM_DISTILLED,
     VERIFICATION_NEEDS_REVALIDATION,
     enrich_metadata_with_trust,
     metadata_can_promote_to_canonical,
 )
+from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
 from servers.adapters.django_memory_serializers import describe_snapshot_rewrite
 
 

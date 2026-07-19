@@ -22,6 +22,7 @@ from app.runtime_limits import get_pipeline_run_limit_error
 from app.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 from studio import cron_schedule
 from studio.models import PipelineTrigger
+from studio.ops_controls import assert_schedulers_not_paused
 from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from studio.pipeline_validation import validate_pipeline_definition
 
@@ -96,6 +97,12 @@ class Command(BaseCommand):
             cycle_started=True,
         )
         summary = {"evaluated": 0, "fired": 0, "skipped": 0, "errors": 0}
+        paused = assert_schedulers_not_paused()
+        if paused:
+            self.stdout.write(self.style.WARNING(paused))
+            summary["skipped"] += 1
+            summary["paused"] = True
+            return summary
         now = timezone.now()
         window_start = now - timedelta(seconds=max(interval_seconds, 60))
         triggers = PipelineTrigger.objects.select_related("pipeline").filter(

@@ -36,7 +36,7 @@ class WatcherService:
         self.memory_store = DjangoServerMemoryStore()
 
     def scan_queryset(self, servers_qs, *, limit: int = 25) -> dict:
-        from servers.models import AgentRun, ServerAlert, ServerHealthCheck
+        from servers.models import AgentRun, ServerAlert, ServerHealthCheck, ServerPrediction
 
         server_ids = list(servers_qs.values_list("id", flat=True)[:limit])
         if not server_ids:
@@ -63,6 +63,13 @@ class WatcherService:
         recent_runs_by_server: dict[int, list] = {}
         for run in AgentRun.objects.filter(server_id__in=server_ids).select_related("agent").order_by("-started_at")[:100]:
             recent_runs_by_server.setdefault(run.server_id, []).append(run)
+        predictions_by_server: dict[int, list] = {}
+        for prediction in ServerPrediction.objects.filter(
+            server_id__in=server_ids,
+            status=ServerPrediction.STATUS_ACTIVE,
+            severity__in=["warning", "critical"],
+        ).order_by("severity", "eta_days")[:200]:
+            predictions_by_server.setdefault(prediction.server_id, []).append(prediction)
 
         drafts: list[WatcherDraft] = []
         critical_count = 0
@@ -73,7 +80,8 @@ class WatcherService:
             health = latest_health.get(server.id)
             alerts = alerts_by_server.get(server.id, [])
             recent_runs = recent_runs_by_server.get(server.id, [])
-            if not alerts and not health and not recent_runs:
+            predictions = predictions_by_server.get(server.id, [])
+            if not alerts and not health and not recent_runs and not predictions:
                 continue
 
             reasons: list[str] = []
@@ -124,6 +132,27 @@ class WatcherService:
                     if severity != "critical":
                         role = "post_change_verifier"
                         objective = f"Понять, почему недавний агентный run на сервере {server.name} завершился ошибкой"
+
+            for prediction in predictions[:3]:
+                eta_text = (
+                    f" через ~{round(prediction.eta_days, 1)} дн"
+                    if prediction.eta_days is not None
+                    else ""
+                )
+                reasons.append(f"[{prediction.severity}] Прогноз: {prediction.kind} {prediction.target}{eta_text}")
+                _promote("critical" if prediction.severity == "critical" else "warning")
+                if prediction.kind in {"disk_full", "inode_full"}:
+                    role = "infra_scout"
+                    objective = (
+                        f"Проверить прогноз заполнения диска на {server.name}: "
+                        f"{prediction.target}{eta_text} — найти источник роста и предложить безопасную очистку"
+                    )
+                elif prediction.kind == "cert_expiry":
+                    role = "infra_scout"
+                    objective = f"Спланировать обновление сертификата на {server.name} ({prediction.target}{eta_text})"
+                elif prediction.kind == "memory_pressure" and severity != "critical":
+                    role = "infra_scout"
+                    objective = f"Найти источник роста потребления памяти на {server.name}"
 
             if severity == "critical":
                 critical_count += 1

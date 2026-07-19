@@ -6,7 +6,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage
 from plugin_marketplace.services.developer_package_service import validate_plugin_source_dir
 from plugin_marketplace.services.lifecycle_service import installation_impact
 from plugin_marketplace.services.package_service import PluginPackageValidationError, validate_wtp_package

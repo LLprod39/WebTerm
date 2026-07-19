@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
-
-from django.contrib.auth.models import User
-from django.test import Client
+from typing import Any
 
 import pytest
+from django.contrib.auth.models import User
+from django.test import Client
 
 from core_ui.models import UserAppPermission
 from servers.models import Server

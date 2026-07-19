@@ -1,6 +1,7 @@
 import type { WorkspaceAppId, WorkspaceAppStatus } from "./WorkspaceChrome";
 
-export const DEFAULT_ACTIVE_APP: WorkspaceAppId = "overview";
+// Overview is beta/hidden in pilot; land on Files when the Linux UI opens.
+export const DEFAULT_ACTIVE_APP: WorkspaceAppId = "files";
 
 export function workspaceStatusClass(status: WorkspaceAppStatus) {
   if (status === "live") return "border-emerald-500/20 bg-emerald-500/8 text-emerald-400";

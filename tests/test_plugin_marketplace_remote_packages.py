@@ -6,9 +6,10 @@ import zipfile
 
 import pytest
 from django.contrib.auth.models import User
+from django.test import override_settings
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
-from plugin_marketplace.models import PluginInstallEvent, PluginInstallation, PluginPackage
+from plugin_marketplace.models import PluginInstallation, PluginInstallEvent, PluginPackage
 from plugin_marketplace.services.package_retention_service import retained_package_exists
 from plugin_marketplace.services.remote_package_service import (
     RemotePackageError,
@@ -37,6 +38,7 @@ def _package_bytes(manifest: dict) -> bytes:
     return buffer.getvalue()
 
 
+@override_settings(PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS=["packages.example"])
 @pytest.mark.django_db
 def test_remote_package_bytes_stage_disabled_with_provenance():
     user = User.objects.create_user(username="remote-package-admin", password="x", is_staff=True)
@@ -65,6 +67,7 @@ def test_remote_package_bytes_stage_disabled_with_provenance():
     assert PluginInstallEvent.objects.filter(plugin_id="acme.remote-alerts", event_type="plugin_remote_package_staged").exists()
 
 
+@override_settings(PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS=["packages.example"])
 @pytest.mark.django_db
 def test_remote_package_hash_mismatch_does_not_stage_package():
     data = _package_bytes(_remote_manifest())

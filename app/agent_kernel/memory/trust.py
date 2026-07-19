@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 TRUST_MANUAL_VERIFIED = "manual_verified"
 TRUST_SYSTEM_MEASURED = "system_measured"

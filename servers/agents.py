@@ -31,6 +31,9 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 COMMAND_TIMEOUT = 30
+# Wall-clock budget for one mini run (SSH commands + LLM). Prevents zombie "running" rows.
+MINI_RUN_WALL_TIMEOUT_SEC = 15 * 60
+MINI_AI_ANALYSIS_TIMEOUT_SEC = 180
 
 AGENT_TEMPLATES: dict[str, dict[str, Any]] = {
     "security_audit": {
@@ -276,30 +279,98 @@ def get_all_templates() -> list[dict[str, Any]]:
     return result
 
 
-async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
-    """Execute agent commands on a server and get AI analysis."""
-    run = await sync_to_async(AgentRun.objects.create)(
-        agent=agent,
-        server=server,
-        user=user,
-        status=AgentRun.STATUS_RUNNING,
-    )
+async def _persist_run(run: AgentRun, *, fields: list[str] | None = None) -> None:
+    run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+    update_fields = list(fields or [])
+    if "report_payload" not in update_fields:
+        update_fields.append("report_payload")
+    await sync_to_async(run.save)(update_fields=update_fields if fields else None)
 
+
+async def _finalize_failed_run(run: AgentRun, *, message: str, t0: float, outputs: list[dict[str, Any]] | None = None) -> AgentRun:
+    run.status = AgentRun.STATUS_FAILED
+    if outputs is not None:
+        run.commands_output = outputs
+    run.ai_analysis = message
+    run.completed_at = timezone.now()
+    run.duration_ms = int((time.monotonic() - t0) * 1000)
+    await _persist_run(
+        run,
+        fields=["status", "commands_output", "ai_analysis", "completed_at", "duration_ms", "report_payload"],
+    )
+    await deliver_agent_report_async(run)
+    return run
+
+
+async def run_agent(
+    agent: ServerAgent,
+    server: Server,
+    user,
+    *,
+    run_record: AgentRun | None = None,
+) -> AgentRun:
+    """Execute agent commands on a server and get AI analysis.
+
+    When ``run_record`` is provided (queued execution plane), reuses that row instead
+    of creating a new one so HTTP launch can return a run_id immediately.
+    """
     t0 = time.monotonic()
+    if run_record is None:
+        run = await sync_to_async(AgentRun.objects.create)(
+            agent=agent,
+            server=server,
+            user=user,
+            status=AgentRun.STATUS_RUNNING,
+        )
+    else:
+        run = run_record
+        run.server = server
+        run.user = user
+        run.status = AgentRun.STATUS_RUNNING
+        run.completed_at = None
+        run.duration_ms = 0
+        await sync_to_async(run.save)(
+            update_fields=["server", "user", "status", "completed_at", "duration_ms"]
+        )
+
+    try:
+        return await asyncio.wait_for(
+            _run_agent_body(agent, server, user, run=run, t0=t0),
+            timeout=MINI_RUN_WALL_TIMEOUT_SEC,
+        )
+    except asyncio.TimeoutError:
+        logger.error(
+            "Mini agent '{}' on {} exceeded wall timeout ({}s)",
+            agent.name,
+            server.name,
+            MINI_RUN_WALL_TIMEOUT_SEC,
+        )
+        return await _finalize_failed_run(
+            run,
+            message=(
+                f"Mini agent run exceeded wall timeout ({MINI_RUN_WALL_TIMEOUT_SEC}s) "
+                "and was marked failed."
+            ),
+            t0=t0,
+            outputs=list(run.commands_output or []),
+        )
+
+
+async def _run_agent_body(
+    agent: ServerAgent,
+    server: Server,
+    user,
+    *,
+    run: AgentRun,
+    t0: float,
+) -> AgentRun:
     commands = agent.commands or []
     outputs: list[dict[str, Any]] = []
 
     try:
         kwargs = await _build_connect_kwargs(server)
     except Exception as exc:
-        run.status = AgentRun.STATUS_FAILED
-        run.ai_analysis = f"Cannot connect to server: {exc}"
-        run.completed_at = timezone.now()
-        run.duration_ms = int((time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
-        await sync_to_async(run.save)()
-        await deliver_agent_report_async(run)
-        return run
+        return await _finalize_failed_run(run, message=f"Cannot connect to server: {exc}", t0=t0)
 
     try:
         sudo_password = await sync_to_async(get_server_sudo_secret)(server)
@@ -381,15 +452,17 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
                         "duration_ms": int((time.monotonic() - cmd_t0) * 1000),
                     })
     except Exception as exc:
-        run.status = AgentRun.STATUS_FAILED
-        run.commands_output = outputs
-        run.ai_analysis = f"SSH connection failed: {exc}"
-        run.completed_at = timezone.now()
-        run.duration_ms = int((time.monotonic() - t0) * 1000)
-        run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
-        await sync_to_async(run.save)()
-        await deliver_agent_report_async(run)
-        return run
+        return await _finalize_failed_run(
+            run,
+            message=f"SSH connection failed: {exc}",
+            t0=t0,
+            outputs=outputs,
+        )
+
+    # Persist command output before LLM so the run page is not empty while AI thinks.
+    run.commands_output = outputs
+    run.duration_ms = int((time.monotonic() - t0) * 1000)
+    await _persist_run(run, fields=["commands_output", "duration_ms", "report_payload"])
 
     with audit_context(
         user_id=getattr(user, "id", None),
@@ -400,15 +473,27 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
         entity_id=str(run.id),
         entity_name=agent.name,
     ):
-        ai_analysis = await get_ai_analysis(agent, server, outputs, template=get_template(agent.agent_type))
+        try:
+            ai_analysis = await asyncio.wait_for(
+                get_ai_analysis(agent, server, outputs, template=get_template(agent.agent_type)),
+                timeout=MINI_AI_ANALYSIS_TIMEOUT_SEC,
+            )
+        except asyncio.TimeoutError:
+            ai_analysis = (
+                f"AI analysis timed out after {MINI_AI_ANALYSIS_TIMEOUT_SEC}s. "
+                "Command outputs were collected successfully."
+            )
+            logger.error("AI analysis timed out for mini agent '{}'", agent.name)
 
     run.status = AgentRun.STATUS_COMPLETED
     run.commands_output = outputs
     run.ai_analysis = ai_analysis
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
-    run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
-    await sync_to_async(run.save)()
+    await _persist_run(
+        run,
+        fields=["status", "commands_output", "ai_analysis", "completed_at", "duration_ms", "report_payload"],
+    )
     await deliver_agent_report_async(run)
 
     await sync_to_async(lambda: setattr(agent, "last_run_at", timezone.now()) or agent.save(update_fields=["last_run_at"]))()
@@ -462,13 +547,30 @@ async def run_agent(agent: ServerAgent, server: Server, user) -> AgentRun:
 
     return run
 
-async def run_agent_on_all_servers(agent: ServerAgent, user) -> list[AgentRun]:
-    """Run agent on all configured servers sequentially."""
-    server_ids = await sync_to_async(lambda: list(agent.servers.values_list("id", flat=True)))()
-    servers = await sync_to_async(lambda: list(Server.objects.filter(id__in=server_ids)))()
 
-    runs = []
-    for srv in servers:
-        run = await run_agent(agent, srv, user)
+async def run_agent_on_all_servers(
+    agent: ServerAgent,
+    user,
+    *,
+    servers: list[Server] | None = None,
+    primary_run: AgentRun | None = None,
+) -> list[AgentRun]:
+    """Run agent on configured servers sequentially.
+
+    ``primary_run`` (if set) is reused for the first server so a pre-created
+    queued dispatch row is updated instead of orphaned.
+    """
+    if servers is None:
+        server_ids = await sync_to_async(lambda: list(agent.servers.values_list("id", flat=True)))()
+        servers = await sync_to_async(lambda: list(Server.objects.filter(id__in=server_ids)))()
+
+    runs: list[AgentRun] = []
+    for index, srv in enumerate(servers):
+        run = await run_agent(
+            agent,
+            srv,
+            user,
+            run_record=primary_run if index == 0 else None,
+        )
         runs.append(run)
     return runs

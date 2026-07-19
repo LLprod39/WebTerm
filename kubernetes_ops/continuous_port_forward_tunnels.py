@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from contextlib import suppress
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from time import monotonic
 from typing import Any
 
@@ -15,9 +15,16 @@ from kubernetes_ops.services.admin_port_forward_tunnel import (
     prepare_kubernetes_port_forward_tunnel_context,
 )
 from kubernetes_ops.services.admin_resources import AdminResourceError
-from kubernetes_ops.services.admin_streams import active_admin_stream_session_status, bounded_stream_float, bounded_stream_int
+from kubernetes_ops.services.admin_streams import (
+    active_admin_stream_session_status,
+    bounded_stream_float,
+    bounded_stream_int,
+)
 from kubernetes_ops.services.provider_clients import KubernetesProviderError
-from kubernetes_ops.services.provider_port_forward_tunnels import MAX_PROVIDER_TUNNEL_BYTES, open_provider_port_forward_tunnel
+from kubernetes_ops.services.provider_port_forward_tunnels import (
+    MAX_PROVIDER_TUNNEL_BYTES,
+    open_provider_port_forward_tunnel,
+)
 
 
 async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], input_queue: asyncio.Queue[Any]) -> None:

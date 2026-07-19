@@ -7,14 +7,21 @@ from django.contrib.auth.models import User
 from django.test import override_settings
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sActionRequest
-from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sFleetBundle, K8sNetworkRef, K8sPodRef, K8sProvider, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sActionRequest,
+    K8sAppRef,
+    K8sCluster,
+    K8sFleetBundle,
+    K8sNetworkRef,
+    K8sPodRef,
+    K8sProvider,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.services.provider_probe import KubernetesProviderProbeResult
 from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VERSION
 from kubernetes_ops.services.release_evidence import build_kubernetes_release_evidence
 from kubernetes_ops.services.release_normal_user_surface import build_kubernetes_release_normal_user_surface_evidence
 from kubernetes_ops.services.sync import KubernetesSyncResult
-
 
 READY_PREFLIGHT_RESULT_IDS = (
     "django_check",

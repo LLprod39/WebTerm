@@ -13,10 +13,11 @@ from app.plugins.validation import PluginValidationError, validate_plugin_manife
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import PluginPackage
 from plugin_marketplace.services import remote_package_service
-from plugin_marketplace.services.package_service import PluginPackageValidationError, validate_wtp_package
 from plugin_marketplace.services.package_retention_service import PackageRetentionError, read_retained_package_bytes
+from plugin_marketplace.services.package_service import PluginPackageValidationError, validate_wtp_package
 from plugin_marketplace.services.signing_service import canonical_manifest_hash, package_signature_status
 from plugin_marketplace.services.static_scan_service import scan_manifest
+
 
 class PackageAttestationError(ValueError):
     pass

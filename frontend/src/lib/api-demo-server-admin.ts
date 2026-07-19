@@ -1,9 +1,14 @@
 import { ACCESS_FEATURE_OPTIONS } from "./access-features";
 import {
   DEMO_ACTIVITY_LOGS,
+  DEMO_BOOTSTRAP,
   DEMO_MODELS,
   DEMO_SETTINGS,
 } from "./demo";
+
+// Poll counter driving the simulated live playbook run in demo mode.
+let demoPlaybookRunPolls = 0;
+
 export function demoServerAdminFallback<T>(path: string, _options: RequestInit = {}): T | undefined {
   if (path.includes("/servers/api/") && path.includes("/files/read/")) {
     const filePath = path.includes("path=") ? decodeURIComponent(path.split("path=")[1].split("&")[0] || "/home/demo/nginx.conf") : "/home/demo/nginx.conf";
@@ -175,27 +180,87 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
   if (path.includes("/api/models")) return DEMO_MODELS as T;
 
   // Admin dashboard — must match AdminDashboardData shape
-  if (path.includes("/api/admin/dashboard")) return {
-    success: true,
-    data: {
-      online_users: { count: 1, total_registered: 1, users: [{ username: "demo", action: "login", time: new Date().toISOString() }] },
-      ai: { requests_today: 0 },
-      terminals: { active: 0, connections: [] },
-      agents: { running: 0, today: 0, succeeded_24h: 0, failed_24h: 0, success_rate: 0 },
-      api_usage: {},
-      api_calls_today: 0,
-      providers: { gemini: { enabled: true, model: "gemini-2.0-flash" } },
-      servers: { total: 3, active: 2 },
-      tasks: { total: 0, in_progress: 0 },
-      hourly_activity: [],
-      top_users: [{ username: "demo", total: 5, ai_requests: 2, terminal_sessions: 3 }],
-      recent_activity: [{ user: "demo", category: "auth", action: "login", time: new Date().toISOString() }],
-      fleet_health: { avg_cpu: 25, avg_memory: 40, avg_disk: 35, healthy: 2, warning: 0, critical: 0, unreachable: 1 },
-      active_alerts_count: 0,
-      alerts: [],
-      app_version: "demo",
-    },
-  } as T;
+  if (path.includes("/api/admin/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    const dayIso = (offset: number) => new Date(now - offset * 86_400_000).toISOString().slice(0, 10);
+    const hourlyPattern = [4, 3, 2, 2, 3, 5, 9, 14, 18, 22, 26, 24, 21, 25, 28, 31, 27, 22, 17, 14, 12, 9, 7, 5];
+    return {
+      success: true,
+      data: {
+        online_users: {
+          count: 3,
+          total_registered: 12,
+          users: [
+            { username: "demo", action: "terminal_command", time: minutesAgo(1) },
+            { username: "a.petrov", action: "chat_request", time: minutesAgo(2) },
+            { username: "i.sidorova", action: "http_request", time: minutesAgo(4) },
+          ],
+        },
+        ai: { requests_today: 128 },
+        terminals: {
+          active: 2,
+          connections: [
+            { server: "web-prod-01", user: "demo", connected_at: minutesAgo(25) },
+            { server: "db-prod-01", user: "a.petrov", connected_at: minutesAgo(6) },
+          ],
+        },
+        agents: {
+          running: 1,
+          today: 14,
+          succeeded_24h: 18,
+          failed_24h: 2,
+          success_rate: 90,
+          daily: [
+            { date: dayIso(6), succeeded: 9, failed: 1 },
+            { date: dayIso(5), succeeded: 12, failed: 0 },
+            { date: dayIso(4), succeeded: 8, failed: 2 },
+            { date: dayIso(3), succeeded: 15, failed: 1 },
+            { date: dayIso(2), succeeded: 11, failed: 0 },
+            { date: dayIso(1), succeeded: 17, failed: 2 },
+            { date: dayIso(0), succeeded: 12, failed: 1 },
+          ],
+        },
+        api_usage: {
+          gemini: { calls: 64, input_tokens: 182_400, output_tokens: 45_100, errors: 0, cost_usd: 0.1138 },
+          claude: { calls: 38, input_tokens: 240_800, output_tokens: 88_400, errors: 1, cost_usd: 0.9876 },
+          openai: { calls: 26, input_tokens: 96_300, output_tokens: 31_200, errors: 0, cost_usd: 0.255 },
+        },
+        api_calls_today: 128,
+        providers: {
+          gemini: { enabled: true, model: "gemini-2.0-flash" },
+          claude: { enabled: true, model: "claude-sonnet-4-6" },
+          openai: { enabled: true, model: "gpt-5-mini" },
+          ollama: { enabled: false, model: "" },
+        },
+        servers: { total: 3, active: 2 },
+        tasks: { total: 6, in_progress: 2 },
+        hourly_activity: hourlyPattern.map((count, index) => ({
+          hour: new Date(now - (23 - index) * 3_600_000).toISOString(),
+          count,
+        })),
+        top_users: [
+          { username: "demo", total: 214, ai_requests: 64, terminal_sessions: 38 },
+          { username: "a.petrov", total: 122, ai_requests: 31, terminal_sessions: 27 },
+          { username: "i.sidorova", total: 78, ai_requests: 12, terminal_sessions: 19 },
+        ],
+        recent_activity: [
+          { user: "demo", category: "terminal", action: "terminal_command", time: minutesAgo(1) },
+          { user: "a.petrov", category: "agent", action: "agent_run", time: minutesAgo(3) },
+          { user: "i.sidorova", category: "auth", action: "login", time: minutesAgo(9) },
+          { user: "demo", category: "server", action: "http_request", time: minutesAgo(14) },
+          { user: "a.petrov", category: "agent", action: "agent_run", time: minutesAgo(21) },
+        ],
+        fleet_health: { avg_cpu: 38, avg_memory: 65, avg_disk: 60, healthy: 1, warning: 1, critical: 0, unreachable: 1 },
+        active_alerts_count: 2,
+        alerts: [
+          { server: "staging-01", type: "unreachable", severity: "critical", title: "Server unreachable", time: minutesAgo(31) },
+          { server: "db-prod-01", type: "resource", severity: "warning", title: "resource", time: minutesAgo(22) },
+        ],
+        app_version: "demo",
+      },
+    } as T;
+  }
   if (path.includes("/api/admin/users/sessions")) return { success: true, online_count: 1, total_registered: 1, active_today: 1, sessions: [] } as T;
   if (path.includes("/api/admin/users/activity")) return { success: true, total: 0, events: [] } as T;
 
@@ -205,13 +270,44 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
     thresholds: { cpu_warn: 80, cpu_crit: 95, mem_warn: 85, mem_crit: 95, disk_warn: 80, disk_crit: 90 },
     stats: { total_checks: 0, active_alerts: 0, last_check_at: null, monitored_servers: 0 },
   } as T;
-  if (path.includes("/servers/api/monitoring/dashboard")) return {
-    success: true,
-    servers: [],
-    alerts: [],
-    summary: { total_servers: 3, healthy: 2, warning: 0, critical: 0, unreachable: 1, unknown: 0, active_alerts: 0, avg_cpu: 25, avg_memory: 40, avg_disk: 35 },
-    recent_activity: [],
-  } as T;
+  if (path.includes("/servers/api/monitoring/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    return {
+      success: true,
+      servers: [
+        {
+          server_id: 1, server_name: "web-prod-01", host: "192.168.1.10", status: "healthy",
+          cpu_percent: 34, memory_percent: 52, disk_percent: 61, load_1m: 0.8,
+          uptime_seconds: 3_456_000, response_time_ms: 42, checked_at: minutesAgo(2),
+        },
+        {
+          server_id: 2, server_name: "db-prod-01", host: "192.168.1.11", status: "warning",
+          cpu_percent: 41, memory_percent: 78, disk_percent: 72, load_1m: 1.9,
+          uptime_seconds: 8_640_000, response_time_ms: 55, checked_at: minutesAgo(2),
+        },
+        {
+          server_id: 3, server_name: "staging-01", host: "192.168.1.20", status: "unreachable",
+          cpu_percent: null, memory_percent: null, disk_percent: null, load_1m: null,
+          uptime_seconds: null, response_time_ms: null, checked_at: minutesAgo(31),
+        },
+      ],
+      alerts: [
+        {
+          id: 1, server_id: 3, server_name: "staging-01", alert_type: "unreachable", severity: "critical",
+          title: "Сервер недоступен", message: "TCP-проба не отвечает более 30 минут",
+          is_resolved: false, created_at: minutesAgo(31),
+        },
+        {
+          id: 2, server_id: 2, server_name: "db-prod-01", alert_type: "resource", severity: "warning",
+          title: "Высокая загрузка памяти", message: "RAM 78% превышает порог 75%",
+          is_resolved: false, created_at: minutesAgo(22),
+        },
+      ],
+      summary: { total_servers: 3, healthy: 1, warning: 1, critical: 0, unreachable: 1, unknown: 0, active_alerts: 2, avg_cpu: 38, avg_memory: 65, avg_disk: 66 },
+      recent_activity: [],
+    } as T;
+  }
   if (path.includes("/servers/api/monitoring/status")) return {
     success: true,
     servers: [],
@@ -227,7 +323,46 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
   } as T;
 
   // Agents
-  if (path.includes("/servers/api/agents/dashboard")) return { success: true, active: [], recent: [] } as T;
+  if (path.includes("/servers/api/agents/dashboard")) {
+    const now = Date.now();
+    const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
+    const baseRun = {
+      agent_mode: "full", agent_type: "deploy_watcher", pending_question: "",
+      connected_servers: [], ai_analysis: "", final_report: "", commands_output: [],
+    };
+    const finished = (
+      id: number, agentName: string, serverId: number, serverName: string,
+      status: string, startedMinAgo: number, durationSec: number, iterations: number,
+    ) => ({
+      ...baseRun,
+      id, agent_id: 1, agent_name: agentName, server_id: serverId, server_name: serverName,
+      status, total_iterations: iterations, duration_ms: durationSec * 1000,
+      started_at: minutesAgo(startedMinAgo), completed_at: minutesAgo(startedMinAgo - Math.ceil(durationSec / 60)),
+    });
+    return {
+      success: true,
+      active: [
+        {
+          ...baseRun,
+          id: 120, agent_id: 1, agent_name: "Deploy Watcher", server_id: 1, server_name: "web-prod-01",
+          status: "running", total_iterations: 3, duration_ms: 0,
+          started_at: minutesAgo(4), completed_at: null,
+        },
+      ],
+      recent: [
+        finished(119, "Health Check", 2, "db-prod-01", "completed", 42, 38, 5),
+        finished(118, "Deploy Watcher", 1, "web-prod-01", "completed", 95, 61, 7),
+        finished(117, "Log Auditor", 2, "db-prod-01", "failed", 150, 24, 3),
+        finished(116, "Health Check", 1, "web-prod-01", "completed", 210, 33, 5),
+        finished(115, "Deploy Watcher", 1, "web-prod-01", "completed", 300, 58, 6),
+        finished(114, "Backup Verifier", 2, "db-prod-01", "completed", 420, 112, 9),
+        finished(113, "Health Check", 3, "staging-01", "failed", 510, 19, 2),
+        finished(112, "Deploy Watcher", 1, "web-prod-01", "completed", 640, 66, 7),
+        finished(111, "Log Auditor", 2, "db-prod-01", "completed", 760, 29, 4),
+        finished(110, "Health Check", 1, "web-prod-01", "completed", 900, 31, 5),
+      ],
+    } as T;
+  }
   if (path.includes("/servers/api/agents/schedules/dispatch/")) {
     return {
       success: true,
@@ -293,6 +428,295 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
       ],
     } as T;
   }
+  if (path.includes("/servers/api/playbooks/ansible/status")) {
+    return {
+      success: true,
+      ansible: {
+        available: true,
+        method: "demo",
+        binary: "ansible-playbook",
+        version: "ansible-core 2.17 (demo)",
+        message: "Demo mode",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/guided/generate")) {
+    return {
+      success: true,
+      playbook: {
+        id: 9,
+        name: "Guided demo",
+        description: "demo",
+        kind: "ansible",
+        category: "custom",
+        visibility: "private",
+        tags: ["guided"],
+        fidelity: { engine: "ansible", score: 1 },
+        task_count: 1,
+        is_template_clone: true,
+        template_slug: "guided:demo",
+        last_run_at: null,
+        last_run_status: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: 1,
+        tasks: [{ id: "t1", command: "uptime", description: "up", continue_on_error: false }],
+        source_yaml: "- name: demo\n  hosts: all\n  tasks: []\n",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/guided")) {
+    return {
+      success: true,
+      recipes: [
+        {
+          slug: "health-check",
+          name: "Health check",
+          description: "Demo recipe",
+          category: "diagnose",
+          icon: "heart",
+          fields: [],
+        },
+      ],
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/templates/") && path.includes("/install/")) {
+    return {
+      success: true,
+      playbook: {
+        id: 1,
+        name: "Health snapshot",
+        description: "Demo template",
+        kind: "runbook",
+        category: "diagnose",
+        visibility: "private",
+        tags: ["health"],
+        fidelity: {},
+        task_count: 2,
+        is_template_clone: true,
+        template_slug: "health-snapshot",
+        last_run_at: null,
+        last_run_status: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: 1,
+        tasks: [
+          { id: "t1", command: "uptime", description: "Uptime", continue_on_error: false },
+          { id: "t2", command: "df -h", description: "Disk", continue_on_error: false },
+        ],
+        source_yaml: "",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/templates")) {
+    return {
+      success: true,
+      templates: [
+        {
+          slug: "health-snapshot",
+          name: "Health snapshot",
+          description: "Uptime, load, disk, memory",
+          kind: "runbook",
+          category: "diagnose",
+          tags: ["health"],
+          task_count: 5,
+          tasks_preview: [{ description: "Uptime", command: "uptime" }],
+        },
+      ],
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/runs/") && path.includes("/cancel/")) {
+    demoPlaybookRunPolls = 99;
+    return { success: true, run: { id: 1, status: "cancelled", playbook_name: "Demo", host_results: [], summary: {} } } as T;
+  }
+  if (path.includes("/servers/api/playbooks/runs/") && path.includes("/rerun-failed/")) {
+    demoPlaybookRunPolls = 0;
+    return { success: true, run: { id: 2, status: "pending", playbook_name: "Demo", host_results: [], summary: {} } } as T;
+  }
+  if (path.includes("/servers/api/playbooks/runs/")) {
+    // Simulate a live run: first polls stream progress, then the run completes.
+    demoPlaybookRunPolls += 1;
+    const step = Math.min(demoPlaybookRunPolls, 5);
+    const live = step < 5;
+    const logAll = [
+      "PLAY [Health snapshot] *********************************************************",
+      "",
+      "TASK [Gathering Facts] *********************************************************",
+      "ok: [demo-linux]",
+      "",
+      "TASK [Uptime] ******************************************************************",
+      "changed: [demo-linux]",
+      "",
+      "TASK [Disk] ********************************************************************",
+      "changed: [demo-linux]",
+      "",
+      "PLAY RECAP *********************************************************************",
+      "demo-linux                 : ok=3    changed=2    unreachable=0    failed=0    skipped=0",
+    ];
+    const logCut = [4, 7, 10, 13, logAll.length][step - 1] ?? logAll.length;
+    const taskNames = ["Gathering Facts", "Uptime", "Disk", "Disk", ""];
+    const statusFor = (n: number) => (step > n ? "success" : step === n ? "running" : "pending");
+    return {
+      success: true,
+      run: {
+        id: 1,
+        playbook_id: 1,
+        status: live ? "running" : "completed",
+        playbook_name: "Health snapshot",
+        target_server_ids: [1],
+        target_group_ids: [],
+        options: { concurrency: 2, dry_run: false },
+        summary: live
+          ? {}
+          : { hosts_total: 1, hosts_ok: 1, hosts_failed: 0, tasks_ok: 3, tasks_failed: 0, tasks_skipped: 0, engine: "ansible", ansible_method: "demo" },
+        progress: {
+          engine: "ansible",
+          play: "Health snapshot",
+          task: taskNames[step - 1],
+          task_number: Math.min(step, 3),
+          tasks_total: 3,
+          hosts_total: 1,
+          counts: { ok: Math.min(step, 3), changed: Math.max(0, Math.min(step, 3) - 1), failed: 0, skipped: 0, unreachable: 0 },
+          finished: !live,
+        },
+        live_log: logAll.slice(0, logCut).join("\n"),
+        inventory_preview: "[all]\ndemo ansible_host=10.0.0.1",
+        error_message: "",
+        cancel_requested: false,
+        started_at: new Date(Date.now() - step * 1200).toISOString(),
+        finished_at: live ? null : new Date().toISOString(),
+        created_at: new Date(Date.now() - step * 1200).toISOString(),
+        host_results: [
+          {
+            server_id: 1,
+            server_name: "demo-linux",
+            host: "10.0.0.1",
+            status: live ? "running" : "success",
+            task_results: [
+              { task_id: "t0", command: "Gathering Facts", description: "Gathering Facts", status: statusFor(1), output: "", exit_code: 0 },
+              { task_id: "t1", command: "uptime", description: "Uptime", status: statusFor(2), output: step > 2 ? "up 3 days, load 0.42" : "", exit_code: 0 },
+              { task_id: "t2", command: "df -h", description: "Disk", status: statusFor(3), output: step > 3 ? "/ 40% used" : "", exit_code: 0 },
+            ],
+          },
+        ],
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/runs")) {
+    return { success: true, runs: [] } as T;
+  }
+  if (path.includes("/servers/api/playbooks/inventory/preview")) {
+    return {
+      success: true,
+      inventory: "[all]\ndemo ansible_host=10.0.0.1\n",
+      hosts: [{ id: 1, name: "demo-linux", host: "10.0.0.1", port: 22, username: "root", group_id: null, detected_os: "ubuntu" }],
+      count: 1,
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/import")) {
+    return {
+      success: true,
+      playbook: {
+        id: 2,
+        name: "Imported",
+        description: "hosts: all",
+        kind: "ansible",
+        category: "custom",
+        visibility: "private",
+        tags: ["imported"],
+        fidelity: { runnable: 1, total: 1, score: 1, unsupported_modules: [] },
+        task_count: 1,
+        is_template_clone: false,
+        template_slug: "",
+        last_run_at: null,
+        last_run_status: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: 1,
+        tasks: [{ id: "t1", command: "echo ok", description: "demo", continue_on_error: false }],
+        source_yaml: "",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/") && path.includes("/run/")) {
+    demoPlaybookRunPolls = 0;
+    return {
+      success: true,
+      run: {
+        id: 1,
+        playbook_id: 1,
+        status: "running",
+        playbook_name: "Demo",
+        target_server_ids: [1],
+        target_group_ids: [],
+        options: {},
+        summary: {},
+        inventory_preview: "",
+        error_message: "",
+        cancel_requested: false,
+        started_at: new Date().toISOString(),
+        finished_at: null,
+        created_at: new Date().toISOString(),
+        host_results: [],
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/") && (path.includes("/update/") || path.includes("/duplicate/") || path.includes("/create/"))) {
+    return {
+      success: true,
+      playbook: {
+        id: 1,
+        name: "Demo playbook",
+        description: "",
+        kind: "runbook",
+        category: "custom",
+        visibility: "private",
+        tags: [],
+        fidelity: {},
+        task_count: 1,
+        is_template_clone: false,
+        template_slug: "",
+        last_run_at: null,
+        last_run_status: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: 1,
+        tasks: [{ id: "t1", command: "uptime", description: "", continue_on_error: false }],
+        source_yaml: "",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks/") && path.includes("/delete/")) {
+    return { success: true } as T;
+  }
+  if (path.match(/\/servers\/api\/playbooks\/\d+\/?$/)) {
+    return {
+      success: true,
+      playbook: {
+        id: 1,
+        name: "Demo playbook",
+        description: "Demo mode",
+        kind: "runbook",
+        category: "diagnose",
+        visibility: "private",
+        tags: ["demo"],
+        fidelity: {},
+        task_count: 1,
+        is_template_clone: false,
+        template_slug: "",
+        last_run_at: null,
+        last_run_status: "",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: 1,
+        tasks: [{ id: "t1", command: "uptime", description: "Uptime", continue_on_error: false }],
+        source_yaml: "",
+      },
+    } as T;
+  }
+  if (path.includes("/servers/api/playbooks")) {
+    return { success: true, playbooks: [], count: 0 } as T;
+  }
   if (path.includes("/servers/api/agents/templates")) return { success: true, templates: [] } as T;
   if (path.includes("/servers/api/agents/runs/") && path.includes("/events/")) {
     return { success: true, events: [], total: 0 } as T;
@@ -355,10 +779,70 @@ export function demoServerAdminFallback<T>(path: string, _options: RequestInit =
       },
     ],
   } as T;
-  if (path.includes("/servers/api/global-context")) return { rules: "", forbidden_commands: [], required_checks: [], environment_vars: {} } as T;
+  if (path.includes("/servers/api/global-context")) {
+    return { rules: "", forbidden_commands: [], required_checks: [], environment_vars: {} } as T;
+  }
+  if (path.includes("/group-context") || path.includes("/groups/") && path.includes("/context")) {
+    return { rules: "", forbidden_commands: [], environment_vars: {} } as T;
+  }
   if (path.includes("/servers/api/master-password")) return { has_master_password: false, success: true } as T;
-  if (path.includes("/knowledge")) return { success: true, items: [], categories: [] } as T;
-  if (path.includes("/shares")) return { success: true, shares: [] } as T;
+
+  // Server detail / CRUD used by create-edit dialogs
+  if (path.includes("/servers/api/") && path.includes("/get/")) {
+    const match = path.match(/\/servers\/api\/(\d+)\/get\//);
+    const id = match ? Number(match[1]) : 1;
+    const seed = DEMO_BOOTSTRAP.servers.find((server) => server.id === id) || DEMO_BOOTSTRAP.servers[0];
+    return {
+      id: seed?.id ?? id,
+      name: seed?.name ?? `server-${id}`,
+      host: seed?.host ?? "127.0.0.1",
+      port: seed?.port ?? 22,
+      username: seed?.username ?? "demo",
+      server_type: "ssh",
+      auth_method: "key",
+      key_path: "",
+      tags: "demo,ssh",
+      notes: "Demo server (static UI demo — no live SSH).",
+      group_id: seed?.group_id ?? 1,
+      is_active: true,
+      ai_read_only: false,
+      sudo_auth_mode: "none",
+      has_saved_sudo_password: false,
+      corporate_context: "",
+      network_config: {},
+      has_saved_password: false,
+      can_view_password: false,
+      can_edit: true,
+      is_shared_server: false,
+      share_context_enabled: false,
+      shared_by_username: "",
+    } as T;
+  }
+  if (path.includes("/servers/api/create") || path.includes("/servers/api/") && path.endsWith("/create/")) {
+    return { success: true, server_id: 99, message: "created (demo)" } as T;
+  }
+  if (path.includes("/update/")) return { success: true, message: "updated (demo)" } as T;
+  if (path.includes("/delete/") || path.includes("/test/")) return { success: true, message: "ok (demo)" } as T;
+  if (path.includes("/execute/")) {
+    return {
+      success: true,
+      output: { stdout: "demo-execute: backend offline\n", stderr: "", exit_code: 0 },
+    } as T;
+  }
+  if (path.includes("/reveal-password/")) {
+    return { success: true, password: "••••••••" } as T;
+  }
+
+  // Knowledge + memory (must always include items arrays — UI calls .filter on them)
+  if (path.includes("/knowledge")) {
+    return { success: true, items: [], categories: [] } as T;
+  }
+  if (path.includes("/memory/snapshots") || path.includes("/memory/overview") || path.includes("/memory/")) {
+    return { success: true, items: [], snapshots: [], episodes: [], revalidations: [], summary: {} } as T;
+  }
+  if (path.includes("/shares") || path.includes("/share/")) {
+    return { success: true, shares: [] } as T;
+  }
 
   if (path.includes("/api/health")) return { status: "ok" } as T;
   if (path.includes("/api/access/users")) return {

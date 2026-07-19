@@ -29,7 +29,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const djangoTarget = env.VITE_DJANGO_URL || process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000";
 
+  // VITE_BASE=/WebTerm-Demo/ for GitHub Pages static demo; default "/" for normal deploys.
+  const base = env.VITE_BASE || process.env.VITE_BASE || "/";
+
   return {
+  base,
   build: {
     rollupOptions: {
       output: {

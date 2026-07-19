@@ -66,7 +66,9 @@ def build_probe_nodes(
                 ),
                 "server_ids": primary_server_ids,
                 "permission_mode": "PLAN",
-                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                # ask_user намеренно исключён: пайплайн имеет unattended-триггеры
+                # (schedule/webhook/monitoring), рантайм запрещает ask_user в таком режиме.
+                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "analyze_output"],
                 "max_iterations": 2,
                 "on_failure": "continue",
             },
@@ -88,7 +90,8 @@ def build_probe_nodes(
                 ),
                 "server_ids": multi_server_ids,
                 "permission_mode": "PLAN",
-                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                # ask_user намеренно исключён: см. комментарий у react_probe.
+                "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "analyze_output"],
                 "max_iterations": 2,
                 "on_failure": "continue",
             },

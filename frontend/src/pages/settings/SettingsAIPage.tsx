@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Bot } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { QueryStateBlock } from "@/components/ui/page-shell";
 import {
   fetchAuthSession,
@@ -59,24 +60,18 @@ export default function SettingsAIPage() {
   }
 
   return (
-    <div className="space-y-6 pb-10">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-secondary text-foreground">
-            <Bot className="h-4 w-4" />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold tracking-tight text-foreground">Настройки AI</h1>
-            <p className="text-xs text-muted-foreground">
-              Провайдеры, модели по ролям, Ollama и безопасная маршрутизация запросов.
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">{aiSettings.configuredProviderCount} активных API</Badge>
-          {aiSettings.aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
-        </div>
-      </div>
+    <div className="space-y-5 pb-10">
+      <SettingsPageHeader
+        icon={Bot}
+        title="AI и модели"
+        description="Провайдеры, API-ключи и модели для чата, агентов и оркестратора. Настраивается в UI после деплоя."
+        actions={
+          <>
+            <Badge variant="secondary">{aiSettings.configuredProviderCount} активных API</Badge>
+            {aiSettings.aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
+          </>
+        }
+      />
 
       <AiSettingsPanel config={settingsData.config} apiKeys={apiKeys} isAdmin={isAdmin} form={aiSettings} />
     </div>

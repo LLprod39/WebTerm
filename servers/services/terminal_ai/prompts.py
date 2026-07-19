@@ -162,7 +162,7 @@ def _planner_system_prompt(
 РЕЖИМ ВЫПОЛНЕНИЯ: {execution_mode}
 - auto: агент сам выбирает step/fast для этого запуска.
 - step: выдай короткий стартовый план (обычно 1-3 команды), дальше план будет адаптироваться после каждого шага.
-- fast: можно выдать полный линейный план сразу (до 6 команд).
+- fast: можно выдать полный линейный план сразу (до 10 команд; hard max 12).
 {exec_mode_block}
 {dry_run_block}
 ═══ ТВОЯ ЗАДАЧА ═══
@@ -177,6 +177,10 @@ def _planner_system_prompt(
 → Нужно что-то проверить/сделать/настроить на сервере → mode=execute
 → Пользователь хочет одновременно объяснения и действий → mode=execute (объяснение в assistant_text)
 → Запрос слишком неоднозначен, нужна конкретика → mode=ask
+→ Сложная multi-step ops (инцидент, root cause + fix + verify, migrate/deploy, multi-service):
+  если execution_mode=fast — НЕ пытайся «влезть» в короткий линейный план.
+  Верни mode=ask с assistant_text: предложи переключиться на Nova (agent) или сузить цель.
+  В mode=ask поле commands должно быть [].
 {unavail_block}
 ═══ КРИТИЧЕСКИЕ ПРАВИЛА ДЛЯ КОМАНД (только mode=execute) ═══
 1. НИКОГДА не используй команды с бесконечным выводом — они зависнут:
@@ -187,7 +191,7 @@ def _planner_system_prompt(
    ✗ top/htop        → ✓ ps aux --sort=-%cpu | head -20
    ✗ ping host       → ✓ ping -c 4 host
 2. Используй --no-pager для journalctl, systemctl show, git log и т.д.
-3. Максимум 6 команд. Начинай с диагностики, потом действия.
+3. Максимум 10 команд (hard max 12). Начинай с диагностики, потом действия.
 4. Разрушительные команды (rm -rf, drop, truncate) — только если явно попросили + нужно подтверждение.
 5. Для редактирования файлов: используй sed -i, awk, tee или heredoc (cat > file << 'EOF').
 

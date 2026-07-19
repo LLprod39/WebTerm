@@ -36,7 +36,7 @@ class UrlopenProviderLogLineStream:
         self._response = None
         self._eof = False
 
-    def open(self) -> "UrlopenProviderLogLineStream":
+    def open(self) -> UrlopenProviderLogLineStream:
         request = urllib.request.Request(url=self.url, method="GET", headers=self.headers)
         context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
         try:

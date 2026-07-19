@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-quer
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Suspense, lazy, type ReactNode } from "react";
 import { I18nProvider, useI18n } from "./lib/i18n";
+import { UiStyleProvider } from "./lib/ui-style";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
 import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
@@ -12,6 +13,7 @@ const queryClient = new QueryClient();
 const Index = lazy(() => import("./pages/Index"));
 const Login = lazy(() => import("./pages/Login"));
 const Servers = lazy(() => import("./pages/Servers"));
+const AutomationPage = lazy(() => import("./pages/AutomationPage"));
 const TerminalPage = lazy(() => import("./pages/TerminalPage"));
 const DashboardRouter = lazy(() => import("./pages/DashboardRouter"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -20,6 +22,9 @@ const SettingsGroupsPage = lazy(() => import("./pages/SettingsGroupsPage"));
 const SettingsPermissionsPage = lazy(() => import("./pages/SettingsPermissionsPage"));
 // New Settings Pages with Layout
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout"));
+const SettingsIndexRedirect = lazy(() =>
+  import("./components/settings/SettingsLayout").then((mod) => ({ default: mod.SettingsIndexRedirect })),
+);
 const SettingsReadinessPage = lazy(() => import("./pages/settings/SettingsReadinessPage"));
 const SettingsLimitsPage = lazy(() => import("./pages/settings/SettingsLimitsPage"));
 const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
@@ -48,6 +53,7 @@ const KubernetesFleetPage = lazy(() => import("./pages/KubernetesFleetPage"));
 const KubernetesDevtronPage = lazy(() => import("./pages/KubernetesDevtronPage"));
 const MarsPage = lazy(() => import("./pages/MarsPage"));
 const MarsRunPage = lazy(() => import("./pages/MarsRunPage"));
+const MonitoringInsightsPage = lazy(() => import("./pages/monitoring-insights/MonitoringInsightsPage"));
 
 function RouteLoader() {
   const { t } = useI18n();
@@ -151,10 +157,11 @@ function FeatureGate({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <UiStyleProvider>
     <I18nProvider>
       <TooltipProvider>
         <Toaster />
-        <BrowserRouter>
+        <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/"}>
           <Suspense fallback={<RouteLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -177,10 +184,26 @@ const App = () => (
                 <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/dashboard/admin" element={<Navigate to="/dashboard" replace />} />
                 <Route
+                  path="/monitoring/insights"
+                  element={(
+                    <FeatureGate feature="dashboard">
+                      <MonitoringInsightsPage />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
                   path="/servers"
                   element={(
                     <FeatureGate feature="servers">
                       <Servers />
+                    </FeatureGate>
+                  )}
+                />
+                <Route
+                  path="/automation"
+                  element={(
+                    <FeatureGate feature="servers">
+                      <AutomationPage />
                     </FeatureGate>
                   )}
                 />
@@ -361,7 +384,7 @@ const App = () => (
                     </FeatureGate>
                   )}
                 >
-                  <Route index element={<Navigate to="/settings/readiness" replace />} />
+                  <Route index element={<SettingsIndexRedirect />} />
                   <Route path="readiness" element={<SettingsReadinessPage />} />
                   <Route path="limits" element={<SettingsLimitsPage />} />
                   <Route path="ai" element={<SettingsAIPage />} />
@@ -395,6 +418,7 @@ const App = () => (
         </BrowserRouter>
       </TooltipProvider>
     </I18nProvider>
+    </UiStyleProvider>
   </QueryClientProvider>
 );
 

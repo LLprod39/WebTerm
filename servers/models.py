@@ -29,12 +29,20 @@ from servers.models_memory import (
     ServerMemoryRevalidation,
     ServerMemorySnapshot,
 )
+from servers.models_metrics import (
+    ServerAiInsight,
+    ServerCertificate,
+    ServerMetricRollup,
+    ServerMetricSample,
+    ServerPrediction,
+)
 from servers.models_monitoring import (
     BackgroundWorkerState,
     ServerAlert,
     ServerHealthCheck,
     ServerWatcherDraft,
 )
+from servers.models_playbooks import Playbook, PlaybookRun
 
 __all__ = [
     "AgentRun",
@@ -46,7 +54,9 @@ __all__ = [
     "GlobalServerRules",
     "Server",
     "ServerAgent",
+    "ServerAiInsight",
     "ServerAlert",
+    "ServerCertificate",
     "ServerCommandHistory",
     "ServerConnection",
     "ServerGroup",
@@ -62,7 +72,12 @@ __all__ = [
     "ServerMemoryPolicy",
     "ServerMemoryRevalidation",
     "ServerMemorySnapshot",
+    "ServerMetricRollup",
+    "ServerMetricSample",
+    "ServerPrediction",
     "ServerShare",
     "ServerWatcherDraft",
+    "Playbook",
+    "PlaybookRun",
     "TerminalAiChatMessage",
 ]

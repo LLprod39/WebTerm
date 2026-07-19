@@ -119,7 +119,7 @@ def _apply_filters(
 
 
 def _counts(queryset: QuerySet[K8sActionRequest], field: str, known_values: list[str]) -> dict[str, int]:
-    counts = {value: 0 for value in known_values}
+    counts = dict.fromkeys(known_values, 0)
     for row in queryset.values(field).annotate(total=Count("id")):
         counts[str(row.get(field) or "")] = int(row.get("total") or 0)
     return counts

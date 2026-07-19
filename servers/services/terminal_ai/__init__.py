@@ -52,6 +52,7 @@ from servers.services.terminal_ai.memory_extraction import (  # noqa: F401
 )
 from servers.services.terminal_ai.output_explanation import explain_command_output  # noqa: F401
 from servers.services.terminal_ai.plan_items import (  # noqa: F401
+    apply_fast_complexity_routing,
     build_plan_item,
     normalize_command_text,
     normalize_execution_mode,

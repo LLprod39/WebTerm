@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 class PluginStudioNode(BaseNode):
     node_type = "plugin/base"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         manifest = await sync_to_async(get_plugin_studio_node_manifest, thread_sensitive=True)(self.node_type)
         if manifest is None:
             return NodeResult(error=f"Plugin Studio node is disabled or unknown: {self.node_type}")

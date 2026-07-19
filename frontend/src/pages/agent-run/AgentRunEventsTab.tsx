@@ -140,7 +140,7 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
           <div className="mt-4 rounded-lg border border-border/70 bg-background/45 p-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Последний важный сигнал</p>
+                <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">Последний важный сигнал</p>
                 <p className="mt-1 break-words text-sm font-medium leading-6 text-foreground">
                   {latestImportant.title || latestImportant.message}
                 </p>
@@ -230,7 +230,7 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
 function EventMiniStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-border/70 bg-background/45 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 font-mono text-sm font-semibold text-foreground">{value}</p>
     </div>
   );

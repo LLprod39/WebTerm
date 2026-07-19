@@ -22,6 +22,7 @@ async def plan_multi_agent_tasks(engine: Any, goal: str, orchestrator_log: list)
     connected = engine.session.get_connected_info()
     servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected)
     custom_system = engine.agent.system_prompt or ""
+    instructions = str(getattr(engine.agent, "ai_prompt", "") or "").strip()
     materials_prompt = build_agent_materials_prompt(engine.agent.input_artifacts)
     skills_desc = engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
     role_options = "\n".join(
@@ -32,12 +33,14 @@ async def plan_multi_agent_tasks(engine: Any, goal: str, orchestrator_log: list)
     skill_errors = ""
     if engine.skill_errors:
         skill_errors = "\nSkills с ошибками:\n" + "\n".join(f"- {item}" for item in engine.skill_errors)
+    instructions_block = f"\nOperator instructions:\n{instructions}\n" if instructions else ""
 
     system_prompt = f"""Ты — мастер-оркестратор DevOps-агентов. Твоя задача — разбить цель на конкретные задачи для исполнительных агентов.
 Каждый агент умеет: выполнять SSH-команды, читать файлы, проверять сервисы, анализировать логи.
 Отвечай ТОЛЬКО валидным JSON-массивом. Без пояснений до или после JSON.
 {engine.ops_prompt_context}
 {custom_system}
+{instructions_block}
 {materials_prompt}
 
 Подключённые серверы:
@@ -52,7 +55,18 @@ Attached skills:
 - Каждая задача должна быть самодостаточной и конкретной
 - Используй русский язык для имён и описаний
 - Порядок задач важен — они выполняются последовательно
-- Каждая задача должна быть выполнима за 5-7 SSH-команд максимум
+- Каждая задача — один измеримый outcome; subagent может сделать до 10–12 tool steps
+  (не ограничивайся 5–7 SSH-командами — разведка, действие и локальная проверка
+  внутри задачи допустимы, если это один coherent outcome)
+- Если в materials есть kind=script: планируй запуск operator script через
+  run_script_material (id из каталога), а не «написать свой bash». Типичный
+  каркас: inspect/dry_run → run_script_material → verify side-effects.
+- Если есть task_list: учитывай пункты чеклиста в плане (можно 1:1 seed),
+  subagent обновляет progress через update_material_task.
+- Для сложных multi-step ops (инцидент, деплой, миграция, multi-service fix)
+  планируй минимум: разведка → действие → post-change verification
+- Если план меняет состояние (restart/deploy/edit/config), обязательно включи
+  задачу с role=post_change_verifier (или явную verification-задачу в конце)
 - Если attached skills содержат runtime guardrails, учитывай их как обязательные ограничения
 
 Доступные subagent roles:
@@ -76,11 +90,14 @@ Attached skills:
     response = await engine._call_llm_raw(system_prompt, user_msg)
     orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
+    from servers.services.agent_complexity import ensure_verification_task
+
     tasks = parse_plan_response(
         response,
         max_tasks=MAX_PLAN_TASKS,
         fallback_goal=engine.agent.goal or engine.agent.ai_prompt,
     )
+    tasks = ensure_verification_task(tasks, max_tasks=MAX_PLAN_TASKS)
     return engine._prepare_plan_tasks(tasks)
 
 
@@ -176,11 +193,14 @@ async def replan_multi_agent_tasks(engine: Any, goal: str, plan_tasks: list[dict
     response = await engine._call_llm_raw(system_prompt, user_msg)
     orchestrator_log.append({"role": "assistant", "content": response, "timestamp": timezone.now().isoformat()})
 
+    from servers.services.agent_complexity import ensure_verification_task
+
     tasks = parse_plan_response(
         response,
         max_tasks=MAX_PLAN_TASKS,
         fallback_goal=engine.agent.goal or engine.agent.ai_prompt,
     )
+    tasks = ensure_verification_task(tasks, max_tasks=MAX_PLAN_TASKS)
     return engine._prepare_plan_tasks(tasks[:MAX_PLAN_TASKS])
 
 

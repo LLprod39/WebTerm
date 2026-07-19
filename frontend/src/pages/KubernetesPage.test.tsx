@@ -14,6 +14,7 @@ import {
 } from "@/api";
 import { I18nProvider } from "@/lib/i18n";
 import KubernetesPage from "@/pages/KubernetesPage";
+import { featureMap } from "@/test/featureFlags";
 
 vi.mock("@/api", () => ({
   approveExternalKubernetesAction: vi.fn(),
@@ -177,7 +178,7 @@ describe("KubernetesPage", () => {
         username: "admin",
         email: "admin@example.com",
         is_staff: true,
-        features: { kubernetes: true, studio_pipelines: true },
+        features: featureMap({ kubernetes: true, studio_pipelines: true }),
       },
     });
     vi.mocked(fetchKubernetesOverview).mockResolvedValue(overviewFixture());
@@ -207,6 +208,7 @@ describe("KubernetesPage", () => {
       success: true,
       request_id: "request-1",
       status: "pending_approval",
+      request: actionRequestFixture(),
       report: {},
       execution_policy: {
         approval_required: true,
@@ -261,8 +263,8 @@ describe("KubernetesPage", () => {
   it("renders an operator overview without admin provider controls", async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Kubernetes Ops" })).toBeInTheDocument();
-    expect(await screen.findByText("Только просмотр")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Кластерный пульт" })).toBeInTheDocument();
+    expect(await screen.findByText("Sidebar выкл.")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Кластеры" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Требует внимания" })).toBeInTheDocument();
     expect(screen.queryByText("Админ-диагностика")).not.toBeInTheDocument();

@@ -4,7 +4,6 @@ from typing import Any
 
 from kubernetes_ops.services.release_preflight import PREFLIGHT_ARTIFACT
 
-
 COMMANDS: dict[str, dict[str, str]] = {
     "local_demo_fixture": {
         "id": "local_demo_fixture",

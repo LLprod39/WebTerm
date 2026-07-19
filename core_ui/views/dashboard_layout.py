@@ -1,8 +1,10 @@
 import json
 import logging
+
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+
 from core_ui.models import DashboardLayout
 
 logger = logging.getLogger(__name__)

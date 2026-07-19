@@ -7,7 +7,6 @@ from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.line_filters import filter_memory_lines, is_runbook_safe_line, looks_like_access_signal
 from app.agent_kernel.memory.pattern_utils import derive_human_habits, derive_runbook_patterns
 from app.agent_kernel.memory.snapshot_utils import derive_recent_event_points, render_snapshot_lines
-from app.agent_kernel.memory.types import CANONICAL_MEMORY_KEYS, SNAPSHOT_TITLES, OperationalPattern, SnapshotCandidate
 from app.agent_kernel.memory.trust import (
     TRUST_HUMAN_OBSERVED,
     TRUST_SYSTEM_MEASURED,
@@ -15,6 +14,7 @@ from app.agent_kernel.memory.trust import (
     aggregate_trust_metadata,
     metadata_can_promote_to_canonical,
 )
+from app.agent_kernel.memory.types import CANONICAL_MEMORY_KEYS, SNAPSHOT_TITLES, OperationalPattern, SnapshotCandidate
 
 
 def build_snapshot_candidates(

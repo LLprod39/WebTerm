@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type CSSProperties } from "react";
 import { buildPipelineRunGraphState } from "@/components/pipeline/pipelineRunGraph";
 import type { PipelineEdge, PipelineNode, PipelineRun } from "@/lib/api";
 import {
@@ -7,13 +7,20 @@ import {
   isLivePipelineRunStatus,
 } from "./pipelineGraphUtils";
 
+// Domain edges may arrive decorated with React Flow presentation props.
+type DisplayPipelineEdge = PipelineEdge & {
+  style?: CSSProperties;
+  labelStyle?: CSSProperties;
+  labelBgStyle?: CSSProperties;
+};
+
 export function usePipelineGraphDisplayState({
   edges,
   graphRunLive,
   lang,
   nodes,
 }: {
-  edges: PipelineEdge[];
+  edges: DisplayPipelineEdge[];
   graphRunLive: PipelineRun | null;
   lang: "en" | "ru";
   nodes: PipelineNode[];

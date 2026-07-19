@@ -5,11 +5,10 @@ import sys
 import textwrap
 import time
 
-from asgiref.sync import async_to_sync
 import pytest
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
-from django.test import Client
-from django.test import override_settings
+from django.test import Client, override_settings
 
 from core_ui.models import UserAppPermission
 from mars.consumers import MarsRunConsumer

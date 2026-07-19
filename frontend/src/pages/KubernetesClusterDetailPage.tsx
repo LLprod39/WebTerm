@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Boxes, FileText, Layers3, RefreshCcw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, FileText, Layers3, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
@@ -20,10 +20,6 @@ import {
 import { Button } from "@/components/ui/button";
 import {
   EmptyState,
-  MetricCard,
-  MetricGrid,
-  PageHero,
-  PageShell,
   QueryStateBlock,
   SectionCard,
   StatusBadge,
@@ -33,14 +29,24 @@ import {
   AppRow,
   formatSync,
   healthIcon,
-  metricToneForHealth,
   statusLabel,
   statusTone,
 } from "@/pages/kubernetes-page/kubernetesPageSections";
 import { KubernetesActionRequestPanel } from "@/pages/kubernetes-page/KubernetesActionRequestPanel";
+import {
+  countHealth,
+  KpiTile,
+} from "@/pages/kubernetes-page/KubernetesCockpitPrimitives";
+import { KubernetesMetricsStrip } from "@/pages/kubernetes-page/KubernetesMetricsStrip";
 import { KubernetesNetworkPanel } from "@/pages/kubernetes-page/KubernetesNetworkPanel";
 import { KubernetesPodLogsPanel } from "@/pages/kubernetes-page/KubernetesPodLogsPanel";
 import { KubernetesPodsPanel } from "@/pages/kubernetes-page/KubernetesPodsPanel";
+import {
+  K8sRefreshButton,
+  KubernetesPageHeader,
+  KubernetesShell,
+} from "@/pages/kubernetes-page/KubernetesShell";
+import { KubernetesTopology } from "@/pages/kubernetes-page/KubernetesTopology";
 import { useKubernetesDeepLinkAudit } from "@/pages/kubernetes-page/useKubernetesDeepLinkAudit";
 
 export default function KubernetesClusterDetailPage() {
@@ -120,30 +126,40 @@ export default function KubernetesClusterDetailPage() {
   const error = clusterQuery.error || namespacesQuery.error || workloadsQuery.error || podsQuery.error || networkQuery.error || eventsQuery.error;
   const degradedNamespaces = namespaces.filter((namespace) => namespace.degraded > 0).length;
   const warningNamespaces = namespaces.filter((namespace) => namespace.warning > 0).length;
+  const wlHealth = countHealth(workloads);
 
   return (
-    <PageShell width="7xl" className="space-y-5">
-      <PageHero
-        kicker={localize(lang, "Kubernetes cluster", "Kubernetes cluster")}
+    <KubernetesShell>
+      <KubernetesPageHeader
+        kicker={localize(lang, "Кластер", "Cluster")}
         title={cluster?.name || localize(lang, "Cluster detail", "Cluster detail")}
         description={localize(
           lang,
-          "Read-only detail view: health, namespace aggregates, normalized workloads and WebTerm audit events.",
-          "Read-only detail view: health, namespace aggregates, normalized workloads, and WebTerm audit events.",
+          "Namespaces, workloads, pods, network, events — read-only inventory + describe/logs.",
+          "Namespaces, workloads, pods, network, events — read-only inventory + describe/logs.",
         )}
+        meta={
+          cluster ? (
+            <>
+              {healthIcon(cluster.health)}
+              <StatusBadge label={statusLabel(lang, cluster.health)} tone={statusTone(cluster.health)} />
+              <StatusBadge label={cluster.environment || "env"} tone="neutral" />
+              <span className="font-mono text-2xs text-muted-foreground">
+                {localize(lang, "Sync:", "Sync:")} {formatSync(lang, cluster.last_sync_at)}
+              </span>
+            </>
+          ) : null
+        }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
+          <>
+            <Button asChild variant="outline" size="sm" className="h-10 gap-2">
               <Link to="/kubernetes">
                 <ArrowLeft className="h-4 w-4" />
-                {localize(lang, "Overview", "Overview")}
+                {localize(lang, "Пульт", "Cockpit")}
               </Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={refresh}>
-              <RefreshCcw className="h-4 w-4" />
-              {localize(lang, "Обновить", "Refresh")}
-            </Button>
-          </div>
+            <K8sRefreshButton onClick={refresh} label={localize(lang, "Обновить", "Refresh")} />
+          </>
         }
       />
 
@@ -155,36 +171,55 @@ export default function KubernetesClusterDetailPage() {
       >
         {cluster ? (
           <>
-            <MetricGrid>
-              <MetricCard
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <KpiTile
                 label={localize(lang, "Health", "Health")}
                 value={statusLabel(lang, cluster.health)}
-                description={formatSync(lang, cluster.last_sync_at)}
+                hint={formatSync(lang, cluster.last_sync_at)}
                 tone={statusTone(cluster.health) === "danger" ? "danger" : statusTone(cluster.health) === "warning" ? "warning" : "success"}
-                icon={healthIcon(cluster.health)}
               />
-              <MetricCard
+              <KpiTile
                 label={localize(lang, "Nodes", "Nodes")}
                 value={`${cluster.nodes_ready}/${cluster.nodes_total}`}
-                description={localize(lang, "ready nodes", "ready nodes")}
                 tone={cluster.nodes_total && cluster.nodes_ready < cluster.nodes_total ? "warning" : "success"}
-                icon={<Boxes className="h-4 w-4" />}
               />
-              <MetricCard
+              <KpiTile
                 label={localize(lang, "Namespaces", "Namespaces")}
                 value={namespaces.length || cluster.namespaces}
-                description={`${warningNamespaces} warning, ${degradedNamespaces} degraded`}
-                tone={metricToneForHealth(degradedNamespaces, warningNamespaces)}
-                icon={<ShieldCheck className="h-4 w-4" />}
+                hint={`${warningNamespaces} warn · ${degradedNamespaces} deg`}
+                tone={degradedNamespaces ? "danger" : warningNamespaces ? "warning" : "success"}
               />
-              <MetricCard
+              <KpiTile
                 label={localize(lang, "Workloads", "Workloads")}
                 value={workloads.length || cluster.workloads}
-                description={localize(lang, "normalized app/workload refs", "normalized app/workload refs")}
                 tone="info"
-                icon={<Layers3 className="h-4 w-4" />}
               />
-            </MetricGrid>
+            </div>
+
+            <KubernetesMetricsStrip
+              lang={lang}
+              clusterId={cluster.id}
+              healthy={wlHealth.healthy}
+              warning={wlHealth.warning}
+              degraded={wlHealth.degraded}
+            />
+
+            <SectionCard
+              title={localize(lang, "Topology", "Topology")}
+              description={localize(
+                lang,
+                "Namespace → workloads → services (эвристика по именам).",
+                "Namespace → workloads → services (name heuristics).",
+              )}
+              icon={<Layers3 className="h-4 w-4" />}
+            >
+              <KubernetesTopology
+                lang={lang}
+                namespaces={namespaces}
+                workloads={workloads}
+                networkRefs={networkRefs}
+              />
+            </SectionCard>
 
             <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <SectionCard
@@ -348,7 +383,7 @@ export default function KubernetesClusterDetailPage() {
           </>
         ) : null}
       </QueryStateBlock>
-    </PageShell>
+    </KubernetesShell>
   );
 }
 

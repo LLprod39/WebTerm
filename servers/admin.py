@@ -3,6 +3,8 @@ from django.contrib import admin
 from .models import (
     AgentRun,
     AgentRunArtifact,
+    Playbook,
+    PlaybookRun,
     Server,
     ServerAgent,
     ServerAlert,
@@ -109,3 +111,19 @@ class AgentRunArtifactAdmin(admin.ModelAdmin):
     list_filter = ['artifact_type', 'created_at']
     readonly_fields = ['created_at', 'updated_at']
     search_fields = ['name', 'run__agent__name', 'user__username']
+
+
+@admin.register(Playbook)
+class PlaybookAdmin(admin.ModelAdmin):
+    list_display = ['name', 'user', 'kind', 'category', 'visibility', 'last_run_status', 'updated_at']
+    list_filter = ['kind', 'category', 'visibility']
+    search_fields = ['name', 'description', 'user__username']
+    readonly_fields = ['created_at', 'updated_at', 'last_run_at']
+
+
+@admin.register(PlaybookRun)
+class PlaybookRunAdmin(admin.ModelAdmin):
+    list_display = ['id', 'playbook', 'user', 'status', 'started_at', 'finished_at', 'created_at']
+    list_filter = ['status', 'created_at']
+    readonly_fields = ['created_at', 'started_at', 'finished_at']
+    search_fields = ['playbook__name', 'user__username']

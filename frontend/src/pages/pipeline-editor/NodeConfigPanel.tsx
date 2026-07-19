@@ -318,7 +318,7 @@ export function NodeConfigPanel({
         guidanceChecklist={nodeGuidance.checklist}
         icon={TypeIcon ? <TypeIcon className={`h-5 w-5 ${typeIconClassName}`} /> : <span className="text-xs font-semibold text-foreground">#</span>}
         agents={agents}
-        selectedAgent={selectedAgent}
+        selectedAgent={selectedAgent ?? null}
         provider={provider || "auto"}
         providerOptions={agentProviderOptions}
         modelList={modelList}

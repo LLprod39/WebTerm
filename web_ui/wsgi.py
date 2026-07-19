@@ -11,6 +11,8 @@ import os
 
 from django.core.wsgi import get_wsgi_application
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web_ui.settings')
+# Deployments must set DJANGO_SETTINGS_MODULE=web_ui.settings.production explicitly
+# (docker-compose / render.yaml do). Fallback mirrors asgi.py for local runs.
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'web_ui.settings.development')
 
 application = get_wsgi_application()

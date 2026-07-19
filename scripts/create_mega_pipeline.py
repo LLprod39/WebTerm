@@ -11,7 +11,7 @@ import django
 ROOT = Path(__file__).resolve().parents[1]
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings.development")
 django.setup()
 
 from django.contrib.auth.models import User

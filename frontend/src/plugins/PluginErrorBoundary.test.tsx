@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PluginErrorBoundary } from "./PluginErrorBoundary";
 
-function BrokenPluginSurface() {
+function BrokenPluginSurface(): ReactNode {
   throw new Error("boom");
 }
 

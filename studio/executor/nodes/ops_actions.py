@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 async def execute_service_action(
-    ctx: "ExecutionContext",
+    ctx: ExecutionContext,
     config: dict[str, Any],
     *,
     load_owned_server: Any,
@@ -51,7 +51,7 @@ async def execute_service_action(
 
 
 async def execute_docker_action(
-    ctx: "ExecutionContext",
+    ctx: ExecutionContext,
     config: dict[str, Any],
     *,
     load_owned_server: Any,
@@ -92,7 +92,7 @@ async def execute_docker_action(
 
 
 async def execute_process_action(
-    ctx: "ExecutionContext",
+    ctx: ExecutionContext,
     config: dict[str, Any],
     *,
     load_owned_server: Any,

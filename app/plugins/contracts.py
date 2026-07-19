@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-
 SURFACE_KINDS = {
     "pages",
     "dashboard_widgets",

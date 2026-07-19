@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 EXTERNAL_RELEASE_BLOCKER_PREFIXES = (
     "release_scope:",
     "external_evidence_bundle:",

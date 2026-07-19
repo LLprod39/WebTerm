@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils";
 
 const sectionToneStyles: Record<string, string> = {
   default: "",
-  info: "border-primary/30 shadow-sm bg-card/65",
-  success: "border-emerald-500/25 bg-emerald-950/5 dark:bg-emerald-950/10 shadow-emerald-500/5",
-  warning: "border-amber-500/25 bg-amber-950/5 dark:bg-amber-950/10 shadow-amber-500/5",
-  danger: "border-red-500/25 bg-red-950/5 dark:bg-red-950/10 shadow-red-500/5",
+  info: "border-primary/30 bg-primary/5",
+  success: "border-success/25 bg-success/5",
+  warning: "border-warning/25 bg-warning/5",
+  danger: "border-destructive/25 bg-destructive/5",
 };
 
 function providerLabel(provider: string) {
@@ -63,11 +63,11 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
                       </div>
                       <div>
                         <div className="text-muted-foreground">Ошибки</div>
-                        <div className={cn("font-mono", usage.errors > 0 ? "text-red-500" : "text-foreground")}>{usage.errors} ({errRate}%)</div>
+                        <div className={cn("font-mono", usage.errors > 0 ? "text-destructive" : "text-foreground")}>{usage.errors} ({errRate}%)</div>
                       </div>
                       <div>
                         <div className="text-muted-foreground">Стоимость</div>
-                        <div className="font-mono text-emerald-500">${usage.cost_usd.toFixed(4)}</div>
+                        <div className="font-mono text-success">${usage.cost_usd.toFixed(4)}</div>
                       </div>
                     </div>
                   </div>
@@ -99,11 +99,11 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
                         <td className="py-3 text-right font-mono text-muted-foreground/80">{usage.input_tokens.toLocaleString()}</td>
                         <td className="py-3 text-right font-mono text-muted-foreground/80">{usage.output_tokens.toLocaleString()}</td>
                         <td className="py-3 text-right font-mono">
-                          <span className={cn(usage.errors > 0 ? "text-red-500 font-bold" : "text-muted-foreground/80")}>
+                          <span className={cn(usage.errors > 0 ? "text-destructive font-bold" : "text-muted-foreground/80")}>
                             {usage.errors} ({errRate}%)
                           </span>
                         </td>
-                        <td className="py-3 text-right font-bold font-mono text-emerald-500">${usage.cost_usd.toFixed(4)}</td>
+                        <td className="py-3 text-right font-bold font-mono text-success">${usage.cost_usd.toFixed(4)}</td>
                       </tr>
                     );
                   })}
@@ -135,7 +135,7 @@ export function buildAdminUsageWidgets(d: AdminDashboardData, lang: string): Wid
               {providerEntries.map(([provider, info]) => (
                 <div key={provider} className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-secondary/5 text-xs hover:border-primary/30 transition-all">
                   <div className="flex items-center gap-2">
-                    <div className={cn("h-2 w-2 rounded-full shrink-0", info.enabled ? "bg-emerald-500" : "bg-muted-foreground/30")} />
+                    <div className={cn("h-2 w-2 rounded-full shrink-0", info.enabled ? "bg-success" : "bg-muted-foreground/30")} />
                     <span className="font-semibold text-foreground/95">{providerLabel(provider)}</span>
                   </div>
                   <span className="text-xs font-mono text-muted-foreground bg-card border rounded-md px-2 py-0.5 max-w-[150px] truncate shadow-sm">

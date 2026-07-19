@@ -19,6 +19,8 @@ class FakePlanCallbacks:
         self.failure_decisions: list[dict] = []
         self.replan_tasks: list[dict] = []
         self.user_answer = "continue"
+        self.unattended = False
+        self.wait_for_user_reply_calls = 0
 
     def callbacks(self) -> PlanExecutionCallbacks:
         return PlanExecutionCallbacks(
@@ -33,6 +35,7 @@ class FakePlanCallbacks:
             handle_failure=self.handle_failure,
             replan=self.replan,
             wait_for_user_reply=self.wait_for_user_reply,
+            unattended=self.unattended,
         )
 
     async def wait_for_resume(self):
@@ -66,6 +69,7 @@ class FakePlanCallbacks:
         return deepcopy(self.replan_tasks)
 
     async def wait_for_user_reply(self):
+        self.wait_for_user_reply_calls += 1
         return self.user_answer
 
 
@@ -164,6 +168,41 @@ async def test_execute_plan_tasks_ask_user_updates_waiting_state_and_context():
 
     assert fake.waiting_questions == ["Continue?"]
     assert fake.clear_waiting_calls == 1
+    assert fake.wait_for_user_reply_calls == 1
     assert "### Ответ пользователя по задаче 1\nyes" in fake.run_calls[-1][1]
     assert plan_tasks[0]["status"] == "failed"
     assert plan_tasks[0]["result"] == "Пользователь ответил: yes"
+
+
+@pytest.mark.asyncio
+async def test_execute_plan_tasks_unattended_ask_user_does_not_block():
+    """Production path: orchestrator recovery ask_user must not await human reply when unattended."""
+    from servers.multi_agent_plan_executor import UNATTENDED_ASK_USER_DENY
+
+    fake = FakePlanCallbacks()
+    fake.unattended = True
+    fake.failure_decisions = [{"action": "ask_user", "message": "Need human?"}]
+    plan_tasks = [
+        {"id": 1, "name": "fails", "description": "fails", "status": "pending", "raise": "boom"},
+        {"id": 2, "name": "next", "description": "next", "status": "pending"},
+    ]
+
+    await execute_plan_tasks(
+        goal="goal",
+        plan_tasks=plan_tasks,
+        orchestrator_log=[],
+        deadline=999999,
+        callbacks=fake.callbacks(),
+        skip_completed=True,
+    )
+
+    assert fake.wait_for_user_reply_calls == 0
+    assert fake.waiting_questions == []
+    assert fake.clear_waiting_calls == 0
+    # Second task still ran with deny message in context (fail-fast, no hang).
+    assert [call[0] for call in fake.run_calls] == [1, 2]
+    assert UNATTENDED_ASK_USER_DENY in fake.run_calls[-1][1]
+    assert any(
+        event == "agent_status" and payload.get("outcome_note") == "ask_user_denied_unattended"
+        for event, payload in fake.events
+    )

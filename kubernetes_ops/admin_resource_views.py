@@ -10,6 +10,11 @@ from loguru import logger
 
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAdminSession, K8sAuditEvent
+from kubernetes_ops.services.admin_metrics import get_cluster_metrics_snapshot
+from kubernetes_ops.services.admin_nodes import list_cluster_nodes
+from kubernetes_ops.services.admin_resource_describe import get_cluster_resource_live_describe
+from kubernetes_ops.services.admin_resource_detail import get_cluster_resource_detail
+from kubernetes_ops.services.admin_resource_events import list_cluster_resource_events
 from kubernetes_ops.services.admin_resources import (
     AdminResourceError,
     discover_cluster_resources,
@@ -17,11 +22,6 @@ from kubernetes_ops.services.admin_resources import (
     list_cluster_crds,
     list_cluster_resources,
 )
-from kubernetes_ops.services.admin_nodes import list_cluster_nodes
-from kubernetes_ops.services.admin_metrics import get_cluster_metrics_snapshot
-from kubernetes_ops.services.admin_resource_describe import get_cluster_resource_live_describe
-from kubernetes_ops.services.admin_resource_detail import get_cluster_resource_detail
-from kubernetes_ops.services.admin_resource_events import list_cluster_resource_events
 
 
 def _safe_json(handler):

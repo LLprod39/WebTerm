@@ -175,12 +175,23 @@ async def _run_detect_command(server: Server, *, secret: str, timeout_seconds: f
         server=server,
     )
     try:
+        # OS probe is read-only and never needs sudo. Avoid loading/decrypting
+        # stored sudo passwords (wrong MANAGED_SECRET_KEY would fail the whole probe).
         result = await asyncio.wait_for(
-            ssh_manager.execute(conn_id, OS_DETECT_COMMAND),
+            ssh_manager.execute(
+                conn_id,
+                OS_DETECT_COMMAND,
+                sudo_auth_mode="none",
+                sudo_password="",
+            ),
             timeout=timeout_seconds,
         )
         stdout = str(result.get("stdout") or "")
         stderr = str(result.get("stderr") or "")
+        exit_code = result.get("exit_code")
+        # Never treat internal Python/decrypt errors as remote OS output.
+        if exit_code == -1 and "Managed secret" in (stderr or ""):
+            raise RuntimeError(stderr.strip())
         return stdout if stdout.strip() else stderr
     finally:
         await ssh_manager.disconnect(conn_id)
@@ -225,26 +236,65 @@ async def detect_server_os(server: Server) -> dict[str, Any]:
     try:
         raw = await _run_detect_command(server, secret=secret)
     except Exception as exc:
+        # Soft-fail: keep previous known distro if any; only stamp attempt time.
         await sync_to_async(_mark_detection_attempt)(server)
         logger.debug("OS detect failed for {}: {}", server.name, exc)
-        return {"success": False, "server_id": server.id, "error": str(exc)}
+        return {"success": False, "server_id": server.id, "error": str(exc), "needs_retry": True}
+
+    # Internal error strings must not be parsed as OS release output.
+    raw_text = (raw or "").strip()
+    if raw_text.startswith("Managed secret cannot be decrypted") or raw_text.startswith("SSH error:"):
+        await sync_to_async(_mark_detection_attempt)(server)
+        return {
+            "success": False,
+            "server_id": server.id,
+            "error": raw_text[:300],
+            "needs_retry": True,
+        }
 
     sections = _parse_marked_sections(raw)
-    os_release = parse_os_release(sections.get("__OS_RELEASE__", ""))
+    os_release_text = sections.get("__OS_RELEASE__", "")
+    uname_text = sections.get("__UNAME__", "")
+    bsd_text = sections.get("__BSD_VERSION__", "")
+    # Fallback: remote shell ignored markers — parse whole blob.
+    if not os_release_text and not uname_text and raw_text:
+        if "ID=" in raw_text or "PRETTY_NAME=" in raw_text:
+            os_release_text = raw_text
+        if "Linux " in raw_text or "Darwin " in raw_text or "FreeBSD " in raw_text:
+            uname_text = raw_text
+    os_release = parse_os_release(os_release_text)
     kind, meta = map_to_os_kind(
         os_release,
-        uname=sections.get("__UNAME__", ""),
-        bsd_version=sections.get("__BSD_VERSION__", ""),
+        uname=uname_text,
+        bsd_version=bsd_text,
     )
     meta["source"] = "ssh"
+    probe_empty = not any(
+        [
+            (os_release.get("ID") or "").strip(),
+            (os_release.get("PRETTY_NAME") or "").strip(),
+            (meta.get("uname") or "").strip(),
+            (meta.get("bsd_version") or "").strip(),
+        ]
+    )
+    # Empty SSH probe → unresolved (not a "successful" unknown forever).
+    if probe_empty or kind not in VALID_OS_KINDS:
+        kind = "unknown"
+        meta["unresolved"] = True
+        meta["probe_empty"] = bool(probe_empty)
+        if raw_text and probe_empty:
+            meta["raw_preview"] = raw_text[:200]
     await sync_to_async(_save_detection)(server, kind, meta)
     pretty = meta.get("pretty_name") or kind
+    resolved = kind in VALID_OS_KINDS
     return {
-        "success": True,
+        "success": resolved,
         "server_id": server.id,
         "detected_os": kind,
-        "detected_os_pretty": pretty,
+        "detected_os_pretty": pretty if resolved else "",
         "meta": meta,
+        "needs_retry": not resolved,
+        "error": None if resolved else ("empty_os_probe" if probe_empty else "unmapped_os"),
     }
 
 

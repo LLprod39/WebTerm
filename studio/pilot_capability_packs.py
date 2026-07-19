@@ -4,7 +4,6 @@ import copy
 from dataclasses import dataclass
 from typing import Any
 
-
 JsonSchema = dict[str, Any]
 
 

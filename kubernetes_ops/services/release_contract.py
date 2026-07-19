@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 RELEASE_EVIDENCE_SCHEMA_VERSION = "kubernetes_ops.release_evidence.v2"
 
 

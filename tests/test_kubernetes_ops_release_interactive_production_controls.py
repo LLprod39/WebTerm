@@ -17,7 +17,6 @@ from kubernetes_ops.services.release_interactive_production_controls import (
     write_kubernetes_interactive_production_controls,
 )
 
-
 pytestmark = pytest.mark.django_db
 
 

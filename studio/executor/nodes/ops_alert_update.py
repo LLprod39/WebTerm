@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 
 async def execute_alert_update(
-    ctx: "ExecutionContext",
+    ctx: ExecutionContext,
     config: dict[str, Any],
     *,
     ops_runtime: Any,

@@ -33,6 +33,14 @@ from app.core.llm import LLMProvider
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
+from servers.agent_budgets import (
+    FULL_DEFAULT_COMMAND_TIMEOUT_SEC,
+    FULL_DEFAULT_MAX_ITERATIONS,
+    FULL_DEFAULT_SESSION_TIMEOUT_SEC,
+    FULL_MAX_ITERATIONS_CAP,
+    clamp_command_timeout,
+    clamp_full_iterations,
+)
 from servers.agent_engine_prompts import build_system_prompt, generate_final_report
 from servers.agent_engine_runner import run_agent_engine
 from servers.agent_engine_tools import execute_agent_tool, validate_agent_tool_args
@@ -48,9 +56,9 @@ from servers.models import AgentRun, Server, ServerAgent
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
-
-SESSION_TIMEOUT_DEFAULT = 600
-MAX_ITERATIONS_CAP = 100
+SESSION_TIMEOUT_DEFAULT = FULL_DEFAULT_SESSION_TIMEOUT_SEC
+MAX_ITERATIONS_CAP = FULL_MAX_ITERATIONS_CAP
+DEFAULT_COMMAND_TIMEOUT = FULL_DEFAULT_COMMAND_TIMEOUT_SEC
 CONTROL_POLL_INTERVAL = 0.5
 
 _MISSING_ACTION_INTENT_RE = re.compile(
@@ -98,9 +106,14 @@ class AgentEngine:
         self.user = user
         self.event_callback = event_callback
 
-        self.max_iterations = min(agent.max_iterations or 20, MAX_ITERATIONS_CAP)
+        self.max_iterations = clamp_full_iterations(agent.max_iterations or FULL_DEFAULT_MAX_ITERATIONS)
         self.session_timeout = agent.session_timeout_seconds or SESSION_TIMEOUT_DEFAULT
         self.tools_config = dict(agent.tools_config or {})
+        self.command_timeout = clamp_command_timeout(
+            self.tools_config.get("command_timeout")
+            or self.tools_config.get("command_timeout_seconds")
+            or DEFAULT_COMMAND_TIMEOUT
+        )
         self.allowed_tool_names = {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
         self.enabled_tools = get_enabled_tools(self.tools_config)
 
@@ -110,6 +123,8 @@ class AgentEngine:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._stop_cleanup_scheduled = False
         self._control_task: asyncio.Task | None = None
+        self._mid_run_replan_injected = False
+        self._missing_action_reprompts = 0
 
         self.session: AgentSessionManager | None = None
         self.run_record: AgentRun | None = None
@@ -147,6 +162,18 @@ class AgentEngine:
                     self.enabled_tools.append(tool_name)
             if self.allowed_tool_names is not None:
                 self.allowed_tool_names.update({"list_skills", "read_skill"})
+
+        # Materials tools are always available when the agent has input_artifacts,
+        # so the model can list/read scripts and run operator-provided scripts.
+        from servers.agent_inputs import MATERIALS_TOOL_NAMES, normalize_input_artifacts
+
+        self.input_materials = normalize_input_artifacts(getattr(agent, "input_artifacts", None) or [])
+        if self.input_materials:
+            for tool_name in MATERIALS_TOOL_NAMES:
+                if tool_name not in self.enabled_tools:
+                    self.enabled_tools.append(tool_name)
+            if self.allowed_tool_names is not None:
+                self.allowed_tool_names.update(MATERIALS_TOOL_NAMES)
 
     # ------------------------------------------------------------------
     # Public control methods (called from WebSocket consumer)
@@ -303,11 +330,13 @@ class AgentEngine:
 
         Some chat models describe the next tool they intend to call but omit the
         required ACTION line. Treating that as a final answer produces a bogus
-        completed run with zero evidence. We only reprompt before the first tool
-        call, when tools are available and the text still expresses action
-        intent rather than completion.
+        completed run with zero evidence. Allow up to 2 reprompts early in the
+        run (before many tools have run), when tools are available and the text
+        still expresses action intent rather than completion.
         """
-        if tool_calls_log:
+        if len(tool_calls_log) > 2:
+            return False
+        if getattr(self, "_missing_action_reprompts", 0) >= 2:
             return False
         if not (self.enabled_tools or self.mcp_tools):
             return False

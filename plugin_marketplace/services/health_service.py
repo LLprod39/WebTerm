@@ -8,7 +8,11 @@ from app.plugins.connectors import active_connectors
 from app.plugins.permissions import check_plugin_permission
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import PluginInstallation, PluginSecretBinding
-from plugin_marketplace.services.egress_policy_service import denied_egress_hosts, manifest_egress_hosts, normalize_egress_host
+from plugin_marketplace.services.egress_policy_service import (
+    denied_egress_hosts,
+    manifest_egress_hosts,
+    normalize_egress_host,
+)
 from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user, record_event
 
 

@@ -7,6 +7,7 @@ from datetime import timedelta
 from django.test import override_settings
 from django.utils import timezone
 
+from kubernetes_ops.services.live_provider_smoke import LIVE_PROVIDER_SMOKE_SCHEMA_VERSION
 from kubernetes_ops.services.release_contract import RELEASE_EVIDENCE_SCHEMA_VERSION
 from kubernetes_ops.services.release_preflight import (
     PREFLIGHT_SCHEMA_VERSION,
@@ -14,7 +15,6 @@ from kubernetes_ops.services.release_preflight import (
     load_kubernetes_release_preflight_artifact,
     write_kubernetes_release_preflight,
 )
-from kubernetes_ops.services.live_provider_smoke import LIVE_PROVIDER_SMOKE_SCHEMA_VERSION
 
 
 def _write_live_rbac_artifact(tmp_path, *, status: str = "ready", include_live_provider_smoke: bool = True) -> None:

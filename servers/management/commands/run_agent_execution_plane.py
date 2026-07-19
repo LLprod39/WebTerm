@@ -20,7 +20,7 @@ from servers.worker_state import (
 
 
 class Command(BaseCommand):
-    help = "Run the dedicated execution-plane worker for queued full/multi agent runs."
+    help = "Run the dedicated execution-plane worker for queued mini/full/multi agent runs."
 
     def add_arguments(self, parser):
         parser.add_argument("--interval", type=int, default=5, help="Poll interval in seconds while the queue is empty")

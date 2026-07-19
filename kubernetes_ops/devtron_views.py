@@ -7,7 +7,11 @@ from loguru import logger
 
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent
-from kubernetes_ops.services.devtron_app_detail import build_devtron_app_detail, devtron_app_audit_payload, devtron_app_for_value
+from kubernetes_ops.services.devtron_app_detail import (
+    build_devtron_app_detail,
+    devtron_app_audit_payload,
+    devtron_app_for_value,
+)
 
 
 def _safe_json(handler):

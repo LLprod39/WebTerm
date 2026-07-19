@@ -5,7 +5,6 @@ from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
-
 BLOCKED_NAMES = {
     "install.sh",
     "postinstall.sh",

@@ -171,7 +171,7 @@ export function buildPipelineSavePayload({
 }
 
 export function getActiveStoredTriggers(
-  pipelineTriggers: PipelineTrigger[] | undefined,
+  pipelineTriggers: PipelineTrigger[] | null | undefined,
   type: PipelineTrigger["trigger_type"],
 ) {
   if (!Array.isArray(pipelineTriggers)) {

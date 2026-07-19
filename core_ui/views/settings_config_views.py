@@ -214,7 +214,7 @@ def _settings_config_payload(config, delegate_ui: str) -> dict:
         "domain_auth_default_profile": (
             getattr(config, "domain_auth_default_profile", None)
             if getattr(config, "domain_auth_default_profile", None)
-            else str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only") or "server_only")
+            else str(getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "pilot_user") or "pilot_user")
         ),
         "openai_reasoning_effort": getattr(config, "openai_reasoning_effort", "low") or "low",
         "chat_llm_provider": getattr(config, "chat_llm_provider", "") or "",

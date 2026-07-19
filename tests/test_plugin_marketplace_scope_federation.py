@@ -9,7 +9,6 @@ from core_ui.models import UserAppPermission
 from plugin_marketplace.models import MarketplaceCatalogItem, PluginInstallEvent, PluginPackage
 from studio.pipeline_validation import validate_pipeline_definition
 
-
 PLUGIN_STUDIO_NODE_TYPE = "plugin/webtrerm.demo-dashboard/demo-connector-ping"
 
 

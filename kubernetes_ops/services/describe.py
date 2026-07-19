@@ -6,8 +6,12 @@ from typing import Any
 from django.db.models import Q
 
 from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sEvent, K8sWorkloadRef
-from kubernetes_ops.serializers import serialize_app, serialize_cluster_event, serialize_kubernetes_event, serialize_workload
-
+from kubernetes_ops.serializers import (
+    serialize_app,
+    serialize_cluster_event,
+    serialize_kubernetes_event,
+    serialize_workload,
+)
 
 SENSITIVE_KEY_PARTS = ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
 BLOCKED_ACTIONS = ("exec", "logs_streaming", "rollout_restart", "scale", "delete", "apply_yaml", "port_forward")

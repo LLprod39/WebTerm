@@ -14,7 +14,6 @@ from kubernetes_ops.serializers import (
 )
 from kubernetes_ops.services.logs import _redact_log_line
 
-
 MAX_RELATED_APPS = 30
 MAX_RELATED_WORKLOADS = 50
 MAX_RELATED_EVENTS = 40

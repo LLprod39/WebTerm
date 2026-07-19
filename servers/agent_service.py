@@ -2,29 +2,27 @@ from __future__ import annotations
 
 import contextlib
 
-from asgiref.sync import async_to_sync
 from django.db.models import Q
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
 from servers.agent_background import launch_plan_execution_background
-from servers.agent_dispatch import cancel_agent_dispatches_for_run, serialize_agent_dispatch
 from servers.agent_cleanup_service import cleanup_stale_agent_runs_for_user
+from servers.agent_dispatch import cancel_agent_dispatches_for_run, serialize_agent_dispatch
 from servers.agent_execution_state import (
     get_agent_execution_readiness,
     get_agent_execution_readiness_for_mode,
 )
 from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
-from servers.agent_launch import launch_full_agent_run
+from servers.agent_launch import launch_queued_agent_run
 from servers.agent_run_lifecycle import mark_agent_run_stopped
 from servers.agent_run_report import record_run_event_and_refresh_report, refresh_agent_run_report_payload
+from servers.agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from servers.agent_runtime_overview import (
     get_agent_runtime_overview,
     get_agent_worker_states,
 )
-from servers.agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from servers.agent_schedule import compute_next_due_by_schedule, normalize_schedule_config
-from servers.agents import run_agent, run_agent_on_all_servers
 from servers.models import AgentRun, AgentRunDispatch, BackgroundWorkerState, ServerAgent, ServerWatcherDraft
 from servers.run_events import record_run_event
 from servers.scheduled_agents import dispatch_scheduled_agents, is_agent_due
@@ -108,6 +106,13 @@ def serialize_agent_item(
         "last_run_status": last_run.status if last_run else None,
         "last_run_id": last_run.id if last_run else None,
         "active_run_id": active_run.id if active_run else None,
+        "active_run_status": active_run.status if active_run else None,
+        "active_run_started_at": active_run.started_at.isoformat() if active_run and active_run.started_at else None,
+        "active_run_iterations": int(active_run.total_iterations or 0) if active_run else 0,
+        "active_run_server_name": (
+            active_run.server.name if active_run and active_run.server_id and active_run.server else None
+        ),
+        "active_run_pending_question": (active_run.pending_question or "")[:200] if active_run else "",
         "execution_readiness": execution_readiness or get_agent_execution_readiness_for_mode(agent.mode),
         "schedule_state": compute_schedule_state(agent, current_time),
         "due_now": bool(next_due_at is not None and next_due_at <= current_time and agent.is_enabled),
@@ -126,19 +131,22 @@ def list_agents_for_user(user, *, mode_filter: str | None = None) -> list[dict]:
         queryset = queryset.filter(mode=mode_filter)
 
     current_time = timezone.now()
-    full_multi_readiness = get_agent_execution_readiness()
+    execution_readiness = get_agent_execution_readiness()
     data: list[dict] = []
     for agent in queryset:
-        last_run = AgentRun.objects.filter(agent=agent).first()
-        active_run = AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).first()
-        readiness = get_agent_execution_readiness_for_mode(agent.mode) if agent.mode == ServerAgent.MODE_MINI else full_multi_readiness
+        last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
+        active_run = (
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
+            .select_related("server")
+            .first()
+        )
         data.append(
             serialize_agent_item(
                 agent,
                 now=current_time,
                 last_run=last_run,
                 active_run=active_run,
-                execution_readiness=readiness,
+                execution_readiness=execution_readiness,
             )
         )
     return data
@@ -154,7 +162,7 @@ def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
     )
 
     items = []
-    full_multi_readiness = get_agent_execution_readiness()
+    execution_readiness = get_agent_execution_readiness()
     summary = {
         "total_scheduled": 0,
         "enabled": 0,
@@ -163,15 +171,18 @@ def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
         "active_runs": 0,
     }
     for agent in agents:
-        last_run = AgentRun.objects.filter(agent=agent).first()
-        active_run = AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).first()
-        readiness = get_agent_execution_readiness_for_mode(agent.mode) if agent.mode == ServerAgent.MODE_MINI else full_multi_readiness
+        last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
+        active_run = (
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
+            .select_related("server")
+            .first()
+        )
         item = serialize_agent_item(
             agent,
             now=current_time,
             last_run=last_run,
             active_run=active_run,
-            execution_readiness=readiness,
+            execution_readiness=execution_readiness,
         )
         items.append(item)
         summary["total_scheduled"] += 1
@@ -225,69 +236,48 @@ def start_agent_run_for_user(
     source: str = "http",
     extra_event_payload: dict | None = None,
 ) -> dict:
-    if agent.is_full or agent.is_multi:
-        limit_error = get_agent_run_limit_error(user)
-        if limit_error:
-            return {"ok": False, "status": 429, "payload": limit_error}
+    """Queue any agent mode (mini/full/multi) for the execution-plane worker.
 
-        launch_result = launch_full_agent_run(
-            agent=agent,
-            user=user,
-            accessible_servers_queryset=accessible_servers_queryset,
-        )
-        if not launch_result["ok"]:
-            return {
-                "ok": False,
-                "status": int(launch_result["status"]),
-                "payload": {"success": False, "error": launch_result["error"]},
-            }
+    Never runs SSH/LLM inside the HTTP request — that blocked Daphne threads and
+    left orphan ``running`` rows when the client timed out or the worker hung.
+    """
+    limit_error = get_agent_run_limit_error(user)
+    if limit_error:
+        return {"ok": False, "status": 429, "payload": limit_error}
 
-        run_result = launch_result["run"]
-        record_run_event_and_refresh_report(
-            run_result,
-            "agent_manual_dispatch",
-            _manual_dispatch_payload(
-                agent=agent,
-                source=source,
-                extra_payload=extra_event_payload,
-            ),
-        )
+    launch_result = launch_queued_agent_run(
+        agent=agent,
+        user=user,
+        accessible_servers_queryset=accessible_servers_queryset,
+        server_id=int(server_id) if server_id is not None else None,
+    )
+    if not launch_result["ok"]:
         return {
-            "ok": True,
-            "payload": {
-                "success": True,
-                "run_id": run_result.id,
-                "status": run_result.status,
-                "runs": [serialize_run_result(run_result)],
-            },
+            "ok": False,
+            "status": int(launch_result["status"]),
+            "payload": {"success": False, "error": launch_result["error"]},
         }
 
-    if server_id:
-        server = accessible_servers_queryset.filter(id=server_id).first()
-        if not server:
-            return {"ok": False, "status": 404, "payload": {"success": False, "error": "Server not found"}}
-        runs = [async_to_sync(run_agent)(agent, server, user)]
-    else:
-        runs = async_to_sync(run_agent_on_all_servers)(agent, user)
-
-    results = []
-    for run in runs:
-        record_run_event_and_refresh_report(
-            run,
-            "agent_manual_dispatch",
-            _manual_dispatch_payload(
-                agent=agent,
-                source=source,
-                extra_payload={"server_id": run.server_id, **(extra_event_payload or {})},
-            ),
-        )
-        results.append(serialize_run_result(run))
-
+    run_result = launch_result["run"]
+    record_run_event_and_refresh_report(
+        run_result,
+        "agent_manual_dispatch",
+        _manual_dispatch_payload(
+            agent=agent,
+            source=source,
+            extra_payload={
+                "server_id": run_result.server_id,
+                **(extra_event_payload or {}),
+            },
+        ),
+    )
     return {
         "ok": True,
         "payload": {
             "success": True,
-            "runs": results,
+            "run_id": run_result.id,
+            "status": run_result.status,
+            "runs": [serialize_run_result(run_result)],
         },
     }
 

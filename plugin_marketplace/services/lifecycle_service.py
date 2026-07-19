@@ -16,7 +16,10 @@ from plugin_marketplace.models import (
 )
 from plugin_marketplace.services.egress_policy_service import manifest_egress_hosts
 from plugin_marketplace.services.install_service import record_event
-from plugin_marketplace.services.package_attestation_policy_service import attestation_enable_blockers, attestation_policy_for_package
+from plugin_marketplace.services.package_attestation_policy_service import (
+    attestation_enable_blockers,
+    attestation_policy_for_package,
+)
 from plugin_marketplace.services.sandbox_policy_service import sandbox_enable_blockers, sandbox_policy_for_package
 
 

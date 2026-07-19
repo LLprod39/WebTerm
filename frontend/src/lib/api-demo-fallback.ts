@@ -18,6 +18,28 @@ export function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/auth/ws-token")) return { token: "demo-token" } as T;
   if (path.includes("/frontend/bootstrap")) return DEMO_BOOTSTRAP as T;
 
+  // Plugin surfaces: dashboards expect surfaces.dashboard_widgets[] even when empty.
+  if (path.includes("/api/plugins/surfaces")) {
+    return {
+      success: true,
+      surfaces: {
+        pages: [],
+        dashboard_widgets: [],
+        connectors: [],
+        studio_nodes: [],
+        agent_tools: [],
+        terminal_actions: [],
+        hooks: [],
+      },
+    } as T;
+  }
+  if (path.includes("/api/plugins/catalog")) {
+    return { success: true, packages: [], items: [], count: 0 } as T;
+  }
+  if (path.includes("/api/plugins/installed")) {
+    return { success: true, installations: [], count: 0 } as T;
+  }
+
   const kubernetesFallback = demoKubernetesFallback<T>(path, _options);
   if (kubernetesFallback !== undefined) return kubernetesFallback;
 

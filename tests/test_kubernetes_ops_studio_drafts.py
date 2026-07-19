@@ -6,8 +6,8 @@ from django.urls import reverse
 
 from core_ui.models import UserAppPermission
 from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster
-from studio.skill_registry import get_skill
 from studio.models import MCPServerPool, Pipeline, PipelineDraftSession, PipelineRun
+from studio.skill_registry import get_skill
 
 
 class KubernetesOpsStudioDraftTests(TestCase):

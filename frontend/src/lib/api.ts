@@ -17,6 +17,7 @@ export * from "@/api/monitoring";
 export * from "@/api/servers";
 export * from "@/api/server-files";
 export * from "@/api/server-memory";
+export * from "@/api/playbooks";
 export * from "@/api/settings";
 export * from "@/api/plugins";
 export * from "@/api/studio";
@@ -172,7 +173,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const { timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS, ...requestOptions } = options;
   try {
     const csrfToken = isMutationRequest(requestOptions.method) ? await ensureCsrfToken(forceBackend) : getCookie("csrftoken");
-    const jsonHeaders = isFormDataBody(requestOptions.body) ? {} : { "Content-Type": "application/json" };
+    const jsonHeaders: Record<string, string> = isFormDataBody(requestOptions.body) ? {} : { "Content-Type": "application/json" };
     response = await fetchWithTimeout(`${apiBaseForPath(path)}${path}`, {
       credentials: "include",
       ...requestOptions,
@@ -234,6 +235,14 @@ export function getStudioPipelineRunWsUrl(runId: number | string): string {
 
 export function getMarsRunWsUrl(runId: number | string): string {
   return `${buildWsBase()}/ws/mars/runs/${runId}/live/`;
+}
+
+export function getMonitoringLiveWsUrl(): string {
+  return `${buildWsBase()}/ws/monitoring/live/`;
+}
+
+export function getOperatorChatWsUrl(chatId: number | string): string {
+  return `${buildWsBase()}/ws/operator/${chatId}/`;
 }
 
 export function getKubernetesAdminLogStreamWsUrl(

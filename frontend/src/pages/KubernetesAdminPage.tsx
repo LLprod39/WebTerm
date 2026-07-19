@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Database, ListTree, RefreshCcw, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Database, ListTree, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import {
@@ -16,7 +16,7 @@ import {
   fetchKubernetesReadiness,
 } from "@/api";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageHero, PageShell, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
+import { EmptyState, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
 import { localize, useI18n } from "@/lib/i18n";
 import { ResourceCatalogPanel } from "@/pages/kubernetes-page/KubernetesAdminResourceCatalog";
 import { ResourceInspector } from "@/pages/kubernetes-page/KubernetesAdminResourceInspector";
@@ -33,6 +33,11 @@ import {
   type InspectorTab,
   type ResourceTarget,
 } from "@/pages/kubernetes-page/kubernetesAdminResourceModel";
+import {
+  K8sRefreshButton,
+  KubernetesPageHeader,
+  KubernetesShell,
+} from "@/pages/kubernetes-page/KubernetesShell";
 
 export default function KubernetesAdminPage() {
   const { lang } = useI18n();
@@ -262,36 +267,37 @@ export default function KubernetesAdminPage() {
   const error = readinessQuery.error || clustersQuery.error || sessionsQuery.error;
 
   return (
-    <PageShell width="full" className="space-y-5">
-      <PageHero
-        kicker={localize(lang, "Kubernetes Admin Mode", "Kubernetes Admin Mode")}
+    <KubernetesShell width="full">
+      <KubernetesPageHeader
+        kicker={localize(lang, "Admin Mode", "Admin Mode")}
         title={localize(lang, "Live resource workspace", "Live resource workspace")}
         description={localize(
           lang,
-          "Freelens-like просмотр ресурсов через WebTerm: catalog, таблица, YAML, events, logs snapshot и watch preview. Read-only по умолчанию.",
-          "Freelens-like resource browsing through WebTerm: catalog, table, YAML, events, logs snapshot, and watch preview. Read-only by default.",
+          "Catalog · table · YAML · events · logs · watch. Чище Freelens: один поток, без хаоса панелей. Read-only по умолчанию.",
+          "Catalog · table · YAML · events · logs · watch. Cleaner than Freelens: one flow, no panel chaos. Read-only by default.",
         )}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
+        meta={
+          <>
             <StatusBadge
               label={canAdminRead ? localize(lang, "Admin read", "Admin read") : localize(lang, "Нет admin read", "No admin read")}
               tone={canAdminRead ? "success" : "warning"}
             />
             <StatusBadge
-              label={sessionId ? localize(lang, "Read session active", "Read session active") : localize(lang, "Нужна session", "Session required")}
+              label={sessionId ? localize(lang, "Session active", "Session active") : localize(lang, "Нужна session", "Session required")}
               tone={sessionId ? "success" : "warning"}
             />
-            <Button asChild variant="outline" size="sm">
+          </>
+        }
+        actions={
+          <>
+            <Button asChild variant="outline" size="sm" className="h-10 gap-2">
               <Link to="/kubernetes">
                 <ArrowLeft className="h-4 w-4" />
-                {localize(lang, "Ops", "Ops")}
+                {localize(lang, "Пульт", "Cockpit")}
               </Link>
             </Button>
-            <Button variant="outline" size="sm" onClick={refreshAll}>
-              <RefreshCcw className="h-4 w-4" />
-              {localize(lang, "Обновить", "Refresh")}
-            </Button>
-          </div>
+            <K8sRefreshButton onClick={refreshAll} label={localize(lang, "Обновить", "Refresh")} />
+          </>
         }
       />
 
@@ -438,6 +444,6 @@ export default function KubernetesAdminPage() {
           </div>
         )}
       </QueryStateBlock>
-    </PageShell>
+    </KubernetesShell>
   );
 }

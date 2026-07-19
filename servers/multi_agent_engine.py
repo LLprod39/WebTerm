@@ -139,6 +139,16 @@ class MultiAgentEngine:
             if self.allowed_tool_names is not None:
                 self.allowed_tool_names.update({"list_skills", "read_skill"})
 
+        from servers.agent_inputs import MATERIALS_TOOL_NAMES, normalize_input_artifacts
+
+        self.input_materials = normalize_input_artifacts(getattr(agent, "input_artifacts", None) or [])
+        if self.input_materials:
+            for tool_name in MATERIALS_TOOL_NAMES:
+                if tool_name not in self.enabled_tools:
+                    self.enabled_tools.append(tool_name)
+            if self.allowed_tool_names is not None:
+                self.allowed_tool_names.update(MATERIALS_TOOL_NAMES)
+
     # ------------------------------------------------------------------
     # Public control methods
     # ------------------------------------------------------------------
@@ -276,6 +286,7 @@ class MultiAgentEngine:
             handle_failure=self._handle_failure,
             replan=self._replan,
             wait_for_user_reply=self._wait_for_user_reply,
+            unattended=bool(getattr(self, "unattended", False)),
         )
 
     # ------------------------------------------------------------------
@@ -362,6 +373,7 @@ class MultiAgentEngine:
             permission_engine=permission_engine,
             tool_registry=tool_registry,
             allowed_tool_names=allowed_tool_names,
+            engine=self,
         )
 
     async def _build_ops_prompt_context(self) -> str:

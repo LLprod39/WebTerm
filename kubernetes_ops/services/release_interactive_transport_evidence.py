@@ -11,7 +11,6 @@ from django.utils.dateparse import parse_datetime
 
 from kubernetes_ops.services.admin_interactive_transport_readiness import build_admin_interactive_transport_report
 
-
 INTERACTIVE_TRANSPORT_EVIDENCE_SCHEMA_VERSION = "kubernetes_ops.interactive_transport_evidence.v1"
 INTERACTIVE_TRANSPORT_EVIDENCE_ARTIFACT = "artifacts/kubernetes_ops_interactive_transport_evidence.json"
 

@@ -12,7 +12,6 @@ from django.utils.dateparse import parse_datetime
 from kubernetes_ops.services.action_requests import BLOCKED_ACTIONS
 from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS
 
-
 PRODUCTION_ACTION_EVIDENCE_SCHEMA_VERSION = "kubernetes_ops.production_action_evidence.v1"
 PRODUCTION_ACTION_EVIDENCE_ARTIFACT = "artifacts/kubernetes_ops_production_action_evidence.json"
 PRODUCTION_ROLLBACK_EVIDENCE_SETTING = "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF"

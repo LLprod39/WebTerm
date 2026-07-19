@@ -5,7 +5,14 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sAdminAction, K8sAdminRecording, K8sAdminSession, K8sAuditEvent, K8sCluster, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminSession,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sProvider,
+)
 from kubernetes_ops.services.admin_port_forward import prepare_kubernetes_port_forward_bridge
 from kubernetes_ops.services.admin_port_forward_tunnel import prepare_kubernetes_port_forward_tunnel_context
 from kubernetes_ops.services.admin_resources import AdminResourceError

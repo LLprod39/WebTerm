@@ -7,9 +7,54 @@
     <meta name="application-name" content="WebTermAI" />
     <meta name="description" content="Server management console with terminal access and AI assistance." />
     <meta name="author" content="WEU AI" />
-    <meta name="theme-color" content="#08111f" />
+    <meta name="theme-color" content="#09090b" />
+    <!-- Help static demo deploys avoid stale index.html / chunk mismatches -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta name="demo-build" content="2026-07-09-servers-modal-v4" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.ico" />
+    <script>
+      (function () {
+        try {
+          // Last style applied for this browser session/user (FOUC guard).
+          // Per-user map is applied after auth loads in the app.
+          var style = localStorage.getItem("webterm.ui-style.active");
+          var allowed = { catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1 };
+          if (style === "nocturne" || style === "haze") style = "folio-dark";
+          if (!allowed[style]) {
+            style = localStorage.getItem("webterm.ui-style");
+          }
+          if (!allowed[style]) style = "folio-dark";
+          document.documentElement.setAttribute("data-ui-style", style);
+        } catch (e) {
+          document.documentElement.setAttribute("data-ui-style", "folio-dark");
+        }
+
+        // Stale GH Pages/service-worker caches often keep old index + missing chunks.
+        // One automatic hard reload when a script/style 404s after a new deploy.
+        var buildMeta = document.querySelector('meta[name="demo-build"]');
+        var buildId = (buildMeta && buildMeta.getAttribute("content")) || "unknown";
+        var reloadKey = "webterm.demo.chunk-reload." + buildId;
+        window.addEventListener(
+          "error",
+          function (event) {
+            var target = event && event.target;
+            if (!target || (target.tagName !== "SCRIPT" && target.tagName !== "LINK")) return;
+            try {
+              if (sessionStorage.getItem(reloadKey)) return;
+              sessionStorage.setItem(reloadKey, "1");
+              var url = new URL(window.location.href);
+              url.searchParams.set("_cb", String(Date.now()));
+              window.location.replace(url.toString());
+            } catch (err) {
+              // ignore
+            }
+          },
+          true
+        );
+      })();
+    </script>
 
     <meta property="og:title" content="WebTermAI" />
     <meta property="og:description" content="Server management console with terminal access and AI assistance." />

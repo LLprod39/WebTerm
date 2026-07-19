@@ -22,6 +22,18 @@ def _grant_feature(user: User, *features: str) -> None:
         )
 
 
+def _force_planner_path(monkeypatch) -> None:
+    """Existing planner tests bypass the operator loop."""
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("test forces planner fallback")
+
+    monkeypatch.setattr(
+        "core_ui.services.operator_loop.handle_operator_message_sync",
+        _boom,
+    )
+
+
 @pytest.mark.django_db
 def test_assistant_chat_requires_orchestrator_feature():
     user = User.objects.create_user(username="chat-no-access", password="x")
@@ -40,6 +52,7 @@ def test_assistant_chat_read_action_executes_immediately(monkeypatch):
     _grant_feature(user, "orchestrator", "agents")
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
 
     async def fake_plan(**_kwargs):
         return {
@@ -77,6 +90,7 @@ def test_assistant_chat_keeps_llm_reply_when_no_action_is_needed(monkeypatch):
     _grant_feature(user, "orchestrator", "agents")
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
 
     async def fake_plan(**_kwargs):
         return {
@@ -112,6 +126,7 @@ def test_assistant_chat_passes_runtime_context_to_planner(monkeypatch):
     )
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
     captured: dict = {}
 
     async def fake_plan(**kwargs):
@@ -148,6 +163,7 @@ def test_assistant_chat_upgrades_named_agent_list_to_confirmed_run(monkeypatch):
     )
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
 
     async def fake_plan(**_kwargs):
         return {
@@ -189,6 +205,7 @@ def test_assistant_chat_mutating_action_waits_for_confirmation(monkeypatch):
     _grant_feature(user, "orchestrator", "studio_pipelines")
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
 
     async def fake_plan(**_kwargs):
         return {
@@ -232,6 +249,7 @@ def test_assistant_chat_action_respects_target_feature(monkeypatch):
     _grant_feature(user, "orchestrator")
     client = Client()
     client.force_login(user)
+    _force_planner_path(monkeypatch)
     register_action(
         AssistantActionSpec(
             action_type="test.kubernetes.blocked_action",

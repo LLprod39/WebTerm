@@ -20,6 +20,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
+from servers.elevated_files import ElevatedFileError, read_text_file_elevated, write_text_file_elevated
 from servers.sftp import (
     change_owner,
     change_permissions,
@@ -59,19 +60,31 @@ def _materialize_uploaded_file(uploaded_file) -> tuple[str, bool]:
 def _sftp_error_response(exc: Exception) -> JsonResponse:
     import asyncssh as _asyncssh
 
+    if isinstance(exc, ElevatedFileError):
+        return JsonResponse(
+            {"success": False, "error": str(exc) or "Elevated file operation failed", "code": exc.code},
+            status=exc.status,
+        )
     if isinstance(exc, (FileNotFoundError, _asyncssh.SFTPNoSuchFile, _asyncssh.SFTPNoSuchPath)):
-        return JsonResponse({"success": False, "error": "Файл или папка не найдены"}, status=404)
+        return JsonResponse({"success": False, "error": "Файл или папка не найдены", "code": "not_found"}, status=404)
     if isinstance(exc, (FileExistsError, _asyncssh.SFTPFileAlreadyExists)):
-        return JsonResponse({"success": False, "error": "Файл уже существует"}, status=409)
+        return JsonResponse({"success": False, "error": "Файл уже существует", "code": "already_exists"}, status=409)
     if isinstance(exc, NotADirectoryError):
-        return JsonResponse({"success": False, "error": "Указанный путь не является папкой"}, status=400)
+        return JsonResponse({"success": False, "error": "Указанный путь не является папкой", "code": "not_a_directory"}, status=400)
     if isinstance(exc, IsADirectoryError):
-        return JsonResponse({"success": False, "error": "Операция требует файл, а не папку"}, status=400)
+        return JsonResponse({"success": False, "error": "Операция требует файл, а не папку", "code": "is_directory"}, status=400)
     if isinstance(exc, (PermissionError, _asyncssh.SFTPPermissionDenied)):
-        return JsonResponse({"success": False, "error": "Недостаточно прав для выполнения операции"}, status=403)
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Недостаточно прав для выполнения операции",
+                "code": "permission_denied",
+            },
+            status=403,
+        )
     if isinstance(exc, ValueError):
-        return JsonResponse({"success": False, "error": str(exc)}, status=400)
-    return JsonResponse({"success": False, "error": str(exc) or "SFTP operation failed"}, status=500)
+        return JsonResponse({"success": False, "error": str(exc), "code": "invalid_request"}, status=400)
+    return JsonResponse({"success": False, "error": str(exc) or "SFTP operation failed", "code": "sftp_error"}, status=500)
 
 
 def _missing_capability_response(capability: str) -> JsonResponse:
@@ -100,19 +113,37 @@ def server_file_list(request, server_id):
 
 @login_required
 @require_feature("servers")
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 def server_file_read_text(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "read_files"):
         return _missing_capability_response("read_files")
     try:
         _require_ssh_server(server)
-        password = _resolve_server_secret(server, request, request.GET)
-        result = async_to_sync(read_text_file)(
-            server,
-            secret=password or "",
-            path=str(request.GET.get("path") or ""),
-        )
+        # Prefer JSON body for elevate + sudo_password (never put secrets in query string).
+        body = {}
+        if request.method == "POST":
+            with contextlib.suppress(Exception):
+                body = json.loads(request.body or "{}") or {}
+        params = request.GET if request.method == "GET" else body
+        password = _resolve_server_secret(server, request, params if isinstance(params, dict) else request.GET)
+        elevate = _parse_bool(params.get("elevate") if isinstance(params, dict) else request.GET.get("elevate"))
+        # Password only accepted from POST body.
+        sudo_password = str(body.get("sudo_password") or "") if request.method == "POST" else ""
+        path = str((params.get("path") if isinstance(params, dict) else None) or request.GET.get("path") or "")
+        if elevate:
+            result = async_to_sync(read_text_file_elevated)(
+                server,
+                secret=password or "",
+                path=path,
+                sudo_password=sudo_password,
+            )
+        else:
+            result = async_to_sync(read_text_file)(
+                server,
+                secret=password or "",
+                path=path,
+            )
         log_user_activity(
             user=request.user,
             request=request,
@@ -123,7 +154,11 @@ def server_file_read_text(request, server_id):
             entity_type="server",
             entity_id=server.id,
             entity_name=server.name,
-            metadata={"path": result["path"], "size": result["size"]},
+            metadata={
+                "path": result["path"],
+                "size": result["size"],
+                "elevated": bool(elevate),
+            },
         )
         return JsonResponse({"success": True, "file": result})
     except Exception as exc:
@@ -141,12 +176,25 @@ def server_file_write_text(request, server_id):
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
         password = _resolve_server_secret(server, request, data)
-        result = async_to_sync(write_text_file)(
-            server,
-            secret=password or "",
-            path=str(data.get("path") or ""),
-            content=str(data.get("content") or ""),
-        )
+        elevate = _parse_bool(data.get("elevate"))
+        sudo_password = str(data.get("sudo_password") or "")
+        path = str(data.get("path") or "")
+        content = str(data.get("content") or "")
+        if elevate:
+            result = async_to_sync(write_text_file_elevated)(
+                server,
+                secret=password or "",
+                path=path,
+                content=content,
+                sudo_password=sudo_password,
+            )
+        else:
+            result = async_to_sync(write_text_file)(
+                server,
+                secret=password or "",
+                path=path,
+                content=content,
+            )
         log_user_activity(
             user=request.user,
             request=request,
@@ -157,7 +205,11 @@ def server_file_write_text(request, server_id):
             entity_type="server",
             entity_id=server.id,
             entity_name=server.name,
-            metadata={"path": result["path"], "size": result["size"]},
+            metadata={
+                "path": result["path"],
+                "size": result["size"],
+                "elevated": bool(elevate),
+            },
         )
         return JsonResponse({"success": True, "file": result})
     except Exception as exc:

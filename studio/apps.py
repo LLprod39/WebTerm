@@ -12,12 +12,12 @@ class StudioConfig(AppConfig):
         from app.agent_kernel import mcp_runtime_registry, skill_promotion_registry, skill_provider_registry
         from app.runtime_limits import register_pipeline_run_limit_provider
         from app.smoke_seed_provider import register_smoke_pipeline_seed_provider
+        from studio.assistant_action_registry import register_assistant_actions
         from studio.mcp_runtime_adapter import StudioMCPRuntimeProvider
         from studio.runtime_limit_provider import DjangoPipelineRunLimitProvider
         from studio.skill_adapter import StudioSkillProvider
         from studio.skill_promotion import StudioSkillPromotionGateway
         from studio.smoke_seed_provider import DjangoSmokePipelineSeedProvider
-        from studio.assistant_action_registry import register_assistant_actions
 
         mcp_runtime_registry.register(StudioMCPRuntimeProvider())
         register_pipeline_run_limit_provider(DjangoPipelineRunLimitProvider())

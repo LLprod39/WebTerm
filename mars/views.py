@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from django.http import JsonResponse
 from django.db.models import Count
+from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
@@ -12,7 +12,6 @@ from core_ui.decorators import require_feature
 from mars.models import MarsRun, MarsSession, MarsWorkspace
 from mars.policy import MarsPolicyError
 from mars.project_serializers import serialize_project_session
-from mars.skill_catalog import available_skill_slugs
 from mars.services import (
     MarsInterviewError,
     build_interview_questions,
@@ -20,13 +19,14 @@ from mars.services import (
     ensure_personal_workspace,
     existing_personal_workspace,
     generate_plan,
-    record_event,
     recommend_skills,
+    record_event,
     serialize_event,
     serialize_run,
     serialize_session,
     serialize_workspace,
 )
+from mars.skill_catalog import available_skill_slugs
 
 
 def _json_body(request) -> dict[str, Any]:

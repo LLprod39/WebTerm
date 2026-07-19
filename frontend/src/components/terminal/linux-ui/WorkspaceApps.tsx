@@ -44,6 +44,8 @@ export function buildWorkspaceApps({
       status: "live",
       icon: <Monitor className="h-5 w-5" />,
       accentClass: "from-primary/15 to-background",
+      // Beta surface — hidden for pilot (not in dock/launcher).
+      hidden: true,
     },
     {
       id: "services",

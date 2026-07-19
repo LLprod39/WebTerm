@@ -152,3 +152,25 @@ docs/local/
 
 .gemini/
 gha-creds-*.json
+
+# Local working junk — never commit
+.token-savior-cache.json
+.tools/
+mcps/
+56 скринов/
+AgentFrontedTest/
+/*.png
+
+# Local Ollama sticky URL (WSL host)
+.ollama_wsl_url
+
+
+# Personal notes / scratch / recordings (not part of the repo)
+.obsidian/
+*.canvas
+*.base
+/2026-*.md
+.tmp-req-win.txt
+frontend/demo-recordings/
+scripts/_*.ps1
+scripts/_tmp_*.py

@@ -39,7 +39,7 @@ class SSHTerminalAiExecutionMixin:
         Pauses when a command requires confirmation.
         """
         send_idle = True
-        execution_mode = self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "step"))
+        execution_mode = self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "agent"))
         step_mode = execution_mode == "step"
         direct_exec_enabled = self._legacy_direct_exec_enabled()
         try:

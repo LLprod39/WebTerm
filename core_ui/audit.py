@@ -34,7 +34,8 @@ DEFAULT_LOGGING_CONFIG: dict[str, Any] = {
 
 _CONFIG_LOADED = False
 _CONFIG_LOCK = Lock()
-_AUDIT_CONTEXT: ContextVar[dict[str, Any]] = ContextVar("weu_audit_context", default={})
+# No mutable default: a shared dict default would leak state between contexts.
+_AUDIT_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("weu_audit_context", default=None)
 _RETENTION_LOCK = Lock()
 _LAST_RETENTION_RUN_TS = 0.0
 _RETENTION_INTERVAL_SECONDS = 3600.0

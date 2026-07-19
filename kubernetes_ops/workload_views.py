@@ -7,7 +7,11 @@ from loguru import logger
 
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent
-from kubernetes_ops.services.workload_detail import build_workload_detail, workload_detail_audit_payload, workload_for_value
+from kubernetes_ops.services.workload_detail import (
+    build_workload_detail,
+    workload_detail_audit_payload,
+    workload_for_value,
+)
 
 
 def _safe_json(handler):

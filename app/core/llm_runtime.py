@@ -48,7 +48,8 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
     if provider == "claude":
         return _setting_int("LLM_CLAUDE_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     if provider == "ollama":
-        return _setting_int("LLM_OLLAMA_STREAM_TIMEOUT_SECONDS", 300, minimum=1)
+        # Operator tools can hang on huge prompts; fail faster so the UI recovers
+        return _setting_int("LLM_OLLAMA_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     if provider == "openai" and endpoint_name == "responses":
         return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai":
@@ -62,6 +63,20 @@ def _grok_reasoning_effort(model: str, *, purpose: str = "") -> str | None:
     normalized_model = (model or "").strip().lower()
     if not normalized_model.startswith("grok-4.3"):
         return None
+
+    # Per-turn override from Operator chat thinking toggle
+    try:
+        from core_ui.services.operator_turn_runtime import operator_thinking_mode
+
+        override = operator_thinking_mode.get()
+        if override == "off":
+            return "none"
+        if override == "on":
+            return "medium"
+        if override in {"low", "medium", "high"}:
+            return override
+    except Exception:  # noqa: BLE001
+        pass
 
     default = "medium" if (purpose or "").strip().lower() == "orchestrator" else "none"
     value = _setting_str("LLM_GROK_REASONING_EFFORT", default).lower()

@@ -30,7 +30,7 @@ def get_agent_worker_states() -> dict[str, dict]:
 
 
 def _status_counts(queryset, statuses: list[str]) -> dict[str, int]:
-    counts = {status: 0 for status in statuses}
+    counts = dict.fromkeys(statuses, 0)
     for item in queryset.values("status").annotate(total=Count("id", distinct=True)):
         status = str(item.get("status") or "")
         if status in counts:

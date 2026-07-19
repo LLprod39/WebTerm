@@ -11,8 +11,8 @@ from django.db import transaction
 from app.plugins.validation import PluginValidationError, validate_plugin_manifest
 from plugin_marketplace.models import PluginPackage
 from plugin_marketplace.services.package_attestation_service import append_package_attestation
-from plugin_marketplace.services.signing_service import canonical_manifest_hash, package_signature_status
 from plugin_marketplace.services.sandbox_policy_service import sandbox_policy_for_package
+from plugin_marketplace.services.signing_service import canonical_manifest_hash, package_signature_status
 from plugin_marketplace.services.static_scan_service import scan_manifest
 
 SECURITY_SCAN_PROVIDER_LOCAL = "local_static"

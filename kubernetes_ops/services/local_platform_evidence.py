@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
-
+from typing import Any
 
 KubectlRunner = Callable[[list[str]], subprocess.CompletedProcess[str]]
 LOCAL_PLATFORM_SCHEMA_VERSION = "kubernetes_ops.local_platform_evidence.v1"

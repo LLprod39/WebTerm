@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 
@@ -10,6 +10,14 @@ class AgentRunSnapshot:
     status: str
     final_report: str
     ai_analysis: str
+    outcome: str = ""
+    outcome_reason: str = ""
+    tool_call_count: int = 0
+    failed_task_count: int = 0
+    verification_summary: str = ""
+    plan_summary: dict[str, Any] = field(default_factory=dict)
+    policy_blocked_count: int = 0
+    disconnected_servers: list[str] = field(default_factory=list)
 
 
 class PipelineAgentProvider(Protocol):

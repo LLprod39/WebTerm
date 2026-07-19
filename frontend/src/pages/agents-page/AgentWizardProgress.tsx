@@ -1,6 +1,7 @@
-import { CheckCircle2, Lock } from "lucide-react";
+import { Check } from "lucide-react";
 
 import { localize } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 import { AGENT_WIZARD_STEPS, type AgentWizardStep } from "./agentPageUtils";
 
@@ -12,12 +13,21 @@ type AgentWizardProgressProps = {
   canVisitStep: (step: AgentWizardStep) => boolean;
 };
 
+/** Catalog stepper: sharp pills, acid active rail, check for completed steps. */
 export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange, canVisitStep }: AgentWizardProgressProps) {
+  const total = AGENT_WIZARD_STEPS.length;
+  const progressPct = Math.round(((currentStepIndex + 1) / total) * 100);
+
   return (
-    <div className="border-b border-border/70 bg-secondary/10 px-4 py-3 sm:px-6">
-      <div className="flex gap-2 overflow-x-auto pb-1">
+    <div className="border-b border-border bg-surface-0/40">
+      <div className="h-0.5 w-full bg-surface-2">
+        <div
+          className="h-full bg-primary transition-[width] duration-500 ease-[var(--ease-standard)]"
+          style={{ width: `${progressPct}%` }}
+        />
+      </div>
+      <div className="flex items-stretch gap-0.5 overflow-x-auto px-4 sm:px-6">
         {AGENT_WIZARD_STEPS.map((item, index) => {
-          const Icon = item.icon;
           const active = item.key === step;
           const complete = index < currentStepIndex;
           const canVisit = canVisitStep(item.key);
@@ -27,21 +37,30 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
               type="button"
               disabled={!canVisit}
               onClick={() => onStepChange(item.key)}
-              className={`flex min-h-14 w-[210px] shrink-0 items-center gap-3 rounded-lg border px-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                "relative flex min-h-11 shrink-0 items-center gap-2 px-2.5 py-2.5 text-sm transition-colors disabled:cursor-not-allowed sm:px-3",
                 active
-                  ? "border-primary/80 bg-primary/10 text-foreground"
+                  ? "font-semibold text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
                   : complete
-                    ? "border-primary/25 bg-secondary/30 text-foreground hover:border-primary/50"
-                    : "border-border/60 bg-background/20 text-muted-foreground hover:border-primary/35 hover:text-foreground"
-              }`}
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground/45",
+              )}
             >
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-sm font-semibold ${active || complete ? "border-primary bg-primary/15 text-primary" : "border-border/80 bg-secondary/30"}`}>
-                {complete ? <CheckCircle2 className="h-4 w-4" /> : !canVisit ? <Lock className="h-4 w-4" /> : active ? index + 1 : <Icon className="h-4 w-4" />}
+              <span
+                className={cn(
+                  "flex h-[18px] w-[18px] items-center justify-center rounded-sm font-mono text-[10px] font-semibold",
+                  active
+                    ? "bg-primary text-primary-foreground shadow-elev-1"
+                    : complete
+                      ? "border border-success/40 bg-success/15 text-success"
+                      : "border border-border bg-surface-2 text-muted-foreground/70",
+                )}
+                aria-hidden
+              >
+                {complete ? <Check className="h-3 w-3" /> : index + 1}
               </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-semibold">{localize(lang, item.labelRu, item.labelEn)}</span>
-                <span className="block truncate text-xs leading-4 text-muted-foreground">{localize(lang, item.detailRu, item.detailEn)}</span>
-              </span>
+              <span className="hidden sm:inline">{localize(lang, item.labelRu, item.labelEn)}</span>
             </button>
           );
         })}

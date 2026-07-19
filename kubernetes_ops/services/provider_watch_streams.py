@@ -39,7 +39,7 @@ class UrlopenProviderWatchEventStream:
         self._eof = False
         self._sse_payload_lines: list[str] = []
 
-    def open(self) -> "UrlopenProviderWatchEventStream":
+    def open(self) -> UrlopenProviderWatchEventStream:
         request = urllib.request.Request(url=self.url, method="GET", headers=self.headers)
         context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
         try:

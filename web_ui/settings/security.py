@@ -43,12 +43,22 @@ def _secret_key_settings(*, debug: bool) -> str:
     return secret_key
 
 
+def _default_debug() -> bool:
+    """
+    DEBUG defaults to True only for explicit dev/test settings modules.
+    Any other entry point (production, bare/unknown module, misconfigured
+    deploy script) fails safe to DEBUG=False unless DJANGO_DEBUG=true is set.
+    """
+    module = (os.getenv("DJANGO_SETTINGS_MODULE") or "").strip()
+    return module.endswith(".development") or module.endswith(".test")
+
+
 def build_security_settings(
     *,
     render_external_url: str,
     render_external_hostname: str,
 ) -> dict[str, object]:
-    debug = env_bool("DJANGO_DEBUG", env_bool("DEBUG", True))
+    debug = env_bool("DJANGO_DEBUG", env_bool("DEBUG", _default_debug()))
     secret_key = _secret_key_settings(debug=debug)
     site_url = (
         os.getenv("SITE_URL")
@@ -90,6 +100,18 @@ def build_security_settings(
     append_unique(csrf_trusted_origins, frontend_origin, site_origin, render_origin)
     if debug:
         append_unique(csrf_trusted_origins, *_DEFAULT_FRONTEND_ORIGINS)
+    # Ngrok tunnels rotate hostnames on restart. Django natively supports
+    # wildcard subdomains in CSRF_TRUSTED_ORIGINS, so a static entry replaces
+    # the former runtime middleware (which mutated settings per request and
+    # matched by substring — spoofable via x.ngrok-free.app.evil.com).
+    if env_bool("CSRF_TRUST_NGROK", debug):
+        append_unique(
+            csrf_trusted_origins,
+            "https://*.ngrok-free.app",
+            "http://*.ngrok-free.app",
+            "https://*.ngrok.io",
+            "http://*.ngrok.io",
+        )
 
     cors_allowed_origins = env_list(
         "CORS_ALLOWED_ORIGINS",
@@ -162,5 +184,4 @@ def build_security_settings(
         "CSRF_COOKIE_SAMESITE": csrf_cookie_samesite,
         "SESSION_COOKIE_SECURE": session_cookie_secure,
         "CSRF_COOKIE_SECURE": csrf_cookie_secure,
-        "CSRF_TRUST_NGROK": env_bool("CSRF_TRUST_NGROK", debug),
     }

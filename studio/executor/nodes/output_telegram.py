@@ -6,12 +6,14 @@ from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.pipeline_notifications import (
     _global_tg_defaults,
-    _load_notif_cfg,
+    _load_notif_cfg,  # noqa: F401  (re-export: tests patch it on this module)
     _send_telegram_message,
-    httpx,
+    httpx,  # noqa: F401  (re-export: tests patch httpx.AsyncClient on this module)
 )
 from studio.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
+)
+from studio.pipeline_redaction import (
     redacted_execution_context as _redacted_context,
 )
 
@@ -36,7 +38,7 @@ def _resolve_telegram_target(config: dict[str, Any], *, token_keys: tuple[str, .
 class OutputTelegramNode(BaseNode):
     node_type = "output/telegram"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         config = self.node_data if isinstance(self.node_data, dict) else {}
         bot_token, chat_id = _resolve_telegram_target(
             config,

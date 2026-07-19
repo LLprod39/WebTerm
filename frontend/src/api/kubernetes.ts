@@ -38,11 +38,14 @@ export interface KubernetesReadinessResponse {
   success: boolean;
   status: KubernetesReadinessStatus;
   ready_for_sidebar: boolean;
+  /** Closed-pilot mode: production-only release checks waived when env set. */
+  pilot_sidebar?: boolean;
   summary: {
     ready: number;
     missing: number;
     manual: number;
     total: number;
+    pilot_sidebar?: boolean;
   };
   checks: KubernetesReadinessCheck[];
   worker_state: KubernetesWorkerState;

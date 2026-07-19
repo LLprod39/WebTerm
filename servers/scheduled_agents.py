@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from asgiref.sync import async_to_sync
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
-from servers.agent_launch import launch_full_agent_run
+from servers.agent_launch import launch_queued_agent_run
 from servers.agent_run_report import record_run_event_and_refresh_report
 from servers.agent_schedule import is_agent_due_by_schedule
-from servers.agents import run_agent_on_all_servers
 from servers.models import AgentRun, Server, ServerAgent
 
 
@@ -74,66 +72,43 @@ def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int]
             continue
 
         try:
-            if agent.is_full or agent.is_multi:
-                launch_result = launch_full_agent_run(
-                    agent=agent,
-                    user=agent.user,
-                    accessible_servers_queryset=server_qs,
-                )
-                if not launch_result["ok"]:
-                    summary["skipped"] += 1
-                    summary["skip_reasons"]["launch_rejected"] += 1
-                    summary["errors"].append(
-                        {
-                            "agent_id": agent.id,
-                            "agent_name": agent.name,
-                            "error": str(launch_result["error"]),
-                        }
-                    )
-                    continue
-
-                run = launch_result["run"]
-                record_run_event_and_refresh_report(
-                    run,
-                    "agent_scheduled_dispatch",
-                    {
-                        "source": "schedule_config",
-                        "schedule_minutes": int(agent.schedule_minutes or 0),
-                        "schedule_config": agent.schedule_config or {},
-                        "agent_id": agent.id,
-                        "agent_name": agent.name,
-                        "agent_mode": agent.mode,
-                    },
-                )
-                summary["launched_agents"] += 1
-                summary["runs_created"] += 1
-                summary["background_runs"] += 1
-                continue
-
-            runs = async_to_sync(run_agent_on_all_servers)(agent, agent.user)
-            created_runs = 0
-            for run in runs or []:
-                record_run_event_and_refresh_report(
-                    run,
-                    "agent_scheduled_dispatch",
-                    {
-                        "source": "schedule_config",
-                        "schedule_minutes": int(agent.schedule_minutes or 0),
-                        "schedule_config": agent.schedule_config or {},
-                        "agent_id": agent.id,
-                        "agent_name": agent.name,
-                        "agent_mode": agent.mode,
-                    },
-                )
-                created_runs += 1
-
-            if created_runs:
-                summary["launched_agents"] += 1
-                summary["runs_created"] += created_runs
-                summary["mini_runs"] += created_runs
-            else:
+            # Mini/full/multi all go through the execution-plane queue so scheduled
+            # dispatch never blocks the scheduler process on SSH/LLM.
+            launch_result = launch_queued_agent_run(
+                agent=agent,
+                user=agent.user,
+                accessible_servers_queryset=server_qs,
+            )
+            if not launch_result["ok"]:
                 summary["skipped"] += 1
                 summary["skip_reasons"]["launch_rejected"] += 1
+                summary["errors"].append(
+                    {
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "error": str(launch_result["error"]),
+                    }
+                )
+                continue
+
+            run = launch_result["run"]
+            record_run_event_and_refresh_report(
+                run,
+                "agent_scheduled_dispatch",
+                {
+                    "source": "schedule_config",
+                    "schedule_minutes": int(agent.schedule_minutes or 0),
+                    "schedule_config": agent.schedule_config or {},
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "agent_mode": agent.mode,
+                },
+            )
+            summary["launched_agents"] += 1
+            summary["runs_created"] += 1
+            summary["background_runs"] += 1
+            if not agent.is_full and not agent.is_multi:
+                summary["mini_runs"] += 1
         except Exception as exc:
             summary["skipped"] += 1
             summary["skip_reasons"]["error"] += 1

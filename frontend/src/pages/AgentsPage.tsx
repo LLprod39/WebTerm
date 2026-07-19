@@ -5,39 +5,37 @@ import {
   cleanupStaleAgentRuns,
   deleteAgent,
   fetchAgents,
+  fetchAuthSession,
   runAgent,
   stopAgent,
+  updateAgent,
   type AgentItem,
   type AgentRuntimeRunItem,
   type AgentRunResult,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
+import { notifyWithUndo } from "@/lib/notify-undo";
 import {
-  Activity,
   AlertTriangle,
-  Bot,
   CheckCircle2,
-  Clock,
   FileText,
   Plus,
   RefreshCw,
-  Server,
   X,
 } from "lucide-react";
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
-import { MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
+import { PageShell, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
+import { SkeletonList } from "@/components/ui/list-state";
 import { CreateAgentDialog } from "./agents-page/CreateAgentDialog";
 import { AgentListSection } from "./agents-page/AgentListSection";
-import { AgentRuntimeOverviewPanel } from "./agents-page/AgentRuntimeOverviewPanel";
-import { ExecutionWorkerPanel, WorkerRuntimePanel } from "./agents-page/AgentWorkerPanels";
+import { AgentSystemHealthSection } from "./agents-page/AgentSystemHealthSection";
 import {
-  agentModeLabel,
   formatDuration,
   isAgentScheduled,
 } from "./agents-page/agentPageUtils";
-import { readinessTone, runBlockedReason } from "./agents-page/agentRuntimeShared";
+import { runBlockedReason } from "./agents-page/agentRuntimeShared";
 
 
 export default function AgentsPage() {
@@ -62,6 +60,13 @@ export default function AgentsPage() {
     queryFn: () => fetchAgents(),
     refetchInterval: 10_000,
   });
+  const { data: authSession } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const isAdmin = Boolean(authSession?.user?.is_staff);
 
   const allAgents = data?.agents || [];
   const agents = allAgents.filter(
@@ -69,7 +74,11 @@ export default function AgentsPage() {
   );
   const activeAgents = allAgents.filter((agent) => agent.active_run_id).length;
   const scheduledAgents = allAgents.filter(isAgentScheduled).length;
-  const serverScopeCount = allAgents.reduce((sum, agent) => sum + agent.server_count, 0);
+  const pausedAgents = allAgents.filter((agent) => agent.schedule_state === "paused").length;
+  const failedAgents = allAgents.filter((agent) => {
+    const status = String(agent.last_run_status || "").toLowerCase();
+    return !agent.active_run_id && ["failed", "error", "stopped"].includes(status);
+  }).length;
   const executionWarning = allAgents.find(
     (agent) => agent.execution_readiness?.required && !agent.execution_readiness.ready,
   )?.execution_readiness;
@@ -77,7 +86,7 @@ export default function AgentsPage() {
   const workerStates = data?.worker_states || {};
   const runtimeOverview = data?.runtime_overview;
   const activeRunByAgentId = new Map<number, AgentRuntimeRunItem>();
-  for (const item of runtimeOverview?.items.active_runs || []) {
+  for (const item of runtimeOverview?.items?.active_runs || []) {
     if (item.agent_id) {
       activeRunByAgentId.set(item.agent_id, item);
     }
@@ -96,11 +105,15 @@ export default function AgentsPage() {
   const scheduledWorker = workerStates.scheduled_agents;
   const showScheduledWorker = scheduledAgents > 0 || Boolean(scheduledWorker && scheduledWorker.status !== "missing");
 
-  const onRun = async (ag: AgentItem) => {
-    const blockedReason = runBlockedReason(ag, lang);
+  const openCreate = () => {
+    setCreateOpen(true);
+  };
+
+  const launchAgent = async (ag: AgentItem) => {
+    const blockedReason = runBlockedReason(ag, lang, { isAdmin });
     if (blockedReason) {
       setActionError(blockedReason);
-      return;
+      return false;
     }
 
     setRunningId(ag.id);
@@ -108,16 +121,19 @@ export default function AgentsPage() {
     setActionNotice(null);
     setResult(null);
     try {
+      // All modes return immediately with a queued run_id; execution is async.
       const res = await runAgent(ag.id);
+      const runId = res.run_id || res.runs?.[0]?.run_id;
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      if (runId) {
+        navigate(`/agents/run/${runId}`);
+        return true;
+      }
       if (res.runs?.length > 0) {
         setResult(res.runs[0]);
         setReportModalOpen(true);
       }
-      if ((ag.mode === "full" || ag.mode === "multi") && res.run_id) {
-        navigate(`/agents/run/${res.run_id}`);
-        return;
-      }
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      return true;
     } catch {
       setResult({
         run_id: 0,
@@ -127,9 +143,15 @@ export default function AgentsPage() {
         duration_ms: 0,
         commands_output: [],
       });
+      setReportModalOpen(true);
+      return false;
     } finally {
       setRunningId(null);
     }
+  };
+
+  const onRun = async (ag: AgentItem) => {
+    await launchAgent(ag);
   };
 
   const onStop = async (ag: AgentItem) => {
@@ -138,17 +160,31 @@ export default function AgentsPage() {
       return;
     }
 
-    setStoppingId(ag.id);
+    const runId = ag.active_run_id;
     setActionError(null);
     setActionNotice(null);
-    try {
-      await stopAgent(ag.id, ag.active_run_id);
-      await queryClient.invalidateQueries({ queryKey: ["agents"] });
-    } catch {
-      setActionError(localize(lang, "Не удалось остановить активный запуск.", "Failed to stop the active run."));
-    } finally {
-      setStoppingId(null);
-    }
+    // Delayed stop with Undo (5s) — feels safer than an immediate kill.
+    notifyWithUndo({
+      lang,
+      title: localize(lang, `Остановка «${ag.name}»…`, `Stopping “${ag.name}”…`),
+      description: localize(lang, "Нажмите «Отменить», чтобы продолжить прогон", "Click Undo to keep the run going"),
+      durationMs: 5000,
+      onCommit: async () => {
+        setStoppingId(ag.id);
+        try {
+          await stopAgent(ag.id, runId);
+          await queryClient.invalidateQueries({ queryKey: ["agents"] });
+          setActionNotice(localize(lang, `Агент «${ag.name}» остановлен`, `Agent “${ag.name}” stopped`));
+        } catch {
+          setActionError(localize(lang, "Не удалось остановить активный запуск.", "Failed to stop the active run."));
+        } finally {
+          setStoppingId(null);
+        }
+      },
+      onUndo: () => {
+        setActionNotice(localize(lang, `Остановка «${ag.name}» отменена`, `Stop of “${ag.name}” cancelled`));
+      },
+    });
   };
 
   const onCleanupStale = async () => {
@@ -178,6 +214,23 @@ export default function AgentsPage() {
     setDeleteTarget(agent);
   };
 
+  const onTogglePause = async (agent: AgentItem) => {
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await updateAgent(agent.id, { is_enabled: !agent.is_enabled });
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+    } catch {
+      setActionError(
+        localize(
+          lang,
+          agent.is_enabled ? "Не удалось поставить расписание на паузу." : "Не удалось возобновить расписание.",
+          agent.is_enabled ? "Failed to pause the schedule." : "Failed to resume the schedule.",
+        ),
+      );
+    }
+  };
+
   const copyExecutionCommand = async (command: string) => {
     if (!command) return;
     try {
@@ -195,120 +248,87 @@ export default function AgentsPage() {
     await queryClient.invalidateQueries({ queryKey: ["agents"] });
   };
 
-  if (isLoading) return <QueryStateBlock loading loadingText={t("loading")} className="p-6">{null}</QueryStateBlock>;
+  if (isLoading) {
+    return (
+      <PageShell width="7xl" className="space-y-4">
+        <SkeletonList rows={6} />
+      </PageShell>
+    );
+  }
+
+  // Worker/ops diagnostics are admin-only. No "healthy services" strip —
+  // show only when something is actually broken (and only to staff).
+  const healthSection = isAdmin ? (
+    <AgentSystemHealthSection
+      runtimeOverview={runtimeOverview}
+      showRuntimeOverview={showRuntimeOverview}
+      executionReadiness={executionReadiness || executionWarning}
+      scheduledWorker={scheduledWorker}
+      showScheduledWorker={showScheduledWorker}
+      lang={lang}
+      onCopyCommand={copyExecutionCommand}
+      onCleanupStale={onCleanupStale}
+      cleaningStale={cleaningStale}
+    />
+  ) : null;
 
   return (
-    <PageShell width="6xl">
-      <PageHero
-        kicker="Automation"
+    <PageShell width="7xl" className="space-y-4">
+      <SoftHeader
+        compact
         title={t("agent.title")}
-        description={localize(
-          lang,
-          `${allAgents.length} настроено · ${activeAgents} выполняется · ${scheduledAgents} по расписанию`,
-          `${allAgents.length} configured · ${activeAgents} running · ${scheduledAgents} scheduled`,
-        )}
+        count={allAgents.length > 0 ? allAgents.length : undefined}
+        subtitle={localize(lang, "Команды и задачи на ваших серверах", "Commands and tasks on your servers")}
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-            <div className="inline-flex min-h-10 rounded-lg border border-border bg-secondary/20 p-0.5 text-xs font-semibold">
-              {(["all", "mini", "full", "multi"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={modeFilter === m}
-                  onClick={() => setModeFilter(m)}
-                  className={`rounded-md px-3 py-1.5 transition-all duration-150 ${modeFilter === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                >{agentModeLabel(m, lang)}</button>
-              ))}
-            </div>
-            <Button size="icon" variant="ghost" className="h-10 w-10" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
+          <>
+            <Button size="icon" variant="ghost" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
               <RefreshCw className="h-4 w-4" />
             </Button>
-            <Button size="sm" className="h-10 gap-1.5 text-sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-4 w-4" /> {t("agent.new")}
+            <Button className="gap-1.5 shadow-elev-1" onClick={openCreate}>
+              <Plus className="h-4 w-4" />
+              {t("agent.new")}
             </Button>
-          </div>
+          </>
         }
       />
 
-      <MetricGrid className="grid-cols-2 xl:grid-cols-4">
-        <MetricCard label={t("agent.title")} value={allAgents.length} description={t("agent.view_all")} icon={<Bot className="h-4 w-4" />} />
-        <MetricCard label={t("agent.active_runs")} value={activeAgents} description={activeAgents > 0 ? t("agent.working_on") : t("agent.manual")} icon={<Activity className="h-4 w-4" />} tone={activeAgents > 0 ? "info" : "default"} />
-        <MetricCard label={t("agent.schedule")} value={scheduledAgents} description={scheduledAgents > 0 ? t("agent.every") : t("agent.manual")} icon={<Clock className="h-4 w-4" />} />
-        <MetricCard label={t("nav.servers")} value={serverScopeCount} description={t("agent.servers_lc")} icon={<Server className="h-4 w-4" />} />
-      </MetricGrid>
-
-      {showRuntimeOverview && runtimeOverview ? (
-        <AgentRuntimeOverviewPanel
-          overview={runtimeOverview}
-          lang={lang}
-          onCopyCommand={copyExecutionCommand}
-          onCleanupStale={onCleanupStale}
-          cleaningStale={cleaningStale}
-        />
+      {allAgents.length > 0 ? (
+        <StatStrip>
+          <StatStripItem
+            label={localize(lang, "Всего", "Total")}
+            value={allAgents.length}
+            hint={localize(lang, "профили", "profiles")}
+          />
+          <StatStripItem
+            label={localize(lang, "Выполняется", "Running")}
+            value={activeAgents}
+            tone={activeAgents > 0 ? "info" : "default"}
+            hint={localize(lang, "активные запуски", "active runs")}
+          />
+          <StatStripItem
+            label={localize(lang, "Расписание", "Scheduled")}
+            value={scheduledAgents}
+            tone={scheduledAgents > 0 ? "success" : "default"}
+            hint={
+              pausedAgents > 0
+                ? localize(lang, `${pausedAgents} на паузе`, `${pausedAgents} paused`)
+                : localize(lang, "по расписанию", "on schedule")
+            }
+          />
+          <StatStripItem
+            label={localize(lang, "Сбой / стоп", "Failed / stop")}
+            value={failedAgents}
+            tone={failedAgents > 0 ? "danger" : "default"}
+            hint={localize(lang, "последний запуск", "last run")}
+          />
+        </StatStrip>
       ) : null}
 
-      {executionReadiness ? (
-        <ExecutionWorkerPanel
-          readiness={executionReadiness}
-          lang={lang}
-          onCopyCommand={copyExecutionCommand}
-        />
-      ) : null}
-
-      {showScheduledWorker ? (
-        <WorkerRuntimePanel
-          title={localize(lang, "Schedule worker", "Schedule worker")}
-          description={localize(
-            lang,
-            "Автозапуск агентов по расписанию",
-            "Scheduled agent dispatcher runtime",
-          )}
-          statusTitle={localize(
-            lang,
-            scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-              ? "Scheduler принимает расписания"
-              : "Scheduler не подтверждён",
-            scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-              ? "Scheduler is accepting due agents"
-              : "Scheduler is not confirmed",
-          )}
-          statusDescription={localize(
-            lang,
-            scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-              ? "Due-агенты будут подхвачены фоновым процессом."
-              : "Агенты с расписанием не стартуют автоматически, пока worker не активен.",
-            scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-              ? "Due agents will be picked up by the background process."
-              : "Scheduled agents will not launch automatically until the worker is active.",
-          )}
-          worker={scheduledWorker}
-          command="python manage.py run_scheduled_agents --daemon --worker-key default"
-          icon={<Clock className="h-4 w-4" />}
-          lang={lang}
-          onCopyCommand={copyExecutionCommand}
-        />
-      ) : null}
-
-      {executionWarning ? (
-        <div className="rounded-lg border border-amber-500/25 bg-amber-500/8 px-4 py-3 text-sm text-amber-100">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 font-semibold text-foreground">
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-                {executionWarning.title}
-              </div>
-              <p className="mt-1 leading-6 text-muted-foreground">{executionWarning.description}</p>
-              {executionWarning.next_action ? (
-                <p className="mt-2 break-words font-mono text-xs text-amber-200">{executionWarning.next_action}</p>
-              ) : null}
-            </div>
-            <StatusBadge label={executionWarning.status} tone={readinessTone(executionWarning)} />
-          </div>
-        </div>
-      ) : null}
+      {/* Admin-only: only when workers/runtime have problems (no healthy strip). */}
+      {healthSection}
 
       {actionError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-sm border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive shadow-elev-1">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -328,16 +348,16 @@ export default function AgentsPage() {
       ) : null}
 
       {actionNotice ? (
-        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+        <div className="rounded-sm border border-success/30 bg-success/10 px-4 py-3 text-sm text-foreground shadow-elev-1">
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 items-start gap-2">
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success" />
               <span className="break-words leading-6">{actionNotice}</span>
             </div>
             <Button
               size="icon"
               variant="ghost"
-              className="h-7 w-7 shrink-0 text-emerald-100 hover:text-emerald-50"
+              className="h-7 w-7 shrink-0"
               onClick={() => setActionNotice(null)}
               aria-label={localize(lang, "Скрыть сообщение", "Dismiss notice")}
             >
@@ -348,17 +368,23 @@ export default function AgentsPage() {
       ) : null}
 
       {result && !reportModalOpen && (
-        <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center gap-3">
-          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${result.status === "completed" ? "bg-primary/20 text-primary" : "bg-destructive/20 text-destructive"}`}>
+        <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-4 py-3 shadow-elev-1">
+          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border ${result.status === "completed" ? "border-success/30 bg-success/15 text-success" : "border-destructive/30 bg-destructive/15 text-destructive"}`}>
             {result.status === "completed" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </div>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-foreground">{result.server_name}</div>
             <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
           </div>
-          <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
-            <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
-          </Button>
+          {result.run_id > 0 ? (
+            <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => navigate(`/agents/run/${result.run_id}`)}>
+              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+            </Button>
+          ) : (
+            <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
+              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+            </Button>
+          )}
           <Button
             size="icon"
             variant="ghost"
@@ -376,31 +402,78 @@ export default function AgentsPage() {
       )}
       <AgentListSection
         agents={agents}
+        totalCount={allAgents.length}
         modeFilter={modeFilter}
+        onModeFilterChange={setModeFilter}
         lang={lang}
         t={t}
+        isAdmin={isAdmin}
         createdAgentId={createdAgentId}
         runningId={runningId}
         stoppingId={stoppingId}
         activeRunByAgentId={activeRunByAgentId}
-        onCreate={() => setCreateOpen(true)}
+        onCreate={openCreate}
         onEdit={setEditingAgent}
         onRun={onRun}
         onStop={onStop}
         onDelete={onDelete}
+        onTogglePause={onTogglePause}
       />
 
-      <CreateAgentDialog open={createOpen} onClose={() => setCreateOpen(false)}
-        onSaved={async ({ id, mode }) => {
+      <CreateAgentDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={async ({ id, mode, action, runAfterSave }) => {
           setModeFilter("all");
           setCreatedAgentId(id);
           setCreateOpen(false);
           await queryClient.invalidateQueries({ queryKey: ["agents", "list"] });
-          if (mode === "full" || mode === "multi") {
-            navigate("/agents");
+
+          if (action === "create" && runAfterSave) {
+            const refreshed = await fetchAgents();
+            const created = refreshed.agents.find((agent) => agent.id === id);
+            if (created) {
+              await launchAgent(created);
+            } else {
+              // Fallback shell if list is momentarily stale
+              await launchAgent({
+                id,
+                name: "",
+                mode,
+                mode_display: mode,
+                agent_type: "custom",
+                agent_type_display: "custom",
+                server_count: 0,
+                server_ids: [],
+                server_names: [],
+                schedule_minutes: 0,
+                schedule_config: { mode: "manual" },
+                is_enabled: true,
+                commands: [],
+                ai_prompt: "",
+                goal: "",
+                system_prompt: "",
+                max_iterations: 40,
+                allow_multi_server: false,
+                tools_config: {},
+                sudo_policy: "disabled",
+                stop_conditions: [],
+                skill_slugs: [],
+                input_artifacts: [],
+                report_delivery: {},
+                session_timeout_seconds: 1200,
+                max_connections: 5,
+                last_run_at: null,
+                last_run_status: null,
+                last_run_id: null,
+                active_run_id: null,
+              });
+            }
           }
+
           window.setTimeout(() => setCreatedAgentId((current) => (current === id ? null : current)), 8000);
-        }} />
+        }}
+      />
       <CreateAgentDialog
         open={Boolean(editingAgent)}
         initialAgent={editingAgent}

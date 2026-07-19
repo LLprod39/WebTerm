@@ -77,18 +77,81 @@ describe("AppSidebar preview-gated nav", () => {
     vi.clearAllMocks();
   });
 
-  it("renders MARS when enabled and keeps Chat/Kubernetes hidden until ready", async () => {
+  it("renders MARS when enabled, Chat stays gated, and staff gets Kubernetes without readiness gate", async () => {
     renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, settings: true });
 
     expect(await screen.findByText("MARS")).toBeInTheDocument();
     expect(screen.queryByText("Чат")).not.toBeInTheDocument();
-    expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
+    // Staff mock always has is_staff=true → Kubernetes is open when feature is on.
+    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
+    expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
   });
 
-  it("renders Kubernetes only when backend readiness allows sidebar exposure", async () => {
+  it("renders Kubernetes for staff when feature is enabled (no ready_for_sidebar required)", async () => {
     renderSidebar(
       { servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: false, settings: true },
-      { kubernetesReady: true },
+      { kubernetesReady: false },
+    );
+
+    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
+    expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
+  });
+
+  it("gates Kubernetes on readiness for non-staff operators", async () => {
+    vi.mocked(fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 2,
+        username: "operator",
+        email: "operator@example.com",
+        is_staff: false,
+        features: featureMap({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: false, settings: true }),
+      },
+    });
+    vi.mocked(fetchKubernetesReadiness).mockResolvedValue(kubernetesReadiness(false));
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <I18nProvider>
+            <SidebarProvider>
+              <AppSidebar />
+            </SidebarProvider>
+          </I18nProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("Серверы");
+    expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
+    expect(fetchKubernetesReadiness).toHaveBeenCalled();
+  });
+
+  it("shows Kubernetes for operators when backend readiness allows sidebar exposure", async () => {
+    vi.mocked(fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 2,
+        username: "operator",
+        email: "operator@example.com",
+        is_staff: false,
+        features: featureMap({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: false, settings: true }),
+      },
+    });
+    vi.mocked(fetchKubernetesReadiness).mockResolvedValue(kubernetesReadiness(true));
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <I18nProvider>
+            <SidebarProvider>
+              <AppSidebar />
+            </SidebarProvider>
+          </I18nProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
     );
 
     expect(await screen.findByText("Кубернетес")).toBeInTheDocument();

@@ -173,10 +173,7 @@ def _to_yaml(value: Any, *, indent: int = 0) -> str:
     if isinstance(value, dict):
         lines: list[str] = []
         for key, item in value.items():
-            if isinstance(item, dict):
-                lines.append(f"{pad}{key}:")
-                lines.append(_to_yaml(item, indent=indent + 2))
-            elif isinstance(item, list):
+            if isinstance(item, dict) or isinstance(item, list):
                 lines.append(f"{pad}{key}:")
                 lines.append(_to_yaml(item, indent=indent + 2))
             else:

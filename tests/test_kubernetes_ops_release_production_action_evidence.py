@@ -5,7 +5,7 @@ from datetime import timedelta
 from io import StringIO
 
 import pytest
-from django.core.management import call_command, CommandError
+from django.core.management import CommandError, call_command
 from django.test import override_settings
 from django.utils import timezone
 

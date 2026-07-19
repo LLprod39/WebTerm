@@ -11,10 +11,15 @@ studio/ and core_ui/ MUST use these functions instead of querying Server ORM dir
 """
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from django.db.models import Q
 from django.utils import timezone
 
 from servers.models import Server, ServerShare
+
+if TYPE_CHECKING:
+    from django.db.models import QuerySet
 
 CAPABILITY_VIEW = "view"
 CAPABILITY_CONNECT_TERMINAL = "connect_terminal"
@@ -32,7 +37,7 @@ _SHARE_CAPABILITY_FIELDS = {
 }
 
 
-def get_servers_for_user(user) -> "QuerySet[Server]":
+def get_servers_for_user(user) -> QuerySet[Server]:
     """
     Return all active servers accessible by the given user
     (own servers + shared servers with active non-revoked shares).

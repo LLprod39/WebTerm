@@ -1,12 +1,101 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-@import "./design/tokens.css";
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=Syne:wght@500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/*
+  UI styles (user preference, Dashboard widget editor / Appearance):
+  - catalog     — editorial ops (acid lime, Syne, hard shadows)
+  - classic     — previous console (teal, Inter, soft elevation)
+  - pulse       — violet night ops (Outfit + DM Sans, aurora glow, soft glass)
+  - signal      — brutal ops (carbon black, amber alarm, zero radius, mono)
+  - folio       — mid-gray stone desk (Inter + terracotta; not bright white)
+  - folio-dark  — Folio night desk (default product skin; Inter + terracotta)
+  Applied via <html data-ui-style="...">
+  New skins only add their own html[data-ui-style="…"] blocks — never rewrite other skins.
+*/
+
 @layer base {
-  :root {
+  /* ── Catalog ───────────────────────────────────────────────────── */
+  html[data-ui-style="catalog"] {
+    --background: 240 10% 4%;
+    --foreground: 40 31% 94%;
+
+    --card: 240 10% 8%;
+    --card-foreground: 40 31% 94%;
+
+    --popover: 240 11% 9%;
+    --popover-foreground: 40 31% 94%;
+
+    --primary: 75 90% 61%;
+    --primary-foreground: 0 0% 7%;
+
+    --secondary: 240 10% 11%;
+    --secondary-foreground: 40 12% 82%;
+
+    --muted: 240 9% 12%;
+    --muted-foreground: 40 6% 58%;
+
+    --accent: 75 90% 61%;
+    --accent-foreground: 0 0% 7%;
+
+    --destructive: 0 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 11% 17%;
+    --border-strong: 240 11% 23%;
+    --input: 240 11% 17%;
+    --ring: 75 90% 61%;
+
+    --radius: 0.25rem;
+
+    --primary-hover: 75 92% 55%;
+    --primary-subtle: 75 90% 61%;
+
+    --ai: 204 100% 75%;
+    --ai-foreground: 210 40% 8%;
+
+    --surface-0: 240 10% 4%;
+    --surface-1: 240 10% 8%;
+    --surface-2: 240 11% 11%;
+    --surface-3: 240 11% 13%;
+
+    --shadow-1: 2px 2px 0 rgb(0 0 0 / 0.65);
+    --shadow-2: 4px 4px 0 rgb(0 0 0 / 0.55);
+    --shadow-3: 8px 8px 0 rgb(0 0 0 / 0.55);
+
+    --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --success: 152 58% 58%;
+    --warning: 42 84% 62%;
+    --info: 204 100% 75%;
+
+    --terminal-bg: 240 12% 3%;
+    --terminal-fg: 75 30% 78%;
+    --terminal-cursor: 75 90% 61%;
+
+    --sidebar-background: 240 12% 3%;
+    --sidebar-foreground: 40 12% 82%;
+    --sidebar-primary: 75 90% 61%;
+    --sidebar-primary-foreground: 0 0% 7%;
+    --sidebar-accent: 240 10% 10%;
+    --sidebar-accent-foreground: 40 20% 92%;
+    --sidebar-border: 240 11% 14%;
+    --sidebar-ring: 75 90% 61%;
+
+    --font-ui: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-display: "Syne", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 0;
+    --focus-radius: 0;
+    --selection-bg: hsl(var(--primary));
+    --selection-fg: hsl(var(--primary-foreground));
+    --shell-glow: radial-gradient(ellipse 100% 50% at 50% -15%, hsl(var(--primary) / 0.06), transparent 50%);
+  }
+
+  /* ── Classic (previous product look) ───────────────────────────── */
+  html[data-ui-style="classic"] {
     --background: 209 56% 6%;
     --foreground: 204 29% 94%;
 
@@ -32,10 +121,28 @@
     --destructive-foreground: 0 0% 100%;
 
     --border: 207 34% 20%;
+    --border-strong: 207 30% 30%;
     --input: 207 34% 20%;
     --ring: 172 71% 46%;
 
     --radius: 0.5rem;
+
+    --primary-hover: 172 71% 42%;
+    --primary-subtle: 172 71% 46%;
+
+    --ai: 250 84% 75%;
+    --ai-foreground: 250 40% 10%;
+
+    --surface-0: 209 56% 6%;
+    --surface-1: 207 45% 9%;
+    --surface-2: 207 40% 12%;
+    --surface-3: 207 43% 15%;
+
+    --shadow-1: 0 1px 2px hsl(209 56% 3% / 0.4);
+    --shadow-2: 0 8px 24px hsl(209 56% 3% / 0.35);
+    --shadow-3: 0 24px 60px hsl(209 56% 3% / 0.5);
+
+    --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
     --success: 153 58% 50%;
     --warning: 40 87% 62%;
@@ -54,7 +161,519 @@
     --sidebar-border: 207 20% 17%;
     --sidebar-ring: 168 70% 46%;
 
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: var(--radius);
+    --selection-bg: hsl(var(--primary) / 0.28);
+    --selection-fg: hsl(var(--foreground));
+    --shell-glow: radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
+      radial-gradient(circle at 92% 14%, hsl(var(--info) / 0.045), transparent 24rem);
+  }
+
+  /* ── Pulse (violet night ops — third skin; does not alter catalog/classic) ─ */
+  html[data-ui-style="pulse"] {
+    --background: 270 42% 5%;
+    --foreground: 270 30% 96%;
+
+    --card: 270 32% 9%;
+    --card-foreground: 270 30% 96%;
+
+    --popover: 270 34% 10%;
+    --popover-foreground: 270 30% 96%;
+
+    --primary: 280 92% 72%;
+    --primary-foreground: 270 50% 8%;
+
+    --secondary: 270 28% 13%;
+    --secondary-foreground: 270 20% 86%;
+
+    --muted: 270 24% 12%;
+    --muted-foreground: 270 14% 62%;
+
+    --accent: 280 92% 72%;
+    --accent-foreground: 270 50% 8%;
+
+    --destructive: 350 82% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 270 22% 20%;
+    --border-strong: 270 24% 28%;
+    --input: 270 22% 18%;
+    --ring: 280 92% 72%;
+
+    --radius: 0.75rem;
+
+    --primary-hover: 280 92% 66%;
+    --primary-subtle: 280 92% 72%;
+
+    --ai: 188 94% 55%;
+    --ai-foreground: 200 50% 8%;
+
+    --surface-0: 270 42% 5%;
+    --surface-1: 270 32% 9%;
+    --surface-2: 270 28% 12%;
+    --surface-3: 270 26% 15%;
+
+    --shadow-1: 0 1px 0 hsl(280 80% 70% / 0.06), 0 8px 24px hsl(270 50% 3% / 0.45);
+    --shadow-2: 0 0 0 1px hsl(280 70% 70% / 0.06), 0 12px 40px hsl(270 55% 3% / 0.55);
+    --shadow-3: 0 0 0 1px hsl(280 80% 72% / 0.08), 0 28px 80px hsl(270 60% 2% / 0.65),
+      0 0 60px hsl(280 90% 60% / 0.08);
+
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --success: 158 64% 52%;
+    --warning: 32 96% 62%;
+    --info: 188 94% 55%;
+
+    --terminal-bg: 270 45% 4%;
+    --terminal-fg: 280 30% 82%;
+    --terminal-cursor: 280 92% 72%;
+
+    --sidebar-background: 270 48% 4%;
+    --sidebar-foreground: 270 18% 84%;
+    --sidebar-primary: 280 92% 72%;
+    --sidebar-primary-foreground: 270 50% 8%;
+    --sidebar-accent: 270 30% 11%;
+    --sidebar-accent-foreground: 270 25% 94%;
+    --sidebar-border: 270 24% 14%;
+    --sidebar-ring: 280 92% 72%;
+
+    --font-ui: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Outfit", "DM Sans", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.125rem);
+    --selection-bg: hsl(var(--primary) / 0.32);
+    --selection-fg: hsl(var(--foreground));
+    --shell-glow:
+      radial-gradient(ellipse 90% 55% at 12% -10%, hsl(280 90% 60% / 0.14), transparent 52%),
+      radial-gradient(ellipse 70% 45% at 92% 0%, hsl(188 90% 50% / 0.09), transparent 48%),
+      radial-gradient(ellipse 50% 40% at 70% 100%, hsl(310 80% 50% / 0.05), transparent 55%);
+  }
+
+  /* ── Signal (brutal high-contrast ops — 4th skin; isolated from others) ─ */
+  html[data-ui-style="signal"] {
+    --background: 0 0% 3%;
+    --foreground: 40 10% 94%;
+
+    --card: 0 0% 6%;
+    --card-foreground: 40 10% 94%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 40 10% 94%;
+
+    --primary: 24 100% 52%;
+    --primary-foreground: 0 0% 4%;
+
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 40 8% 86%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 58%;
+
+    --accent: 24 100% 52%;
+    --accent-foreground: 0 0% 4%;
+
+    --destructive: 348 100% 54%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 16%;
+    --border-strong: 0 0% 28%;
+    --input: 0 0% 12%;
+    --ring: 24 100% 52%;
+
+    --radius: 0rem;
+
+    --primary-hover: 24 100% 46%;
+    --primary-subtle: 24 100% 52%;
+
+    --ai: 340 100% 58%;
+    --ai-foreground: 0 0% 100%;
+
+    --surface-0: 0 0% 3%;
+    --surface-1: 0 0% 6%;
+    --surface-2: 0 0% 9%;
+    --surface-3: 0 0% 12%;
+
+    /* Thick offset "stamp" shadows — industrial, not soft blur */
+    --shadow-1: 2px 2px 0 hsl(0 0% 0% / 0.9), 0 0 0 1px hsl(var(--border));
+    --shadow-2: 4px 4px 0 hsl(0 0% 0% / 0.95), 0 0 0 1px hsl(var(--border-strong));
+    --shadow-3: 8px 8px 0 hsl(0 0% 0%), 0 0 0 2px hsl(var(--primary) / 0.35);
+
+    --ease-standard: cubic-bezier(0.1, 0.9, 0.2, 1);
+
+    --success: 140 80% 42%;
+    --warning: 40 100% 50%;
+    --info: 200 100% 55%;
+
+    --terminal-bg: 0 0% 2%;
+    --terminal-fg: 24 70% 72%;
+    --terminal-cursor: 24 100% 52%;
+
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 40 8% 82%;
+    --sidebar-primary: 24 100% 52%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 8%;
+    --sidebar-accent-foreground: 40 10% 94%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 24 100% 52%;
+
+    --font-ui: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --font-display: "Space Grotesk", "JetBrains Mono", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 0;
+    --focus-radius: 0;
+    --selection-bg: hsl(var(--primary));
+    --selection-fg: hsl(var(--primary-foreground));
+    /* Tactical grid + corner amber wash — no soft SaaS orbs */
+    --shell-glow:
+      linear-gradient(hsl(var(--primary) / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary) / 0.03) 1px, transparent 1px),
+      radial-gradient(ellipse 80% 40% at 0% 0%, hsl(24 100% 50% / 0.1), transparent 50%),
+      radial-gradient(ellipse 50% 30% at 100% 100%, hsl(348 100% 50% / 0.06), transparent 45%);
+    --shell-glow-size: 28px 28px, 28px 28px, auto, auto;
+  }
+
+  /*
+   * ── Folio (light editorial paper)
+   * Muted taupe / warm gray — only a hint of light, never bright white.
+   * Think aged paper under soft lamp, not monitor white.
+   */
+  html[data-ui-style="folio"] {
+    /* mid-stone gray desk — not bright / not white (~L 56) */
+    --background: 30 5% 56%;
+    --foreground: 24 12% 12%;
+
+    /* panels only a hair lighter than canvas (~L 61) */
+    --card: 30 4% 61%;
+    --card-foreground: 24 12% 12%;
+
+    --popover: 30 4% 62%;
+    --popover-foreground: 24 12% 12%;
+
+    --primary: 18 58% 36%;
+    --primary-foreground: 30 8% 92%;
+
+    --secondary: 28 4% 50%;
+    --secondary-foreground: 24 10% 16%;
+
+    --muted: 28 4% 51%;
+    --muted-foreground: 24 8% 26%;
+
+    --accent: 18 58% 36%;
+    --accent-foreground: 30 8% 92%;
+
+    --destructive: 0 58% 36%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 28 4% 44%;
+    --border-strong: 26 5% 36%;
+    --input: 30 4% 52%;
+    --ring: 18 58% 36%;
+
+    --radius: 0.875rem;
+
+    --primary-hover: 18 58% 30%;
+    --primary-subtle: 18 58% 36%;
+
+    --ai: 175 32% 26%;
+    --ai-foreground: 30 8% 92%;
+
+    --surface-0: 30 5% 56%;
+    --surface-1: 30 4% 61%;
+    --surface-2: 28 4% 51%;
+    --surface-3: 28 4% 46%;
+
+    --shadow-1: 0 1px 2px hsl(24 12% 8% / 0.14), 0 1px 0 hsl(30 6% 68% / 0.12) inset;
+    --shadow-2: 0 10px 24px hsl(24 14% 8% / 0.16), 0 2px 6px hsl(24 10% 8% / 0.1);
+    --shadow-3: 0 22px 44px hsl(24 16% 6% / 0.2), 0 6px 12px hsl(24 10% 8% / 0.1);
+
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --success: 152 32% 26%;
+    --warning: 32 64% 32%;
+    --info: 200 40% 30%;
+
+    --terminal-bg: 24 10% 12%;
+    --terminal-fg: 36 12% 82%;
+    --terminal-cursor: 18 58% 42%;
+
+    --sidebar-background: 28 5% 48%;
+    --sidebar-foreground: 24 10% 14%;
+    --sidebar-primary: 18 58% 36%;
+    --sidebar-primary-foreground: 30 8% 92%;
+    --sidebar-accent: 28 4% 44%;
+    --sidebar-accent-foreground: 24 10% 12%;
+    --sidebar-border: 28 4% 40%;
+    --sidebar-ring: 18 58% 36%;
+
+    /* Corporate sans — Inter for UI + headings (no decorative serif) */
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.15rem);
+    --selection-bg: hsl(18 58% 36% / 0.22);
+    --selection-fg: hsl(24 12% 12%);
+    /* flat stone air — no bright blooms */
+    --shell-glow:
+      radial-gradient(ellipse 90% 50% at 10% -10%, hsl(28 6% 48% / 0.28), transparent 55%),
+      radial-gradient(ellipse 60% 40% at 100% 0%, hsl(28 4% 50% / 0.12), transparent 50%),
+      radial-gradient(ellipse 70% 35% at 50% 110%, hsl(24 5% 46% / 0.18), transparent 55%);
+    --shell-glow-size: auto;
+  }
+
+  /*
+   * ── Folio dark (night desk) — DEFAULT product skin.
+   * Same corporate Inter + terracotta language as light Folio.
+   * :root uses these tokens for first paint / FOUC before data-ui-style is applied.
+   */
+  :root,
+  html[data-ui-style="folio-dark"] {
+    --background: 24 14% 8%;
+    --foreground: 36 28% 92%;
+
+    --card: 24 12% 11%;
+    --card-foreground: 36 28% 92%;
+
+    --popover: 24 13% 12%;
+    --popover-foreground: 36 28% 92%;
+
+    --primary: 20 78% 56%;
+    --primary-foreground: 24 20% 8%;
+
+    --secondary: 24 12% 15%;
+    --secondary-foreground: 36 20% 86%;
+
+    --muted: 24 10% 14%;
+    --muted-foreground: 30 12% 58%;
+
+    --accent: 20 78% 56%;
+    --accent-foreground: 24 20% 8%;
+
+    --destructive: 0 72% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 24 12% 20%;
+    --border-strong: 24 12% 28%;
+    --input: 24 12% 16%;
+    --ring: 20 78% 56%;
+
+    --radius: 0.875rem;
+
+    --primary-hover: 20 78% 50%;
+    --primary-subtle: 20 78% 56%;
+
+    --ai: 175 50% 48%;
+    --ai-foreground: 24 20% 8%;
+
+    --surface-0: 24 14% 8%;
+    --surface-1: 24 12% 11%;
+    --surface-2: 24 11% 14%;
+    --surface-3: 24 10% 17%;
+
+    --shadow-1: 0 1px 0 hsl(36 30% 100% / 0.04) inset, 0 8px 20px hsl(20 30% 2% / 0.4);
+    --shadow-2: 0 12px 32px hsl(20 30% 2% / 0.45), 0 2px 6px hsl(20 20% 2% / 0.25);
+    --shadow-3: 0 28px 64px hsl(20 35% 2% / 0.55), 0 8px 16px hsl(20 20% 2% / 0.3);
+
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --success: 152 42% 46%;
+    --warning: 32 90% 52%;
+    --info: 200 65% 55%;
+
+    --terminal-bg: 24 16% 6%;
+    --terminal-fg: 36 25% 82%;
+    --terminal-cursor: 20 78% 56%;
+
+    --sidebar-background: 24 16% 7%;
+    --sidebar-foreground: 36 18% 84%;
+    --sidebar-primary: 20 78% 56%;
+    --sidebar-primary-foreground: 24 20% 8%;
+    --sidebar-accent: 24 12% 12%;
+    --sidebar-accent-foreground: 36 25% 92%;
+    --sidebar-border: 24 12% 16%;
+    --sidebar-ring: 20 78% 56%;
+
+    /* Same corporate type system as light Folio */
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.15rem);
+    --selection-bg: hsl(20 78% 56% / 0.28);
+    --selection-fg: hsl(36 28% 94%);
+    --shell-glow:
+      radial-gradient(ellipse 90% 55% at 12% -10%, hsl(20 50% 30% / 0.18), transparent 55%),
+      radial-gradient(ellipse 70% 45% at 95% 0%, hsl(175 30% 28% / 0.12), transparent 50%),
+      radial-gradient(ellipse 60% 35% at 50% 110%, hsl(24 20% 20% / 0.2), transparent 55%);
+    --shell-glow-size: auto;
+  }
+
+  /*
+   * ── Flow — AI-native SaaS light (FlowAI reference).
+   * Off-white canvas, pure white cards, near-black primary buttons,
+   * green status accents, blue AI accent, Inter, generous radius.
+   */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) {
+    /* warm off-white canvas — app surfaces float on it as white cards */
+    --background: 40 10% 96%;
+    --foreground: 222 15% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 15% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 15% 12%;
+
+    /* near-black CTA (Create Workflow / Ask AI) */
+    --primary: 222 15% 12%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 10% 94%;
+    --secondary-foreground: 222 12% 20%;
+
+    --muted: 220 10% 95%;
+    --muted-foreground: 220 6% 44%;
+
+    --accent: 222 15% 12%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 10% 90%;
+    --border-strong: 220 8% 82%;
+    --input: 220 10% 90%;
+    --ring: 222 15% 12%;
+
+    --radius: 0.875rem;
+
+    --primary-hover: 222 15% 20%;
+    --primary-subtle: 222 15% 12%;
+
+    --ai: 221 83% 56%;
+    --ai-foreground: 0 0% 100%;
+
+    --surface-0: 40 10% 96%;
+    --surface-1: 0 0% 100%;
+    --surface-2: 220 12% 97%;
+    --surface-3: 220 10% 94%;
+
+    /* barely-there elevation — borders do the separation work */
+    --shadow-1: 0 1px 2px hsl(220 30% 10% / 0.05);
+    --shadow-2: 0 4px 12px hsl(220 30% 10% / 0.06), 0 1px 3px hsl(220 30% 10% / 0.05);
+    --shadow-3: 0 16px 40px hsl(220 30% 10% / 0.12), 0 4px 10px hsl(220 30% 10% / 0.05);
+
+    --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+
+    --success: 145 62% 40%;
+    --warning: 36 92% 44%;
+    --info: 221 83% 56%;
+
+    --terminal-bg: 222 14% 10%;
+    --terminal-fg: 220 10% 88%;
+    --terminal-cursor: 145 62% 45%;
+
+    --sidebar-background: 0 0% 99%;
+    --sidebar-foreground: 222 10% 30%;
+    --sidebar-primary: 222 15% 12%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 12% 94%;
+    --sidebar-accent-foreground: 222 15% 12%;
+    --sidebar-border: 220 10% 90%;
+    --sidebar-ring: 222 15% 12%;
+
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.15rem);
+    --selection-bg: hsl(222 15% 12% / 0.12);
+    --selection-fg: hsl(222 15% 12%);
+    /* clean air — no colored blooms, just a hint of depth at the top */
+    --shell-glow:
+      radial-gradient(ellipse 80% 40% at 50% -10%, hsl(0 0% 100% / 0.6), transparent 60%);
+    --shell-glow-size: auto;
+  }
+
+  /*
+   * ── Flow dark — same AI-native SaaS language at night.
+   * Inherits every Flow token above (the :is() block covers both ids);
+   * this block only overrides what differs: dark surfaces, white CTA.
+   */
+  html[data-ui-style="flow-dark"] {
+    --background: 240 6% 7%;
+    --foreground: 220 14% 93%;
+
+    --card: 240 5% 10%;
+    --card-foreground: 220 14% 93%;
+
+    --popover: 240 5% 11%;
+    --popover-foreground: 220 14% 93%;
+
+    /* inverted CTA — white button, dark label (Linear-style night) */
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 6% 8%;
+
+    --secondary: 240 5% 15%;
+    --secondary-foreground: 220 10% 80%;
+
+    --muted: 240 5% 14%;
+    --muted-foreground: 220 6% 58%;
+
+    --accent: 0 0% 98%;
+    --accent-foreground: 240 6% 8%;
+
+    --destructive: 0 66% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 5% 17%;
+    --border-strong: 240 5% 24%;
+    --input: 240 5% 17%;
+    --ring: 0 0% 88%;
+
+    --primary-hover: 0 0% 90%;
+    --primary-subtle: 0 0% 98%;
+
+    --ai: 221 83% 62%;
+    --ai-foreground: 0 0% 100%;
+
+    --surface-0: 240 6% 7%;
+    --surface-1: 240 5% 10%;
+    --surface-2: 240 5% 13%;
+    --surface-3: 240 5% 16%;
+
+    --shadow-1: 0 1px 0 hsl(0 0% 100% / 0.03) inset, 0 1px 2px hsl(240 20% 2% / 0.5);
+    --shadow-2: 0 8px 24px hsl(240 20% 2% / 0.5), 0 2px 6px hsl(240 20% 2% / 0.35);
+    --shadow-3: 0 24px 56px hsl(240 25% 2% / 0.6), 0 6px 14px hsl(240 20% 2% / 0.4);
+
+    --success: 145 55% 48%;
+    --warning: 36 90% 55%;
+    --info: 221 83% 62%;
+
+    --terminal-bg: 240 7% 5%;
+    --terminal-fg: 220 12% 86%;
+    --terminal-cursor: 145 55% 52%;
+
+    --sidebar-background: 240 6% 8%;
+    --sidebar-foreground: 220 10% 72%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 6% 8%;
+    --sidebar-accent: 240 5% 15%;
+    --sidebar-accent-foreground: 220 14% 93%;
+    --sidebar-border: 240 5% 15%;
+    --sidebar-ring: 0 0% 88%;
+
+    --selection-bg: hsl(0 0% 98% / 0.16);
+    --selection-fg: hsl(220 14% 96%);
+    --shell-glow:
+      radial-gradient(ellipse 80% 45% at 50% -10%, hsl(221 60% 30% / 0.1), transparent 60%),
+      radial-gradient(ellipse 60% 35% at 90% 105%, hsl(145 40% 20% / 0.08), transparent 55%);
+    --shell-glow-size: auto;
   }
 }
 
@@ -68,22 +687,128 @@
     color-scheme: dark;
   }
 
+  html[data-ui-style="folio"],
+  html[data-ui-style="flow"] {
+    color-scheme: light;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
-    background: hsl(var(--background));
+    background: var(--shell-glow), hsl(var(--background));
+    background-size: var(--shell-glow-size, auto);
+    font-family: var(--font-ui);
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  ::selection {
-    background: hsl(var(--primary) / 0.28);
+  html[data-ui-style="signal"] body {
+    font-feature-settings: "ss01", "zero";
+    letter-spacing: 0.01em;
+  }
+
+  html[data-ui-style="folio"] body {
+    font-feature-settings: "ss01", "cv11";
+    letter-spacing: 0.005em;
+    /* subtle paper grain (SVG noise) layered above shell glow */
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E"),
+      var(--shell-glow),
+      hsl(var(--background));
+    background-size: 180px 180px, var(--shell-glow-size, auto), auto;
     color: hsl(var(--foreground));
   }
 
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
+
+  html[data-ui-style="catalog"] h1,
+  html[data-ui-style="catalog"] h2,
+  html[data-ui-style="catalog"] h3,
+  html[data-ui-style="catalog"] h4,
+  html[data-ui-style="catalog"] .font-display {
+    letter-spacing: -0.03em;
+  }
+
+  html[data-ui-style="pulse"] h1,
+  html[data-ui-style="pulse"] h2,
+  html[data-ui-style="pulse"] h3,
+  html[data-ui-style="pulse"] h4,
+  html[data-ui-style="pulse"] .font-display {
+    letter-spacing: -0.035em;
+    font-weight: 700;
+  }
+
+  html[data-ui-style="signal"] h1,
+  html[data-ui-style="signal"] h2,
+  html[data-ui-style="signal"] h3,
+  html[data-ui-style="signal"] h4,
+  html[data-ui-style="signal"] .font-display {
+    letter-spacing: -0.04em;
+    font-weight: 700;
+    text-transform: none;
+  }
+
+  html[data-ui-style="folio"] h1,
+  html[data-ui-style="folio"] h2,
+  html[data-ui-style="folio"] h3,
+  html[data-ui-style="folio"] h4,
+  html[data-ui-style="folio"] .font-display,
+  html[data-ui-style="folio-dark"] h1,
+  html[data-ui-style="folio-dark"] h2,
+  html[data-ui-style="folio-dark"] h3,
+  html[data-ui-style="folio-dark"] h4,
+  html[data-ui-style="folio-dark"] .font-display {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+    font-style: normal;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) body {
+    font-feature-settings: "cv11", "ss01", "tnum";
+    letter-spacing: 0;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h1,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h2,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h3,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) h4,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .font-display {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+
+
+
+  html[data-ui-style="signal"] ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  html[data-ui-style="signal"] ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.55);
+    border-radius: 0;
+    border: 1px solid hsl(var(--background));
+  }
+
+  html[data-ui-style="signal"] *:focus-visible {
+    outline: 2px solid hsl(var(--primary));
+    outline-offset: 0;
+    box-shadow: 2px 2px 0 hsl(0 0% 0%);
+  }
+
+  ::selection {
+    background: var(--selection-bg);
+    color: var(--selection-fg);
+  }
+
   ::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 6px;
+    height: 6px;
   }
 
   ::-webkit-scrollbar-track {
@@ -91,79 +816,972 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 999px;
+    background: hsl(var(--border-strong));
+    border-radius: var(--dot-radius);
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
+    background: hsl(var(--muted-foreground) / 0.55);
   }
 
-  /* Clean focus styles */
   *:focus-visible {
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
-    border-radius: var(--radius);
+    border-radius: var(--focus-radius);
   }
 }
 
 @layer utilities {
   .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
+  }
+
+  .font-display {
+    font-family: var(--font-display);
+  }
+
+  .type-display {
+    @apply text-[1.75rem] font-bold leading-[2.125rem] tracking-tight font-display;
+  }
+  .type-h1 {
+    @apply text-[1.375rem] font-bold leading-7 tracking-tight font-display;
+  }
+  .type-h2 {
+    @apply text-lg font-bold leading-6 font-display;
+  }
+  .type-h3 {
+    @apply text-[0.9375rem] font-semibold leading-5 font-display;
+  }
+  .type-body {
+    @apply text-[0.8125rem] leading-5;
+  }
+  .type-body-sm {
+    @apply text-xs leading-5;
+  }
+  .type-label {
+    @apply text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  html[data-ui-style="classic"] .type-display,
+  html[data-ui-style="classic"] .type-h1,
+  html[data-ui-style="classic"] .type-h2 {
+    font-weight: 600;
+  }
+
+  html[data-ui-style="pulse"] .type-display,
+  html[data-ui-style="pulse"] .type-h1 {
+    font-weight: 700;
+  }
+
+  html[data-ui-style="pulse"] .type-label {
+    letter-spacing: 0.16em;
+    color: hsl(var(--primary) / 0.88);
+  }
+
+  html[data-ui-style="signal"] .type-display {
+    @apply text-[1.85rem] leading-[2.1rem];
+    font-weight: 700;
+    letter-spacing: -0.045em;
+    text-transform: uppercase;
+  }
+
+  html[data-ui-style="signal"] .type-h1,
+  html[data-ui-style="signal"] .type-h2 {
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+  }
+
+  html[data-ui-style="signal"] .type-label {
+    letter-spacing: 0.18em;
+    font-weight: 600;
+    color: hsl(var(--primary));
+  }
+
+  html[data-ui-style="folio"] .type-display,
+  html[data-ui-style="folio-dark"] .type-display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-style: normal;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-ui-style="folio"] .type-h1,
+  html[data-ui-style="folio"] .type-h2,
+  html[data-ui-style="folio-dark"] .type-h1,
+  html[data-ui-style="folio-dark"] .type-h2 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-style: normal;
+  }
+
+  html[data-ui-style="folio"] .type-label,
+  html[data-ui-style="folio-dark"] .type-label {
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    color: hsl(var(--primary));
+    font-family: var(--font-ui);
+  }
+
+  /* Metrics / % look corporate (aligned digits), not decorative serif */
+  html[data-ui-style="folio"] .tabular-nums,
+  html[data-ui-style="folio"] .font-mono,
+  html[data-ui-style="folio-dark"] .tabular-nums,
+  html[data-ui-style="folio-dark"] .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-display,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h1,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h2 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Section labels stay quiet gray, not colored (FlowAI look) */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-label {
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .tabular-nums,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-ui-style="folio"] [data-sidebar="sidebar"],
+  html[data-ui-style="folio-dark"] [data-sidebar="sidebar"] {
+    font-family: var(--font-ui);
+    font-feature-settings: "cv11", "ss01", "tnum";
+  }
+
+
+
+
+
+
+
+  .shadow-hard {
+    box-shadow: var(--shadow-2);
+  }
+
+  .shadow-hard-sm {
+    box-shadow: var(--shadow-1);
+  }
+
+  .shadow-hard-lg {
+    box-shadow: var(--shadow-3);
   }
 }
 
 @layer components {
   .app-shell-bg {
-    background:
-      radial-gradient(circle at 18% 0%, hsl(var(--primary) / 0.07), transparent 28rem),
-      radial-gradient(circle at 92% 14%, hsl(var(--info) / 0.045), transparent 24rem),
-      hsl(var(--background));
+    background: var(--shell-glow), hsl(var(--background));
   }
 
-  /* Panel styles */
   .enterprise-panel {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
+    @apply rounded-sm border border-border bg-card;
+    box-shadow: var(--shadow-2);
   }
 
   .workspace-panel {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_18px_60px_hsl(var(--background)_/_0.28)];
+    @apply rounded-sm border border-border bg-card;
+    box-shadow: var(--shadow-1);
   }
 
   .workspace-subtle {
-    @apply border border-border/70 bg-secondary/40;
+    @apply border border-border bg-secondary/50;
   }
 
   .workspace-empty {
-    @apply flex flex-col gap-4 rounded-lg border border-dashed border-border/60 bg-secondary/20 px-6 py-8;
+    @apply flex flex-col gap-4 rounded-sm border border-dashed border-border bg-secondary/20 px-6 py-8;
   }
 
   .enterprise-kicker {
-    @apply text-xs font-semibold uppercase tracking-wide text-primary;
+    @apply text-2xs font-medium uppercase tracking-[0.14em] text-primary;
   }
 
-  /* Card styles */
   .corp-card {
-    @apply rounded-lg border border-border/80 bg-card/95 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)];
+    @apply rounded-sm border border-border bg-card;
+    box-shadow: var(--shadow-1);
   }
+
+  .accent-gradient {
+    background: hsl(var(--primary));
+  }
+
+  html[data-ui-style="classic"] .accent-gradient {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--ai)));
+  }
+
+  html[data-ui-style="pulse"] .accent-gradient {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--primary)) 0%,
+      hsl(300 85% 62%) 48%,
+      hsl(var(--ai)) 100%
+    );
+  }
+
+  /* Pulse-only panel chrome: soft glass stack (scoped — catalog/classic untouched). */
+  html[data-ui-style="pulse"] .enterprise-panel,
+  html[data-ui-style="pulse"] .workspace-panel,
+  html[data-ui-style="pulse"] .corp-card {
+    border-radius: var(--radius);
+    border-color: hsl(var(--border) / 0.85);
+    background:
+      linear-gradient(165deg, hsl(var(--card) / 0.98) 0%, hsl(var(--surface-2) / 0.92) 100%);
+    box-shadow: var(--shadow-2);
+    backdrop-filter: blur(8px);
+  }
+
+  html[data-ui-style="pulse"] .icon-box-primary {
+    border-radius: calc(var(--radius) - 0.25rem);
+    border-color: hsl(var(--primary) / 0.4);
+    background: linear-gradient(145deg, hsl(var(--primary) / 0.22), hsl(var(--ai) / 0.1));
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.12);
+  }
+
+  html[data-ui-style="pulse"] .enterprise-kicker {
+    letter-spacing: 0.16em;
+    color: hsl(var(--primary));
+  }
+
+  html[data-ui-style="pulse"] .data-row:hover {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.08), transparent 70%);
+  }
+
+  /*
+   * Signal-only brutal chrome. Everything is scoped under
+   * html[data-ui-style="signal"] so catalog / classic / pulse stay intact.
+   */
+  html[data-ui-style="signal"] .app-shell-bg {
+    background: var(--shell-glow), hsl(var(--background));
+    background-size: var(--shell-glow-size, auto);
+  }
+
+  html[data-ui-style="signal"] .enterprise-panel,
+  html[data-ui-style="signal"] .workspace-panel,
+  html[data-ui-style="signal"] .corp-card {
+    border-radius: 0;
+    border-width: 1px;
+    border-color: hsl(var(--border-strong));
+    background:
+      linear-gradient(180deg, hsl(0 0% 8%) 0%, hsl(0 0% 5%) 100%);
+    box-shadow: var(--shadow-2);
+    position: relative;
+  }
+
+  html[data-ui-style="signal"] .enterprise-panel::before,
+  html[data-ui-style="signal"] .workspace-panel::before,
+  html[data-ui-style="signal"] .corp-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 12px;
+    height: 2px;
+    background: hsl(var(--primary));
+    pointer-events: none;
+  }
+
+  html[data-ui-style="signal"] .workspace-empty {
+    border-radius: 0;
+    border-style: solid;
+    border-width: 1px;
+    border-color: hsl(var(--border-strong));
+    background:
+      repeating-linear-gradient(
+        -45deg,
+        hsl(var(--secondary)) 0 6px,
+        hsl(var(--background)) 6px 12px
+      );
+    box-shadow: var(--shadow-1);
+  }
+
+  html[data-ui-style="signal"] .enterprise-kicker {
+    letter-spacing: 0.2em;
+    font-weight: 700;
+    color: hsl(var(--primary));
+  }
+
+  html[data-ui-style="signal"] .accent-gradient {
+    background: repeating-linear-gradient(
+      90deg,
+      hsl(var(--primary)) 0 8px,
+      hsl(24 100% 42%) 8px 16px
+    );
+  }
+
+  html[data-ui-style="signal"] .icon-box,
+  html[data-ui-style="signal"] .icon-box-primary,
+  html[data-ui-style="signal"] .icon-box-muted {
+    border-radius: 0;
+  }
+
+  html[data-ui-style="signal"] .icon-box-primary {
+    border: 1px solid hsl(var(--primary));
+    background: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+    box-shadow: 2px 2px 0 hsl(0 0% 0%);
+  }
+
+  html[data-ui-style="signal"] .status-dot {
+    border-radius: 0;
+    box-shadow: 1px 1px 0 hsl(0 0% 0%);
+  }
+
+  html[data-ui-style="signal"] .data-row {
+    border-bottom-color: hsl(var(--border));
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-ui-style="signal"] .data-row:hover {
+    background: hsl(var(--primary) / 0.08);
+    box-shadow: inset 3px 0 0 hsl(var(--primary));
+  }
+
+  html[data-ui-style="signal"] .section-divider {
+    border-bottom-width: 2px;
+    border-bottom-color: hsl(var(--border-strong));
+  }
+
+  /* Signal: zero radius on page chrome only — never force-style portaled menus. */
+  html[data-ui-style="signal"] button:not([role="menuitem"]):not([role="option"]),
+  html[data-ui-style="signal"] input,
+  html[data-ui-style="signal"] textarea,
+  html[data-ui-style="signal"] select {
+    border-radius: 0 !important;
+  }
+
+  html[data-ui-style="signal"] button[class*="bg-primary"],
+  html[data-ui-style="signal"] a[class*="bg-primary"] {
+    box-shadow: 3px 3px 0 hsl(0 0% 0%);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  html[data-ui-style="signal"] button[class*="bg-primary"]:hover,
+  html[data-ui-style="signal"] a[class*="bg-primary"]:hover {
+    box-shadow: 1px 1px 0 hsl(0 0% 0%);
+    transform: translate(1px, 1px);
+  }
+
+  html[data-ui-style="signal"] [data-sidebar="sidebar"],
+  html[data-ui-style="signal"] aside {
+    border-right: 1px solid hsl(var(--border-strong));
+  }
+
+  /* Only sidebar active states — not Radix select/menu items */
+  html[data-ui-style="signal"] [data-sidebar="menu-button"][data-active="true"] {
+    box-shadow: inset 3px 0 0 hsl(var(--primary));
+  }
+
+  /*
+   * Folio light chrome — mid-stone gray desk (not bright paper).
+   */
+  html[data-ui-style="folio"] .app-shell-bg {
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
+      var(--shell-glow),
+      hsl(var(--background));
+    background-size: 180px 180px, auto, auto;
+  }
+
+  html[data-ui-style="folio"] .enterprise-panel,
+  html[data-ui-style="folio"] .workspace-panel,
+  html[data-ui-style="folio"] .corp-card {
+    border-radius: var(--radius);
+    border-color: hsl(var(--border));
+    /* mid-gray panels — only a shade lighter than canvas */
+    background:
+      linear-gradient(165deg, hsl(30 4% 62%) 0%, hsl(28 4% 58%) 100%);
+    box-shadow: var(--shadow-2);
+  }
+
+  html[data-ui-style="folio"] .enterprise-panel {
+    border-top: 3px solid hsl(var(--primary) / 0.85);
+  }
+
+  html[data-ui-style="folio"] .workspace-empty {
+    border-radius: var(--radius);
+    border-style: dashed;
+    border-color: hsl(var(--border-strong));
+    background:
+      linear-gradient(180deg, hsl(30 4% 58% / 0.95), hsl(28 4% 54% / 0.95));
+    color: hsl(var(--muted-foreground));
+  }
+
+  html[data-ui-style="folio"] .enterprise-kicker {
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    color: hsl(var(--primary));
+  }
+
+  html[data-ui-style="folio"] .accent-gradient {
+    background-image: linear-gradient(
+      120deg,
+      hsl(var(--primary)) 0%,
+      hsl(28 70% 42%) 45%,
+      hsl(var(--ai)) 100%
+    );
+  }
+
+  html[data-ui-style="folio"] .icon-box {
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+
+  html[data-ui-style="folio"] .icon-box-primary {
+    border-color: hsl(var(--primary) / 0.35);
+    background: linear-gradient(145deg, hsl(var(--primary) / 0.14), hsl(var(--ai) / 0.08));
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-1);
+  }
+
+  html[data-ui-style="folio"] .status-dot {
+    box-shadow: 0 0 0 2px hsl(var(--card));
+  }
+
+  html[data-ui-style="folio"] .data-row {
+    border-bottom-color: hsl(var(--border) / 0.85);
+  }
+
+  html[data-ui-style="folio"] .data-row:hover {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.07), transparent 65%);
+  }
+
+  html[data-ui-style="folio"] .section-divider {
+    border-bottom-color: hsl(var(--border));
+  }
+
+  /* Softer interactive chrome — still only when folio is active */
+  html[data-ui-style="folio"] button,
+  html[data-ui-style="folio"] input,
+  html[data-ui-style="folio"] textarea,
+  html[data-ui-style="folio"] select {
+    border-radius: calc(var(--radius) - 0.2rem);
+  }
+
+  html[data-ui-style="folio"] button[class*="bg-primary"],
+  html[data-ui-style="folio"] a[class*="bg-primary"] {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: 0 1px 0 hsl(36 30% 92% / 0.2) inset, var(--shadow-1);
+  }
+
+  html[data-ui-style="folio"] button[class*="bg-primary"]:hover,
+  html[data-ui-style="folio"] a[class*="bg-primary"]:hover {
+    filter: brightness(0.96);
+  }
+
+  html[data-ui-style="folio"] [data-sidebar="sidebar"],
+  html[data-ui-style="folio"] aside {
+    border-right: 1px solid hsl(var(--sidebar-border));
+    background: linear-gradient(180deg, hsl(28 5% 50%) 0%, hsl(28 5% 46%) 100%);
+  }
+
+  html[data-ui-style="folio"] [data-sidebar="menu-button"][data-active="true"] {
+    background: hsl(var(--card));
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-1);
+    border: 1px solid hsl(var(--border));
+  }
+
+  html[data-ui-style="folio"] ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 999px;
+  }
+
+  html[data-ui-style="folio"] *:focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.55);
+    outline-offset: 2px;
+    border-radius: var(--focus-radius);
+  }
+
+  /* Dialogs / menus feel like paper sheets */
+  html[data-ui-style="folio"] [role="dialog"],
+  html[data-ui-style="folio"] [data-radix-popper-content-wrapper] [role="menu"],
+  html[data-ui-style="folio"] [data-state][class*="bg-popover"],
+  html[data-ui-style="folio"] [class*="bg-popover"] {
+    border-color: hsl(var(--border)) !important;
+    box-shadow: var(--shadow-3) !important;
+  }
+
+  /*
+   * Deep navy + ice cyan — scoped so other dark skins stay intact.
+   */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  /*
+   * Folio family shared chrome (light + dark) and dark-only panel surfaces.
+   */
+  html[data-ui-style="folio"] .enterprise-kicker,
+  html[data-ui-style="folio-dark"] .enterprise-kicker {
+    letter-spacing: 0.16em;
+    font-weight: 700;
+    color: hsl(var(--primary));
+  }
+
+  html[data-ui-style="folio"] .accent-gradient,
+  html[data-ui-style="folio-dark"] .accent-gradient {
+    background-image: linear-gradient(
+      120deg,
+      hsl(var(--primary)) 0%,
+      hsl(28 70% 42%) 45%,
+      hsl(var(--ai)) 100%
+    );
+  }
+
+  html[data-ui-style="folio"] .icon-box,
+  html[data-ui-style="folio-dark"] .icon-box {
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+
+  html[data-ui-style="folio"] .icon-box-primary,
+  html[data-ui-style="folio-dark"] .icon-box-primary {
+    border-color: hsl(var(--primary) / 0.35);
+    background: linear-gradient(145deg, hsl(var(--primary) / 0.14), hsl(var(--ai) / 0.08));
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-1);
+  }
+
+  html[data-ui-style="folio"] .status-dot,
+  html[data-ui-style="folio-dark"] .status-dot {
+    box-shadow: 0 0 0 2px hsl(var(--card));
+  }
+
+  html[data-ui-style="folio"] .data-row,
+  html[data-ui-style="folio-dark"] .data-row {
+    border-bottom-color: hsl(var(--border) / 0.85);
+  }
+
+  html[data-ui-style="folio"] .data-row:hover,
+  html[data-ui-style="folio-dark"] .data-row:hover {
+    background: linear-gradient(90deg, hsl(var(--primary) / 0.07), transparent 65%);
+  }
+
+  html[data-ui-style="folio"] .section-divider,
+  html[data-ui-style="folio-dark"] .section-divider {
+    border-bottom-color: hsl(var(--border));
+  }
+
+  html[data-ui-style="folio"] button,
+  html[data-ui-style="folio"] input,
+  html[data-ui-style="folio"] textarea,
+  html[data-ui-style="folio"] select,
+  html[data-ui-style="folio-dark"] button,
+  html[data-ui-style="folio-dark"] input,
+  html[data-ui-style="folio-dark"] textarea,
+  html[data-ui-style="folio-dark"] select {
+    border-radius: calc(var(--radius) - 0.2rem);
+  }
+
+  html[data-ui-style="folio"] button[class*="bg-primary"],
+  html[data-ui-style="folio"] a[class*="bg-primary"],
+  html[data-ui-style="folio-dark"] button[class*="bg-primary"],
+  html[data-ui-style="folio-dark"] a[class*="bg-primary"] {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    box-shadow: var(--shadow-1);
+  }
+
+  html[data-ui-style="folio"] button[class*="bg-primary"]:hover,
+  html[data-ui-style="folio"] a[class*="bg-primary"]:hover,
+  html[data-ui-style="folio-dark"] button[class*="bg-primary"]:hover,
+  html[data-ui-style="folio-dark"] a[class*="bg-primary"]:hover {
+    filter: brightness(0.96);
+  }
+
+  html[data-ui-style="folio"] [data-sidebar="menu-button"][data-active="true"],
+  html[data-ui-style="folio-dark"] [data-sidebar="menu-button"][data-active="true"] {
+    background: hsl(var(--card));
+    color: hsl(var(--primary));
+    box-shadow: var(--shadow-1);
+    border: 1px solid hsl(var(--border));
+  }
+
+  html[data-ui-style="folio"] ::-webkit-scrollbar-thumb,
+  html[data-ui-style="folio-dark"] ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 999px;
+  }
+
+  html[data-ui-style="folio"] *:focus-visible,
+  html[data-ui-style="folio-dark"] *:focus-visible {
+    outline: 2px solid hsl(var(--primary) / 0.55);
+    outline-offset: 2px;
+    border-radius: var(--focus-radius);
+  }
+
+  html[data-ui-style="folio"] [role="dialog"],
+  html[data-ui-style="folio"] [data-radix-popper-content-wrapper] [role="menu"],
+  html[data-ui-style="folio"] [data-state][class*="bg-popover"],
+  html[data-ui-style="folio"] [class*="bg-popover"],
+  html[data-ui-style="folio-dark"] [role="dialog"],
+  html[data-ui-style="folio-dark"] [data-radix-popper-content-wrapper] [role="menu"],
+  html[data-ui-style="folio-dark"] [data-state][class*="bg-popover"],
+  html[data-ui-style="folio-dark"] [class*="bg-popover"] {
+    border-color: hsl(var(--border)) !important;
+    box-shadow: var(--shadow-3) !important;
+  }
+
+  /* Folio dark surfaces — night paper (not cyber neon) */
+  html[data-ui-style="folio-dark"] .app-shell-bg {
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"),
+      var(--shell-glow),
+      hsl(var(--background));
+    background-size: 180px 180px, auto, auto;
+  }
+
+  html[data-ui-style="folio-dark"] body {
+    font-feature-settings: "ss01", "cv11";
+    letter-spacing: 0.005em;
+    background-image:
+      url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E"),
+      var(--shell-glow),
+      hsl(var(--background));
+    background-size: 180px 180px, var(--shell-glow-size, auto), auto;
+  }
+
+  html[data-ui-style="folio-dark"] .enterprise-panel,
+  html[data-ui-style="folio-dark"] .workspace-panel,
+  html[data-ui-style="folio-dark"] .corp-card {
+    border-radius: var(--radius);
+    border-color: hsl(var(--border));
+    background:
+      linear-gradient(165deg, hsl(24 12% 13%) 0%, hsl(24 14% 10%) 100%);
+    box-shadow: var(--shadow-2);
+  }
+
+  html[data-ui-style="folio-dark"] .enterprise-panel {
+    border-top: 3px solid hsl(var(--primary) / 0.85);
+  }
+
+  html[data-ui-style="folio-dark"] .workspace-empty {
+    border-radius: var(--radius);
+    border-style: dashed;
+    border-color: hsl(var(--border-strong));
+    background: linear-gradient(180deg, hsl(24 12% 12% / 0.9), hsl(24 14% 9% / 0.9));
+    color: hsl(var(--muted-foreground));
+  }
+
+  html[data-ui-style="folio-dark"] [data-sidebar="sidebar"],
+  html[data-ui-style="folio-dark"] aside {
+    border-right: 1px solid hsl(var(--sidebar-border));
+    background: linear-gradient(180deg, hsl(24 14% 9%) 0%, hsl(24 16% 7%) 100%);
+  }
+
+  /*
+   * Flow chrome — white cards on off-white canvas, hairline borders,
+   * barely-there shadows. Scoped so every other skin stays intact.
+   */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .app-shell-bg {
+    background: var(--shell-glow), hsl(var(--background));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+    border-radius: var(--radius);
+    border-color: hsl(var(--border));
+    background: hsl(var(--card));
+    box-shadow: var(--shadow-1);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-empty {
+    border-radius: var(--radius);
+    border-style: dashed;
+    border-color: hsl(var(--border-strong));
+    background: hsl(var(--surface-2));
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-kicker {
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .accent-gradient {
+    background: hsl(var(--primary));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .icon-box {
+    border-radius: calc(var(--radius) - 0.35rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .icon-box-primary {
+    border-color: hsl(var(--border));
+    background: hsl(var(--surface-2));
+    color: hsl(var(--foreground));
+    box-shadow: none;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-dot {
+    box-shadow: 0 0 0 2px hsl(var(--card));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-dot-online {
+    background: hsl(var(--success));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .data-row {
+    border-bottom-color: hsl(var(--border) / 0.8);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .data-row:hover {
+    background: hsl(var(--surface-2));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .section-divider {
+    border-bottom-color: hsl(var(--border));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) select {
+    border-radius: calc(var(--radius) - 0.25rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"] {
+    font-weight: 600;
+    letter-spacing: 0;
+    box-shadow: var(--shadow-1);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+    background: hsl(var(--primary-hover));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) aside {
+    border-right: 1px solid hsl(var(--sidebar-border));
+    background: hsl(var(--sidebar-background));
+  }
+
+  /* Active nav item — soft gray pill with dark text, like the reference */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"][data-active="true"] {
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+    box-shadow: none;
+    border: none;
+    font-weight: 600;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border-strong));
+    border-radius: 999px;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) *:focus-visible {
+    outline: 2px solid hsl(var(--foreground) / 0.35);
+    outline-offset: 2px;
+    border-radius: var(--focus-radius);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-radix-popper-content-wrapper] [role="menu"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-state][class*="bg-popover"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [class*="bg-popover"] {
+    border-color: hsl(var(--border)) !important;
+    box-shadow: var(--shadow-3) !important;
+  }
+
+  /* Floating content sheet — the app "card" on the off-white canvas */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet {
+    margin: 0 0.875rem 0.875rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) + 0.25rem);
+    background: hsl(var(--card));
+    box-shadow: var(--shadow-2);
+  }
+
+  @media (max-width: 767px) {
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet {
+      margin: 0;
+      border: none;
+      border-radius: 0;
+    }
+  }
+
+  /* Pages paint their own bg via bg-background — inside the sheet it must stay white */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .flow-sheet .bg-background {
+    background-color: transparent;
+  }
+
+  /* Sidebar goes flat: no icon tiles, quiet rows, gray active pill.
+     !important — the tile chrome comes from utility classes that would
+     otherwise win the cascade over this components-layer override. */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .nav-icon-tile {
+    border-color: transparent !important;
+    background: transparent !important;
+    height: 1.5rem;
+    width: 1.5rem;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"] a,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="menu-button"] {
+    border-radius: 0.5rem;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a:hover {
+    background: hsl(var(--sidebar-accent) / 0.7);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a[aria-current="page"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] a.active {
+    border-color: transparent;
+    background: hsl(var(--sidebar-accent));
+    color: hsl(var(--sidebar-accent-foreground));
+    box-shadow: none;
+    font-weight: 600;
+  }
+
+  /* Lighter icon language across the app (lucide honors CSS stroke-width) */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) svg.lucide {
+    stroke-width: 1.75;
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-sidebar="sidebar"] svg.lucide {
+    stroke-width: 1.6;
+  }
+
+  /* Inputs sit on white, hairline borders, calm focus */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input:not([type="checkbox"]):not([type="radio"]),
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) select {
+    background-color: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) input::placeholder,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.75);
+  }
+
+  /* Motion language: soft lift on interactive chrome, gentle press */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a {
+    transition:
+      background-color 150ms var(--ease-standard),
+      border-color 150ms var(--ease-standard),
+      color 150ms var(--ease-standard),
+      box-shadow 200ms var(--ease-standard),
+      transform 200ms var(--ease-standard);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-2);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:active,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-1);
+  }
+
+  /* Cards breathe on hover */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel {
+    transition:
+      box-shadow 200ms var(--ease-standard),
+      transform 200ms var(--ease-standard),
+      border-color 150ms var(--ease-standard);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel:hover {
+    border-color: hsl(var(--border-strong));
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Panels rise in softly on mount */
+  @keyframes flow-rise {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+    animation: flow-rise 280ms var(--ease-standard) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-panel,
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-panel,
+    html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .corp-card {
+      animation: none;
+    }
+  }
+
+  /* Overlays: airy sheets with generous radius */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"] {
+    border-radius: calc(var(--radius) + 0.125rem);
+  }
+
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [data-radix-popper-content-wrapper] > * {
+    border-radius: calc(var(--radius) - 0.125rem);
+  }
+
+  /* Status pills — green tint like the reference "Active" badge */
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .status-pill-success {
+    background: hsl(var(--success) / 0.12);
+    color: hsl(145 62% 30%);
+  }
+
 
   .corp-surface {
-    @apply transition-colors duration-150 hover:bg-secondary/50;
+    @apply transition-colors duration-150 hover:bg-secondary/70;
   }
 
-  /* Row hover — for list items inside cards */
   .row-hover {
-    @apply transition-colors duration-100 hover:bg-secondary/40;
+    @apply transition-colors duration-100 hover:bg-secondary/50;
   }
 
-  /* Data row */
   .data-row {
-    @apply flex items-center gap-3 px-4 py-3 transition-colors duration-100 hover:bg-secondary/40;
+    @apply flex items-center gap-3 border-b border-border/70 px-4 py-3 transition-colors duration-100 hover:bg-secondary/40 last:border-b-0;
   }
 
-  /* Status indicators */
   .status-dot {
-    @apply h-2 w-2 rounded-full;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: var(--dot-radius);
   }
 
   .status-dot-online {
@@ -175,26 +1793,45 @@
   }
 
   .status-dot-unknown {
-    @apply status-dot bg-muted;
+    @apply status-dot bg-muted-foreground/50;
   }
 
-  /* Icon container variants */
   .icon-box {
-    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-sm;
   }
 
   .icon-box-primary {
-    @apply icon-box border border-primary/20 bg-primary/15 text-primary;
+    @apply icon-box border border-primary/35 bg-primary/15 text-primary;
   }
 
   .icon-box-muted {
-    @apply icon-box border border-border/70 bg-secondary/70 text-muted-foreground;
+    @apply icon-box border border-border bg-secondary text-muted-foreground;
   }
 
-  /* Section divider */
   .section-divider {
-    @apply border-b border-border/60;
+    @apply border-b border-border;
   }
+
+  /*
+   * Soft glass panels, neon sign glow, no hard industrial clutter.
+   */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 }
 
 /* SSH terminal: clickable text filenames in ls output */
@@ -207,4 +1844,140 @@
 
 .xterm .xterm-link:hover {
   color: hsl(var(--primary));
+}
+
+/*
+  Portaled overlays (Select / Dropdown / Popover) while a Dialog is open:
+  Radix scroll-lock sets body { pointer-events: none } and only restores it on
+  dialog content. Portals render under body, so they need an explicit auto layer
+  above the dialog (z-80). Independent of UI skins.
+*/
+[data-radix-popper-content-wrapper] {
+  z-index: 100 !important;
+  pointer-events: auto !important;
+}
+
+[data-radix-select-content],
+[data-radix-menu-content],
+[data-radix-dropdown-menu-content],
+[data-radix-select-viewport],
+[role="listbox"],
+[role="menu"] {
+  pointer-events: auto !important;
+}
+
+/*
+ * ══ Flow component redesign (light + dark) ══════════════════════════
+ * Unlayered on purpose: these must win over Tailwind utility classes
+ * (layered) without !important. Scoped to the two Flow skins only.
+ */
+
+/* Badges → quiet pills: no shouting uppercase, round, calm weight.
+   The tracking class is the Badge component's unique signature. */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [class*="tracking-[0.08em]"] {
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 500;
+  padding-left: 0.625rem;
+  padding-right: 0.625rem;
+}
+
+/* Tabs → segmented control: pill track, pill slider, pill triggers */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tablist"] {
+  border-radius: 999px;
+  background: hsl(var(--surface-2));
+  border-color: hsl(var(--border));
+  padding: 0.1875rem;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tablist"] > [aria-hidden] {
+  border-radius: 999px;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tab"] {
+  border-radius: 999px;
+}
+
+/* Tables — micro uppercase headers, airy rows, hairline separators */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) thead th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  height: 2.5rem;
+  background: transparent;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) thead {
+  background: hsl(var(--surface-2) / 0.6);
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) tbody tr {
+  border-bottom-color: hsl(var(--border) / 0.7);
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) tbody tr:hover {
+  background: hsl(var(--surface-2) / 0.7);
+}
+
+/* Menus, selects, comboboxes — soft rows, generous radius */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="menuitem"],
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="option"] {
+  border-radius: 0.5rem;
+}
+
+/* Tooltips — inverted pill, like modern SaaS hints */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="tooltip"] {
+  border-radius: 0.625rem;
+  border: none;
+  background: hsl(var(--foreground));
+  color: hsl(var(--background));
+  box-shadow: var(--shadow-2);
+  font-weight: 500;
+}
+
+/* Dialog entrance — one soft rise instead of the default zoom */
+@keyframes flow-dialog-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) [role="dialog"][data-state="open"].fixed.left-\[50\%\] {
+  animation: flow-dialog-in 240ms var(--ease-standard);
+}
+
+/* Overlay: light theme gets a soft veil with blur, dark stays deep */
+html[data-ui-style="flow"] [data-state][class*="bg-black/75"] {
+  background: hsl(222 20% 10% / 0.35);
+  backdrop-filter: blur(4px);
+}
+
+html[data-ui-style="flow-dark"] [data-state][class*="bg-black/75"] {
+  background: hsl(240 10% 2% / 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* Display type — Manrope with real weight for hero numbers/headings */
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-display {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h1,
+html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .type-h2 {
+  font-weight: 700;
+}
+
+/* Dark Flow: success pill text needs more light */
+html[data-ui-style="flow-dark"] .status-pill-success {
+  background: hsl(var(--success) / 0.15);
+  color: hsl(145 55% 62%);
 }

@@ -5,7 +5,6 @@ from typing import Any
 
 from studio.services.pipeline_template_text import _text
 
-
 _PLACEHOLDER_RE = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
 _RUNTIME_PLACEHOLDER_NAMES = {"approve_url", "reject_url"}
 _MONITORING_RUNTIME_PLACEHOLDER_NAMES = {

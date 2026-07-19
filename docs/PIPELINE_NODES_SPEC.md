@@ -373,8 +373,20 @@ Runtime:
 - Вызывает `run_pipeline_react_agent(...)`.
 - Может использовать серверы, MCP servers, Studio skills и сохранённый `AgentConfig`.
 - `goal`, `system_prompt`, `instructions` шаблонизируются context-переменными.
+- **Goal обязателен** после template render; пустой goal → node `failed`.
+- По умолчанию в goal добавляется compact block `## Context from previous pipeline steps` из upstream `node_outputs` (opt-out: `include_upstream_outputs=false`). Лимиты: `max_upstream_nodes` (1–12, default 6), `max_upstream_chars` (200–4000, default 1200).
 - События агента отправляются в websocket group `pipeline_run_<run_id>`.
-- Возвращает `agent_run_id`, `output=final_report`, `error=ai_analysis` если agent run не completed.
+- Outcome-семантика (`app/agent_kernel/runtime/outcomes.py`): `success` | `partial` | `failed` | `stopped`.
+  - timeout / LLM hard error → `failed`
+  - max iterations / final answer без tool evidence / pending verification → `partial` (AgentRun.status может остаться `completed`)
+  - stop → `stopped`
+  - final answer с tools и без pending verification → `success`
+- Pipeline mapping:
+  - `success` → node `status=completed`, ports `success`+`out`
+  - `partial` → зависит от `on_partial` (default `error` → node `failed` / port `error`; `success` → completed; `abort` → failed)
+  - `failed` → node `failed`
+  - `stopped` → node `stopped` (без downstream ports)
+- Node state также содержит: `outcome`, `outcome_reason`, `agent_run_id`, `tool_call_count`, `verification_summary`.
 
 Поля:
 
@@ -391,6 +403,14 @@ Runtime:
 - `instructions`
 - `allowed_tools`
 - `on_failure`
+- `on_partial`: `error` | `success` | `abort` (default `error`)
+- `include_upstream_outputs`: bool (default `true`)
+- `max_upstream_nodes`, `max_upstream_chars`
+- `tools_mode`: `all` | `allowlist` | `denylist` (default: `all` if `allowed_tools` empty, else `allowlist`)
+- `allowed_tools`: list; with `tools_mode=allowlist` **must be non-empty**
+- `interaction_mode`: `interactive` | `unattended` (default unattended for schedule/webhook/monitoring triggers)
+- `require_all_servers`: bool (default false for react)
+- `max_iterations` default **6** (aligned with UI; no experimental model hardcode — empty model uses provider/auto resolution)
 
 AgentConfig behavior:
 
@@ -400,6 +420,7 @@ AgentConfig behavior:
 
 Ошибки:
 
+- `Goal is required for this agent node (empty after template render)...`
 - `Invalid agent config id: ...`
 - `Agent config not found: ...`
 - `Node references servers outside agent scope: [...]`
@@ -411,7 +432,7 @@ AgentConfig behavior:
 
 - Можно запустить агента без сервера, если есть MCP server или skill.
 - MCP доступ admin/staff-only.
-- UI default `max_iterations=6`, backend fallback без поля: `10`.
+- UI/backend default `max_iterations=6` (единый fallback `default_max_iterations`).
 
 ### `agent/multi`
 
@@ -423,7 +444,14 @@ Runtime:
 - Adapter сохраняет существующую multi-agent runtime semantics: AgentConfig/server/MCP/skill resolution, event callback, provider/model resolution и final report mapping остаются в production multi-agent runtime.
 - Вызывает `run_pipeline_multi_agent(...)`.
 - Логика выбора AgentConfig, servers, MCP и skills почти такая же, как у `agent/react`.
-- Возвращает `agent_run_id`, `output=final_report`, `error=ai_analysis` если run не completed.
+- Goal обязателен; upstream outputs инжектятся так же, как у `agent/react`.
+- Outcome-семантика multi:
+  - all tasks `done` → `success`
+  - mixed `done`+`failed` / some `skipped` → `partial` (больше **не** silent `completed` без outcome)
+  - all `failed` / all `skipped` / orchestrator `abort` / empty plan → `failed`
+  - operator stop → `stopped`
+- Pipeline mapping такой же, как у `agent/react` (`on_partial` default `error`).
+- Node state: `outcome`, `outcome_reason`, `agent_run_id`, `tool_call_count`, `failed_task_count`, `plan_summary`, `verification_summary`.
 
 Поля:
 
@@ -439,9 +467,16 @@ Runtime:
 - `system_prompt`
 - `allowed_tools`
 - `on_failure`
+- `on_partial`: `error` | `success` | `abort` (default `error`)
+- `include_upstream_outputs`, `max_upstream_nodes`, `max_upstream_chars`
+- `tools_mode`, `allowed_tools`, `interaction_mode`, `instructions` (parity with react / AgentConfig)
+- `require_all_servers`: bool (default **true** for multi)
+- `max_iterations` default **6**
 
 Ошибки:
 
+- `Goal is required for this agent node (empty after template render)...`
+- `tools_mode=allowlist requires a non-empty allowed_tools list...`
 - `Invalid agent config id: ...`
 - `Agent config not found: ...`
 - `Node references servers outside agent scope: [...]`
@@ -452,7 +487,8 @@ Runtime:
 Фишки:
 
 - Подходит для сравнения нескольких серверов/целей.
-- UI default `max_iterations=6`, backend fallback без поля: `20`.
+- UI/backend default `max_iterations=6`.
+- `instructions` / AgentConfig instructions передаются в orchestrator prompt.
 
 ### `agent/ssh_cmd`
 

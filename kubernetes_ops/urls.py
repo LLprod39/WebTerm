@@ -1,7 +1,37 @@
 from django.urls import path
 
-from kubernetes_ops import action_views, admin_action_views, admin_apply_views, admin_delete_views, admin_dry_run_views, admin_log_views, admin_node_debug_views, admin_node_maintenance_views, admin_patch_views, admin_recording_views, admin_resource_views, admin_session_views, admin_terminal_views, admin_watch_views, admin_workload_views, audit_views, capability_views, describe_views, devtron_views, diagnostic_views, fleet_views, helm_views, log_views, namespace_views, network_views, pod_views, probe_views, release_views, workload_views
-from kubernetes_ops import views
+from kubernetes_ops import (
+    action_views,
+    admin_action_views,
+    admin_apply_views,
+    admin_delete_views,
+    admin_dry_run_views,
+    admin_log_views,
+    admin_node_debug_views,
+    admin_node_maintenance_views,
+    admin_patch_views,
+    admin_recording_views,
+    admin_resource_views,
+    admin_session_views,
+    admin_terminal_views,
+    admin_watch_views,
+    admin_workload_views,
+    audit_views,
+    capability_views,
+    describe_views,
+    devtron_views,
+    diagnostic_views,
+    fleet_views,
+    helm_views,
+    log_views,
+    namespace_views,
+    network_views,
+    pod_views,
+    probe_views,
+    release_views,
+    views,
+    workload_views,
+)
 
 urlpatterns = [
     path("readiness/", views.api_kubernetes_readiness, name="api_kubernetes_readiness"),

@@ -462,4 +462,9 @@ class K8sActionRequest(models.Model):
         return f"{self.action} {self.request_id}"
 
 
-from kubernetes_ops.admin_models import K8sAdminAction, K8sAdminRecording, K8sAdminRecordingEvent, K8sAdminSession  # noqa: E402,F401
+from kubernetes_ops.admin_models import (  # noqa: E402,F401
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminRecordingEvent,
+    K8sAdminSession,
+)

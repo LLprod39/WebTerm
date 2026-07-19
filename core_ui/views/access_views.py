@@ -18,9 +18,9 @@ from loguru import logger
 from core_ui.access import (
     PROFILE_STAFF_FLAGS,
     VALID_ACCESS_PROFILES,
-    access_profile_permissions,
     access_feature_labels,
     access_feature_slugs,
+    access_profile_permissions,
     build_user_access_payload,
     feature_allowed_for_user,
     load_group_permission_sources,
@@ -78,50 +78,41 @@ def _apply_access_profile(user, profile: str) -> None:
         user.save(update_fields=["is_staff"])
 
     with transaction.atomic():
-        for feature, allowed in target.items():
-            UserAppPermission.objects.update_or_create(
-                user=user,
-                feature=feature,
-                defaults={"allowed": allowed},
+        UserAppPermission.objects.bulk_create(
+            [UserAppPermission(user=user, feature=feature, allowed=allowed) for feature, allowed in target.items()],
+            update_conflicts=True,
+            unique_fields=["user", "feature"],
+            update_fields=["allowed"],
+        )
+
+
+def _apply_explicit_permissions(model, owner_field: str, owner, permissions: dict | None) -> None:
+    """Bulk-apply explicit per-feature permissions: empty value deletes, else upserts."""
+    if permissions is None:
+        return
+
+    valid_features = set(_access_feature_slugs())
+    items = {f: v for f, v in dict(permissions).items() if f in valid_features}
+    to_delete = [f for f, v in items.items() if v is None or v == ""]
+    to_upsert = {f: bool(v) for f, v in items.items() if not (v is None or v == "")}
+    with transaction.atomic():
+        if to_delete:
+            model.objects.filter(**{owner_field: owner, "feature__in": to_delete}).delete()
+        if to_upsert:
+            model.objects.bulk_create(
+                [model(**{owner_field: owner, "feature": f, "allowed": allowed}) for f, allowed in to_upsert.items()],
+                update_conflicts=True,
+                unique_fields=[owner_field, "feature"],
+                update_fields=["allowed"],
             )
 
 
 def _apply_user_explicit_permissions(user, permissions: dict | None) -> None:
-    if permissions is None:
-        return
-
-    valid_features = set(_access_feature_slugs())
-    with transaction.atomic():
-        for feature, raw_value in dict(permissions).items():
-            if feature not in valid_features:
-                continue
-            if raw_value is None or raw_value == "":
-                UserAppPermission.objects.filter(user=user, feature=feature).delete()
-            else:
-                UserAppPermission.objects.update_or_create(
-                    user=user,
-                    feature=feature,
-                    defaults={"allowed": bool(raw_value)},
-                )
+    _apply_explicit_permissions(UserAppPermission, "user", user, permissions)
 
 
 def _apply_group_explicit_permissions(group, permissions: dict | None) -> None:
-    if permissions is None:
-        return
-
-    valid_features = set(_access_feature_slugs())
-    with transaction.atomic():
-        for feature, raw_value in dict(permissions).items():
-            if feature not in valid_features:
-                continue
-            if raw_value is None or raw_value == "":
-                GroupAppPermission.objects.filter(group=group, feature=feature).delete()
-            else:
-                GroupAppPermission.objects.update_or_create(
-                    group=group,
-                    feature=feature,
-                    defaults={"allowed": bool(raw_value)},
-                )
+    _apply_explicit_permissions(GroupAppPermission, "group", group, permissions)
 
 
 def _get_access_data():
@@ -258,7 +249,7 @@ def api_access_users(request):
         if access_profile:
             _apply_access_profile(user, access_profile)
         else:
-            _apply_access_profile(user, "server_only")
+            _apply_access_profile(user, "pilot_user")
 
         _apply_user_explicit_permissions(user, data.get("explicit_permissions"))
 

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
 
 
-def resolve_context_key(ctx: "ExecutionContext", config: dict[str, Any], field: str, default_key: str = "") -> Any:
+def resolve_context_key(ctx: ExecutionContext, config: dict[str, Any], field: str, default_key: str = "") -> Any:
     direct = config.get(field)
     if direct not in (None, ""):
         if isinstance(direct, str):
@@ -19,7 +19,7 @@ def resolve_context_key(ctx: "ExecutionContext", config: dict[str, Any], field: 
     return ctx.get_variable(key, "") if key else ""
 
 
-async def load_owned_server(ctx: "ExecutionContext", config: dict[str, Any]):
+async def load_owned_server(ctx: ExecutionContext, config: dict[str, Any]):
     server_id = _coerce_int(resolve_context_key(ctx, config, "server_id", "server_id"))
     if not server_id:
         raise ValueError("server_id is required or must be present in pipeline context.")

@@ -77,6 +77,7 @@ class AgentSessionManager:
         command_timeout: int = COMMAND_TIMEOUT,
         event_callback: Callable[..., Coroutine] | None = None,
         available_skills: list[dict[str, Any]] | None = None,
+        available_materials: list[dict[str, Any]] | None = None,
         sudo_policy: str = "disabled",
     ):
         self.allowed_servers: dict[int, Any] = {s.id: s for s in allowed_servers}
@@ -104,6 +105,10 @@ class AgentSessionManager:
             self._skill_lookup[slug.lower()] = slug
             if name:
                 self._skill_lookup[name.lower()] = slug
+
+        from servers.agent_inputs import normalize_input_artifacts
+
+        self.available_materials = normalize_input_artifacts(available_materials or [])
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -188,6 +193,54 @@ class AgentSessionManager:
         if slug is None:
             return None
         return self._skills_by_slug.get(slug)
+
+    # ------------------------------------------------------------------
+    # Materials (operator documents / task lists / scripts)
+    # ------------------------------------------------------------------
+
+    def list_materials(self) -> list[dict[str, Any]]:
+        from servers.agent_inputs import materials_catalog
+
+        return materials_catalog(self.available_materials)
+
+    def get_material(self, material_ref: str) -> dict[str, Any] | None:
+        from servers.agent_inputs import get_material_by_ref
+
+        return get_material_by_ref(self.available_materials, material_ref)
+
+    def update_material_task(
+        self,
+        material_ref: str,
+        task_index: int,
+        *,
+        status: str,
+        evidence: str = "",
+    ) -> dict[str, Any] | None:
+        material = self.get_material(material_ref)
+        if material is None or material.get("kind") != "task_list":
+            return None
+        tasks = list(material.get("tasks") or [])
+        if task_index < 0 or task_index >= len(tasks):
+            return None
+        normalized_status = str(status or "").strip().lower()
+        if normalized_status not in {"pending", "in_progress", "done", "skipped", "blocked"}:
+            return None
+        task = dict(tasks[task_index])
+        task["status"] = normalized_status
+        task["done"] = normalized_status == "done"
+        if evidence:
+            task["evidence"] = str(evidence).strip()[:800]
+        tasks[task_index] = task
+        material["tasks"] = tasks
+        from servers.agent_inputs import _tasks_to_markdown
+
+        material["content"] = _tasks_to_markdown(tasks)
+        # Keep list in sync by id
+        for index, item in enumerate(self.available_materials):
+            if item.get("id") == material.get("id"):
+                self.available_materials[index] = material
+                break
+        return material
 
     # ------------------------------------------------------------------
     # Command execution

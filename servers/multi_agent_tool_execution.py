@@ -40,9 +40,18 @@ async def execute_multi_agent_tool(
     permission_engine: PermissionEngine | None = None,
     tool_registry: ToolRegistry | None = None,
     allowed_tool_names: list[str] | None = None,
+    engine: Any = None,
 ) -> str:
     active_registry = tool_registry or context.tool_registry
     active_permission_engine = permission_engine or context.permission_engine
+    if name == "ask_user" and bool(getattr(engine, "unattended", False)):
+        if engine is not None:
+            engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
+        return (
+            "Human input unavailable in unattended pipeline/agent run. "
+            "Use logic/human_approval or logic/telegram_input nodes, "
+            "or set interaction_mode=interactive on the agent node."
+        )
     if allowed_tool_names is not None and name not in allowed_tool_names:
         return f"Tool '{name}' is not available to this subagent."
 
@@ -52,6 +61,8 @@ async def execute_multi_agent_tool(
 
     decision = active_permission_engine.evaluate(spec, args) if spec else None
     if decision and not decision.allowed:
+        if engine is not None:
+            engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
         return decision.reason
 
     prepared_args, _sudo_notes = (

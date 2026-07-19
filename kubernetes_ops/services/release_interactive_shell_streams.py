@@ -9,10 +9,20 @@ from django.db import transaction
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sAdminAction, K8sAdminRecording, K8sAdminRecordingEvent, K8sAdminSession, K8sCluster, K8sProvider
+from kubernetes_ops.models import (
+    K8sAdminAction,
+    K8sAdminRecording,
+    K8sAdminRecordingEvent,
+    K8sAdminSession,
+    K8sCluster,
+    K8sProvider,
+)
 from kubernetes_ops.services.admin_node_debug import complete_node_debug_stream, prepare_node_debug_stream_context
 from kubernetes_ops.services.admin_recording import append_interactive_recording_event
-from kubernetes_ops.services.admin_terminal import complete_cluster_terminal_stream, prepare_cluster_terminal_stream_context
+from kubernetes_ops.services.admin_terminal import (
+    complete_cluster_terminal_stream,
+    prepare_cluster_terminal_stream_context,
+)
 from kubernetes_ops.services.provider_interactive_shell_streams import open_provider_interactive_shell_stream
 
 

@@ -34,7 +34,7 @@ export function ConfirmDialog({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className={cn("max-w-md rounded-xl border-border/80 bg-card/95", contentClassName)}>
+      <AlertDialogContent className={cn("max-w-md", contentClassName)}>
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription className="text-sm leading-6">

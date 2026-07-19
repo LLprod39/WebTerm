@@ -17,7 +17,11 @@ from kubernetes_ops.permissions import (
     KUBERNETES_SECRET_READ_FEATURE,
     kubernetes_permission_policy,
 )
-from kubernetes_ops.services.admin_resources import AdminResourceError, get_cluster_resource_yaml, list_cluster_resources
+from kubernetes_ops.services.admin_resources import (
+    AdminResourceError,
+    get_cluster_resource_yaml,
+    list_cluster_resources,
+)
 
 RAW_SECRET_VALUES = (
     "cmVsZWFzZS1wYXNzd29yZA==",

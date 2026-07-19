@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from kubernetes_ops.services.release_definition_of_done import build_kubernetes_release_definition_of_done
 
-
 READY_PREFLIGHT_RESULT_IDS = (
     "kubernetes_backend_tests",
     "live_provider_smoke",

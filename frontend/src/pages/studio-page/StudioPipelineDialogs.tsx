@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { localize } from "@/lib/i18n";
 import { toAbsoluteWebhookUrl, type TriggerInfoTarget } from "@/components/studio/StudioPipelineTriggers";
@@ -232,34 +233,20 @@ type DeletePipelineDialogProps = {
 export function DeletePipelineDialog({
   lang,
   target,
-  deleting,
   onClose,
   onConfirm,
 }: DeletePipelineDialogProps) {
   return (
-    <Dialog open={Boolean(target)} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{localize(lang, "Удалить пайплайн", "Delete pipeline")}</DialogTitle>
-          <DialogDescription>
-            {target ? localize(lang, `Удалить "${target.name}"? Действие нельзя отменить.`, `Delete "${target.name}"? This cannot be undone.`) : ""}
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" className="h-10" onClick={onClose}>
-            {localize(lang, "Отмена", "Cancel")}
-          </Button>
-          <Button
-            variant="destructive"
-            className="h-10"
-            onClick={() => target && onConfirm(target.id)}
-            disabled={deleting}
-          >
-            {deleting && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            {localize(lang, "Удалить", "Delete")}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <DeleteDialog
+      open={Boolean(target)}
+      onOpenChange={(next) => !next && onClose()}
+      title={localize(lang, "Удалить пайплайн", "Delete pipeline")}
+      description={target ? localize(lang, `Удалить "${target.name}"? Действие нельзя отменить.`, `Delete "${target.name}"? This cannot be undone.`) : ""}
+      confirmLabel={localize(lang, "Удалить", "Delete")}
+      cancelLabel={localize(lang, "Отмена", "Cancel")}
+      onConfirm={() => {
+        if (target) onConfirm(target.id);
+      }}
+    />
   );
 }

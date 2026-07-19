@@ -7,7 +7,6 @@ from kubernetes_ops.permissions import kubernetes_admin_mode_enabled
 from kubernetes_ops.services.admin_resources import AdminResourceError, KubernetesResourceRef
 from kubernetes_ops.services.release_scope import PRODUCTION_ENVIRONMENTS
 
-
 DEFAULT_PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 DEFAULT_PRODUCTION_NAMESPACES = {"prod", "production"}
 RESTRICTED_CREDENTIAL_EVIDENCE_SETTING = "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF"

@@ -30,17 +30,19 @@ export function AgentStepsTab({ report, steps }: { report: AgentRunReportRespons
       <div className="border-b border-border/70 p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-foreground">Ход агента</h3>
+            <h3 className="font-display text-base font-bold tracking-tight text-foreground">Ход работы</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              {steps.length ? `${stats.done} из ${steps.length} шагов завершено` : "Шаги появятся после планирования или выполнения команд."}
+              {steps.length
+                ? `${stats.done} из ${steps.length} шагов завершено`
+                : "Шаги появятся после планирования или выполнения команд."}
             </p>
           </div>
           {steps.length ? (
-            <div className="grid min-w-[420px] grid-cols-4 gap-2 max-sm:min-w-0 max-sm:grid-cols-2">
+            <div className="grid min-w-0 grid-cols-2 gap-2 sm:min-w-[280px] sm:grid-cols-4">
               <StepMiniStat label="Готово" value={stats.done} />
               <StepMiniStat label="Активно" value={stats.active} />
               <StepMiniStat label="Риски" value={stats.problems} />
-              <StepMiniStat label="Прогресс" value={`${stats.progress}%`} />
+              <StepMiniStat label="%" value={`${stats.progress}%`} />
             </div>
           ) : null}
         </div>
@@ -66,7 +68,7 @@ export function AgentStepsTab({ report, steps }: { report: AgentRunReportRespons
                       <span className={cn("h-2 w-2 rounded-full", eventDot(step.severity))} />
                     </div>
                     <p className="line-clamp-2 min-h-10 text-xs font-medium leading-5">{step.title}</p>
-                    <p className="mt-1 truncate text-[11px] text-muted-foreground">{step.status_label || step.status}</p>
+                    <p className="mt-1 truncate text-2xs text-muted-foreground">{step.status_label || step.status}</p>
                   </li>
                 ))}
               </ol>
@@ -132,7 +134,7 @@ const stepFilterLabel = {
 function StepMiniStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-border/70 bg-background/45 px-3 py-2">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 font-mono text-sm font-semibold text-foreground">{value}</p>
     </div>
   );
@@ -143,7 +145,7 @@ function StepTimelineItem({ step, last }: { step: AgentRunReportStep; last: bool
   return (
     <li className="grid grid-cols-[28px_minmax(0,1fr)] gap-3">
       <div className="relative flex justify-center">
-        <span className={cn("mt-4 flex h-7 w-7 items-center justify-center rounded-full border bg-background font-mono text-[11px]", stepIndexClass(step))}>
+        <span className={cn("mt-4 flex h-7 w-7 items-center justify-center rounded-full border bg-background font-mono text-2xs", stepIndexClass(step))}>
           {step.index}
         </span>
         {!last ? <span className="absolute top-12 bottom-0 w-px bg-border/70" /> : null}

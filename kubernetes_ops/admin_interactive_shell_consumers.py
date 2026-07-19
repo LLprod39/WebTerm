@@ -6,7 +6,10 @@ from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
 from kubernetes_ops.consumers import KubernetesAdminConsumerAuthMixin, _exec_stream_requested
-from kubernetes_ops.continuous_interactive_shell_streams import run_provider_cluster_terminal_stream, run_provider_node_debug_stream
+from kubernetes_ops.continuous_interactive_shell_streams import (
+    run_provider_cluster_terminal_stream,
+    run_provider_node_debug_stream,
+)
 from kubernetes_ops.services.admin_node_debug import prepare_node_debug_start
 from kubernetes_ops.services.admin_resources import AdminResourceError
 from kubernetes_ops.services.admin_terminal import prepare_cluster_terminal_start

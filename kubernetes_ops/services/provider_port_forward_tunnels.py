@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from kubernetes_ops.models import K8sProvider
-from kubernetes_ops.services.provider_clients import KubernetesProviderError, ProviderJsonClient, ProviderTransport, _decode_utf8, _join_url
+from kubernetes_ops.services.provider_clients import (
+    KubernetesProviderError,
+    ProviderJsonClient,
+    ProviderTransport,
+    _decode_utf8,
+    _join_url,
+)
 
 MAX_PROVIDER_TUNNEL_BYTES = 1024 * 1024
 
@@ -32,7 +38,7 @@ class UrlopenProviderPortForwardTunnel:
         self._response = None
         self._eof = False
 
-    def open(self) -> "UrlopenProviderPortForwardTunnel":
+    def open(self) -> UrlopenProviderPortForwardTunnel:
         headers = {**self.headers, "Content-Type": self.headers.get("Content-Type", "application/json")}
         request = urllib.request.Request(url=self.url, method="POST", headers=headers, data=json.dumps(self.body).encode("utf-8"))
         context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()

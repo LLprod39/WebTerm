@@ -67,9 +67,25 @@ def test_agent_engine_accepts_final_after_tool_call():
     engine.enabled_tools = ["ssh_execute"]
     engine.mcp_tools = {}
 
+    # Явно финальный ответ после вызова инструмента — не репромптим.
     assert not engine._should_reprompt_missing_action(
-        "THOUGHT: Проверю итоговое состояние в отчёте.",
+        "THOUGHT: Итог: сервис стабилен, ошибок в журнале нет.",
         [{"tool": "ssh_execute"}],
+    )
+
+
+def test_agent_engine_reprompts_intent_text_early_but_not_after_many_tool_calls():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute"]
+    engine.mcp_tools = {}
+
+    intent_text = "THOUGHT: Проверю итоговое состояние в отчёте."
+    # Ранний этап (<=2 вызова инструментов): интент без ACTION — репромптим.
+    assert engine._should_reprompt_missing_action(intent_text, [{"tool": "ssh_execute"}])
+    # После 3+ вызовов инструментов доверяем модели завершить ход.
+    assert not engine._should_reprompt_missing_action(
+        intent_text,
+        [{"tool": "ssh_execute"}, {"tool": "ssh_execute"}, {"tool": "ssh_execute"}],
     )
 
 

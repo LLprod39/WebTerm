@@ -10,8 +10,12 @@ from django.utils import timezone
 from kubernetes_ops.models import K8sAdminAction, K8sCluster
 from kubernetes_ops.services.action_errors import ActionRequestValidationError
 from kubernetes_ops.services.action_sanitizers import bounded_action_text, sanitize_action_value
+from kubernetes_ops.services.admin_delete import (
+    PROTECTED_CLUSTER_KINDS,
+    expected_delete_confirmation,
+    protected_delete_namespaces,
+)
 from kubernetes_ops.services.admin_patch import PATCH_TYPES
-from kubernetes_ops.services.admin_delete import PROTECTED_CLUSTER_KINDS, expected_delete_confirmation, protected_delete_namespaces
 from kubernetes_ops.services.admin_resources import build_resource_ref, cluster_for_value
 
 

@@ -86,8 +86,8 @@ export const statusToneClasses: Record<StatusTone, { badge: string; icon: string
     dot: "bg-info",
   },
   ai: {
-    badge: "border-[color:var(--wt-ai)] bg-[color:rgb(155_135_245_/_0.10)] text-[color:var(--wt-ai)]",
-    icon: "text-[color:var(--wt-ai)]",
-    dot: "bg-[color:var(--wt-ai)]",
+    badge: "border-ai/35 bg-ai/10 text-ai",
+    icon: "text-ai",
+    dot: "bg-ai",
   },
 };

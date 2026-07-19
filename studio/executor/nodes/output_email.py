@@ -12,12 +12,13 @@ from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.pipeline_notifications import (
     _global_email_defaults,
-    _load_notif_cfg,
     _normalize_email_recipient,
     _resolve_from_email,
 )
 from studio.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
+)
+from studio.pipeline_redaction import (
     redacted_execution_context as _redacted_context,
 )
 
@@ -36,7 +37,7 @@ def _coerce_smtp_port(value: Any) -> int:
 class OutputEmailNode(BaseNode):
     node_type = "output/email"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         config = self.node_data if isinstance(self.node_data, dict) else {}
         g_to, g_host, g_user, g_pass, g_from = _global_email_defaults()
 

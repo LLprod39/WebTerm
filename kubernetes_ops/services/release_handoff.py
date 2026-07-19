@@ -22,12 +22,11 @@ from kubernetes_ops.services.release_external_evidence_bundle import (
     IDENTITY_RUNTIME_EVIDENCE_SETTING,
     KUBERNETES_MCP_EVIDENCE_SETTING,
     LIVE_PROVIDER_EVIDENCE_SETTING,
-    PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_SETTING,
     PRODUCTION_EVIDENCE_SETTING,
+    PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_SETTING,
     PRODUCTION_ROLLBACK_EVIDENCE_SETTING,
     READONLY_RBAC_EVIDENCE_SETTING,
 )
-from kubernetes_ops.services.release_interactive_live_smoke import INTERACTIVE_LIVE_SMOKE_EVIDENCE_SETTING
 from kubernetes_ops.services.release_handoff_plan import (
     build_kubernetes_handoff_execution_plan,
     render_kubernetes_handoff_execution_plan_markdown,
@@ -36,13 +35,13 @@ from kubernetes_ops.services.release_handoff_workstream import (
     backend_workstream_primary_blocker_category,
     safe_release_handoff_backend_workstream,
 )
+from kubernetes_ops.services.release_interactive_live_smoke import INTERACTIVE_LIVE_SMOKE_EVIDENCE_SETTING
 from kubernetes_ops.services.release_operator_command_plan import (
     build_kubernetes_handoff_operator_command_plan,
     build_kubernetes_handoff_production_checklist,
     render_kubernetes_operator_command_plan_markdown,
 )
 from kubernetes_ops.services.release_summary import build_kubernetes_release_summary
-
 
 HANDOFF_SCHEMA_VERSION = "kubernetes_ops.release_handoff.v1"
 

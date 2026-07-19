@@ -8,8 +8,12 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
 from core_ui.decorators import require_feature
-from plugin_marketplace.services.package_service import PluginPackageValidationError, install_local_package, validate_wtp_package
 from plugin_marketplace.services.package_retention_service import cleanup_retained_packages, retention_inventory
+from plugin_marketplace.services.package_service import (
+    PluginPackageValidationError,
+    install_local_package,
+    validate_wtp_package,
+)
 from plugin_marketplace.services.remote_package_service import RemotePackageError, stage_remote_package
 from plugin_marketplace.views.common import json_error, parse_json_body, staff_required
 

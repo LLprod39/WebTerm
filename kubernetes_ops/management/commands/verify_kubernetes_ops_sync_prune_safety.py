@@ -7,7 +7,15 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from kubernetes_ops.models import K8sCluster, K8sEvent, K8sNamespace, K8sNetworkRef, K8sPodRef, K8sProvider, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sCluster,
+    K8sEvent,
+    K8sNamespace,
+    K8sNetworkRef,
+    K8sPodRef,
+    K8sProvider,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.services.sync import sync_rancher_provider
 
 

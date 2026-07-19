@@ -16,8 +16,8 @@ const NotFound = () => {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
       <div className="w-full max-w-md text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card shadow-sm">
-          <Search className="h-7 w-7 text-primary" />
+        <div className="accent-gradient mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-elev-1">
+          <Search className="h-7 w-7" />
         </div>
 
         <div className="mb-3 inline-flex items-center rounded-full border border-border bg-secondary/40 px-3 py-1 text-xs font-semibold text-muted-foreground">

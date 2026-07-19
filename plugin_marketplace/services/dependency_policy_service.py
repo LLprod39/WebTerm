@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from pathlib import PurePosixPath
-from typing import Any, Iterable
+from typing import Any
 
 from django.conf import settings
 

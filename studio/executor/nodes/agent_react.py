@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 class AgentReactNode(BaseNode):
     node_type = "agent/react"
 
-    async def execute(self, ctx: "ExecutionContext") -> NodeResult:
+    async def execute(self, ctx: ExecutionContext) -> NodeResult:
         from studio.pipeline_agent_runtime import execute_agent_react
 
         run = ctx.extra.get("run")
@@ -27,5 +27,6 @@ class AgentReactNode(BaseNode):
             {"id": self.node_id, "type": self.node_type, "data": self.node_data},
             dict(ctx.extra.get("context") or {}),
             run,
+            node_outputs=dict(ctx.node_outputs or {}),
         )
         return NodeResult(output=dict(result or {}))

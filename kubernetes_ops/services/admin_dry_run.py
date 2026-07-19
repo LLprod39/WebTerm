@@ -7,7 +7,6 @@ import urllib.parse
 from typing import Any
 
 import yaml
-
 from django.conf import settings
 
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sCluster, K8sProvider
@@ -26,7 +25,6 @@ from kubernetes_ops.services.admin_sessions import refresh_admin_session_state
 from kubernetes_ops.services.admin_write_approval import assert_admin_session_approved
 from kubernetes_ops.services.describe import sanitize_metadata
 from kubernetes_ops.services.provider_clients import KubernetesProviderError, ProviderJsonClient, ProviderTransport
-
 
 FIELD_MANAGER = "webterm-admin-mode"
 DIFF_MAX_CHANGES = 80

@@ -7,17 +7,29 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from kubernetes_ops.models import K8sActionRequest, K8sAdminAction, K8sAdminSession, K8sAppRef, K8sCluster, K8sFleetBundle, K8sPodRef, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sActionRequest,
+    K8sAdminAction,
+    K8sAdminSession,
+    K8sAppRef,
+    K8sCluster,
+    K8sFleetBundle,
+    K8sPodRef,
+    K8sWorkloadRef,
+)
 from kubernetes_ops.services.action_errors import ActionRequestValidationError
+from kubernetes_ops.services.action_production_templates import production_rollout_restart_template_is_safe
 from kubernetes_ops.services.action_requests import (
     approve_external_action_request,
     block_kubernetes_action_execution,
     create_kubernetes_action_request,
     record_external_action_verification,
 )
-from kubernetes_ops.services.action_production_templates import production_rollout_restart_template_is_safe
 from kubernetes_ops.services.action_rollback import rollback_plan_is_payload_safe
-from kubernetes_ops.services.action_verification import build_native_action_verification_plan, record_native_action_verification_evaluation
+from kubernetes_ops.services.action_verification import (
+    build_native_action_verification_plan,
+    record_native_action_verification_evaluation,
+)
 from kubernetes_ops.services.admin_dry_run import manifest_fingerprint
 from kubernetes_ops.services.admin_write_approval import production_write_restricted_credential_gate_report
 
@@ -338,7 +350,7 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "rollback_apply_requires_dry_run": "rollback_dry_run_action_id" in list((apply_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
                 "rollback_delete_requires_restore_source": "restore_source_ref" in list((delete_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
                 "rollback_plan_payload_safe": all(
-                    rollback_plan_is_payload_safe((request.preview.get("rollback_plan") or {}))
+                    rollback_plan_is_payload_safe(request.preview.get("rollback_plan") or {})
                     for request in [action_request, scale_request, apply_request, patch_request, delete_request]
                 ),
                 "native_execution_enabled": bool(approved_request.execution_policy.get("native_execution_enabled")),

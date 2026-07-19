@@ -145,9 +145,10 @@ test("downloads completed run artifacts as a server bundle", async ({ page }) =>
 
   await page.goto("/agents/run/908");
   await expect(page.locator("h1", { hasText: "Completed Report" })).toBeVisible();
-  await expect(page.getByText("Доставка отчёта")).toBeVisible();
+  await expect(page.getByText("Доставка:").first()).toBeVisible();
   await expect(page.getByText("Доставлено").first()).toBeVisible();
-  await page.getByRole("tab", { name: "Артефакты" }).click();
+  await page.getByRole("tab", { name: /Материалы/ }).click();
+  await page.getByRole("button", { name: /Файлы/ }).first().click();
   await expect(page.getByText("Артефакты отчёта готовы")).toBeVisible();
   await expect(page.getByText("3 файлов · 3.0 KB")).toBeVisible();
   await expect(page.getByText("manifest проверен")).toBeVisible();

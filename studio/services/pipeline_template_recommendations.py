@@ -6,13 +6,13 @@ from typing import Any
 
 from studio.pilot_capability_packs import enrich_mcp_node_data_with_pilot_spec
 from studio.services.pipeline_template_argument_bindings import _extract_template_argument_bindings
-from studio.services.pipeline_template_recommendation_data import (
-    PILOT_TEMPLATE_KEYWORDS,
-    PILOT_TEMPLATE_SLUGS,
-)
 from studio.services.pipeline_template_placeholders import (
     _replace_bound_placeholders,
     _unresolved_operational_placeholders,
+)
+from studio.services.pipeline_template_recommendation_data import (
+    PILOT_TEMPLATE_KEYWORDS,
+    PILOT_TEMPLATE_SLUGS,
 )
 from studio.services.pipeline_template_text import _contains_term, _normalise_query, _text
 from studio.templates_data import PIPELINE_TEMPLATES

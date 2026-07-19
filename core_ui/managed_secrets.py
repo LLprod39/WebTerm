@@ -34,6 +34,21 @@ class ManagedSecretError(RuntimeError):
     pass
 
 
+def allow_secret_key_fallback() -> bool:
+    return (os.getenv("ALLOW_SECRET_KEY_MANAGED_ENCRYPTION", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def uses_dedicated_managed_secret_key() -> bool:
+    return bool(
+        (os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip()
+    )
+
+
 def _build_fernet() -> Fernet:
     seed = (
         os.getenv("MANAGED_SECRET_KEY")
@@ -71,6 +86,22 @@ def managed_secret_key_source() -> str:
 def verify_managed_secret_roundtrip() -> bool:
     probe = {"kind": "managed_secret_probe", "version": 1}
     return _decrypt_payload(_encrypt_payload(probe)) == probe
+
+
+def list_undecryptable_secrets(limit: int = 500) -> list[str]:
+    """Return identifiers of stored secrets the current key cannot decrypt.
+
+    A non-empty result means secrets were written under a different key seed
+    (MANAGED_SECRET_KEY / SECRET_KEY changed, or another process wrote them
+    with its own key) and every consumer of those secrets will fail at runtime.
+    """
+    broken: list[str] = []
+    for secret in ManagedSecret.objects.all().order_by("namespace", "object_id", "key")[: max(int(limit), 1)]:
+        try:
+            _decrypt_payload(secret.ciphertext)
+        except ManagedSecretError:
+            broken.append(f"{secret.namespace}:{secret.object_id}:{secret.key}")
+    return broken
 
 
 def _upsert(namespace: str, object_id: int, payload: Any, *, key: str = "default", metadata: dict | None = None) -> ManagedSecret:

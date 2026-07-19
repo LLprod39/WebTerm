@@ -22,6 +22,9 @@ export interface ServerHealth {
   uptime_seconds: number | null;
   response_time_ms: number | null;
   checked_at: string | null;
+  /** True when the status row is older than the fleet stale window. */
+  is_stale?: boolean;
+  is_lite?: boolean;
 }
 
 export interface ServerAlertItem {
@@ -76,6 +79,7 @@ export interface MonitoringStatusItem {
   host: string;
   server_type: string;
   status: FleetHealthStatus;
+  /** Timestamp of the row that produced `status` (may be metrics after override). */
   checked_at: string | null;
   age_seconds: number | null;
   is_stale: boolean;
@@ -83,7 +87,15 @@ export interface MonitoringStatusItem {
   cpu_percent: number | null;
   memory_percent: number | null;
   disk_percent: number | null;
+  load_1m?: number | null;
+  metrics_checked_at?: string | null;
+  metrics_age_seconds?: number | null;
+  /** Whether the status-defining row is a lite TCP probe. */
   is_lite: boolean;
+  /** Raw latest probe timestamp (when different from status row). */
+  probe_checked_at?: string | null;
+  probe_is_lite?: boolean;
+  status_from_metrics?: boolean;
 }
 
 export interface MonitoringStatusResponse {
@@ -100,6 +112,7 @@ export interface MonitoringStatusResponse {
   };
   meta: {
     stale_after_seconds: number;
+    full_fail_metrics_trust_seconds?: number;
     latest_checked_at: string | null;
     has_stale: boolean;
   };
@@ -112,9 +125,14 @@ export async function fetchMonitoringStatus() {
   return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/status/");
 }
 
-export async function refreshMonitoringFleet() {
-  return apiFetch<MonitoringStatusResponse>("/servers/api/monitoring/refresh/", {
+/** Refresh fleet monitoring.
+ *  - metrics: true → SSH quick metrics (CPU/RAM/disk) — use when list is open
+ *  - default → lite TCP reachability only
+ */
+export async function refreshMonitoringFleet(options?: { metrics?: boolean }) {
+  return apiFetch<MonitoringStatusResponse & { mode?: string }>("/servers/api/monitoring/refresh/", {
     method: "POST",
+    body: JSON.stringify({ metrics: Boolean(options?.metrics) }),
   });
 }
 
@@ -173,7 +191,14 @@ export interface AdminDashboardData {
   online_users: { count: number; total_registered: number; users: Array<{ username: string; action: string; time: string }> };
   ai: { requests_today: number };
   terminals: { active: number; connections: Array<{ server: string; user: string; connected_at: string }> };
-  agents: { running: number; today: number; succeeded_24h: number; failed_24h: number; success_rate: number };
+  agents: {
+    running: number;
+    today: number;
+    succeeded_24h: number;
+    failed_24h: number;
+    success_rate: number;
+    daily?: Array<{ date: string; succeeded: number; failed: number }>;
+  };
   api_usage: Record<string, { calls: number; input_tokens: number; output_tokens: number; errors: number; cost_usd: number }>;
   api_calls_today: number;
   providers: Record<string, { enabled: boolean; model: string }>;

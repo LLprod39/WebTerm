@@ -20,7 +20,13 @@ from django.conf import settings
 from django.utils import timezone
 from loguru import logger
 
+from servers.metrics_parsing import build_metrics_v2
+from servers.metrics_script import build_metrics_script
 from servers.models import Server, ServerAlert, ServerHealthCheck
+
+# Alert rules live in monitor_alerts (split for size limits); re-exported for tests.
+from servers.monitor_alerts import _create_alerts  # noqa: F401
+from servers.monitor_metrics import create_metric_sample, mirror_metric_sample
 from servers.monitor_parsing import (
     _parse_deep_output,
     _parse_docker_output,
@@ -35,7 +41,14 @@ def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
+# Dual /proc/stat samples (1s apart) give real CPU%; nproc normalizes load fallback.
 QUICK_COMMANDS = (
+    "s1=$(head -n1 /proc/stat 2>/dev/null); "
+    "sleep 1; "
+    "s2=$(head -n1 /proc/stat 2>/dev/null); "
+    "echo \"CPUSTAT1=$s1\"; "
+    "echo \"CPUSTAT2=$s2\"; "
+    "echo \"NPROC=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)\"; "
     "cat /proc/loadavg;"
     "free -m | grep Mem;"
     "df -h / | tail -1;"
@@ -52,12 +65,15 @@ DEEP_COMMANDS = (
 DOCKER_MONITOR_COMMAND = "docker ps -a --format '{{.Names}}|{{.State}}|{{.Status}}' 2>/dev/null || true"
 
 # Thresholds
-CPU_WARN = 80.0
-CPU_CRIT = 95.0
-MEM_WARN = 85.0
-MEM_CRIT = 95.0
-DISK_WARN = 80.0
-DISK_CRIT = 90.0
+# Thresholds shared with monitor_alerts; single source in monitor_thresholds.
+from servers.monitor_thresholds import (  # noqa: E402, F401
+    CPU_CRIT,
+    CPU_WARN,
+    DISK_CRIT,
+    DISK_WARN,
+    MEM_CRIT,
+    MEM_WARN,
+)
 
 
 def _decrypt_server_secret(server: Server) -> str:
@@ -77,156 +93,18 @@ async def _build_connect_kwargs(server: Server) -> dict[str, Any]:
 
 
 def _determine_status(metrics: dict[str, Any]) -> str:
-    cpu = metrics.get("cpu_percent", 0)
-    mem = metrics.get("memory_percent", 0)
-    disk = metrics.get("disk_percent", 0)
+    cpu = metrics.get("cpu_percent")
+    mem = metrics.get("memory_percent")
+    disk = metrics.get("disk_percent")
+    cpu_v = float(cpu) if isinstance(cpu, (int, float)) else 0.0
+    mem_v = float(mem) if isinstance(mem, (int, float)) else 0.0
+    disk_v = float(disk) if isinstance(disk, (int, float)) else 0.0
 
-    if cpu >= CPU_CRIT or mem >= MEM_CRIT or disk >= DISK_CRIT:
+    if cpu_v >= CPU_CRIT or mem_v >= MEM_CRIT or disk_v >= DISK_CRIT:
         return ServerHealthCheck.STATUS_CRITICAL
-    if cpu >= CPU_WARN or mem >= MEM_WARN or disk >= DISK_WARN:
+    if cpu_v >= CPU_WARN or mem_v >= MEM_WARN or disk_v >= DISK_WARN:
         return ServerHealthCheck.STATUS_WARNING
     return ServerHealthCheck.STATUS_HEALTHY
-
-
-async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None = None) -> None:
-    now = timezone.now()
-    recent_window = now - timedelta(minutes=15)
-
-    async def _alert_exists(alert_type: str, fingerprint: str = "") -> bool:
-        def _exists() -> bool:
-            rows = ServerAlert.objects.filter(
-                server=server,
-                alert_type=alert_type,
-                is_resolved=False,
-                created_at__gte=recent_window,
-            ).only("metadata")
-            if not fingerprint:
-                return rows.exists()
-            for row in rows:
-                metadata = row.metadata if isinstance(row.metadata, dict) else {}
-                if str(metadata.get("fingerprint") or "") == fingerprint:
-                    return True
-            return False
-
-        return await sync_to_async(_exists)()
-
-    async def _create(
-        alert_type: str,
-        severity: str,
-        title: str,
-        message: str = "",
-        meta: dict | None = None,
-        *,
-        fingerprint: str = "",
-    ):
-        if await _alert_exists(alert_type, fingerprint):
-            return
-        payload = dict(meta or {})
-        if fingerprint:
-            payload["fingerprint"] = fingerprint
-        await sync_to_async(ServerAlert.objects.create)(
-            server=server,
-            alert_type=alert_type,
-            severity=severity,
-            title=title,
-            message=message,
-            metadata=payload,
-        )
-
-    async def _resolve_stale_docker_alerts(active_fingerprints: set[str]) -> None:
-        def _resolve() -> None:
-            rows = list(
-                ServerAlert.objects.filter(
-                    server=server,
-                    alert_type=ServerAlert.TYPE_SERVICE,
-                    is_resolved=False,
-                ).only("id", "metadata", "is_resolved", "resolved_at")
-            )
-            for row in rows:
-                metadata = row.metadata if isinstance(row.metadata, dict) else {}
-                if str(metadata.get("service_kind") or "") != "docker_container":
-                    continue
-                fingerprint = str(metadata.get("fingerprint") or "").strip()
-                if not fingerprint.startswith("docker-down:"):
-                    continue
-                if fingerprint in active_fingerprints:
-                    continue
-                row.is_resolved = True
-                row.resolved_at = now
-                row.save(update_fields=["is_resolved", "resolved_at"])
-
-        await sync_to_async(_resolve)()
-
-    cpu = metrics.get("cpu_percent", 0)
-    mem = metrics.get("memory_percent", 0)
-    disk = metrics.get("disk_percent", 0)
-
-    if cpu >= CPU_CRIT:
-        await _create(ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_CRITICAL, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}")
-    elif cpu >= CPU_WARN:
-        await _create(ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_WARNING, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}")
-
-    if mem >= MEM_CRIT:
-        await _create(ServerAlert.TYPE_MEMORY, ServerAlert.SEVERITY_CRITICAL, f"RAM {mem}%", f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB")
-    elif mem >= MEM_WARN:
-        await _create(ServerAlert.TYPE_MEMORY, ServerAlert.SEVERITY_WARNING, f"RAM {mem}%", f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB")
-
-    if disk >= DISK_CRIT:
-        await _create(ServerAlert.TYPE_DISK, ServerAlert.SEVERITY_CRITICAL, f"Disk {disk}%", f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB")
-    elif disk >= DISK_WARN:
-        await _create(ServerAlert.TYPE_DISK, ServerAlert.SEVERITY_WARNING, f"Disk {disk}%", f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB")
-
-    if deep_data:
-        failed = deep_data.get("failed_services", [])
-        if failed:
-            await _create(
-                ServerAlert.TYPE_SERVICE,
-                ServerAlert.SEVERITY_CRITICAL,
-                f"Обнаружены упавшие systemd-сервисы: {len(failed)}",
-                "\n".join(failed[:10]),
-                {
-                    "services": failed[:20],
-                    "service_kind": "systemd",
-                },
-                fingerprint="systemd-failed-services",
-            )
-
-        log_errors = deep_data.get("log_errors", [])
-        kernel_errors = deep_data.get("kernel_errors", [])
-        all_errors = log_errors + kernel_errors
-        if all_errors:
-            await _create(
-                ServerAlert.TYPE_LOG_ERROR,
-                ServerAlert.SEVERITY_WARNING,
-                f"Найдены ошибки в логах: {len(all_errors)}",
-                "\n".join(all_errors[:10]),
-                {"errors": all_errors[:30]},
-                fingerprint="monitor-log-errors",
-            )
-
-        docker_data = deep_data.get("docker") if isinstance(deep_data.get("docker"), dict) else {}
-        problem_containers = docker_data.get("problem_containers", []) if isinstance(docker_data, dict) else []
-        active_docker_fingerprints: set[str] = set()
-        if problem_containers:
-            container_names = [str(item.get("name") or "").strip() for item in problem_containers if str(item.get("name") or "").strip()]
-            fingerprint = "docker-down:" + ",".join(sorted(container_names))
-            active_docker_fingerprints.add(fingerprint)
-            await _create(
-                ServerAlert.TYPE_SERVICE,
-                ServerAlert.SEVERITY_CRITICAL,
-                f"Docker-контейнер недоступен: {', '.join(container_names[:3])}",
-                "\n".join(
-                    f"{item.get('name')}: {item.get('status') or item.get('state')}"
-                    for item in problem_containers[:10]
-                ),
-                {
-                    "service_kind": "docker_container",
-                    "containers": problem_containers,
-                    "container_name": container_names[0] if container_names else "",
-                },
-                fingerprint=fingerprint,
-            )
-        await _resolve_stale_docker_alerts(active_docker_fingerprints)
 
 
 async def probe_server_lite(server: Server) -> ServerHealthCheck | None:
@@ -291,16 +169,22 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         logger.debug("Monitor: cannot build connect kwargs for {}: {}", server.name, exc)
         return await _save_unreachable(server, str(exc))
 
-    cmd = QUICK_COMMANDS
-    if deep:
-        cmd += ";" + DEEP_COMMANDS
-
+    metrics: dict[str, Any] | None = None
     try:
         async with asyncssh.connect(**kwargs) as conn:
-            result = await asyncio.wait_for(conn.run(cmd, check=False), timeout=30)
+            # Collector v2 sleeps 1s for dual /proc/stat samples; legacy quick
+            # commands run only when the v2 markers are missing from the output.
+            result = await asyncio.wait_for(conn.run(build_metrics_script(), check=False), timeout=45)
             raw = result.stdout or ""
+            metrics = build_metrics_v2(raw)
+            if metrics is None:
+                legacy_result = await asyncio.wait_for(conn.run(QUICK_COMMANDS, check=False), timeout=45)
+                raw = legacy_result.stdout or ""
+            deep_raw = ""
             docker_raw = ""
             if deep:
+                deep_result = await asyncio.wait_for(conn.run(DEEP_COMMANDS, check=False), timeout=30)
+                deep_raw = deep_result.stdout or ""
                 docker_result = await asyncio.wait_for(conn.run(DOCKER_MONITOR_COMMAND, check=False), timeout=20)
                 docker_raw = docker_result.stdout or ""
     except Exception as exc:
@@ -310,8 +194,9 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     elapsed = int((time.monotonic() - t0) * 1000)
 
-    metrics = _parse_quick_output(raw)
-    deep_data = _parse_deep_output(raw) if deep else None
+    if metrics is None:
+        metrics = _parse_quick_output(raw)
+    deep_data = _parse_deep_output(deep_raw) if deep else None
     if deep:
         docker_data = _parse_docker_output(docker_raw)
         if deep_data is None:
@@ -319,7 +204,7 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         deep_data["docker"] = docker_data
 
     status = _determine_status(metrics)
-    raw_output = {"quick": raw}
+    raw_output = {"quick": raw[:8000]}
     if deep_data:
         raw_output["deep"] = deep_data
 
@@ -342,6 +227,15 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
         is_deep=deep,
         raw_output=raw_output,
     )
+
+    if metrics.get("collector_version") == 2:
+        try:
+            sample = await sync_to_async(create_metric_sample)(
+                server, metrics, source="deep" if deep else "quick"
+            )
+            health._metric_sample = sample
+        except Exception as exc:
+            logger.debug("Monitor: failed to persist metric sample for {}: {}", server.name, exc)
 
     await _create_alerts(server, metrics, deep_data)
 
@@ -392,6 +286,110 @@ async def _save_unreachable(server: Server, error_msg: str, elapsed_ms: int = 0)
     return health
 
 
+def _monitoring_endpoint_key(server: Server) -> str:
+    host = (server.host or "").strip().lower()
+    try:
+        port = int(server.port or 22)
+    except (TypeError, ValueError):
+        port = 22
+    return f"{host}:{port}"
+
+
+async def _mirror_health_check(
+    source: ServerHealthCheck,
+    target_servers: list[Server],
+) -> list[ServerHealthCheck]:
+    """Copy a health snapshot onto sibling inventory rows for the same host:port."""
+    if not target_servers:
+        return []
+
+    raw = dict(source.raw_output) if isinstance(source.raw_output, dict) else {}
+    raw["mirrored_from_server_id"] = source.server_id
+    source_sample = getattr(source, "_metric_sample", None)
+
+    def _create_all() -> list[ServerHealthCheck]:
+        rows: list[ServerHealthCheck] = []
+        for target in target_servers:
+            if target.id == source.server_id:
+                continue
+            rows.append(
+                ServerHealthCheck.objects.create(
+                    server=target,
+                    status=source.status,
+                    cpu_percent=source.cpu_percent,
+                    memory_percent=source.memory_percent,
+                    memory_used_mb=source.memory_used_mb,
+                    memory_total_mb=source.memory_total_mb,
+                    disk_percent=source.disk_percent,
+                    disk_used_gb=source.disk_used_gb,
+                    disk_total_gb=source.disk_total_gb,
+                    load_1m=source.load_1m,
+                    load_5m=source.load_5m,
+                    load_15m=source.load_15m,
+                    uptime_seconds=source.uptime_seconds,
+                    process_count=source.process_count,
+                    response_time_ms=source.response_time_ms,
+                    is_deep=source.is_deep,
+                    raw_output=raw,
+                )
+            )
+        if source_sample is not None:
+            mirror_metric_sample(source_sample, target_servers)
+        return rows
+
+    return await sync_to_async(_create_all)()
+
+
+async def _check_endpoint_group(
+    servers: list[Server],
+    *,
+    deep: bool,
+    use_lite: bool,
+) -> list[ServerHealthCheck]:
+    """Probe one physical endpoint and mirror status onto all inventory rows."""
+    if not servers:
+        return []
+
+    results: list[ServerHealthCheck] = []
+    # Non-SSH or lite: TCP once, then mirror.
+    if use_lite or any(s.server_type != "ssh" for s in servers):
+        primary = servers[0]
+        hc = await probe_server_lite(primary)
+        if hc:
+            results.append(hc)
+            # probe_server_lite may reuse a recent check without creating a new row;
+            # still mirror a fresh snapshot for siblings so every row has current status.
+            if hc.status == ServerHealthCheck.STATUS_UNREACHABLE or not getattr(hc, "id", None):
+                mirrored = await _mirror_health_check(hc, servers[1:])
+                results.extend(mirrored)
+            else:
+                # Fresh or reused OK probe: ensure siblings get the same status.
+                mirrored = await _mirror_health_check(hc, servers[1:])
+                results.extend(mirrored)
+        return results
+
+    # SSH: try credentials from each inventory row until one succeeds, then mirror.
+    last_hc: ServerHealthCheck | None = None
+    for candidate in servers:
+        hc = await check_server(candidate, deep=deep)
+        if not hc:
+            continue
+        results.append(hc)
+        last_hc = hc
+        if hc.status != ServerHealthCheck.STATUS_UNREACHABLE:
+            siblings = [s for s in servers if s.id != candidate.id]
+            results.extend(await _mirror_health_check(hc, siblings))
+            return results
+
+    # All candidates unreachable: mirror the last failure onto remaining rows that
+    # did not get their own check (if we only tried some before giving up — we try all).
+    if last_hc is not None:
+        already = {hc.server_id for hc in results if getattr(hc, "server_id", None)}
+        remaining = [s for s in servers if s.id not in already]
+        results.extend(await _mirror_health_check(last_hc, remaining))
+    return results
+
+
 async def check_all_servers(
     deep: bool = False,
     lite: bool = False,
@@ -402,14 +400,17 @@ async def check_all_servers(
 
     lite=True runs TCP reachability only (quick fleet sweep).
     deep=True runs full SSH metrics + optional deep diagnostics.
+    Non-SSH servers always get a TCP reachability probe.
+
+    Inventory rows that share the same host:port are treated as one physical
+    endpoint: only one probe runs and the resulting status is mirrored to every
+    user-owned server row so each list shows the correct current health.
     """
     normalized_ids = sorted({int(item) for item in (server_ids or []) if str(item).strip().isdigit()})
     use_lite = bool(lite and not deep)
 
     def _load_servers() -> list[Server]:
         qs = Server.objects.filter(is_active=True)
-        if not use_lite:
-            qs = qs.filter(server_type="ssh")
         if normalized_ids:
             qs = qs.filter(id__in=normalized_ids)
         return list(qs.order_by("id"))
@@ -417,28 +418,52 @@ async def check_all_servers(
     servers = await sync_to_async(_load_servers)()
 
     if not servers:
-        scope = "active servers" if use_lite else "active SSH servers"
-        logger.info("Monitor: no {} to check", scope)
+        logger.info("Monitor: no active servers to check")
         return []
+
+    groups: dict[str, list[Server]] = {}
+    for server in servers:
+        groups.setdefault(_monitoring_endpoint_key(server), []).append(server)
+
+    logger.info(
+        "Monitor: checking {} inventory rows as {} unique endpoint(s)",
+        len(servers),
+        len(groups),
+    )
 
     sem = asyncio.Semaphore(concurrency)
     results: list[ServerHealthCheck] = []
 
-    async def _check(srv: Server):
+    async def _check_group(group: list[Server]):
         async with sem:
-            if use_lite:
-                hc = await probe_server_lite(srv)
-            else:
-                hc = await check_server(srv, deep=deep)
-            if hc:
-                results.append(hc)
+            group_results = await _check_endpoint_group(group, deep=deep, use_lite=use_lite)
+            results.extend(group_results)
 
-    await asyncio.gather(*[_check(s) for s in servers], return_exceptions=True)
+    await asyncio.gather(*[_check_group(group) for group in groups.values()], return_exceptions=True)
     return results
 
 
+def schedule_health_check_for_server_ids(server_ids: list[int], *, deep: bool = False) -> None:
+    """Fire-and-forget health check after a server is added (does not block HTTP)."""
+    import threading
+
+    ids = sorted({int(item) for item in server_ids if item})
+    if not ids:
+        return
+
+    def _worker() -> None:
+        try:
+            from asgiref.sync import async_to_sync
+
+            async_to_sync(check_all_servers)(deep=deep, lite=False, server_ids=ids, concurrency=1)
+        except Exception as exc:
+            logger.debug("Background health check for servers {} failed: {}", ids, exc)
+
+    threading.Thread(target=_worker, daemon=True, name="monitor-server-bootstrap").start()
+
+
 async def cleanup_old_data(days: int = 7) -> None:
-    """Remove health checks and resolved alerts older than N days."""
+    """Remove health checks, resolved alerts, and expired metric series data."""
     cutoff = timezone.now() - timedelta(days=days)
     deleted_hc = await sync_to_async(
         lambda: ServerHealthCheck.objects.filter(checked_at__lt=cutoff).delete()
@@ -446,4 +471,14 @@ async def cleanup_old_data(days: int = 7) -> None:
     deleted_alerts = await sync_to_async(
         lambda: ServerAlert.objects.filter(is_resolved=True, created_at__lt=cutoff).delete()
     )()
-    logger.info("Monitor cleanup: removed {} health checks, {} resolved alerts", deleted_hc[0], deleted_alerts[0])
+
+    from servers.metrics_rollup import cleanup_metric_data
+
+    deleted_metrics = await sync_to_async(cleanup_metric_data)()
+    logger.info(
+        "Monitor cleanup: removed {} health checks, {} resolved alerts, {} metric samples, {} rollups",
+        deleted_hc[0],
+        deleted_alerts[0],
+        deleted_metrics["samples"],
+        deleted_metrics["hour_rollups"] + deleted_metrics["day_rollups"],
+    )

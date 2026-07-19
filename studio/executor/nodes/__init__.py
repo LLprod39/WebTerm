@@ -18,4 +18,21 @@ Import this package to auto-register all nodes:
     import studio.executor.nodes
 """
 
-from . import agent_llm_query, agent_mcp_call, agent_multi, agent_react, agent_ssh_cmd, logic_condition, logic_human_approval, logic_merge, logic_parallel, logic_telegram_input, logic_wait, ops, output_email, output_report, output_telegram, output_webhook  # noqa: F401
+from . import (  # noqa: F401
+    agent_llm_query,
+    agent_mcp_call,
+    agent_multi,
+    agent_react,
+    agent_ssh_cmd,
+    logic_condition,
+    logic_human_approval,
+    logic_merge,
+    logic_parallel,
+    logic_telegram_input,
+    logic_wait,
+    ops,
+    output_email,
+    output_report,
+    output_telegram,
+    output_webhook,
+)

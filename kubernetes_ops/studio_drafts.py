@@ -7,8 +7,8 @@ from django.db.models import Q
 from kubernetes_ops.models import K8sAppRef, K8sCluster
 from kubernetes_ops.studio_integration import owned_kubernetes_mcp_server
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, PipelineDraftSession
-from studio.pipeline_validation import validate_pipeline_definition
 from studio.pilot_capability_packs import enrich_mcp_node_data_with_pilot_spec
+from studio.pipeline_validation import validate_pipeline_definition
 from studio.views.pipeline_assistant_preview import pipeline_assistant_risk
 from studio.views.pipeline_draft_helpers import revision_from_response
 

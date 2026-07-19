@@ -2,8 +2,7 @@ import copy
 
 import pytest
 from django.contrib.auth.models import User
-from django.test import Client
-from django.test import override_settings
+from django.test import Client, override_settings
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
 from core_ui.models import UserAppPermission

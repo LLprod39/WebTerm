@@ -69,7 +69,10 @@ def test_prepare_plan_tasks_with_registry_embeds_subagent_metadata_and_filters_t
     assert task["subagent"]["role"] == "log_investigator"
     assert "ssh_execute" in task["tool_names"]
     assert "keycloak_mutate" not in task["tool_names"]
-    assert task["max_iterations"] == get_role_spec("log_analyzer").max_task_iterations
+    # Engine cap (max_task_iterations=7) wins over role default and over inflated
+    # requested max_iterations=99 — complex-task budget semantics.
+    assert task["max_iterations"] == 7
+    assert task["max_iterations"] == task["subagent"]["max_iterations"]
 
 
 def test_build_task_subagent_prompt_context_uses_task_recipes_before_default():

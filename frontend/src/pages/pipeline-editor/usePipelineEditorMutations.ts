@@ -1,6 +1,7 @@
 import type { Dispatch, SetStateAction } from "react";
 import type { NavigateFunction } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Edge, Node } from "@xyflow/react";
 
 import type { PipelineDetail, PipelineEdge, PipelineNode, PipelineRun } from "@/lib/api";
 import { studioPipelines } from "@/lib/api";
@@ -32,13 +33,13 @@ export function usePipelineEditorMutations({
   pipelineId: number | null;
   resetRunDialog: () => void;
   setActiveRunId: (runId: number | null) => void;
-  setEdges: Dispatch<SetStateAction<never[]>>;
+  setEdges: Dispatch<SetStateAction<Edge[]>>;
   setGraphRunId: (runId: number | null) => void;
   setGraphRunLive: (run: PipelineRun | null) => void;
   setHasHydratedPipeline: (value: boolean) => void;
   setHasLocalChanges: (value: boolean) => void;
   setLastRun: (run: PipelineRun | null) => void;
-  setNodes: Dispatch<SetStateAction<never[]>>;
+  setNodes: Dispatch<SetStateAction<Node[]>>;
   setPipelineName: (name: string) => void;
   setSelectedNode: (node: PipelineNode | null) => void;
   toast: ToastFn;
@@ -59,8 +60,8 @@ export function usePipelineEditorMutations({
         (pipeline.nodes || []) as PipelineNode[],
         (pipeline.edges || []) as PipelineEdge[],
       );
-      setNodes(normalisedGraph.nodes as never[]);
-      setEdges(normalisedGraph.edges as never[]);
+      setNodes(normalisedGraph.nodes as unknown as Node[]);
+      setEdges(normalisedGraph.edges as unknown as Edge[]);
       setHasHydratedPipeline(true);
       setHasLocalChanges(false);
       toast({ description: "Pipeline saved" });

@@ -2,6 +2,7 @@
 Studio pipeline run endpoints.
 """
 
+import hmac
 import json
 import re
 import sys
@@ -9,6 +10,7 @@ import sys
 import httpx
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
+from django.utils.html import escape
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
@@ -183,7 +185,7 @@ def api_run_approve(request, run_id: int, node_id: str):
         return _err(f"Node '{node_id}' not found in run #{run_id}", 404)
 
     stored_token = node_state.get("approval_token", "")
-    if not stored_token or stored_token != token:
+    if not stored_token or not hmac.compare_digest(str(stored_token), str(token)):
         return _err("Invalid or expired token", 403)
 
     if node_state.get("approval_decision"):
@@ -200,10 +202,12 @@ def api_run_approve(request, run_id: int, node_id: str):
     _send_approval_telegram_confirmation(run, resolved_node_id, decision)
 
     emoji = "✅" if decision == "approved" else "❌"
+    safe_pipeline_name = escape(run.pipeline.name)
+    safe_decision = escape(decision.capitalize())
     html = (
         "<html><body style='font-family:sans-serif;max-width:600px;margin:60px auto;text-align:center'>"
-        f"<h1>{emoji} {decision.capitalize()}</h1>"
-        f"<p>Your decision for pipeline <strong>{run.pipeline.name}</strong> (run #{run_id}) "
+        f"<h1>{emoji} {safe_decision}</h1>"
+        f"<p>Your decision for pipeline <strong>{safe_pipeline_name}</strong> (run #{int(run_id)}) "
         "has been recorded.</p>"
         "<p style='color:#888'>You can close this tab.</p>"
         "</body></html>"

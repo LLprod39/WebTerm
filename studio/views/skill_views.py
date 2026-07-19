@@ -9,7 +9,13 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from studio.skill_authoring import KNOWN_SAFETY_LEVELS, _render_frontmatter_value, scaffold_skill, validate_skill_dir, validate_skills
+from studio.skill_authoring import (
+    KNOWN_SAFETY_LEVELS,
+    _render_frontmatter_value,
+    scaffold_skill,
+    validate_skill_dir,
+    validate_skills,
+)
 from studio.skill_registry import SkillNotFoundError, get_skill, list_skills
 from studio.skill_templates import get_skill_template, list_skill_templates
 from studio.views.common import (

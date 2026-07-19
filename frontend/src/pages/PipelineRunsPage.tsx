@@ -16,6 +16,8 @@ import { studioRuns } from "@/lib/api";
 import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { PipelineRunDetail, StatusBadge } from "@/components/studio/PipelineRunDetail";
 import { formatRunDate, formatRunDuration } from "@/components/studio/pipelineRunFormatters";
+import { EmptyState } from "@/components/ui/page-shell";
+import { SkeletonList } from "@/components/ui/list-state";
 import { localize, useI18n } from "@/lib/i18n";
 
 // ---------------------------------------------------------------------------
@@ -185,34 +187,38 @@ export default function PipelineRunsPage() {
 
         {/* List */}
         <div className="flex-1 overflow-auto">
-          {isLoading && (
-            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" /> {localize(lang, "Загрузка…", "Loading…")}
-            </div>
-          )}
+          {isLoading && <div className="p-4"><SkeletonList rows={6} /></div>}
 
           {!isLoading && filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-sm gap-2">
-              <Workflow className="h-8 w-8 text-muted-foreground/30" />
-              <p>{runs.length ? localize(lang, "Под фильтры ничего не подходит", "No runs match the filters") : localize(lang, "Нет запусков", "No runs")}</p>
-              {runs.length ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-2 h-10"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setStatusFilter("all");
-                    setTimeFilter("all");
-                  }}
-                >
-                  {localize(lang, "Сбросить фильтры", "Reset filters")}
-                </Button>
-              ) : (
-                <Button size="sm" variant="outline" className="mt-2 h-10" onClick={() => navigate("/studio")}>
-                  {localize(lang, "Перейти к пайплайнам", "Open pipelines")}
-                </Button>
-              )}
+            <div className="p-4">
+              <EmptyState
+                icon={<Workflow className="h-5 w-5" />}
+                title={runs.length ? localize(lang, "Под фильтры ничего не подходит", "No runs match the filters") : localize(lang, "Нет запусков", "No runs")}
+                description={
+                  runs.length
+                    ? localize(lang, "Измените или сбросьте фильтры, чтобы увидеть запуски.", "Change or reset the filters to see runs.")
+                    : localize(lang, "Запустите пайплайн из Студии, чтобы увидеть историю здесь.", "Run a pipeline from Studio to see history here.")
+                }
+                actions={
+                  runs.length ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setStatusFilter("all");
+                        setTimeFilter("all");
+                      }}
+                    >
+                      {localize(lang, "Сбросить фильтры", "Reset filters")}
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => navigate("/studio")}>
+                      {localize(lang, "Перейти к пайплайнам", "Open pipelines")}
+                    </Button>
+                  )
+                }
+              />
             </div>
           )}
 

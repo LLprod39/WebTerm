@@ -1,4 +1,5 @@
-import { Layers, Loader2, Server, Settings, Sparkles, Terminal } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { ServerIcons } from "@/lib/app-icons";
 
 import {
   Dialog,
@@ -130,11 +131,11 @@ export function ServerAdvancedDialog({
     setShareUser,
   } = sharesController;
   const tabs: Array<{ key: AdvancedTab; icon: JSX.Element; label: string }> = [
-    { key: "access", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.access") },
-    { key: "knowledge", icon: <Sparkles className="h-3.5 w-3.5" />, label: t("srv.knowledge") },
-    { key: "context", icon: <Layers className="h-3.5 w-3.5" />, label: t("srv.server_rules_tab") },
-    { key: "security", icon: <Settings className="h-3.5 w-3.5" />, label: t("srv.security") },
-    { key: "execute", icon: <Terminal className="h-3.5 w-3.5" />, label: t("srv.execute") },
+    { key: "access", icon: <ServerIcons.access className="h-3.5 w-3.5" strokeWidth={1.5} />, label: t("srv.access") },
+    { key: "knowledge", icon: <ServerIcons.knowledge className="h-3.5 w-3.5" strokeWidth={1.5} />, label: t("srv.knowledge") },
+    { key: "context", icon: <ServerIcons.context className="h-3.5 w-3.5" strokeWidth={1.5} />, label: t("srv.server_rules_tab") },
+    { key: "security", icon: <ServerIcons.security className="h-3.5 w-3.5" strokeWidth={1.5} />, label: t("srv.security") },
+    { key: "execute", icon: <ServerIcons.execute className="h-3.5 w-3.5" strokeWidth={1.5} />, label: t("srv.execute") },
   ];
 
   return (
@@ -142,7 +143,7 @@ export function ServerAdvancedDialog({
       <DialogContent className="flex h-[88vh] max-w-5xl flex-col p-0 sm:h-[85vh]">
         <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-4 sm:px-6">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
-            <Server className="h-4 w-4 text-primary" />
+            <ServerIcons.form className="h-4 w-4 text-primary" strokeWidth={1.5} />
           </div>
           <div className="min-w-0 flex-1">
             <DialogTitle className="text-sm font-semibold">{advancedServer?.name || t("srv.server")}</DialogTitle>

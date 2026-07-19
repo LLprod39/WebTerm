@@ -1,82 +1,158 @@
+import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, GitBranch, RefreshCcw } from "lucide-react";
-import { Link } from "react-router-dom";
+import { GitBranch, Search } from "lucide-react";
 
 import { fetchKubernetesFleetBundles } from "@/api";
-import { Button } from "@/components/ui/button";
-import { EmptyState, MetricCard, MetricGrid, PageHero, PageShell, QueryStateBlock, SectionCard } from "@/components/ui/page-shell";
+import { EmptyState, QueryStateBlock, SectionCard } from "@/components/ui/page-shell";
 import { localize, useI18n } from "@/lib/i18n";
-import { FleetRow, statusTone } from "@/pages/kubernetes-page/kubernetesPageSections";
+import { FleetRow } from "@/pages/kubernetes-page/kubernetesPageSections";
+import {
+  CockpitChip,
+  HealthDonut,
+  HealthLegend,
+  KpiTile,
+  WorkloadReadyBar,
+} from "@/pages/kubernetes-page/KubernetesCockpitPrimitives";
+import {
+  K8sRefreshButton,
+  KubernetesPageHeader,
+  KubernetesShell,
+} from "@/pages/kubernetes-page/KubernetesShell";
 import { useKubernetesDeepLinkAudit } from "@/pages/kubernetes-page/useKubernetesDeepLinkAudit";
+
+type FleetFilter = "all" | "rolling" | "degraded" | "ready";
 
 export default function KubernetesFleetPage() {
   const { lang } = useI18n();
   const queryClient = useQueryClient();
   const auditDeepLink = useKubernetesDeepLinkAudit();
+  const [filter, setFilter] = useState<FleetFilter>("all");
+  const [q, setQ] = useState("");
   const bundlesQuery = useQuery({
     queryKey: ["kubernetes", "fleet", "bundles"],
     queryFn: fetchKubernetesFleetBundles,
     staleTime: 15_000,
   });
   const bundles = bundlesQuery.data?.bundles || [];
-  const rolling = bundles.filter((bundle) => bundle.status === "rolling").length;
-  const degraded = bundles.filter((bundle) => bundle.status === "degraded").length;
-  const ready = bundles.filter((bundle) => bundle.status === "ready").length;
+  const rolling = bundles.filter((b) => b.status === "rolling").length;
+  const degraded = bundles.filter((b) => b.status === "degraded").length;
+  const ready = bundles.filter((b) => b.status === "ready").length;
+  const paused = bundles.filter((b) => b.status === "paused").length;
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["kubernetes", "fleet", "bundles"] });
 
+  const filtered = useMemo(() => {
+    let rows = bundles;
+    if (filter !== "all") rows = rows.filter((b) => b.status === filter);
+    if (q.trim()) {
+      const needle = q.trim().toLowerCase();
+      rows = rows.filter(
+        (b) =>
+          b.name.toLowerCase().includes(needle) ||
+          b.source.toLowerCase().includes(needle) ||
+          b.target.toLowerCase().includes(needle),
+      );
+    }
+    return rows;
+  }, [bundles, filter, q]);
+
+  const slices = [
+    { key: "ready", label: "Ready", value: ready, color: "#34d399" },
+    { key: "rolling", label: "Rolling", value: rolling, color: "#fbbf24" },
+    { key: "degraded", label: "Degraded", value: degraded, color: "#f87171" },
+    { key: "paused", label: "Paused", value: paused, color: "#64748b" },
+  ];
+
   return (
-    <PageShell width="7xl" className="space-y-5">
-      <PageHero
-        kicker={localize(lang, "Kubernetes GitOps", "Kubernetes GitOps")}
-        title="Fleet rollouts"
-        description={localize(lang, "Read-only Fleet bundle inventory, rollout status and target readiness.", "Read-only Fleet bundle inventory, rollout status, and target readiness.")}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to="/kubernetes">
-                <ArrowLeft className="h-4 w-4" />
-                {localize(lang, "Overview", "Overview")}
-              </Link>
-            </Button>
-            <Button variant="outline" size="sm" onClick={refresh}>
-              <RefreshCcw className="h-4 w-4" />
-              {localize(lang, "Обновить", "Refresh")}
-            </Button>
-          </div>
-        }
+    <KubernetesShell>
+      <KubernetesPageHeader
+        kicker={localize(lang, "GitOps", "GitOps")}
+        title={localize(lang, "Fleet · выкатки", "Fleet · rollouts")}
+        description={localize(
+          lang,
+          "Bundles, readiness и targets. Без write-actions — только честная картина.",
+          "Bundles, readiness and targets. No write actions — just a clear picture.",
+        )}
+        actions={<K8sRefreshButton onClick={refresh} label={localize(lang, "Обновить", "Refresh")} />}
       />
+
       <QueryStateBlock
         loading={bundlesQuery.isLoading}
         error={bundlesQuery.error}
         errorText={localize(lang, "Не удалось загрузить Fleet bundles", "Failed to load Fleet bundles")}
         onRetry={refresh}
       >
-        <MetricGrid>
-          <MetricCard label="Total" value={bundles.length} description={localize(lang, "synced bundles", "synced bundles")} tone="info" icon={<GitBranch className="h-4 w-4" />} />
-          <MetricCard label="Ready" value={ready} description={localize(lang, "ready bundles", "ready bundles")} tone="success" icon={<GitBranch className="h-4 w-4" />} />
-          <MetricCard label="Rolling" value={rolling} description={localize(lang, "active rollouts", "active rollouts")} tone={rolling ? "warning" : "default"} icon={<GitBranch className="h-4 w-4" />} />
-          <MetricCard label="Degraded" value={degraded} description={localize(lang, "needs attention", "needs attention")} tone={statusTone(degraded ? "degraded" : "healthy") === "danger" ? "danger" : "success"} icon={<GitBranch className="h-4 w-4" />} />
-        </MetricGrid>
+        <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
+          <SectionCard title={localize(lang, "Состояние", "State")} icon={<GitBranch className="h-4 w-4" />}>
+            <div className="flex flex-col items-center gap-4 sm:flex-row">
+              <HealthDonut
+                slices={slices}
+                centerValue={bundles.length}
+                centerLabel={localize(lang, "bundles", "bundles")}
+              />
+              <HealthLegend slices={slices} />
+            </div>
+          </SectionCard>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiTile label="Total" value={bundles.length} tone="info" />
+            <KpiTile label="Ready" value={ready} tone="success" />
+            <KpiTile label="Rolling" value={rolling} tone={rolling ? "warning" : "success"} />
+            <KpiTile label="Degraded" value={degraded} tone={degraded ? "danger" : "success"} />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["all", localize(lang, "Все", "All")],
+                ["ready", "Ready"],
+                ["rolling", "Rolling"],
+                ["degraded", "Degraded"],
+              ] as const
+            ).map(([id, label]) => (
+              <CockpitChip key={id} active={filter === id} onClick={() => setFilter(id)}>
+                {label}
+              </CockpitChip>
+            ))}
+          </div>
+          <label className="relative block w-full sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={localize(lang, "Поиск bundle…", "Search bundle…")}
+              className="h-9 w-full rounded-sm border border-border bg-surface-0 pl-9 pr-3 font-mono text-xs outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </label>
+        </div>
+
         <SectionCard
-          title="Fleet bundles"
-          description={localize(lang, "No write actions are exposed from this page.", "No write actions are exposed from this page.")}
+          title={localize(lang, "Bundles", "Bundles")}
+          description={localize(lang, "Readiness по targets. Write — только через approval / Admin.", "Target readiness. Writes only via approval / Admin.")}
           icon={<GitBranch className="h-4 w-4" />}
         >
-          {bundles.length ? (
+          {filtered.length ? (
             <div className="space-y-3">
-              {bundles.map((bundle) => (
-                <FleetRow key={bundle.id} bundle={bundle} lang={lang} onOpenLink={auditDeepLink} />
+              {filtered.map((bundle) => (
+                <div key={bundle.id} className="space-y-2 rounded-sm border border-border bg-surface-0 p-3 shadow-elev-1">
+                  <FleetRow bundle={bundle} lang={lang} onOpenLink={auditDeepLink} />
+                  <WorkloadReadyBar ready={bundle.ready} desired={bundle.desired} />
+                </div>
               ))}
             </div>
           ) : (
             <EmptyState
               icon={<GitBranch className="h-5 w-5" />}
-              title={localize(lang, "Fleet bundles не синхронизированы", "Fleet bundles are not synced")}
-              description={localize(lang, "Запустите Rancher/Fleet provider sync после настройки credentials.", "Run Rancher/Fleet provider sync after credentials are configured.")}
+              title={localize(lang, "Fleet bundles не найдены", "No Fleet bundles")}
+              description={localize(
+                lang,
+                "Синхронизируйте Rancher/Fleet provider после credentials.",
+                "Sync Rancher/Fleet after credentials are configured.",
+              )}
             />
           )}
         </SectionCard>
       </QueryStateBlock>
-    </PageShell>
+    </KubernetesShell>
   );
 }

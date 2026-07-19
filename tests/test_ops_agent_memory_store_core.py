@@ -6,8 +6,8 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 
 from app.agent_kernel.memory.server_cards import build_server_memory_card
-from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.adapters.django_memory_repair import auto_resolve_stale_revalidations
+from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.models import (
     AgentRun,
     Server,
@@ -378,3 +378,39 @@ def test_server_memory_card_excludes_candidate_layer_snapshots_without_prefix():
 
     assert "Unreviewed restart recipe" not in prompt
     assert "systemctl restart nginx without approval" not in prompt
+
+
+@pytest.mark.django_db(transaction=True)
+def test_server_memory_card_handles_non_manual_legacy_knowledge():
+    """Regression: legacy knowledge with source != 'manual' must not raise NameError."""
+    owner = User.objects.create_user(username="ops-kernel-legacy-user", password="x")
+    server = Server.objects.create(
+        user=owner,
+        name="legacy-1",
+        host="10.0.0.9",
+        port=22,
+        username="root",
+    )
+    ai_item = ServerKnowledge.objects.create(
+        server=server,
+        category="solutions",
+        title="Disk cleanup recipe",
+        content="If /var fills up: journalctl --vacuum-size=200M, then docker system prune -f",
+        source="ai_auto",
+        confidence=0.7,
+    )
+    manual_item = ServerKnowledge.objects.create(
+        server=server,
+        category="config",
+        title="nginx layout",
+        content="Configs live in /etc/nginx/sites-enabled",
+        source="manual",
+    )
+
+    card = build_server_memory_card(server, legacy_knowledge=[ai_item, manual_item])
+
+    combined = "\n".join(
+        [*card.operational_playbooks, *(record.content for record in card.records)]
+    )
+    assert "journalctl" in combined
+    assert "nginx" in combined

@@ -7,7 +7,6 @@ from servers.models import BackgroundWorkerState
 from studio.management.commands.run_telegram_bot import Command as TelegramBotCommand
 from studio.models import Pipeline
 
-
 pytestmark = pytest.mark.django_db(transaction=True)
 
 

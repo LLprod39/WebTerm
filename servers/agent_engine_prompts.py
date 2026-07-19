@@ -58,6 +58,11 @@ def build_system_prompt(engine) -> str:
         tool_rules.append("- Используй ask_user только когда действительно нужен ввод человека для критического решения")
     if "report" in engine.enabled_tools:
         tool_rules.append("- Используй report для отправки промежуточного отчёта пользователю при длительных задачах")
+    if any(name in engine.enabled_tools for name in ("list_materials", "read_material", "run_script_material")):
+        tool_rules.append(
+            "- Если есть operator materials: list_materials → для script используй run_script_material "
+            "(не пиши свой скрипт вместо готового) → проверь side-effects; task_list обновляй через update_material_task"
+        )
     rules_text = "\n".join(tool_rules)
 
     return f"""Ты — DevOps / Platform AI-агент, работающий через SSH и MCP-инструменты.
@@ -89,10 +94,14 @@ def build_system_prompt(engine) -> str:
 {skill_errors}
 
 ## Формат вывода
+Предпочтительный текстовый формат:
 THOUGHT: <твоё рассуждение о том, что делать дальше>
 ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
 
-Когда задача завершена (больше нет действий), выведи итоговый анализ БЕЗ строки ACTION."""
+Альтернатива (JSON object, если удобнее модели):
+{{"thinking": "<рассуждение>", "tool": "tool_name", "args": {{"param1": "value1"}}}}
+
+Когда задача завершена (больше нет действий), выведи итоговый анализ БЕЗ строки ACTION и без JSON tool-call."""
 
 
 def build_fallback_final_report(engine, iterations: list[dict], *, error: str = "") -> str:

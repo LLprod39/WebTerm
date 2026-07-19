@@ -138,8 +138,11 @@ def server_create(request):
             },
         )
 
+        from servers.monitor import schedule_health_check_for_server_ids
         from servers.os_detect_service import schedule_os_detect_for_server_ids
 
+        # Start fleet monitoring immediately so the list has current status.
+        schedule_health_check_for_server_ids([server.id])
         schedule_os_detect_for_server_ids([server.id], force=True)
 
         return JsonResponse({"success": True, "server_id": server.id, "message": "Server created successfully"})

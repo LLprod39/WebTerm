@@ -4,7 +4,16 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sEvent, K8sNamespace, K8sNetworkRef, K8sPodRef, K8sWorkloadRef
+from kubernetes_ops.models import (
+    K8sAppRef,
+    K8sAuditEvent,
+    K8sCluster,
+    K8sEvent,
+    K8sNamespace,
+    K8sNetworkRef,
+    K8sPodRef,
+    K8sWorkloadRef,
+)
 
 
 class KubernetesOpsNamespaceDetailTests(TestCase):

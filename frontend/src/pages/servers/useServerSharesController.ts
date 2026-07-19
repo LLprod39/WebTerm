@@ -16,8 +16,8 @@ export function useServerSharesController(activeServer: FrontendServer | null) {
   const [shareExpiresAt, setShareExpiresAt] = useState("");
 
   const loadForServer = useCallback(async (serverId: number) => {
-    const response = await listServerShares(serverId);
-    const nextShares = (response.shares || []) as ShareItem[];
+    const response = await listServerShares(serverId).catch(() => null);
+    const nextShares = (response?.shares ?? []) as ShareItem[];
     setShares(nextShares);
     return nextShares;
   }, []);
