@@ -2,6 +2,7 @@
 
 Extracted from server_playbooks.py to keep modules under the size limit.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,14 +10,30 @@ from typing import Any
 from django.db.models import Q
 
 from servers.models import Playbook, PlaybookRun
+from servers.services.playbook_compatibility_analysis import (
+    COMPATIBILITY_ANALYZER_VERSION,
+    analyze_playbook_compatibility,
+)
 from servers.services.playbook_runner import normalize_tasks
 
 
 def _playbooks_for_user(user):
-    return Playbook.objects.filter(Q(user=user) | Q(visibility=Playbook.VISIBILITY_SHARED))
+    return Playbook.objects.filter(Q(user=user) | Q(visibility=Playbook.VISIBILITY_SHARED)).select_related(
+        "active_compatibility_revision"
+    )
 
 
 def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str, Any]:
+    revision = pb.active_compatibility_revision
+    compatibility = pb.compatibility if isinstance(pb.compatibility, dict) else {}
+    if compatibility.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION and (pb.source_yaml or "").strip():
+        compatibility = analyze_playbook_compatibility(pb.source_yaml)
+    revision_report = revision.report if revision and isinstance(revision.report, dict) else {}
+    if revision and revision_report.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION:
+        revision_report = analyze_playbook_compatibility(
+            revision.adapted_yaml,
+            bindings=revision.inventory_bindings if isinstance(revision.inventory_bindings, dict) else {},
+        )
     data: dict[str, Any] = {
         "id": pb.id,
         "name": pb.name,
@@ -26,6 +43,22 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str
         "visibility": pb.visibility,
         "tags": pb.tags if isinstance(pb.tags, list) else [],
         "fidelity": pb.fidelity if isinstance(pb.fidelity, dict) else {},
+        "compatibility": compatibility,
+        "active_compatibility_revision": (
+            {
+                "id": revision.id,
+                "status": revision.status,
+                "report": revision_report,
+                "semantic_guard": revision.semantic_guard if isinstance(revision.semantic_guard, dict) else {},
+                "change_summary": revision.change_summary if isinstance(revision.change_summary, list) else [],
+                "inventory_bindings": revision.inventory_bindings
+                if isinstance(revision.inventory_bindings, dict)
+                else {},
+                "created_at": revision.created_at.isoformat(),
+            }
+            if revision
+            else None
+        ),
         "task_count": pb.task_count,
         "is_template_clone": pb.is_template_clone,
         "template_slug": pb.template_slug,
@@ -38,6 +71,7 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str
     if include_tasks:
         data["tasks"] = pb.tasks if isinstance(pb.tasks, list) else []
         data["source_yaml"] = pb.source_yaml or ""
+        data["adapted_source_yaml"] = revision.adapted_yaml if revision else ""
     return data
 
 

@@ -21,6 +21,46 @@ export interface PlaybookFidelity {
   hosts_hint?: string;
 }
 
+export interface PlaybookCompatibilityIssue {
+  code: string;
+  severity: "info" | "warning" | "error" | string;
+  message: string;
+  path?: string;
+}
+
+export interface PlaybookCompatibilityReport {
+  analyzer_version?: number;
+  status?: "ready" | "needs_binding" | "needs_adaptation" | "blocked" | string;
+  ready?: boolean;
+  host_selectors?: string[];
+  host_patterns?: string[];
+  missing_bindings?: string[];
+  required_variables?: string[];
+  dependencies?: { roles?: string[]; collections?: string[]; assets?: string[] };
+  issues?: PlaybookCompatibilityIssue[];
+  semantic_hash?: string;
+  targets_count?: number;
+  syntax_check?: { status?: string; passed?: boolean | null; message?: string; method?: string };
+}
+
+export interface PlaybookCompatibilityRevision {
+  id: number;
+  status: "draft" | "validated" | "rejected" | string;
+  report: PlaybookCompatibilityReport;
+  semantic_guard: {
+    passed?: boolean;
+    violations?: string[];
+    original_hash?: string;
+    adapted_hash?: string;
+  };
+  change_summary: string[];
+  inventory_bindings?: PlaybookInventoryBindings;
+  created_at: string;
+  active?: boolean;
+}
+
+export type PlaybookInventoryBindings = Record<string, { server_ids: number[]; group_ids: number[] }>;
+
 export interface PlaybookSummary {
   id: number;
   name: string;
@@ -30,6 +70,8 @@ export interface PlaybookSummary {
   visibility: PlaybookVisibility;
   tags: string[];
   fidelity: PlaybookFidelity;
+  compatibility: PlaybookCompatibilityReport;
+  active_compatibility_revision: PlaybookCompatibilityRevision | null;
   task_count: number;
   is_template_clone: boolean;
   template_slug: string;
@@ -43,6 +85,7 @@ export interface PlaybookSummary {
 export interface PlaybookDetail extends PlaybookSummary {
   tasks: PlaybookTask[];
   source_yaml: string;
+  adapted_source_yaml: string;
 }
 
 export interface PlaybookTaskResult {
@@ -259,7 +302,12 @@ export async function installPlaybookTemplate(slug: string) {
   });
 }
 
-export async function previewPlaybookInventory(payload: { server_ids?: number[]; group_ids?: number[] }) {
+export async function previewPlaybookInventory(payload: {
+  server_ids?: number[];
+  group_ids?: number[];
+  playbook_id?: number;
+  inventory_bindings?: PlaybookInventoryBindings;
+}) {
   return apiFetch<{
     success: boolean;
     inventory: string;
@@ -273,6 +321,8 @@ export async function previewPlaybookInventory(payload: { server_ids?: number[];
       detected_os: string;
     }>;
     count: number;
+    compatibility?: PlaybookCompatibilityReport;
+    inventory_bindings?: PlaybookInventoryBindings;
   }>("/servers/api/playbooks/inventory/preview/", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -293,12 +343,69 @@ export async function runPlaybook(
     tags?: string;
     limit?: string;
     extra_vars?: Record<string, unknown>;
+    inventory_bindings?: PlaybookInventoryBindings;
   },
 ) {
   return apiFetch<{ success: boolean; run: PlaybookRun; error?: string }>(`/servers/api/playbooks/${id}/run/`, {
     method: "POST",
     body: JSON.stringify(payload),
     timeoutMs: 60_000,
+  });
+}
+
+export async function analyzePlaybookCompatibility(
+  id: number,
+  payload: {
+    source_yaml?: string;
+    server_ids?: number[];
+    group_ids?: number[];
+    inventory_bindings?: PlaybookInventoryBindings;
+  } = {},
+) {
+  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; error?: string }>(
+    `/servers/api/playbooks/${id}/compatibility/analyze/`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+export async function adaptPlaybookCompatibility(
+  id: number,
+  payload: { instruction?: string; inventory_bindings?: PlaybookInventoryBindings } = {},
+) {
+  return apiFetch<{
+    success: boolean;
+    error?: string;
+    proposal: {
+      method: "deterministic" | "ai" | "ai_rejected" | string;
+      adapted_yaml: string;
+      changes: string[];
+      assumptions: string[];
+      semantic_guard: PlaybookCompatibilityRevision["semantic_guard"];
+      report: PlaybookCompatibilityReport;
+    };
+  }>(`/servers/api/playbooks/${id}/compatibility/adapt/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+    timeoutMs: 120_000,
+  });
+}
+
+export async function applyPlaybookCompatibility(
+  id: number,
+  payload: {
+    adapted_yaml: string;
+    changes?: string[];
+    inventory_bindings?: PlaybookInventoryBindings;
+  },
+) {
+  return apiFetch<{
+    success: boolean;
+    error?: string;
+    revision: PlaybookCompatibilityRevision;
+    playbook: PlaybookDetail;
+  }>(`/servers/api/playbooks/${id}/compatibility/apply/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
   });
 }
 

@@ -6,6 +6,7 @@ import json
 
 import pytest
 from django.contrib.auth.models import User
+from django.db import IntegrityError, transaction
 from django.test import Client
 
 from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
@@ -21,6 +22,21 @@ def _grant(user: User, *features: str) -> None:
         UserAppPermission.objects.update_or_create(
             user=user, feature=feature, defaults={"allowed": True}
         )
+
+
+@pytest.mark.django_db
+def test_only_one_active_turn_is_allowed_per_chat():
+    user = User.objects.create_user(username="turn-unique", password="x")
+    session = ChatSession.objects.create(user=user, title="Unique active turn")
+    ChatTurnState.objects.create(session=session, status=ChatTurnState.STATUS_RUNNING)
+
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ChatTurnState.objects.create(
+            session=session,
+            status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+        )
+
+    ChatTurnState.objects.create(session=session, status=ChatTurnState.STATUS_DONE)
 
 
 @pytest.mark.django_db
@@ -147,3 +163,13 @@ def test_rate_limit_triggers():
     err = check_turn_rate_limit(session)
     assert err is not None
     assert "Rate limit" in err
+
+
+@pytest.mark.django_db
+def test_rate_limit_is_per_user_not_per_chat():
+    user = User.objects.create_user(username="rate-user-global", password="x")
+    first = ChatSession.objects.create(user=user)
+    second = ChatSession.objects.create(user=user)
+    for i in range(60):
+        ChatMessage.objects.create(session=first, role="user", content=f"m{i}")
+    assert check_turn_rate_limit(second) is not None

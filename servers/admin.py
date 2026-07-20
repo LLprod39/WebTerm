@@ -4,6 +4,7 @@ from .models import (
     AgentRun,
     AgentRunArtifact,
     Playbook,
+    PlaybookCompatibilityRevision,
     PlaybookRun,
     Server,
     ServerAgent,
@@ -127,3 +128,11 @@ class PlaybookRunAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     readonly_fields = ['created_at', 'started_at', 'finished_at']
     search_fields = ['playbook__name', 'user__username']
+
+
+@admin.register(PlaybookCompatibilityRevision)
+class PlaybookCompatibilityRevisionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'playbook', 'user', 'status', 'created_at']
+    list_filter = ['status', 'created_at']
+    readonly_fields = ['created_at']
+    search_fields = ['playbook__name', 'user__username', 'source_hash']

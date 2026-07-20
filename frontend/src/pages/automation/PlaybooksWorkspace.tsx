@@ -25,7 +25,7 @@ import {
   runPlaybook,
   updatePlaybook,
   type PlaybookCategory,
-  type PlaybookDetail,
+  type PlaybookInventoryBindings,
   type PlaybookRun,
   type PlaybookSummary,
   type PlaybookTemplate,
@@ -42,7 +42,8 @@ import { PlaybookCard } from "./PlaybookCard";
 import { PlaybookEditor, type PlaybookEditorState } from "./PlaybookEditor";
 import { RunResultsView } from "./RunResultsView";
 import { RunWizard } from "./RunWizard";
-import { CATEGORIES, CATEGORY_META, RUN_STATUS_META, newLocalTaskId } from "./constants";
+import { CATEGORIES, CATEGORY_META, RUN_STATUS_META } from "./constants";
+import { detailToPlaybookEditor, emptyPlaybookEditor } from "./playbookEditorState";
 
 type View =
   | { mode: "catalog" }
@@ -50,36 +51,6 @@ type View =
   | { mode: "edit"; playbookId: number | null }
   | { mode: "run-wizard"; playbookId: number }
   | { mode: "run-results"; runId: number };
-
-const emptyEditor = (): PlaybookEditorState => ({
-  name: "",
-  description: "",
-  kind: "ansible",
-  category: "custom",
-  visibility: "private",
-  tagsText: "",
-  tasks: [{ id: newLocalTaskId(), command: "", description: "", continue_on_error: false }],
-});
-
-function detailToEditor(pb: PlaybookDetail): PlaybookEditorState {
-  return {
-    name: pb.name,
-    description: pb.description || "",
-    kind: pb.kind,
-    category: pb.category,
-    visibility: pb.visibility,
-    tagsText: (pb.tags || []).join(", "),
-    tasks:
-      pb.tasks?.length > 0
-        ? pb.tasks.map((t) => ({
-            id: t.id || newLocalTaskId(),
-            command: String(t?.command ?? ""),
-            description: String(t?.description ?? ""),
-            continue_on_error: Boolean(t?.continue_on_error),
-          }))
-        : [{ id: newLocalTaskId(), command: "", description: "", continue_on_error: false }],
-  };
-}
 
 export interface PlaybooksWorkspaceProps {
   /** When provided, skip bootstrap fetch for inventory targets */
@@ -102,7 +73,7 @@ export function PlaybooksWorkspace({
   const [view, setView] = useState<View>({ mode: "catalog" });
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<PlaybookCategory | "all">("all");
-  const [editor, setEditor] = useState<PlaybookEditorState>(emptyEditor);
+  const [editor, setEditor] = useState<PlaybookEditorState>(emptyPlaybookEditor);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -188,14 +159,14 @@ export function PlaybooksWorkspace({
   }, [view, queryClient]);
 
   const openNew = () => {
-    setEditor(emptyEditor());
+    setEditor(emptyPlaybookEditor());
     setView({ mode: "edit", playbookId: null });
   };
 
   const openEdit = async (id: number) => {
     try {
       const res = await getPlaybook(id);
-      setEditor(detailToEditor(res.playbook));
+      setEditor(detailToPlaybookEditor(res.playbook));
       setView({ mode: "edit", playbookId: id });
     } catch (err) {
       notify.error({ title: tr("Не удалось открыть playbook", "Failed to open playbook"), description: String(err) });
@@ -230,17 +201,17 @@ export function PlaybooksWorkspace({
     setSaving(true);
     try {
       const payload = buildPayload();
-      if (!payload.name || payload.tasks.length === 0) {
+      if (!payload.name || (payload.tasks.length === 0 && !editor.sourceYaml)) {
         notify.error({ title: tr("Имя и задачи обязательны", "Name and tasks required") });
         return;
       }
       if (view.mode === "edit" && view.playbookId) {
         const res = await updatePlaybook(view.playbookId, payload);
-        setEditor(detailToEditor(res.playbook));
+        setEditor(detailToPlaybookEditor(res.playbook));
         notify.success({ title: tr("Сохранено", "Saved") });
       } else {
         const res = await createPlaybook(payload);
-        setEditor(detailToEditor(res.playbook));
+        setEditor(detailToPlaybookEditor(res.playbook));
         setView({ mode: "edit", playbookId: res.playbook.id });
         notify.success({ title: tr("Создано", "Created") });
       }
@@ -289,7 +260,7 @@ export function PlaybooksWorkspace({
             ? `${score}% · ${fidelity?.runnable}/${fidelity?.total} runnable`
             : res.playbook.name,
       });
-      setEditor(detailToEditor(res.playbook));
+      setEditor(detailToPlaybookEditor(res.playbook));
       setView({ mode: "edit", playbookId: res.playbook.id });
       await queryClient.invalidateQueries({ queryKey: ["playbooks"] });
     } catch (err) {
@@ -301,7 +272,7 @@ export function PlaybooksWorkspace({
     try {
       const res = await installPlaybookTemplate(tmpl.slug);
       notify.success({ title: tr("Шаблон добавлен", "Template installed") });
-      setEditor(detailToEditor(res.playbook));
+      setEditor(detailToPlaybookEditor(res.playbook));
       setView({ mode: "edit", playbookId: res.playbook.id });
       await queryClient.invalidateQueries({ queryKey: ["playbooks"] });
     } catch (err) {
@@ -312,7 +283,7 @@ export function PlaybooksWorkspace({
   const startRunWizard = async (playbookId: number) => {
     try {
       const res = await getPlaybook(playbookId);
-      setEditor(detailToEditor(res.playbook));
+      setEditor(detailToPlaybookEditor(res.playbook));
       setView({ mode: "run-wizard", playbookId });
     } catch (err) {
       notify.error({ title: tr("Не удалось открыть", "Failed to open"), description: String(err) });
@@ -323,7 +294,7 @@ export function PlaybooksWorkspace({
     setSaving(true);
     try {
       const payload = buildPayload();
-      if (!payload.name || payload.tasks.length === 0) {
+      if (!payload.name || (payload.tasks.length === 0 && !editor.sourceYaml)) {
         notify.error({ title: tr("Имя и задачи обязательны", "Name and tasks required") });
         return;
       }
@@ -348,6 +319,7 @@ export function PlaybooksWorkspace({
     concurrency: number;
     dry_run: boolean;
     become: boolean;
+    inventory_bindings: PlaybookInventoryBindings;
   }) => {
     const playbookId =
       view.mode === "run-wizard" ? view.playbookId : view.mode === "edit" ? view.playbookId : null;
@@ -696,7 +668,7 @@ export function PlaybooksWorkspace({
           lang={lang}
           onBack={() => setView({ mode: "catalog" })}
           onCreated={(pb) => {
-            setEditor(detailToEditor(pb));
+            setEditor(detailToPlaybookEditor(pb));
             setView({ mode: "edit", playbookId: pb.id });
             void queryClient.invalidateQueries({ queryKey: ["playbooks"] });
           }}
@@ -716,6 +688,8 @@ export function PlaybooksWorkspace({
             else void ensureSavedThenWizard();
           }}
           title={view.playbookId ? tr("Редактирование", "Edit playbook") : tr("Новый playbook", "New playbook")}
+          playbookId={view.playbookId}
+          onCompatibilityApplied={(playbook) => setEditor(detailToPlaybookEditor(playbook))}
         />
       ) : null}
 
@@ -727,6 +701,8 @@ export function PlaybooksWorkspace({
           groups={groupsWithId}
           running={running}
           ansibleAvailable={ansibleAvailable}
+          playbookId={view.playbookId}
+          compatibility={editor.activeCompatibilityRevision?.report || editor.compatibility}
           onBack={() => setView({ mode: "edit", playbookId: view.playbookId })}
           onConfirm={(opts) => void onConfirmRun(opts)}
         />

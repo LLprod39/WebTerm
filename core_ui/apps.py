@@ -20,6 +20,7 @@ class CoreUiConfig(AppConfig):
         from core_ui.managed_secrets import get_llm_api_key
         from core_ui.services.llm_budget import get_current_llm_budget_user_id, get_user_daily_budget_status
         from core_ui.services.llm_usage import capture_llm_usage_audit_context, record_llm_usage
+        from core_ui.services.operator_web_tools import register_operator_web_tools
 
         core_ui.logging_setup.configure_loguru_sinks()
         register_llm_api_key_provider(get_llm_api_key)
@@ -29,6 +30,7 @@ class CoreUiConfig(AppConfig):
         register_llm_usage_recorder(record_llm_usage)
         register_tool_audit_context_provider(get_audit_context)
         register_tool_activity_logger(log_user_activity_async)
+        register_operator_web_tools()
 
         def _sqlite_wal_mode(sender, connection, **kwargs):
             if connection.vendor == "sqlite":

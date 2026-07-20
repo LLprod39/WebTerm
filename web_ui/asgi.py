@@ -11,6 +11,7 @@ import os
 
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
 from django.conf import settings
 from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
 from django.core.asgi import get_asgi_application
@@ -28,7 +29,9 @@ import web_ui.routing  # noqa: E402
 
 application = ProtocolTypeRouter({
     "http": http_application,
-    "websocket": AuthMiddlewareStack(
-        URLRouter(web_ui.routing.websocket_urlpatterns)
+    "websocket": AllowedHostsOriginValidator(
+        AuthMiddlewareStack(
+            URLRouter(web_ui.routing.websocket_urlpatterns)
+        )
     ),
 })

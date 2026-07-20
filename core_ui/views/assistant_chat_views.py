@@ -5,6 +5,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from app.assistant_actions import AssistantActionError
 from core_ui.decorators import require_feature
 from core_ui.models import AssistantAction
 from core_ui.services.assistant_chat import (
@@ -66,6 +67,10 @@ def api_assistant_artifacts(request, chat_id: int):
         return JsonResponse({"artifacts": list_artifacts(session)})
 
     data = _json_body(request)
+    from core_ui.services.operator_rate_limit import MAX_ARTIFACT_CHARS
+
+    if "content" in data and len(str(data.get("content") or "")) > MAX_ARTIFACT_CHARS:
+        return _err(f"Artifact is too large (max {MAX_ARTIFACT_CHARS} characters).", 413)
     if request.method == "POST":
         art = create_artifact(
             session=session,
@@ -181,9 +186,15 @@ def api_assistant_chat_message(request, chat_id: int):
     message = str(data.get("message") or "").strip()
     if not message:
         return _err("message is required")
+    from core_ui.services.operator_rate_limit import MAX_MESSAGE_CHARS
+
+    if len(message) > MAX_MESSAGE_CHARS:
+        return _err(f"Message is too large (max {MAX_MESSAGE_CHARS} characters).", 413)
 
     try:
         result = handle_user_message(session, request.user, message, request=request)
+    except AssistantActionError as exc:
+        return _err(exc.message, exc.status)
     except Exception as exc:
         return _err(str(exc), 400)
 
@@ -205,9 +216,16 @@ def api_assistant_chat_create_and_message(request):
     message = str(data.get("message") or "").strip()
     if not message:
         return _err("message is required")
+    from core_ui.services.operator_rate_limit import MAX_MESSAGE_CHARS
+
+    if len(message) > MAX_MESSAGE_CHARS:
+        return _err(f"Message is too large (max {MAX_MESSAGE_CHARS} characters).", 413)
     session = create_chat_session(request.user, title=message[:80])
     try:
         result = handle_user_message(session, request.user, message, request=request)
+    except AssistantActionError as exc:
+        session.delete()
+        return _err(exc.message, exc.status)
     except Exception as exc:
         return _err(str(exc), 400)
     return JsonResponse(
@@ -263,6 +281,10 @@ def api_assistant_action_confirm(request, action_id: int):
     data = _json_body(request)
     typed_confirm = str(data.get("typed_confirm") or data.get("confirm_token") or "").strip() or None
     action = execute_action(action, request=request, confirmed=True, typed_confirm=typed_confirm)
+    if action.status == AssistantAction.STATUS_RUNNING:
+        # Another worker won the atomic execution claim. It owns both execution
+        # and turn resume; this request must not feed an incomplete result to LLM.
+        return JsonResponse(serialize_action(action), status=202)
     if action.status == AssistantAction.STATUS_REQUIRES_CONFIRMATION and action.error:
         return JsonResponse(serialize_action(action), status=400)
     _resume_operator_if_parked(action, request=request, cancelled=False)

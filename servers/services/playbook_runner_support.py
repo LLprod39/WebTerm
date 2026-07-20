@@ -91,7 +91,11 @@ def resolve_target_servers(
     return list(selected.values())
 
 
-def build_inventory_for_servers(servers: list[Server]) -> str:
+def build_inventory_for_servers(
+    servers: list[Server],
+    *,
+    extra_groups: dict[str, list[int]] | None = None,
+) -> str:
     payload = [
         {
             "id": s.id,
@@ -107,6 +111,8 @@ def build_inventory_for_servers(servers: list[Server]) -> str:
     for s in servers:
         if s.group_id and s.group:
             groups.setdefault(s.group.name, []).append(s.id)
+    for name, server_ids in (extra_groups or {}).items():
+        groups[name] = [server_id for server_id in server_ids if server_id in {server.id for server in servers}]
     return build_inventory_ini(payload, groups)
 
 

@@ -25,6 +25,13 @@ describe("parseOperatorCompose", () => {
     expect(parsed.mentions).toContain("db-01");
     expect(parsed.message).toContain("@db-01");
   });
+
+  it("expands web research with citation instructions", () => {
+    const parsed = parseOperatorCompose("/web Django 6 security releases");
+    expect(parsed.slash).toBe("web");
+    expect(parsed.message).toContain("Django 6 security releases");
+    expect(parsed.message).toContain("ссылками");
+  });
 });
 
 describe("extractPinnedServersFromMentions", () => {

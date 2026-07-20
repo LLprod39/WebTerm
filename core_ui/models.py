@@ -196,6 +196,20 @@ class ChatTurnState(models.Model):
             models.Index(fields=["session", "status"], name="cu_turn_session_status_idx"),
             models.Index(fields=["session", "-updated_at"], name="cu_turn_session_updated_idx"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session"],
+                condition=models.Q(
+                    status__in=[
+                        "running",
+                        "awaiting_confirm",
+                        "awaiting_async",
+                        "resuming",
+                    ]
+                ),
+                name="cu_turn_one_active_per_session",
+            )
+        ]
 
     def __str__(self):
         return f"turn {self.pk} session={self.session_id} [{self.status}]"
@@ -269,6 +283,7 @@ FEATURE_CHOICES = [
     ("settings", "Settings"),
     ("orchestrator", "Orchestrator"),
     ("knowledge_base", "Knowledge Base"),
+    ("web_research", "Web Research"),
 ]
 
 # Features allowed by default for non-staff users (aligned with pilot_user).
@@ -282,6 +297,7 @@ EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes_break_glass",
     "kubernetes_secret_read",
     "mars",
+    "web_research",
 }
 STAFF_ONLY_FEATURES = set()
 

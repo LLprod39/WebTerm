@@ -9,6 +9,7 @@ from django.contrib.auth.models import User
 from django.test import Client
 
 from core_ui.models import AssistantAction, ChatSession, UserAppPermission
+from core_ui.services.assistant_chat import execute_action
 from core_ui.services.operator_duty import (
     deliver_morning_briefing,
     get_or_create_duty_session,
@@ -20,7 +21,6 @@ from core_ui.services.operator_security import (
     should_require_typed_confirm,
     validate_typed_confirm,
 )
-from core_ui.services.assistant_chat import execute_action
 
 
 def _grant(user: User, *features: str) -> None:
@@ -118,6 +118,46 @@ def test_execute_action_blocks_without_typed_confirm():
     ok = execute_action(action, confirmed=True, typed_confirm="web-01")
     assert ok.status == AssistantAction.STATUS_COMPLETED
     assert ok.result_payload.get("ok") is True
+
+
+@pytest.mark.django_db
+def test_execute_action_is_idempotent_after_completion():
+    user = User.objects.create_user(username="idem-action", password="x")
+    _grant(user, "orchestrator", "servers")
+    session = ChatSession.objects.create(user=user)
+    calls = {"count": 0}
+
+    from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
+
+    if get_action_spec("operator.test_idempotent") is None:
+        def handler(ctx):
+            calls["count"] += 1
+            return {"ok": True}
+
+        register_action(
+            AssistantActionSpec(
+                action_type="operator.test_idempotent",
+                label="Idempotent test",
+                description="Idempotent test",
+                required_feature="servers",
+                risk="mutating",
+                requires_confirmation=True,
+                handler=handler,
+            )
+        )
+
+    action = AssistantAction.objects.create(
+        user=user,
+        session=session,
+        action_type="operator.test_idempotent",
+        risk="mutating",
+        required_feature="servers",
+        requires_confirmation=True,
+        status=AssistantAction.STATUS_REQUIRES_CONFIRMATION,
+    )
+    execute_action(action, confirmed=True)
+    execute_action(action, confirmed=True)
+    assert calls["count"] == 1
 
 
 @pytest.mark.django_db

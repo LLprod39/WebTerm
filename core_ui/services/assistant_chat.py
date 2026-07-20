@@ -212,41 +212,57 @@ def execute_action(
     confirmed: bool = False,
     typed_confirm: str | None = None,
 ) -> AssistantAction:
-    spec = get_action_spec(action.action_type)
-    if spec is None or spec.handler is None:
-        action.status = AssistantAction.STATUS_FAILED
-        action.error = f"Unknown assistant action: {action.action_type}"
-        action.completed_at = timezone.now()
-        action.save(update_fields=["status", "error", "completed_at", "updated_at"])
-        return action
-
-    if not feature_allowed_for_user(action.user, spec.required_feature):
-        action.status = AssistantAction.STATUS_FAILED
-        action.error = f"Feature access required: {spec.required_feature}"
-        action.completed_at = timezone.now()
-        action.save(update_fields=["status", "error", "completed_at", "updated_at"])
-        return action
-
-    if action.requires_confirmation and not confirmed:
-        action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
-        action.save(update_fields=["status", "updated_at"])
-        return action
-
-    if confirmed:
-        from core_ui.services.operator_security import validate_typed_confirm
-
-        typed_error = validate_typed_confirm(action, typed_confirm)
-        if typed_error:
-            action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
-            action.error = typed_error
-            action.save(update_fields=["status", "error", "updated_at"])
+    # Atomically claim the action before invoking a side-effecting handler.  A
+    # second tab/worker that confirms the same id observes RUNNING/COMPLETED and
+    # returns without executing it again.
+    with transaction.atomic():
+        action = (
+            AssistantAction.objects.select_for_update()
+            .select_related("user", "session", "message")
+            .get(pk=action.pk)
+        )
+        spec = get_action_spec(action.action_type)
+        if action.status in {
+            AssistantAction.STATUS_RUNNING,
+            AssistantAction.STATUS_COMPLETED,
+            AssistantAction.STATUS_FAILED,
+            AssistantAction.STATUS_CANCELLED,
+        }:
+            return action
+        if spec is None or spec.handler is None:
+            action.status = AssistantAction.STATUS_FAILED
+            action.error = f"Unknown assistant action: {action.action_type}"
+            action.completed_at = timezone.now()
+            action.save(update_fields=["status", "error", "completed_at", "updated_at"])
             return action
 
-    action.status = AssistantAction.STATUS_RUNNING
-    if confirmed:
-        action.confirmed_at = timezone.now()
-        action.error = ""
-    action.save(update_fields=["status", "confirmed_at", "error", "updated_at"])
+        if not feature_allowed_for_user(action.user, spec.required_feature):
+            action.status = AssistantAction.STATUS_FAILED
+            action.error = f"Feature access required: {spec.required_feature}"
+            action.completed_at = timezone.now()
+            action.save(update_fields=["status", "error", "completed_at", "updated_at"])
+            return action
+
+        if action.requires_confirmation and not confirmed:
+            action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
+            action.save(update_fields=["status", "updated_at"])
+            return action
+
+        if confirmed:
+            from core_ui.services.operator_security import validate_typed_confirm
+
+            typed_error = validate_typed_confirm(action, typed_confirm)
+            if typed_error:
+                action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
+                action.error = typed_error
+                action.save(update_fields=["status", "error", "updated_at"])
+                return action
+
+        action.status = AssistantAction.STATUS_RUNNING
+        if confirmed:
+            action.confirmed_at = timezone.now()
+            action.error = ""
+        action.save(update_fields=["status", "confirmed_at", "error", "updated_at"])
 
     try:
         result = spec.handler(
@@ -304,17 +320,19 @@ def execute_action(
 
 
 def cancel_action(action: AssistantAction) -> AssistantAction:
-    if action.status in {
-        AssistantAction.STATUS_COMPLETED,
-        AssistantAction.STATUS_FAILED,
-        AssistantAction.STATUS_CANCELLED,
-        AssistantAction.STATUS_RUNNING,
-    }:
+    with transaction.atomic():
+        action = AssistantAction.objects.select_for_update().get(pk=action.pk)
+        if action.status in {
+            AssistantAction.STATUS_COMPLETED,
+            AssistantAction.STATUS_FAILED,
+            AssistantAction.STATUS_CANCELLED,
+            AssistantAction.STATUS_RUNNING,
+        }:
+            return action
+        action.status = AssistantAction.STATUS_CANCELLED
+        action.completed_at = timezone.now()
+        action.save(update_fields=["status", "completed_at", "updated_at"])
         return action
-    action.status = AssistantAction.STATUS_CANCELLED
-    action.completed_at = timezone.now()
-    action.save(update_fields=["status", "completed_at", "updated_at"])
-    return action
 
 
 def handle_user_message(session: ChatSession, user, message: str, *, request=None) -> AssistantTurnResult:
@@ -328,6 +346,11 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
     text = str(message or "").strip()
     if not text:
         raise AssistantActionError("message is required")
+    from core_ui.services.operator_rate_limit import check_turn_rate_limit
+
+    rate_error = check_turn_rate_limit(session, message=text)
+    if rate_error:
+        raise AssistantActionError(rate_error, status=429)
 
     last_message_id = session.messages.order_by("-id").values_list("id", flat=True).first() or 0
 

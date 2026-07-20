@@ -107,15 +107,23 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         elif msg_type == "turn.stop":
             await self._handle_stop()
         elif msg_type == "action.confirm":
+            try:
+                action_id = int((content or {}).get("action_id") or 0)
+            except (TypeError, ValueError):
+                action_id = 0
             await self._handle_action(
-                int((content or {}).get("action_id") or 0),
+                action_id,
                 confirm=True,
                 typed_confirm=str((content or {}).get("typed_confirm") or "").strip() or None,
                 thinking=(content or {}).get("thinking"),
             )
         elif msg_type == "action.cancel":
+            try:
+                action_id = int((content or {}).get("action_id") or 0)
+            except (TypeError, ValueError):
+                action_id = 0
             await self._handle_action(
-                int((content or {}).get("action_id") or 0),
+                action_id,
                 confirm=False,
                 thinking=(content or {}).get("thinking"),
             )
@@ -126,6 +134,16 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         text = str(content.get("message") or "").strip()
         if not text:
             await self.send_json({"type": "error", "message": "message is required"})
+            return
+        from core_ui.services.operator_rate_limit import MAX_MESSAGE_CHARS
+
+        if len(text) > MAX_MESSAGE_CHARS:
+            await self.send_json(
+                {
+                    "type": "error",
+                    "message": f"Message is too large (max {MAX_MESSAGE_CHARS} characters).",
+                }
+            )
             return
         if self._chat_id is None:
             await self.send_json({"type": "error", "message": "Session not found"})

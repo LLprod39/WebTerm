@@ -21,7 +21,7 @@ def _redacted_result(payload: Any) -> Any:
     return redacted
 
 
-def specs_to_tools(user) -> list[dict[str, Any]]:
+def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
     """Build LLM tool list from registered action specs the user may access."""
     tools: list[dict[str, Any]] = []
     seen_names: set[str] = set()
@@ -56,7 +56,40 @@ def specs_to_tools(user) -> list[dict[str, Any]]:
         )
     from core_ui.services.operator_policy import filter_tools_for_policy
 
-    return filter_tools_for_policy(user, tools)
+    tools = filter_tools_for_policy(user, tools)
+    return _route_tools_for_message(tools, message)
+
+
+def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[dict[str, Any]]:
+    """Keep the full catalog for ambiguous asks, narrow it for clear domains."""
+    text = str(message or "").strip().lower()
+    if not text:
+        return tools
+    prefixes: set[str] = set()
+    if any(word in text for word in ("интернет", "веб", "web ", "cve", "документац", "release note", "найди онлайн")):
+        prefixes.add("web.")
+    if any(word in text for word in ("pipeline", "пайплайн", "studio", "скилл", "skill", "mcp")):
+        prefixes.add("studio.")
+    if any(word in text for word in ("агент", "agent", "run #", "отчёт рана", "отчет рана")):
+        prefixes.update({"agent.", "agents."})
+    if any(
+        word in text
+        for word in (
+            "сервер", "server", "флот", "метрик", "алерт", "диск", "ssh", "команд", "nginx",
+            "docker", "прогноз", "сертификат", "playbook", "плейбук", "runbook",
+        )
+    ):
+        prefixes.update({"operator.", "server."})
+    if not prefixes:
+        return tools
+    always = {"operator.propose_plan", "operator.resolve_server"}
+    selected = [
+        tool
+        for tool in tools
+        if str(tool.get("action_type") or "") in always
+        or any(str(tool.get("action_type") or "").startswith(prefix) for prefix in prefixes)
+    ]
+    return selected or tools
 
 
 def resolve_action_type(tool_name: str, tools: list[dict[str, Any]] | None = None) -> str | None:
@@ -168,6 +201,35 @@ def normalize_tool_arguments(user, action_type: str, arguments: dict[str, Any]) 
         if resolved:
             args["server_ids"] = resolved
 
+    return args
+
+
+def freeze_mutating_targets(user, action_type: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    """Resolve selector-based mutation targets before consent is requested.
+
+    Confirmation must describe an immutable set of targets.  In particular,
+    ``operator.run_fanout`` used to resolve ``tag`` (or the whole fleet) only
+    inside the handler, after the user had clicked confirm.  Snapshot the
+    accessible server ids now so typed-confirm and approved-plan matching see
+    the real blast radius.
+    """
+    args = dict(arguments or {})
+    if action_type != "operator.run_fanout":
+        return args
+
+    raw_ids = args.get("server_ids")
+    if isinstance(raw_ids, list) and raw_ids:
+        return args
+
+    from servers.views.server_helpers import _accessible_servers_queryset
+
+    qs = _accessible_servers_queryset(user)
+    tag = str(args.get("tag") or "").strip()
+    if tag:
+        qs = qs.filter(tags__icontains=tag)
+    ids = list(qs.order_by("name").values_list("id", flat=True)[:30])
+    if ids:
+        args["server_ids"] = [int(value) for value in ids]
     return args
 
 

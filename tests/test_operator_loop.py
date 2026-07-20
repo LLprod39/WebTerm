@@ -217,7 +217,13 @@ def test_operator_loop_auto_executes_approved_plan_step(operator_user):
                 "title": "Проверка",
                 "status": "approved",
                 "steps": [
-                    {"id": 1, "text": "run mutate", "tool": "operator_test_mutate", "status": "pending"}
+                    {
+                        "id": 1,
+                        "text": "run mutate",
+                        "tool": "operator.test_mutate",
+                        "input": {"command": "df -h"},
+                        "status": "pending",
+                    }
                 ],
             }
         },

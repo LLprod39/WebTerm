@@ -19,6 +19,7 @@ from .views import (
     server_monitoring_actions,
     server_ops,
     server_pages,
+    server_playbook_compatibility_views,
     server_playbooks,
     server_shares,
     snapshot_views,
@@ -299,5 +300,25 @@ urlpatterns = [
     path("api/playbooks/<int:playbook_id>/update/", server_playbooks.playbook_update, name="playbook_update"),
     path("api/playbooks/<int:playbook_id>/delete/", server_playbooks.playbook_delete, name="playbook_delete"),
     path("api/playbooks/<int:playbook_id>/duplicate/", server_playbooks.playbook_duplicate, name="playbook_duplicate"),
+    path(
+        "api/playbooks/<int:playbook_id>/compatibility/analyze/",
+        server_playbook_compatibility_views.playbook_compatibility_analyze,
+        name="playbook_compatibility_analyze",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/compatibility/adapt/",
+        server_playbook_compatibility_views.playbook_compatibility_adapt,
+        name="playbook_compatibility_adapt",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/compatibility/apply/",
+        server_playbook_compatibility_views.playbook_compatibility_apply,
+        name="playbook_compatibility_apply",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/compatibility/revisions/",
+        server_playbook_compatibility_views.playbook_compatibility_revisions,
+        name="playbook_compatibility_revisions",
+    ),
     path("api/playbooks/<int:playbook_id>/run/", server_playbooks.playbook_run, name="playbook_run"),
 ]

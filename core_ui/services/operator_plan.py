@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from core_ui.models import ChatMessage, ChatTurnState
@@ -14,16 +15,20 @@ def normalize_plan(raw: dict[str, Any] | None) -> dict[str, Any] | None:
     steps = []
     for i, step in enumerate(steps_in[:20]):
         if isinstance(step, dict):
+            step_input = step.get("input") if isinstance(step.get("input"), dict) else {}
             steps.append(
                 {
                     "id": int(step.get("id") or i + 1),
                     "text": str(step.get("text") or step.get("description") or "")[:400],
                     "tool": str(step.get("tool") or "")[:80],
+                    "input": step_input,
                     "status": str(step.get("status") or "pending"),
                 }
             )
         else:
-            steps.append({"id": i + 1, "text": str(step)[:400], "tool": "", "status": "pending"})
+            steps.append(
+                {"id": i + 1, "text": str(step)[:400], "tool": "", "input": {}, "status": "pending"}
+            )
     if not steps:
         return None
     return {
@@ -55,6 +60,37 @@ def save_plan_to_message(message: ChatMessage, plan: dict[str, Any]) -> dict[str
     message.metadata = meta
     message.save(update_fields=["metadata"])
     return plan
+
+
+def approved_plan_step_matches(
+    plan: dict[str, Any] | None,
+    *,
+    action_type: str,
+    input_payload: dict[str, Any],
+) -> bool:
+    """Return True only when an approved pending step exactly matches a call.
+
+    A plan approval is consent for the payload shown in that plan, not a blank
+    cheque for any later model mutation.  Legacy/text-only plans deliberately
+    fail closed and fall back to an individual confirmation card.
+    """
+    normalized = normalize_plan(plan)
+    if not normalized or normalized.get("status") not in {"approved", "running"}:
+        return False
+
+    action_key = str(action_type or "").strip().lower().replace("_", ".")
+    actual = json.dumps(input_payload or {}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    for step in normalized.get("steps") or []:
+        if step.get("status") != "pending":
+            continue
+        tool_key = str(step.get("tool") or "").strip().lower().replace("_", ".")
+        planned_input = step.get("input") if isinstance(step.get("input"), dict) else {}
+        if not tool_key or not planned_input:
+            continue
+        expected = json.dumps(planned_input, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        if tool_key == action_key and expected == actual:
+            return True
+    return False
 
 
 def mark_plan_approved(plan: dict[str, Any]) -> dict[str, Any]:
@@ -94,12 +130,7 @@ def advance_plan_on_action(
             target = step
             break
     if target is None:
-        for step in steps:
-            if step.get("status") == "pending":
-                target = step
-                break
-    if target is None:
-        plan["status"] = "completed" if all(s.get("status") in {"done", "completed", "skipped"} for s in steps) else plan.get("status")
+        # Never attribute an unrelated model action to the next plan step.
         return plan
     target["status"] = "done" if ok else "failed"
     if all(s.get("status") in {"done", "completed", "failed", "skipped"} for s in steps):

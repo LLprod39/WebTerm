@@ -71,3 +71,19 @@ def test_inventory_ini():
     assert "app-01 ansible_host=10.0.0.1" in inv
     assert "[web]" in inv
     assert "ansible_connection=ssh" in inv
+
+
+def test_role_only_playbook_is_kept_for_real_ansible_validation():
+    mod = _load_parser_module()
+    result = mod.parse_ansible_playbook(
+        """
+- name: Role based deploy
+  hosts: web
+  roles:
+    - geerlingguy.nginx
+""",
+        "roles.yml",
+    )
+    assert result["kind"] == "ansible"
+    assert result["tasks"] == []
+    assert "roles" in result["fidelity"]["unsupported_modules"]

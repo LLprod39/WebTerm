@@ -1,10 +1,19 @@
 import { ChevronDown, GripVertical, Plus, Save, X } from "lucide-react";
-import type { PlaybookCategory, PlaybookKind, PlaybookTask, PlaybookVisibility } from "@/api/playbooks";
+import type {
+  PlaybookCategory,
+  PlaybookCompatibilityReport,
+  PlaybookCompatibilityRevision,
+  PlaybookDetail,
+  PlaybookKind,
+  PlaybookTask,
+  PlaybookVisibility,
+} from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CATEGORIES, CATEGORY_META, newLocalTaskId } from "./constants";
+import { PlaybookCompatibilityPanel } from "./PlaybookCompatibilityPanel";
 
 export interface PlaybookEditorState {
   name: string;
@@ -14,6 +23,9 @@ export interface PlaybookEditorState {
   visibility: PlaybookVisibility;
   tagsText: string;
   tasks: PlaybookTask[];
+  sourceYaml: string;
+  compatibility: PlaybookCompatibilityReport;
+  activeCompatibilityRevision: PlaybookCompatibilityRevision | null;
 }
 
 interface PlaybookEditorProps {
@@ -25,6 +37,8 @@ interface PlaybookEditorProps {
   onBack: () => void;
   onRun: () => void;
   title: string;
+  playbookId: number | null;
+  onCompatibilityApplied: (playbook: PlaybookDetail) => void;
 }
 
 export function PlaybookEditor({
@@ -36,6 +50,8 @@ export function PlaybookEditor({
   onBack,
   onRun,
   title,
+  playbookId,
+  onCompatibilityApplied,
 }: PlaybookEditorProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
 
@@ -68,7 +84,7 @@ export function PlaybookEditor({
 
   const canSave =
     Boolean(String(state.name ?? "").trim()) &&
-    state.tasks.some((t) => Boolean(String(t?.command ?? "").trim()));
+    (Boolean(state.sourceYaml.trim()) || state.tasks.some((t) => Boolean(String(t?.command ?? "").trim())));
 
   return (
     <section className="space-y-4">
@@ -92,6 +108,32 @@ export function PlaybookEditor({
 
       <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
         <div className="space-y-4">
+          {state.sourceYaml ? (
+            <>
+              <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
+                <div>
+                  <h3 className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
+                    {tr("Оригинальный Ansible YAML", "Original Ansible YAML")}
+                  </h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {tr(
+                      "Хранится неизменным. Для выполнения используется только проверенная ревизия или runtime-привязка inventory.",
+                      "Preserved unchanged. Execution uses a validated revision or runtime inventory binding.",
+                    )}
+                  </p>
+                </div>
+                <Textarea value={state.sourceYaml} readOnly className="min-h-80 bg-background font-mono text-xs" />
+              </div>
+              <PlaybookCompatibilityPanel
+                lang={lang}
+                playbookId={playbookId}
+                sourceYaml={state.sourceYaml}
+                report={state.activeCompatibilityRevision?.report || state.compatibility}
+                activeRevision={state.activeCompatibilityRevision}
+                onApplied={onCompatibilityApplied}
+              />
+            </>
+          ) : (
           <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
@@ -114,6 +156,7 @@ export function PlaybookEditor({
               </div>
             </div>
           </div>
+          )}
 
           <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
             <div className="flex items-center justify-between">
@@ -239,7 +282,8 @@ export function PlaybookEditor({
             <ul className="list-disc space-y-1 pl-4">
               <li>{tr("Каждая задача выполняется через ansible.builtin.shell", "Each task runs via ansible.builtin.shell")}</li>
               <li>{tr("Inventory строится из ваших серверов и групп", "Inventory is built from your servers & groups")}</li>
-              <li>{tr("Импортированный YAML запускается как есть", "Imported YAML runs as-is with ansible-playbook")}</li>
+              <li>{tr("Импортированный YAML проходит compatibility gate", "Imported YAML passes a compatibility gate")}</li>
+              <li>{tr("Привязка hosts не меняет оригинал", "Host binding never changes the original")}</li>
             </ul>
           </div>
         </aside>

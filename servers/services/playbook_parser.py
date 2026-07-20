@@ -223,6 +223,7 @@ def parse_ansible_playbook(content: str, filename: str = "playbook.yml") -> dict
     description = ""
     unsupported: list[str] = []
     hosts_hint = ""
+    has_ansible_content = False
 
     for play in plays:
         if not isinstance(play, dict):
@@ -236,15 +237,18 @@ def parse_ansible_playbook(content: str, filename: str = "playbook.yml") -> dict
             hosts_hint = ",".join(str(h) for h in play["hosts"])
             description = f"hosts: {hosts_hint}"
 
+        if play.get("roles"):
+            has_ansible_content = True
+            unsupported.append("roles")
+
         for section in ("pre_tasks", "tasks", "post_tasks", "handlers"):
+            if play.get(section):
+                has_ansible_content = True
             for raw in _as_list(play.get(section)):
                 if not isinstance(raw, dict):
                     continue
                 # Expand blocks shallowly
-                if "block" in raw and isinstance(raw["block"], list):
-                    block_items = raw["block"]
-                else:
-                    block_items = [raw]
+                block_items = raw["block"] if "block" in raw and isinstance(raw["block"], list) else [raw]
 
                 for item in block_items:
                     if not isinstance(item, dict):
@@ -268,7 +272,7 @@ def parse_ansible_playbook(content: str, filename: str = "playbook.yml") -> dict
                         }
                     )
 
-    if not tasks:
+    if not tasks and not has_ansible_content:
         raise ValueError(
             "No tasks found. Use shell/command/apt/yum/systemd/file/git/pip modules, or create a runbook manually."
         )

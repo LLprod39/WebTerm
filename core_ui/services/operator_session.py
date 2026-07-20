@@ -9,6 +9,7 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from django.db import transaction
 
+from app.egress_redaction import redact_egress_payload
 from core_ui.activity import log_user_activity
 from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState, UserActivityLog
 from core_ui.services.operator_loop import (
@@ -32,18 +33,31 @@ async def resume_after_action(
     cancelled: bool = False,
 ) -> OperatorTurnResult | None:
     """Resume a parked turn after confirm/cancel of a mutating tool."""
-    turn = await sync_to_async(
-        lambda: ChatTurnState.objects.filter(
-            pending_action=action,
-            status=ChatTurnState.STATUS_AWAITING_CONFIRM,
-        )
-        .select_related("session", "assistant_message", "user_message", "pending_action")
-        .first()
-    )()
+    def _claim_turn():
+        with transaction.atomic():
+            claimed = (
+                ChatTurnState.objects.select_for_update()
+                .filter(
+                    pending_action=action,
+                    status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+                )
+                .select_related("session", "assistant_message", "user_message", "pending_action")
+                .first()
+            )
+            if claimed is None:
+                return None
+            claimed.status = ChatTurnState.STATUS_RESUMING
+            claimed.save(update_fields=["status", "updated_at"])
+            return claimed
+
+    turn = await sync_to_async(_claim_turn)()
     if turn is None:
         return None
 
-    user = action.user
+    # ``action`` is often passed in without its related user cached. Resolve the
+    # relation in the sync worker so resume remains safe under Django's async ORM
+    # guard.
+    user = await sync_to_async(lambda: action.user)()
     # specs_to_tools already applies pilot policy filter
     tools = await sync_to_async(specs_to_tools)(user)
     messages = list(turn.llm_messages or [])
@@ -138,11 +152,18 @@ async def resume_after_action(
                 status=turn.status,
             )
 
+        safe_envelope, _redaction_report, _redaction_hashes = redact_egress_payload(
+            {
+                "result": action.result_payload if isinstance(action.result_payload, dict) else {},
+                "error": action.error,
+            }
+        )
+        safe_envelope = safe_envelope if isinstance(safe_envelope, dict) else {}
         result_payload = {
             "ok": action.status == AssistantAction.STATUS_COMPLETED,
             "status": action.status,
-            "result": action.result_payload,
-            "error": action.error,
+            "result": safe_envelope.get("result") or {},
+            "error": safe_envelope.get("error") or "",
         }
         result_content = truncate_tool_result(result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS)
         await _emit(
@@ -251,8 +272,9 @@ async def resume_after_async_result(
     tool_call = dict(turn.pending_tool_call or {})
     tool_id = str(tool_call.get("id") or f"async_{tool_name}")
 
+    safe_async_result, _redaction_report, _redaction_hashes = redact_egress_payload(result_payload)
     content = truncate_tool_result(
-        {"ok": bool(result_payload.get("ok")), "result": result_payload},
+        {"ok": bool(result_payload.get("ok")), "result": safe_async_result},
         max_chars=TOOL_RESULT_PREVIEW_CHARS,
     )
     # If the original tool_use is still the last assistant turn, append tool_result;
@@ -319,7 +341,7 @@ def start_operator_turn(
 
     from core_ui.services.operator_rate_limit import check_turn_rate_limit
 
-    rate_err = check_turn_rate_limit(session)
+    rate_err = check_turn_rate_limit(session, message=text)
     if rate_err:
         raise ValueError(rate_err)
 
@@ -359,6 +381,19 @@ def start_operator_turn(
         raise ValueError("Turn is resuming — wait a moment and try again")
 
     with transaction.atomic():
+        # Serialize turn creation across ASGI workers/tabs.  The process-local
+        # task map is only a UX optimisation; the database is authoritative.
+        session = ChatSession.objects.select_for_update().get(pk=session.pk, user=user)
+        if ChatTurnState.objects.filter(
+            session=session,
+            status__in={
+                ChatTurnState.STATUS_RUNNING,
+                ChatTurnState.STATUS_AWAITING_CONFIRM,
+                ChatTurnState.STATUS_AWAITING_ASYNC,
+                ChatTurnState.STATUS_RESUMING,
+            },
+        ).exists():
+            raise ValueError("Turn already in progress — wait, confirm, or cancel it first")
         user_message = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=text)
         if session.messages.count() <= 1 or session.title in {"", "Новый чат"}:
             session.title = text[:80] or session.title
@@ -427,7 +462,7 @@ def start_operator_turn(
             llm_messages=history,
         )
 
-    tools = specs_to_tools(user)
+    tools = specs_to_tools(user, message=text)
     log_user_activity(
         user=user,
         request=request,

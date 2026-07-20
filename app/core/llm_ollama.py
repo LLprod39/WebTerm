@@ -29,7 +29,7 @@ class OllamaStreamRequest:
 def get_ollama_think_value(model_manager: Any) -> Any | None:
     # Per-turn override from Operator chat "thinking mode" toggle
     try:
-        from core_ui.services.operator_turn_runtime import operator_thinking_mode
+        from app.core.llm_context import operator_thinking_mode
 
         override = operator_thinking_mode.get()
         if override == "off":

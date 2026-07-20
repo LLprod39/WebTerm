@@ -7,23 +7,20 @@ Channels group ``operator_chat_{chat_id}`` so reconnecting clients resume the st
 from __future__ import annotations
 
 import asyncio
-import contextvars
+import contextlib
+from datetime import timedelta
 from typing import Any
 
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
+from django.utils import timezone
 from loguru import logger
 
+from app.core.llm_context import operator_thinking_mode
 from core_ui.models import ChatTurnState
 from core_ui.services.assistant_chat import cancel_action, execute_action, serialize_action
 from core_ui.services.operator_loop import OperatorTurnResult
 from core_ui.services.operator_session import handle_operator_message, resume_after_action
-
-# Per-request thinking override for LLM providers (None = use global settings)
-operator_thinking_mode: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "operator_thinking_mode",
-    default=None,
-)
 
 _ACTIVE_TASKS: dict[int, asyncio.Task[Any]] = {}
 _ACTIVE_META: dict[int, dict[str, Any]] = {}
@@ -125,6 +122,13 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
     """Return a reconnect snapshot if a turn is still open for this chat."""
 
     def _load() -> dict[str, Any] | None:
+        stale_before = timezone.now() - timedelta(seconds=90)
+        ChatTurnState.objects.filter(
+            session_id=chat_id,
+            session__user_id=user_id,
+            status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
+            updated_at__lt=stale_before,
+        ).update(status=ChatTurnState.STATUS_FAILED, error="worker_heartbeat_lost")
         turn = (
             ChatTurnState.objects.filter(
                 session_id=chat_id,
@@ -287,14 +291,34 @@ async def _run_message_turn(
     # No explicit per-turn choice → pick a tier by intent (fast for simple asks).
     effective_thinking = thinking or classify_turn_thinking(message)
     token = operator_thinking_mode.set(effective_thinking)
+    work_task: asyncio.Task[OperatorTurnResult] | None = None
+    heartbeat_task: asyncio.Task[Any] | None = None
     try:
         async def on_event(event: dict[str, Any]) -> None:
             await broadcast_operator_event(chat_id, event)
 
-        result: OperatorTurnResult = await asyncio.wait_for(
+        work_task = asyncio.create_task(
             handle_operator_message(session, user, message, on_event=on_event),
-            timeout=300,
+            name=f"operator-work-{chat_id}",
         )
+
+        async def _heartbeat() -> None:
+            while work_task is not None and not work_task.done():
+                await asyncio.sleep(10)
+                touched = await sync_to_async(
+                    lambda: ChatTurnState.objects.filter(
+                        session_id=chat_id,
+                        session__user_id=user.id,
+                        status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
+                    ).update(updated_at=timezone.now())
+                )()
+                # A different worker/user stop closed the DB state.
+                if touched == 0 and work_task is not None and not work_task.done():
+                    work_task.cancel()
+                    return
+
+        heartbeat_task = asyncio.create_task(_heartbeat(), name=f"operator-heartbeat-{chat_id}")
+        result = await asyncio.wait_for(work_task, timeout=300)
         await broadcast_operator_event(
             chat_id,
             {
@@ -306,6 +330,13 @@ async def _run_message_turn(
             },
         )
     except asyncio.TimeoutError:
+        await sync_to_async(
+            lambda: ChatTurnState.objects.filter(
+                session_id=chat_id,
+                session__user_id=user.id,
+                status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
+            ).update(status=ChatTurnState.STATUS_FAILED, error="turn_timeout")
+        )()
         await broadcast_operator_event(
             chat_id,
             {
@@ -322,6 +353,10 @@ async def _run_message_turn(
             {"type": "error", "message": str(exc) or "Operator turn failed"},
         )
     finally:
+        if heartbeat_task is not None and not heartbeat_task.done():
+            heartbeat_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await heartbeat_task
         operator_thinking_mode.reset(token)
         _ACTIVE_TASKS.pop(int(chat_id), None)
         _ACTIVE_META.pop(int(chat_id), None)
@@ -351,6 +386,13 @@ async def _run_action_turn(
             chat_id,
             {"type": "action_update", "action": serialize_action(action)},
         )
+
+        if confirm and action.status == action.STATUS_RUNNING:
+            await broadcast_operator_event(
+                chat_id,
+                {"type": "error", "message": "Action is already running in another worker."},
+            )
+            return
 
         if confirm and action.status == action.STATUS_REQUIRES_CONFIRMATION and action.error:
             await broadcast_operator_event(chat_id, {"type": "error", "message": action.error})

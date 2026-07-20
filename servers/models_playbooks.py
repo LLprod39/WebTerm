@@ -52,6 +52,18 @@ class Playbook(models.Model):
         blank=True,
         help_text="Import fidelity: runnable/total/unsupported modules",
     )
+    compatibility = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Latest deterministic Ansible compatibility report",
+    )
+    active_compatibility_revision = models.ForeignKey(
+        "PlaybookCompatibilityRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="active_for_playbooks",
+    )
     is_template_clone = models.BooleanField(default=False)
     template_slug = models.CharField(max_length=80, blank=True, default="")
     last_run_at = models.DateTimeField(null=True, blank=True)
@@ -73,6 +85,42 @@ class Playbook(models.Model):
     @property
     def task_count(self) -> int:
         return len(self.tasks) if isinstance(self.tasks, list) else 0
+
+
+class PlaybookCompatibilityRevision(models.Model):
+    """AI/deterministic adaptation proposal that never overwrites source_yaml."""
+
+    STATUS_DRAFT = "draft"
+    STATUS_VALIDATED = "validated"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_VALIDATED, "Validated"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
+    playbook = models.ForeignKey(Playbook, on_delete=models.CASCADE, related_name="compatibility_revisions")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="playbook_compatibility_revisions")
+    source_hash = models.CharField(max_length=64)
+    adapted_yaml = models.TextField()
+    inventory_bindings = models.JSONField(default=dict, blank=True)
+    report = models.JSONField(default=dict, blank=True)
+    semantic_guard = models.JSONField(default=dict, blank=True)
+    change_summary = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["playbook", "-created_at"],
+                name="servers_pla_playboo_compat_idx",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Compatibility revision #{self.pk} for {self.playbook_id} ({self.status})"
 
 
 class PlaybookRun(models.Model):

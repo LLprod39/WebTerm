@@ -66,7 +66,7 @@ def _grok_reasoning_effort(model: str, *, purpose: str = "") -> str | None:
 
     # Per-turn override from Operator chat thinking toggle
     try:
-        from core_ui.services.operator_turn_runtime import operator_thinking_mode
+        from app.core.llm_context import operator_thinking_mode
 
         override = operator_thinking_mode.get()
         if override == "off":

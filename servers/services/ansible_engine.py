@@ -86,6 +86,7 @@ def run_ansible_playbook(
     forks: int = 5,
     cancel_check=None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
+    inventory_binding_groups: dict[str, list[int]] | None = None,
 ) -> dict[str, Any]:
     """Execute ansible-playbook and return structured host results.
 
@@ -122,7 +123,12 @@ def run_ansible_playbook(
     try:
         pb_path = workdir / "playbook.yml"
         pb_path.write_text(playbook_yaml, encoding="utf-8")
-        inv_path, _cleanup_keys = _write_inventory(workdir, servers, master_password=master_password)
+        inv_path, _cleanup_keys = _write_inventory(
+            workdir,
+            servers,
+            master_password=master_password,
+            binding_groups=inventory_binding_groups,
+        )
         _build_ansible_cfg(workdir)
 
         inv_preview = inv_path.read_text(encoding="utf-8")

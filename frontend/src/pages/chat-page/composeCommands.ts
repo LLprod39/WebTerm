@@ -96,6 +96,21 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     build: () => "Сделай краткий операторский брифинг: алерты, прогнозы, худшие серверы.",
   },
   {
+    id: "web",
+    trigger: "web",
+    labelRu: "Веб-поиск",
+    labelEn: "Web research",
+    hintRu: "Найти свежие публичные источники и дать ссылки",
+    hintEn: "Find current public sources and include citations",
+    kind: "send",
+    build: (args) => {
+      const query = args.trim();
+      if (!query) return "Найди в интернете актуальные публичные источники по теме и дай ответ со ссылками.";
+      return `Найди в интернете актуальные публичные источники по запросу: «${query}». Проверь источники и дай ответ со ссылками.`;
+    },
+    keywords: ["search", "internet", "источники", "поиск"],
+  },
+  {
     id: "run",
     trigger: "run",
     labelRu: "Команда",

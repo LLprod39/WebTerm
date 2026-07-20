@@ -163,6 +163,11 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     forks=concurrency,
                     cancel_check=lambda: _is_cancelled(run_id),
                     progress_callback=_on_ansible_progress,
+                    inventory_binding_groups=(
+                        options.get("inventory_binding_groups")
+                        if isinstance(options.get("inventory_binding_groups"), dict)
+                        else None
+                    ),
                 )
                 host_results = result.get("host_results") or []
                 summary = result.get("summary") or _summarize(host_results)

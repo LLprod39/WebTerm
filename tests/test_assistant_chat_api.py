@@ -6,6 +6,7 @@ from django.test import Client
 
 from app.assistant_actions import AssistantActionSpec, register_action
 from core_ui.models import AssistantAction, ChatSession, UserAppPermission
+from core_ui.services.operator_rate_limit import MAX_MESSAGE_CHARS
 from servers.models import ServerAgent
 
 
@@ -44,6 +45,57 @@ def test_assistant_chat_requires_orchestrator_feature():
 
     assert response.status_code == 403
     assert response.json()["error"] == "Forbidden"
+
+
+@pytest.mark.django_db
+def test_assistant_chat_rejects_oversized_message_without_creating_session():
+    user = User.objects.create_user(username="chat-message-limit", password="x")
+    _grant_feature(user, "orchestrator")
+    client = Client()
+    client.force_login(user)
+
+    response = client.post(
+        "/api/assistant/chats/message/",
+        data=_json({"message": "x" * (MAX_MESSAGE_CHARS + 1)}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 413
+    assert ChatSession.objects.filter(user=user).count() == 0
+
+
+@pytest.mark.django_db
+def test_duplicate_confirm_does_not_resume_while_other_worker_runs(monkeypatch):
+    user = User.objects.create_user(username="chat-confirm-race", password="x")
+    _grant_feature(user, "orchestrator")
+    session = ChatSession.objects.create(user=user, title="Confirm race")
+    action = AssistantAction.objects.create(
+        user=user,
+        session=session,
+        action_type="test.confirm.race",
+        status=AssistantAction.STATUS_REQUIRES_CONFIRMATION,
+        risk=AssistantAction.RISK_MUTATING,
+        requires_confirmation=True,
+    )
+    client = Client()
+    client.force_login(user)
+    resumed = False
+
+    def fake_execute(current, **_kwargs):
+        current.status = AssistantAction.STATUS_RUNNING
+        return current
+
+    def fake_resume(*_args, **_kwargs):
+        nonlocal resumed
+        resumed = True
+
+    monkeypatch.setattr("core_ui.views.assistant_chat_views.execute_action", fake_execute)
+    monkeypatch.setattr("core_ui.views.assistant_chat_views._resume_operator_if_parked", fake_resume)
+
+    response = client.post(f"/api/assistant/actions/{action.pk}/confirm/", data={})
+
+    assert response.status_code == 202
+    assert resumed is False
 
 
 @pytest.mark.django_db

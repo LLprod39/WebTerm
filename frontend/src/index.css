@@ -1158,16 +1158,16 @@
     border-radius: 0 !important;
   }
 
-  html[data-ui-style="signal"] button[class*="bg-primary"],
-  html[data-ui-style="signal"] a[class*="bg-primary"] {
+  html[data-ui-style="signal"] button[class~="bg-primary"],
+  html[data-ui-style="signal"] a[class~="bg-primary"] {
     box-shadow: 3px 3px 0 hsl(0 0% 0%);
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
 
-  html[data-ui-style="signal"] button[class*="bg-primary"]:hover,
-  html[data-ui-style="signal"] a[class*="bg-primary"]:hover {
+  html[data-ui-style="signal"] button[class~="bg-primary"]:hover,
+  html[data-ui-style="signal"] a[class~="bg-primary"]:hover {
     box-shadow: 1px 1px 0 hsl(0 0% 0%);
     transform: translate(1px, 1px);
   }
@@ -1267,15 +1267,15 @@
     border-radius: calc(var(--radius) - 0.2rem);
   }
 
-  html[data-ui-style="folio"] button[class*="bg-primary"],
-  html[data-ui-style="folio"] a[class*="bg-primary"] {
+  html[data-ui-style="folio"] button[class~="bg-primary"],
+  html[data-ui-style="folio"] a[class~="bg-primary"] {
     font-weight: 700;
     letter-spacing: 0.02em;
     box-shadow: 0 1px 0 hsl(36 30% 92% / 0.2) inset, var(--shadow-1);
   }
 
-  html[data-ui-style="folio"] button[class*="bg-primary"]:hover,
-  html[data-ui-style="folio"] a[class*="bg-primary"]:hover {
+  html[data-ui-style="folio"] button[class~="bg-primary"]:hover,
+  html[data-ui-style="folio"] a[class~="bg-primary"]:hover {
     filter: brightness(0.96);
   }
 
@@ -1399,19 +1399,19 @@
     border-radius: calc(var(--radius) - 0.2rem);
   }
 
-  html[data-ui-style="folio"] button[class*="bg-primary"],
-  html[data-ui-style="folio"] a[class*="bg-primary"],
-  html[data-ui-style="folio-dark"] button[class*="bg-primary"],
-  html[data-ui-style="folio-dark"] a[class*="bg-primary"] {
+  html[data-ui-style="folio"] button[class~="bg-primary"],
+  html[data-ui-style="folio"] a[class~="bg-primary"],
+  html[data-ui-style="folio-dark"] button[class~="bg-primary"],
+  html[data-ui-style="folio-dark"] a[class~="bg-primary"] {
     font-weight: 700;
     letter-spacing: 0.02em;
     box-shadow: var(--shadow-1);
   }
 
-  html[data-ui-style="folio"] button[class*="bg-primary"]:hover,
-  html[data-ui-style="folio"] a[class*="bg-primary"]:hover,
-  html[data-ui-style="folio-dark"] button[class*="bg-primary"]:hover,
-  html[data-ui-style="folio-dark"] a[class*="bg-primary"]:hover {
+  html[data-ui-style="folio"] button[class~="bg-primary"]:hover,
+  html[data-ui-style="folio"] a[class~="bg-primary"]:hover,
+  html[data-ui-style="folio-dark"] button[class~="bg-primary"]:hover,
+  html[data-ui-style="folio-dark"] a[class~="bg-primary"]:hover {
     filter: brightness(0.96);
   }
 
@@ -1568,15 +1568,15 @@
     border-radius: calc(var(--radius) - 0.25rem);
   }
 
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"],
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"] {
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class~="bg-primary"],
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class~="bg-primary"] {
     font-weight: 600;
     letter-spacing: 0;
     box-shadow: var(--shadow-1);
   }
 
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class~="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class~="bg-primary"]:hover {
     background: hsl(var(--primary-hover));
   }
 
@@ -1697,14 +1697,14 @@
       transform 200ms var(--ease-standard);
   }
 
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:hover,
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:hover {
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class~="bg-primary"]:hover,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class~="bg-primary"]:hover {
     transform: translateY(-1px);
     box-shadow: var(--shadow-2);
   }
 
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class*="bg-primary"]:active,
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class*="bg-primary"]:active {
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) button[class~="bg-primary"]:active,
+  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) a[class~="bg-primary"]:active {
     transform: translateY(0);
     box-shadow: var(--shadow-1);
   }

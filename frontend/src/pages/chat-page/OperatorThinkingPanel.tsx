@@ -83,7 +83,7 @@ export function OperatorThinkingPanel({
 
   useEffect(() => {
     if (hasReasoningStream || reasoningText.trim()) {
-      setExpanded(preferExpanded || true);
+      setExpanded(preferExpanded);
     }
   }, [hasReasoningStream, reasoningText, preferExpanded]);
 

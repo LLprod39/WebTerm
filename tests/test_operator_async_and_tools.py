@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from django.contrib.auth.models import User
@@ -158,8 +157,8 @@ def test_prepare_list_servers_arguments_policy():
     from servers.operator_tools import (
         extract_server_hint,
         normalize_host_hint,
-        prepare_list_servers_arguments,
         prefer_resolve_server_for_message,
+        prepare_list_servers_arguments,
         user_wants_inventory_card,
     )
 
@@ -358,6 +357,26 @@ def test_normalize_tool_arguments():
     # A named host collapses into server_id.
     out = normalize_tool_arguments(user, "operator.server_metrics", {"host": "grafana-1"})
     assert out["server_id"] == srv.id
+
+
+@pytest.mark.django_db
+def test_freeze_fanout_targets_snapshots_accessible_servers():
+    from core_ui.services.operator_tools import freeze_mutating_targets
+    from servers.models import Server
+
+    user = User.objects.create_user(username="fanout-freeze", password="x")
+    other = User.objects.create_user(username="fanout-other", password="x")
+    _grant(user, "servers")
+    prod = Server.objects.create(user=user, name="prod-1", host="10.0.0.11", tags="prod")
+    Server.objects.create(user=user, name="stage-1", host="10.0.0.12", tags="stage")
+    Server.objects.create(user=other, name="prod-other", host="10.0.0.13", tags="prod")
+
+    frozen = freeze_mutating_targets(
+        user,
+        "operator.run_fanout",
+        {"tag": "prod", "command": "uptime"},
+    )
+    assert frozen["server_ids"] == [prod.id]
 
 
 @pytest.mark.django_db

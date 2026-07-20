@@ -9,13 +9,18 @@ import pytest
 from django.contrib.auth.models import User
 
 from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
-from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState, UserAppPermission
+from core_ui.models import ChatMessage, ChatSession, ChatTurnState, UserAppPermission
 from core_ui.services.operator_loop import handle_operator_message
-from core_ui.services.operator_plan import advance_plan_on_action, apply_plan_progress, mark_plan_approved
+from core_ui.services.operator_plan import (
+    advance_plan_on_action,
+    apply_plan_progress,
+    approved_plan_step_matches,
+    mark_plan_approved,
+)
 from core_ui.services.operator_policy import filter_tools_for_policy, is_pilot_restricted_operator
 from core_ui.services.operator_tools import specs_to_tools
-from servers.operator_tools import register_operator_tools
 from servers.operator_mutate_tools import register_operator_mutate_tools
+from servers.operator_tools import register_operator_tools
 
 
 def _grant(user: User, *features: str) -> None:
@@ -187,3 +192,34 @@ def test_apply_plan_progress_on_message():
     assert plan is not None
     msg.refresh_from_db()
     assert msg.metadata["plan"]["steps"][0]["status"] == "done"
+
+
+def test_approved_plan_requires_exact_tool_and_payload():
+    plan = {
+        "title": "Deploy",
+        "status": "approved",
+        "steps": [
+            {
+                "id": 1,
+                "text": "restart web",
+                "tool": "operator.run_command",
+                "input": {"server_id": 7, "command": "systemctl restart nginx"},
+                "status": "pending",
+            }
+        ],
+    }
+    assert approved_plan_step_matches(
+        plan,
+        action_type="operator.run_command",
+        input_payload={"server_id": 7, "command": "systemctl restart nginx"},
+    )
+    assert not approved_plan_step_matches(
+        plan,
+        action_type="operator.run_command",
+        input_payload={"server_id": 8, "command": "systemctl restart nginx"},
+    )
+    assert not approved_plan_step_matches(
+        plan,
+        action_type="operator.run_fanout",
+        input_payload={"server_ids": [7], "command": "systemctl restart nginx"},
+    )

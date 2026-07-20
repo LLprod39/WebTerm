@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Layers, Play, Server, Shield } from "lucide-react";
 import type { FrontendGroup, FrontendServer } from "@/lib/api";
-import { previewPlaybookInventory } from "@/api/playbooks";
+import {
+  previewPlaybookInventory,
+  type PlaybookCompatibilityReport,
+  type PlaybookInventoryBindings,
+} from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { StatusIndicator } from "@/components/StatusIndicator";
@@ -22,8 +26,11 @@ interface RunWizardProps {
     concurrency: number;
     dry_run: boolean;
     become: boolean;
+    inventory_bindings: PlaybookInventoryBindings;
   }) => void;
   ansibleAvailable?: boolean;
+  playbookId: number;
+  compatibility?: PlaybookCompatibilityReport;
 }
 
 export function RunWizard({
@@ -35,6 +42,8 @@ export function RunWizard({
   onBack,
   onConfirm,
   ansibleAvailable = false,
+  playbookId,
+  compatibility,
 }: RunWizardProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -46,6 +55,9 @@ export function RunWizard({
   const [inventory, setInventory] = useState("");
   const [resolvedCount, setResolvedCount] = useState(0);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [bindingChoices, setBindingChoices] = useState<Record<string, string>>({});
+  const [previewCompatibility, setPreviewCompatibility] = useState<PlaybookCompatibilityReport>({});
+  const hostSelectors = useMemo(() => compatibility?.host_selectors || [], [compatibility]);
 
   const onlineIds = useMemo(
     () => new Set(servers.filter((s) => s.status === "online").map((s) => s.id)),
@@ -70,6 +82,26 @@ export function RunWizard({
     });
   };
 
+  const bindingChoice = useCallback(
+    (selector: string) => bindingChoices[selector] || (hostSelectors.length === 1 ? "selected" : ""),
+    [bindingChoices, hostSelectors.length],
+  );
+
+  const buildBindings = useCallback((): PlaybookInventoryBindings => {
+    const result: PlaybookInventoryBindings = {};
+    hostSelectors.forEach((selector) => {
+      const choice = bindingChoice(selector);
+      if (choice === "selected") {
+        result[selector] = { server_ids: Array.from(serverIds), group_ids: Array.from(groupIds) };
+      } else if (choice.startsWith("group:")) {
+        result[selector] = { server_ids: [], group_ids: [Number(choice.slice(6))] };
+      } else if (choice.startsWith("server:")) {
+        result[selector] = { server_ids: [Number(choice.slice(7))], group_ids: [] };
+      }
+    });
+    return result;
+  }, [bindingChoice, groupIds, hostSelectors, serverIds]);
+
   useEffect(() => {
     if (step !== 3) return;
     let cancelled = false;
@@ -77,11 +109,14 @@ export function RunWizard({
     void previewPlaybookInventory({
       server_ids: Array.from(serverIds),
       group_ids: Array.from(groupIds),
+      playbook_id: playbookId,
+      inventory_bindings: buildBindings(),
     })
       .then((res) => {
         if (cancelled) return;
         setInventory(res.inventory || "");
         setResolvedCount(res.count || 0);
+        setPreviewCompatibility(res.compatibility || {});
       })
       .catch(() => {
         if (cancelled) return;
@@ -94,9 +129,10 @@ export function RunWizard({
     return () => {
       cancelled = true;
     };
-  }, [step, serverIds, groupIds]);
+  }, [step, serverIds, groupIds, playbookId, buildBindings]);
 
   const hasTargets = serverIds.size > 0 || groupIds.size > 0;
+  const bindingsComplete = hostSelectors.every((selector) => Boolean(bindingChoice(selector)));
 
   return (
     <section className="space-y-4">
@@ -129,6 +165,7 @@ export function RunWizard({
       </div>
 
       {step === 1 ? (
+        <div className="space-y-4">
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
             <div className="flex items-center justify-between">
@@ -206,6 +243,52 @@ export function RunWizard({
               ) : null}
             </div>
           </div>
+        </div>
+        {hostSelectors.length > 0 ? (
+          <div className="rounded-sm border border-primary/25 bg-primary/5 p-4 shadow-elev-1 space-y-3">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">{tr("Привязка hosts", "Host bindings")}</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {tr(
+                  "Исходный YAML не меняется. Для каждого селектора создаётся временная группа inventory.",
+                  "The source YAML remains unchanged. A temporary inventory group is created for each selector.",
+                )}
+              </p>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {hostSelectors.map((selector) => (
+                <label key={selector} className="space-y-1.5 rounded-sm border border-border bg-card p-3">
+                  <span className="font-mono text-xs font-medium text-foreground">hosts: {selector}</span>
+                  <select
+                    value={bindingChoice(selector)}
+                    onChange={(event) => setBindingChoices((previous) => ({ ...previous, [selector]: event.target.value }))}
+                    className="flex h-9 w-full rounded-sm border border-border bg-surface-0 px-2 text-xs text-foreground"
+                  >
+                    <option value="">{tr("Выберите цель", "Choose target")}</option>
+                    <option value="selected">{tr("Все выбранные выше", "All selected above")}</option>
+                    {groups
+                      .filter((group) => group.id != null && groupIds.has(group.id))
+                      .map((group) => (
+                        <option key={`group-${group.id}`} value={`group:${group.id}`}>
+                          {tr("Группа", "Group")}: {group.name}
+                        </option>
+                      ))}
+                    {servers
+                      .filter((server) => serverIds.has(server.id))
+                      .map((server) => (
+                        <option key={`server-${server.id}`} value={`server:${server.id}`}>
+                          {tr("Сервер", "Server")}: {server.name}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            {!bindingsComplete ? (
+              <p className="text-xs text-amber-400">{tr("Привяжите каждый hosts-селектор.", "Bind every hosts selector.")}</p>
+            ) : null}
+          </div>
+        ) : null}
         </div>
       ) : null}
 
@@ -291,7 +374,18 @@ export function RunWizard({
                 <dt className="text-muted-foreground">Check / dry-run</dt>
                 <dd className="font-mono text-foreground">{dryRun ? "yes" : "no"}</dd>
               </div>
+              {hostSelectors.length > 0 ? (
+                <div className="flex justify-between gap-4 py-1.5">
+                  <dt className="text-muted-foreground">{tr("Привязки hosts", "Host bindings")}</dt>
+                  <dd className="font-mono text-foreground">{Object.keys(buildBindings()).length}/{hostSelectors.length}</dd>
+                </div>
+              ) : null}
             </dl>
+            {(previewCompatibility.issues || []).some((issue) => issue.severity === "error") ? (
+              <p className="text-xs text-destructive">
+                {(previewCompatibility.issues || []).find((issue) => issue.severity === "error")?.message}
+              </p>
+            ) : null}
           </div>
           <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-2">
             <h3 className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -318,7 +412,7 @@ export function RunWizard({
           <Button
             size="sm"
             className="h-9 shadow-elev-1"
-            disabled={step === 1 && !hasTargets}
+            disabled={step === 1 && (!hasTargets || !bindingsComplete)}
             onClick={() => setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s))}
           >
             {tr("Далее", "Next")}
@@ -327,7 +421,13 @@ export function RunWizard({
           <Button
             size="sm"
             className="h-9 gap-1.5 px-5 shadow-elev-1"
-            disabled={running || resolvedCount === 0 || !ansibleAvailable}
+            disabled={
+              running ||
+              resolvedCount === 0 ||
+              !ansibleAvailable ||
+              !bindingsComplete ||
+              (previewCompatibility.issues || []).some((issue) => issue.severity === "error")
+            }
             onClick={() =>
               onConfirm({
                 server_ids: Array.from(serverIds),
@@ -335,6 +435,7 @@ export function RunWizard({
                 concurrency,
                 dry_run: dryRun,
                 become,
+                inventory_bindings: buildBindings(),
               })
             }
           >

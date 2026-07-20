@@ -18,6 +18,11 @@ from servers.services.ansible_engine import (
     generate_from_recipe,
     list_guided_recipes,
 )
+from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility
+from servers.services.playbook_compatibility_inventory import (
+    inventory_groups_from_bindings,
+    normalize_inventory_bindings,
+)
 from servers.services.playbook_parser import parse_ansible_playbook
 from servers.services.playbook_runner import (
     build_inventory_for_servers,
@@ -87,6 +92,8 @@ def playbook_create(request):
     tags = data.get("tags") if isinstance(data.get("tags"), list) else []
     tags = [str(t).strip() for t in tags if str(t).strip()][:20]
 
+    source_yaml = str(data.get("source_yaml") or "")[:200_000]
+    compatibility = analyze_playbook_compatibility(source_yaml) if source_yaml.strip() else {}
     pb = Playbook.objects.create(
         user=request.user,
         name=name[:200],
@@ -95,7 +102,8 @@ def playbook_create(request):
         category=category,
         visibility=visibility,
         tasks=tasks,
-        source_yaml=str(data.get("source_yaml") or "")[:200_000],
+        source_yaml=source_yaml,
+        compatibility=compatibility,
         tags=tags,
         fidelity=data.get("fidelity") if isinstance(data.get("fidelity"), dict) else {},
         is_template_clone=bool(data.get("is_template_clone")),
@@ -147,8 +155,14 @@ def playbook_update(request, playbook_id: int):
         pb.tasks = tasks
     if "tags" in data and isinstance(data["tags"], list):
         pb.tags = [str(t).strip() for t in data["tags"] if str(t).strip()][:20]
+    source_changed = False
     if "source_yaml" in data:
-        pb.source_yaml = str(data.get("source_yaml") or "")[:200_000]
+        next_source = str(data.get("source_yaml") or "")[:200_000]
+        source_changed = next_source != pb.source_yaml
+        pb.source_yaml = next_source
+        if source_changed:
+            pb.compatibility = analyze_playbook_compatibility(next_source) if next_source.strip() else {}
+            pb.active_compatibility_revision = None
     if "fidelity" in data and isinstance(data["fidelity"], dict):
         pb.fidelity = data["fidelity"]
     pb.save()
@@ -205,6 +219,7 @@ def playbook_duplicate(request, playbook_id: int):
         source_yaml=pb.source_yaml,
         tags=list(pb.tags or []),
         fidelity=dict(pb.fidelity or {}),
+        compatibility=dict(pb.compatibility or {}),
         is_template_clone=pb.is_template_clone,
         template_slug=pb.template_slug,
     )
@@ -227,6 +242,7 @@ def playbook_import(request):
     if not save:
         return JsonResponse({"success": True, "parsed": parsed})
 
+    compatibility = analyze_playbook_compatibility(parsed.get("source_yaml") or content)
     pb = Playbook.objects.create(
         user=request.user,
         name=str(parsed["name"])[:200],
@@ -238,6 +254,7 @@ def playbook_import(request):
         source_yaml=parsed.get("source_yaml") or content,
         tags=parsed.get("tags") or ["imported"],
         fidelity=parsed.get("fidelity") or {},
+        compatibility=compatibility,
     )
     log_user_activity(
         user=request.user,
@@ -341,7 +358,37 @@ def playbook_inventory_preview(request):
     server_ids = [int(x) for x in (data.get("server_ids") or []) if str(x).isdigit() or isinstance(x, int)]
     group_ids = [int(x) for x in (data.get("group_ids") or []) if str(x).isdigit() or isinstance(x, int)]
     servers = resolve_target_servers(request.user, server_ids=server_ids, group_ids=group_ids)
-    inventory = build_inventory_for_servers(servers)
+    selected_ids = {server.id for server in servers}
+    normalized_bindings = normalize_inventory_bindings(data.get("inventory_bindings"))
+    resolved_bindings: dict[str, list[int]] = {}
+    for selector, binding in normalized_bindings.items():
+        bound_servers = resolve_target_servers(
+            request.user,
+            server_ids=binding["server_ids"],
+            group_ids=binding["group_ids"],
+        )
+        resolved_bindings[selector] = sorted(server.id for server in bound_servers if server.id in selected_ids)
+    binding_groups = inventory_groups_from_bindings(resolved_bindings)
+    inventory = build_inventory_for_servers(servers, extra_groups=binding_groups)
+    compatibility = {}
+    playbook_id = data.get("playbook_id")
+    if str(playbook_id).isdigit():
+        playbook = _playbooks_for_user(request.user).filter(id=int(playbook_id)).first()
+        if playbook and playbook.source_yaml:
+            analysis_source = (
+                playbook.active_compatibility_revision.adapted_yaml
+                if playbook.active_compatibility_revision
+                and playbook.active_compatibility_revision.status == "validated"
+                else playbook.source_yaml
+            )
+            analysis_bindings = {
+                selector: {"server_ids": ids, "group_ids": []} for selector, ids in resolved_bindings.items()
+            }
+            compatibility = analyze_playbook_compatibility(
+                analysis_source,
+                bindings=analysis_bindings,
+                target_servers=servers,
+            )
     return JsonResponse(
         {
             "success": True,
@@ -359,6 +406,8 @@ def playbook_inventory_preview(request):
                 for s in servers
             ],
             "count": len(servers),
+            "compatibility": compatibility,
+            "inventory_bindings": normalized_bindings,
         }
     )
 

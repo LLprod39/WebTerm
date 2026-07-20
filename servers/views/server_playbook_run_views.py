@@ -3,8 +3,10 @@
 Extracted from server_playbooks.py to keep modules under the size limit.
 Re-exported from servers.views.server_playbooks so URL routing stays stable.
 """
+
 from __future__ import annotations
 
+import hashlib
 import json
 
 from django.contrib.auth.decorators import login_required
@@ -15,7 +17,13 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from servers.models import PlaybookRun, ServerGroup
+from servers.models import PlaybookCompatibilityRevision, PlaybookRun, ServerGroup
+from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility
+from servers.services.playbook_compatibility_inventory import (
+    compile_runtime_playbook_yaml,
+    normalize_inventory_bindings,
+)
+from servers.services.playbook_compatibility_validation import validate_playbook_syntax
 from servers.services.playbook_runner import (
     build_inventory_for_servers,
     normalize_tasks,
@@ -24,6 +32,7 @@ from servers.services.playbook_runner import (
 )
 from servers.views.server_helpers import _effective_master_password, _get_group_role
 from servers.views.server_playbook_serializers import _playbooks_for_user, _serialize_run
+
 
 @login_required
 @require_feature("servers")
@@ -49,9 +58,88 @@ def playbook_run(request, playbook_id: int):
         return JsonResponse({"success": False, "error": "Select at least one accessible server or group"}, status=400)
 
     tasks = normalize_tasks(pb.tasks)
-    source_yaml = (pb.source_yaml or "").strip()
+    original_source_yaml = (pb.source_yaml or "").strip()
+    revision = pb.active_compatibility_revision
+    source_hash = hashlib.sha256(original_source_yaml.encode("utf-8")).hexdigest() if original_source_yaml else ""
+    if (
+        revision
+        and revision.status == PlaybookCompatibilityRevision.STATUS_VALIDATED
+        and revision.source_hash == source_hash
+    ):
+        source_yaml = (revision.adapted_yaml or "").strip()
+    else:
+        revision = None
+        source_yaml = original_source_yaml
     if not tasks and not source_yaml:
         return JsonResponse({"success": False, "error": "Playbook has no tasks or Ansible YAML"}, status=400)
+
+    inventory_binding_groups: dict[str, list[int]] = {}
+    normalized_bindings: dict[str, dict[str, list[int]]] = {}
+    compatibility_report: dict = {}
+    if source_yaml:
+        raw_bindings = (
+            data.get("inventory_bindings")
+            if "inventory_bindings" in data
+            else (revision.inventory_bindings if revision else {})
+        )
+        normalized_bindings = normalize_inventory_bindings(raw_bindings)
+        resolved_bindings: dict[str, list[int]] = {}
+        selected_ids = {server.id for server in servers}
+        for selector, binding in normalized_bindings.items():
+            bound_servers = resolve_target_servers(
+                request.user,
+                server_ids=binding["server_ids"],
+                group_ids=binding["group_ids"],
+            )
+            bound_ids = sorted({server.id for server in bound_servers})
+            if not set(bound_ids).issubset(selected_ids):
+                return JsonResponse(
+                    {"success": False, "error": f"Binding '{selector}' includes servers outside selected targets"},
+                    status=400,
+                )
+            resolved_bindings[selector] = bound_ids
+        analysis_bindings = {
+            selector: {"server_ids": server_ids, "group_ids": []} for selector, server_ids in resolved_bindings.items()
+        }
+        compatibility_report = analyze_playbook_compatibility(
+            source_yaml,
+            bindings=analysis_bindings,
+            target_servers=servers,
+        )
+        blockers = [item for item in compatibility_report.get("issues") or [] if item.get("severity") == "error"]
+        if blockers:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": blockers[0].get("message") or "Playbook compatibility check failed",
+                    "compatibility": compatibility_report,
+                },
+                status=400,
+            )
+        if compatibility_report.get("missing_bindings"):
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Map every playbook host selector before running",
+                    "compatibility": compatibility_report,
+                },
+                status=400,
+            )
+        try:
+            source_yaml, inventory_binding_groups = compile_runtime_playbook_yaml(source_yaml, resolved_bindings)
+        except ValueError as exc:
+            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+        syntax_check = validate_playbook_syntax(source_yaml)
+        compatibility_report["syntax_check"] = syntax_check
+        if syntax_check.get("passed") is False:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": syntax_check.get("message") or "Ansible syntax check failed",
+                    "compatibility": compatibility_report,
+                },
+                status=400,
+            )
 
     concurrency = int(data.get("concurrency") or 4)
     concurrency = max(1, min(concurrency, 12))
@@ -68,6 +156,7 @@ def playbook_run(request, playbook_id: int):
         "tags": str(data.get("tags") or ""),
         "limit": str(data.get("limit") or ""),
         "extra_vars": data.get("extra_vars") if isinstance(data.get("extra_vars"), dict) else {},
+        "inventory_binding_groups": inventory_binding_groups,
     }
 
     snapshot = {
@@ -77,6 +166,10 @@ def playbook_run(request, playbook_id: int):
         "kind": pb.kind,
         "category": pb.category,
         "source_yaml": source_yaml,
+        "source_yaml_original": original_source_yaml,
+        "compatibility_revision_id": revision.id if revision else None,
+        "compatibility": compatibility_report,
+        "inventory_bindings": normalized_bindings,
         "tasks": [
             {
                 "id": t["id"],
@@ -100,7 +193,7 @@ def playbook_run(request, playbook_id: int):
         options=options,
         host_results=[],
         summary={},
-        inventory_preview=build_inventory_for_servers(servers),
+        inventory_preview=build_inventory_for_servers(servers, extra_groups=inventory_binding_groups),
     )
 
     start_playbook_run_async(run.id, master_password=master_password)

@@ -28,8 +28,7 @@ import {
 import { MetricsSnapshotCard, type MetricsSnapshot } from "./MetricsSnapshotCard";
 import { OperatorMarkdown } from "./OperatorMarkdown";
 import { cleanStepTitle } from "./PlanTasksPanel";
-
-
+import { WebSourcesCard, type WebSource } from "./WebSourcesCard";
 function actionServerLabel(action: AssistantAction): string {
   const blast = action.blast_radius || {};
   if (Array.isArray(blast.server_names) && blast.server_names.length) {
@@ -65,8 +64,8 @@ function actionResultOutput(action: AssistantAction): string {
   return String(out).trim();
 }
 
-/** Minimal action row — click confirm only (no typing). */
-function ActionCard({
+/** Confirmation card with immutable target preview and typed-confirm support. */
+export function ActionCard({
   action,
   isWorking,
   onConfirm,
@@ -80,10 +79,25 @@ function ActionCard({
   onUndo?: (actionId: number) => void;
 }) {
   const { lang } = useI18n();
+  const [typedConfirm, setTypedConfirm] = useState("");
   const canConfirm = action.status === "requires_confirmation";
   const canCancel = action.status === "requires_confirmation" || action.status === "proposed";
 
   const server = actionServerLabel(action);
+  const blast = (action.blast_radius || {}) as Record<string, unknown>;
+  const serverNames = Array.isArray(blast.server_names)
+    ? blast.server_names.map(String).filter(Boolean)
+    : [];
+  const serverIds = Array.isArray(blast.server_ids) ? blast.server_ids : [];
+  const targetCount = Number(blast.count || serverIds.length || serverNames.length || 0);
+  const typedRequired = blast.typed_confirm_required === true;
+  const typedToken = String(blast.typed_confirm_token || "").trim();
+  const typedHint = String(blast.typed_confirm_hint || "").trim();
+  const typedMatches = !typedRequired || (
+    typedToken === "FANOUT"
+      ? typedConfirm.trim().toUpperCase() === "FANOUT"
+      : typedConfirm.trim().toLocaleLowerCase() === typedToken.toLocaleLowerCase()
+  );
   const cmd = actionCommandLine(action);
   const output = action.status === "completed" ? actionResultOutput(action) : "";
   const statusDot =
@@ -127,6 +141,35 @@ function ActionCard({
             </pre>
           ) : null}
 
+          {canConfirm && action.description ? (
+            <p className="text-[11px] leading-4 text-muted-foreground/85">{action.description}</p>
+          ) : null}
+
+          {canConfirm && targetCount > 0 ? (
+            <div className="rounded-sm border border-warning/25 bg-warning/[0.06] px-2 py-1 text-[10.5px] leading-4 text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {localize(lang, "Затронет", "Targets")}: {targetCount}
+              </span>
+              {serverNames.length ? ` · ${serverNames.slice(0, 8).join(", ")}` : null}
+              {serverNames.length > 8 ? ` +${serverNames.length - 8}` : null}
+            </div>
+          ) : null}
+
+          {canConfirm && typedRequired ? (
+            <label className="block space-y-1 text-[10.5px] text-warning">
+              <span>{typedHint || localize(lang, `Введите ${typedToken}`, `Type ${typedToken}`)}</span>
+              <input
+                value={typedConfirm}
+                onChange={(event) => setTypedConfirm(event.target.value)}
+                placeholder={typedToken}
+                autoComplete="off"
+                spellCheck={false}
+                className="h-8 w-full rounded-sm border border-warning/40 bg-background px-2 font-mono text-[12px] text-foreground outline-none focus:border-warning"
+                aria-label={localize(lang, "Текстовое подтверждение", "Typed confirmation")}
+              />
+            </label>
+          ) : null}
+
           {action.error ? <p className="text-[11px] text-destructive/90">{action.error}</p> : null}
 
           {(canConfirm || canCancel || (action.status === "completed" && onUndo && action.undo_payload)) && (
@@ -135,8 +178,8 @@ function ActionCard({
                 <button
                   type="button"
                   className="text-foreground/90 underline-offset-2 hover:underline disabled:opacity-40"
-                  disabled={isWorking}
-                  onClick={() => onConfirm(action.id)}
+                  disabled={isWorking || !typedMatches}
+                  onClick={() => onConfirm(action.id, typedRequired ? typedConfirm.trim() : undefined)}
                 >
                   {isWorking ? (
                     <Loader2 className="inline h-3 w-3 animate-spin" />
@@ -279,6 +322,7 @@ export function MessageBubble({
   const metrics = message.metadata.metrics as MetricsSnapshot | undefined;
   const table = message.metadata.table as DataTable | undefined;
   const tables = (message.metadata.tables as DataTable[] | undefined) || (table ? [table] : []);
+  const webSources = (message.metadata.web_sources as WebSource[] | undefined) || [];
   const completedMutations = actions.filter((a) => a.status === "completed" && a.risk !== "read");
 
   if (isUser) {
@@ -344,6 +388,7 @@ export function MessageBubble({
             <OperatorMarkdown content={message.content} stripTables={hasStructuredTable || Boolean(metrics)} />
           </div>
         ) : null}
+        <WebSourcesCard sources={webSources} />
         {metrics ? <MetricsSnapshotCard data={metrics} /> : null}
         {plan ? (
           <div className="max-w-[min(920px,100%)]">
@@ -453,4 +498,3 @@ export function MessageBubble({
     </div>
   );
 }
-

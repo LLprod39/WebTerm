@@ -3,14 +3,17 @@
 Extracted from ansible_engine.py to keep modules under the size limit.
 Re-exported from servers.services.ansible_engine for backward compatibility.
 """
+
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +24,7 @@ logger = logging.getLogger(__name__)
 # Prefer project image (built via docker/ansible-runner). Override with WEBTERM_ANSIBLE_IMAGE.
 LOCAL_ANSIBLE_IMAGE = os.environ.get("WEBTERM_ANSIBLE_IMAGE_LOCAL", "webterm-ansible:latest")
 FALLBACK_ANSIBLE_IMAGE = os.environ.get("WEBTERM_ANSIBLE_IMAGE_FALLBACK", "cytopia/ansible:latest-tools")
+
 
 def _safe_host_name(name: str, server_id: int) -> str:
     cleaned = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", (name or "").strip()) or f"server_{server_id}"
@@ -68,7 +72,9 @@ def resolve_docker_ansible_image(docker: str | None = None) -> tuple[str, bool]:
 
 def detect_ansible() -> dict[str, Any]:
     """Discover how (if) ansible-playbook can be run on this host."""
-    native = shutil.which("ansible-playbook")
+    executable_name = "ansible-playbook.exe" if os.name == "nt" else "ansible-playbook"
+    venv_candidate = Path(sys.executable).with_name(executable_name)
+    native = str(venv_candidate) if venv_candidate.exists() else shutil.which("ansible-playbook")
     if native:
         version = _run_version([native, "--version"])
         return {
@@ -208,6 +214,7 @@ def _write_inventory(
     servers: list[Any],
     *,
     master_password: str = "",
+    binding_groups: dict[str, list[int]] | None = None,
 ) -> tuple[Path, list[Path]]:
     """Write inventory.ini + optional key files. Returns (inventory_path, cleanup_paths)."""
     inv_path = workdir / "inventory.ini"
@@ -218,6 +225,7 @@ def _write_inventory(
         "[all]",
     ]
     groups: dict[str, list[str]] = {}
+    binding_groups = binding_groups or {}
 
     for server in servers:
         host_alias = _safe_host_name(getattr(server, "name", ""), int(server.id))
@@ -242,10 +250,8 @@ def _write_inventory(
             # Copy key into workdir for docker mounts
             key_dest = workdir / f"key_{server.id}"
             shutil.copy2(key_path, key_dest)
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(key_dest, 0o600)
-            except OSError:
-                pass
             cleanup.append(key_dest)
             # Inside docker/native workdir relative path
             parts.append(f"ansible_ssh_private_key_file={key_dest.name}")
@@ -264,7 +270,9 @@ def _write_inventory(
                 password = ""
             if password:
                 parts.append(f"ansible_ssh_pass={_ini_escape(password)}")
-                parts.append("ansible_ssh_common_args='-o PreferredAuthentications=password -o PubkeyAuthentication=no'")
+                parts.append(
+                    "ansible_ssh_common_args='-o PreferredAuthentications=password -o PubkeyAuthentication=no'"
+                )
 
         # sudo / become password
         try:
@@ -280,6 +288,9 @@ def _write_inventory(
         if group is not None and getattr(group, "name", None):
             gname = re.sub(r"[^a-zA-Z0-9_\-]", "_", group.name) or "group"
             groups.setdefault(gname, []).append(host_alias)
+        for binding_name, server_ids in binding_groups.items():
+            if int(server.id) in {int(item) for item in server_ids}:
+                groups.setdefault(binding_name, []).append(host_alias)
 
     lines.append("")
     for gname, members in groups.items():
@@ -344,5 +355,3 @@ def estimate_total_tasks(playbook_yaml: str) -> int:
     plays = len(re.findall(r"^-\s+name\s*:", playbook_yaml, re.MULTILINE)) or 1
     gather_disabled = len(re.findall(r"gather_facts\s*:\s*(?:false|no)\b", playbook_yaml, re.IGNORECASE))
     return tasks + max(0, plays - gather_disabled)
-
-

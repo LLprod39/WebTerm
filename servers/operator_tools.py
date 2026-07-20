@@ -1482,7 +1482,15 @@ def register_operator_tools() -> None:
                             "properties": {
                                 "text": {"type": "string"},
                                 "tool": {"type": "string"},
+                                "input": {
+                                    "type": "object",
+                                    "description": (
+                                        "Exact arguments that will be executed after approval. "
+                                        "The platform rejects plan auto-run when they differ."
+                                    ),
+                                },
                             },
+                            "required": ["text", "tool", "input"],
                         },
                     },
                 },
