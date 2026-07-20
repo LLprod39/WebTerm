@@ -26,6 +26,14 @@ from core_ui.services.operator_tools import (
 MAX_ITERATIONS = 12
 HISTORY_MESSAGE_LIMIT = 24
 TOOL_RESULT_PREVIEW_CHARS = 4000
+# Small local models occasionally burn a turn on thinking and emit no text and no
+# tool call. Retry that dud once with a nudge before surfacing an honest failure —
+# never mask it as a successful "Готово.".
+EMPTY_RESPONSE_RETRIES = 1
+EMPTY_RESPONSE_NUDGE = (
+    "Ты не вызвал ни одного инструмента и не дал ответа. "
+    "Выполни запрос: вызови нужный инструмент или дай короткий ответ по существу."
+)
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
@@ -455,6 +463,23 @@ def _ensure_visible_answer(message_id: int) -> None:
 
 
 @sync_to_async
+def _assistant_is_empty(message_id: int) -> bool:
+    """True when the finished assistant message has no visible text and no UI card.
+
+    Same emptiness notion as `_ensure_visible_answer`, but used to detect a dud
+    generation (thinking-only turn, no text, no tool call) so we can retry or fail
+    honestly instead of stamping a fake "Готово." on it.
+    """
+    msg = ChatMessage.objects.filter(pk=message_id).first()
+    if not msg:
+        return False
+    if (msg.content or "").strip():
+        return False
+    meta = msg.metadata if isinstance(msg.metadata, dict) else {}
+    return not (meta.get("tables") or meta.get("metrics"))
+
+
+@sync_to_async
 def _touch_session_usage(session_id: int, usage: dict[str, Any]) -> None:
     session = ChatSession.objects.get(pk=session_id)
     total = dict(session.total_usage or {})
@@ -489,6 +514,8 @@ async def run_operator_loop(
 
     system_prompt = build_operator_system_prompt(session)
     await _emit(on_event, {"type": "turn_started", "turn_id": turn.pk, "chat_id": session.pk})
+
+    empty_retries = 0
 
     while True:
         turn = await _refresh_turn(turn.pk)
@@ -613,6 +640,48 @@ async def run_operator_loop(
                     )
 
         if not tool_calls:
+            # Dud generation guard: the model called no tool and produced no visible
+            # text/card. Retry once with a nudge; if it stays empty, fail honestly
+            # instead of masking it as a successful "Готово.".
+            is_empty = bool(assistant_message) and await _assistant_is_empty(assistant_message.pk)
+            if is_empty and empty_retries < EMPTY_RESPONSE_RETRIES:
+                empty_retries += 1
+                logger.warning(
+                    "operator loop: empty generation (stop={}) on turn {}, retry {}/{}",
+                    stop_reason,
+                    turn.pk,
+                    empty_retries,
+                    EMPTY_RESPONSE_RETRIES,
+                )
+                messages.append({"role": "user", "content": EMPTY_RESPONSE_NUDGE})
+                await _save_turn(turn, llm_messages=messages)
+                continue
+            if is_empty:
+                honest = (
+                    "Модель вернула пустой ответ — не смогла обработать запрос. "
+                    "Повтори попытку или переформулируй короче."
+                )
+                await sync_to_async(
+                    ChatMessage.objects.filter(pk=assistant_message.pk).update
+                )(content=honest)
+                await _set_assistant_metadata(
+                    assistant_message.pk,
+                    {
+                        "source": "operator_loop",
+                        "turn_id": turn.pk,
+                        "iterations": iteration,
+                        "empty_response": True,
+                    },
+                )
+                await _save_turn(
+                    turn,
+                    status=ChatTurnState.STATUS_FAILED,
+                    llm_messages=messages,
+                    error="empty_response",
+                    pending_tool_call={},
+                )
+                await _emit(on_event, {"type": "turn_done", "status": "failed", "turn_id": turn.pk})
+                break
             # Final text-only response
             await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages, pending_tool_call={})
             if assistant_message:

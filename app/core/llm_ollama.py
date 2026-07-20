@@ -91,9 +91,12 @@ def build_ollama_payload(request: OllamaStreamRequest) -> dict[str, Any]:
             {"role": "user", "content": request.prompt},
         ],
         "stream": True,
-        # Keep local replies bounded — long tool JSON should not run forever
         "options": {
-            "num_predict": 1024 if request.json_mode else 2048,
+            # No output cap on free-text replies (-1): long agent/chat answers and
+            # multi-step reasoning must never be truncated to empty. JSON tool calls
+            # stay bounded (but generous) so a broken model cannot loop forever — the
+            # object closes long before the cap.
+            "num_predict": 4096 if request.json_mode else -1,
             "temperature": 0.2 if request.json_mode else 0.5,
             # Large context: operator/agent system prompts run several thousand tokens
             # and overflow Ollama's default 4096 window, truncating the reply to empty.

@@ -51,6 +51,17 @@ from app.core.redacted_logging import redacted_log_text
 
 _provider_instance: "LLMProvider | None" = None
 
+# Ollama streams model reasoning ("thinking") fragments prefixed with this
+# sentinel so the operator chat can turn them into reasoning events. Every other
+# consumer (agents, final reports, orchestrator) must drop them from answer text —
+# otherwise the raw thinking leaks into the output as «THINK»-littered prose.
+_THINK_SENTINELS = ("«THINK»", "\x00THINK\x00")
+
+
+def is_thinking_chunk(chunk: object) -> bool:
+    """True if a stream_chat chunk is a model-thinking fragment, not answer text."""
+    return isinstance(chunk, str) and chunk.startswith(_THINK_SENTINELS)
+
 
 def get_provider() -> "LLMProvider":
     """Return a module-level cached LLMProvider."""

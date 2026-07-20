@@ -33,6 +33,9 @@ export function useServerSharesController(activeServer: FrontendServer | null) {
       user: shareUser.trim(),
       share_context: shareContext,
       can_connect_terminal: true,
+      // A shared server should be usable out of the box: terminal + read-only file
+      // browsing. Writing files and running one-off commands stay opt-in (mutating).
+      can_read_files: true,
       expires_at: shareExpiresAt ? new Date(shareExpiresAt).toISOString() : null,
     });
     setShareUser("");

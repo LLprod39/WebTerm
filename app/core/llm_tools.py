@@ -657,8 +657,11 @@ async def stream_ollama_tools(
         # ~4000 tokens, filling Ollama's default 4096 context. Once any history is
         # added the prompt overflows, output truncates (done_reason=length) and the
         # model "thinks" then emits nothing — the classic empty-second-message bug.
-        # num_predict caps output; thinking counts against it, so keep it generous too.
-        "options": {"temperature": 0.3, "num_ctx": 16384, "num_predict": 4096},
+        # num_predict=-1 removes the output cap entirely: thinking tokens no longer
+        # eat the answer budget, so long tool-calling turns and multi-step tasks are
+        # never truncated to empty. The model stops naturally; the request timeout is
+        # the real upper bound.
+        "options": {"temperature": 0.3, "num_ctx": 16384, "num_predict": -1},
     }
     # NB: Ollama's qwen3 tool grammar 500s ("XML syntax error … <function> closed by
     # </parameter>") when thinking is explicitly disabled. Never send think:false with

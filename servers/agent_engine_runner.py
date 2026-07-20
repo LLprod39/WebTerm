@@ -462,8 +462,11 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
 
     except Exception as exc:
         logger.error("Agent engine error: {}", exc)
+        # Some exceptions (asyncio.TimeoutError / CancelledError) stringify to "",
+        # which produced an unhelpful bare "Agent failed:" in the report.
+        exc_text = str(exc).strip() or type(exc).__name__
         run.status = AgentRun.STATUS_FAILED
-        run.ai_analysis = f"Agent failed: {exc}"
+        run.ai_analysis = f"Agent failed: {exc_text}"
         run.iterations_log = iterations_log
         run.tool_calls = tool_calls_log
         run.total_iterations = len(iterations_log)
@@ -473,9 +476,9 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         failed_outcome = AgentOutcome(
             outcome=OUTCOME_FAILED,
             status=STATUS_FAILED,
-            reason=f"Agent failed: {exc}",
+            reason=f"Agent failed: {exc_text}",
             tool_call_count=len(tool_calls_log),
-            verification_summary=str(exc),
+            verification_summary=exc_text,
             exit_reason="exception",
         )
         report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
@@ -489,7 +492,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             tool_calls_log=tool_calls_log,
         )
         await deliver_agent_report_async(run)
-        await engine._emit("agent_status", {"status": "failed", "error": str(exc), "outcome": "failed"})
+        await engine._emit("agent_status", {"status": "failed", "error": exc_text, "outcome": "failed"})
     finally:
         unregister_engine(run.id, engine)
         if engine._control_task:

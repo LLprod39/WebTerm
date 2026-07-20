@@ -29,7 +29,7 @@ from app.agent_kernel.runtime.parsing import parse_action as _parse_action  # no
 from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
-from app.core.llm import LLMProvider
+from app.core.llm import LLMProvider, is_thinking_chunk
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
@@ -302,7 +302,8 @@ class AgentEngine:
                     specific_model=self.specific_model,
                     purpose="ops",
                 ):
-                    chunks.append(chunk)
+                    if not is_thinking_chunk(chunk):
+                        chunks.append(chunk)
         except Exception as exc:
             logger.error("LLM call failed: {}", exc)
             raise

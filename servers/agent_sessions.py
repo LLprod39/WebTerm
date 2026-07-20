@@ -124,7 +124,21 @@ class AgentSessionManager:
         session = _ServerSession(server.id, server.name, forbidden)
 
         kwargs = await _build_connect_kwargs(server)
-        session.conn = await asyncssh.connect(**kwargs)
+        host = kwargs.get("host") or getattr(server, "host", "") or "?"
+        port = kwargs.get("port") or int(getattr(server, "port", 22) or 22)
+        try:
+            session.conn = await asyncssh.connect(**kwargs)
+        except Exception as exc:  # noqa: BLE001 — surface a readable connection error
+            detail = str(exc).strip()
+            if not detail:
+                detail = (
+                    "истёк таймаут SSH-рукопожатия (порт открыт, но SSH не ответил)"
+                    if isinstance(exc, (asyncio.TimeoutError, TimeoutError))
+                    else type(exc).__name__
+                )
+            raise RuntimeError(
+                f"SSH connection failed to {server.name} ({host}:{port}): {detail}"
+            ) from exc
         session.proc = await session.conn.create_process(
             term_type="xterm-256color",
             term_size=(120, 40),

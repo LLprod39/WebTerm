@@ -3,7 +3,7 @@ from __future__ import annotations
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import describe_mcp_bindings
-from app.core.llm import LLMProvider
+from app.core.llm import LLMProvider, is_thinking_chunk
 from app.execution_policy import safe_payload_preview
 from app.sudo_policy import sudo_policy_prompt
 from servers.agent_inputs import build_agent_materials_prompt
@@ -249,7 +249,8 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
             specific_model=engine.specific_model,
             purpose="opssummary",
         ):
-            chunks.append(chunk)
+            if not is_thinking_chunk(chunk):
+                chunks.append(chunk)
         report = "".join(chunks).strip()
         logger.info(
             "agent_run {} final report llm done: chars={}",

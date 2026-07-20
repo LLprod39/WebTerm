@@ -4,7 +4,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.core.llm import LLMProvider
+from app.core.llm import LLMProvider, is_thinking_chunk
 
 
 async def call_multi_agent_llm_raw(engine: Any, system_prompt: str, user_msg: str) -> str:
@@ -20,7 +20,8 @@ async def call_multi_agent_llm_raw(engine: Any, system_prompt: str, user_msg: st
                 specific_model=engine.specific_model,
                 purpose="opsplan",
             ):
-                chunks.append(chunk)
+                if not is_thinking_chunk(chunk):
+                    chunks.append(chunk)
     except Exception as exc:
         logger.error("Orchestrator LLM call failed: {}", exc)
         raise
@@ -44,7 +45,8 @@ async def call_multi_agent_llm_history(engine: Any, history: list[dict]) -> str:
                 specific_model=engine.specific_model,
                 purpose="ops",
             ):
-                chunks.append(chunk)
+                if not is_thinking_chunk(chunk):
+                    chunks.append(chunk)
     except Exception as exc:
         logger.error("Task LLM call failed: {}", exc)
         raise

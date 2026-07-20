@@ -6,7 +6,7 @@ from asgiref.sync import sync_to_async as _s2a
 from loguru import logger
 
 from app.agent_kernel import skill_provider_registry
-from app.core.llm import LLMProvider
+from app.core.llm import LLMProvider, is_thinking_chunk
 from servers.agent_inputs import build_agent_materials_prompt
 
 if TYPE_CHECKING:
@@ -98,7 +98,8 @@ async def get_ai_analysis(
     try:
         chunks = []
         async for chunk in LLMProvider().stream_chat(full_prompt, model="auto"):
-            chunks.append(chunk)
+            if not is_thinking_chunk(chunk):
+                chunks.append(chunk)
         return "".join(chunks)
     except Exception as exc:
         logger.error("AI analysis failed for agent '{}': {}", agent.name, exc)
