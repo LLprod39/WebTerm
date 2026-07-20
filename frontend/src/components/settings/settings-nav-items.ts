@@ -49,6 +49,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         description: "Провайдеры, ключи, роли моделей",
         icon: SettingsIcons.ai,
         path: "/settings/ai",
+        adminOnly: true,
         setupHint: "Подключите LLM — чат, агенты, оркестратор",
       },
       {

@@ -316,6 +316,22 @@ def _audit_logging_keys() -> set[str]:
     }
 
 
+def _ai_model_settings_keys() -> set[str]:
+    """LLM provider/model routing keys — admin-only.
+
+    Regular users must inherit whatever the admin configured; they cannot pick
+    their own models or providers. Derived from the allowed set minus the keys
+    already gated elsewhere (audit, runtime limits, domain auth) so it stays in
+    sync automatically as settings evolve.
+    """
+    return (
+        _allowed_settings_keys()
+        - _audit_logging_keys()
+        - set(runtime_limit_fields())
+        - set(DOMAIN_AUTH_SETTINGS_KEYS)
+    )
+
+
 def _normalize_settings_update(data: dict) -> JsonResponse | None:
     if "domain_auth_header" in data and data["domain_auth_header"] is not None:
         data["domain_auth_header"] = str(data["domain_auth_header"]).strip() or "REMOTE_USER"
@@ -433,6 +449,12 @@ def api_settings(request):
         if requested_runtime_limit_keys and not request.user.is_staff:
             return JsonResponse(
                 {"success": False, "error": "Only admins can update runtime limits"},
+                status=403,
+            )
+        requested_ai_model_keys = sorted(key for key in data if key in _ai_model_settings_keys())
+        if requested_ai_model_keys and not request.user.is_staff:
+            return JsonResponse(
+                {"success": False, "error": "Only admins can change AI models and providers"},
                 status=403,
             )
         validation_error = _normalize_settings_update(data)

@@ -96,7 +96,7 @@ export default function AppLayout() {
                   <span className="text-xs font-medium text-foreground">{localize(lang, immersive.titleRu, immersive.titleEn)}</span>
                 </header>
               )}
-              <main className="min-h-0 flex-1 overflow-hidden pt-16 md:pt-0">
+              <main className="flex min-h-0 flex-1 flex-col overflow-hidden pt-16 md:pt-0">
                 <Suspense fallback={<ContentFallback />}>
                   <PageTransition>
                     <Outlet />

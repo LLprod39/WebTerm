@@ -226,7 +226,8 @@ export default function Servers() {
     }
     return map;
   }, [monitoringStatus, liveMetrics, servers]);
-  const serversList = useServersListController(servers);
+  const serverListUserKey = authData?.user?.id != null ? `id:${authData.user.id}` : undefined;
+  const serversList = useServersListController(servers, serverListUserKey);
   const { collapsed, filtered, grouped, onlineCount, search, setSearch, toggleGroup } = serversList;
   const groups = useMemo(() => (Array.isArray(data?.groups) ? data.groups : []), [data?.groups]);
   const manageableGroups = useMemo(

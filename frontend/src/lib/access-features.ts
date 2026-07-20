@@ -32,6 +32,6 @@ export const ACCESS_FEATURE_OPTIONS: Array<{ value: FeatureFlag; label: string }
   { value: "kubernetes", label: "Kubernetes" },
   { value: "mars", label: "MARS" },
   { value: "settings", label: "Settings" },
-  { value: "orchestrator", label: "Orchestrator" },
+  { value: "orchestrator", label: "Chat (Operator)" },
   { value: "knowledge_base", label: "Knowledge Base" },
 ];

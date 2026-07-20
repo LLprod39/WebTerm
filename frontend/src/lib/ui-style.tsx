@@ -30,7 +30,7 @@ export const UI_STYLE_ACTIVE_KEY = "webterm.ui-style.active";
 export const UI_STYLE_LEGACY_KEY = "webterm.ui-style";
 
 /** Product default skin for every account without a saved preference. */
-export const DEFAULT_UI_STYLE: UiStyleId = "folio-dark";
+export const DEFAULT_UI_STYLE: UiStyleId = "flow-dark";
 export const GUEST_USER_KEY = "guest";
 
 /** Skins that force light color-scheme (native inputs, scrollbars, form controls). */

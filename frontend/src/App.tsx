@@ -123,9 +123,12 @@ function PermissionDenied() {
 function FeatureGate({
   feature,
   children,
+  staffOnly = false,
 }: {
   feature: string | string[];
   children: ReactNode;
+  /** Require an admin (is_staff) in addition to the feature. */
+  staffOnly?: boolean;
 }) {
   const location = useLocation();
   const { data, isLoading } = useQuery({
@@ -140,6 +143,10 @@ function FeatureGate({
   if (!data?.authenticated) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
+  }
+
+  if (staffOnly && !data.user?.is_staff) {
+    return <PermissionDenied />;
   }
 
   const allowed = Array.isArray(feature)
@@ -186,7 +193,7 @@ const App = () => (
                 <Route
                   path="/monitoring/insights"
                   element={(
-                    <FeatureGate feature="dashboard">
+                    <FeatureGate feature="dashboard" staffOnly>
                       <MonitoringInsightsPage />
                     </FeatureGate>
                   )}

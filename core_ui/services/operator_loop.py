@@ -413,6 +413,47 @@ def _set_assistant_metadata(message_id: int, metadata: dict[str, Any]) -> None:
     msg.save(update_fields=["metadata"])
 
 
+def _fallback_answer_from_metadata(metadata: dict[str, Any] | None) -> str:
+    """Concise stand-in answer when a tool attached a card but the model emitted no text.
+
+    Small local models (qwen3 tool-calling) sometimes run the tool, attach the
+    UI card, then return an empty final message — which the UI shows as a blank
+    bubble that looks like a hang. Keep the answer readable by summarizing the card.
+    """
+    meta = metadata if isinstance(metadata, dict) else {}
+    tables = meta.get("tables")
+    if isinstance(tables, list):
+        for table in tables:
+            if not isinstance(table, dict):
+                continue
+            kind = table.get("kind")
+            items = table.get("items")
+            count = len(items) if isinstance(items, list) else None
+            if kind == "servers" and count is not None:
+                return f"{count} серверов — список ниже."
+            if kind == "agents" and count is not None:
+                return f"{count} агентов — список ниже."
+            if kind == "alerts" and count is not None:
+                return f"{count} алертов — список ниже."
+            if kind == "forecasts":
+                return "Прогнозы — карточка ниже."
+        if any(isinstance(t, dict) for t in tables):
+            return "Готово — детали в карточке ниже."
+    if meta.get("metrics"):
+        return "Метрики — карточка ниже."
+    return "Готово."
+
+
+@sync_to_async
+def _ensure_visible_answer(message_id: int) -> None:
+    """Guarantee the finished assistant message has visible text (no blank bubble)."""
+    msg = ChatMessage.objects.filter(pk=message_id).first()
+    if not msg or (msg.content or "").strip():
+        return
+    msg.content = _fallback_answer_from_metadata(msg.metadata)
+    msg.save(update_fields=["content"])
+
+
 @sync_to_async
 def _touch_session_usage(session_id: int, usage: dict[str, Any]) -> None:
     session = ChatSession.objects.get(pk=session_id)
@@ -579,6 +620,7 @@ async def run_operator_loop(
                     assistant_message.pk,
                     {"source": "operator_loop", "turn_id": turn.pk, "iterations": iteration},
                 )
+                await _ensure_visible_answer(assistant_message.pk)
             await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
             break
 
@@ -973,6 +1015,7 @@ async def run_operator_loop(
                 await sync_to_async(compress_inventory_assistant_content)(assistant_message)
             except Exception:  # noqa: BLE001
                 pass
+            await _ensure_visible_answer(assistant_message.pk)
         await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages)
         await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
         break

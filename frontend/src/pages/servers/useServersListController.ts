@@ -2,9 +2,35 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { FrontendServer } from "@/lib/api";
 
-export function useServersListController(servers: FrontendServer[]) {
+const COLLAPSED_GROUPS_KEY_PREFIX = "webterm.servers.collapsed-groups";
+
+function storageKeyFor(userKey?: string) {
+  return userKey ? `${COLLAPSED_GROUPS_KEY_PREFIX}.${userKey}` : COLLAPSED_GROUPS_KEY_PREFIX;
+}
+
+/** Load the persisted collapsed-groups map for this user (empty = all expanded). */
+function readCollapsedGroups(userKey?: string): Record<string, boolean> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(storageKeyFor(userKey));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (!parsed || typeof parsed !== "object") return {};
+    const out: Record<string, boolean> = {};
+    for (const [group, value] of Object.entries(parsed)) {
+      if (typeof value === "boolean") out[group] = value;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function useServersListController(servers: FrontendServer[], userKey?: string) {
   const [search, setSearch] = useState("");
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  // Groups are expanded by default; only groups the user explicitly collapses are
+  // stored, and that choice is remembered across reloads / navigation.
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => readCollapsedGroups(userKey));
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
   const safeServers = servers ?? [];
@@ -32,23 +58,21 @@ export function useServersListController(servers: FrontendServer[]) {
     setCollapsed((current) => ({ ...current, [groupName]: !current[groupName] }));
   };
 
+  // Re-load the remembered state when the signed-in user changes (login / switch).
   useEffect(() => {
-    const entries = Object.entries(grouped);
-    if (entries.length <= 1) return;
+    setCollapsed(readCollapsedGroups(userKey));
+  }, [userKey]);
 
-    setCollapsed((current) => {
-      let changed = false;
-      const next = { ...current };
-
-      for (const [groupName, groupServers] of entries) {
-        if (next[groupName] !== undefined || groupServers.length > 2) continue;
-        next[groupName] = true;
-        changed = true;
-      }
-
-      return changed ? next : current;
-    });
-  }, [grouped]);
+  // Persist collapse choices so a reload or navigation keeps groups the way the
+  // user left them (collapsed groups stay collapsed until they expand again).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(storageKeyFor(userKey), JSON.stringify(collapsed));
+    } catch {
+      // ignore quota / disabled storage
+    }
+  }, [collapsed, userKey]);
 
   useEffect(() => {
     if (!filtered.length) {

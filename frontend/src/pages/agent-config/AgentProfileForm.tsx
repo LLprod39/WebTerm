@@ -266,6 +266,7 @@ export function AgentForm({
               lang={lang}
               readOnly={readOnly}
               onFieldChange={setField}
+              isAdmin={isAdmin}
             />
           ) : null}
 

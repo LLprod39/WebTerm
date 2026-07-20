@@ -59,6 +59,9 @@ export function getDashboardWidthLabel(width: number): string {
 
 export function getCuratedDefaultDashboardLayout(type: DashboardType): DashboardWidgetConfig[] {
   if (type === "user") {
+    // Mirrors the admin layout's structure with the widgets a regular user can
+    // populate: attention full-width on top, a metrics row, runs, then an
+    // alerts + servers row and a full-width activity log at the bottom.
     return [
       { id: "my_attention", x: 0, y: 0, w: 12, h: 1, props: { tone: "default", limit: 6 } },
       { id: "quick_stats", x: 0, y: 1, w: 12, h: 1, props: { tone: "default", limit: 5 } },
@@ -66,8 +69,9 @@ export function getCuratedDefaultDashboardLayout(type: DashboardType): Dashboard
       { id: "quick_tools", x: 8, y: 2, w: 4, h: 1, props: { tone: "default", limit: 5 } },
       { id: "active_runs", x: 0, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
       { id: "recent_runs", x: 6, y: 3, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "recent_servers", x: 0, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
-      { id: "recent_activity", x: 6, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "user_alerts", x: 0, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "recent_servers", x: 6, y: 4, w: 6, h: 1, props: { tone: "default", limit: 5 } },
+      { id: "recent_activity", x: 0, y: 5, w: 12, h: 1, props: { tone: "default", limit: 5 } },
     ];
   }
   return [

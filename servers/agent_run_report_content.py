@@ -406,6 +406,34 @@ def _build_report_state(
             "Дождитесь следующего события агента.",
         ),
     )
+    # Surface the real failure reason instead of the generic "не дошёл до отчёта":
+    # the actual error (e.g. SSH connect failure) lives in ai_analysis/final_report.
+    if run.status == AgentRun.STATUS_FAILED:
+        reason = _text(run.ai_analysis or run.final_report or "", limit=400)
+        if reason:
+            low = reason.lower()
+            ssh_unreachable = "ssh" in low and any(
+                marker in low
+                for marker in (
+                    "connect call failed",
+                    "connection failed",
+                    "errno 111",
+                    "unreachable",
+                    "timed out",
+                    "no route to host",
+                    "connection refused",
+                )
+            )
+            if ssh_unreachable:
+                headline = "Сервер недоступен по SSH"
+                description = (
+                    f"Агент не смог подключиться к серверу по SSH — {reason}. "
+                    "Проверьте, что на сервере запущен SSH и он доступен по указанному host:port, "
+                    "а логин/ключ корректны."
+                )
+                next_expected = "Восстановите доступ к серверу по SSH и перезапустите агента."
+            else:
+                description = f"Запуск завершился ошибкой: {reason}"
     if not report_ready and problem_count:
         description = f"{description} Уже есть проблемные сигналы: {problem_count}."
     if not report_ready and _severity_rank(execution_state.get("severity")) >= _severity_rank("warning"):

@@ -11,11 +11,17 @@ import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 import {
+  allSettingsNavItems,
   findSettingsNavItem,
   settingsNavGroups,
   type SettingsNavGroup,
   type SettingsNavItem,
 } from "./settings-nav-items";
+
+/** First settings page a non-admin is allowed to open (fallback landing). */
+function firstNonAdminSettingsPath(): string {
+  return allSettingsNavItems.find((item) => !item.adminOnly)?.path ?? "/settings/access";
+}
 
 /** Default landing for /settings — readiness is admin-only. */
 export function SettingsIndexRedirect() {
@@ -27,7 +33,7 @@ export function SettingsIndexRedirect() {
   });
   if (isLoading) return null;
   const isAdmin = Boolean(authData?.user?.is_staff);
-  return <Navigate to={isAdmin ? "/settings/readiness" : "/settings/ai"} replace />;
+  return <Navigate to={isAdmin ? "/settings/readiness" : firstNonAdminSettingsPath()} replace />;
 }
 
 function visibleSettingsGroups(isAdmin: boolean): SettingsNavGroup[] {
@@ -143,7 +149,7 @@ export default function SettingsLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { t } = useI18n();
   const location = useLocation();
-  const { data: authData } = useQuery({
+  const { data: authData, isLoading: authLoading } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
     staleTime: 60_000,
@@ -151,6 +157,12 @@ export default function SettingsLayout() {
   });
   const isAdmin = authData?.user?.is_staff ?? false;
   const current = findSettingsNavItem(location.pathname);
+
+  // Route-level guard: non-admins hitting an admin-only settings page directly
+  // (by URL) are bounced to the settings index, which lands them on an allowed page.
+  if (!authLoading && current?.adminOnly && !isAdmin) {
+    return <Navigate to="/settings" replace />;
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-background">

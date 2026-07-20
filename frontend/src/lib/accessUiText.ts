@@ -15,7 +15,7 @@ const FEATURE_LABELS: Record<AccessUiLang, Record<string, string>> = {
     kubernetes: "Kubernetes",
     mars: "MARS",
     settings: "Settings",
-    orchestrator: "Orchestrator",
+    orchestrator: "Chat (Operator)",
     knowledge_base: "Knowledge Base",
   },
   ru: {
@@ -32,7 +32,7 @@ const FEATURE_LABELS: Record<AccessUiLang, Record<string, string>> = {
     kubernetes: "Кубернетес",
     mars: "MARS",
     settings: "Настройки",
-    orchestrator: "Оркестратор",
+    orchestrator: "Чат (Оператор)",
     knowledge_base: "База знаний",
   },
 };

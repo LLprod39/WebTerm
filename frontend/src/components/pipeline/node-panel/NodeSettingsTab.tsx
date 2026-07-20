@@ -1,7 +1,8 @@
 import { type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Cpu, BookOpen } from "lucide-react";
 
-import type { AgentConfig, MCPServer, StudioSkill } from "@/lib/api";
+import { fetchAuthSession, type AgentConfig, type MCPServer, type StudioSkill } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +81,16 @@ export function NodeSettingsTab({
   onProviderChange,
   onOpenPoliciesTab,
 }: NodeSettingsTabProps) {
+  // Model & agent-profile selection is admin-only; regular users inherit the
+  // admin's configured model / the workspace default.
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const isAdmin = Boolean(authData?.user?.is_staff);
+
   const selectedMcpServerIds = Array.isArray(data.mcp_server_ids)
     ? (data.mcp_server_ids as number[])
     : [];
@@ -113,36 +124,38 @@ export function NodeSettingsTab({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="agent-config" className="text-xs text-muted-foreground">
-            {t(lang, "Конфиг агента", "Agent config")}
-          </Label>
-          <Select
-            value={data.agent_config_id ? String(data.agent_config_id) : "__none__"}
-            onValueChange={(value) => {
-              if (value === "__none__") {
-                onSetMany({ agent_config_id: null, agent_name: "" });
-                return;
-              }
-              const agent = agents.find((item) => String(item.id) === value);
-              onSetMany({ agent_config_id: value, agent_name: agent?.name || "" });
-            }}
-          >
-            <SelectTrigger id="agent-config" className="h-10 rounded-lg border-border/70 bg-background/70">
-              <SelectValue placeholder={t(lang, "Настроить прямо в ноде", "Configure directly in the node")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">
-                {t(lang, "Настроить прямо в ноде", "Configure directly in the node")}
-              </SelectItem>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={String(agent.id)}>
-                  {agent.icon} {agent.name}
+        {isAdmin ? (
+          <div className="space-y-2">
+            <Label htmlFor="agent-config" className="text-xs text-muted-foreground">
+              {t(lang, "Конфиг агента", "Agent config")}
+            </Label>
+            <Select
+              value={data.agent_config_id ? String(data.agent_config_id) : "__none__"}
+              onValueChange={(value) => {
+                if (value === "__none__") {
+                  onSetMany({ agent_config_id: null, agent_name: "" });
+                  return;
+                }
+                const agent = agents.find((item) => String(item.id) === value);
+                onSetMany({ agent_config_id: value, agent_name: agent?.name || "" });
+              }}
+            >
+              <SelectTrigger id="agent-config" className="h-10 rounded-lg border-border/70 bg-background/70">
+                <SelectValue placeholder={t(lang, "Настроить прямо в ноде", "Configure directly in the node")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">
+                  {t(lang, "Настроить прямо в ноде", "Configure directly in the node")}
                 </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+                {agents.map((agent) => (
+                  <SelectItem key={agent.id} value={String(agent.id)}>
+                    {agent.icon} {agent.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         {selectedAgent ? (
           <div className="rounded-lg border border-border/70 bg-muted/20 px-4 py-3">
@@ -247,56 +260,68 @@ export function NodeSettingsTab({
           </div>
         ) : (
           <>
-            <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">
-                {t(lang, "Провайдер", "Provider")}
-              </Label>
-              <ProviderSelector
-                options={providerOptions}
-                value={provider || "auto"}
-                onChange={onProviderChange}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="node-model" className="text-xs text-muted-foreground">
-                {t(lang, "Модель", "Model")}
-              </Label>
-              {provider === "auto" ? (
-                <div className="flex h-10 items-center rounded-lg border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
-                  {t(lang, "Используется глобальная модель агента.", "Uses the workspace default agent model.")}
+            {isAdmin ? (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">
+                    {t(lang, "Провайдер", "Provider")}
+                  </Label>
+                  <ProviderSelector
+                    options={providerOptions}
+                    value={provider || "auto"}
+                    onChange={onProviderChange}
+                  />
                 </div>
-              ) : (
-                <Select
-                  value={(data.model as string) || ""}
-                  onValueChange={(value) => onSet("model", value)}
-                  disabled={loadingModelsFor === provider}
-                >
-                  <SelectTrigger id="node-model" className="h-10 rounded-lg border-border/70 bg-background/70">
-                    <SelectValue
-                      placeholder={
-                        loadingModelsFor === provider
-                          ? t(lang, "Загрузка моделей...", "Loading models...")
-                          : t(lang, "Выберите модель", "Select a model")
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelList.length ? (
-                      modelList.map((model) => (
-                        <SelectItem key={model} value={model}>
-                          {model}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="_empty" disabled>
-                        {t(lang, "Модели недоступны", "No models available")}
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="node-model" className="text-xs text-muted-foreground">
+                    {t(lang, "Модель", "Model")}
+                  </Label>
+                  {provider === "auto" ? (
+                    <div className="flex h-10 items-center rounded-lg border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
+                      {t(lang, "Используется глобальная модель агента.", "Uses the workspace default agent model.")}
+                    </div>
+                  ) : (
+                    <Select
+                      value={(data.model as string) || ""}
+                      onValueChange={(value) => onSet("model", value)}
+                      disabled={loadingModelsFor === provider}
+                    >
+                      <SelectTrigger id="node-model" className="h-10 rounded-lg border-border/70 bg-background/70">
+                        <SelectValue
+                          placeholder={
+                            loadingModelsFor === provider
+                              ? t(lang, "Загрузка моделей...", "Loading models...")
+                              : t(lang, "Выберите модель", "Select a model")
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelList.length ? (
+                          modelList.map((model) => (
+                            <SelectItem key={model} value={model}>
+                              {model}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <SelectItem value="_empty" disabled>
+                            {t(lang, "Модели недоступны", "No models available")}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
+                {t(
+                  lang,
+                  "Модель и провайдера задаёт администратор — используется значение по умолчанию.",
+                  "Model and provider are set by the administrator — the default is used.",
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">

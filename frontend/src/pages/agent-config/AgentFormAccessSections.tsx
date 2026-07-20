@@ -18,11 +18,14 @@ export function AgentCoreSettingsSection({
   lang,
   readOnly,
   onFieldChange,
+  isAdmin = false,
 }: {
   form: Partial<AgentConfig>;
   lang: Lang;
   readOnly: boolean;
   onFieldChange: (key: keyof AgentConfig, value: unknown) => void;
+  /** Model selection is admin-only — regular users inherit the admin's configured model. */
+  isAdmin?: boolean;
 }) {
   return (
     <>
@@ -61,22 +64,24 @@ export function AgentCoreSettingsSection({
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <Label>{localize(lang, "Модель", "Model")}</Label>
-          <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => onFieldChange("model", value)}>
-            <SelectTrigger disabled={readOnly}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODEL_OPTIONS.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className={isAdmin ? "grid gap-4 md:grid-cols-2" : "space-y-2"}>
+        {isAdmin ? (
+          <div className="space-y-2">
+            <Label>{localize(lang, "Модель", "Model")}</Label>
+            <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => onFieldChange("model", value)}>
+              <SelectTrigger disabled={readOnly}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODEL_OPTIONS.map((model) => (
+                  <SelectItem key={model} value={model}>
+                    {model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         <div className="space-y-2">
           <Label>{localize(lang, "Лимит итераций", "Max iterations")}</Label>

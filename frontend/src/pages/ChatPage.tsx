@@ -1486,13 +1486,8 @@ export default function ChatPage() {
                     </div>
                   ) : null}
 
-                  {streamInventoryKind ? (
-                    <InventoryPanelSkeleton
-                      kind={streamInventoryKind}
-                      rows={streamInventoryKind === "alerts" ? 4 : 5}
-                    />
-                  ) : null}
-
+                  {/* Text first, cards below — same order as the settled MessageBubble,
+                      so the answer doesn't jump from under the cards to the top on turn end. */}
                   {operatorWs.streamText ? (
                     <div className="max-w-[min(42rem,100%)]">
                       <OperatorMarkdown
@@ -1501,6 +1496,13 @@ export default function ChatPage() {
                         stripTables={Boolean(streamInventoryKind) || hasMarkdownTable(operatorWs.streamText)}
                       />
                     </div>
+                  ) : null}
+
+                  {streamInventoryKind ? (
+                    <InventoryPanelSkeleton
+                      kind={streamInventoryKind}
+                      rows={streamInventoryKind === "alerts" ? 4 : 5}
+                    />
                   ) : null}
                 </div>
               ) : null}
