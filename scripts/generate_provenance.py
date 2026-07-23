@@ -86,10 +86,7 @@ def notes_for_status(signature_status: str) -> str:
             "Verify with: gh attestation verify <path> --repo <owner/repo>"
         )
     if signature_status == "github_attestation_pending":
-        return (
-            "Statement inventory ready for GitHub Actions "
-            "actions/attest-build-provenance (OIDC + Sigstore)."
-        )
+        return "Statement inventory ready for GitHub Actions actions/attest-build-provenance (OIDC + Sigstore)."
     if signature_status == "cosign_signed":
         return "Subjects signed with cosign; verify with cosign verify-blob / verify-attestation."
     return (

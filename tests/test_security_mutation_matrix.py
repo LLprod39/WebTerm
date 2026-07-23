@@ -188,7 +188,9 @@ def test_generate_sbom_checksums_and_provenance(tmp_path: Path):
     assert signed.returncode == 0, signed.stderr or signed.stdout
     signed_doc = json.loads(signed_path.read_text(encoding="utf-8"))
     assert signed_doc["webterm"]["signature_status"] == "github_attestation"
-    assert signed_doc["predicate"]["buildDefinition"]["internalParameters"]["attestation"]["id"] == "test-attestation-id"
+    assert (
+        signed_doc["predicate"]["buildDefinition"]["internalParameters"]["attestation"]["id"] == "test-attestation-id"
+    )
     sidecar = signed_path.parent / "github-attestation.json"
     assert sidecar.is_file()
     sidecar_doc = json.loads(sidecar.read_text(encoding="utf-8"))
