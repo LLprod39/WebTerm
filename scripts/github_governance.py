@@ -12,7 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -102,9 +102,7 @@ def audit_branches(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
                 current_required = set(contexts)
             missing_required = sorted(set(required) - current_required)
             if protected and missing_required:
-                errors.append(
-                    f"{branch}: protection missing required checks: {', '.join(missing_required)}"
-                )
+                errors.append(f"{branch}: protection missing required checks: {', '.join(missing_required)}")
         except GovernanceError as exc:
             if "404" not in str(exc):
                 raise
@@ -153,7 +151,7 @@ def apply_protection(config: dict[str, Any], config_path: Path) -> dict[str, Any
         print(f"Protected {repository}:{branch}")
 
     started = start_clock_payload(
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
         started_commit=git_head_sha(),
         started_by="github_governance.py --apply",
         applied_branches=sorted(config["branches"].keys()),
@@ -166,14 +164,16 @@ def apply_protection(config: dict[str, Any], config_path: Path) -> dict[str, Any
     else:
         config["clock"] = started
         write_json(config_path, config)
-        ledger_path = ROOT / config.get("stabilityClock", {}).get(
-            "ledgerPath", "config/ci-stability-ledger.json"
+        ledger_path = ROOT / config.get("stabilityClock", {}).get("ledgerPath", "config/ci-stability-ledger.json")
+        ledger = (
+            load_json(ledger_path)
+            if ledger_path.exists()
+            else {
+                "policyVersion": config.get("policyVersion", "F-11"),
+                "uniqueGreenShas": [],
+                "entries": [],
+            }
         )
-        ledger = load_json(ledger_path) if ledger_path.exists() else {
-            "policyVersion": config.get("policyVersion", "F-11"),
-            "uniqueGreenShas": [],
-            "entries": [],
-        }
         ledger["clockStartedAt"] = started["startedAt"]
         ledger["clockStartedCommit"] = started["startedCommit"]
         write_json(ledger_path, ledger)
@@ -190,11 +190,15 @@ def sync_unique_shas(config: dict[str, Any], *, dry_run: bool = False) -> dict[s
 
     stability = config.get("stabilityClock") or {}
     ledger_path = ROOT / stability.get("ledgerPath", "config/ci-stability-ledger.json")
-    ledger = load_json(ledger_path) if ledger_path.exists() else {
-        "policyVersion": config.get("policyVersion", "F-11"),
-        "uniqueGreenShas": [],
-        "entries": [],
-    }
+    ledger = (
+        load_json(ledger_path)
+        if ledger_path.exists()
+        else {
+            "policyVersion": config.get("policyVersion", "F-11"),
+            "uniqueGreenShas": [],
+            "entries": [],
+        }
+    )
     # Required checks union across protected branches.
     required: set[str] = set()
     for branch_config in config["branches"].values():
@@ -212,8 +216,7 @@ def sync_unique_shas(config: dict[str, Any], *, dry_run: bool = False) -> dict[s
         ledger, result = record_unique_green_sha(
             ledger,
             sha=item["sha"],
-            recorded_at=item.get("createdAt")
-            or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            recorded_at=item.get("createdAt") or datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             event=item.get("event") or "sync",
             branch=item.get("branch"),
             run_ids=item.get("runIds") or [],
@@ -308,12 +311,16 @@ def main() -> int:
     if args.record_sha:
         stability = config.get("stabilityClock") or {}
         ledger_path = ROOT / stability.get("ledgerPath", "config/ci-stability-ledger.json")
-        ledger = load_json(ledger_path) if ledger_path.exists() else {
-            "policyVersion": config.get("policyVersion", "F-11"),
-            "uniqueGreenShas": [],
-            "entries": [],
-        }
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        ledger = (
+            load_json(ledger_path)
+            if ledger_path.exists()
+            else {
+                "policyVersion": config.get("policyVersion", "F-11"),
+                "uniqueGreenShas": [],
+                "entries": [],
+            }
+        )
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         ledger, result = record_unique_green_sha(
             ledger,
             sha=args.record_sha,
@@ -338,10 +345,14 @@ def main() -> int:
     if args.clock_status or args.record_sha:
         stability = config.get("stabilityClock") or {}
         ledger_path = ROOT / stability.get("ledgerPath", "config/ci-stability-ledger.json")
-        ledger = load_json(ledger_path) if ledger_path.exists() else {
-            "uniqueGreenShas": [],
-            "entries": [],
-        }
+        ledger = (
+            load_json(ledger_path)
+            if ledger_path.exists()
+            else {
+                "uniqueGreenShas": [],
+                "entries": [],
+            }
+        )
         evaluation = evaluate_clock(
             clock=config.get("clock") or {},
             ledger=ledger,

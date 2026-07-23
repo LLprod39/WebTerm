@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -28,16 +28,16 @@ def test_normalize_sha_rejects_invalid() -> None:
 
 
 def test_calendar_days_elapsed_counts_utc_dates() -> None:
-    started = datetime(2026, 7, 1, 23, 0, tzinfo=timezone.utc)
-    now = datetime(2026, 7, 15, 1, 0, tzinfo=timezone.utc)
+    started = datetime(2026, 7, 1, 23, 0, tzinfo=UTC)
+    now = datetime(2026, 7, 15, 1, 0, tzinfo=UTC)
     assert calendar_days_elapsed(started, now) == 14
     assert is_calendar_gate_met(started, 14, now) is True
     # Date-based and conservative: the 14th calendar day is reached on 2026-07-15
     # (UTC date), independent of the time of day. The window must never open a day
     # early just because the clock happened to start late on 07-01 (no acceleration).
-    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 15, 0, 0, tzinfo=timezone.utc)) is True
-    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 14, 23, 0, tzinfo=timezone.utc)) is False
-    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 14, 0, 0, tzinfo=timezone.utc)) is False
+    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 15, 0, 0, tzinfo=UTC)) is True
+    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 14, 23, 0, tzinfo=UTC)) is False
+    assert is_calendar_gate_met(started, 14, datetime(2026, 7, 14, 0, 0, tzinfo=UTC)) is False
 
 
 def test_record_unique_green_sha_counts_only_first_occurrence() -> None:
@@ -77,7 +77,7 @@ def test_evaluate_clock_requires_both_gates() -> None:
         "uniqueGreenShas": [f"{i:040x}" for i in range(30)],
         "entries": [],
     }
-    now = datetime(2026, 7, 15, 12, 0, tzinfo=timezone.utc)
+    now = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
     result = evaluate_clock(
         clock=clock,
         ledger=ledger,
@@ -95,7 +95,7 @@ def test_evaluate_clock_requires_both_gates() -> None:
         ledger=ledger,
         min_calendar_days=14,
         min_unique_green_shas=30,
-        now=datetime(2026, 7, 10, 12, 0, tzinfo=timezone.utc),
+        now=datetime(2026, 7, 10, 12, 0, tzinfo=UTC),
     )
     assert early["calendarGateMet"] is False
     assert early["uniqueShaGateMet"] is True
@@ -127,7 +127,7 @@ def test_evaluate_clock_not_started() -> None:
 
 def test_start_clock_payload_shape() -> None:
     payload = start_clock_payload(
-        started_at=datetime(2026, 7, 24, 10, 0, tzinfo=timezone.utc),
+        started_at=datetime(2026, 7, 24, 10, 0, tzinfo=UTC),
         started_commit="cccccccccccccccccccccccccccccccccccccccc",
         started_by="test",
         applied_branches=["main", "test"],

@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -82,11 +82,15 @@ def append_break_glass(
     incident_url: str,
     opened_by: str,
 ) -> dict[str, Any]:
-    payload = load_json(log_path) if log_path.exists() else {
-        "policyVersion": "F-11",
-        "incidents": [],
-    }
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    payload = (
+        load_json(log_path)
+        if log_path.exists()
+        else {
+            "policyVersion": "F-11",
+            "incidents": [],
+        }
+    )
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     entry = {
         "id": f"bg-{len(payload.get('incidents', [])) + 1:04d}",
         "openedAt": now,
@@ -113,7 +117,7 @@ def close_break_glass(
     restored_evidence_url: str,
 ) -> dict[str, Any]:
     payload = load_json(log_path)
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     found = None
     for item in payload.get("incidents", []):
         if item.get("id") == incident_id:
@@ -156,7 +160,7 @@ def collect_green_unique_shas_from_github(
         text = since.replace("Z", "+00:00")
         since_dt = datetime.fromisoformat(text)
         if since_dt.tzinfo is None:
-            since_dt = since_dt.replace(tzinfo=timezone.utc)
+            since_dt = since_dt.replace(tzinfo=UTC)
 
     candidates: dict[str, dict[str, Any]] = {}
     for branch in branches:

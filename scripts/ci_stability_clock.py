@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -25,14 +25,14 @@ def parse_utc(value: str | None) -> datetime | None:
         text = text[:-1] + "+00:00"
     dt = datetime.fromisoformat(text)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
+    return dt.astimezone(UTC)
 
 
 def calendar_days_elapsed(started_at: datetime, now: datetime | None = None) -> int:
     """Whole calendar days between start date and now (UTC), inclusive of start day zero."""
-    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-    start_day = started_at.astimezone(timezone.utc).date()
+    current = (now or datetime.now(UTC)).astimezone(UTC)
+    start_day = started_at.astimezone(UTC).date()
     current_day = current.date()
     return max(0, (current_day - start_day).days)
 
@@ -143,7 +143,7 @@ def evaluate_clock(
     started_at = parse_utc(started_raw) if started_raw else None
     unique_shas = list(ledger.get("uniqueGreenShas") or [])
     unique_count = len(unique_shas)
-    current = now or datetime.now(timezone.utc)
+    current = now or datetime.now(UTC)
 
     if status != "started" or started_at is None:
         return {
@@ -200,7 +200,7 @@ def start_clock_payload(
 ) -> dict[str, Any]:
     return {
         "status": "started",
-        "startedAt": started_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "startedAt": started_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "startedCommit": normalize_sha(started_commit),
         "startedBy": started_by,
         "appliedBranches": list(applied_branches),
@@ -251,14 +251,18 @@ def main() -> int:
     config = load_json(args.config)
     clock_cfg = config.get("stabilityClock", {})
     ledger_path = args.ledger or (ROOT / clock_cfg.get("ledgerPath", "config/ci-stability-ledger.json"))
-    ledger = load_json(ledger_path) if ledger_path.exists() else {
-        "policyVersion": config.get("policyVersion", "F-11"),
-        "uniqueGreenShas": [],
-        "entries": [],
-    }
+    ledger = (
+        load_json(ledger_path)
+        if ledger_path.exists()
+        else {
+            "policyVersion": config.get("policyVersion", "F-11"),
+            "uniqueGreenShas": [],
+            "entries": [],
+        }
+    )
 
     if args.record_sha:
-        now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         ledger, result = record_unique_green_sha(
             ledger,
             sha=args.record_sha,
