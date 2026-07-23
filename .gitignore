@@ -153,7 +153,12 @@ graphify-out/
 /PRODUCTION_READINESS_PLAN.md
 /SECURITY_QA_FOR_IS_REVIEW.md
 /AI_MEMORY_PRESENTATION.md
-docs/
+# Internal docs tree (local-only). Re-include only the public F-11 CI governance contract.
+docs/**
+!docs/architecture/
+docs/architecture/**
+!docs/architecture/CI_GOVERNANCE.md
+
 
 .gemini/
 gha-creds-*.json

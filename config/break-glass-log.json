@@ -1,0 +1,5 @@
+{
+  "policyVersion": "F-11",
+  "description": "Logged emergency admin merges that temporarily bypass required checks. Empty means no break-glass events recorded.",
+  "incidents": []
+}

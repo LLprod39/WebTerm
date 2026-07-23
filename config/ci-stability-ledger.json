@@ -1,0 +1,8 @@
+{
+  "policyVersion": "F-11",
+  "description": "Unique-SHA green merge-candidate/scheduled runs after the F-11 clock start. Reruns of the same SHA do not increase the denominator.",
+  "clockStartedAt": null,
+  "clockStartedCommit": null,
+  "uniqueGreenShas": [],
+  "entries": []
+}

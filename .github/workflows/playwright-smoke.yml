@@ -1,16 +1,12 @@
 name: Playwright Smoke
 
 on:
+  # Always run on protected-branch PRs/pushes so the required F-11 check context
+  # is never missing because of path filters.
   pull_request:
     branches: [test, main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/playwright-smoke.yml"
   push:
     branches: [test, main]
-    paths:
-      - "frontend/**"
-      - ".github/workflows/playwright-smoke.yml"
   workflow_dispatch:
 
 permissions:

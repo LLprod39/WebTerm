@@ -1,22 +1,97 @@
 {
   "repository": "LLprod39/WebTerm",
+  "policyVersion": "F-11",
   "minimumPushCapableCollaborators": 2,
+  "breakGlass": {
+    "enforceAdmins": true,
+    "allowPermanentAdminBypass": false,
+    "requiresLoggedIncident": true,
+    "logPath": "config/break-glass-log.json",
+    "procedure": [
+      "Open/append an incident entry in config/break-glass-log.json (or run: python scripts/github_governance.py --break-glass ...)",
+      "Record reason, approver, expiry (UTC), and linked incident/PR URL",
+      "Temporarily relax only the minimum protection needed via GitHub UI/API as admin",
+      "Complete the emergency merge/push",
+      "Immediately re-apply protection: python scripts/github_governance.py --apply",
+      "Close the break-glass log entry with restoredAt + evidence URL"
+    ]
+  },
+  "stabilityClock": {
+    "minCalendarDays": 14,
+    "minUniqueGreenShas": 30,
+    "countRerunsOfSameSha": false,
+    "eligibleEvents": [
+      "pull_request",
+      "push",
+      "schedule",
+      "workflow_dispatch"
+    ],
+    "mergeCandidateBranches": [
+      "test",
+      "main"
+    ],
+    "productWorkflows": [
+      "Backend CI",
+      "Frontend CI",
+      "Architecture Fitness",
+      "Playwright Smoke",
+      "Security"
+    ],
+    "ledgerPath": "config/ci-stability-ledger.json",
+    "p95MaxMinutes": 15
+  },
   "branches": {
     "test": {
       "requiredChecks": [
         "Runtime Contract",
+        "Python Quality",
+        "Django Checks",
+        "Backend Unit and Coverage",
+        "PostgreSQL and Redis Integration",
+        "Production Checks",
         "Documentation Contract",
         "Frontend Lock",
-        "Architecture No Regression"
+        "Frontend Typecheck and Lint",
+        "Frontend Unit and Coverage",
+        "Frontend Production Build",
+        "Architecture No Regression",
+        "God-file & Import Boundary Checks",
+        "Playwright Smoke",
+        "Python dependency audit",
+        "npm dependency audit",
+        "SBOM, checksums, provenance",
+        "Secrets-never and security unit tests"
       ]
     },
     "main": {
       "requiredChecks": [
         "Runtime Contract",
+        "Python Quality",
+        "Django Checks",
+        "Backend Unit and Coverage",
+        "PostgreSQL and Redis Integration",
+        "Production Checks",
         "Documentation Contract",
         "Frontend Lock",
-        "Architecture No Regression"
+        "Frontend Typecheck and Lint",
+        "Frontend Unit and Coverage",
+        "Frontend Production Build",
+        "Architecture No Regression",
+        "God-file & Import Boundary Checks",
+        "Playwright Smoke",
+        "Python dependency audit",
+        "npm dependency audit",
+        "SBOM, checksums, provenance",
+        "Secrets-never and security unit tests"
       ]
     }
+  },
+  "clock": {
+    "status": "not_started",
+    "startedAt": null,
+    "startedCommit": null,
+    "startedBy": null,
+    "appliedBranches": [],
+    "notes": "Clock starts only when F-11 required checks are successfully applied to branch protection on test and main. It cannot be backdated or accelerated."
   }
 }
