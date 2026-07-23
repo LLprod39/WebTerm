@@ -24,7 +24,9 @@ def secret_values_visible_for_request(user, ref, requested: bool | str) -> bool:
     if str(getattr(ref, "kind", "")).lower() != "secret":
         return False
     if not str(getattr(ref, "name", "") or "").strip():
-        raise SecretValueAccessError("Secret values require a named Secret.", code="secret_read_requires_name", status=400)
+        raise SecretValueAccessError(
+            "Secret values require a named Secret.", code="secret_read_requires_name", status=400
+        )
     if not secret_values_allowed_for_user(user):
         raise SecretValueAccessError(
             "Secret value read access is required.",

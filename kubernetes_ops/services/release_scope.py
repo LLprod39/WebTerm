@@ -7,13 +7,37 @@ from django.conf import settings
 PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 PRODUCTION_CORE_EVIDENCE_REFS = (
     ("production_approval", "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "<change-or-approval-id>"),
-    ("production_evidence", "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF", "<operator-reviewed production evidence bundle ref>"),
-    ("identity_runtime", "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF", "<production SSO/Keycloak runtime evidence ref>"),
-    ("live_provider", "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF", "<production Rancher/Fleet/Devtron live provider evidence ref>"),
+    (
+        "production_evidence",
+        "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF",
+        "<operator-reviewed production evidence bundle ref>",
+    ),
+    (
+        "identity_runtime",
+        "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF",
+        "<production SSO/Keycloak runtime evidence ref>",
+    ),
+    (
+        "live_provider",
+        "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+        "<production Rancher/Fleet/Devtron live provider evidence ref>",
+    ),
     ("readonly_rbac", "KUBERNETES_OPS_READONLY_RBAC_EVIDENCE_REF", "<production read-only RBAC can-i evidence ref>"),
-    ("kubernetes_mcp", "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF", "<production Kubernetes MCP READ_ONLY smoke evidence ref>"),
-    ("production_rollback", "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF", "<production rollback drill evidence ref>"),
-    ("native_verification", "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF", "<production native verification evidence ref>"),
+    (
+        "kubernetes_mcp",
+        "KUBERNETES_OPS_KUBERNETES_MCP_EVIDENCE_REF",
+        "<production Kubernetes MCP READ_ONLY smoke evidence ref>",
+    ),
+    (
+        "production_rollback",
+        "KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF",
+        "<production rollback drill evidence ref>",
+    ),
+    (
+        "native_verification",
+        "KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF",
+        "<production native verification evidence ref>",
+    ),
 )
 LOCAL_EVIDENCE_MARKERS = (
     "127.0.0.1",
@@ -69,7 +93,9 @@ def build_kubernetes_release_scope_report(
         reason = "local/test evidence cannot approve production sidebar enablement"
     elif missing_non_approval_refs:
         status = "missing_refs"
-        reason = "production evidence refs are required: " + ", ".join(item["setting"] for item in missing_non_approval_refs)
+        reason = "production evidence refs are required: " + ", ".join(
+            item["setting"] for item in missing_non_approval_refs
+        )
     else:
         status = "ready"
         reason = "production release scope is explicitly approved"
@@ -102,8 +128,13 @@ def _production_approval_ref() -> str:
 
 
 def production_core_reference_checks(*, production_required: bool | None = None) -> list[dict[str, Any]]:
-    required = _release_environment() in PRODUCTION_ENVIRONMENTS if production_required is None else bool(production_required)
-    return [_reference_item(ref_id, setting, expected, required) for ref_id, setting, expected in PRODUCTION_CORE_EVIDENCE_REFS]
+    required = (
+        _release_environment() in PRODUCTION_ENVIRONMENTS if production_required is None else bool(production_required)
+    )
+    return [
+        _reference_item(ref_id, setting, expected, required)
+        for ref_id, setting, expected in PRODUCTION_CORE_EVIDENCE_REFS
+    ]
 
 
 def _reference_item(ref_id: str, setting: str, expected: str, required: bool) -> dict[str, Any]:

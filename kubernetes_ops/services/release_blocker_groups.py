@@ -2,6 +2,7 @@
 
 Extracted from release_readiness_summary.py to keep modules under the size limit.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from django.conf import settings
 
 from kubernetes_ops.services.release_completion_audit import PRODUCTION_SCOPE_READINESS_CHECK_IDS
+
 
 def _blocker_groups(
     *,
@@ -45,10 +47,25 @@ def _blocker_groups(
     if missing_refs or not production_gate.get("production_target") or production_gate.get("local_indicator_count"):
         blockers: list[dict[str, Any]] = []
         if not production_gate.get("production_target"):
-            blockers.append({"id": "target_environment", "status": "missing", "detail": "Production release environment is not selected."})
+            blockers.append(
+                {
+                    "id": "target_environment",
+                    "status": "missing",
+                    "detail": "Production release environment is not selected.",
+                }
+            )
         if production_gate.get("local_indicator_count"):
-            blockers.append({"id": "local_evidence", "status": "missing", "detail": "Configured evidence still contains local/test markers."})
-        blockers.extend({"id": item["id"], "status": "missing", "detail": f"{item['setting']} is required."} for item in missing_refs)
+            blockers.append(
+                {
+                    "id": "local_evidence",
+                    "status": "missing",
+                    "detail": "Configured evidence still contains local/test markers.",
+                }
+            )
+        blockers.extend(
+            {"id": item["id"], "status": "missing", "detail": f"{item['setting']} is required."}
+            for item in missing_refs
+        )
         groups.append(
             _group(
                 "production_scope",
@@ -59,7 +76,11 @@ def _blocker_groups(
         )
 
     artifact_blockers = []
-    if artifact_report.get("status") != "ready" or not artifact_report.get("production_ready") or not artifact_report.get("ready_for_sidebar"):
+    if (
+        artifact_report.get("status") != "ready"
+        or not artifact_report.get("production_ready")
+        or not artifact_report.get("ready_for_sidebar")
+    ):
         artifact_blockers.append(
             {
                 "id": "release_artifact",
@@ -67,7 +88,10 @@ def _blocker_groups(
                 "detail": str(artifact_report.get("detail") or "Release evidence artifact is not production-ready."),
             }
         )
-    artifact_blockers.extend({"id": f"artifact_error_{index + 1}", "status": "missing", "detail": str(item)} for index, item in enumerate(artifact_report.get("errors") or []))
+    artifact_blockers.extend(
+        {"id": f"artifact_error_{index + 1}", "status": "missing", "detail": str(item)}
+        for index, item in enumerate(artifact_report.get("errors") or [])
+    )
     if artifact_blockers:
         groups.append(
             _group(
@@ -78,7 +102,10 @@ def _blocker_groups(
             )
         )
 
-    evidence_blockers = [{"id": str(item), "status": "blocked", "detail": str(item)} for item in artifact_summary.get("top_blockers") or []]
+    evidence_blockers = [
+        {"id": str(item), "status": "blocked", "detail": str(item)}
+        for item in artifact_summary.get("top_blockers") or []
+    ]
     if evidence_blockers:
         groups.append(
             _group(
@@ -103,7 +130,11 @@ def _group(group_id: str, title: str, blockers: list[dict[str, Any]], next_step:
 
 
 def _missing_refs(production_gate: dict[str, Any]) -> list[dict[str, str]]:
-    refs = production_gate.get("missing_required_references") if isinstance(production_gate.get("missing_required_references"), list) else []
+    refs = (
+        production_gate.get("missing_required_references")
+        if isinstance(production_gate.get("missing_required_references"), list)
+        else []
+    )
     result: list[dict[str, str]] = []
     for item in refs:
         if not isinstance(item, dict):

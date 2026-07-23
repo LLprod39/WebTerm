@@ -92,8 +92,16 @@ def _apply_template(manifest: dict, *, template: str, plugin_id: str, slug: str,
                 "category": "Plugin",
                 "required_permission": permission_scope,
                 "executor_ref": executor_ref,
-                "input_schema": {"type": "object", "properties": {"value": {"type": "string"}}, "additionalProperties": True},
-                "output_schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "additionalProperties": True},
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"value": {"type": "string"}},
+                    "additionalProperties": True,
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {"ok": {"type": "boolean"}},
+                    "additionalProperties": True,
+                },
                 "source_handles": ["success", "error"],
             }
         )
@@ -113,10 +121,10 @@ def _apply_template(manifest: dict, *, template: str, plugin_id: str, slug: str,
         )
 
     if template in {"connector", "full"}:
-        manifest["secrets"].append(
-            {"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True}
+        manifest["secrets"].append({"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True})
+        manifest["egress"].append(
+            {"host": "example.com", "ports": [443], "reason": "Replace with the connector API host."}
         )
-        manifest["egress"].append({"host": "example.com", "ports": [443], "reason": "Replace with the connector API host."})
         surfaces["connectors"].append(
             {
                 "id": "connector",
@@ -199,15 +207,15 @@ def _backend_plugin_template(plugin_id: str) -> str:
     return (
         "from __future__ import annotations\n\n"
         "def handle(payload):\n"
-        "    arguments = payload.get(\"arguments\") if isinstance(payload, dict) else {}\n"
+        '    arguments = payload.get("arguments") if isinstance(payload, dict) else {}\n'
         "    if not isinstance(arguments, dict):\n"
         "        arguments = {}\n"
         "    return {\n"
-        "        \"success\": True,\n"
-        f"        \"plugin_id\": \"{plugin_id}\",\n"
-        "        \"result\": {\n"
-        "            \"ok\": True,\n"
-        "            \"echo\": arguments.get(\"value\", \"\"),\n"
+        '        "success": True,\n'
+        f'        "plugin_id": "{plugin_id}",\n'
+        '        "result": {\n'
+        '            "ok": True,\n'
+        '            "echo": arguments.get("value", ""),\n'
         "        },\n"
         "    }\n"
     )
@@ -255,7 +263,11 @@ class Command(BaseCommand):
         )
         _write(target / "CHANGELOG.md", "# Changelog\n\n## 0.1.0\n\n- Initial scaffold.\n", force=force)
         _write(target / "LICENSE", "Proprietary. Replace this file before publishing.\n", force=force)
-        _write(target / "docs" / "usage.md", f"# {manifest['name']} Usage\n\nDocument setup, permissions, and uninstall impact here.\n", force=force)
+        _write(
+            target / "docs" / "usage.md",
+            f"# {manifest['name']} Usage\n\nDocument setup, permissions, and uninstall impact here.\n",
+            force=force,
+        )
         template = str(options.get("template") or "empty")
         sandbox_template = template in SANDBOX_TEMPLATES
         _write(
@@ -270,10 +282,26 @@ class Command(BaseCommand):
         )
         if sandbox_template:
             _write(target / "backend" / "plugin.py", _backend_plugin_template(plugin_id), force=force)
-        _write(target / "backend" / "tests" / "README.md", "Add plugin contract tests here before private extension rollout.\n", force=force)
+        _write(
+            target / "backend" / "tests" / "README.md",
+            "Add plugin contract tests here before private extension rollout.\n",
+            force=force,
+        )
         _write(target / "frontend" / "manifest.json", json.dumps({"components": []}, indent=2) + "\n", force=force)
-        _write(target / "assets" / "icon.svg", "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 64 64\"><rect width=\"64\" height=\"64\" rx=\"8\" fill=\"#0f766e\"/><path d=\"M18 34h28v6H18zM18 24h28v6H18z\" fill=\"#ffffff\"/></svg>\n", force=force)
-        _write(target / "migrations" / "README.md", "Declarative migrations are not supported in the safe extension foundation.\n", force=force)
-        _write(target / "signatures" / "README.md", "Package signatures can be added by review/signing services when that hardening is enabled.\n", force=force)
+        _write(
+            target / "assets" / "icon.svg",
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#0f766e"/><path d="M18 34h28v6H18zM18 24h28v6H18z" fill="#ffffff"/></svg>\n',
+            force=force,
+        )
+        _write(
+            target / "migrations" / "README.md",
+            "Declarative migrations are not supported in the safe extension foundation.\n",
+            force=force,
+        )
+        _write(
+            target / "signatures" / "README.md",
+            "Package signatures can be added by review/signing services when that hardening is enabled.\n",
+            force=force,
+        )
 
         self.stdout.write(self.style.SUCCESS(f"Scaffolded {plugin_id} ({template}) at {target}."))

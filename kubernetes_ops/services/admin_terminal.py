@@ -28,10 +28,14 @@ from kubernetes_ops.services.provider_clients import provider_path
 CLUSTER_TERMINAL_VERB = getattr(K8sAdminAction, "VERB_CLUSTER_TERMINAL", "cluster_terminal")
 
 
-def prepare_cluster_terminal_start(*, user, session: K8sAdminSession, reason: str, include_restricted_context: bool = False) -> dict[str, Any]:
+def prepare_cluster_terminal_start(
+    *, user, session: K8sAdminSession, reason: str, include_restricted_context: bool = False
+) -> dict[str, Any]:
     session = _validate_break_glass_terminal_session(user=user, session=session)
     reason_value = _required_reason(reason)
-    restricted_context = build_restricted_kube_context_for_session(session=session, include_manifest=include_restricted_context)
+    restricted_context = build_restricted_kube_context_for_session(
+        session=session, include_manifest=include_restricted_context
+    )
     transport_contract = _assert_transport_prerequisites(session=session)
     blocked_reason = _blocked_reason()
     request_summary = {
@@ -53,7 +57,9 @@ def prepare_cluster_terminal_start(*, user, session: K8sAdminSession, reason: st
         "payload_stored": False,
         "transport_contract": transport_contract,
     }
-    action = _record_terminal_action(user=user, session=session, request_summary=request_summary, response_summary=response_summary)
+    action = _record_terminal_action(
+        user=user, session=session, request_summary=request_summary, response_summary=response_summary
+    )
     recording = create_interactive_recording(
         user=user,
         session=session,
@@ -63,7 +69,9 @@ def prepare_cluster_terminal_start(*, user, session: K8sAdminSession, reason: st
         status=K8sAdminRecording.STATUS_BLOCKED,
         summary=response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_terminal(
         user=user,
@@ -95,7 +103,9 @@ def prepare_cluster_terminal_start(*, user, session: K8sAdminSession, reason: st
         "action": {"id": str(action.action_id), "status": action.status},
         "policy": {
             "cluster_terminal_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED", False)),
-            "session_recording_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED", False)),
+            "session_recording_enabled": bool(
+                getattr(settings, "KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED", False)
+            ),
             "requires_break_glass_session": True,
             "requires_approval": True,
             "requires_restricted_context": True,
@@ -116,7 +126,9 @@ def prepare_cluster_terminal_stream_context(
     timeout_seconds: int | str | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED", False)):
-        raise AdminResourceError("Cluster terminal transport is disabled by policy.", code="cluster_terminal_disabled", status=403)
+        raise AdminResourceError(
+            "Cluster terminal transport is disabled by policy.", code="cluster_terminal_disabled", status=403
+        )
     session = _validate_break_glass_terminal_session(user=user, session=session)
     reason_value = _required_reason(reason)
     restricted_context = build_restricted_kube_context_for_session(session=session, include_manifest=False)
@@ -165,7 +177,9 @@ def prepare_cluster_terminal_stream_context(
         policy=recording_policy,
         summary=response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_terminal(
         user=user,
@@ -256,11 +270,25 @@ def complete_cluster_terminal_stream(
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_terminal(user=user, session=session, action="k8s.admin_terminal.stream_stopped", payload={"stream_id": stream_id, **summary})
+    _audit_terminal(
+        user=user,
+        session=session,
+        action="k8s.admin_terminal.stream_stopped",
+        payload={"stream_id": stream_id, **summary},
+    )
     return summary
 
 
-def fail_cluster_terminal_stream(*, user, action_id: str, session_pk: int, stream_id: str, error_code: str, stdout_count: int = 0, stderr_count: int = 0) -> dict[str, Any]:
+def fail_cluster_terminal_stream(
+    *,
+    user,
+    action_id: str,
+    session_pk: int,
+    stream_id: str,
+    error_code: str,
+    stdout_count: int = 0,
+    stderr_count: int = 0,
+) -> dict[str, Any]:
     action = K8sAdminAction.objects.select_related("session", "cluster").get(action_id=action_id)
     action.status = K8sAdminAction.STATUS_FAILED
     summary = {
@@ -282,7 +310,12 @@ def fail_cluster_terminal_stream(*, user, action_id: str, session_pk: int, strea
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_terminal(user=user, session=session, action="k8s.admin_terminal.stream_failed", payload={"stream_id": stream_id, **summary})
+    _audit_terminal(
+        user=user,
+        session=session,
+        action="k8s.admin_terminal.stream_failed",
+        payload={"stream_id": stream_id, **summary},
+    )
     return summary
 
 
@@ -292,7 +325,11 @@ def reject_cluster_terminal_stop(*, user, session: K8sAdminSession, action_id: s
         user=user,
         session=session,
         action="k8s.admin_terminal.stop_rejected",
-        payload={"action_id": str(action_id or ""), "reason": str(reason or "")[:1000], "code": "cluster_terminal_not_running"},
+        payload={
+            "action_id": str(action_id or ""),
+            "reason": str(reason or "")[:1000],
+            "code": "cluster_terminal_not_running",
+        },
     )
     raise AdminResourceError("Cluster terminal is not running.", code="cluster_terminal_not_running", status=409)
 
@@ -303,9 +340,13 @@ def _validate_break_glass_terminal_session(*, user, session: K8sAdminSession) ->
         raise AdminResourceError("Kubernetes break-glass access is required.", code="break_glass_required", status=403)
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_not_active", status=403)
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Cluster terminal requires a break-glass admin session.", code="break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Cluster terminal requires a break-glass admin session.", code="break_glass_session_required", status=403
+        )
     if session.user_id != getattr(user, "id", None):
         raise AdminResourceError("Admin session not found.", code="admin_session_not_found", status=404)
     assert_admin_session_approved(session=session, action=CLUSTER_TERMINAL_VERB)
@@ -353,7 +394,9 @@ def _context_summary(context: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _record_terminal_action(*, user, session: K8sAdminSession, request_summary: dict[str, Any], response_summary: dict[str, Any]) -> K8sAdminAction:
+def _record_terminal_action(
+    *, user, session: K8sAdminSession, request_summary: dict[str, Any], response_summary: dict[str, Any]
+) -> K8sAdminAction:
     return K8sAdminAction.objects.create(
         session=session,
         user=user,

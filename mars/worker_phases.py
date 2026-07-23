@@ -62,12 +62,18 @@ def _gemini_prefix(role: str, docker_runtime: bool) -> list[str]:
 
 def _codex_timeout(role: str) -> int:
     role_name = role.upper()
-    return int(getattr(settings, f"MARS_CODEX_{role_name}_TIMEOUT_SECONDS", None) or getattr(settings, "MARS_CODEX_TIMEOUT_SECONDS", 1800))
+    return int(
+        getattr(settings, f"MARS_CODEX_{role_name}_TIMEOUT_SECONDS", None)
+        or getattr(settings, "MARS_CODEX_TIMEOUT_SECONDS", 1800)
+    )
 
 
 def _gemini_timeout(role: str) -> int:
     role_name = role.upper()
-    return int(getattr(settings, f"MARS_GEMINI_{role_name}_TIMEOUT_SECONDS", None) or getattr(settings, "MARS_GEMINI_TIMEOUT_SECONDS", 900))
+    return int(
+        getattr(settings, f"MARS_GEMINI_{role_name}_TIMEOUT_SECONDS", None)
+        or getattr(settings, "MARS_GEMINI_TIMEOUT_SECONDS", 900)
+    )
 
 
 async def _save_instance(instance, update_fields: list[str]) -> None:
@@ -230,7 +236,7 @@ async def _stream_process(
     stderr_task = asyncio.create_task(read_stream(process.stderr, "stderr"))
     try:
         await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         await sync_to_async(record_event)(run, f"{event_prefix}_timeout", f"{event_prefix} timed out")
         await process.wait()
@@ -238,7 +244,9 @@ async def _stream_process(
         await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
 
     exit_code = int(process.returncode or 0)
-    await sync_to_async(record_event)(run, f"{event_prefix}_finished", f"{event_prefix} exited {exit_code}", {"exit_code": exit_code})
+    await sync_to_async(record_event)(
+        run, f"{event_prefix}_finished", f"{event_prefix} exited {exit_code}", {"exit_code": exit_code}
+    )
     return exit_code, "\n".join(output_chunks)[-120_000:]
 
 
@@ -401,7 +409,9 @@ async def _run_verification(
         timeout_seconds=int(getattr(settings, "MARS_TEST_TIMEOUT_SECONDS", 900)),
     )
     if test_exit != 0:
-        await sync_to_async(record_event)(run, f"{event_prefix}_failed", "Configured verification failed", {"exit_code": test_exit})
+        await sync_to_async(record_event)(
+            run, f"{event_prefix}_failed", "Configured verification failed", {"exit_code": test_exit}
+        )
     else:
         await sync_to_async(record_event)(run, f"{event_prefix}_passed", "Configured verification passed")
     return test_exit, test_output

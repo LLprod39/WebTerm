@@ -20,13 +20,9 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user = self._resolve_user(options.get("username"))
         pipeline = ensure_all_nodes_smoke_pipeline(user)
-        trigger_types = list(
-            pipeline.triggers.order_by("created_at", "id").values_list("trigger_type", flat=True)
-        )
+        trigger_types = list(pipeline.triggers.order_by("created_at", "id").values_list("trigger_type", flat=True))
         self.stdout.write(
-            self.style.SUCCESS(
-                f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.'
-            )
+            self.style.SUCCESS(f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.')
         )
         self.stdout.write(f"Studio path: /studio/pipeline/{pipeline.id}")
         self.stdout.write(f"Triggers: {', '.join(trigger_types)}")

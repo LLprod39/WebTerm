@@ -35,7 +35,10 @@ PENDING_PREVIEW_LIMIT = 20
 
 
 def _action_needs_post_review(action: K8sAdminAction) -> bool:
-    return action.session.mode == K8sAdminSession.MODE_BREAK_GLASS or action.verb in BREAK_GLASS_REVIEW_VERBS | WRITE_REVIEW_VERBS
+    return (
+        action.session.mode == K8sAdminSession.MODE_BREAK_GLASS
+        or action.verb in BREAK_GLASS_REVIEW_VERBS | WRITE_REVIEW_VERBS
+    )
 
 
 def _has_post_review(action: K8sAdminAction) -> bool:

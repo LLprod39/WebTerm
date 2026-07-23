@@ -18,16 +18,30 @@ class _WorkerSpec:
 
 
 class Command(BaseCommand):
-    help = "Supervise long-running ops workers: memory dreams, execution plane, scheduled agents, and optional watchers."
+    help = (
+        "Supervise long-running ops workers: memory dreams, execution plane, scheduled agents, and optional watchers."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument("--with-watchers", action="store_true", help="Also supervise the watchers worker")
-        parser.add_argument("--with-scheduled-agents", action="store_true", help="Also supervise scheduled server agents")
-        parser.add_argument("--restart-delay", type=int, default=5, help="Seconds to wait before restarting a dead worker")
-        parser.add_argument("--lease-seconds", type=int, default=180, help="Lease heartbeat duration passed to child workers")
-        parser.add_argument("--dream-interval", type=int, default=300, help="Poll interval for run_memory_dreams --daemon")
-        parser.add_argument("--execution-interval", type=int, default=5, help="Poll interval for run_agent_execution_plane")
-        parser.add_argument("--scheduled-agents-interval", type=int, default=60, help="Poll interval for run_scheduled_agents")
+        parser.add_argument(
+            "--with-scheduled-agents", action="store_true", help="Also supervise scheduled server agents"
+        )
+        parser.add_argument(
+            "--restart-delay", type=int, default=5, help="Seconds to wait before restarting a dead worker"
+        )
+        parser.add_argument(
+            "--lease-seconds", type=int, default=180, help="Lease heartbeat duration passed to child workers"
+        )
+        parser.add_argument(
+            "--dream-interval", type=int, default=300, help="Poll interval for run_memory_dreams --daemon"
+        )
+        parser.add_argument(
+            "--execution-interval", type=int, default=5, help="Poll interval for run_agent_execution_plane"
+        )
+        parser.add_argument(
+            "--scheduled-agents-interval", type=int, default=60, help="Poll interval for run_scheduled_agents"
+        )
         parser.add_argument("--scheduled-agents-limit", type=int, default=100, help="Scheduled agents batch limit")
         parser.add_argument("--watchers-interval", type=int, default=120, help="Poll interval for run_watchers")
         parser.add_argument("--watchers-limit", type=int, default=100, help="Watcher batch limit")
@@ -107,7 +121,11 @@ class Command(BaseCommand):
                 args=base
                 + [
                     "run_memory_dreams",
-                    *(["--once"] if once else ["--daemon", "--interval", str(max(60, int(options["dream_interval"] or 300)))]),
+                    *(
+                        ["--once"]
+                        if once
+                        else ["--daemon", "--interval", str(max(60, int(options["dream_interval"] or 300)))]
+                    ),
                     "--lease-seconds",
                     str(lease_seconds),
                 ],
@@ -132,7 +150,15 @@ class Command(BaseCommand):
                     args=base
                     + [
                         "run_scheduled_agents",
-                        *(["--once"] if once else ["--daemon", "--interval", str(max(15, int(options["scheduled_agents_interval"] or 60)))]),
+                        *(
+                            ["--once"]
+                            if once
+                            else [
+                                "--daemon",
+                                "--interval",
+                                str(max(15, int(options["scheduled_agents_interval"] or 60))),
+                            ]
+                        ),
                         "--worker-key",
                         "default",
                         "--lease-seconds",
@@ -149,7 +175,11 @@ class Command(BaseCommand):
                     args=base
                     + [
                         "run_watchers",
-                        *(["--once"] if once else ["--daemon", "--interval", str(max(30, int(options["watchers_interval"] or 120)))]),
+                        *(
+                            ["--once"]
+                            if once
+                            else ["--daemon", "--interval", str(max(30, int(options["watchers_interval"] or 120)))]
+                        ),
                         "--lease-seconds",
                         str(lease_seconds),
                         "--limit",

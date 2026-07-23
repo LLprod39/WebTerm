@@ -4,7 +4,7 @@ import json
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,14 +67,20 @@ def verify_kubernetes_readonly_rbac_live(
         if apply_result.returncode != 0:
             errors.append("kubectl_apply_failed:" + _stderr(apply_result))
 
-    allowed = [_can_i(runner, options, subject, verb, resource, namespaced) for verb, resource, namespaced in ALLOWED_CAN_I_CHECKS]
-    denied = [_can_i(runner, options, subject, verb, resource, namespaced) for verb, resource, namespaced in DENIED_CAN_I_CHECKS]
+    allowed = [
+        _can_i(runner, options, subject, verb, resource, namespaced)
+        for verb, resource, namespaced in ALLOWED_CAN_I_CHECKS
+    ]
+    denied = [
+        _can_i(runner, options, subject, verb, resource, namespaced)
+        for verb, resource, namespaced in DENIED_CAN_I_CHECKS
+    ]
     errors.extend(_can_i_errors(allowed, expected=True))
     errors.extend(_can_i_errors(denied, expected=False))
 
     return {
         "status": "ready" if not errors else "missing",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "context": context,
         "kubectl": options.kubectl,
         "manifest_path": str(options.manifest_path),
@@ -92,7 +98,9 @@ def write_live_rbac_evidence(report: dict[str, Any], output_path: Path) -> None:
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _can_i(runner: KubectlRunner, options: KubectlProbeOptions, subject: str, verb: str, resource: str, namespaced: bool) -> dict[str, Any]:
+def _can_i(
+    runner: KubectlRunner, options: KubectlProbeOptions, subject: str, verb: str, resource: str, namespaced: bool
+) -> dict[str, Any]:
     args = _context_args(options) + ["auth", "can-i", verb, resource, f"--as={subject}"]
     if namespaced:
         args.append(f"--namespace={options.probe_namespace}")

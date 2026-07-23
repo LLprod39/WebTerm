@@ -21,30 +21,21 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
     items: list[dict] = []
     filters = Q(content__icontains=query) | Q(title__icontains=query)
     if server_id is not None:
-        for item in (
-            ServerMemorySnapshot.objects.filter(
-                filters,
-                server_id=server_id,
-                is_active=True,
-                layer=ServerMemorySnapshot.LAYER_CANONICAL,
-            )
-            .order_by("-updated_at")[:12]
-        ):
+        for item in ServerMemorySnapshot.objects.filter(
+            filters,
+            server_id=server_id,
+            is_active=True,
+            layer=ServerMemorySnapshot.LAYER_CANONICAL,
+        ).order_by("-updated_at")[:12]:
             memory_key = str(item.memory_key or "")
             metadata = dict(item.metadata or {})
-            include_manual_operational = (
-                memory_key.startswith(("manual_note:", "knowledge_note:"))
-                and (
-                    str(metadata.get("category") or "").strip().lower() in {"solutions", "services"}
-                    or str(item.title or "").lower().startswith("operational skill:")
-                    or "workflow:" in str(item.content or "").lower()
-                    or "связанный skill:" in str(item.content or "").lower()
-                )
+            include_manual_operational = memory_key.startswith(("manual_note:", "knowledge_note:")) and (
+                str(metadata.get("category") or "").strip().lower() in {"solutions", "services"}
+                or str(item.title or "").lower().startswith("operational skill:")
+                or "workflow:" in str(item.content or "").lower()
+                or "связанный skill:" in str(item.content or "").lower()
             )
-            if (
-                memory_key not in {"runbook", "human_habits"}
-                and not include_manual_operational
-            ):
+            if memory_key not in {"runbook", "human_habits"} and not include_manual_operational:
                 continue
             if memory_key.startswith((PATTERN_CANDIDATE_PREFIX, AUTOMATION_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX)):
                 continue
@@ -70,7 +61,9 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
                 }
             )
         if not items:
-            for item in ServerKnowledge.objects.filter(filters, server_id=server_id, is_active=True).order_by("-updated_at")[:6]:
+            for item in ServerKnowledge.objects.filter(filters, server_id=server_id, is_active=True).order_by(
+                "-updated_at"
+            )[:6]:
                 items.append(
                     {
                         "scope": "server",
@@ -98,7 +91,9 @@ def search_runbooks(query: str, *, server_id: int | None = None, group_id: int |
                     }
                 )
     if group_id is not None:
-        for item in ServerGroupKnowledge.objects.filter(filters, group_id=group_id, is_active=True).order_by("-updated_at")[:6]:
+        for item in ServerGroupKnowledge.objects.filter(filters, group_id=group_id, is_active=True).order_by(
+            "-updated_at"
+        )[:6]:
             items.append(
                 {
                     "scope": "group",
@@ -224,9 +219,31 @@ def extract_runbook_query_terms(query: str) -> list[str]:
     terms = unique_preserving_order([normalized], limit=1)
     token_candidates = re.findall(r"[A-Za-zА-Яа-яЁё0-9_./:-]{3,}", normalized.lower())
     stop_words = {
-        "the", "and", "for", "with", "that", "from", "into", "this", "need", "after",
-        "что", "для", "после", "перед", "если", "или", "при", "это", "как", "без",
-        "server", "agent", "роль", "server_id", "group_id",
+        "the",
+        "and",
+        "for",
+        "with",
+        "that",
+        "from",
+        "into",
+        "this",
+        "need",
+        "after",
+        "что",
+        "для",
+        "после",
+        "перед",
+        "если",
+        "или",
+        "при",
+        "это",
+        "как",
+        "без",
+        "server",
+        "agent",
+        "роль",
+        "server_id",
+        "group_id",
     }
     for token in token_candidates:
         if token in stop_words:

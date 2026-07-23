@@ -98,7 +98,10 @@ class KubernetesOpsDevtronAppDetailTests(TestCase):
         self.assertEqual(payload["summary"]["restart_count"], 3)
         self.assertEqual(payload["summary"]["ready_containers"], 1)
         self.assertEqual(payload["summary"]["total_containers"], 2)
-        self.assertEqual(payload["summary"]["delivery_capabilities"], ["deployment_history", "helm_values", "rollback_context", "logs"])
+        self.assertEqual(
+            payload["summary"]["delivery_capabilities"],
+            ["deployment_history", "helm_values", "rollback_context", "logs"],
+        )
         self.assertTrue(payload["summary"]["values_context_available"])
         self.assertEqual(payload["delivery_context"]["chart"]["name"], "payments-chart")
         self.assertEqual(payload["delivery_context"]["chart"]["release"], "payments")
@@ -121,7 +124,9 @@ class KubernetesOpsDevtronAppDetailTests(TestCase):
         self.assertEqual(audit.cluster, self.cluster)
         self.assertEqual(audit.payload["app_id"], f"app_{app.id}")
         self.assertEqual(audit.payload["workload_count"], 1)
-        self.assertEqual(audit.payload["delivery_capabilities"], ["deployment_history", "helm_values", "rollback_context", "logs"])
+        self.assertEqual(
+            audit.payload["delivery_capabilities"], ["deployment_history", "helm_values", "rollback_context", "logs"]
+        )
         self.assertTrue(audit.payload["values_visible"])
         self.assertNotIn("raw-event-secret", str(audit.payload))
         self.assertNotIn("raw-values-secret", str(audit.payload))
@@ -171,7 +176,9 @@ class KubernetesOpsDevtronAppDetailTests(TestCase):
         )
 
         missing = self.client.get(reverse("api_kubernetes_devtron_app_detail", kwargs={"app_id": "app_999999"}))
-        wrong_owner = self.client.get(reverse("api_kubernetes_devtron_app_detail", kwargs={"app_id": f"app_{non_devtron.id}"}))
+        wrong_owner = self.client.get(
+            reverse("api_kubernetes_devtron_app_detail", kwargs={"app_id": f"app_{non_devtron.id}"})
+        )
 
         self.assertEqual(missing.status_code, 404)
         self.assertEqual(missing.json()["code"], "app_not_found")

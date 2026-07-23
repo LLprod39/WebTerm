@@ -107,7 +107,12 @@ class KubernetesOpsAdminWorkloadActionTests(TestCase):
 
         def transport(url: str, headers: dict[str, str], timeout: int, *, method: str = "GET", body=None):
             seen.update({"url": url, "headers": headers, "method": method, "body": body})
-            return {"apiVersion": "autoscaling/v1", "kind": "Scale", "metadata": {"name": "payments-api", "namespace": "payments"}, "spec": {"replicas": 3}}
+            return {
+                "apiVersion": "autoscaling/v1",
+                "kind": "Scale",
+                "metadata": {"name": "payments-api", "namespace": "payments"},
+                "spec": {"replicas": 3},
+            }
 
         payload = scale_kubernetes_workload(
             user=user,
@@ -125,7 +130,9 @@ class KubernetesOpsAdminWorkloadActionTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "scale")
         self.assertEqual(payload["replicas"], 3)
-        self.assertEqual(payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api/scale")
+        self.assertEqual(
+            payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api/scale"
+        )
         self.assertEqual(seen["method"], "PATCH")
         self.assertIn("/scale", seen["url"])
         self.assertEqual(seen["headers"]["Content-Type"], "application/merge-patch+json")

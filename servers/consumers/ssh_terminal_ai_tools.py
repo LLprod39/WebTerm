@@ -1,4 +1,5 @@
 """Terminal AI explain, report, history, and plan helpers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -46,9 +47,7 @@ class SSHTerminalAiToolsMixin:
             exit_code = None
 
         if not cmd and not output:
-            await self._send_ai_event(
-                terminal_events.ai_error("Нужна команда и её вывод для объяснения.")
-            )
+            await self._send_ai_event(terminal_events.ai_error("Нужна команда и её вывод для объяснения."))
             return
 
         from servers.services.terminal_ai import explain_command_output
@@ -63,14 +62,10 @@ class SSHTerminalAiToolsMixin:
                 user_question=question,
                 semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
             )
-            await self._send_ai_event(
-                terminal_events.ai_explanation(item_id=cmd_id, command=cmd, explanation=text)
-            )
+            await self._send_ai_event(terminal_events.ai_explanation(item_id=cmd_id, command=cmd, explanation=text))
         except Exception as exc:
             logger.warning("AI output explanation failed: %s", exc)
-            await self._send_ai_event(
-                terminal_events.ai_error("Не удалось объяснить вывод команды.")
-            )
+            await self._send_ai_event(terminal_events.ai_error("Не удалось объяснить вывод команды."))
         finally:
             await self._send_ai_event(terminal_events.ai_status("idle"))
 
@@ -78,18 +73,14 @@ class SSHTerminalAiToolsMixin:
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
         async with self._ai_lock:
             if self._ai_run.has_active_task():
-                await self._send_ai_event(
-                    terminal_events.ai_error("Дождитесь завершения текущего запуска ассистента.")
-                )
+                await self._send_ai_event(terminal_events.ai_error("Дождитесь завершения текущего запуска ассистента."))
                 return
             done_items = list(self._ai_last_done_items or [])
             user_message = str(self._ai_user_message or "")
             cached_report = "" if force_regenerate else str(self._ai_last_report or "")
 
         if not done_items:
-            await self._send_ai_event(
-                terminal_events.ai_error("Нет завершённых команд для формирования отчёта.")
-            )
+            await self._send_ai_event(terminal_events.ai_error("Нет завершённых команд для формирования отчёта."))
             return
 
         try:
@@ -224,4 +215,3 @@ class SSHTerminalAiToolsMixin:
             else:
                 ai_session.insert_after_current(item)
             apply_legacy_ai_queue_state(self, ai_session)
-

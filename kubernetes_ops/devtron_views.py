@@ -29,7 +29,9 @@ def api_kubernetes_devtron_app_detail(request, app_id: str):
     def handler():
         app = devtron_app_for_value(app_id)
         if app is None:
-            return JsonResponse({"success": False, "error": "Devtron app not found.", "code": "app_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Devtron app not found.", "code": "app_not_found"}, status=404
+            )
         payload = build_devtron_app_detail(app, user=request.user)
         K8sAuditEvent.objects.create(
             user=request.user,

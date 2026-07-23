@@ -7,7 +7,6 @@ from django.db.models import Q
 from kubernetes_ops.models import (
     K8sAppRef,
     K8sAuditEvent,
-    K8sCluster,
     K8sEvent,
     K8sNetworkRef,
     K8sPodRef,
@@ -72,7 +71,14 @@ def build_pod_detail(pod: K8sPodRef, *, user=None) -> dict[str, Any]:
         "sibling_pods": [_safe_payload(serialize_pod_ref(item, user=user)) for item in sibling_pods],
         "network_refs": [_safe_payload(serialize_network_ref(item, user=user)) for item in network_refs],
         "events": [_safe_payload(_event_payload(event)) for event in events],
-        "summary": _summary(pod, owner_workloads=owner_workloads, owner_apps=owner_apps, sibling_pods=sibling_pods, network_refs=network_refs, events=events),
+        "summary": _summary(
+            pod,
+            owner_workloads=owner_workloads,
+            owner_apps=owner_apps,
+            sibling_pods=sibling_pods,
+            network_refs=network_refs,
+            events=events,
+        ),
         "policy": {
             "mode": "read_only",
             "mutates_state": False,
@@ -108,10 +114,18 @@ def pod_detail_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _owner_workloads(pod: K8sPodRef) -> list[K8sWorkloadRef]:
     values = _match_values(pod)
-    rows = K8sWorkloadRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace).select_related("cluster").order_by("kind", "name")[:100]
+    rows = (
+        K8sWorkloadRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace)
+        .select_related("cluster")
+        .order_by("kind", "name")[:100]
+    )
     matched: list[K8sWorkloadRef] = []
     for workload in rows:
-        if _name_matches(workload.name, values) or _labels_match(workload.labels, values) or pod.name.startswith(f"{workload.name}-"):
+        if (
+            _name_matches(workload.name, values)
+            or _labels_match(workload.labels, values)
+            or pod.name.startswith(f"{workload.name}-")
+        ):
             matched.append(workload)
     return matched[:MAX_OWNER_WORKLOADS]
 
@@ -119,7 +133,11 @@ def _owner_workloads(pod: K8sPodRef) -> list[K8sWorkloadRef]:
 def _owner_apps(pod: K8sPodRef, owner_workloads: list[K8sWorkloadRef]) -> list[K8sAppRef]:
     values = _match_values(pod)
     values.update(workload.name for workload in owner_workloads)
-    rows = K8sAppRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace).select_related("cluster").order_by("owner", "name")[:100]
+    rows = (
+        K8sAppRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace)
+        .select_related("cluster")
+        .order_by("owner", "name")[:100]
+    )
     matched: list[K8sAppRef] = []
     for app in rows:
         if _name_matches(app.name, values) or _labels_match(app.labels, values) or pod.name.startswith(f"{app.name}-"):
@@ -127,23 +145,40 @@ def _owner_apps(pod: K8sPodRef, owner_workloads: list[K8sWorkloadRef]) -> list[K
     return matched[:MAX_OWNER_APPS]
 
 
-def _sibling_pods(pod: K8sPodRef, *, owner_workloads: list[K8sWorkloadRef], owner_apps: list[K8sAppRef]) -> list[K8sPodRef]:
+def _sibling_pods(
+    pod: K8sPodRef, *, owner_workloads: list[K8sWorkloadRef], owner_apps: list[K8sAppRef]
+) -> list[K8sPodRef]:
     values = _match_values(pod)
     values.update(workload.name for workload in owner_workloads)
     values.update(app.name for app in owner_apps)
-    rows = K8sPodRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace).exclude(id=pod.id).select_related("cluster").order_by("name")[:200]
+    rows = (
+        K8sPodRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace)
+        .exclude(id=pod.id)
+        .select_related("cluster")
+        .order_by("name")[:200]
+    )
     matched: list[K8sPodRef] = []
     for item in rows:
-        if _name_matches(item.owner_name, values) or _name_matches(item.name, values) or _labels_match(item.labels, values):
+        if (
+            _name_matches(item.owner_name, values)
+            or _name_matches(item.name, values)
+            or _labels_match(item.labels, values)
+        ):
             matched.append(item)
     return matched[:MAX_SIBLING_PODS]
 
 
-def _related_network(pod: K8sPodRef, *, owner_workloads: list[K8sWorkloadRef], owner_apps: list[K8sAppRef]) -> list[K8sNetworkRef]:
+def _related_network(
+    pod: K8sPodRef, *, owner_workloads: list[K8sWorkloadRef], owner_apps: list[K8sAppRef]
+) -> list[K8sNetworkRef]:
     values = _match_values(pod)
     values.update(workload.name for workload in owner_workloads)
     values.update(app.name for app in owner_apps)
-    rows = K8sNetworkRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace).select_related("cluster").order_by("kind", "name")[:100]
+    rows = (
+        K8sNetworkRef.objects.filter(cluster=pod.cluster, namespace=pod.namespace)
+        .select_related("cluster")
+        .order_by("kind", "name")[:100]
+    )
     matched: list[K8sNetworkRef] = []
     for item in rows:
         if _name_matches(item.name, values) or _labels_match(item.labels, values) or _network_targets_pod(item, pod):
@@ -184,7 +219,11 @@ def _summary(
     network_refs: list[K8sNetworkRef],
     events: list[K8sEvent | K8sAuditEvent],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     related_pods = [pod, *sibling_pods]
     return {
         "health": pod.health,
@@ -206,8 +245,20 @@ def _summary(
         "related_total_containers": sum(item.total_containers for item in related_pods),
         "related_restart_count": sum(item.restart_count for item in related_pods),
         "images": _safe_payload(pod.images or []),
-        "owners": sorted({item for item in [*(app.owner for app in owner_apps), *(workload.owner for workload in owner_workloads)] if item}),
-        "teams": sorted({item for item in [*(app.team for app in owner_apps), *(workload.team for workload in owner_workloads)] if item}),
+        "owners": sorted(
+            {
+                item
+                for item in [*(app.owner for app in owner_apps), *(workload.owner for workload in owner_workloads)]
+                if item
+            }
+        ),
+        "teams": sorted(
+            {
+                item
+                for item in [*(app.team for app in owner_apps), *(workload.team for workload in owner_workloads)]
+                if item
+            }
+        ),
     }
 
 

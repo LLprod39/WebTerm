@@ -12,9 +12,6 @@ from django.db import close_old_connections
 from django.utils import timezone
 
 from servers.models import Playbook, PlaybookRun, Server
-
-logger = logging.getLogger(__name__)
-
 from servers.services.playbook_runner_support import (
     DEFAULT_CONCURRENCY,
     MAX_CONCURRENCY,
@@ -29,6 +26,8 @@ from servers.services.playbook_runner_support import (
     resolve_target_servers,
 )
 
+logger = logging.getLogger(__name__)
+
 __all__ = [
     "build_inventory_for_servers",
     "execute_playbook_run",
@@ -36,6 +35,7 @@ __all__ = [
     "resolve_target_servers",
     "start_playbook_run_async",
 ]
+
 
 def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
     """Execute a PlaybookRun in-process (call from background thread)."""
@@ -116,7 +116,12 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     run_id,
                     status=PlaybookRun.STATUS_RUNNING,
                     started_at=timezone.now(),
-                    host_results=[_empty_host_result(s, tasks or [{"id": "ansible", "command": "ansible-playbook", "description": "Ansible"}]) for s in servers],
+                    host_results=[
+                        _empty_host_result(
+                            s, tasks or [{"id": "ansible", "command": "ansible-playbook", "description": "Ansible"}]
+                        )
+                        for s in servers
+                    ],
                     inventory_preview="",
                     error_message="",
                     live_log="",

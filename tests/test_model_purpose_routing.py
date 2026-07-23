@@ -2,6 +2,7 @@
 
 Ensures terminal AI purposes route to cheap ``chat`` tier by default.
 """
+
 from __future__ import annotations
 
 from app.core.model_config import ModelConfig, ModelManager
@@ -81,7 +82,7 @@ class TestProviderModelSelection:
     def test_chat_and_agent_models_use_provider_catalog(self):
         mgr = _make_manager(
             default_provider="openai",
-            internal_llm_provider="fair",
+            internal_llm_provider="grok",
             chat_model_openai="gpt-chat",
             agent_model_openai="gpt-agent",
             chat_model_grok="grok-chat",
@@ -96,13 +97,13 @@ class TestProviderModelSelection:
     def test_auto_provider_uses_internal_provider_for_model_selection(self):
         mgr = _make_manager(
             default_provider="auto",
-            internal_llm_provider="fair",
-            chat_model_fair="fair-chat",
-            agent_model_fair="fair-agent",
+            internal_llm_provider="openai",
+            chat_model_openai="gpt-chat",
+            agent_model_openai="gpt-agent",
         )
 
-        assert mgr.get_chat_model() == "fair-chat"
-        assert mgr.get_agent_model() == "fair-agent"
+        assert mgr.get_chat_model() == "gpt-chat"
+        assert mgr.get_agent_model() == "gpt-agent"
 
     def test_claude_agent_model_inherits_chat_model(self):
         mgr = _make_manager(chat_model_claude="claude-sonnet-test")

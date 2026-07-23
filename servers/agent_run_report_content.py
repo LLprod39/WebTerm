@@ -177,10 +177,16 @@ def _task_duration_ms(task: dict[str, Any]) -> int:
         return 0
 
 
-def _build_findings(run: AgentRun, markdown: str, logs: list[dict[str, Any]], steps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _build_findings(
+    run: AgentRun, markdown: str, logs: list[dict[str, Any]], steps: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     findings: list[dict[str, Any]] = []
-    for index, item in enumerate(_line_items_from_section(markdown, ("Ключевые находки", "Обнаружения", "Findings")), start=1):
-        findings.append({"id": f"md-finding-{index}", "title": item, "description": "", "severity": "info", "source": "report"})
+    for index, item in enumerate(
+        _line_items_from_section(markdown, ("Ключевые находки", "Обнаружения", "Findings")), start=1
+    ):
+        findings.append(
+            {"id": f"md-finding-{index}", "title": item, "description": "", "severity": "info", "source": "report"}
+        )
     for item in logs:
         if int(item.get("exit_code") or 0) != 0:
             findings.append(
@@ -209,7 +215,9 @@ def _build_findings(run: AgentRun, markdown: str, logs: list[dict[str, Any]], st
 def _build_risks(run: AgentRun, markdown: str, findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     risks = [
         {"id": f"md-risk-{index}", "title": item, "description": "", "severity": "high"}
-        for index, item in enumerate(_line_items_from_section(markdown, ("Проблемы и риски", "Риски", "Risks")), start=1)
+        for index, item in enumerate(
+            _line_items_from_section(markdown, ("Проблемы и риски", "Риски", "Risks")), start=1
+        )
     ]
     for finding in findings:
         if finding.get("severity") in {"critical", "fatal"}:
@@ -243,7 +251,9 @@ def _build_recommendations(run: AgentRun, markdown: str, risks: list[dict[str, A
             "owner": "Оператор",
             "done": False,
         }
-        for index, item in enumerate(_line_items_from_section(markdown, ("Рекомендации", "Следующие шаги", "Recommendations")), start=1)
+        for index, item in enumerate(
+            _line_items_from_section(markdown, ("Рекомендации", "Следующие шаги", "Recommendations")), start=1
+        )
     ]
     if risks and not items:
         items.append(
@@ -452,5 +462,6 @@ def _build_report_state(
         "progress": _phase_progress(phase),
         "execution_state": execution_state,
     }
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

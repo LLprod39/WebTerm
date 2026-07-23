@@ -24,7 +24,9 @@ async def plan_multi_agent_tasks(engine: Any, goal: str, orchestrator_log: list)
     custom_system = engine.agent.system_prompt or ""
     instructions = str(getattr(engine.agent, "ai_prompt", "") or "").strip()
     materials_prompt = build_agent_materials_prompt(engine.agent.input_artifacts)
-    skills_desc = engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
+    skills_desc = (
+        engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
+    )
     role_options = "\n".join(
         f"- {slug}: {spec.title}; фокус: {', '.join(spec.focus_areas)}"
         for slug, spec in ROLE_SPECS.items()
@@ -119,11 +121,11 @@ async def handle_multi_agent_failure(
     if "Session timeout" in error or "session timeout" in error.lower():
         timeout_hint = (
             "\n\nВажно: при ошибке «Session timeout» лимит времени сессии исчерпан. "
-            "Лучше выбрать \"replan\" — перепланировать оставшуюся работу (меньше/проще задач), чтобы уложиться во время и довести цель до конца."
+            'Лучше выбрать "replan" — перепланировать оставшуюся работу (меньше/проще задач), чтобы уложиться во время и довести цель до конца.'
         )
 
-    user_msg = f"""Задача, которая упала: {failed_task['name']}
-Описание: {failed_task['description']}
+    user_msg = f"""Задача, которая упала: {failed_task["name"]}
+Описание: {failed_task["description"]}
 Ошибка: {error}
 
 Уже выполнено задач: {len(done_tasks)}
@@ -147,24 +149,19 @@ async def handle_multi_agent_failure(
     return parse_decision_response(response)
 
 
-async def replan_multi_agent_tasks(engine: Any, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> list[dict]:
+async def replan_multi_agent_tasks(
+    engine: Any, goal: str, plan_tasks: list[dict], orchestrator_log: list
+) -> list[dict]:
     """Produce a short replacement plan for remaining work."""
     done_tasks = [t for t in plan_tasks if t["status"] == "done"]
     failed_or_skipped = [t for t in plan_tasks if t["status"] in ("failed", "skipped")]
     pending_tasks = [t for t in plan_tasks if t["status"] == "pending"]
 
-    done_block = "\n".join(
-        f"- {t['name']}: { (t.get('result') or '')[:300]}"
-        for t in done_tasks
-    ) or "(нет)"
-    failed_block = "\n".join(
-        f"- {t['name']}: ошибка — {t.get('error', '')[:200]}"
-        for t in failed_or_skipped
-    ) or "(нет)"
-    pending_block = "\n".join(
-        f"- {t['name']}: {t.get('description', '')[:200]}"
-        for t in pending_tasks
-    ) or "(нет)"
+    done_block = "\n".join(f"- {t['name']}: {(t.get('result') or '')[:300]}" for t in done_tasks) or "(нет)"
+    failed_block = (
+        "\n".join(f"- {t['name']}: ошибка — {t.get('error', '')[:200]}" for t in failed_or_skipped) or "(нет)"
+    )
+    pending_block = "\n".join(f"- {t['name']}: {t.get('description', '')[:200]}" for t in pending_tasks) or "(нет)"
 
     system_prompt = """Ты — оркестратор. Нужно перепланировать оставшуюся работу с учётом полной картины.
 Учитывай уже выполненное, провалы и ограничения (например нехватка времени). Составь НОВЫЙ короткий план задач, чтобы достичь исходной цели.
@@ -289,7 +286,9 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
                     await engine._emit("agent_report", {"text": "".join(chunks), "interim": True})
         result = "".join(chunks).strip()
         if not result:
-            return _fallback_multi_agent_report(goal, plan_tasks, tasks_table, error="LLM вернул пустой финальный отчёт")
+            return _fallback_multi_agent_report(
+                goal, plan_tasks, tasks_table, error="LLM вернул пустой финальный отчёт"
+            )
         orchestrator_log.append({"role": "assistant", "content": result, "timestamp": timezone.now().isoformat()})
         return inject_tasks_table_into_report(result, tasks_table)
     except Exception as exc:
@@ -317,7 +316,9 @@ def _fallback_multi_agent_report(goal: str, plan_tasks: list[dict], tasks_table:
     if error:
         risk_lines.append(f"- Генерация LLM-отчёта завершилась ошибкой: {error[:500]}")
     if not risk_lines:
-        risk_lines = ["- Критических проблем не обнаружено по сохранённым задачам; полнота вывода требует ручной проверки."]
+        risk_lines = [
+            "- Критических проблем не обнаружено по сохранённым задачам; полнота вывода требует ручной проверки."
+        ]
 
     status = "❌ Ошибка" if failed else "⚠️ Частичный успех"
     return f"""# Отчёт пайплайна

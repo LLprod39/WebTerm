@@ -11,10 +11,7 @@ class GuardReport:
 
     def display(self, metrics: list[FileMetric], import_ok: bool) -> bool:
         size_failures = [m for m in metrics if not m.passed]
-        size_warnings = [
-            m for m in metrics
-            if m.passed and not m.is_legacy and m.error_message
-        ]
+        size_warnings = [m for m in metrics if m.passed and not m.is_legacy and m.error_message]
         overall_ok = not size_failures and import_ok
 
         print("\n=== Architecture Fitness Check: God-File Prevention ===")

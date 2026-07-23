@@ -95,7 +95,9 @@ def test_live_provider_smoke_reports_ready_rancher_fleet_and_devtron(monkeypatch
         lambda **kwargs: {
             "success": True,
             "operation": "resource_live_describe",
-            "paths": {"resource": f"/k8s/clusters/c-prod/api/v1/namespaces/{kwargs['namespace']}/pods/{kwargs['name']}"},
+            "paths": {
+                "resource": f"/k8s/clusters/c-prod/api/v1/namespaces/{kwargs['namespace']}/pods/{kwargs['name']}"
+            },
             "events": {"event_count": 1},
             "related": {"pods": {"item_count": 1}, "controllers": {"item_count": 0}},
             "redacted": True,

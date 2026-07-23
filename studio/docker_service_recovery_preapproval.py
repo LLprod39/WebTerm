@@ -114,7 +114,8 @@ def build_preapproval_nodes(
                 "server_ids": [server_id],
                 "model": "gemini-2.0-flash-exp",
                 "max_iterations": 3,
-                "permission_mode": "PLAN", "allowed_tools": ["ssh_execute", "read_console"],
+                "permission_mode": "PLAN",
+                "allowed_tools": ["ssh_execute", "read_console"],
                 "goal": (
                     "На сервере {server_name} ({server_host}) сработал критический alert по контейнеру {container_name}. "
                     "Нужно провести только диагностику и подготовить техническое заключение.\n\n"
@@ -245,4 +246,3 @@ def build_preapproval_nodes(
             },
         },
     ]
-

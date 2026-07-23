@@ -1293,7 +1293,6 @@ Runtime:
 
 | Slug | Сценарий | Ключевые ноды |
 | --- | --- | --- |
-| `pilot-keycloak-access-change` | Keycloak role/group/user access change | `agent/mcp_call`, `logic/human_approval`, verification `agent/mcp_call`, `output/report` |
 | `pilot-kubernetes-rollout` | Kubernetes diagnose and rollout restart | read-only `agent/mcp_call`, `agent/llm_query`, approval, mutating `agent/mcp_call`, verification |
 | `pilot-gitlab-failed-pipeline-mr` | GitLab failed pipeline -> MR | webhook trigger, read-only CI evidence, approval, MR MCP action, pipeline verification |
 | `pilot-database-diagnostics-maintenance` | DB diagnostics and guarded maintenance | read-only DB checks, approval, guarded maintenance MCP action, health verification |

@@ -90,7 +90,11 @@ spec:
             return {
                 "apiVersion": "apps/v1",
                 "kind": "Deployment",
-                "metadata": {"name": "payments-api", "namespace": "payments", "managedFields": [{"manager": "webterm"}]},
+                "metadata": {
+                    "name": "payments-api",
+                    "namespace": "payments",
+                    "managedFields": [{"manager": "webterm"}],
+                },
                 "spec": {"replicas": 2},
                 "status": {"observedGeneration": 10},
             }
@@ -108,7 +112,9 @@ spec:
         self.assertFalse(payload["mutates_state"])
         self.assertEqual(payload["operation"], "dry_run_apply")
         self.assertEqual(payload["target"]["kind"], "Deployment")
-        self.assertEqual(payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api")
+        self.assertEqual(
+            payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api"
+        )
         self.assertEqual(seen["method"], "PATCH")
         self.assertIn("dryRun=All", seen["url"])
         self.assertIn("fieldManager=webterm-admin-mode", seen["url"])

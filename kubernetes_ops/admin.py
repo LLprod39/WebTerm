@@ -71,7 +71,17 @@ class K8sNetworkRefAdmin(admin.ModelAdmin):
 
 @admin.register(K8sPodRef)
 class K8sPodRefAdmin(admin.ModelAdmin):
-    list_display = ["name", "cluster", "namespace", "phase", "health", "ready_containers", "total_containers", "restart_count", "last_sync_at"]
+    list_display = [
+        "name",
+        "cluster",
+        "namespace",
+        "phase",
+        "health",
+        "ready_containers",
+        "total_containers",
+        "restart_count",
+        "last_sync_at",
+    ]
     list_filter = ["health", "phase", "environment"]
     search_fields = ["name", "namespace", "node_name", "owner_name", "cluster__name"]
 
@@ -101,7 +111,16 @@ class K8sActionRequestAdmin(admin.ModelAdmin):
 
 @admin.register(K8sAdminSession)
 class K8sAdminSessionAdmin(admin.ModelAdmin):
-    list_display = ["session_id", "mode", "status", "risk_tier", "username_snapshot", "cluster", "namespace", "expires_at"]
+    list_display = [
+        "session_id",
+        "mode",
+        "status",
+        "risk_tier",
+        "username_snapshot",
+        "cluster",
+        "namespace",
+        "expires_at",
+    ]
     list_filter = ["mode", "status", "risk_tier", "created_at"]
     search_fields = ["session_id", "username_snapshot", "cluster__name", "namespace", "reason", "approval_ref"]
     readonly_fields = ["session_id", "created_at", "updated_at", "approved_at", "closed_at"]
@@ -109,17 +128,50 @@ class K8sAdminSessionAdmin(admin.ModelAdmin):
 
 @admin.register(K8sAdminAction)
 class K8sAdminActionAdmin(admin.ModelAdmin):
-    list_display = ["action_id", "verb", "status", "username_snapshot", "cluster", "namespace", "resource_kind", "resource_name"]
+    list_display = [
+        "action_id",
+        "verb",
+        "status",
+        "username_snapshot",
+        "cluster",
+        "namespace",
+        "resource_kind",
+        "resource_name",
+    ]
     list_filter = ["verb", "status", "created_at"]
-    search_fields = ["action_id", "username_snapshot", "cluster__name", "namespace", "resource_api_version", "resource_kind", "resource_name"]
+    search_fields = [
+        "action_id",
+        "username_snapshot",
+        "cluster__name",
+        "namespace",
+        "resource_api_version",
+        "resource_kind",
+        "resource_name",
+    ]
     readonly_fields = ["action_id", "created_at", "updated_at"]
 
 
 @admin.register(K8sAdminRecording)
 class K8sAdminRecordingAdmin(admin.ModelAdmin):
-    list_display = ["recording_id", "operation", "status", "username_snapshot", "cluster", "namespace", "resource_kind", "resource_name"]
+    list_display = [
+        "recording_id",
+        "operation",
+        "status",
+        "username_snapshot",
+        "cluster",
+        "namespace",
+        "resource_kind",
+        "resource_name",
+    ]
     list_filter = ["operation", "status", "created_at"]
-    search_fields = ["recording_id", "username_snapshot", "cluster__name", "namespace", "resource_kind", "resource_name"]
+    search_fields = [
+        "recording_id",
+        "username_snapshot",
+        "cluster__name",
+        "namespace",
+        "resource_kind",
+        "resource_name",
+    ]
     readonly_fields = ["recording_id", "created_at", "updated_at", "started_at", "finished_at"]
 
 

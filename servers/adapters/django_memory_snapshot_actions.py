@@ -139,7 +139,9 @@ def purge_server_ai_memory(store: Any, server_id: int, *, actor_user_id: int | N
     )
 
     ai_knowledge_ids = list(
-        ServerKnowledge.objects.filter(server_id=server_id, source__in=["ai_auto", "ai_task"]).values_list("id", flat=True)
+        ServerKnowledge.objects.filter(server_id=server_id, source__in=["ai_auto", "ai_task"]).values_list(
+            "id", flat=True
+        )
     )
     ai_bridge_keys: list[str] = []
     for knowledge_id in ai_knowledge_ids:

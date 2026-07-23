@@ -1,4 +1,5 @@
 """Terminal AI request and control handlers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -96,9 +97,7 @@ class SSHTerminalAiControlsMixin:
             # A3: detect memory_enabled transition True → False so we can
             # wipe both in-memory and persisted chat history in one shot.
             # Capture the *previous* value before overwriting ``_ai_settings``.
-            prev_memory_enabled = bool(
-                (self._ai_settings or {}).get("memory_enabled", True)
-            )
+            prev_memory_enabled = bool((self._ai_settings or {}).get("memory_enabled", True))
             new_memory_enabled = bool(ai_settings.get("memory_enabled", True))
             memory_disabled_now = prev_memory_enabled and not new_memory_enabled
 
@@ -251,11 +250,15 @@ class SSHTerminalAiControlsMixin:
         if requested_mode in ("fast", "auto", "step", "") and mode == "execute":
             from servers.services.terminal_ai.plan_items import apply_fast_complexity_routing
 
-            fast_policy = str(
-                (self._ai_settings or {}).get("fast_complex_policy")
-                or (self._ai_settings or {}).get("complex_policy")
-                or "ask"
-            ).strip().lower()
+            fast_policy = (
+                str(
+                    (self._ai_settings or {}).get("fast_complex_policy")
+                    or (self._ai_settings or {}).get("complex_policy")
+                    or "ask"
+                )
+                .strip()
+                .lower()
+            )
             routing = apply_fast_complexity_routing(
                 user_message=msg,
                 requested_mode=requested_mode if requested_mode != "auto" else selected_mode,
@@ -495,4 +498,3 @@ class SSHTerminalAiControlsMixin:
                 execution_mode=str(getattr(self, "_ai_execution_mode", "agent")),
             )
         )
-

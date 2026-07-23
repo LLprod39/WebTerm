@@ -33,6 +33,7 @@ async def resume_after_action(
     cancelled: bool = False,
 ) -> OperatorTurnResult | None:
     """Resume a parked turn after confirm/cancel of a mutating tool."""
+
     def _claim_turn():
         with transaction.atomic():
             claimed = (
@@ -74,9 +75,7 @@ async def resume_after_action(
 
         def _run():
             # All ORM access stays inside the sync worker thread
-            turn_local = ChatTurnState.objects.select_related(
-                "assistant_message", "session"
-            ).get(pk=turn.pk)
+            turn_local = ChatTurnState.objects.select_related("assistant_message", "session").get(pk=turn.pk)
             return apply_plan_progress(
                 message=turn_local.assistant_message,
                 turn=turn_local,
@@ -140,9 +139,7 @@ async def resume_after_action(
             )
             await _emit(on_event, {"type": "turn_done", "status": "awaiting_async", "turn_id": turn.pk})
             turn = await sync_to_async(
-                lambda: ChatTurnState.objects.select_related(
-                    "user_message", "assistant_message"
-                ).get(pk=turn.pk)
+                lambda: ChatTurnState.objects.select_related("user_message", "assistant_message").get(pk=turn.pk)
             )()
             return OperatorTurnResult(
                 user_message=turn.user_message,
@@ -188,9 +185,7 @@ async def resume_after_action(
                 turn_id = turn.pk
 
                 def _extract():
-                    turn_local = ChatTurnState.objects.select_related(
-                        "assistant_message", "session"
-                    ).get(pk=turn_id)
+                    turn_local = ChatTurnState.objects.select_related("assistant_message", "session").get(pk=turn_id)
                     return extract_artifacts_from_tool_result(
                         session=turn_local.session,
                         message=turn_local.assistant_message,
@@ -291,10 +286,7 @@ async def resume_after_async_result(
             ],
         }
     )
-    note = (
-        f"\n\n_Async `{tool_name}` #{result_payload.get('run_id')} "
-        f"завершён: {result_payload.get('status')}._"
-    )
+    note = f"\n\n_Async `{tool_name}` #{result_payload.get('run_id')} завершён: {result_payload.get('status')}._"
     if turn.assistant_message_id:
         from core_ui.services.operator_loop import _append_assistant_text
 

@@ -1,4 +1,5 @@
 """Tests for terminal-AI command outcome helpers."""
+
 from __future__ import annotations
 
 from servers.services.terminal_ai.command_outcome import unavailable_command_name

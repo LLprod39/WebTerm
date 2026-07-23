@@ -1,9 +1,4 @@
-import hashlib
-import io
-import json
-import zipfile
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth.models import User
@@ -11,13 +6,10 @@ from django.test import Client, override_settings
 from django.utils import timezone
 
 from app.runtime_limits import get_terminal_session_limit_error
-from servers.agent_run_report import refresh_agent_run_report_payload
 from servers.models import (
     AgentRun,
-    AgentRunArtifact,
     AgentRunDispatch,
     AgentRunEvent,
-    BackgroundWorkerState,
     ServerAgent,
     ServerConnection,
 )
@@ -53,13 +45,15 @@ def test_agent_run_launches_in_background(monkeypatch, mode, extra_fields):
     captured: dict[str, object] = {}
 
     def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
-        captured.update({
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "server_ids": server_ids,
-            "user_id": user_id,
-            "plan_only": plan_only,
-        })
+        captured.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+                "plan_only": plan_only,
+            }
+        )
 
     monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 
@@ -234,12 +228,14 @@ def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
     captured: dict[str, object] = {}
 
     def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int):
-        captured.update({
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "server_ids": server_ids,
-            "user_id": user_id,
-        })
+        captured.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+            }
+        )
 
     monkeypatch.setattr("servers.agent_service.launch_plan_execution_background", fake_launch)
 

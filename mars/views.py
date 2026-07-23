@@ -221,7 +221,9 @@ def api_session_answer(request, session_id: int):
             answers[question_id] = str(raw_answers.get(question_id) or "").strip()
 
     session.answers = answers
-    session.selected_skill_slugs = _selected_skills(payload, session.selected_skill_slugs or recommend_skills(session.task_brief))
+    session.selected_skill_slugs = _selected_skills(
+        payload, session.selected_skill_slugs or recommend_skills(session.task_brief)
+    )
     session.generated_plan = generate_plan(session)
     session.status = MarsSession.STATUS_PLAN_READY
     session.save(update_fields=["answers", "selected_skill_slugs", "generated_plan", "status", "updated_at"])
@@ -236,7 +238,9 @@ def api_session_approve_plan(request, session_id: int):
         return _err("Session not found.", 404)
 
     payload = _json_body(request)
-    session.selected_skill_slugs = _selected_skills(payload, session.selected_skill_slugs or recommend_skills(session.task_brief))
+    session.selected_skill_slugs = _selected_skills(
+        payload, session.selected_skill_slugs or recommend_skills(session.task_brief)
+    )
     session.generated_plan = str(payload.get("generated_plan") or generate_plan(session)).strip()
     if not session.generated_plan:
         session.generated_plan = generate_plan(session)

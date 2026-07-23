@@ -65,7 +65,7 @@ async def stream_gemini_response(
                 purpose=purpose,
             )
             return
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error("Gemini stream timeout")
             _log_usage(
                 usage_logger,

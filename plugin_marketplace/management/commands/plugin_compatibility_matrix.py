@@ -16,8 +16,12 @@ class Command(BaseCommand):
     help = "Build or update the private plugin catalog compatibility matrix for release gates."
 
     def add_arguments(self, parser):
-        parser.add_argument("--update", action="store_true", help="Persist compatibility jobs and update catalog item matrix state.")
-        parser.add_argument("--json", action="store_true", dest="as_json", help="Print the compatibility matrix payload as JSON.")
+        parser.add_argument(
+            "--update", action="store_true", help="Persist compatibility jobs and update catalog item matrix state."
+        )
+        parser.add_argument(
+            "--json", action="store_true", dest="as_json", help="Print the compatibility matrix payload as JSON."
+        )
         parser.add_argument(
             "--fail-on-incompatible",
             action="store_true",

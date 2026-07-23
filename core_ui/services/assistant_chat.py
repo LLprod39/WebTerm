@@ -188,7 +188,9 @@ def _create_action(
             completed_at=timezone.now(),
         )
 
-    status = AssistantAction.STATUS_REQUIRES_CONFIRMATION if spec.requires_confirmation else AssistantAction.STATUS_PROPOSED
+    status = (
+        AssistantAction.STATUS_REQUIRES_CONFIRMATION if spec.requires_confirmation else AssistantAction.STATUS_PROPOSED
+    )
     return AssistantAction.objects.create(
         user=user,
         session=session,
@@ -217,9 +219,7 @@ def execute_action(
     # returns without executing it again.
     with transaction.atomic():
         action = (
-            AssistantAction.objects.select_for_update()
-            .select_related("user", "session", "message")
-            .get(pk=action.pk)
+            AssistantAction.objects.select_for_update().select_related("user", "session", "message").get(pk=action.pk)
         )
         spec = get_action_spec(action.action_type)
         if action.status in {
@@ -369,9 +369,7 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
         logger.warning("operator loop rejected message: {}", exc)
         return _operator_error_turn(session, user, text, str(exc), request=request)
     except Exception as exc:
-        turn_wrote_rows = (
-            session.messages.order_by("-id").values_list("id", flat=True).first() or 0
-        ) > last_message_id
+        turn_wrote_rows = (session.messages.order_by("-id").values_list("id", flat=True).first() or 0) > last_message_id
         if turn_wrote_rows:
             # Partial turn already visible in the chat — never duplicate rows.
             logger.exception("operator loop failed mid-turn: {}", exc)

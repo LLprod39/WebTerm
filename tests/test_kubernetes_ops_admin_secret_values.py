@@ -131,7 +131,11 @@ class KubernetesOpsAdminSecretValueTests(TestCase):
             client_cls.return_value.get.return_value = {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": {"name": "db-creds", "namespace": "payments", "annotations": {"token": "raw-annotation-token"}},
+                "metadata": {
+                    "name": "db-creds",
+                    "namespace": "payments",
+                    "annotations": {"token": "raw-annotation-token"},
+                },
                 "data": {"password": "cGFzc3dvcmQ=", "token": "cmF3"},
                 "stringData": {"dsn": "postgres://raw-secret"},
             }

@@ -22,21 +22,46 @@ RUNTIME_LIMIT_DEFINITIONS: tuple[RuntimeLimitDefinition, ...] = (
     RuntimeLimitDefinition("agent_active_runs_per_user_limit", "AGENT_ACTIVE_RUNS_PER_USER_LIMIT", 5, maximum=100),
     RuntimeLimitDefinition("agent_active_runs_global_limit", "AGENT_ACTIVE_RUNS_GLOBAL_LIMIT", 25, maximum=500),
     RuntimeLimitDefinition("agent_run_stale_seconds", "AGENT_RUN_STALE_SECONDS", 21_600, maximum=604_800),
-    RuntimeLimitDefinition("pipeline_active_runs_per_user_limit", "PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT", 8, maximum=100),
+    RuntimeLimitDefinition(
+        "pipeline_active_runs_per_user_limit", "PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT", 8, maximum=100
+    ),
     RuntimeLimitDefinition("pipeline_active_runs_global_limit", "PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT", 40, maximum=500),
     RuntimeLimitDefinition("pipeline_run_stale_seconds", "PIPELINE_RUN_STALE_SECONDS", 21_600, maximum=604_800),
-    RuntimeLimitDefinition("ssh_terminal_sessions_per_user_limit", "SSH_TERMINAL_SESSIONS_PER_USER_LIMIT", 12, maximum=100),
-    RuntimeLimitDefinition("ssh_terminal_sessions_global_limit", "SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT", 120, maximum=1_000),
-    RuntimeLimitDefinition("ssh_terminal_session_stale_seconds", "SSH_TERMINAL_SESSION_STALE_SECONDS", 180, maximum=86_400),
+    RuntimeLimitDefinition(
+        "ssh_terminal_sessions_per_user_limit", "SSH_TERMINAL_SESSIONS_PER_USER_LIMIT", 12, maximum=100
+    ),
+    RuntimeLimitDefinition(
+        "ssh_terminal_sessions_global_limit", "SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT", 120, maximum=1_000
+    ),
+    RuntimeLimitDefinition(
+        "ssh_terminal_session_stale_seconds", "SSH_TERMINAL_SESSION_STALE_SECONDS", 180, maximum=86_400
+    ),
     RuntimeLimitDefinition("llm_daily_token_limit_per_user", "LLM_DAILY_TOKEN_LIMIT_PER_USER", 0, maximum=50_000_000),
-    RuntimeLimitDefinition("mcp_stdio_initialize_timeout_seconds", "MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20, minimum=1, maximum=600),
-    RuntimeLimitDefinition("mcp_stdio_request_timeout_seconds", "MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30, minimum=1, maximum=600),
-    RuntimeLimitDefinition("mcp_stdio_tool_call_timeout_seconds", "MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120, minimum=1, maximum=3_600),
-    RuntimeLimitDefinition("mcp_process_terminate_timeout_seconds", "MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2, minimum=1, maximum=60),
-    RuntimeLimitDefinition("mcp_http_connect_timeout_seconds", "MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10, minimum=1, maximum=300),
-    RuntimeLimitDefinition("mcp_http_request_timeout_seconds", "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30, minimum=1, maximum=600),
-    RuntimeLimitDefinition("mcp_http_tool_call_timeout_seconds", "MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120, minimum=1, maximum=3_600),
+    RuntimeLimitDefinition(
+        "mcp_stdio_initialize_timeout_seconds", "MCP_STDIO_INITIALIZE_TIMEOUT_SECONDS", 20, minimum=1, maximum=600
+    ),
+    RuntimeLimitDefinition(
+        "mcp_stdio_request_timeout_seconds", "MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30, minimum=1, maximum=600
+    ),
+    RuntimeLimitDefinition(
+        "mcp_stdio_tool_call_timeout_seconds", "MCP_STDIO_TOOL_CALL_TIMEOUT_SECONDS", 120, minimum=1, maximum=3_600
+    ),
+    RuntimeLimitDefinition(
+        "mcp_process_terminate_timeout_seconds", "MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2, minimum=1, maximum=60
+    ),
+    RuntimeLimitDefinition(
+        "mcp_http_connect_timeout_seconds", "MCP_HTTP_CONNECT_TIMEOUT_SECONDS", 10, minimum=1, maximum=300
+    ),
+    RuntimeLimitDefinition(
+        "mcp_http_request_timeout_seconds", "MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30, minimum=1, maximum=600
+    ),
+    RuntimeLimitDefinition(
+        "mcp_http_tool_call_timeout_seconds", "MCP_HTTP_TOOL_CALL_TIMEOUT_SECONDS", 120, minimum=1, maximum=3_600
+    ),
     RuntimeLimitDefinition("mcp_http_retry_attempts", "MCP_HTTP_RETRY_ATTEMPTS", 2, maximum=10),
+    RuntimeLimitDefinition(
+        "mcp_runner_request_timeout_seconds", "MCP_RUNNER_REQUEST_TIMEOUT_SECONDS", 120, minimum=1, maximum=3_600
+    ),
 )
 
 _DEFINITIONS_BY_FIELD = {item.field: item for item in RUNTIME_LIMIT_DEFINITIONS}

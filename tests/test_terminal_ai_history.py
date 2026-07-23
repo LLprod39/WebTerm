@@ -1,4 +1,5 @@
 """Tests for servers.services.terminal_ai.history (F2-9)."""
+
 from __future__ import annotations
 
 import pytest
@@ -96,7 +97,9 @@ class TestAppendMessage:
                 max_entries=5,
             )
         rows = list(
-            TerminalAiChatMessage.objects.filter(user=user, server=server).order_by("created_at").values_list("text", flat=True)
+            TerminalAiChatMessage.objects.filter(user=user, server=server)
+            .order_by("created_at")
+            .values_list("text", flat=True)
         )
         assert len(rows) == 5
         # Newest 5 are preserved
@@ -107,12 +110,8 @@ class TestAppendMessage:
         user_b, server_b = _make_user_and_server("user-b")
         # Both users write 3 messages. max_entries=2 → each keeps 2 independently.
         for i in range(3):
-            append_message_sync(
-                user_id=user_a.id, server_id=server_a.id, role="user", text=f"a-{i}", max_entries=2
-            )
-            append_message_sync(
-                user_id=user_b.id, server_id=server_b.id, role="user", text=f"b-{i}", max_entries=2
-            )
+            append_message_sync(user_id=user_a.id, server_id=server_a.id, role="user", text=f"a-{i}", max_entries=2)
+            append_message_sync(user_id=user_b.id, server_id=server_b.id, role="user", text=f"b-{i}", max_entries=2)
         assert TerminalAiChatMessage.objects.filter(user=user_a).count() == 2
         assert TerminalAiChatMessage.objects.filter(user=user_b).count() == 2
 
@@ -122,9 +121,7 @@ class TestLoadRecent:
     def test_returns_oldest_to_newest(self):
         user, server = _make_user_and_server()
         for i in range(5):
-            append_message_sync(
-                user_id=user.id, server_id=server.id, role="user", text=f"m-{i}"
-            )
+            append_message_sync(user_id=user.id, server_id=server.id, role="user", text=f"m-{i}")
         rows = load_recent_sync(user_id=user.id, server_id=server.id, limit=10)
         assert [r["text"] for r in rows] == [f"m-{i}" for i in range(5)]
         # All entries have the expected shape
@@ -133,9 +130,7 @@ class TestLoadRecent:
     def test_limit_respected(self):
         user, server = _make_user_and_server()
         for i in range(20):
-            append_message_sync(
-                user_id=user.id, server_id=server.id, role="user", text=f"m-{i}"
-            )
+            append_message_sync(user_id=user.id, server_id=server.id, role="user", text=f"m-{i}")
         rows = load_recent_sync(user_id=user.id, server_id=server.id, limit=5)
         # Last 5 in chronological order (oldest first within the window)
         assert [r["text"] for r in rows] == [f"m-{i}" for i in range(15, 20)]

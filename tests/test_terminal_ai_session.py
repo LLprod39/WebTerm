@@ -1,4 +1,5 @@
 """Tests for servers.services.terminal_ai.session (F2-1)."""
+
 from __future__ import annotations
 
 from servers.services.terminal_ai.session import TerminalAiSession

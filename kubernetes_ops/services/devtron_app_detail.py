@@ -87,7 +87,9 @@ def devtron_app_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "pod_count": int(summary.get("pod_count") or 0),
         "event_count": int(summary.get("event_count") or 0),
         "delivery_capabilities": list(delivery.get("capabilities") or [])[:10],
-        "values_visible": bool((delivery.get("values") or {}).get("visible")) if isinstance(delivery.get("values"), dict) else False,
+        "values_visible": bool((delivery.get("values") or {}).get("visible"))
+        if isinstance(delivery.get("values"), dict)
+        else False,
     }
 
 
@@ -97,7 +99,11 @@ def _devtron_apps():
 
 def _related_workloads(app: K8sAppRef) -> list[K8sWorkloadRef]:
     values = _match_values(app.name, app.labels)
-    candidates = K8sWorkloadRef.objects.filter(cluster=app.cluster, namespace=app.namespace).select_related("cluster").order_by("kind", "name")[:100]
+    candidates = (
+        K8sWorkloadRef.objects.filter(cluster=app.cluster, namespace=app.namespace)
+        .select_related("cluster")
+        .order_by("kind", "name")[:100]
+    )
     rows = [
         workload
         for workload in candidates
@@ -109,7 +115,11 @@ def _related_workloads(app: K8sAppRef) -> list[K8sWorkloadRef]:
 def _related_pods(app: K8sAppRef, workloads: list[K8sWorkloadRef]) -> list[K8sPodRef]:
     values = _match_values(app.name, app.labels)
     workload_names = {workload.name for workload in workloads}
-    candidates = K8sPodRef.objects.filter(cluster=app.cluster, namespace=app.namespace).select_related("cluster").order_by("name")[:200]
+    candidates = (
+        K8sPodRef.objects.filter(cluster=app.cluster, namespace=app.namespace)
+        .select_related("cluster")
+        .order_by("name")[:200]
+    )
     rows = []
     for pod in candidates:
         owner_name = str(pod.owner_name or "")
@@ -123,18 +133,29 @@ def _related_pods(app: K8sAppRef, workloads: list[K8sWorkloadRef]) -> list[K8sPo
     return rows[:MAX_RELATED_PODS]
 
 
-def _related_events(app: K8sAppRef, workloads: list[K8sWorkloadRef], pods: list[K8sPodRef]) -> list[K8sEvent | K8sAuditEvent]:
+def _related_events(
+    app: K8sAppRef, workloads: list[K8sWorkloadRef], pods: list[K8sPodRef]
+) -> list[K8sEvent | K8sAuditEvent]:
     names = {app.name, *(workload.name for workload in workloads), *(pod.name for pod in pods)}
     names = {name for name in names if name}
     query = Q(involved_name__in=names)
     if app.name:
         query |= Q(message__icontains=app.name)
-    native_events = list(K8sEvent.objects.filter(cluster=app.cluster, namespace=app.namespace).filter(query).order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS])
+    native_events = list(
+        K8sEvent.objects.filter(cluster=app.cluster, namespace=app.namespace)
+        .filter(query)
+        .order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS]
+    )
     if native_events:
         return native_events
     audit_events = (
         K8sAuditEvent.objects.filter(cluster=app.cluster)
-        .filter(Q(payload__app_id=f"app_{app.id}") | Q(payload__app_id=app.id) | Q(payload__app_name=app.name) | Q(payload__target_name=app.name))
+        .filter(
+            Q(payload__app_id=f"app_{app.id}")
+            | Q(payload__app_id=app.id)
+            | Q(payload__app_name=app.name)
+            | Q(payload__target_name=app.name)
+        )
         .select_related("user", "cluster")
         .order_by("-created_at", "-id")[:MAX_RELATED_EVENTS]
     )
@@ -149,7 +170,11 @@ def _summary(
     events: list[K8sEvent | K8sAuditEvent],
     delivery_context: dict[str, Any],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     return {
         "health": app.health,
         "version": app.version,
@@ -173,7 +198,9 @@ def _summary(
     }
 
 
-def _delivery_context(app: K8sAppRef, *, app_payload: dict[str, Any], workloads: list[K8sWorkloadRef], pods: list[K8sPodRef]) -> dict[str, Any]:
+def _delivery_context(
+    app: K8sAppRef, *, app_payload: dict[str, Any], workloads: list[K8sWorkloadRef], pods: list[K8sPodRef]
+) -> dict[str, Any]:
     labels = app.labels if isinstance(app.labels, dict) else {}
     visible_links = app_payload.get("links") if isinstance(app_payload.get("links"), dict) else {}
     flow_links = {key: visible_links.get(key) for key in DEVTRON_FLOW_LINKS if visible_links.get(key)}
@@ -192,8 +219,10 @@ def _delivery_context(app: K8sAppRef, *, app_payload: dict[str, Any], workloads:
         "owner": K8sAppRef.OWNER_DEVTRON,
         "chart": {
             "name": _label_value(labels, "helm.sh/chart", "chart", "chartName", "devtron.ai/chart") or app.version,
-            "version": _label_value(labels, "app.kubernetes.io/version", "chartVersion", "devtron.ai/chart-version") or app.version,
-            "release": _label_value(labels, "meta.helm.sh/release-name", "app.kubernetes.io/instance", "release") or app.name,
+            "version": _label_value(labels, "app.kubernetes.io/version", "chartVersion", "devtron.ai/chart-version")
+            or app.version,
+            "release": _label_value(labels, "meta.helm.sh/release-name", "app.kubernetes.io/instance", "release")
+            or app.name,
         },
         "history": {
             "available": "deployment_history" in capabilities,
@@ -215,7 +244,9 @@ def _delivery_context(app: K8sAppRef, *, app_payload: dict[str, Any], workloads:
             "link": flow_links.get("logs", ""),
             "related_pods": len(pods),
         },
-        "workload_refs": [{"id": f"workload_{item.id}", "name": item.name, "kind": item.kind} for item in workloads[:10]],
+        "workload_refs": [
+            {"id": f"workload_{item.id}", "name": item.name, "kind": item.kind} for item in workloads[:10]
+        ],
         "links": flow_links,
         "capabilities": capabilities,
         "policy": {
@@ -228,10 +259,13 @@ def _delivery_context(app: K8sAppRef, *, app_payload: dict[str, Any], workloads:
 
 
 def _values_preview(labels: dict[str, Any]) -> dict[str, Any]:
-    raw_values = labels.get("values") or labels.get("helm_values") or labels.get("helmValues") or labels.get("values_yaml")
+    raw_values = (
+        labels.get("values") or labels.get("helm_values") or labels.get("helmValues") or labels.get("values_yaml")
+    )
     preview = _safe_payload(raw_values) if raw_values not in (None, "") else {}
     return {
-        "available": bool(raw_values) or bool(_label_value(labels, "valuesDigest", "values_digest", "devtron.ai/values-digest")),
+        "available": bool(raw_values)
+        or bool(_label_value(labels, "valuesDigest", "values_digest", "devtron.ai/values-digest")),
         "visible": bool(raw_values),
         "body_returned": False,
         "redacted": bool(raw_values),

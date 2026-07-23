@@ -4,10 +4,6 @@ import re
 from typing import Any
 
 from studio.services.pipeline_assistant_interview import augment_response_with_interview_questions
-from studio.services.pipeline_assistant_keycloak_fallback import (
-    build_keycloak_draft_response,
-    is_keycloak_request,
-)
 from studio.services.pipeline_template_recommendations import (
     build_template_graph_patch,
     build_template_resource_plan,
@@ -64,8 +60,6 @@ def should_use_draft_fallback(
     intent = str(assistant_context.get("intent") or "").lower()
     if intent not in {"create", "edit", ""}:
         return False
-    if is_keycloak_request(user_message):
-        return True
     if intent == "edit":
         return False
     return not any(_text(node_type) for node_type in (known_node_types or {}).values())
@@ -199,37 +193,43 @@ def build_template_draft_response(
         "LLM provider did not return a usable structured draft, so WebTermAI generated a pilot template "
         f"skeleton locally. Reason: {fallback_reason[:500]}"
     )
-    return augment_response_with_interview_questions({
-        "reply": (
-            f"LLM provider is unavailable, so I used `{template_name}` as the skeleton for `{pipeline_name}`. "
-            "Review MCP servers, arguments and approvals before applying."
-        ),
-        "selected_template": {
-            "slug": _text(template.get("slug")),
-            "name": template_name,
-            "source": "pilot_template_fallback",
-        },
-        "template_recommendations": recommendations,
-        "requirements": [user_message],
-        "assumptions": [
-            f"Pilot template selected: {template.get('slug')}.",
-            "Template approval, verification and report branches were preserved.",
-        ],
-        "questions": [],
-        "resource_plan": resource_plan,
-        "target_node_id": None,
-        "node_patch": {},
-        "graph_patch": graph_patch,
-        "node_explanations": {
-            _text(node.get("ref")): "Step copied from the matched pilot template skeleton."
-            for node in graph_patch.get("nodes", [])
-            if isinstance(node, dict) and _text(node.get("ref"))
-        },
-        "confidence": 0.62,
-        "warnings": [warning],
-        "patch_summary": f"Pilot template skeleton: {template_name}",
-        "suggested_next_actions": ["Review selected resources", "Fill service-specific arguments", "Apply the draft"],
-    })
+    return augment_response_with_interview_questions(
+        {
+            "reply": (
+                f"LLM provider is unavailable, so I used `{template_name}` as the skeleton for `{pipeline_name}`. "
+                "Review MCP servers, arguments and approvals before applying."
+            ),
+            "selected_template": {
+                "slug": _text(template.get("slug")),
+                "name": template_name,
+                "source": "pilot_template_fallback",
+            },
+            "template_recommendations": recommendations,
+            "requirements": [user_message],
+            "assumptions": [
+                f"Pilot template selected: {template.get('slug')}.",
+                "Template approval, verification and report branches were preserved.",
+            ],
+            "questions": [],
+            "resource_plan": resource_plan,
+            "target_node_id": None,
+            "node_patch": {},
+            "graph_patch": graph_patch,
+            "node_explanations": {
+                _text(node.get("ref")): "Step copied from the matched pilot template skeleton."
+                for node in graph_patch.get("nodes", [])
+                if isinstance(node, dict) and _text(node.get("ref"))
+            },
+            "confidence": 0.62,
+            "warnings": [warning],
+            "patch_summary": f"Pilot template skeleton: {template_name}",
+            "suggested_next_actions": [
+                "Review selected resources",
+                "Fill service-specific arguments",
+                "Apply the draft",
+            ],
+        }
+    )
 
 
 def build_deterministic_draft_response(
@@ -239,13 +239,6 @@ def build_deterministic_draft_response(
     fallback_reason: str,
 ) -> dict[str, Any]:
     message = _text(user_message) or "Build a safe operations automation."
-    keycloak_response = build_keycloak_draft_response(
-        user_message=message,
-        assistant_context=assistant_context,
-        fallback_reason=fallback_reason,
-    )
-    if keycloak_response is not None:
-        return keycloak_response
     template_response = build_template_draft_response(
         user_message=message,
         assistant_context=assistant_context,
@@ -341,51 +334,53 @@ def build_deterministic_draft_response(
         "LLM provider did not return a usable structured draft, so WebTermAI generated a safe starter DAG locally. "
         f"Reason: {fallback_reason[:500]}"
     )
-    return augment_response_with_interview_questions({
-        "reply": (
-            f"LLM provider is unavailable, so I generated a safe starter DAG for `{pipeline_name}` locally. "
-            "Review resources and prompts before applying."
-        ),
-        "requirements": [message],
-        "assumptions": [
-            "Fallback mode uses a conservative trigger, one AI runbook step, and a final summary output.",
-            "No server, MCP, or skill resource is attached automatically.",
-        ],
-        "questions": [],
-        "resource_plan": {
-            "servers": [],
-            "agents": [],
-            "mcp_servers": [],
-            "skills": [],
-            "missing": [],
-            "notes": ["Attach concrete servers, MCP tools, or skills after reviewing the draft."],
-            "available": {
-                "servers": assistant_context.get("available_servers") or [],
-                "agents": assistant_context.get("available_agents") or [],
-                "mcp_servers": assistant_context.get("available_mcp_servers") or [],
-                "skills": assistant_context.get("available_skills") or [],
+    return augment_response_with_interview_questions(
+        {
+            "reply": (
+                f"LLM provider is unavailable, so I generated a safe starter DAG for `{pipeline_name}` locally. "
+                "Review resources and prompts before applying."
+            ),
+            "requirements": [message],
+            "assumptions": [
+                "Fallback mode uses a conservative trigger, one AI runbook step, and a final summary output.",
+                "No server, MCP, or skill resource is attached automatically.",
+            ],
+            "questions": [],
+            "resource_plan": {
+                "servers": [],
+                "agents": [],
+                "mcp_servers": [],
+                "skills": [],
+                "missing": [],
+                "notes": ["Attach concrete servers, MCP tools, or skills after reviewing the draft."],
+                "available": {
+                    "servers": assistant_context.get("available_servers") or [],
+                    "agents": assistant_context.get("available_agents") or [],
+                    "mcp_servers": assistant_context.get("available_mcp_servers") or [],
+                    "skills": assistant_context.get("available_skills") or [],
+                },
             },
-        },
-        "target_node_id": None,
-        "node_patch": {},
-        "graph_patch": {
-            "anchor_node_id": None,
-            "nodes": nodes,
-            "edges": edges,
-            "update_nodes": [],
-            "remove_node_ids": [],
-            "remove_edge_ids": [],
-        },
-        "node_explanations": {
-            trigger_ref: "Entry point selected from the automation request.",
-            runbook_ref: "Safe AI runbook step with diagnostics-first instructions.",
-            output_ref: "Final summary output for the operator.",
-        },
-        "confidence": 0.45,
-        "warnings": [warning],
-        "patch_summary": "Local fallback starter DAG",
-        "suggested_next_actions": ["Review generated node prompts", "Attach required resources", "Apply the draft"],
-    })
+            "target_node_id": None,
+            "node_patch": {},
+            "graph_patch": {
+                "anchor_node_id": None,
+                "nodes": nodes,
+                "edges": edges,
+                "update_nodes": [],
+                "remove_node_ids": [],
+                "remove_edge_ids": [],
+            },
+            "node_explanations": {
+                trigger_ref: "Entry point selected from the automation request.",
+                runbook_ref: "Safe AI runbook step with diagnostics-first instructions.",
+                output_ref: "Final summary output for the operator.",
+            },
+            "confidence": 0.45,
+            "warnings": [warning],
+            "patch_summary": "Local fallback starter DAG",
+            "suggested_next_actions": ["Review generated node prompts", "Attach required resources", "Apply the draft"],
+        }
+    )
 
 
 def build_provider_free_draft_response(
@@ -402,7 +397,9 @@ def build_provider_free_draft_response(
         assistant_context=assistant_context,
         fallback_reason="Provider-free deterministic compiler requested.",
     )
-    selected_template = response.get("selected_template") if isinstance(response.get("selected_template"), dict) else None
+    selected_template = (
+        response.get("selected_template") if isinstance(response.get("selected_template"), dict) else None
+    )
     template_name = _text(selected_template.get("name")) if selected_template else ""
     pipeline_name = _text(assistant_context.get("pipeline_name")) or "Operations runbook"
     if selected_template:

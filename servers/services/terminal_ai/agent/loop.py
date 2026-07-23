@@ -158,7 +158,7 @@ async def _llm_next_step_with_retry(
                 _llm_next_step(system_prompt, user_prompt),
                 timeout=timeout_sec,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise
         except asyncio.CancelledError:
             raise
@@ -227,10 +227,7 @@ async def _invoke_tool(
     if tool is None:
         return ToolResult(
             ok=False,
-            output=(
-                f"Unknown tool: {step.tool!r}. Valid: "
-                + ", ".join(sorted(tools.keys()))
-            ),
+            output=(f"Unknown tool: {step.tool!r}. Valid: " + ", ".join(sorted(tools.keys()))),
             error=f"unknown tool {step.tool}",
         )
 
@@ -240,8 +237,7 @@ async def _invoke_tool(
         # Return a concise error the LLM can learn from.
         errors = exc.errors(include_url=False)
         summary = "; ".join(
-            f"{'.'.join(str(p) for p in err.get('loc', ())) or 'root'}: {err.get('msg', '')}"
-            for err in errors[:5]
+            f"{'.'.join(str(p) for p in err.get('loc', ())) or 'root'}: {err.get('msg', '')}" for err in errors[:5]
         )
         return ToolResult(
             ok=False,
@@ -255,7 +251,7 @@ async def _invoke_tool(
         if step.tool == "ask_user" and isinstance(ask_timeout, int | float):
             effective_timeout = max(effective_timeout, float(ask_timeout) + 5.0)
         return await asyncio.wait_for(tool.run(validated, ctx), timeout=effective_timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return ToolResult(
             ok=False,
             output=f"tool {step.tool!r} timed out after {effective_timeout:.0f}s",
@@ -356,7 +352,7 @@ async def run_agent_loop(
                     user_prompt,
                     timeout_sec=ctx.iteration_timeout_sec,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 stopped = True
                 stop_reason = "llm_timeout"
                 break
@@ -365,9 +361,7 @@ async def run_agent_loop(
             except Exception as exc:  # noqa: BLE001
                 logger.warning("agent LLM call failed: %s", exc)
                 if ctx.emit is not None:
-                    await ctx.emit(
-                        {"type": "agent_error", "iteration": iterations, "message": str(exc)[:400]}
-                    )
+                    await ctx.emit({"type": "agent_error", "iteration": iterations, "message": str(exc)[:400]})
                 stopped = True
                 stop_reason = "llm_error"
                 break
@@ -427,9 +421,7 @@ async def run_agent_loop(
             )
 
             # Execute.
-            result = await _invoke_tool(
-                step, tools, tool_ctx, timeout_sec=ctx.iteration_timeout_sec
-            )
+            result = await _invoke_tool(step, tools, tool_ctx, timeout_sec=ctx.iteration_timeout_sec)
             tool_calls += 1
 
             # Emit tool result. We forward ``data`` so the UI can show
@@ -458,7 +450,9 @@ async def run_agent_loop(
             # Compact in-place so subsequent turns and partial reports see summary.
             history[:] = compact_agent_history(
                 history,
-                compact_after=int(getattr(ctx, "compact_after_turns", NOVA_COMPACT_AFTER_TURNS) or NOVA_COMPACT_AFTER_TURNS),
+                compact_after=int(
+                    getattr(ctx, "compact_after_turns", NOVA_COMPACT_AFTER_TURNS) or NOVA_COMPACT_AFTER_TURNS
+                ),
             )
 
             if result.fatal:

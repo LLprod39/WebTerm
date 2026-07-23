@@ -111,7 +111,9 @@ class KubernetesOpsWorkloadDetailTests(TestCase):
             last_seen_at=timezone.now(),
         )
 
-        response = self.client.get(reverse("api_kubernetes_workload_detail", kwargs={"workload_id": f"workload_{workload.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_workload_detail", kwargs={"workload_id": f"workload_{workload.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -155,14 +157,20 @@ class KubernetesOpsWorkloadDetailTests(TestCase):
             kind=K8sWorkloadRef.KIND_DEPLOYMENT,
             owner=K8sAppRef.OWNER_FLEET,
             health=K8sCluster.HEALTH_HEALTHY,
-            links={"rancher": "https://rancher.example.test/workloads/ingress-nginx-controller?token=raw-link-token#tail"},
+            links={
+                "rancher": "https://rancher.example.test/workloads/ingress-nginx-controller?token=raw-link-token#tail"
+            },
         )
 
-        response = self.client.get(reverse("api_kubernetes_workload_detail", kwargs={"workload_id": f"workload_{workload.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_workload_detail", kwargs={"workload_id": f"workload_{workload.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["workload"]["links"]["rancher"], "https://rancher.example.test/workloads/ingress-nginx-controller")
+        self.assertEqual(
+            payload["workload"]["links"]["rancher"], "https://rancher.example.test/workloads/ingress-nginx-controller"
+        )
         self.assertNotIn("raw-link-token", str(payload))
         self.assertNotIn("#tail", str(payload))
 

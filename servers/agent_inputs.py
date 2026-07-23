@@ -224,8 +224,7 @@ def build_agent_materials_prompt(artifacts: Any) -> str:
             extra = f", tasks={entry['tasks_open']}/{entry['tasks_total']} open"
         hint = f", hint={entry['run_hint']!r}" if entry.get("run_hint") else ""
         sections.append(
-            f"- id=`{entry['id']}` kind=`{entry['kind']}` name=`{entry['name']}` "
-            f"chars={entry['chars']}{extra}{hint}"
+            f"- id=`{entry['id']}` kind=`{entry['kind']}` name=`{entry['name']}` chars={entry['chars']}{extra}{hint}"
         )
     sections.append(
         "Tools: `list_materials`, `read_material`, `run_script_material`, `update_material_task`. "

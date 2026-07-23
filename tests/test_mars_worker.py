@@ -37,7 +37,7 @@ def test_mars_worker_completes_run_with_fake_codex_and_gemini(tmp_path):
     )
     gemini_script = tmp_path / "fake_gemini.py"
     gemini_script.write_text(
-        "print('{\"type\":\"review\",\"content\":\"Gemini review ok\"}')\n",
+        'print(\'{"type":"review","content":"Gemini review ok"}\')\n',
         encoding="utf-8",
     )
 

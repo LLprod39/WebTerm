@@ -57,7 +57,12 @@ def api_kubernetes_admin_pod_logs(request, cluster_id: str):
             _audit(
                 request,
                 "k8s.admin_resource.logs_rejected",
-                payload={"code": exc.code, "cluster_id": cluster_id, "namespace": _query(request, "namespace"), "pod": _query(request, "pod") or _query(request, "name")},
+                payload={
+                    "code": exc.code,
+                    "cluster_id": cluster_id,
+                    "namespace": _query(request, "namespace"),
+                    "pod": _query(request, "pod") or _query(request, "name"),
+                },
             )
             return _error_response(exc)
         _audit(

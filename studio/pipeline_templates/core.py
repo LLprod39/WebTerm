@@ -3,8 +3,8 @@
 from ..webhook_smoke import WEBHOOK_SMOKE_TEMPLATE
 
 CORE_TEMPLATES = [
-WEBHOOK_SMOKE_TEMPLATE,
-{
+    WEBHOOK_SMOKE_TEMPLATE,
+    {
         "slug": "healthcheck-sweep",
         "name": "Healthcheck Sweep",
         "description": "Checks CPU, RAM, disk and load on multiple servers, generates a health report.",
@@ -42,7 +42,7 @@ WEBHOOK_SMOKE_TEMPLATE,
             {"id": "e2-3", "source": "n2", "target": "n3", "animated": True},
         ],
     },
-{
+    {
         "slug": "docker-deploy",
         "name": "Docker Deploy",
         "description": "Pulls latest image, recreates container, verifies it's running.",
@@ -97,7 +97,7 @@ WEBHOOK_SMOKE_TEMPLATE,
             {"id": "e3-5", "source": "n3", "target": "n5", "sourceHandle": "false", "label": "failed"},
         ],
     },
-{
+    {
         "slug": "log-cleanup",
         "name": "Log Cleanup",
         "description": "Finds and removes old logs and temp files, frees up disk space.",
@@ -145,7 +145,7 @@ WEBHOOK_SMOKE_TEMPLATE,
             {"id": "e3-4", "source": "n3", "target": "n4", "animated": True},
         ],
     },
-{
+    {
         "slug": "incident-response",
         "name": "Incident Response",
         "description": "Triggered by webhook alert — investigates the issue, collects diagnostics, generates a report.",
@@ -193,7 +193,7 @@ WEBHOOK_SMOKE_TEMPLATE,
             {"id": "e2-4", "source": "n2", "target": "n4", "animated": True},
         ],
     },
-{
+    {
         "slug": "security-audit",
         "name": "Security Audit",
         "description": "Checks open ports, outdated packages, SSH config, and sudo permissions.",
@@ -231,7 +231,7 @@ WEBHOOK_SMOKE_TEMPLATE,
             {"id": "e2-3", "source": "n2", "target": "n3", "animated": True},
         ],
     },
-{
+    {
         "slug": "service-restart",
         "name": "Service Restart",
         "description": "Restarts a service, waits for it to come up, verifies it is healthy.",

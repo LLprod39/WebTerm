@@ -59,7 +59,14 @@ class KubernetesOpsAuditTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         serialized = str(payload) + str(cluster_event)
-        for raw in ("raw-audit-token", "raw-audit-password", "raw-url-password", "raw-url-token", "raw-db-password", "abc.def"):
+        for raw in (
+            "raw-audit-token",
+            "raw-audit-password",
+            "raw-url-password",
+            "raw-url-token",
+            "raw-db-password",
+            "abc.def",
+        ):
             self.assertNotIn(raw, serialized)
         self.assertEqual(payload["events"][0]["payload"]["token"], "[redacted]")
         self.assertEqual(payload["events"][0]["payload"]["url"], "https://rancher.example.test/path")

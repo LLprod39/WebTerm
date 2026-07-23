@@ -34,7 +34,9 @@ def _sandbox_executor_refs(manifest: dict[str, Any]) -> list[str]:
 def _compatibility_test_cases(manifest: dict[str, Any], executor_refs: list[str]) -> list[dict[str, Any]]:
     raw_cases = manifest.get("compatibility_tests")
     if not isinstance(raw_cases, list):
-        raw_cases = (manifest.get("testing") or {}).get("compatibility") if isinstance(manifest.get("testing"), dict) else []
+        raw_cases = (
+            (manifest.get("testing") or {}).get("compatibility") if isinstance(manifest.get("testing"), dict) else []
+        )
     cases = []
     for index, item in enumerate(raw_cases if isinstance(raw_cases, list) else []):
         if not isinstance(item, dict):
@@ -46,7 +48,9 @@ def _compatibility_test_cases(manifest: dict[str, Any], executor_refs: list[str]
             {
                 "id": str(item.get("id") or f"case-{index + 1}"),
                 "executor_ref": ref,
-                "payload": item.get("payload") if isinstance(item.get("payload"), dict) else {"surface": "compatibility_job", "arguments": {}},
+                "payload": item.get("payload")
+                if isinstance(item.get("payload"), dict)
+                else {"surface": "compatibility_job", "arguments": {}},
                 "expect": item.get("expect") if isinstance(item.get("expect"), dict) else {},
             }
         )
@@ -114,13 +118,34 @@ def add_sandbox_compatibility_checks(item: MarketplaceCatalogItem, report: dict[
         if test_case["executor_ref"] not in refs:
             refs.append(test_case["executor_ref"])
     if not refs:
-        checks.append({"name": "sandbox_executor_smoke", "ok": True, "skipped": True, "reason": "No sandbox executor refs declared."})
+        checks.append(
+            {
+                "name": "sandbox_executor_smoke",
+                "ok": True,
+                "skipped": True,
+                "reason": "No sandbox executor refs declared.",
+            }
+        )
     elif not _sandbox_enabled():
-        checks.append({"name": "sandbox_executor_smoke", "ok": False, "executor_refs": refs, "error": "Sandbox compatibility mode is not enabled."})
+        checks.append(
+            {
+                "name": "sandbox_executor_smoke",
+                "ok": False,
+                "executor_refs": refs,
+                "error": "Sandbox compatibility mode is not enabled.",
+            }
+        )
     else:
         package = _retained_package_for_item(item)
         if package is None:
-            checks.append({"name": "sandbox_executor_smoke", "ok": False, "executor_refs": refs, "error": "Retained plugin package was not found."})
+            checks.append(
+                {
+                    "name": "sandbox_executor_smoke",
+                    "ok": False,
+                    "executor_refs": refs,
+                    "error": "Retained plugin package was not found.",
+                }
+            )
         else:
             try:
                 retention = (package.provenance or {}).get("retention") if isinstance(package.provenance, dict) else {}

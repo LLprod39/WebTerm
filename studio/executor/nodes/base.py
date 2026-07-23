@@ -14,6 +14,7 @@ Usage:
             ...
             return NodeResult(output={"sent": True})
 """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -32,6 +33,7 @@ class NodeResult:
     error       — human-readable error string if execution failed
     stop_pipeline — if True, executor halts the entire pipeline
     """
+
     output: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     stop_pipeline: bool = False

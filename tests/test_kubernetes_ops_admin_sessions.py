@@ -339,9 +339,7 @@ class KubernetesOpsAdminSessionTests(TestCase):
     def test_pending_or_expired_session_cannot_be_closed(self):
         requester = self.create_user("k8s-admin-write-close-pending", grant_admin_write=True)
         self.client.force_login(requester)
-        create_response = self.post_session(
-            {"mode": K8sAdminSession.MODE_WRITE, "reason": "planned manifest review"}
-        )
+        create_response = self.post_session({"mode": K8sAdminSession.MODE_WRITE, "reason": "planned manifest review"})
         session_id = create_response.json()["session"]["id"]
 
         pending_close = self.client.post(

@@ -27,7 +27,12 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
             {
                 "name": "Ops Flow",
                 "nodes": [
-                    {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
+                    {
+                        "id": "manual",
+                        "type": "trigger/manual",
+                        "position": {"x": 0, "y": 0},
+                        "data": {"label": "Manual"},
+                    },
                     {
                         "id": "webhook",
                         "type": "trigger/webhook",
@@ -238,7 +243,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
                 "name": "Studio Agent",
                 "model": "gemini-2.0-flash-exp",
                 "allowed_tools": ["report", "ask_user"],
-                "skill_slugs": ["keycloak-safety"],
+                "skill_slugs": ["kubernetes-safety"],
                 "mcp_server_ids": [mcp_id],
                 "server_scope_ids": [server.id],
             }
@@ -259,19 +264,19 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
 
     agent_update = client.put(
         f"/api/studio/agents/{agent_id}/",
-        data=json_payload({"skill_slugs": ["keycloak-safety", "keycloak-test-profile"]}),
+        data=json_payload({"skill_slugs": ["kubernetes-safety"]}),
         content_type="application/json",
     )
     assert agent_update.status_code == 200
-    assert "keycloak-test-profile" in agent_update.json()["skill_slugs"]
+    assert "kubernetes-safety" in agent_update.json()["skill_slugs"]
 
     skills = client.get("/api/studio/skills/")
     assert skills.status_code == 200
-    assert any(item["slug"] == "keycloak-safety" for item in skills.json())
+    assert any(item["slug"] == "kubernetes-safety" for item in skills.json())
 
-    skill_detail = client.get("/api/studio/skills/keycloak-safety/")
+    skill_detail = client.get("/api/studio/skills/kubernetes-safety/")
     assert skill_detail.status_code == 200
-    assert skill_detail.json()["slug"] == "keycloak-safety"
+    assert skill_detail.json()["slug"] == "kubernetes-safety"
 
     delete_agent = client.delete(f"/api/studio/agents/{agent_id}/")
     assert delete_agent.status_code == 200
@@ -407,12 +412,12 @@ def test_non_admin_cannot_manage_global_notifications_or_skill_workspace():
     )
     assert scaffold.status_code == 403
 
-    workspace = client.get("/api/studio/skills/keycloak-safety/workspace/")
+    workspace = client.get("/api/studio/skills/kubernetes-safety/workspace/")
     assert workspace.status_code == 403
 
     validate = client.post(
         "/api/studio/skills/validate/",
-        data=json_payload({"slugs": ["keycloak-safety"]}),
+        data=json_payload({"slugs": ["kubernetes-safety"]}),
         content_type="application/json",
     )
     assert validate.status_code == 403

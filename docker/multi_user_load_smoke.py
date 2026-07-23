@@ -20,9 +20,9 @@ def _base_http(url: str) -> str:
 def _base_ws(url: str) -> str:
     base = url.rstrip("/")
     if base.startswith("https://"):
-        return "wss://" + base[len("https://"):]
+        return "wss://" + base[len("https://") :]
     if base.startswith("http://"):
-        return "ws://" + base[len("http://"):]
+        return "ws://" + base[len("http://") :]
     raise ValueError(f"Unsupported base URL: {url}")
 
 
@@ -159,7 +159,9 @@ class SmokeUserSession:
         async with self.session.get(urljoin(self.base_url, "api/auth/session/"), headers=auth_headers) as response:
             payload = await response.json()
             if response.status != 200 or not payload.get("authenticated"):
-                raise SmokeFailure(f"session check failed for {self.seed['username']}: HTTP {response.status} {payload}")
+                raise SmokeFailure(
+                    f"session check failed for {self.seed['username']}: HTTP {response.status} {payload}"
+                )
 
         async with self.session.get(urljoin(self.base_url, "api/auth/ws-token/"), headers=auth_headers) as response:
             payload = await response.json()
@@ -180,9 +182,7 @@ class SmokeUserSession:
 
     async def run_terminal_session(self, session_index: int) -> float:
         started = time.perf_counter()
-        ws_url = (
-            f"{self.ws_base}/ws/servers/{int(self.seed['server_id'])}/terminal/?ws_token={self.ws_token}"
-        )
+        ws_url = f"{self.ws_base}/ws/servers/{int(self.seed['server_id'])}/terminal/?ws_token={self.ws_token}"
         marker = f"TERM_OK_{self.seed['username']}_{session_index}"
         async with self.session.ws_connect(ws_url, heartbeat=20) as ws:
             await _expect_json(ws, predicate=lambda p: p.get("type") == "ready")
@@ -229,9 +229,7 @@ class SmokeUserSession:
         ) as response:
             payload = await response.json()
             if response.status != 202:
-                raise SmokeFailure(
-                    f"pipeline run failed for {self.seed['username']}: HTTP {response.status} {payload}"
-                )
+                raise SmokeFailure(f"pipeline run failed for {self.seed['username']}: HTTP {response.status} {payload}")
             run_id = int(payload["id"])
 
         run_detail = await _poll_run(
@@ -272,9 +270,7 @@ class SmokeUserSession:
             except aiohttp.ContentTypeError:
                 payload = {"raw_text": await response.text()}
             if response.status != 200 or not payload.get("success"):
-                raise SmokeFailure(
-                    f"agent run failed for {self.seed['username']}: HTTP {response.status} {payload}"
-                )
+                raise SmokeFailure(f"agent run failed for {self.seed['username']}: HTTP {response.status} {payload}")
             run_id = int((payload.get("runs") or [{}])[0].get("run_id") or payload.get("run_id") or 0)
             if not run_id:
                 raise SmokeFailure(f"agent run id missing for {self.seed['username']}: {payload}")
@@ -314,17 +310,12 @@ async def _run_user(
     try:
         await user.login()
         terminal_tasks = [
-            asyncio.create_task(user.run_terminal_session(index))
-            for index in range(1, terminal_sessions_per_user + 1)
+            asyncio.create_task(user.run_terminal_session(index)) for index in range(1, terminal_sessions_per_user + 1)
         ]
         pipeline_tasks = [
-            asyncio.create_task(user.run_pipeline(index))
-            for index in range(1, pipeline_runs_per_user + 1)
+            asyncio.create_task(user.run_pipeline(index)) for index in range(1, pipeline_runs_per_user + 1)
         ]
-        agent_tasks = [
-            asyncio.create_task(user.run_agent(index))
-            for index in range(1, agent_runs_per_user + 1)
-        ]
+        agent_tasks = [asyncio.create_task(user.run_agent(index)) for index in range(1, agent_runs_per_user + 1)]
         terminal_latencies = await asyncio.gather(*terminal_tasks)
         pipeline_latencies = await asyncio.gather(*pipeline_tasks)
         agent_latencies = await asyncio.gather(*agent_tasks)

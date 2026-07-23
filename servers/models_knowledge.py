@@ -106,8 +106,6 @@ class ServerKnowledge(models.Model):
         return f"{self.server.name}: {self.title}"
 
 
-
-
 class ServerGroupKnowledge(models.Model):
     """Knowledge applicable to a group of servers"""
 
@@ -144,4 +142,3 @@ class ServerGroupKnowledge(models.Model):
 
     def __str__(self):
         return f"{self.group.name}: {self.title[:50]}"
-

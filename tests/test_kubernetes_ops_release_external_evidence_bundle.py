@@ -39,7 +39,9 @@ def _write_required_artifacts(tmp_path, *, local: bool = False) -> None:
                 "success": True,
                 "checked_at": now,
                 "summary": {"enabled_providers": 2, "provider_probes_ok": 2, "sync_dry_run_ok": 2},
-                "provider_probes": [{"provider_name": provider_name, "provider_base_url": provider_url, "success": True}],
+                "provider_probes": [
+                    {"provider_name": provider_name, "provider_base_url": provider_url, "success": True}
+                ],
                 "sync_dry_run": [{"provider_name": "devtron-prod", "provider_kind": "devtron", "success": True}],
                 "errors": [],
             }
@@ -47,7 +49,16 @@ def _write_required_artifacts(tmp_path, *, local: bool = False) -> None:
         encoding="utf-8",
     )
     (artifact_dir / "kubernetes_ops_readonly_rbac_live_evidence.json").write_text(
-        json.dumps({"status": "ready", "checked_at": now, "context": context, "allowed": [{"decision": "yes"}], "denied": [{"decision": "no"}], "errors": []}),
+        json.dumps(
+            {
+                "status": "ready",
+                "checked_at": now,
+                "context": context,
+                "allowed": [{"decision": "yes"}],
+                "denied": [{"decision": "no"}],
+                "errors": [],
+            }
+        ),
         encoding="utf-8",
     )
     (artifact_dir / "kubernetes_ops_interactive_transport_evidence.json").write_text(
@@ -94,10 +105,18 @@ def _write_required_artifacts(tmp_path, *, local: bool = False) -> None:
                 "summary": {"control_contract_count": 4, "required_ref_count": 0, "missing_required_ref_count": 0},
                 "coverage": {"control_contract_complete": True},
                 "controls": [
-                    {"id": "restricted_credentials", "ready": True, "required_items": ["reviewed_restricted_service_account"]},
+                    {
+                        "id": "restricted_credentials",
+                        "ready": True,
+                        "required_items": ["reviewed_restricted_service_account"],
+                    },
                     {"id": "recording_policy", "ready": True, "required_items": ["metadata_retention"]},
                     {"id": "port_forward_network_policy", "ready": True, "required_items": ["reviewed_network_policy"]},
-                    {"id": "provider_path_contracts", "ready": True, "required_items": ["cluster_terminal_path_template"]},
+                    {
+                        "id": "provider_path_contracts",
+                        "ready": True,
+                        "required_items": ["cluster_terminal_path_template"],
+                    },
                 ],
                 "errors": [],
             }
@@ -159,7 +178,10 @@ def test_external_evidence_bundle_blocks_production_missing_refs_and_local_artif
     assert report["summary"]["missing_required_ref_count"] >= 8
     assert report["summary"]["local_indicator_count"] >= 1
     assert any(item.startswith("reference:production_approval:") for item in report["errors"])
-    assert any(item.startswith("reference:production_rollback:KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF:") for item in report["errors"])
+    assert any(
+        item.startswith("reference:production_rollback:KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF:")
+        for item in report["errors"]
+    )
     assert any(
         item.startswith("reference:native_verification:KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF:")
         for item in report["errors"]

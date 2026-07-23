@@ -264,7 +264,7 @@ def test_pipeline_executor_wait_node_honors_stop_request():
                 "type": "logic/wait",
                 "position": {"x": 0, "y": 0},
                 "data": {"wait_minutes": 5},
-            }
+            },
         ],
         edges=[{"id": "manual-wait", "source": "manual", "target": "wait_1", "sourceHandle": "out"}],
     )

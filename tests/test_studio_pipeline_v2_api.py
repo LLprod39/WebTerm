@@ -149,7 +149,9 @@ def test_manual_run_validate_only_reports_graph_errors_without_launch(monkeypatc
     grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("validate_only must not launch"))
+    monkeypatch.setattr(
+        "studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("validate_only must not launch")
+    )
 
     pipeline = Pipeline.objects.create(
         name="Legacy validate flow",

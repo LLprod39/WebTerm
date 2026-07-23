@@ -45,4 +45,3 @@ def sync_freshness(
         "sync_age_seconds": age,
         "sync_stale_after_seconds": stale_after,
     }
-

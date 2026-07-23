@@ -103,7 +103,9 @@ class KubernetesOpsAdminDeleteTests(TestCase):
     @override_settings(KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED=True)
     def test_delete_blocks_namespace_and_system_namespace(self):
         user = self.create_user("k8s-delete-guards", grant_admin_write=True)
-        session = self.create_write_session(user, allowed_namespaces=["payments", "kube-system"], allowed_kinds=["Deployment", "Namespace"])
+        session = self.create_write_session(
+            user, allowed_namespaces=["payments", "kube-system"], allowed_kinds=["Deployment", "Namespace"]
+        )
 
         with self.assertRaises(AdminResourceError) as namespace_denied:
             delete_kubernetes_resource(

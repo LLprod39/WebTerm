@@ -99,7 +99,9 @@ def _ensure_ai_node_instructions(
         )
         _warn(warnings, f"AI node '{node_label}' was missing instructions; working instructions were added.")
     if not str(next_data.get("expected_output") or "").strip():
-        next_data["expected_output"] = "Short operational summary with status, evidence, risks, and recommended next action."
+        next_data["expected_output"] = (
+            "Short operational summary with status, evidence, risks, and recommended next action."
+        )
     return next_data
 
 
@@ -373,9 +375,7 @@ def _sanitize_graph_patch(
     ]
     for merge_ref in merge_refs:
         existing_merge_sources = {
-            str(edge.get("source") or "")
-            for edge in edges
-            if str(edge.get("target") or "") == merge_ref
+            str(edge.get("source") or "") for edge in edges if str(edge.get("target") or "") == merge_ref
         }
         for leaf_ref in branch_leaf_refs[:4]:
             if leaf_ref not in existing_merge_sources:
@@ -454,7 +454,10 @@ def _sanitize_graph_patch(
             edge["target_handle"] = None
 
         _add_repair_edge(merge_ref, target, "insert explicit merge before shared target")
-        _warn(warnings, f"AI graph repair inserted merge '{merge_ref}' before '{target}' to avoid multiple incoming edges.")
+        _warn(
+            warnings,
+            f"AI graph repair inserted merge '{merge_ref}' before '{target}' to avoid multiple incoming edges.",
+        )
 
     raw_update_nodes = raw_graph_patch.get("update_nodes")
     if not isinstance(raw_update_nodes, list):

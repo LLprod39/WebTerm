@@ -26,7 +26,9 @@ from kubernetes_ops.services.action_verification_targets import (
 )
 
 
-def build_native_action_verification_plan(*, action_request: K8sActionRequest, execution: dict[str, Any], created_at=None) -> dict[str, Any]:
+def build_native_action_verification_plan(
+    *, action_request: K8sActionRequest, execution: dict[str, Any], created_at=None
+) -> dict[str, Any]:
     now = created_at or timezone.now()
     target = _safe_target(action_request=action_request, execution=execution)
     checks = _checks_for_action(action_request.action, target=target, execution=execution)
@@ -45,7 +47,9 @@ def build_native_action_verification_plan(*, action_request: K8sActionRequest, e
     }
 
 
-def mark_native_verification_plan_recorded(*, report: dict[str, Any], verified: bool, recorded_at=None, checks: Any = None) -> dict[str, Any]:
+def mark_native_verification_plan_recorded(
+    *, report: dict[str, Any], verified: bool, recorded_at=None, checks: Any = None
+) -> dict[str, Any]:
     plan = report.get("verification_plan") if isinstance(report.get("verification_plan"), dict) else {}
     if not plan or plan.get("mode") != "native_post_action":
         return {}
@@ -98,7 +102,9 @@ def evaluate_native_action_verification_plan(*, action_request: K8sActionRequest
     )
 
 
-def record_native_action_verification_evaluation(*, action_request: K8sActionRequest, evaluated_by: str = "", evaluated_at=None) -> K8sActionRequest:
+def record_native_action_verification_evaluation(
+    *, action_request: K8sActionRequest, evaluated_by: str = "", evaluated_at=None
+) -> K8sActionRequest:
     evaluation = evaluate_native_action_verification_plan(action_request=action_request, evaluated_at=evaluated_at)
     if evaluation.get("status") == "skipped":
         return action_request
@@ -141,7 +147,9 @@ def record_native_action_verification_evaluation(*, action_request: K8sActionReq
     return action_request
 
 
-def run_pending_native_action_verifications(*, limit: int = 50, evaluated_by: str = "webterm-native-verifier") -> dict[str, Any]:
+def run_pending_native_action_verifications(
+    *, limit: int = 50, evaluated_by: str = "webterm-native-verifier"
+) -> dict[str, Any]:
     limit = max(1, min(int(limit or 50), 200))
     candidates = (
         K8sActionRequest.objects.select_related("cluster")
@@ -186,7 +194,9 @@ def _safe_target(*, action_request: K8sActionRequest, execution: dict[str, Any])
         "namespace": reference_action_text(target.get("namespace") or ""),
         "name": reference_action_text(target.get("name") or ""),
         "replicas": target.get("replicas") if isinstance(target.get("replicas"), int) else execution.get("replicas"),
-        "dry_run_action_id": reference_action_text(((execution.get("dry_run_proof") or {}).get("id")) or target.get("dry_run_action_id") or ""),
+        "dry_run_action_id": reference_action_text(
+            ((execution.get("dry_run_proof") or {}).get("id")) or target.get("dry_run_action_id") or ""
+        ),
         "manifest_fingerprint_present": bool(target.get("manifest_fingerprint")),
     }
 
@@ -195,7 +205,14 @@ def _evaluation(status: str, evaluated_at, **extra: Any) -> dict[str, Any]:
     return {"status": status, "evaluated_at": evaluated_at.isoformat(), **extra}
 
 
-def _evaluate_check(check: dict[str, Any], *, action_request: K8sActionRequest, cluster: K8sCluster | None, target: dict[str, Any], executed_at) -> dict[str, Any]:
+def _evaluate_check(
+    check: dict[str, Any],
+    *,
+    action_request: K8sActionRequest,
+    cluster: K8sCluster | None,
+    target: dict[str, Any],
+    executed_at,
+) -> dict[str, Any]:
     check_id = str(check.get("id") or "")
     if cluster is None:
         return _check_result(check_id, "missing", "cluster_not_found")
@@ -227,7 +244,11 @@ def _admin_action_completed(check_id: str, action_request: K8sActionRequest) -> 
         check_id,
         "passed" if passed else "needs_review",
         "admin_action_completed" if passed else "admin_action_not_completed",
-        evidence={"admin_action_id": str(admin_action.action_id), "admin_action_status": admin_action.status, "verb": admin_action.verb},
+        evidence={
+            "admin_action_id": str(admin_action.action_id),
+            "admin_action_status": admin_action.status,
+            "verb": admin_action.verb,
+        },
     )
 
 
@@ -238,8 +259,17 @@ def _workload_ready(check_id: str, *, cluster: K8sCluster, target: dict[str, Any
     evidence = _workload_evidence(workload)
     if not _fresh_after(workload.last_sync_at, executed_at):
         return _check_result(check_id, "missing", "workload_sync_not_fresh", evidence=evidence)
-    passed = workload.ready >= workload.desired and workload.desired > 0 and workload.health not in {K8sCluster.HEALTH_DEGRADED, K8sCluster.HEALTH_UNKNOWN}
-    return _check_result(check_id, "passed" if passed else "needs_review", "workload_ready" if passed else "workload_not_ready", evidence=evidence)
+    passed = (
+        workload.ready >= workload.desired
+        and workload.desired > 0
+        and workload.health not in {K8sCluster.HEALTH_DEGRADED, K8sCluster.HEALTH_UNKNOWN}
+    )
+    return _check_result(
+        check_id,
+        "passed" if passed else "needs_review",
+        "workload_ready" if passed else "workload_not_ready",
+        evidence=evidence,
+    )
 
 
 def _desired_replicas(check_id: str, *, cluster: K8sCluster, target: dict[str, Any], executed_at) -> dict[str, Any]:
@@ -265,7 +295,9 @@ def _pods_ready(check_id: str, *, cluster: K8sCluster, target: dict[str, Any], e
         return _check_result(check_id, "missing", "pods_not_found")
     stale = [pod.name for pod in pods if not _fresh_after(pod.last_sync_at, executed_at)]
     if stale:
-        return _check_result(check_id, "missing", "pod_sync_not_fresh", evidence={"pod_count": len(pods), "stale_count": len(stale)})
+        return _check_result(
+            check_id, "missing", "pod_sync_not_fresh", evidence={"pod_count": len(pods), "stale_count": len(stale)}
+        )
     unhealthy = [
         pod.name
         for pod in pods
@@ -308,7 +340,11 @@ def _dependent_health(check_id: str, *, cluster: K8sCluster, target: dict[str, A
     if not _cluster_fresh_after(cluster, executed_at):
         return _check_result(check_id, "missing", "cluster_sync_not_fresh")
     namespace = str(target.get("namespace") or "")
-    workloads = K8sWorkloadRef.objects.filter(cluster=cluster, namespace=namespace) if namespace else K8sWorkloadRef.objects.filter(cluster=cluster)
+    workloads = (
+        K8sWorkloadRef.objects.filter(cluster=cluster, namespace=namespace)
+        if namespace
+        else K8sWorkloadRef.objects.filter(cluster=cluster)
+    )
     degraded = workloads.filter(health__in=[K8sCluster.HEALTH_DEGRADED, K8sCluster.HEALTH_UNKNOWN]).count()
     return _check_result(
         check_id,
@@ -318,7 +354,9 @@ def _dependent_health(check_id: str, *, cluster: K8sCluster, target: dict[str, A
     )
 
 
-def _recent_warning_events(check_id: str, *, cluster: K8sCluster, target: dict[str, Any], executed_at) -> dict[str, Any]:
+def _recent_warning_events(
+    check_id: str, *, cluster: K8sCluster, target: dict[str, Any], executed_at
+) -> dict[str, Any]:
     if not _cluster_fresh_after(cluster, executed_at):
         return _check_result(check_id, "missing", "event_sync_not_fresh")
     events = K8sEvent.objects.filter(cluster=cluster, severity__in=[K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR])
@@ -351,7 +389,9 @@ def _check_result(check_id: str, status: str, reason: str, *, evidence: dict[str
 
 
 def _merge_evaluated_checks(planned: Any, evaluated: Any) -> list[dict[str, Any]]:
-    evaluated_by_id = {item.get("id"): item for item in evaluated if isinstance(item, dict)} if isinstance(evaluated, list) else {}
+    evaluated_by_id = (
+        {item.get("id"): item for item in evaluated if isinstance(item, dict)} if isinstance(evaluated, list) else {}
+    )
     rows = []
     for item in planned if isinstance(planned, list) else []:
         if not isinstance(item, dict):
@@ -369,19 +409,31 @@ def _checks_for_action(action: str, *, target: dict[str, Any], execution: dict[s
         ]
     if action == K8sActionRequest.ACTION_K8S_WORKLOAD_SCALE:
         return [
-            _check("desired_replicas_observed", "Confirm the workload desired replica count matches the approved request.", expected=target.get("replicas")),
+            _check(
+                "desired_replicas_observed",
+                "Confirm the workload desired replica count matches the approved request.",
+                expected=target.get("replicas"),
+            ),
             _check("workload_readiness_observed", "Confirm workload readiness after scaling."),
             _check("recent_warning_events_checked", "Check recent Events for warnings after scaling."),
         ]
     if action == K8sActionRequest.ACTION_K8S_RESOURCE_APPLY:
         return [
-            _check("apply_action_completed", "Confirm server-side apply completed through the linked Admin action.", expected=execution.get("admin_action_status") or (execution.get("action") or {}).get("status")),
+            _check(
+                "apply_action_completed",
+                "Confirm server-side apply completed through the linked Admin action.",
+                expected=execution.get("admin_action_status") or (execution.get("action") or {}).get("status"),
+            ),
             _check("resource_generation_observed", "Confirm the applied resource generation or revision is visible."),
             _check("recent_warning_events_checked", "Check recent Events for warnings after apply."),
         ]
     if action == K8sActionRequest.ACTION_K8S_RESOURCE_PATCH:
         return [
-            _check("patch_action_completed", "Confirm the patch completed through the linked Admin action.", expected=execution.get("admin_action_status") or (execution.get("action") or {}).get("status")),
+            _check(
+                "patch_action_completed",
+                "Confirm the patch completed through the linked Admin action.",
+                expected=execution.get("admin_action_status") or (execution.get("action") or {}).get("status"),
+            ),
             _check("resource_generation_observed", "Confirm the patched resource generation or revision is visible."),
             _check("recent_warning_events_checked", "Check recent Events for warnings after patch."),
         ]

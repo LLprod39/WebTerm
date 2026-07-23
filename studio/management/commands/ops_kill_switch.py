@@ -5,6 +5,7 @@ Usage:
   python manage.py ops_kill_switch --resume
   python manage.py ops_kill_switch --status
 """
+
 from __future__ import annotations
 
 from django.core.management.base import BaseCommand
@@ -27,7 +28,9 @@ class Command(BaseCommand):
             self.stderr.write("Choose only one of --pause or --resume")
             return
         if options.get("pause"):
-            payload = set_ops_paused(True, reason=options.get("reason") or "Paused by operator", actor=options.get("actor") or "")
+            payload = set_ops_paused(
+                True, reason=options.get("reason") or "Paused by operator", actor=options.get("actor") or ""
+            )
             self.stdout.write(self.style.WARNING(f"Kill switch ON: {payload}"))
             return
         if options.get("resume"):

@@ -56,56 +56,6 @@ def _schema(properties: dict[str, Any], *, required: tuple[str, ...] = ()) -> Js
 
 PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
     PilotMCPToolSpec(
-        pack_slug="identity-keycloak",
-        pack_name="Identity: Keycloak",
-        task_family="identity_access",
-        service="keycloak",
-        mcp_server_name="Keycloak Admin",
-        tool_name="keycloak_lookup_subject_access",
-        description="Read current effective Keycloak access for a user/service account before or after a change.",
-        input_schema=_schema(
-            {
-                "realm": {"type": "string", "description": "Keycloak realm name."},
-                "username": {"type": "string", "description": "User name, login, email or service account id."},
-                "group": {"type": "string", "description": "Optional target group to check."},
-                "role": {"type": "string", "description": "Optional target realm/client role to check."},
-            },
-            required=("realm", "username"),
-        ),
-        permission_mode="READ_ONLY",
-        risk_level="read_only",
-        operation_kind="keycloak.access.lookup",
-        skill_slugs=("keycloak-safety",),
-        policy_tags=("iam", "preflight", "verification"),
-    ),
-    PilotMCPToolSpec(
-        pack_slug="identity-keycloak",
-        pack_name="Identity: Keycloak",
-        task_family="identity_access",
-        service="keycloak",
-        mcp_server_name="Keycloak Admin",
-        tool_name="keycloak_apply_access_change",
-        description="Apply an approved Keycloak group/role access change.",
-        input_schema=_schema(
-            {
-                "realm": {"type": "string", "description": "Keycloak realm name."},
-                "username": {"type": "string", "description": "User name, login, email or service account id."},
-                "group": {"type": "string", "description": "Group to add/remove, when the change targets group membership."},
-                "role": {"type": "string", "description": "Role to add/remove, when the change targets a role assignment."},
-                "operation": {"type": "string", "enum": ["add", "remove"], "description": "Approved mutation direction."},
-                "approval": {"type": "string", "description": "Human approval evidence from the approval node."},
-            },
-            required=("realm", "username", "operation", "approval"),
-        ),
-        permission_mode="ASSISTED",
-        risk_level="high",
-        operation_kind="keycloak.access.mutate",
-        mutates_state=True,
-        requires_approval=True,
-        skill_slugs=("keycloak-safety",),
-        policy_tags=("iam", "mutation", "approval-required", "audit"),
-    ),
-    PilotMCPToolSpec(
         pack_slug="kubernetes-operations",
         pack_name="Kubernetes Operations",
         task_family="kubernetes_ops",
@@ -115,9 +65,16 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
         description="Read workload status, pods, events and recent rollout evidence.",
         input_schema=_schema(
             {
-                "cluster": {"type": "string", "description": "Cluster/context name, if the MCP supports multiple clusters."},
+                "cluster": {
+                    "type": "string",
+                    "description": "Cluster/context name, if the MCP supports multiple clusters.",
+                },
                 "namespace": {"type": "string", "description": "Kubernetes namespace."},
-                "kind": {"type": "string", "enum": ["deployment", "statefulset", "daemonset", "pod"], "description": "Workload kind."},
+                "kind": {
+                    "type": "string",
+                    "enum": ["deployment", "statefulset", "daemonset", "pod"],
+                    "description": "Workload kind.",
+                },
                 "name": {"type": "string", "description": "Workload name."},
             },
             required=("namespace", "kind", "name"),
@@ -138,9 +95,16 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
         description="Run an approved rollout restart against a workload.",
         input_schema=_schema(
             {
-                "cluster": {"type": "string", "description": "Cluster/context name, if the MCP supports multiple clusters."},
+                "cluster": {
+                    "type": "string",
+                    "description": "Cluster/context name, if the MCP supports multiple clusters.",
+                },
                 "namespace": {"type": "string", "description": "Kubernetes namespace."},
-                "kind": {"type": "string", "enum": ["deployment", "statefulset", "daemonset"], "description": "Restartable workload kind."},
+                "kind": {
+                    "type": "string",
+                    "enum": ["deployment", "statefulset", "daemonset"],
+                    "description": "Restartable workload kind.",
+                },
                 "name": {"type": "string", "description": "Workload name."},
             },
             required=("namespace", "kind", "name"),
@@ -163,9 +127,16 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
         description="Verify rollout completion and final workload health.",
         input_schema=_schema(
             {
-                "cluster": {"type": "string", "description": "Cluster/context name, if the MCP supports multiple clusters."},
+                "cluster": {
+                    "type": "string",
+                    "description": "Cluster/context name, if the MCP supports multiple clusters.",
+                },
                 "namespace": {"type": "string", "description": "Kubernetes namespace."},
-                "kind": {"type": "string", "enum": ["deployment", "statefulset", "daemonset"], "description": "Workload kind."},
+                "kind": {
+                    "type": "string",
+                    "enum": ["deployment", "statefulset", "daemonset"],
+                    "description": "Workload kind.",
+                },
                 "name": {"type": "string", "description": "Workload name."},
                 "timeout_seconds": {"type": "integer", "description": "Maximum time to wait for a healthy rollout."},
             },
@@ -332,7 +303,10 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
         input_schema=_schema(
             {
                 "alert_id": {"type": "string", "description": "Alert id, fingerprint or incident source reference."},
-                "alert_source": {"type": "string", "description": "Alert source such as Grafana, Prometheus, Sentry or PagerDuty."},
+                "alert_source": {
+                    "type": "string",
+                    "description": "Alert source such as Grafana, Prometheus, Sentry or PagerDuty.",
+                },
                 "service": {"type": "string", "description": "Impacted service or application name."},
                 "severity": {
                     "type": "string",
@@ -362,7 +336,10 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
                 "service": {"type": "string", "description": "Service, workload or application to investigate."},
                 "query": {"type": "string", "description": "Metrics/logs query or investigation hint."},
                 "time_range_minutes": {"type": "integer", "description": "Evidence window in minutes."},
-                "datasource": {"type": "string", "description": "Datasource hint such as Prometheus, Loki, Grafana or Sentry."},
+                "datasource": {
+                    "type": "string",
+                    "description": "Datasource hint such as Prometheus, Loki, Grafana or Sentry.",
+                },
             },
             required=("service", "time_range_minutes"),
         ),
@@ -411,7 +388,10 @@ PILOT_MCP_TOOL_SPECS: tuple[PilotMCPToolSpec, ...] = (
         description="Verify that the incident ticket or escalation was created, updated or acknowledged.",
         input_schema=_schema(
             {
-                "ticket_ref": {"type": "string", "description": "Ticket, incident, escalation or MCP result reference."},
+                "ticket_ref": {
+                    "type": "string",
+                    "description": "Ticket, incident, escalation or MCP result reference.",
+                },
             },
             required=("ticket_ref",),
         ),

@@ -10,12 +10,12 @@ def on_user_logged_in(sender, request, user, **kwargs):
     log_user_activity(
         user=user,
         request=request,
-        category='auth',
-        action='login',
+        category="auth",
+        action="login",
         status=UserActivityLog.STATUS_SUCCESS,
-        description='User logged in',
+        description="User logged in",
         metadata={
-            'is_staff': bool(getattr(user, 'is_staff', False)),
-            'is_superuser': bool(getattr(user, 'is_superuser', False)),
+            "is_staff": bool(getattr(user, "is_staff", False)),
+            "is_superuser": bool(getattr(user, "is_superuser", False)),
         },
     )

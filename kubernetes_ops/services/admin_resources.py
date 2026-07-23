@@ -60,6 +60,7 @@ class KubernetesResourceRef:
 MAX_LIST_ITEMS = 250
 READ_VERBS = {"get", "list", "watch", "logs", "yaml"}
 
+
 def cluster_for_value(cluster_id: str) -> K8sCluster | None:
     value = str(cluster_id or "").strip()
     numeric = value.removeprefix("cluster_")
@@ -69,11 +70,15 @@ def cluster_for_value(cluster_id: str) -> K8sCluster | None:
     return K8sCluster.objects.filter(query).select_related("rancher_provider").first()
 
 
-def active_resource_session_for_user(user, session_id: str, cluster: K8sCluster, *, verb: str, namespace: str = "", kind: str = "") -> K8sAdminSession:
+def active_resource_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, verb: str, namespace: str = "", kind: str = ""
+) -> K8sAdminSession:
     if not (policy := kubernetes_permission_policy(user))["admin_mode_enabled"]:
         raise AdminResourceError("Kubernetes Admin Mode is disabled.", code="admin_mode_disabled", status=403)
     if not (policy["can_admin_read"] or policy["can_admin_write"] or policy["can_break_glass"]):
-        raise AdminResourceError("Kubernetes Admin Mode read access is required.", code="admin_read_required", status=403)
+        raise AdminResourceError(
+            "Kubernetes Admin Mode read access is required.", code="admin_read_required", status=403
+        )
     try:
         session = (
             K8sAdminSession.objects.select_related("user", "provider", "cluster")
@@ -81,26 +86,38 @@ def active_resource_session_for_user(user, session_id: str, cluster: K8sCluster,
             .first()
         )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active admin session is required.", code="admin_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active admin session is required.", code="admin_session_required", status=403
+        ) from exc
     if session is None:
         raise AdminResourceError("Active admin session is required.", code="admin_session_required", status=403)
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
         raise AdminResourceError("Admin session is not active.", code="admin_session_not_active", status=403)
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if verb not in set(session.allowed_verbs or []):
-        raise AdminResourceError("Admin session does not allow this verb.", code="admin_session_verb_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not allow this verb.", code="admin_session_verb_denied", status=403
+        )
     if verb not in READ_VERBS:
-        raise AdminResourceError("Only read verbs are supported by this endpoint.", code="verb_not_read_only", status=403)
+        raise AdminResourceError(
+            "Only read verbs are supported by this endpoint.", code="verb_not_read_only", status=403
+        )
     if namespace:
         allowed_namespaces = set(session.allowed_namespaces or [])
         if "*" not in allowed_namespaces and namespace not in allowed_namespaces:
-            raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+            )
     if kind:
         allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
         if "*" not in allowed_kinds and kind.lower() not in allowed_kinds:
-            raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+            )
     return session
 
 
@@ -124,9 +141,13 @@ def list_cluster_resources(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     cluster = _required_cluster(cluster_id)
-    resource_ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
+    resource_ref = build_resource_ref(
+        api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource
+    )
     verb = "get" if resource_ref.name else "list"
-    session = active_resource_session_for_user(user, session_id, cluster, verb=verb, namespace=resource_ref.namespace, kind=resource_ref.kind)
+    session = active_resource_session_for_user(
+        user, session_id, cluster, verb=verb, namespace=resource_ref.namespace, kind=resource_ref.kind
+    )
     provider = _required_rancher_provider(cluster)
     path = rancher_resource_path(provider, cluster, resource_ref)
     list_options = list_query_options(
@@ -139,7 +160,9 @@ def list_cluster_resources(
     )
     if not resource_ref.name:
         path = append_query(path, list_options["provider_params"])
-    secret_values_visible = secret_values_visible_for_request(user, resource_ref, include_secret_values) if resource_ref.name else False
+    secret_values_visible = (
+        secret_values_visible_for_request(user, resource_ref, include_secret_values) if resource_ref.name else False
+    )
     payload = _provider_get(provider, path, transport=transport)
     if resource_ref.name:
         resource = sanitize_kubernetes_resource(payload, allow_secret_values=secret_values_visible)
@@ -181,8 +204,12 @@ def list_cluster_resources(
     ]
     filtered_items = filter_resource_items_for_search(raw_items, list_options["search"])
     visible_items = filtered_items[:item_limit]
-    items = attach_resource_summaries(attach_item_ownership(cluster=cluster, ref=resource_ref, items=visible_items), ref=resource_ref)
-    ownership_contexts = [item["webterm_ownership"] for item in items if isinstance(item.get("webterm_ownership"), dict)]
+    items = attach_resource_summaries(
+        attach_item_ownership(cluster=cluster, ref=resource_ref, items=visible_items), ref=resource_ref
+    )
+    ownership_contexts = [
+        item["webterm_ownership"] for item in items if isinstance(item.get("webterm_ownership"), dict)
+    ]
     record_admin_resource_action(
         user=user,
         session=session,
@@ -238,8 +265,12 @@ def get_cluster_resource_yaml(
     if not str(name or "").strip():
         raise AdminResourceError("name is required for YAML view.", code="name_required")
     cluster = _required_cluster(cluster_id)
-    resource_ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
-    session = active_resource_session_for_user(user, session_id, cluster, verb="yaml", namespace=resource_ref.namespace, kind=resource_ref.kind)
+    resource_ref = build_resource_ref(
+        api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource
+    )
+    session = active_resource_session_for_user(
+        user, session_id, cluster, verb="yaml", namespace=resource_ref.namespace, kind=resource_ref.kind
+    )
     provider = _required_rancher_provider(cluster)
     path = rancher_resource_path(provider, cluster, resource_ref)
     secret_values_visible = secret_values_visible_for_request(user, resource_ref, include_secret_values)
@@ -271,13 +302,20 @@ def get_cluster_resource_yaml(
             "resource": resource,
             "redacted": resource_was_redacted(resource),
             "ownership": ownership,
-            "manifest": build_resource_manifest_contract(resource, ref=resource_ref, include_secret_values=include_secret_values, secret_values_visible=secret_values_visible),
+            "manifest": build_resource_manifest_contract(
+                resource,
+                ref=resource_ref,
+                include_secret_values=include_secret_values,
+                secret_values_visible=secret_values_visible,
+            ),
             "secret_values": secret_values_payload(include_secret_values, secret_values_visible),
         },
     )
 
 
-def discover_cluster_resources(*, user, session_id: str, cluster_id: str, transport: ProviderTransport | None = None) -> dict[str, Any]:
+def discover_cluster_resources(
+    *, user, session_id: str, cluster_id: str, transport: ProviderTransport | None = None
+) -> dict[str, Any]:
     cluster = _required_cluster(cluster_id)
     session = active_resource_session_for_user(user, session_id, cluster, verb="list")
     provider = _required_rancher_provider(cluster)
@@ -285,10 +323,24 @@ def discover_cluster_resources(*, user, session_id: str, cluster_id: str, transp
     groups_path = _proxy_prefix(provider, cluster) + "/apis"
     core = _provider_get(provider, core_path, transport=transport)
     groups = _provider_get(provider, groups_path, transport=transport)
-    api_resources = api_resource_catalog_payload(core, groups, fetch_group_version=lambda version: _provider_get(provider, rancher_api_path(provider, cluster, version), transport=transport), limit=MAX_LIST_ITEMS)
-    crd_resources = _discover_crd_resources(user=user, session_id=session_id, cluster=cluster, provider=provider, transport=transport)
+    api_resources = api_resource_catalog_payload(
+        core,
+        groups,
+        fetch_group_version=lambda version: _provider_get(
+            provider, rancher_api_path(provider, cluster, version), transport=transport
+        ),
+        limit=MAX_LIST_ITEMS,
+    )
+    crd_resources = _discover_crd_resources(
+        user=user, session_id=session_id, cluster=cluster, provider=provider, transport=transport
+    )
     common_resources = common_resource_payload()
-    resource_catalog = build_resource_catalog(common_resources=common_resources, api_resources=api_resources, crd_resources=crd_resources, limit=MAX_LIST_ITEMS)
+    resource_catalog = build_resource_catalog(
+        common_resources=common_resources,
+        api_resources=api_resources,
+        crd_resources=crd_resources,
+        limit=MAX_LIST_ITEMS,
+    )
     record_admin_resource_action(
         user=user,
         session=session,
@@ -312,7 +364,11 @@ def discover_cluster_resources(*, user, session_id: str, cluster_id: str, transp
         "operation": "discovery",
         "cluster": _cluster_payload(cluster),
         "provider": _provider_payload(provider),
-        "paths": {"core": _public_path(core_path), "groups": _public_path(groups_path), "crds": crd_resources.get("path", "")},
+        "paths": {
+            "core": _public_path(core_path),
+            "groups": _public_path(groups_path),
+            "crds": crd_resources.get("path", ""),
+        },
         "core": sanitize_metadata(core),
         "groups": sanitize_metadata(groups),
         "api_resources": api_resources,
@@ -322,20 +378,43 @@ def discover_cluster_resources(*, user, session_id: str, cluster_id: str, transp
     }
 
 
-def list_cluster_crds(*, user, session_id: str, cluster_id: str, transport: ProviderTransport | None = None) -> dict[str, Any]:
+def list_cluster_crds(
+    *, user, session_id: str, cluster_id: str, transport: ProviderTransport | None = None
+) -> dict[str, Any]:
     cluster = _required_cluster(cluster_id)
     session = active_resource_session_for_user(user, session_id, cluster, verb="list", kind="CustomResourceDefinition")
     provider = _required_rancher_provider(cluster)
-    ref = KubernetesResourceRef(api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions")
+    ref = KubernetesResourceRef(
+        api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions"
+    )
     path = rancher_resource_path(provider, cluster, ref)
     payload = _provider_get(provider, path, transport=transport)
     items = [sanitize_kubernetes_resource(item) for item in payload_items(payload)[:MAX_LIST_ITEMS]]
-    record_admin_resource_action(user=user, session=session, cluster=cluster, ref=ref, verb=K8sAdminAction.VERB_LIST, status=K8sAdminAction.STATUS_COMPLETED, response_summary={"item_count": len(items)})
-    return _base_response("crd_list", cluster, provider, ref, path, {"items": items, "item_count": len(items), "truncated": len(payload_items(payload)) > MAX_LIST_ITEMS})
+    record_admin_resource_action(
+        user=user,
+        session=session,
+        cluster=cluster,
+        ref=ref,
+        verb=K8sAdminAction.VERB_LIST,
+        status=K8sAdminAction.STATUS_COMPLETED,
+        response_summary={"item_count": len(items)},
+    )
+    return _base_response(
+        "crd_list",
+        cluster,
+        provider,
+        ref,
+        path,
+        {"items": items, "item_count": len(items), "truncated": len(payload_items(payload)) > MAX_LIST_ITEMS},
+    )
 
 
-def _discover_crd_resources(*, user, session_id: str, cluster: K8sCluster, provider: K8sProvider, transport: ProviderTransport | None) -> dict[str, Any]:
-    ref = KubernetesResourceRef(api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions")
+def _discover_crd_resources(
+    *, user, session_id: str, cluster: K8sCluster, provider: K8sProvider, transport: ProviderTransport | None
+) -> dict[str, Any]:
+    ref = KubernetesResourceRef(
+        api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions"
+    )
     path = rancher_resource_path(provider, cluster, ref)
     try:
         active_resource_session_for_user(user, session_id, cluster, verb="list", kind="CustomResourceDefinition")
@@ -353,7 +432,9 @@ def _discover_crd_resources(*, user, session_id: str, cluster: K8sCluster, provi
     return {"path": _public_path(path), **crd_discovery_payload(payload, limit=MAX_LIST_ITEMS)}
 
 
-def build_resource_ref(*, api_version: str, kind: str, namespace: str = "", name: str = "", resource: str = "") -> KubernetesResourceRef:
+def build_resource_ref(
+    *, api_version: str, kind: str, namespace: str = "", name: str = "", resource: str = ""
+) -> KubernetesResourceRef:
     version = str(api_version or "").strip() or "v1"
     normalized_kind = display_kind(kind)
     if not normalized_kind:
@@ -404,7 +485,16 @@ def secret_values_visible_for_request(user, ref: KubernetesResourceRef, requeste
         ) from exc
 
 
-def record_admin_resource_action(*, user, session: K8sAdminSession, cluster: K8sCluster, ref: KubernetesResourceRef, verb: str, status: str, response_summary: dict[str, Any] | None = None) -> K8sAdminAction:
+def record_admin_resource_action(
+    *,
+    user,
+    session: K8sAdminSession,
+    cluster: K8sCluster,
+    ref: KubernetesResourceRef,
+    verb: str,
+    status: str,
+    response_summary: dict[str, Any] | None = None,
+) -> K8sAdminAction:
     response_summary = response_summary or {}
     return K8sAdminAction.objects.create(
         session=session,
@@ -449,7 +539,11 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for live Admin Mode reads.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for live Admin Mode reads.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 
@@ -460,7 +554,14 @@ def _provider_get(provider: K8sProvider, path: str, *, transport: ProviderTransp
         raise AdminResourceError(str(exc), code="provider_request_failed", status=502) from exc
 
 
-def _base_response(operation: str, cluster: K8sCluster, provider: K8sProvider, ref: KubernetesResourceRef, path: str, extra: dict[str, Any]) -> dict[str, Any]:
+def _base_response(
+    operation: str,
+    cluster: K8sCluster,
+    provider: K8sProvider,
+    ref: KubernetesResourceRef,
+    path: str,
+    extra: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "success": True,
         "mode": "admin_read_only",

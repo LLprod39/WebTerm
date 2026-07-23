@@ -65,7 +65,8 @@ class KubernetesAdminFollowLifecycleMixin(KubernetesAdminConsumerAuthMixin):
         return await database_sync_to_async(close_admin_stream)(
             user=self.scope["user"],
             stream=stream,
-            last_payload=self._last_payload or {"target": stream.get("target", {}), "source": "not_started", "available": False},
+            last_payload=self._last_payload
+            or {"target": stream.get("target", {}), "source": "not_started", "available": False},
             batch_count=self._batch_count,
             close_reason=close_reason,
         )
@@ -74,7 +75,9 @@ class KubernetesAdminFollowLifecycleMixin(KubernetesAdminConsumerAuthMixin):
         state = await database_sync_to_async(active_admin_stream_session_status)(session_pk=stream["session_pk"])
         if state.get("active"):
             return ""
-        last_payload = dict(self._last_payload or {"target": stream.get("target", {}), "source": "not_started", "available": False})
+        last_payload = dict(
+            self._last_payload or {"target": stream.get("target", {}), "source": "not_started", "available": False}
+        )
         last_payload["session_status"] = str(state.get("status") or "")
         self._last_payload = last_payload
         return str(state.get("code") or "admin_session_not_active")
@@ -108,7 +111,9 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
                 tail_lines=params.get("tail", "120"),
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json(_started_event(envelope))
@@ -128,11 +133,15 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
                 follow=True,
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json(_started_event(stream))
-        self._track_follow_stream(stream, {"target": stream.get("target", {}), "source": "not_started", "available": False, "line_count": 0})
+        self._track_follow_stream(
+            stream, {"target": stream.get("target", {}), "source": "not_started", "available": False, "line_count": 0}
+        )
         if _continuous_provider_stream(params):
             await run_continuous_log_follow(self, params, stream)
             return
@@ -140,9 +149,18 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
 
     async def _log_follow_loop(self, params: dict[str, str], stream: dict) -> None:
         max_batches = bounded_stream_int(params.get("max_batches"), default=5, minimum=1, maximum=25)
-        poll_interval = bounded_stream_float(params.get("poll_interval_seconds"), default=2.0, minimum=0.25, maximum=30.0)
-        idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=60.0, minimum=1.0, maximum=300.0)
-        last_payload: dict = {"target": stream.get("target", {}), "source": "not_started", "available": False, "line_count": 0}
+        poll_interval = bounded_stream_float(
+            params.get("poll_interval_seconds"), default=2.0, minimum=0.25, maximum=30.0
+        )
+        idle_timeout = bounded_stream_float(
+            params.get("idle_timeout_seconds"), default=60.0, minimum=1.0, maximum=300.0
+        )
+        last_payload: dict = {
+            "target": stream.get("target", {}),
+            "source": "not_started",
+            "available": False,
+            "line_count": 0,
+        }
         last_provider_payload: dict | None = None
         batch_count = 0
         close_reason = "max_batches"
@@ -178,9 +196,18 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
                 last_provider_payload = provider_payload
                 batch_count += 1
                 self._track_follow_batch(last_payload, batch_count)
-                await self.send_json({"type": "log_batch", "stream_id": stream["stream_id"], "batch_index": batch_index, "payload": last_payload})
+                await self.send_json(
+                    {
+                        "type": "log_batch",
+                        "stream_id": stream["stream_id"],
+                        "batch_index": batch_index,
+                        "payload": last_payload,
+                    }
+                )
                 if batch_index < max_batches:
-                    await self.send_json({"type": "stream_heartbeat", "stream_id": stream["stream_id"], "batch_index": batch_index})
+                    await self.send_json(
+                        {"type": "stream_heartbeat", "stream_id": stream["stream_id"], "batch_index": batch_index}
+                    )
                     await asyncio.sleep(poll_interval)
         except asyncio.CancelledError:
             await self._close_active_stream("client_disconnect")
@@ -188,7 +215,9 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
         summary = await self._close_active_stream(close_reason)
         if summary is None:
             return
-        await self.send_json(_stopped_event({"stream_id": stream["stream_id"], "stream_type": "logs", "summary": summary}))
+        await self.send_json(
+            _stopped_event({"stream_id": stream["stream_id"], "stream_type": "logs", "summary": summary})
+        )
         await self.close(code=1000)
 
     async def _fail_stream(self, stream: dict, exc: AdminResourceError) -> None:
@@ -234,11 +263,15 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
                 timeout_seconds=params.get("timeout_seconds", "10"),
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json(_started_event(envelope))
-        await self.send_json({"type": "watch_batch", "stream_id": envelope["stream_id"], "payload": envelope["payload"]})
+        await self.send_json(
+            {"type": "watch_batch", "stream_id": envelope["stream_id"], "payload": envelope["payload"]}
+        )
         await self.send_json(_stopped_event(envelope))
         await self.close(code=1000)
 
@@ -256,11 +289,15 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
                 follow=True,
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "stream_error", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json(_started_event(stream))
-        self._track_follow_stream(stream, {"target": stream.get("target", {}), "source": "not_started", "available": False, "event_count": 0})
+        self._track_follow_stream(
+            stream, {"target": stream.get("target", {}), "source": "not_started", "available": False, "event_count": 0}
+        )
         if _continuous_provider_stream(params):
             await run_continuous_watch_follow(self, params, stream)
             return
@@ -268,9 +305,18 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
 
     async def _watch_follow_loop(self, params: dict[str, str], stream: dict) -> None:
         max_batches = bounded_stream_int(params.get("max_batches"), default=5, minimum=1, maximum=25)
-        poll_interval = bounded_stream_float(params.get("poll_interval_seconds"), default=2.0, minimum=0.25, maximum=30.0)
-        idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=60.0, minimum=1.0, maximum=300.0)
-        last_payload: dict = {"target": stream.get("target", {}), "source": "not_started", "available": False, "event_count": 0}
+        poll_interval = bounded_stream_float(
+            params.get("poll_interval_seconds"), default=2.0, minimum=0.25, maximum=30.0
+        )
+        idle_timeout = bounded_stream_float(
+            params.get("idle_timeout_seconds"), default=60.0, minimum=1.0, maximum=300.0
+        )
+        last_payload: dict = {
+            "target": stream.get("target", {}),
+            "source": "not_started",
+            "available": False,
+            "event_count": 0,
+        }
         batch_count = 0
         close_reason = "max_batches"
         next_resource_version = str(params.get("resource_version", "") or "")
@@ -285,7 +331,9 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
                     close_reason = session_close_reason
                     break
                 try:
-                    watch_reader = get_admin_resource_watch_stream_batch if provider_stream else get_admin_resource_watch_preview
+                    watch_reader = (
+                        get_admin_resource_watch_stream_batch if provider_stream else get_admin_resource_watch_preview
+                    )
                     last_payload = await database_sync_to_async(watch_reader)(
                         user=self.scope["user"],
                         session_id=str(self.scope["url_route"]["kwargs"]["session_id"]),
@@ -305,9 +353,18 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
                 next_resource_version = str(last_payload.get("latest_resource_version") or next_resource_version)
                 batch_count += 1
                 self._track_follow_batch(last_payload, batch_count)
-                await self.send_json({"type": "watch_batch", "stream_id": stream["stream_id"], "batch_index": batch_index, "payload": last_payload})
+                await self.send_json(
+                    {
+                        "type": "watch_batch",
+                        "stream_id": stream["stream_id"],
+                        "batch_index": batch_index,
+                        "payload": last_payload,
+                    }
+                )
                 if batch_index < max_batches:
-                    await self.send_json({"type": "stream_heartbeat", "stream_id": stream["stream_id"], "batch_index": batch_index})
+                    await self.send_json(
+                        {"type": "stream_heartbeat", "stream_id": stream["stream_id"], "batch_index": batch_index}
+                    )
                     await asyncio.sleep(poll_interval)
         except asyncio.CancelledError:
             await self._close_active_stream("client_disconnect")
@@ -315,7 +372,9 @@ class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, As
         summary = await self._close_active_stream(close_reason)
         if summary is None:
             return
-        await self.send_json(_stopped_event({"stream_id": stream["stream_id"], "stream_type": "watch", "summary": summary}))
+        await self.send_json(
+            _stopped_event({"stream_id": stream["stream_id"], "stream_type": "watch", "summary": summary})
+        )
         await self.close(code=1000)
 
     async def _fail_stream(self, stream: dict, exc: AdminResourceError) -> None:
@@ -364,10 +423,14 @@ class KubernetesAdminExecStreamConsumer(KubernetesAdminConsumerAuthMixin, AsyncJ
                 stdin=_truthy(params.get("stdin")),
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "exec_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "exec_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
-        await self.send_json({"type": "exec_blocked", "stream_id": envelope["stream_id"], "stream_type": "exec", "payload": envelope})
+        await self.send_json(
+            {"type": "exec_blocked", "stream_id": envelope["stream_id"], "stream_type": "exec", "payload": envelope}
+        )
         await self.close(code=4403)
 
     async def receive_json(self, content, **kwargs):
@@ -399,7 +462,9 @@ class KubernetesAdminPortForwardStreamConsumer(KubernetesAdminConsumerAuthMixin,
         params = self._query_params()
         if _port_forward_tunnel_requested(params):
             self._port_forward_input_queue = asyncio.Queue()
-            self._port_forward_task = asyncio.create_task(run_provider_port_forward_tunnel(self, params, self._port_forward_input_queue))
+            self._port_forward_task = asyncio.create_task(
+                run_provider_port_forward_tunnel(self, params, self._port_forward_input_queue)
+            )
             return
         try:
             envelope = await database_sync_to_async(prepare_kubernetes_port_forward_bridge)(
@@ -417,17 +482,30 @@ class KubernetesAdminPortForwardStreamConsumer(KubernetesAdminConsumerAuthMixin,
                 reason=params.get("reason", ""),
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "port_forward_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "port_forward_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
-        await self.send_json({"type": "port_forward_blocked", "stream_id": envelope["stream_id"], "stream_type": "port_forward", "payload": envelope})
+        await self.send_json(
+            {
+                "type": "port_forward_blocked",
+                "stream_id": envelope["stream_id"],
+                "stream_type": "port_forward",
+                "payload": envelope,
+            }
+        )
         await self.close(code=4403)
 
     async def receive_json(self, content, **kwargs):
         if content.get("type") == "ping":
             await self.send_json({"type": "pong"})
             return
-        if self._port_forward_input_queue is not None and content.get("type") in {"client_data", "data", "port_forward_data"}:
+        if self._port_forward_input_queue is not None and content.get("type") in {
+            "client_data",
+            "data",
+            "port_forward_data",
+        }:
             await self._port_forward_input_queue.put(content)
 
     async def disconnect(self, code):
@@ -441,11 +519,21 @@ class KubernetesAdminPortForwardStreamConsumer(KubernetesAdminConsumerAuthMixin,
 
 
 def _started_event(envelope: dict) -> dict:
-    return {"type": "stream_started", "stream_id": envelope["stream_id"], "stream_type": envelope["stream_type"], "started_at": envelope["started_at"]}
+    return {
+        "type": "stream_started",
+        "stream_id": envelope["stream_id"],
+        "stream_type": envelope["stream_type"],
+        "started_at": envelope["started_at"],
+    }
 
 
 def _stopped_event(envelope: dict) -> dict:
-    return {"type": "stream_stopped", "stream_id": envelope["stream_id"], "stream_type": envelope["stream_type"], "summary": envelope["summary"]}
+    return {
+        "type": "stream_stopped",
+        "stream_id": envelope["stream_id"],
+        "stream_type": envelope["stream_type"],
+        "summary": envelope["summary"],
+    }
 
 
 def _truthy(value: str | None) -> bool:
@@ -455,7 +543,9 @@ def _truthy(value: str | None) -> bool:
 def _continuous_provider_stream(params: dict[str, str]) -> bool:
     provider_stream = str(params.get("provider_stream") or "").strip().lower()
     transport = str(params.get("stream_transport") or "").strip().lower()
-    return provider_stream == "continuous" or (_truthy(provider_stream) and transport in {"continuous", "provider_native"})
+    return provider_stream == "continuous" or (
+        _truthy(provider_stream) and transport in {"continuous", "provider_native"}
+    )
 
 
 def _exec_stream_requested(params: dict[str, str]) -> bool:
@@ -470,7 +560,12 @@ def _port_forward_tunnel_requested(params: dict[str, str]) -> bool:
 def _deduplicate_log_follow_payload(previous_payload: dict | None, current_payload: dict) -> dict:
     previous_lines = previous_payload.get("lines") if isinstance(previous_payload, dict) else []
     current_lines = current_payload.get("lines")
-    if not isinstance(previous_lines, list) or not isinstance(current_lines, list) or not previous_lines or not current_lines:
+    if (
+        not isinstance(previous_lines, list)
+        or not isinstance(current_lines, list)
+        or not previous_lines
+        or not current_lines
+    ):
         return current_payload
     overlap = min(len(previous_lines), len(current_lines))
     duplicate_count = 0

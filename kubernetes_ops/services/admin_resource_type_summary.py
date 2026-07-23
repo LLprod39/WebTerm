@@ -3,7 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 
-def type_specific_resource_summaries(resource: dict[str, Any], spec: dict[str, Any], status: dict[str, Any]) -> dict[str, Any]:
+def type_specific_resource_summaries(
+    resource: dict[str, Any], spec: dict[str, Any], status: dict[str, Any]
+) -> dict[str, Any]:
     return {
         "storage": _storage_summary(resource, spec, status),
         "ingress": _ingress_summary(resource, spec),
@@ -175,8 +177,12 @@ def _rbac_summary(resource: dict[str, Any]) -> dict[str, Any]:
                 "name": _text(role_ref.get("name"), 180),
             },
             "subject_count": len(subjects),
-            "subject_kinds": sorted({_text(item.get("kind"), 80) for item in subjects if isinstance(item, dict) and item.get("kind")})[:20],
-            "has_service_account_subject": any(isinstance(item, dict) and item.get("kind") == "ServiceAccount" for item in subjects),
+            "subject_kinds": sorted(
+                {_text(item.get("kind"), 80) for item in subjects if isinstance(item, dict) and item.get("kind")}
+            )[:20],
+            "has_service_account_subject": any(
+                isinstance(item, dict) and item.get("kind") == "ServiceAccount" for item in subjects
+            ),
             "has_group_subject": any(isinstance(item, dict) and item.get("kind") == "Group" for item in subjects),
         }
     return {}
@@ -188,7 +194,13 @@ def _endpoints_summary(resource: dict[str, Any]) -> dict[str, Any]:
         subsets = resource.get("subsets") if isinstance(resource.get("subsets"), list) else []
         addresses = sum(len(item.get("addresses") or []) for item in subsets if isinstance(item, dict))
         not_ready = sum(len(item.get("notReadyAddresses") or []) for item in subsets if isinstance(item, dict))
-        ports = [port for item in subsets if isinstance(item, dict) for port in item.get("ports") or [] if isinstance(port, dict)]
+        ports = [
+            port
+            for item in subsets
+            if isinstance(item, dict)
+            for port in item.get("ports") or []
+            if isinstance(port, dict)
+        ]
         return {
             "subset_count": len(subsets),
             "address_count": addresses,
@@ -227,7 +239,9 @@ def _quota_summary(resource: dict[str, Any], spec: dict[str, Any], status: dict[
         limits = spec.get("limits") if isinstance(spec.get("limits"), list) else []
         return {
             "limit_count": len(limits),
-            "types": sorted({_text(item.get("type"), 80) for item in limits if isinstance(item, dict) and item.get("type")})[:20],
+            "types": sorted(
+                {_text(item.get("type"), 80) for item in limits if isinstance(item, dict) and item.get("type")}
+            )[:20],
             "default_keys": _merged_nested_keys(limits, "default"),
             "default_request_keys": _merged_nested_keys(limits, "defaultRequest"),
             "min_keys": _merged_nested_keys(limits, "min"),
@@ -254,7 +268,11 @@ def _ingress_backend_names(rules: list[Any]) -> list[str]:
         http = rule.get("http") if isinstance(rule, dict) and isinstance(rule.get("http"), dict) else {}
         paths = http.get("paths") if isinstance(http.get("paths"), list) else []
         for path in paths[:20]:
-            service = path.get("backend", {}).get("service", {}) if isinstance(path, dict) and isinstance(path.get("backend"), dict) else {}
+            service = (
+                path.get("backend", {}).get("service", {})
+                if isinstance(path, dict) and isinstance(path.get("backend"), dict)
+                else {}
+            )
             name = _text(service.get("name") if isinstance(service, dict) else "", 180)
             if name and name not in names:
                 names.append(name)
@@ -291,7 +309,9 @@ def _network_policy_selector(spec: dict[str, Any]) -> dict[str, Any]:
 
 
 def _unique_from_rules(rules: list[Any], key: str) -> list[str]:
-    values = {_safe_key(item) if key == "resources" else _text(item, 120) for item in _raw_unique_from_rules(rules, key)}
+    values = {
+        _safe_key(item) if key == "resources" else _text(item, 120) for item in _raw_unique_from_rules(rules, key)
+    }
     return sorted(item for item in values if item)[:40]
 
 
@@ -324,7 +344,11 @@ def _port_summaries(ports: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _endpoint_condition_count(endpoints: list[Any], name: str) -> int:
     total = 0
     for endpoint in endpoints:
-        conditions = endpoint.get("conditions") if isinstance(endpoint, dict) and isinstance(endpoint.get("conditions"), dict) else {}
+        conditions = (
+            endpoint.get("conditions")
+            if isinstance(endpoint, dict) and isinstance(endpoint.get("conditions"), dict)
+            else {}
+        )
         if conditions.get(name) is True:
             total += 1
     return total
@@ -345,7 +369,7 @@ def _merged_nested_keys(items: list[Any], key: str) -> list[str]:
 
 
 def _keys(value: Any) -> list[str]:
-    return sorted(_safe_key(key) for key in value.keys())[:40] if isinstance(value, dict) else []
+    return sorted(_safe_key(key) for key in value)[:40] if isinstance(value, dict) else []
 
 
 def _string_list(value: Any, limit: int, text_limit: int) -> list[str]:
@@ -365,6 +389,9 @@ def _text(value: Any, limit: int) -> str:
 def _safe_key(value: Any) -> str:
     key = str(value or "")[:120]
     normalized = key.replace("-", "_").lower()
-    if any(part in normalized for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")):
+    if any(
+        part in normalized
+        for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
+    ):
         return "[redacted]"
     return key

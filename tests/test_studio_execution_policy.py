@@ -90,7 +90,9 @@ def test_execution_policy_requires_approval_for_dynamic_agent_with_default_tools
     decisions = build_execution_policy_decisions(
         nodes=[
             _node("manual", "trigger/manual"),
-            _node("agent", "agent/react", {"label": "Fix service", "server_ids": [42], "goal": "Restart nginx if needed"}),
+            _node(
+                "agent", "agent/react", {"label": "Fix service", "server_ids": [42], "goal": "Restart nginx if needed"}
+            ),
         ],
         edges=[_edge("manual", "agent")],
     )
@@ -117,7 +119,14 @@ def test_execution_policy_allows_read_only_agent_tools_without_approval():
                     "label": "Read logs",
                     "server_ids": [42],
                     "permission_mode": "PLAN",
-                    "allowed_tools": ["ssh_execute", "read_console", "wait_for_output", "report", "ask_user", "analyze_output"],
+                    "allowed_tools": [
+                        "ssh_execute",
+                        "read_console",
+                        "wait_for_output",
+                        "report",
+                        "ask_user",
+                        "analyze_output",
+                    ],
                     "goal": "Inspect logs only",
                 },
             ),

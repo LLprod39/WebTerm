@@ -14,6 +14,4 @@ class Command(BaseCommand):
             installation = install_local_package(options["path"])
         except PluginPackageValidationError as exc:
             raise CommandError(str(exc)) from exc
-        self.stdout.write(
-            self.style.SUCCESS(f"Installed {installation.plugin_id} as {installation.status}.")
-        )
+        self.stdout.write(self.style.SUCCESS(f"Installed {installation.plugin_id} as {installation.status}."))

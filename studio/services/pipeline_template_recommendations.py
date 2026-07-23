@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import re
 from typing import Any
 
@@ -165,10 +164,7 @@ def _match_context_server(assistant_context: dict[str, Any]) -> dict[str, Any] |
         return None
 
     query = _normalise_query(
-        " ".join(
-            _text(assistant_context.get(field))
-            for field in ("binding_query", "pipeline_name", "user_message")
-        )
+        " ".join(_text(assistant_context.get(field)) for field in ("binding_query", "pipeline_name", "user_message"))
     )
     scored: list[tuple[int, dict[str, Any]]] = []
     for item in servers:
@@ -346,7 +342,9 @@ def build_template_resource_plan(
         dict.fromkeys(
             _text((node.get("data") or {}).get("mcp_server_name"))
             for node in template.get("nodes", [])
-            if isinstance(node, dict) and isinstance(node.get("data"), dict) and _text(node["data"].get("mcp_server_name"))
+            if isinstance(node, dict)
+            and isinstance(node.get("data"), dict)
+            and _text(node["data"].get("mcp_server_name"))
         )
     )
     for expected_name in expected_mcp_names:
@@ -358,9 +356,7 @@ def build_template_resource_plan(
             missing.append(expected_name)
 
     needs_server = any(
-        isinstance(node, dict)
-        and isinstance(node.get("data"), dict)
-        and "server_id" in node["data"]
+        isinstance(node, dict) and isinstance(node.get("data"), dict) and "server_id" in node["data"]
         for node in template.get("nodes", [])
     )
     if needs_server:

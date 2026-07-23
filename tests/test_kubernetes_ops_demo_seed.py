@@ -48,9 +48,10 @@ def test_seed_kubernetes_ops_demo_creates_safe_idempotent_inventory():
     assert K8sEvent.objects.count() == 2
     assert not K8sProvider.objects.exclude(secret_ref="").exists()
     assert set(K8sProvider.objects.values_list("base_url", flat=True)) == {"http://127.0.0.1:18090"}
-    assert set(
-        UserAppPermission.objects.filter(user=user, allowed=True).values_list("feature", flat=True)
-    ) == {"kubernetes", "kubernetes_admin_read"}
+    assert set(UserAppPermission.objects.filter(user=user, allowed=True).values_list("feature", flat=True)) == {
+        "kubernetes",
+        "kubernetes_admin_read",
+    }
     worker = BackgroundWorkerState.objects.get(worker_kind=KUBERNETES_OPS_SYNC_WORKER, worker_key="local-demo")
     assert worker.status == BackgroundWorkerState.STATUS_RUNNING
     assert worker.lease_expires_at is not None

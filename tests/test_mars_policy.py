@@ -51,7 +51,10 @@ def test_validate_workspace_child_blocks_parent_escape_and_denied_globs(tmp_path
     source_file = root / "src" / "app.py"
     source_file.parent.mkdir()
     source_file.write_text("print('ok')\n", encoding="utf-8")
-    assert validate_workspace_child(root_path=str(root), child_path=str(source_file), deny_globs=default_deny_globs()) == source_file.resolve()
+    assert (
+        validate_workspace_child(root_path=str(root), child_path=str(source_file), deny_globs=default_deny_globs())
+        == source_file.resolve()
+    )
 
 
 def test_validate_workspace_child_blocks_symlink_outside_root(tmp_path):

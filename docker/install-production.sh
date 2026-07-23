@@ -40,7 +40,7 @@ The script will:
 
 Default stack services:
   postgres, redis, backend, frontend, nginx,
-  mcp-demo, mcp-keycloak,
+  mcp-demo,
   scheduled-pipelines, scheduled-agents, monitor,
   ops-supervisor (agent execution + watchers + memory dreams),
   kubernetes-ops-sync, celery-worker
@@ -474,7 +474,6 @@ wait_for_stack() {
   wait_for_service postgres 180
   wait_for_service redis 120
   wait_for_service mcp-demo 120
-  wait_for_service mcp-keycloak 180
   wait_for_service backend 300
   wait_for_service frontend 240
   wait_for_service nginx 180
@@ -549,7 +548,7 @@ Open:
   http://127.0.0.1:${frontend_port}
 
 Core services:
-  postgres redis backend frontend nginx mcp-demo mcp-keycloak
+  postgres redis backend frontend nginx mcp-demo
 
 Background workers (agents / studio / monitoring):
   ops-supervisor          # full/multi agent execution + watchers + memory dreams
@@ -642,7 +641,6 @@ main() {
     postgres
     redis
     mcp-demo
-    mcp-keycloak
     backend
     scheduled-pipelines
     scheduled-agents

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import re
 from datetime import datetime
 from typing import Any
@@ -10,11 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
-from servers.agent_dispatch import serialize_agent_dispatch
-from servers.agent_execution_state import AGENT_EXECUTION_COMMAND, AGENT_OPS_SUPERVISOR_COMMAND
-from servers.agent_inputs import normalize_report_delivery
-from servers.models import AgentRun, AgentRunArtifact, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState
-from servers.run_events import record_run_event, serialize_run_event
+from servers.models import AgentRun, AgentRunDispatch, BackgroundWorkerState
 
 REPORT_SCHEMA_VERSION = 1
 TEXT_PREVIEW_LIMIT = 4000
@@ -174,7 +169,9 @@ def _serialize_worker_row(worker: BackgroundWorkerState | None, *, now: datetime
     }
 
 
-def _select_agent_execution_worker(dispatch: AgentRunDispatch | None, *, now: datetime | None = None) -> BackgroundWorkerState | None:
+def _select_agent_execution_worker(
+    dispatch: AgentRunDispatch | None, *, now: datetime | None = None
+) -> BackgroundWorkerState | None:
     current = now or timezone.now()
     workers = list(BackgroundWorkerState.objects.filter(worker_kind=BackgroundWorkerState.KIND_AGENT_EXECUTION))
     if not workers:
@@ -298,7 +295,11 @@ def _summary_from_markdown(markdown: str, fallback: str) -> str:
 
 def _server_names(run: AgentRun) -> list[str]:
     connected = run.connected_servers or []
-    names = [_text(item.get("server_name"), limit=120) for item in connected if isinstance(item, dict) and item.get("server_name")]
+    names = [
+        _text(item.get("server_name"), limit=120)
+        for item in connected
+        if isinstance(item, dict) and item.get("server_name")
+    ]
     if names:
         return names
     if run.server_id and run.server:

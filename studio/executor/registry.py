@@ -11,6 +11,7 @@ To add a new pipeline node type:
 
 No changes to engine.py needed.
 """
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -53,10 +54,7 @@ class NodeRegistry:
         """
         cls = self._registry.get(node_type)
         if cls is None:
-            raise KeyError(
-                f"Unknown node type: {node_type!r}. "
-                f"Registered types: {sorted(self._registry)}"
-            )
+            raise KeyError(f"Unknown node type: {node_type!r}. Registered types: {sorted(self._registry)}")
         return cls(node_id=node_id, node_data=node_data)
 
     def list_types(self) -> list[str]:

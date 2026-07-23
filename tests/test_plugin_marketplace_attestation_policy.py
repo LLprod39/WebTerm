@@ -75,7 +75,9 @@ def test_required_attestation_blocks_plugin_enable(tmp_path):
 @pytest.mark.django_db
 @override_settings(PLUGIN_MARKETPLACE_REQUIRED_ATTESTATION_KINDS=["security_scan"])
 def test_passed_required_attestation_allows_plugin_enable(tmp_path):
-    installation, package = _install_reviewed_package(tmp_path, _manifest(plugin_id="acme.attested-ok", slug="attested-ok"))
+    installation, package = _install_reviewed_package(
+        tmp_path, _manifest(plugin_id="acme.attested-ok", slug="attested-ok")
+    )
     append_package_attestation(package, kind="security_scan", status="passed", report={"scanner": "test"})
 
     enabled = set_installation_status(installation.id, enable=True)
@@ -92,7 +94,9 @@ def test_passed_required_attestation_allows_plugin_enable(tmp_path):
     PLUGIN_MARKETPLACE_ATTESTATION_MAX_AGE_DAYS=1,
 )
 def test_stale_required_attestation_blocks_plugin_enable(tmp_path):
-    installation, package = _install_reviewed_package(tmp_path, _manifest(plugin_id="acme.attested-stale", slug="attested-stale"))
+    installation, package = _install_reviewed_package(
+        tmp_path, _manifest(plugin_id="acme.attested-stale", slug="attested-stale")
+    )
     attestation = append_package_attestation(package, kind="security_scan", status="passed", report={"scanner": "test"})
     attestation["created_at"] = (timezone.now() - timedelta(days=3)).isoformat()
     package.attestations = [attestation]

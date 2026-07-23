@@ -84,8 +84,14 @@ def fleet_bundle_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _related_apps(bundle: K8sFleetBundle) -> list[K8sAppRef]:
     candidates = _candidate_values(bundle)
-    rows = K8sAppRef.objects.filter(owner=K8sAppRef.OWNER_FLEET).select_related("cluster").order_by("cluster__name", "namespace", "name")[:200]
-    return [app for app in rows if _row_matches(bundle, app.name, app.namespace, app.labels, candidates)][:MAX_RELATED_APPS]
+    rows = (
+        K8sAppRef.objects.filter(owner=K8sAppRef.OWNER_FLEET)
+        .select_related("cluster")
+        .order_by("cluster__name", "namespace", "name")[:200]
+    )
+    return [app for app in rows if _row_matches(bundle, app.name, app.namespace, app.labels, candidates)][
+        :MAX_RELATED_APPS
+    ]
 
 
 def _related_workloads(bundle: K8sFleetBundle) -> list[K8sWorkloadRef]:
@@ -107,9 +113,24 @@ def _related_events(
     apps: list[K8sAppRef],
     workloads: list[K8sWorkloadRef],
 ) -> list[K8sEvent | K8sAuditEvent]:
-    names = {bundle.name, _short_name(bundle.name), *(app.name for app in apps), *(workload.name for workload in workloads)}
-    namespaces = {item for item in [_target_namespace(bundle), *(app.namespace for app in apps), *(workload.namespace for workload in workloads)] if item}
-    cluster_ids = {item for item in [*(app.cluster_id for app in apps), *(workload.cluster_id for workload in workloads)] if item}
+    names = {
+        bundle.name,
+        _short_name(bundle.name),
+        *(app.name for app in apps),
+        *(workload.name for workload in workloads),
+    }
+    namespaces = {
+        item
+        for item in [
+            _target_namespace(bundle),
+            *(app.namespace for app in apps),
+            *(workload.namespace for workload in workloads),
+        ]
+        if item
+    }
+    cluster_ids = {
+        item for item in [*(app.cluster_id for app in apps), *(workload.cluster_id for workload in workloads)] if item
+    }
     query = Q()
     for name in {name for name in names if name}:
         query |= Q(involved_name=name) | Q(message__icontains=name)
@@ -117,7 +138,9 @@ def _related_events(
         query &= Q(namespace__in=namespaces)
     if cluster_ids:
         query &= Q(cluster_id__in=cluster_ids)
-    native_events = list(K8sEvent.objects.filter(query).order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS]) if query else []
+    native_events = (
+        list(K8sEvent.objects.filter(query).order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS]) if query else []
+    )
     if native_events:
         return native_events
     audit_events = (
@@ -140,7 +163,11 @@ def _summary(
     workloads: list[K8sWorkloadRef],
     events: list[K8sEvent | K8sAuditEvent],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     clusters = sorted({*(app.cluster.name for app in apps), *(workload.cluster.name for workload in workloads)})
     namespaces = sorted({*(app.namespace for app in apps), *(workload.namespace for workload in workloads)})
     return {
@@ -170,9 +197,7 @@ def _row_matches(bundle: K8sFleetBundle, name: str, namespace: str, labels: Any,
     target_namespace = _target_namespace(bundle)
     if target_namespace and namespace == target_namespace:
         return True
-    if short_name and (name == short_name or name.startswith(f"{short_name}-")):
-        return True
-    return False
+    return bool(short_name and (name == short_name or name.startswith(f"{short_name}-")))
 
 
 def _candidate_values(bundle: K8sFleetBundle) -> set[str]:
@@ -194,7 +219,12 @@ def _labels_match(labels: Any, candidates: set[str]) -> bool:
         if key_text.startswith(FLEET_LABEL_PREFIXES) and _candidate_matches(value_text, candidates):
             return True
         if key_text == "app.kubernetes.io/managed-by" and value_text.lower() == "fleet":
-            app_name = str(labels.get("app.kubernetes.io/name") or labels.get("app.kubernetes.io/instance") or labels.get("app") or "")
+            app_name = str(
+                labels.get("app.kubernetes.io/name")
+                or labels.get("app.kubernetes.io/instance")
+                or labels.get("app")
+                or ""
+            )
             if _candidate_matches(app_name, candidates):
                 return True
     return False
@@ -203,7 +233,10 @@ def _labels_match(labels: Any, candidates: set[str]) -> bool:
 def _has_fleet_metadata(labels: Any) -> bool:
     if not isinstance(labels, dict):
         return False
-    return any(str(key).startswith(FLEET_LABEL_PREFIXES) for key in labels) or str(labels.get("app.kubernetes.io/managed-by") or "").lower() == "fleet"
+    return (
+        any(str(key).startswith(FLEET_LABEL_PREFIXES) for key in labels)
+        or str(labels.get("app.kubernetes.io/managed-by") or "").lower() == "fleet"
+    )
 
 
 def _candidate_matches(value: str, candidates: set[str]) -> bool:

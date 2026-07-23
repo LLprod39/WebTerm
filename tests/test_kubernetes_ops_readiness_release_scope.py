@@ -32,15 +32,31 @@ def _patch_ready_dependencies(monkeypatch, *, release_artifact_status: str = "re
     monkeypatch.setattr(readiness_service, "_provider_check", lambda kind, _label: _ready(f"{kind}_provider"))
     monkeypatch.setattr(readiness_service, "_provider_health_check", lambda: _ready("provider_health"))
     monkeypatch.setattr(readiness_service, "_sync_worker_check", lambda _worker_state: _ready("sync_worker"))
-    monkeypatch.setattr(readiness_service, "_studio_automation_check", lambda _user: _ready("studio_automation", required=False))
-    monkeypatch.setattr(readiness_service, "kubernetes_security_review_check", lambda: _ready("security_review", required=False))
-    monkeypatch.setattr(readiness_service, "kubernetes_terminal_safety_check", lambda _user: _ready("terminal_exec_threat_model", required=False))
-    monkeypatch.setattr(readiness_service, "kubernetes_operator_docs_check", lambda: _ready("operator_docs", required=False))
-    monkeypatch.setattr(readiness_service, "kubernetes_frontend_e2e_check", lambda: _ready("frontend_e2e", required=False))
+    monkeypatch.setattr(
+        readiness_service, "_studio_automation_check", lambda _user: _ready("studio_automation", required=False)
+    )
+    monkeypatch.setattr(
+        readiness_service, "kubernetes_security_review_check", lambda: _ready("security_review", required=False)
+    )
+    monkeypatch.setattr(
+        readiness_service,
+        "kubernetes_terminal_safety_check",
+        lambda _user: _ready("terminal_exec_threat_model", required=False),
+    )
+    monkeypatch.setattr(
+        readiness_service, "kubernetes_operator_docs_check", lambda: _ready("operator_docs", required=False)
+    )
+    monkeypatch.setattr(
+        readiness_service, "kubernetes_frontend_e2e_check", lambda: _ready("frontend_e2e", required=False)
+    )
     monkeypatch.setattr(
         readiness_service,
         "build_kubernetes_release_evidence_artifact_report",
-        lambda require_ready: {"status": release_artifact_status, "detail": "release artifact check", "required": require_ready},
+        lambda require_ready: {
+            "status": release_artifact_status,
+            "detail": "release artifact check",
+            "required": require_ready,
+        },
     )
 
 

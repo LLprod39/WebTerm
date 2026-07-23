@@ -35,10 +35,14 @@ def api_kubernetes_namespace_detail(request, cluster_id: str, namespace_id: str)
     def handler():
         cluster = _cluster_or_none(cluster_id)
         if cluster is None:
-            return JsonResponse({"success": False, "error": "Cluster not found.", "code": "cluster_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Cluster not found.", "code": "cluster_not_found"}, status=404
+            )
         payload = build_namespace_detail(cluster, namespace_id, user=request.user)
         if payload is None:
-            return JsonResponse({"success": False, "error": "Namespace not found.", "code": "namespace_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Namespace not found.", "code": "namespace_not_found"}, status=404
+            )
         K8sAuditEvent.objects.create(
             user=request.user,
             username_snapshot=getattr(request.user, "username", ""),

@@ -60,7 +60,9 @@ class KubernetesOpsCapabilitiesTests(TestCase):
         self.assertTrue(workflows["safe_cockpit"]["available"])
         self.assertTrue(workflows["action_request"]["available"])
         self.assertFalse(workflows["live_resource_explorer"]["available"])
-        self.assertEqual(workflows["live_resource_explorer"]["blocked_reason"], "kubernetes_admin_read_feature_required")
+        self.assertEqual(
+            workflows["live_resource_explorer"]["blocked_reason"], "kubernetes_admin_read_feature_required"
+        )
         self.assertFalse(workflows["apply_yaml"]["available"])
         self.assertFalse(workflows["pod_exec"]["available"])
         self.assertEqual(payload["summary"]["mutating_available"], 0)
@@ -157,4 +159,6 @@ class KubernetesOpsCapabilitiesTests(TestCase):
         self.assertFalse(workflows["live_resource_explorer"]["available"])
         self.assertFalse(workflows["apply_yaml"]["available"])
         self.assertFalse(workflows["pod_exec"]["available"])
-        self.assertEqual(workflows["live_resource_explorer"]["blocked_reason"], "kubernetes_admin_mode_enabled_disabled")
+        self.assertEqual(
+            workflows["live_resource_explorer"]["blocked_reason"], "kubernetes_admin_mode_enabled_disabled"
+        )

@@ -10,6 +10,7 @@ Public API
 ----------
 - :func:`is_server_ai_read_only` — sync predicate used from the consumer.
 """
+
 from __future__ import annotations
 
 
@@ -21,6 +22,4 @@ def is_server_ai_read_only(server_id: int) -> bool:
     """
     from servers.models import Server
 
-    return bool(
-        Server.objects.filter(pk=server_id).values_list("ai_read_only", flat=True).first()
-    )
+    return bool(Server.objects.filter(pk=server_id).values_list("ai_read_only", flat=True).first())

@@ -51,7 +51,6 @@ export interface SettingsConfig {
   gemini_enabled: boolean;
   grok_enabled: boolean;
   openai_enabled: boolean;
-  fair_enabled: boolean;
   ollama_enabled: boolean;
   ollama_cloud_enabled?: boolean;
   chat_llm_provider: string;
@@ -64,12 +63,9 @@ export interface SettingsConfig {
   chat_model_gemini: string;
   chat_model_grok: string;
   chat_model_openai: string;
-  chat_model_fair: string;
   chat_model_claude: string;
   chat_model_ollama: string;
-  agent_model_fair?: string;
   agent_model_ollama?: string;
-  fair_base_url?: string;
   ollama_base_url?: string;
   ollama_runtime_mode?: string;
   ollama_cloud_base_url?: string;
@@ -139,7 +135,6 @@ export interface ModelsResponse {
   gemini: string[];
   grok: string[];
   openai: string[];
-  fair: string[];
   claude: string[];
   ollama: string[];
   ollama_local?: string[];
@@ -149,10 +144,8 @@ export interface ModelsResponse {
     chat_gemini: string;
     chat_grok: string;
     chat_openai: string;
-    chat_fair?: string;
     chat_claude: string;
     chat_ollama?: string;
-    agent_model_fair?: string;
     agent_model_ollama?: string;
     ollama_runtime_mode?: string;
     ollama_think_mode?: string;
@@ -215,7 +208,7 @@ export interface SettingsReadinessResponse {
   checks: SettingsReadinessCheck[];
 }
 
-export type RefreshableProvider = "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama";
+export type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
 
 export async function fetchSettings() {
   return apiFetch<SettingsConfigResponse>("/api/settings/");

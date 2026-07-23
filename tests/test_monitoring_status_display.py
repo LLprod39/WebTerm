@@ -82,10 +82,7 @@ def test_full_unreachable_with_very_fresh_metrics_still_prefers_metrics():
         status=ServerHealthCheck.STATUS_HEALTHY,
         checked_at=now - timedelta(seconds=20),
     )
-    assert (
-        _status(hc, metrics, now=now)
-        == ServerHealthCheck.STATUS_HEALTHY
-    )
+    assert _status(hc, metrics, now=now) == ServerHealthCheck.STATUS_HEALTHY
 
 
 def test_full_unreachable_with_old_metrics_stays_unreachable():
@@ -101,10 +98,7 @@ def test_full_unreachable_with_old_metrics_stays_unreachable():
         status=ServerHealthCheck.STATUS_HEALTHY,
         checked_at=now - timedelta(seconds=200),
     )
-    assert (
-        _status(hc, metrics, now=now)
-        == ServerHealthCheck.STATUS_UNREACHABLE
-    )
+    assert _status(hc, metrics, now=now) == ServerHealthCheck.STATUS_UNREACHABLE
 
 
 def test_no_checks_is_unknown():
@@ -231,4 +225,5 @@ def test_dashboard_and_status_agree_on_lite_unreachable_override():
     assert dash_item["is_lite"] is False
     assert status_item["cpu_percent"] == 65.0
     assert dash_item["cpu_percent"] == 65.0
-    assert status_body["meta"]["full_fail_metrics_trust_seconds"] == 90
+    assert status_body["meta"]["full_fail_metrics_trust_seconds"] == 300
+    assert dash_body["meta"]["full_fail_metrics_trust_seconds"] == 300

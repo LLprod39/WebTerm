@@ -2,6 +2,7 @@
 Model Configuration Manager
 Manages model selection for different purposes (chat, RAG, agent)
 """
+
 import json
 import os
 
@@ -32,11 +33,11 @@ from app.core.redacted_logging import redacted_config_value
 
 class ModelConfig(BaseModel):
     """Configuration for models"""
+
     # API providers (optional, disabled by default)
     gemini_enabled: bool = False
     grok_enabled: bool = True  # Fallback for internal calls
     openai_enabled: bool = False
-    fair_enabled: bool = True
     claude_enabled: bool = False
     ollama_enabled: bool = False
 
@@ -44,7 +45,6 @@ class ModelConfig(BaseModel):
     chat_model_gemini: str = "models/gemini-3-flash-preview"
     chat_model_grok: str = "grok-3"
     chat_model_openai: str = "gpt-5-mini"
-    chat_model_fair: str = "qwen3:14b"
     chat_model_claude: str = "claude-sonnet-4-6"
     chat_model_ollama: str = ""
 
@@ -55,17 +55,16 @@ class ModelConfig(BaseModel):
     agent_model_gemini: str = "models/gemini-3-flash-preview"
     agent_model_grok: str = "grok-3"
     agent_model_openai: str = "gpt-5-mini"
-    agent_model_fair: str = "fair-spark"
     agent_model_ollama: str = ""
 
     # Default provider for internal chat/agent routing.
     # Note: "ralph" is NOT a valid provider - it's an orchestrator mode
-    default_provider: str = "fair"
+    default_provider: str = "grok"
 
     # Провайдер для ВНУТРЕННИХ вызовов LLM (генерация workflow, анализ задач).
     # Когда default_provider - CLI agent, внутренние вызовы используют этот провайдер.
-    # Варианты: "gemini", "grok", "openai", "fair", "claude", "ollama"
-    internal_llm_provider: str = "fair"
+    # Варианты: "gemini", "grok", "openai", "claude", "ollama"
+    internal_llm_provider: str = "grok"
 
     # Default orchestrator mode: react | ralph_internal | ralph_cli
     default_orchestrator_mode: str = "ralph_internal"
@@ -106,7 +105,6 @@ class ModelConfig(BaseModel):
     domain_auth_default_profile: str | None = None
 
     # Ollama runtime
-    fair_base_url: str = "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_runtime_mode: str = "auto"
     ollama_cloud_enabled: bool = False
@@ -148,7 +146,6 @@ class ModelConfig(BaseModel):
     mcp_http_retry_attempts: int | None = None
 
 
-
 class ModelManager:
     """Manages available models and configurations"""
 
@@ -157,7 +154,6 @@ class ModelManager:
         self.available_gemini_models: list[str] = []
         self.available_grok_models: list[str] = []
         self.available_openai_models: list[str] = []
-        self.available_fair_models: list[str] = []
         self.available_claude_models: list[str] = []
         self.available_ollama_models: list[str] = []
         self.available_ollama_local_models: list[str] = []
@@ -165,7 +161,6 @@ class ModelManager:
         self.gemini_api_key: str | None = None
         self.grok_api_key: str | None = None
         self.openai_api_key: str | None = None
-        self.fair_api_key: str | None = None
         self.ollama_api_key: str | None = None
         self.anthropic_api_key: str | None = None
 
@@ -175,7 +170,6 @@ class ModelManager:
         grok_key: str | None = None,
         anthropic_key: str | None = None,
         openai_key: str | None = None,
-        fair_key: str | None = None,
         ollama_key: str | None = None,
     ):
         """Set API keys"""
@@ -187,34 +181,11 @@ class ModelManager:
             self.anthropic_api_key = anthropic_key
         if openai_key:
             self.openai_api_key = openai_key
-        if fair_key:
-            self.fair_api_key = fair_key
         if ollama_key:
             self.ollama_api_key = ollama_key
 
     def _get_ollama_api_key(self) -> str:
         return (self.ollama_api_key or "").strip() or (os.getenv("OLLAMA_API_KEY") or "").strip()
-
-    @staticmethod
-    def _normalize_fair_base_url(raw: str | None = None) -> str:
-        value = (
-            (raw or "").strip()
-            or (os.getenv("FAIR_HYPERION_BASE_URL") or "").strip()
-            or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
-        ).rstrip("/")
-        if "://" not in value:
-            value = f"https://{value}"
-        return value.rstrip("/")
-
-    def _get_fair_base_url(self) -> str:
-        return self._normalize_fair_base_url(self.config.fair_base_url)
-
-    @staticmethod
-    def _get_fair_api_key() -> str:
-        return (
-            (os.getenv("FAIR_HYPERION_API_KEY") or "").strip()
-            or (os.getenv("FAIR_API_KEY") or "").strip()
-        )
 
     @staticmethod
     def _get_managed_llm_api_key(provider: str) -> str:
@@ -273,9 +244,6 @@ class ModelManager:
     async def fetch_available_openai_models(self) -> list[str]:
         return await model_refresh.fetch_available_openai_models(self)
 
-    async def fetch_available_fair_models(self) -> list[str]:
-        return await model_refresh.fetch_available_fair_models(self)
-
     async def fetch_available_ollama_models(self) -> list[str]:
         return await model_refresh.fetch_available_ollama_models(self)
 
@@ -291,10 +259,6 @@ class ModelManager:
         """Default OpenAI models list (fallback)"""
         return get_provider_default_models("openai")
 
-    def _get_default_fair_models(self) -> list[str]:
-        """Default FAIR.Hyperion models list (fallback)."""
-        return get_provider_default_models("fair")
-
     def _get_default_ollama_models(self) -> list[str]:
         """Ollama models are local-install specific; default to no cached models."""
         return get_provider_default_models("ollama")
@@ -303,7 +267,11 @@ class ModelManager:
         """Refresh available models from both providers"""
         logger.info("Refreshing available models...")
 
-        if self.gemini_api_key or (os.getenv("GEMINI_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("gemini"):
+        if (
+            self.gemini_api_key
+            or (os.getenv("GEMINI_API_KEY") or "").strip()
+            or await self._aget_managed_llm_api_key("gemini")
+        ):
             await self.fetch_available_gemini_models()
 
         if (
@@ -322,10 +290,11 @@ class ModelManager:
         ):
             await self.fetch_available_openai_models()
 
-        if self.fair_api_key or self._get_fair_api_key() or await self._aget_managed_llm_api_key("fair"):
-            await self.fetch_available_fair_models()
-
-        if self.anthropic_api_key or (os.getenv("ANTHROPIC_API_KEY") or "").strip() or await self._aget_managed_llm_api_key("claude"):
+        if (
+            self.anthropic_api_key
+            or (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+            or await self._aget_managed_llm_api_key("claude")
+        ):
             await self.fetch_available_claude_models()
 
         if self.config.ollama_enabled:
@@ -360,11 +329,11 @@ class ModelManager:
             # A4: expanded per-purpose routing for terminal AI sub-calls.
             # All of these are small, focused tasks and do not need the
             # flagship agent model — route them to the chat bucket.
-            "terminal_step_decision": "chat",   # 1-shot "next / stop" JSON
-            "terminal_recovery": "chat",         # retry/skip/ask after error
-            "terminal_report": "chat",           # short run summary
-            "terminal_answer": "chat",           # pure knowledge answer
-            "terminal_explain": "chat",          # A6: explain command output
+            "terminal_step_decision": "chat",  # 1-shot "next / stop" JSON
+            "terminal_recovery": "chat",  # retry/skip/ask after error
+            "terminal_report": "chat",  # short run summary
+            "terminal_answer": "chat",  # pure knowledge answer
+            "terminal_explain": "chat",  # A6: explain command output
         }
         normalized_purpose = purpose_aliases.get(purpose, purpose)
 
@@ -433,7 +402,7 @@ class ModelManager:
         """Save configuration to file"""
         config_path = self._config_path(filepath)
         try:
-            with open(config_path, 'w') as f:
+            with open(config_path, "w") as f:
                 json.dump(self.config.model_dump(), f, indent=2)
             logger.success(f"Model configuration saved to {config_path}")
         except Exception as e:

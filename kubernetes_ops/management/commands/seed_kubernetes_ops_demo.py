@@ -12,8 +12,12 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--username", default="admin", help="Existing user to grant Kubernetes demo access to.")
-        parser.add_argument("--no-permissions", action="store_true", help="Only seed inventory; do not grant user feature access.")
-        parser.add_argument("--admin-write", action="store_true", help="Also grant Kubernetes Admin Write for local demo testing.")
+        parser.add_argument(
+            "--no-permissions", action="store_true", help="Only seed inventory; do not grant user feature access."
+        )
+        parser.add_argument(
+            "--admin-write", action="store_true", help="Also grant Kubernetes Admin Write for local demo testing."
+        )
         parser.add_argument("--json", action="store_true", help="Print a JSON summary.")
 
     def handle(self, *args, **options):
@@ -27,8 +31,7 @@ class Command(BaseCommand):
             return
         self.stdout.write(
             self.style.SUCCESS(
-                "Seeded Kubernetes Ops demo inventory: "
-                f"cluster={result['cluster']} counts={result['demo_counts']}"
+                f"Seeded Kubernetes Ops demo inventory: cluster={result['cluster']} counts={result['demo_counts']}"
             )
         )
         user = result.get("user") if isinstance(result.get("user"), dict) else {}

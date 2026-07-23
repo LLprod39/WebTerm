@@ -135,7 +135,10 @@ class KubernetesOpsAdminResourceDetailTests(TestCase):
 
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "resource_detail")
-        self.assertEqual(payload["paths"]["resource"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api")
+        self.assertEqual(
+            payload["paths"]["resource"],
+            "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api",
+        )
         self.assertEqual(payload["paths"]["events"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/events")
         self.assertEqual(payload["resource"]["metadata"]["labels"]["token"], "[redacted]")
         self.assertEqual(payload["resource"]["metadata"]["managedFields"], "[redacted]")
@@ -191,7 +194,9 @@ class KubernetesOpsAdminResourceDetailTests(TestCase):
                 "metadata": {"name": "payments-api-abc123", "namespace": "payments"},
                 "status": {"phase": "Running"},
             }
-            events_client.return_value.get.return_value = {"items": [{"metadata": {"name": "event-1"}, "reason": "Pulled"}]}
+            events_client.return_value.get.return_value = {
+                "items": [{"metadata": {"name": "event-1"}, "reason": "Pulled"}]
+            }
             response = self.client.get(
                 reverse("api_kubernetes_admin_resource_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
                 {

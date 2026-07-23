@@ -50,7 +50,18 @@ def build_skill_routing(selected_skills: list[str] | tuple[str, ...] | None) -> 
     selected = _ordered_unique(selected_skills) or available_skill_slugs()
     phase_terms: dict[str, tuple[str, ...]] = {
         "architect": ("design", "brief", "product", "planning", "research", "figma", "ux", "architecture"),
-        "executor": ("dev", "app", "web", "frontend", "react", "python", "build", "game", "component", "implementation"),
+        "executor": (
+            "dev",
+            "app",
+            "web",
+            "frontend",
+            "react",
+            "python",
+            "build",
+            "game",
+            "component",
+            "implementation",
+        ),
         "verifier": ("test", "qa", "playwright", "browser", "security", "validation", "debug", "scan"),
         "repair": ("fix", "debug", "repair", "test", "validation", "security", "react", "dev", "best-practices"),
         "reviewer": ("review", "design", "security", "qa", "validation", "best-practices", "accessibility", "audit"),
@@ -292,4 +303,6 @@ def _gemini_text_fragments(output: str) -> str:
 
 
 def review_requests_changes(review_output: str) -> bool:
-    return bool(_STATUS_LINE_RE.search(review_output or "") or _STATUS_LINE_RE.search(_gemini_text_fragments(review_output)))
+    return bool(
+        _STATUS_LINE_RE.search(review_output or "") or _STATUS_LINE_RE.search(_gemini_text_fragments(review_output))
+    )

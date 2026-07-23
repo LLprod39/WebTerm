@@ -55,7 +55,9 @@ def build_pod_log_snapshot(
         payload["message"] = "Rancher provider is not configured for this pod."
         return payload
 
-    template = provider_path(provider, "pod_logs_path_template", "").strip() or _default_pod_logs_path_template(provider)
+    template = provider_path(provider, "pod_logs_path_template", "").strip() or _default_pod_logs_path_template(
+        provider
+    )
     payload["provider"] = {"id": provider.id, "name": provider.name, "kind": provider.kind}
     if not template:
         payload["source"] = "external_link_only"
@@ -123,7 +125,9 @@ def _pod_for_id(pod_id: str) -> K8sPodRef | None:
     if prefix == "pod" and numeric.isdigit():
         return K8sPodRef.objects.select_related("cluster", "cluster__rancher_provider").filter(id=int(numeric)).first()
     if raw_value.isdigit():
-        return K8sPodRef.objects.select_related("cluster", "cluster__rancher_provider").filter(id=int(raw_value)).first()
+        return (
+            K8sPodRef.objects.select_related("cluster", "cluster__rancher_provider").filter(id=int(raw_value)).first()
+        )
     return None
 
 

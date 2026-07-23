@@ -9,7 +9,9 @@ from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sFleetBundle, K8sWork
 from kubernetes_ops.services.describe import sanitize_links, sanitize_metadata
 
 
-def build_admin_resource_ownership(*, cluster: K8sCluster, ref, resource: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_admin_resource_ownership(
+    *, cluster: K8sCluster, ref, resource: dict[str, Any] | None = None
+) -> dict[str, Any]:
     metadata = resource.get("metadata") if isinstance(resource, dict) else {}
     metadata = metadata if isinstance(metadata, dict) else {}
     labels = metadata.get("labels") if isinstance(metadata.get("labels"), dict) else {}
@@ -58,7 +60,9 @@ def summarize_ownership(contexts: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _match_workload(*, cluster: K8sCluster, namespace: str, name: str, kind: str, labels: dict[str, Any]) -> K8sWorkloadRef | None:
+def _match_workload(
+    *, cluster: K8sCluster, namespace: str, name: str, kind: str, labels: dict[str, Any]
+) -> K8sWorkloadRef | None:
     if not namespace:
         return None
     kind_value = _workload_kind(kind)
@@ -125,7 +129,9 @@ def _candidate_names(name: str, labels: dict[str, Any]) -> list[str]:
 
 def _label_owner(labels: dict[str, Any], annotations: dict[str, Any]) -> str:
     values = {**annotations, **labels}
-    managed_by = str(values.get("app.kubernetes.io/managed-by") or values.get("managed-by") or values.get("owner") or "").lower()
+    managed_by = str(
+        values.get("app.kubernetes.io/managed-by") or values.get("managed-by") or values.get("owner") or ""
+    ).lower()
     if "devtron" in managed_by:
         return K8sAppRef.OWNER_DEVTRON
     if "fleet" in managed_by:
@@ -135,7 +141,9 @@ def _label_owner(labels: dict[str, Any], annotations: dict[str, Any]) -> str:
     return ""
 
 
-def _select_owner(*, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bundle: K8sFleetBundle | None, label_owner: str) -> str:
+def _select_owner(
+    *, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bundle: K8sFleetBundle | None, label_owner: str
+) -> str:
     if app and app.owner:
         return app.owner
     if bundle:
@@ -150,7 +158,14 @@ def _select_owner(*, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bun
     return "rancher" if workload else "unknown"
 
 
-def _confidence(*, owner: str, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bundle: K8sFleetBundle | None, label_owner: str) -> str:
+def _confidence(
+    *,
+    owner: str,
+    workload: K8sWorkloadRef | None,
+    app: K8sAppRef | None,
+    bundle: K8sFleetBundle | None,
+    label_owner: str,
+) -> str:
     if app or bundle or workload:
         return "normalized_inventory"
     if label_owner:
@@ -184,7 +199,9 @@ def _warnings(owner: str) -> list[str]:
     return []
 
 
-def _evidence(*, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bundle: K8sFleetBundle | None, label_owner: str) -> list[str]:
+def _evidence(
+    *, workload: K8sWorkloadRef | None, app: K8sAppRef | None, bundle: K8sFleetBundle | None, label_owner: str
+) -> list[str]:
     evidence: list[str] = []
     if workload:
         evidence.append("matched_normalized_workload")

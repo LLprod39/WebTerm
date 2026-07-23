@@ -6,7 +6,6 @@ from datetime import timedelta
 from typing import Any
 
 from django.contrib.auth.models import User
-from django.db.models import Q
 from django.utils import timezone
 from loguru import logger
 
@@ -18,11 +17,7 @@ MIN_HOURS_BETWEEN_BRIEFINGS = 20
 
 
 def get_or_create_duty_session(user: User) -> ChatSession:
-    session = (
-        ChatSession.objects.filter(user=user, kind=ChatSession.KIND_DUTY)
-        .order_by("-updated_at")
-        .first()
-    )
+    session = ChatSession.objects.filter(user=user, kind=ChatSession.KIND_DUTY).order_by("-updated_at").first()
     if session is not None:
         return session
     return ChatSession.objects.create(
@@ -51,92 +46,11 @@ def set_duty_enabled(user: User, *, enabled: bool) -> ChatSession:
 
 
 def _collect_facts_for_user(user: User) -> dict[str, Any]:
-    from servers.models import AgentRun, ServerAlert, ServerHealthCheck, ServerPrediction
-    from servers.views.server_helpers import _accessible_servers_queryset
+    from app.agent_kernel import operator_provider_registry
 
-    now = timezone.now()
-    since = now - timedelta(hours=16)
-    servers = list(_accessible_servers_queryset(user).order_by("name")[:200])
-    ids = [s.id for s in servers]
-
-    status_counts = {"healthy": 0, "warning": 0, "critical": 0, "unreachable": 0, "unknown": 0}
-    latest_health: dict[int, Any] = {}
-    if ids:
-        for h in ServerHealthCheck.objects.filter(server_id__in=ids).order_by("server_id", "-checked_at"):
-            if h.server_id not in latest_health:
-                latest_health[h.server_id] = h
-    worst = []
-    for s in servers:
-        health = latest_health.get(s.id)
-        status = getattr(health, "status", None) or "unknown"
-        status_counts[status] = status_counts.get(status, 0) + 1
-        if status in {"critical", "warning", "unreachable"}:
-            worst.append({"name": s.name, "status": status})
-    worst = worst[:10]
-
-    alerts = []
-    if ids:
-        for a in (
-            ServerAlert.objects.filter(server_id__in=ids, created_at__gte=since)
-            .select_related("server")
-            .order_by("-created_at")[:20]
-        ):
-            if a.is_resolved:
-                continue
-            alerts.append(
-                {
-                    "id": a.id,
-                    "server": a.server.name if a.server_id else "",
-                    "severity": a.severity,
-                    "title": a.title,
-                }
-            )
-
-    predictions = []
-    if ids:
-        for p in (
-            ServerPrediction.objects.filter(
-                server_id__in=ids,
-                status=ServerPrediction.STATUS_ACTIVE,
-            )
-            .select_related("server")
-            .order_by("eta_days", "id")[:15]
-        ):
-            predictions.append(
-                {
-                    "server": p.server.name if p.server_id else "",
-                    "kind": p.kind,
-                    "severity": p.severity,
-                    "eta_days": p.eta_days,
-                    "target": p.target,
-                }
-            )
-
-    agent_runs = []
-    if feature_allowed_for_user(user, "agents"):
-        for run in (
-            AgentRun.objects.filter(Q(user=user) | Q(agent__user=user), started_at__gte=since)
-            .select_related("agent", "server")
-            .order_by("-started_at")[:15]
-        ):
-            agent_runs.append(
-                {
-                    "id": run.id,
-                    "agent": run.agent.name if run.agent_id else "",
-                    "status": run.status,
-                    "server": run.server.name if run.server_id else "",
-                }
-            )
-
-    return {
-        "generated_at": now.isoformat(),
-        "server_count": len(servers),
-        "status_counts": status_counts,
-        "worst": worst,
-        "open_alerts": alerts,
-        "predictions": predictions,
-        "agent_runs": agent_runs,
-    }
+    return operator_provider_registry.collect_duty_facts(
+        user, include_agent_runs=feature_allowed_for_user(user, "agents")
+    )
 
 
 def render_briefing_markdown(facts: dict[str, Any], *, lang: str = "ru") -> str:
@@ -172,9 +86,7 @@ def render_briefing_markdown(facts: dict[str, Any], *, lang: str = "ru") -> str:
     for p in preds[:8]:
         eta = p.get("eta_days")
         eta_s = f"{eta:.1f}д" if isinstance(eta, (int, float)) else "?"
-        lines.append(
-            f"- [{p.get('severity')}] `{p.get('server')}` {p.get('kind')}/{p.get('target')} ETA {eta_s}"
-        )
+        lines.append(f"- [{p.get('severity')}] `{p.get('server')}` {p.get('kind')}/{p.get('target')} ETA {eta_s}")
 
     if runs:
         lines.append("")
@@ -183,8 +95,10 @@ def render_briefing_markdown(facts: dict[str, Any], *, lang: str = "ru") -> str:
             lines.append(f"- #{r.get('id')} {r.get('agent')} [{r.get('status')}] {r.get('server')}")
 
     lines.append("")
-    if alerts or any(w.get("status") in {"critical", "unreachable"} for w in worst) or any(
-        p.get("severity") == "critical" for p in preds
+    if (
+        alerts
+        or any(w.get("status") in {"critical", "unreachable"} for w in worst)
+        or any(p.get("severity") == "critical" for p in preds)
     ):
         lines.append(
             "Рекомендация: разберите critical/unreachable в чате (`/fleet` или «Разобрать в чате»)."
@@ -251,12 +165,15 @@ def deliver_morning_briefing(user: User, *, force: bool = False) -> dict[str, An
     msg = post_duty_message(
         session,
         text,
-        metadata={"kind": "morning_briefing", "facts": {
-            "server_count": facts.get("server_count"),
-            "status_counts": facts.get("status_counts"),
-            "alert_count": len(facts.get("open_alerts") or []),
-            "prediction_count": len(facts.get("predictions") or []),
-        }},
+        metadata={
+            "kind": "morning_briefing",
+            "facts": {
+                "server_count": facts.get("server_count"),
+                "status_counts": facts.get("status_counts"),
+                "alert_count": len(facts.get("open_alerts") or []),
+                "prediction_count": len(facts.get("predictions") or []),
+            },
+        },
     )
     pinned = dict(session.pinned_context or {})
     pinned["last_briefing_at"] = timezone.now().isoformat()
@@ -281,9 +198,7 @@ def deliver_briefings_for_all_users(*, force: bool = False) -> dict[str, Any]:
     # Also staff
     user_ids.update(User.objects.filter(is_staff=True, is_active=True).values_list("id", flat=True))
     # Existing duty sessions
-    user_ids.update(
-        ChatSession.objects.filter(kind=ChatSession.KIND_DUTY).values_list("user_id", flat=True)
-    )
+    user_ids.update(ChatSession.objects.filter(kind=ChatSession.KIND_DUTY).values_list("user_id", flat=True))
 
     delivered = 0
     skipped = 0

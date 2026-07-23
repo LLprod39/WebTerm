@@ -22,7 +22,9 @@ DEFAULT_PASS_STATUSES = {"clean", "ok", "pass", "passed", "success"}
 
 
 def _security_scan_provider() -> str:
-    provider = str(getattr(settings, "PLUGIN_MARKETPLACE_SECURITY_SCAN_PROVIDER", SECURITY_SCAN_PROVIDER_LOCAL) or "").strip()
+    provider = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_SECURITY_SCAN_PROVIDER", SECURITY_SCAN_PROVIDER_LOCAL) or ""
+    ).strip()
     return provider or SECURITY_SCAN_PROVIDER_LOCAL
 
 
@@ -71,10 +73,14 @@ def _finding_severity(finding: Any) -> str:
 
 
 def _blocking_findings(findings: list[Any], block_severities: set[str]) -> list[dict[str, Any]]:
-    return [finding for finding in findings if isinstance(finding, dict) and _finding_severity(finding) in block_severities]
+    return [
+        finding for finding in findings if isinstance(finding, dict) and _finding_severity(finding) in block_severities
+    ]
 
 
-def _external_scan_passed(response: dict[str, Any], findings: list[Any], blocking_findings: list[dict[str, Any]]) -> bool:
+def _external_scan_passed(
+    response: dict[str, Any], findings: list[Any], blocking_findings: list[dict[str, Any]]
+) -> bool:
     raw_passed = response.get("passed")
     if isinstance(raw_passed, bool):
         provider_passed = raw_passed
@@ -114,10 +120,14 @@ def _local_security_report(package: PluginPackage) -> dict[str, Any]:
     static_scan = scan_manifest(
         parsed,
         allow_sandboxed_code=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)),
-        allow_dynamic_frontend_bundles=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)),
+        allow_dynamic_frontend_bundles=bool(
+            getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)
+        ),
     )
     dependency_scan = package.dependency_scan if isinstance(package.dependency_scan, dict) else {}
-    checks.append({"name": "static_no_code_scan", "ok": static_scan.passed, "findings": static_scan.to_dict()["findings"]})
+    checks.append(
+        {"name": "static_no_code_scan", "ok": static_scan.passed, "findings": static_scan.to_dict()["findings"]}
+    )
     checks.append(
         {
             "name": "dependency_manifest_blockers",
@@ -126,9 +136,13 @@ def _local_security_report(package: PluginPackage) -> dict[str, Any]:
             "summary": dependency_scan.get("summary", {}),
         }
     )
-    checks.append({"name": "sbom_present", "ok": bool(package.sbom), "summary": (package.sbom or {}).get("summary", {})})
+    checks.append(
+        {"name": "sbom_present", "ok": bool(package.sbom), "summary": (package.sbom or {}).get("summary", {})}
+    )
     sandbox_policy = sandbox_policy_for_package(package)
-    checks.append({"name": "sandbox_policy", "ok": bool(sandbox_policy.get("allowed", False)), "policy": sandbox_policy})
+    checks.append(
+        {"name": "sandbox_policy", "ok": bool(sandbox_policy.get("allowed", False)), "policy": sandbox_policy}
+    )
     return {
         "provider": SECURITY_SCAN_PROVIDER_LOCAL,
         "scanner": "webtrerm-static-sca",

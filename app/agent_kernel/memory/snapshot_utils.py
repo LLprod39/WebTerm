@@ -72,7 +72,19 @@ def docker_run_summary(command: str) -> dict[str, Any]:
         if skip_next:
             skip_next = False
             continue
-        if token in {"--name", "-p", "--publish", "-v", "--volume", "-e", "--env", "--network", "--restart", "-w", "--workdir"}:
+        if token in {
+            "--name",
+            "-p",
+            "--publish",
+            "-v",
+            "--volume",
+            "-e",
+            "--env",
+            "--network",
+            "--restart",
+            "-w",
+            "--workdir",
+        }:
             if index + 1 < len(tokens):
                 value = tokens[index + 1]
                 if token == "--name":
@@ -137,14 +149,18 @@ def derive_recent_event_points(events: list[Any]) -> dict[str, list[str]]:
             if ports:
                 normalized_ports = [item.replace("/tcp", "") for item in ports]
                 port_text = "; опубликованы порты " + ", ".join(normalized_ports[:2])
-                access_points.append(f"Docker publish: {container_label} доступен через {', '.join(normalized_ports[:2])}")
+                access_points.append(
+                    f"Docker publish: {container_label} доступен через {', '.join(normalized_ports[:2])}"
+                )
             change_points.append(f"Запущен контейнер {container_label} из {image}{port_text}")
             continue
 
         if "docker compose up" in command_lower:
             change_points.append(f"Выполнен rollout через `{compact_text(command, limit=120)}`")
             if published_ports:
-                access_points.append("После compose подтверждены опубликованные порты: " + ", ".join(published_ports[:2]))
+                access_points.append(
+                    "После compose подтверждены опубликованные порты: " + ", ".join(published_ports[:2])
+                )
             continue
 
         if command_lower.startswith("docker rm ") or command_lower.startswith("docker rm -f"):

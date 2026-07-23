@@ -67,8 +67,7 @@ def ensure_builtin_packages() -> list[PluginInstallation]:
 def enabled_plugin_ids() -> set[str]:
     ensure_builtin_packages()
     return set(
-        PluginInstallation.objects.filter(status=PluginInstallation.STATUS_ENABLED)
-        .values_list("plugin_id", flat=True)
+        PluginInstallation.objects.filter(status=PluginInstallation.STATUS_ENABLED).values_list("plugin_id", flat=True)
     )
 
 
@@ -78,9 +77,7 @@ def enabled_plugin_ids_for_user(user) -> set[str]:
         status=PluginInstallation.STATUS_ENABLED,
     ).prefetch_related("scoped_groups")
     return {
-        installation.plugin_id
-        for installation in installations
-        if installation_allowed_for_user(installation, user)
+        installation.plugin_id for installation in installations if installation_allowed_for_user(installation, user)
     }
 
 
@@ -90,11 +87,7 @@ def enabled_installed_plugin_manifests() -> list[dict[str, Any]]:
         .filter(status=PluginInstallation.STATUS_ENABLED)
         .exclude(package__source=PluginPackage.SOURCE_BUILTIN)
     )
-    return [
-        item.package.manifest
-        for item in installations
-        if isinstance(item.package.manifest, dict)
-    ]
+    return [item.package.manifest for item in installations if isinstance(item.package.manifest, dict)]
 
 
 def list_catalog_plugins(user=None) -> list[dict[str, Any]]:
@@ -116,7 +109,9 @@ def list_catalog_plugins(user=None) -> list[dict[str, Any]]:
 
 def list_installations() -> list[dict[str, Any]]:
     ensure_builtin_packages()
-    installations = PluginInstallation.objects.select_related("package", "installed_by").prefetch_related("scoped_groups").all()
+    installations = (
+        PluginInstallation.objects.select_related("package", "installed_by").prefetch_related("scoped_groups").all()
+    )
     return [installation_payload(item) for item in installations]
 
 

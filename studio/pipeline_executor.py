@@ -190,6 +190,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
+
 def _s2a_fn(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 

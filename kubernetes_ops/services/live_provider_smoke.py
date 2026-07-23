@@ -246,12 +246,15 @@ def _backend_path_evidence(enabled: bool) -> dict[str, Any]:
                 ),
                 _backend_check(
                     "rancher_pod_live_describe",
-                    bool(describe_payload.get("success")) and describe_payload.get("operation") == "resource_live_describe",
+                    bool(describe_payload.get("success"))
+                    and describe_payload.get("operation") == "resource_live_describe",
                     path=describe_payload.get("paths", {}).get("resource", ""),
                     source="admin_resource_live_describe",
                     event_count=int(describe_payload.get("events", {}).get("event_count") or 0),
                     related_pod_count=int(describe_payload.get("related", {}).get("pods", {}).get("item_count") or 0),
-                    related_controller_count=int(describe_payload.get("related", {}).get("controllers", {}).get("item_count") or 0),
+                    related_controller_count=int(
+                        describe_payload.get("related", {}).get("controllers", {}).get("item_count") or 0
+                    ),
                     redacted=bool(describe_payload.get("redacted")),
                 ),
                 _backend_check(
@@ -297,16 +300,24 @@ def _backend_path_evidence(enabled: bool) -> dict[str, Any]:
 
 
 def _backend_path_target_pod() -> K8sPodRef | None:
-    pods = K8sPodRef.objects.select_related("cluster", "cluster__rancher_provider").filter(
-        cluster__rancher_provider__enabled=True,
-        cluster__rancher_provider__kind=K8sProvider.KIND_RANCHER,
-    ).exclude(namespace="").exclude(name="").exclude(node_name="")
+    pods = (
+        K8sPodRef.objects.select_related("cluster", "cluster__rancher_provider")
+        .filter(
+            cluster__rancher_provider__enabled=True,
+            cluster__rancher_provider__kind=K8sProvider.KIND_RANCHER,
+        )
+        .exclude(namespace="")
+        .exclude(name="")
+        .exclude(node_name="")
+    )
     return pods.filter(phase__iexact="Running").first() or pods.first()
 
 
 def _backend_path_user():
     User = get_user_model()
-    user = User.objects.create_user(username=f"k8s-live-provider-smoke-{uuid.uuid4().hex[:12]}", password="live-provider-smoke")
+    user = User.objects.create_user(
+        username=f"k8s-live-provider-smoke-{uuid.uuid4().hex[:12]}", password="live-provider-smoke"
+    )
     UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
     UserAppPermission.objects.create(user=user, feature="kubernetes_admin_read", allowed=True)
     return user
@@ -379,8 +390,12 @@ def _summary(
     sync_dry_run: list[dict[str, Any]],
     backend_paths: dict[str, Any],
 ) -> dict[str, Any]:
-    rancher_sync = [item for item in sync_dry_run if item.get("provider_kind") == K8sProvider.KIND_RANCHER and item.get("success")]
-    devtron_sync = [item for item in sync_dry_run if item.get("provider_kind") == K8sProvider.KIND_DEVTRON and item.get("success")]
+    rancher_sync = [
+        item for item in sync_dry_run if item.get("provider_kind") == K8sProvider.KIND_RANCHER and item.get("success")
+    ]
+    devtron_sync = [
+        item for item in sync_dry_run if item.get("provider_kind") == K8sProvider.KIND_DEVTRON and item.get("success")
+    ]
     backend_checks = backend_paths.get("checks") if isinstance(backend_paths.get("checks"), list) else []
     return {
         "enabled_providers": len(providers),

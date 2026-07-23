@@ -7,7 +7,6 @@ from django.db.models import Q
 from kubernetes_ops.models import (
     K8sAppRef,
     K8sAuditEvent,
-    K8sCluster,
     K8sEvent,
     K8sNetworkRef,
     K8sPodRef,
@@ -125,7 +124,11 @@ def network_detail_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _owner_apps(item: K8sNetworkRef) -> list[K8sAppRef]:
     values = _match_values(item)
-    rows = K8sAppRef.objects.filter(cluster=item.cluster, namespace=item.namespace).select_related("cluster").order_by("owner", "name")[:100]
+    rows = (
+        K8sAppRef.objects.filter(cluster=item.cluster, namespace=item.namespace)
+        .select_related("cluster")
+        .order_by("owner", "name")[:100]
+    )
     matched: list[K8sAppRef] = []
     for app in rows:
         if _name_matches(app.name, values) or _labels_match(app.labels, values):
@@ -136,7 +139,11 @@ def _owner_apps(item: K8sNetworkRef) -> list[K8sAppRef]:
 def _related_workloads(item: K8sNetworkRef, *, owner_apps: list[K8sAppRef]) -> list[K8sWorkloadRef]:
     values = _match_values(item)
     values.update(app.name for app in owner_apps)
-    rows = K8sWorkloadRef.objects.filter(cluster=item.cluster, namespace=item.namespace).select_related("cluster").order_by("kind", "name")[:150]
+    rows = (
+        K8sWorkloadRef.objects.filter(cluster=item.cluster, namespace=item.namespace)
+        .select_related("cluster")
+        .order_by("kind", "name")[:150]
+    )
     matched: list[K8sWorkloadRef] = []
     for workload in rows:
         if _name_matches(workload.name, values) or _labels_match(workload.labels, values):
@@ -144,11 +151,17 @@ def _related_workloads(item: K8sNetworkRef, *, owner_apps: list[K8sAppRef]) -> l
     return matched[:MAX_RELATED_WORKLOADS]
 
 
-def _related_pods(item: K8sNetworkRef, *, owner_apps: list[K8sAppRef], workloads: list[K8sWorkloadRef]) -> list[K8sPodRef]:
+def _related_pods(
+    item: K8sNetworkRef, *, owner_apps: list[K8sAppRef], workloads: list[K8sWorkloadRef]
+) -> list[K8sPodRef]:
     values = _match_values(item)
     values.update(app.name for app in owner_apps)
     values.update(workload.name for workload in workloads)
-    rows = K8sPodRef.objects.filter(cluster=item.cluster, namespace=item.namespace).select_related("cluster").order_by("name")[:200]
+    rows = (
+        K8sPodRef.objects.filter(cluster=item.cluster, namespace=item.namespace)
+        .select_related("cluster")
+        .order_by("name")[:200]
+    )
     matched: list[K8sPodRef] = []
     endpoint_text = _payload_text([item.endpoints, item.hosts, item.ports])
     for pod in rows:
@@ -189,7 +202,11 @@ def _related_events(item: K8sNetworkRef) -> list[K8sEvent | K8sAuditEvent]:
     kind_values = {"Service"} if item.kind == K8sNetworkRef.KIND_SERVICE else {"Ingress"}
     native_events = list(
         K8sEvent.objects.filter(cluster=item.cluster, namespace=item.namespace)
-        .filter(Q(involved_name=item.name) | Q(message__icontains=item.name) | Q(involved_kind__in=kind_values, involved_name=item.name))
+        .filter(
+            Q(involved_name=item.name)
+            | Q(message__icontains=item.name)
+            | Q(involved_kind__in=kind_values, involved_name=item.name)
+        )
         .order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS]
     )
     if native_events:
@@ -219,7 +236,11 @@ def _summary(
     related_network: list[K8sNetworkRef],
     events: list[K8sEvent | K8sAuditEvent],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     return {
         "health": item.health,
         "kind": item.kind,
@@ -237,8 +258,12 @@ def _summary(
         "ready_containers": sum(pod.ready_containers for pod in pods),
         "total_containers": sum(pod.total_containers for pod in pods),
         "restart_count": sum(pod.restart_count for pod in pods),
-        "owners": sorted({item for item in [*(app.owner for app in owner_apps), *(workload.owner for workload in workloads)] if item}),
-        "teams": sorted({item for item in [*(app.team for app in owner_apps), *(workload.team for workload in workloads)] if item}),
+        "owners": sorted(
+            {item for item in [*(app.owner for app in owner_apps), *(workload.owner for workload in workloads)] if item}
+        ),
+        "teams": sorted(
+            {item for item in [*(app.team for app in owner_apps), *(workload.team for workload in workloads)] if item}
+        ),
         "workload_kinds": _counts_by(workloads, "kind"),
     }
 

@@ -222,7 +222,9 @@ def build_run_summary_payload(
             {
                 "title": "Автопрофиль сервера",
                 "category": "system",
-                "content": build_canonical_note_content(profile_lines, fallback="Профиль сервера уточняется новыми наблюдениями."),
+                "content": build_canonical_note_content(
+                    profile_lines, fallback="Профиль сервера уточняется новыми наблюдениями."
+                ),
                 "confidence": 0.84 if verified else 0.74,
                 "source": "ai_auto",
                 "verified": verified,
@@ -256,21 +258,11 @@ def build_run_summary_payload(
         )
 
     # GAP 6: skill_draft_hint — если run успешен + verified + использовал SSH из 3+ шагов
-    has_ssh_steps = any(
-        str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"}
-        for item in tool_calls
-    )
+    has_ssh_steps = any(str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"} for item in tool_calls)
     ssh_tool_count = sum(
-        1 for item in tool_calls
-        if str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"}
+        1 for item in tool_calls if str(item.get("tool") or "").lower() in {"ssh_execute", "read_console"}
     )
-    if (
-        verified
-        and final_status == "completed"
-        and has_ssh_steps
-        and ssh_tool_count >= 3
-        and runbook_lines
-    ):
+    if verified and final_status == "completed" and has_ssh_steps and ssh_tool_count >= 3 and runbook_lines:
         skill_summary_lines = unique_preserving_order(runbook_lines[:4], limit=4)
         workflow_steps = unique_preserving_order(
             [str(item.get("tool") or "") for item in tool_calls if item.get("tool")],
@@ -281,8 +273,7 @@ def build_run_summary_payload(
                 "title": f"Skill Draft Hint: {getattr(run.agent, 'name', 'Agent')} run #{run.pk}",
                 "category": "solutions",
                 "content": build_canonical_note_content(
-                    ["Автоматически детектированный skill draft из успешного run."]
-                    + skill_summary_lines,
+                    ["Автоматически детектированный skill draft из успешного run."] + skill_summary_lines,
                 ),
                 "confidence": 0.82,
                 "source": "ai_run_summary",

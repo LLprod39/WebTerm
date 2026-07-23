@@ -46,7 +46,9 @@ def _s2a_fn(func, thread_sensitive: bool = False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
-def _save_server_command_history(*, server_id: int, user_id: int | None, command: str, output: str, exit_code: int | None) -> None:
+def _save_server_command_history(
+    *, server_id: int, user_id: int | None, command: str, output: str, exit_code: int | None
+) -> None:
     save_command_history_entry(
         server_id=server_id,
         user_id=user_id,
@@ -124,7 +126,11 @@ async def _load_owned_agent_config(owner, agent_config_id: int):
     from studio.models import AgentConfig
 
     return await _s2a_fn(
-        lambda: AgentConfig.objects.filter(id=agent_config_id, owner=owner).prefetch_related("mcp_servers", "server_scope").first()
+        lambda: (
+            AgentConfig.objects.filter(id=agent_config_id, owner=owner)
+            .prefetch_related("mcp_servers", "server_scope")
+            .first()
+        )
     )()
 
 
@@ -191,7 +197,9 @@ async def execute_agent_react(
             return {"status": "failed", "error": tools_error, "output": ""}
         mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
-        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled"))
+        sudo_policy = resolve_sudo_policy(
+            config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled")
+        )
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
             disallowed = [server_id for server_id in server_ids if server_id not in allowed_server_ids]
@@ -221,7 +229,10 @@ async def execute_agent_react(
     if server_ids and not servers:
         return {"status": "failed", "error": f"Servers not found: {server_ids}"}
     if not servers and not mcp_servers and not skills:
-        return {"status": "failed", "error": "Configure at least one server, one MCP server, or one skill for this agent node"}
+        return {
+            "status": "failed",
+            "error": "Configure at least one server, one MCP server, or one skill for this agent node",
+        }
     if server_ids and require_all_servers_enabled(config, default=False) and len(servers) < len(server_ids):
         found_ids = {int(s.id) for s in servers}
         missing = [sid for sid in server_ids if int(sid) not in found_ids]
@@ -345,7 +356,9 @@ async def execute_agent_multi(
             return {"status": "failed", "error": tools_error, "output": ""}
         mcp_servers = await _s2a_fn(lambda: list(agent_conf.mcp_servers.filter(owner=owner)))()
         skill_slugs = merge_unique_strings(list(agent_conf.skill_slugs or []), node_skill_slugs)
-        sudo_policy = resolve_sudo_policy(config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled"))
+        sudo_policy = resolve_sudo_policy(
+            config.get("sudo_policy"), inherited=getattr(agent_conf, "sudo_policy", "disabled")
+        )
         allowed_server_ids = await _load_agent_scope_ids(agent_conf)
         if allowed_server_ids:
             disallowed = [server_id for server_id in server_ids if server_id not in allowed_server_ids]

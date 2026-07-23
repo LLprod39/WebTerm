@@ -100,7 +100,9 @@ def _task_domains(task_brief: str) -> set[str]:
         domains.add("game")
     if _contains_any(text, ("bug", "fix", "ошиб", "слом", "не работает", "исправ", "debug", "регресс")):
         domains.add("bugfix")
-    if _contains_any(text, ("api", "backend", "django", "fastapi", "endpoint", "бэк", "сервер", "database", "db", "postgres")):
+    if _contains_any(
+        text, ("api", "backend", "django", "fastapi", "endpoint", "бэк", "сервер", "database", "db", "postgres")
+    ):
         domains.add("backend")
     if _contains_any(text, ("dashboard", "дашборд", "analytics", "chart", "график", "таблиц", "report", "отчет")):
         domains.add("dashboard")
@@ -118,8 +120,19 @@ def _task_domains(task_brief: str) -> set[str]:
 def _base_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[str, Any]]:
     subject = _task_subject(task_brief)
     if "bugfix" in domains:
-        success_options = ["Ошибка не повторяется", "Есть понятный фикс", "Добавлен регрессионный тест", "Показана причина"]
-        scope_options = ["Найти причину", "Исправить минимально", "Добавить тест", "Проверить UI", "Обновить текст ошибки"]
+        success_options = [
+            "Ошибка не повторяется",
+            "Есть понятный фикс",
+            "Добавлен регрессионный тест",
+            "Показана причина",
+        ]
+        scope_options = [
+            "Найти причину",
+            "Исправить минимально",
+            "Добавить тест",
+            "Проверить UI",
+            "Обновить текст ошибки",
+        ]
     elif "game" in domains:
         success_options = ["Играбельный прототип", "Полноценный MVP", "Красивый playable demo", "Только core gameplay"]
         scope_options = ["Игровой цикл", "Счет и рекорд", "Пауза/рестарт", "Звуки/эффекты", "Меню", "Адаптив"]
@@ -127,7 +140,12 @@ def _base_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[str
         success_options = ["Рабочий dashboard", "Понятные графики", "Фильтры и таблица", "Готовый отчетный экран"]
         scope_options = ["KPI cards", "Графики", "Фильтры", "Таблица", "Экспорт", "Empty/loading states"]
     elif "backend" in domains:
-        success_options = ["API работает", "Контракт покрыт тестами", "Безопасная интеграция", "Документированное поведение"]
+        success_options = [
+            "API работает",
+            "Контракт покрыт тестами",
+            "Безопасная интеграция",
+            "Документированное поведение",
+        ]
         scope_options = ["Endpoint", "Валидация", "Права доступа", "DB-модель", "Тесты", "Audit/logs"]
     elif "website" in domains:
         success_options = ["Готовая страница", "Красивый first screen", "Адаптивный сайт", "Контент можно заменить"]
@@ -209,13 +227,26 @@ def _domain_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[s
                 "bug_scope",
                 "Что можно менять для фикса?",
                 "multi_choice_text",
-                ["Только проблемный компонент", "API contract", "Тесты", "Стили", "State management", "Минимальный diff"],
+                [
+                    "Только проблемный компонент",
+                    "API contract",
+                    "Тесты",
+                    "Стили",
+                    "State management",
+                    "Минимальный diff",
+                ],
             ),
             _question(
                 "bug_regression",
                 "Какой регрессии нельзя допустить?",
                 "multi_choice_text",
-                ["Не ломать существующий flow", "Не менять публичный API", "Не менять auth", "Не трогать данные", "Не добавлять зависимости"],
+                [
+                    "Не ломать существующий flow",
+                    "Не менять публичный API",
+                    "Не менять auth",
+                    "Не трогать данные",
+                    "Не добавлять зависимости",
+                ],
             ),
         ]
 
@@ -225,7 +256,14 @@ def _domain_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[s
                 "api_contract",
                 f"Какой контракт нужен для «{subject}»?",
                 "multi_choice_text",
-                ["GET endpoint", "POST/PATCH action", "Validation errors", "Permissions", "Audit event", "Pagination/filtering"],
+                [
+                    "GET endpoint",
+                    "POST/PATCH action",
+                    "Validation errors",
+                    "Permissions",
+                    "Audit event",
+                    "Pagination/filtering",
+                ],
             ),
             _question(
                 "data_model",
@@ -237,7 +275,13 @@ def _domain_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[s
                 "backend_safety",
                 "Какие backend-ограничения важны?",
                 "multi_choice_text",
-                ["Ownership check", "Feature gate", "No secrets in response", "Idempotent action", "Transaction safety"],
+                [
+                    "Ownership check",
+                    "Feature gate",
+                    "No secrets in response",
+                    "Idempotent action",
+                    "Transaction safety",
+                ],
             ),
         ]
 
@@ -303,11 +347,23 @@ def _domain_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[s
 
 def _closing_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[str, Any]]:
     subject = _task_subject(task_brief)
-    verification_options = ["npm run build", "npm run test", "Playwright smoke", "Скриншот в браузере", "Ручная проверка"]
+    verification_options = [
+        "npm run build",
+        "npm run test",
+        "Playwright smoke",
+        "Скриншот в браузере",
+        "Ручная проверка",
+    ]
     if "backend" in domains:
         verification_options = ["pytest", "API smoke", "Permission test", "Django check", "No migration drift"]
     elif "game" in domains:
-        verification_options = ["npm run build", "Playwright smoke", "Проверить управление", "Проверить проигрыш/рестарт", "Скриншот"]
+        verification_options = [
+            "npm run build",
+            "Playwright smoke",
+            "Проверить управление",
+            "Проверить проигрыш/рестарт",
+            "Скриншот",
+        ]
     elif "bugfix" in domains:
         verification_options = ["Регрессионный тест", "Повторить repro", "npm run test", "pytest", "Скриншот до/после"]
 
@@ -316,7 +372,13 @@ def _closing_dynamic_questions(task_brief: str, domains: set[str]) -> list[dict[
             "constraints",
             f"Что MARS не должен менять при работе над «{subject}»?",
             "multi_choice_text",
-            ["Не трогать auth/settings", "Без новых зависимостей", "Без backend", "Не менять API", "Можно добавить библиотеки"],
+            [
+                "Не трогать auth/settings",
+                "Без новых зависимостей",
+                "Без backend",
+                "Не менять API",
+                "Можно добавить библиотеки",
+            ],
             required=False,
             placeholder="Например: не менять авторизацию, не трогать чужие модули.",
         ),

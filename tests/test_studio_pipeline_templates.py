@@ -16,7 +16,6 @@ from studio.services.pipeline_template_recommendations import (
 from studio.templates_data import PIPELINE_TEMPLATES
 
 PILOT_TEMPLATE_SLUGS = {
-    "pilot-keycloak-access-change",
     "pilot-kubernetes-rollout",
     "pilot-gitlab-failed-pipeline-mr",
     "pilot-database-diagnostics-maintenance",
@@ -49,8 +48,7 @@ def test_pilot_ops_templates_are_registered_and_valid():
 
         node_types = {node["type"] for node in template["nodes"]}
         assert not any(
-            node_type.startswith(("keycloak/", "kubernetes/", "gitlab/", "database/"))
-            for node_type in node_types
+            node_type.startswith(("keycloak/", "kubernetes/", "gitlab/", "database/")) for node_type in node_types
         )
 
 
@@ -72,8 +70,14 @@ def test_pilot_ops_templates_have_approval_and_verification_shape():
             for node_id, node in nodes.items()
             if (
                 node["type"] in {"ops/service_action", "ops/docker_action", "ops/process_action"}
-                or (node["type"] == "ops/package_action" and str(node.get("data", {}).get("action") or "list_updates") != "list_updates")
-                or (node["type"] == "ops/disk_cleanup" and str(node.get("data", {}).get("action") or "inspect") != "inspect")
+                or (
+                    node["type"] == "ops/package_action"
+                    and str(node.get("data", {}).get("action") or "list_updates") != "list_updates"
+                )
+                or (
+                    node["type"] == "ops/disk_cleanup"
+                    and str(node.get("data", {}).get("action") or "inspect") != "inspect"
+                )
                 or (
                     node["type"] == "agent/mcp_call"
                     and str(node.get("data", {}).get("permission_mode") or "").upper() != "READ_ONLY"
@@ -100,14 +104,6 @@ def test_pilot_ops_templates_have_approval_and_verification_shape():
 
 
 def test_pilot_template_recommendations_match_ops_intents():
-    keycloak = recommend_pilot_pipeline_templates(
-        user_message="Добавь пользователю роль в Keycloak и проверь доступ",
-        pipeline_name="Access request",
-    )
-    assert keycloak[0]["slug"] == "pilot-keycloak-access-change"
-    assert "agent/mcp_call" in keycloak[0]["node_types"]
-    assert any(node["id"] == "approval" for node in keycloak[0]["skeleton"]["nodes"])
-
     service = recommend_pilot_pipeline_templates(
         user_message="Перезапусти nginx после проверки конфига и healthcheck",
         pipeline_name="Service maintenance",
@@ -174,7 +170,7 @@ def test_load_pipeline_templates_creates_pilot_ops_templates():
     loaded_slugs = set(PipelineTemplate.objects.filter(category="Pilot OPS").values_list("slug", flat=True))
     assert loaded_slugs >= PILOT_TEMPLATE_SLUGS
 
-    template = PipelineTemplate.objects.get(slug="pilot-keycloak-access-change")
+    template = PipelineTemplate.objects.get(slug="pilot-kubernetes-rollout")
     assert template.graph_version == CURRENT_PIPELINE_GRAPH_VERSION
 
     pipeline = template.instantiate_for_user(user)

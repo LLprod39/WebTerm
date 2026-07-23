@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
 try:
     from croniter import croniter
@@ -123,7 +122,7 @@ def previous_due_datetime(expression: str, now: datetime, *, croniter_factory=No
     effective_croniter = croniter if croniter_factory is None else croniter_factory
     if effective_croniter is not None:
         previous_due_ts = effective_croniter(cron_expression, now).get_prev(float)
-        previous_due_dt = datetime.fromtimestamp(previous_due_ts, tz=dt_timezone.utc)
+        previous_due_dt = datetime.fromtimestamp(previous_due_ts, tz=UTC)
         if now.tzinfo is not None:
             previous_due_dt = previous_due_dt.astimezone(now.tzinfo)
         return previous_due_dt

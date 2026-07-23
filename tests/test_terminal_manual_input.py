@@ -71,7 +71,9 @@ def _clear_calls():
 async def test_handle_terminal_input_adds_marker_for_single_safe_command():
     owner = DummyOwner()
 
-    await handle_terminal_input(owner, "systemctl status nginx\r", log_activity=_log_activity, persist_result=_persist_result)
+    await handle_terminal_input(
+        owner, "systemctl status nginx\r", log_activity=_log_activity, persist_result=_persist_result
+    )
 
     assert owner._manual_active_cmd_id == 1_000_000
     assert owner._manual_pending_commands[0]["command"] == "systemctl status nginx"

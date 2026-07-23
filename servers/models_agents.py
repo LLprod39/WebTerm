@@ -331,4 +331,3 @@ class AgentRunEvent(models.Model):
 
     def __str__(self):
         return f"run={self.run_id} {self.event_type}"
-

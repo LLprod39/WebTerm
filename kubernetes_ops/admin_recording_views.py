@@ -21,7 +21,9 @@ def _safe_json(handler):
 
 
 def _visible_recordings_for_user(user, *, include_all: bool = False):
-    queryset = K8sAdminRecording.objects.select_related("session", "session__user", "action", "action__user", "user", "cluster")
+    queryset = K8sAdminRecording.objects.select_related(
+        "session", "session__user", "action", "action__user", "user", "cluster"
+    )
     if include_all and getattr(user, "is_staff", False):
         return queryset
     user_id = getattr(user, "id", None)
@@ -59,7 +61,9 @@ def _apply_recording_filters(queryset, request):
 def _recording_for_user_or_none(user, recording_id) -> K8sAdminRecording | None:
     try:
         recording = (
-            K8sAdminRecording.objects.select_related("session", "session__user", "action", "action__user", "user", "cluster")
+            K8sAdminRecording.objects.select_related(
+                "session", "session__user", "action", "action__user", "user", "cluster"
+            )
             .filter(recording_id=recording_id)
             .first()
         )
@@ -70,7 +74,11 @@ def _recording_for_user_or_none(user, recording_id) -> K8sAdminRecording | None:
     if getattr(user, "is_staff", False):
         return recording
     user_id = getattr(user, "id", None)
-    if recording.user_id == user_id or recording.session.user_id == user_id or (recording.action_id and recording.action.user_id == user_id):
+    if (
+        recording.user_id == user_id
+        or recording.session.user_id == user_id
+        or (recording.action_id and recording.action.user_id == user_id)
+    ):
         return recording
     return None
 
@@ -104,7 +112,10 @@ def api_kubernetes_admin_recording_detail(request, recording_id):
     def handler():
         recording = _recording_for_user_or_none(request.user, recording_id)
         if recording is None:
-            return JsonResponse({"success": False, "error": "Admin recording not found.", "code": "admin_recording_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin recording not found.", "code": "admin_recording_not_found"},
+                status=404,
+            )
         event_limit = _bounded_limit(request.GET.get("event_limit"), default=100, maximum=500)
         return JsonResponse(
             {

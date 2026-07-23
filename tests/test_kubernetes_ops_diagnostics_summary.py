@@ -126,7 +126,9 @@ class KubernetesOpsDiagnosticsSummaryTests(TestCase):
             labels={"token": "raw-pod-token"},
         )
 
-        response = self.client.get(reverse("api_kubernetes_diagnostics_summary"), {"scope": "pod", "pod_id": f"pod_{pod.id}"})
+        response = self.client.get(
+            reverse("api_kubernetes_diagnostics_summary"), {"scope": "pod", "pod_id": f"pod_{pod.id}"}
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -153,7 +155,11 @@ class KubernetesOpsDiagnosticsSummaryTests(TestCase):
 
         response = self.client.get(
             reverse("api_kubernetes_diagnostics_summary"),
-            {"scope": "namespace", "cluster_id": f"cluster_{self.cluster.id}", "namespace_id": f"namespace_{namespace.id}"},
+            {
+                "scope": "namespace",
+                "cluster_id": f"cluster_{self.cluster.id}",
+                "namespace_id": f"namespace_{namespace.id}",
+            },
         )
 
         self.assertEqual(response.status_code, 200)
@@ -252,7 +258,9 @@ class KubernetesOpsDiagnosticsSummaryTests(TestCase):
         self.cluster.workload_count = 2
         self.cluster.labels = {"credential": "raw-cluster-credential"}
         self.cluster.links = {"rancher": "https://rancher.example.test/c/prod?token=raw-cluster-link-token"}
-        self.cluster.save(update_fields=["nodes_ready", "nodes_total", "namespace_count", "workload_count", "labels", "links"])
+        self.cluster.save(
+            update_fields=["nodes_ready", "nodes_total", "namespace_count", "workload_count", "labels", "links"]
+        )
         K8sNamespace.objects.create(name="payments", cluster=self.cluster, health=K8sCluster.HEALTH_WARNING)
         K8sWorkloadRef.objects.create(
             name="payments-api",
@@ -312,7 +320,9 @@ class KubernetesOpsDiagnosticsSummaryTests(TestCase):
         self.assertEqual(payload["signals"]["unhealthy_namespace_count"], 1)
         self.assertEqual(payload["signals"]["unhealthy_workload_count"], 1)
         self.assertEqual(payload["signals"]["unhealthy_pod_count"], 1)
-        self.assertEqual(payload["webterm_endpoints"]["events"], f"/api/kubernetes/clusters/cluster_{self.cluster.id}/events/")
+        self.assertEqual(
+            payload["webterm_endpoints"]["events"], f"/api/kubernetes/clusters/cluster_{self.cluster.id}/events/"
+        )
         self.assertIn("node_readiness_gap", [item["id"] for item in payload["findings"]])
         self.assertIn("unhealthy_namespaces", [item["id"] for item in payload["findings"]])
         self.assertIn("unhealthy_workloads", [item["id"] for item in payload["findings"]])

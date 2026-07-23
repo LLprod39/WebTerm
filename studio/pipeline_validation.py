@@ -7,7 +7,12 @@ from plugin_marketplace.services.install_service import enabled_plugin_ids_for_u
 
 from .execution_policy import validate_execution_policy_guardrails
 from .models import CURRENT_PIPELINE_GRAPH_VERSION
-from .node_manifest import KNOWN_NODE_TYPES, TRIGGER_NODE_TYPES, allowed_source_handles, runtime_known_node_types
+
+# Compatibility re-export: ``KNOWN_NODE_TYPES`` is imported from this module by
+# callers/tests even though it is not referenced locally.  The explicit ``as``
+# alias marks it as an intentional re-export so ruff's F401 keeps it.
+from .node_manifest import KNOWN_NODE_TYPES as KNOWN_NODE_TYPES
+from .node_manifest import TRIGGER_NODE_TYPES, allowed_source_handles, runtime_known_node_types
 from .pipeline_validation_references import validate_node_references
 
 
@@ -221,7 +226,9 @@ def validate_pipeline_definition(
         ]
 
     known_node_types = _runtime_known_node_types_for_owner(owner)
-    structure_errors, id_to_node, outgoing_edges, incoming_edges = _validate_graph_structure(nodes, edges, known_node_types)
+    structure_errors, id_to_node, outgoing_edges, incoming_edges = _validate_graph_structure(
+        nodes, edges, known_node_types
+    )
     errors.extend(structure_errors)
     if errors:
         return errors

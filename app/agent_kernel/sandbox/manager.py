@@ -8,7 +8,9 @@ from app.agent_kernel.sandbox.profiles import NETWORKLESS_PROFILES, READ_ONLY_PR
 from app.tools.safety import is_dangerous_command
 
 _READ_ONLY_COMMAND_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\b(ls|cat|grep|find|head|tail|pwd|whoami|env|printenv|ps|top|ss|netstat|ip\b|hostname)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(ls|cat|grep|find|head|tail|pwd|whoami|env|printenv|ps|top|ss|netstat|ip\b|hostname)\b", re.IGNORECASE
+    ),
     re.compile(r"\b(df\s+-h|free\s+-m|uptime|du\s+-sh)\b", re.IGNORECASE),
     re.compile(r"\bsystemctl\s+status\b|\bservice\s+\S+\s+status\b|\bjournalctl\b", re.IGNORECASE),
     re.compile(r"\bdocker\s+(ps|inspect|logs)\b|\bdocker\s+compose\s+(ps|config)\b", re.IGNORECASE),

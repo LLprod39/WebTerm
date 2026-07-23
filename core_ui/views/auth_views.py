@@ -90,6 +90,12 @@ def _auth_user_payload(user):
         return None
     access = build_user_access_payload(user)
     features = access["effective_permissions"]
+    feature_payload = {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()}
+    from plugin_marketplace.release_profile import plugin_marketplace_enabled
+
+    # Product release capability, not a grantable database permission.  Plugin
+    # UI is staff-only and disappears when the production profile is disabled.
+    feature_payload["plugins"] = bool(user.is_staff and plugin_marketplace_enabled())
     return {
         "id": user.id,
         "username": user.username,
@@ -97,7 +103,7 @@ def _auth_user_payload(user):
         "is_staff": bool(user.is_staff),
         "access_profile": access["access_profile"],
         "permission_sources": access["permission_sources"],
-        "features": {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()},
+        "features": feature_payload,
     }
 
 

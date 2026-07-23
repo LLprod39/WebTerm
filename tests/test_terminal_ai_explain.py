@@ -1,4 +1,5 @@
 """Tests for A6: ai_explain_output prompt + consumer handler."""
+
 from __future__ import annotations
 
 import asyncio
@@ -118,11 +119,7 @@ class TestExplainOutputHandler:
         fake = _FakeLLM()
         monkeypatch.setattr("app.core.llm.LLMProvider", lambda: fake)
 
-        _run(
-            cons._handle_ai_explain_output(
-                {"id": 42, "cmd": "df -h", "output": "Filesystem  Size", "exit_code": 0}
-            )
-        )
+        _run(cons._handle_ai_explain_output({"id": 42, "cmd": "df -h", "output": "Filesystem  Size", "exit_code": 0}))
 
         explanations = [e for e in sent if e["type"] == "ai_explanation"]
         assert len(explanations) == 1
@@ -135,11 +132,7 @@ class TestExplainOutputHandler:
         fake = _FakeLLM()
         monkeypatch.setattr("app.core.llm.LLMProvider", lambda: fake)
 
-        _run(
-            cons._handle_ai_explain_output(
-                {"id": 1, "cmd": "uptime", "output": "x", "exit_code": 0}
-            )
-        )
+        _run(cons._handle_ai_explain_output({"id": 1, "cmd": "uptime", "output": "x", "exit_code": 0}))
 
         assert fake.last_purpose == "terminal_chat"
         assert "uptime" in (fake.last_prompt or "")
@@ -168,11 +161,7 @@ class TestExplainOutputHandler:
         fake = _FakeLLM(raise_exc=RuntimeError("boom"))
         monkeypatch.setattr("app.core.llm.LLMProvider", lambda: fake)
 
-        _run(
-            cons._handle_ai_explain_output(
-                {"id": 7, "cmd": "ls", "output": "a b c", "exit_code": 0}
-            )
-        )
+        _run(cons._handle_ai_explain_output({"id": 7, "cmd": "ls", "output": "a b c", "exit_code": 0}))
 
         types = [e["type"] for e in sent]
         assert "ai_error" in types
@@ -185,11 +174,7 @@ class TestExplainOutputHandler:
         fake = _FakeLLM(chunks=["ok"])
         monkeypatch.setattr("app.core.llm.LLMProvider", lambda: fake)
 
-        _run(
-            cons._handle_ai_explain_output(
-                {"id": 99, "cmd": "true", "output": "", "exit_code": 0}
-            )
-        )
+        _run(cons._handle_ai_explain_output({"id": 99, "cmd": "true", "output": "", "exit_code": 0}))
 
         statuses = [e for e in sent if e["type"] == "ai_status"]
         assert [s["status"] for s in statuses] == ["explaining", "idle"]

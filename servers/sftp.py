@@ -270,7 +270,8 @@ async def download_file(
         if _entry_kind(attrs) == "dir":
             raise IsADirectoryError(target_path)
 
-        local_file = SpooledTemporaryFile(max_size=spool_max_size, mode="w+b")
+        # Ownership is intentionally transferred to the response caller.
+        local_file = SpooledTemporaryFile(max_size=spool_max_size, mode="w+b")  # noqa: SIM115
         async with sftp.open(target_path, "rb", encoding=None) as remote_file:
             while True:
                 chunk = await remote_file.read(256 * 1024)

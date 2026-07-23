@@ -1,4 +1,5 @@
 """Terminal AI queue execution behavior."""
+
 from __future__ import annotations
 
 import asyncio
@@ -101,9 +102,7 @@ class SSHTerminalAiExecutionMixin:
                 item_id = int(queue_step.command_id or 0)
                 cmd = queue_step.command
 
-                await self._send_ai_event(
-                    terminal_events.ai_command_status(item_id=item_id, status="running")
-                )
+                await self._send_ai_event(terminal_events.ai_command_status(item_id=item_id, status="running"))
 
                 # F2-8 v2: route safe stateless commands through a non-PTY
                 # channel so the interactive shell is not polluted by
@@ -218,9 +217,7 @@ class SSHTerminalAiExecutionMixin:
         except Exception as e:
             logger.exception("AI processing failed")
             err_msg = str(e).strip() or "Unknown error"
-            if any(
-                hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")
-            ):
+            if any(hint in err_msg.lower() for hint in ("timeout", "429", "rate", "resource exhausted", "overloaded")):
                 err_msg = "Временная ошибка API (лимит или перегрузка). Попробуйте позже."
             await self._send_ai_event(terminal_events.ai_error(err_msg))
         finally:
@@ -340,6 +337,7 @@ class SSHTerminalAiExecutionMixin:
         attempted within the batch — failed items are simply marked done
         with their exit code so downstream reporting can handle them.
         """
+
         async def mark_plan_index_done(plan_idx: int, exit_code: int, output_snippet: str) -> None:
             async with self._ai_lock:
                 ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
@@ -457,4 +455,3 @@ class SSHTerminalAiExecutionMixin:
             await asyncio.sleep(delay)
 
     # ── Nova agent entry point ─────────────────────────────────────────────
-

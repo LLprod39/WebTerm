@@ -73,7 +73,8 @@ def record_plugin_health_result(
             actor=actor,
             request=request,
             installation=installation,
-            message=quarantine_message or f"Plugin {installation.plugin_id} quarantined after repeated health failures.",
+            message=quarantine_message
+            or f"Plugin {installation.plugin_id} quarantined after repeated health failures.",
             metadata={
                 "health_failure_count": installation.health_failure_count,
                 "last_error": error,

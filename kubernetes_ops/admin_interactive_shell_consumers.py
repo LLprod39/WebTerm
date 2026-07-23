@@ -27,7 +27,9 @@ class KubernetesAdminClusterTerminalStreamConsumer(KubernetesAdminConsumerAuthMi
         params = self._query_params()
         if _exec_stream_requested(params):
             self._terminal_input_queue = asyncio.Queue()
-            self._terminal_task = asyncio.create_task(run_provider_cluster_terminal_stream(self, params, self._terminal_input_queue))
+            self._terminal_task = asyncio.create_task(
+                run_provider_cluster_terminal_stream(self, params, self._terminal_input_queue)
+            )
             return
         try:
             session = await database_sync_to_async(_session_for_url)(self)
@@ -38,7 +40,9 @@ class KubernetesAdminClusterTerminalStreamConsumer(KubernetesAdminConsumerAuthMi
                 include_restricted_context=False,
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "terminal_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "terminal_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json({"type": "terminal_blocked", "stream_type": "cluster_terminal", "payload": envelope})
@@ -73,7 +77,9 @@ class KubernetesAdminNodeDebugStreamConsumer(KubernetesAdminConsumerAuthMixin, A
         params = self._query_params()
         if _exec_stream_requested(params):
             self._node_debug_input_queue = asyncio.Queue()
-            self._node_debug_task = asyncio.create_task(run_provider_node_debug_stream(self, params, self._node_debug_input_queue))
+            self._node_debug_task = asyncio.create_task(
+                run_provider_node_debug_stream(self, params, self._node_debug_input_queue)
+            )
             return
         try:
             session = await database_sync_to_async(_session_for_url)(self)
@@ -84,7 +90,9 @@ class KubernetesAdminNodeDebugStreamConsumer(KubernetesAdminConsumerAuthMixin, A
                 reason=params.get("reason", ""),
             )
         except AdminResourceError as exc:
-            await self.send_json({"type": "node_debug_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+            await self.send_json(
+                {"type": "node_debug_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+            )
             await self.close(code=4403 if exc.status == 403 else 4400)
             return
         await self.send_json({"type": "node_debug_blocked", "stream_type": "node_debug", "payload": envelope})

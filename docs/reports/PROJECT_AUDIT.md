@@ -21,7 +21,7 @@ The main open risks are now narrower:
 | Area | Current state |
 | --- | --- |
 | Import boundaries | `import-linter` passed on 2026-06-15. Contracts live in `.importlinter`. |
-| Size guard | Green on 2026-06-15. `frontend/src/lib/api.ts` is down to 2580 lines, `servers/consumers/ssh_terminal.py` to 3189, `Servers.tsx` to 2336, `PipelineEditorPage.tsx` to 1289, `key_mcp.py` to 1304, and `studio/executor/nodes/ops.py` to 488 and no longer pinned. `SettingsPage.tsx` and `LinuxUiPanel.tsx` are now below the standard 500-line limit and removed from legacy baselines. |
+| Size guard | Green on 2026-06-15. `frontend/src/lib/api.ts`, `servers/consumers/ssh_terminal.py`, `Servers.tsx`, and `PipelineEditorPage.tsx` remain on reduced baselines; `studio/executor/nodes/ops.py`, `SettingsPage.tsx`, and `LinuxUiPanel.tsx` are below the standard limit. |
 | Backend views | `core_ui/views/`, `servers/views/`, and `studio/views/` are split into focused modules with compatibility shims. |
 | MCP runtime | Server agents use `MCPRuntimeProvider`; concrete implementation lives in `studio.mcp_runtime_adapter` / `studio.mcp_tool_runtime`. |
 | Passwords shim | No `passwords/` folder exists; only historical/migration references remain. |
@@ -55,7 +55,7 @@ Recommended fix: keep replacing ad hoc redaction at new pipeline/MCP/report/logg
 
 ### P1: Legacy-Large Files Remain
 
-The repository still carries large pinned files such as `frontend/src/pages/PipelineEditorPage.tsx`, `frontend/src/lib/api.ts`, `servers/consumers/ssh_terminal.py`, `key_mcp.py`, and others in `pyproject.toml`.
+The repository still carries large pinned files such as `frontend/src/pages/PipelineEditorPage.tsx`, `frontend/src/lib/api.ts`, `servers/consumers/ssh_terminal.py`, and others in `pyproject.toml`.
 
 Impact: changes are harder to review and regression risk remains high.
 
@@ -92,7 +92,6 @@ Recommended fix: continue one-domain-at-a-time extraction, and remove baseline e
 - `studio/templates_data.py` is below the standard architecture limit and was removed from legacy size baselines; grouped built-in pipeline templates live under `studio/pipeline_templates/`.
 - Below-limit compatibility shims and frontend pages no longer carry stale legacy size baselines: `app/agent_kernel/memory/store.py`, `core_ui/views/_views_all.py`, `studio/views/_views_all.py`, `frontend/src/pages/MCPHubPage.tsx`, `frontend/src/pages/MarsPage.tsx`, and `frontend/src/pages/PipelineRunsPage.tsx`.
 - `servers/linux_ui.py` is below the standard architecture limit and was removed from legacy size baselines; command constants, pure parsers/validators, SSH runtime/capabilities, and resource snapshots live in focused `servers/linux_ui_*` modules.
-- `key_mcp.py` has started shrinking; declarative MCP tool schemas live in `key_mcp_tools.py`, JSON-RPC response helpers live in `key_mcp_protocol.py`, summary-shaping helpers live in `key_mcp_summaries.py`, config/profile helpers live in `key_mcp_config.py`, MCP transport helpers live in `key_mcp_server.py`, role-management helpers live in `key_mcp_roles.py`, and private client/runtime compatibility remains in `key_mcp.py`.
 - `servers/consumers/ssh_terminal.py` has started shrinking; marker filtering, exit-future resolution, bounded sanitized output buffers, manual command state, Nova/session context helpers, report/memory/policy compatibility helpers, and terminal-input aliases now delegate to focused services.
 - `frontend/src/lib/api.ts` has started shrinking; Linux UI, SFTP/server-file, MARS, server-memory, monitoring/admin dashboard, and agents/runs/schedules API calls/types live under `frontend/src/api/`, with compatibility re-export from the legacy API module.
 - `frontend/src/components/terminal/LinuxUiPanel.tsx` is below the standard architecture limit; overview, processes, workspace chrome/apps, services, logs, disk, network, Docker, package-manager UI, and shared summary cards live under `frontend/src/components/terminal/linux-ui/`, and the old desktop/window-shell interaction model is no longer present in the active Linux UI panel.

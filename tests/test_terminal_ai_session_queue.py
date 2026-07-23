@@ -1,4 +1,5 @@
 """Queue state-machine tests for terminal-AI sessions."""
+
 from __future__ import annotations
 
 from servers.services.terminal_ai.session import TerminalAiSession

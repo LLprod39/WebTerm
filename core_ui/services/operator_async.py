@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -21,7 +22,9 @@ def is_async_tool_result(payload: dict[str, Any] | None) -> bool:
     if data.get("run_id") and data.get("async_kind"):
         return True
     # agent.run payloads typically include run_id + status pending/running
-    return bool(data.get("run_id") and str(data.get("status") or "").lower() in {"pending", "running", "queued", "claimed"})
+    return bool(
+        data.get("run_id") and str(data.get("status") or "").lower() in {"pending", "running", "queued", "claimed"}
+    )
 
 
 def normalize_async_ref(payload: dict[str, Any] | None, *, action_type: str = "") -> dict[str, Any]:
@@ -106,10 +109,10 @@ def _find_turns_for_run(*, kind: str, run_id: int) -> list[ChatTurnState]:
 
 
 def _agent_run_result_payload(run) -> dict[str, Any]:
-    from servers.agent_run_report import build_agent_run_report_response
+    from app.agent_kernel import operator_provider_registry
 
     try:
-        report = build_agent_run_report_response(run)
+        report = operator_provider_registry.build_agent_run_report_response(run)
     except Exception as exc:  # noqa: BLE001
         report = {"error": f"report unavailable: {exc}"}
     return {
@@ -220,29 +223,27 @@ def _resume_turns(turns: list[ChatTurnState], *, payload: dict[str, Any], tool_n
             turn.status = ChatTurnState.STATUS_FAILED
             turn.error = str(exc)[:1000]
             turn.save(update_fields=["status", "error", "updated_at"])
-            try:
+            with contextlib.suppress(Exception):
                 async_to_sync(broadcast_operator_event)(
                     chat_id,
                     {"type": "error", "message": f"Async resume failed: {exc}"[:400]},
                 )
-            except Exception:  # noqa: BLE001
-                pass
     return count
 
 
 def notify_agent_run_terminal(run_id: int) -> None:
-    from servers.models import AgentRun
+    from app.agent_kernel import operator_provider_registry
 
-    run = AgentRun.objects.filter(pk=run_id).first()
+    run = operator_provider_registry.get_agent_run(run_id)
     if run is None:
         return
     resume_turns_for_agent_run(run)
 
 
 def notify_playbook_run_terminal(run_id: int) -> None:
-    from servers.models import PlaybookRun
+    from app.agent_kernel import operator_provider_registry
 
-    run = PlaybookRun.objects.filter(pk=run_id).first()
+    run = operator_provider_registry.get_playbook_run(run_id)
     if run is None:
         return
     resume_turns_for_playbook_run(run)

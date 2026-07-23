@@ -35,7 +35,11 @@ def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
         seen_names.add(name)
         schema = dict(spec.input_schema or {})
         if "type" not in schema:
-            schema = {"type": "object", "properties": schema.get("properties") or {}, **{k: v for k, v in schema.items() if k != "properties"}}
+            schema = {
+                "type": "object",
+                "properties": schema.get("properties") or {},
+                **{k: v for k, v in schema.items() if k != "properties"},
+            }
             if "properties" not in schema:
                 schema["properties"] = {}
             schema.setdefault("type", "object")
@@ -75,8 +79,21 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
     if any(
         word in text
         for word in (
-            "сервер", "server", "флот", "метрик", "алерт", "диск", "ssh", "команд", "nginx",
-            "docker", "прогноз", "сертификат", "playbook", "плейбук", "runbook",
+            "сервер",
+            "server",
+            "флот",
+            "метрик",
+            "алерт",
+            "диск",
+            "ssh",
+            "команд",
+            "nginx",
+            "docker",
+            "прогноз",
+            "сертификат",
+            "playbook",
+            "плейбук",
+            "runbook",
         )
     ):
         prefixes.update({"operator.", "server."})
@@ -152,9 +169,9 @@ def _coerce_server_id(user, value: Any) -> int | None:
             return None
         if s.isdigit():
             return int(s)
-        from servers.views.server_helpers import _accessible_servers_queryset
+        from app.agent_kernel import operator_provider_registry
 
-        qs = _accessible_servers_queryset(user)
+        qs = operator_provider_registry.accessible_servers_queryset(user)
         row = qs.filter(name__iexact=s).first() or qs.filter(name__icontains=s).first()
         return int(row.id) if row else None
     return None
@@ -221,9 +238,9 @@ def freeze_mutating_targets(user, action_type: str, arguments: dict[str, Any]) -
     if isinstance(raw_ids, list) and raw_ids:
         return args
 
-    from servers.views.server_helpers import _accessible_servers_queryset
+    from app.agent_kernel import operator_provider_registry
 
-    qs = _accessible_servers_queryset(user)
+    qs = operator_provider_registry.accessible_servers_queryset(user)
     tag = str(args.get("tag") or "").strip()
     if tag:
         qs = qs.filter(tags__icontains=tag)
@@ -272,9 +289,7 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
     # Prefer a stable order so critical lookup fields survive truncation.
     if isinstance(result, dict):
         payload = result.get("result") if isinstance(result.get("result"), dict) else result
-        if isinstance(payload, dict) and (
-            "name_index" in payload or payload.get("ui_table") is False
-        ):
+        if isinstance(payload, dict) and ("name_index" in payload or payload.get("ui_table") is False):
             preferred_keys = (
                 "ok",
                 "found",
@@ -309,9 +324,7 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                 return text
             # Drop bulky arrays first, keep name_index / match
             slim = {
-                k: v
-                for k, v in ordered.items()
-                if k not in {"servers", "matches", "sample_names", "alerts", "agents"}
+                k: v for k, v in ordered.items() if k not in {"servers", "matches", "sample_names", "alerts", "agents"}
             }
             slim_text = json.dumps(
                 {**result, "result": slim} if result is not payload and "result" in result else slim,

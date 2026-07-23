@@ -89,16 +89,11 @@ class GrepTool:
         # Limit output server-side to avoid huge transfers.
         max_out = int(args.max_matches) * (MAX_MATCH_LEN + 100)
         flag_str = " ".join(flags)
-        cmd = (
-            f"grep {flag_str} -- {shlex.quote(pattern)} "
-            f"{shlex.quote(args.path)} 2>/dev/null | head -c {max_out}"
-        )
+        cmd = f"grep {flag_str} -- {shlex.quote(pattern)} {shlex.quote(args.path)} 2>/dev/null | head -c {max_out}"
 
         try:
-            res = await asyncio.wait_for(
-                conn.run(cmd, check=False), timeout=GREP_TIMEOUT_SEC
-            )
-        except asyncio.TimeoutError:
+            res = await asyncio.wait_for(conn.run(cmd, check=False), timeout=GREP_TIMEOUT_SEC)
+        except TimeoutError:
             return tool_err(f"grep timeout ({GREP_TIMEOUT_SEC}s)")
         except asyncio.CancelledError:
             raise
@@ -145,9 +140,7 @@ class GrepTool:
             f"Matches for {pattern!r} in {args.path} on {target.name}: "
             f"{len(matches)}{' (capped)' if len(matches) == args.max_matches else ''}"
         )
-        body = "\n".join(
-            f"  {m['path']}:{m['line']}: {m['text']}" for m in matches
-        )
+        body = "\n".join(f"  {m['path']}:{m['line']}: {m['text']}" for m in matches)
         return tool_ok(
             summary + "\n" + body,
             data={

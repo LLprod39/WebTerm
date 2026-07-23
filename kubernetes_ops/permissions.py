@@ -27,9 +27,7 @@ READ_ONLY_CAPABILITIES = (
     "actions.status",
     "actions.report",
 )
-ACTION_REQUEST_CAPABILITIES = (
-    "actions.request_approval",
-)
+ACTION_REQUEST_CAPABILITIES = ("actions.request_approval",)
 ADMIN_CAPABILITIES = (
     "providers.write",
     "providers.sync",
@@ -103,8 +101,12 @@ def kubernetes_permission_policy(user) -> dict[str, Any]:
     native_port_forward_enabled = bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED", False))
     native_node_maintenance_enabled = bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False))
     node_drain_execution_enabled = bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False))
-    break_glass_apply_bypass_enabled = bool(getattr(settings, "KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED", False))
-    native_action_request_execution_enabled = bool(getattr(settings, "KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED", False))
+    break_glass_apply_bypass_enabled = bool(
+        getattr(settings, "KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED", False)
+    )
+    native_action_request_execution_enabled = bool(
+        getattr(settings, "KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED", False)
+    )
     secret_read_enabled = bool(getattr(settings, "KUBERNETES_ADMIN_SECRET_READ_ENABLED", False))
     can_apply_yaml = can_admin_write and native_apply_enabled
     can_break_glass_apply = can_break_glass and native_apply_enabled and break_glass_apply_bypass_enabled
@@ -150,7 +152,8 @@ def kubernetes_permission_policy(user) -> dict[str, Any]:
         "can_audit_deeplinks": can_admin,
         "can_create_diagnosis_draft": can_read and has_studio_pipelines,
         "can_request_action_approval": can_read,
-        "can_execute_approved_action": native_action_request_execution_enabled and (can_apply_yaml or can_restart or can_scale or can_patch or can_delete),
+        "can_execute_approved_action": native_action_request_execution_enabled
+        and (can_apply_yaml or can_restart or can_scale or can_patch or can_delete),
         "can_admin_providers": can_admin,
         "can_sync_providers": can_admin,
         "can_probe_providers": can_admin,
@@ -174,7 +177,13 @@ def kubernetes_permission_policy(user) -> dict[str, Any]:
         "can_node_drain": can_node_drain,
         "can_break_glass": can_break_glass,
         "can_request_break_glass_session": can_break_glass,
-        "can_mutate_cluster_state": can_apply_yaml or can_break_glass_apply or can_patch or can_scale or can_restart or can_delete or can_node_maintenance,
+        "can_mutate_cluster_state": can_apply_yaml
+        or can_break_glass_apply
+        or can_patch
+        or can_scale
+        or can_restart
+        or can_delete
+        or can_node_maintenance,
         "can_exec": can_exec,
         "read_only_capabilities": list(READ_ONLY_CAPABILITIES) if can_read else [],
         "action_request_capabilities": list(ACTION_REQUEST_CAPABILITIES) if can_read else [],

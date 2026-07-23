@@ -15,6 +15,7 @@ Usage (docker-compose.production.yml / Render / any cloud):
     ALLOWED_HOSTS=yourdomain.com
     CHANNEL_REDIS_URL=redis://redis:6379/1
 """
+
 import os
 
 from web_ui.settings.base import *  # noqa: F401, F403
@@ -22,10 +23,7 @@ from web_ui.settings.base import DEBUG
 
 # Explicitly enforce production mode — fail fast if DEBUG is accidentally True.
 if DEBUG:
-    raise RuntimeError(
-        "web_ui.settings.production loaded but DEBUG=True. "
-        "Set DJANGO_DEBUG=false in your environment."
-    )
+    raise RuntimeError("web_ui.settings.production loaded but DEBUG=True. Set DJANGO_DEBUG=false in your environment.")
 
 # Managed secrets (SSH/sudo passwords, LLM API keys, k8s tokens) are encrypted with a
 # key derived from MANAGED_SECRET_KEY. Without a dedicated key it falls back to the
@@ -34,9 +32,12 @@ if DEBUG:
 _has_managed_secret_key = bool(
     (os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip()
 )
-_allow_secret_key_fallback = (
-    os.getenv("ALLOW_SECRET_KEY_MANAGED_ENCRYPTION", "") or ""
-).strip().lower() in {"1", "true", "yes", "on"}
+_allow_secret_key_fallback = (os.getenv("ALLOW_SECRET_KEY_MANAGED_ENCRYPTION", "") or "").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 if not _has_managed_secret_key and not _allow_secret_key_fallback:
     from django.core.exceptions import ImproperlyConfigured
 

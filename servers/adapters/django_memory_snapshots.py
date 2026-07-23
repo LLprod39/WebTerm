@@ -64,7 +64,11 @@ def upsert_snapshot(
             .order_by("-version", "-updated_at")
             .first()
         )
-        if enforce_trust_gate and layer == ServerMemorySnapshot.LAYER_CANONICAL and not metadata_can_promote_to_canonical(metadata):
+        if (
+            enforce_trust_gate
+            and layer == ServerMemorySnapshot.LAYER_CANONICAL
+            and not metadata_can_promote_to_canonical(metadata)
+        ):
             ensure_revalidation(
                 server_id,
                 memory_key=memory_key,

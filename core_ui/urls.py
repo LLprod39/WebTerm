@@ -114,7 +114,11 @@ urlpatterns = [
         assistant_chat_views.api_assistant_chat_create_and_message,
         name="api_assistant_chat_create_and_message",
     ),
-    path("api/assistant/chats/<int:chat_id>/", assistant_chat_views.api_assistant_chat_detail, name="api_assistant_chat_detail"),
+    path(
+        "api/assistant/chats/<int:chat_id>/",
+        assistant_chat_views.api_assistant_chat_detail,
+        name="api_assistant_chat_detail",
+    ),
     path(
         "api/assistant/chats/<int:chat_id>/message/",
         assistant_chat_views.api_assistant_chat_message,

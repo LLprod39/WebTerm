@@ -8,11 +8,11 @@ x-proxy-env: &proxy-env
   http_proxy: ${http_proxy:-}
   https_proxy: ${https_proxy:-}
   ftp_proxy: ${ftp_proxy:-}
-  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak,fair-hyperion.dev.k8s.erg.kz,.dev.k8s.erg.kz
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
   FTP_PROXY: ${FTP_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak,fair-hyperion.dev.k8s.erg.kz,.dev.k8s.erg.kz
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
 
 x-json-logging: &json-logging
   driver: json-file
@@ -27,11 +27,11 @@ x-backend-build: &backend-build
     http_proxy: ${http_proxy:-}
     https_proxy: ${https_proxy:-}
     ftp_proxy: ${ftp_proxy:-}
-    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak,fair-hyperion.dev.k8s.erg.kz,.dev.k8s.erg.kz
+    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
     HTTP_PROXY: ${HTTP_PROXY:-}
     HTTPS_PROXY: ${HTTPS_PROXY:-}
     FTP_PROXY: ${FTP_PROXY:-}
-    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak,fair-hyperion.dev.k8s.erg.kz,.dev.k8s.erg.kz
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
 
 x-backend-worker: &backend-worker
   build: *backend-build
@@ -49,6 +49,10 @@ x-backend-worker: &backend-worker
     CHANNEL_REDIS_URL: ${CHANNEL_REDIS_URL:-redis://redis:6379/1}
     CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
     CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+    # MCP Runner: workers execute agent/pipeline MCP calls too, so they route
+    # stdio MCP through the shared runner instead of spawning on the host.
+    STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
+    STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
   volumes:
     - mini_prod_media:/workspace/media
     - mini_prod_staticfiles:/workspace/staticfiles
@@ -159,8 +163,6 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
-      FAIR_HYPERION_API_KEY: ${FAIR_HYPERION_API_KEY:-}
-      FAIR_HYPERION_BASE_URL: ${FAIR_HYPERION_BASE_URL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GROK_API_KEY: ${GROK_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
@@ -205,7 +207,11 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       STUDIO_MCP_DEMO_URL: ${STUDIO_MCP_DEMO_URL:-http://mcp-demo:8765/mcp}
-      STUDIO_KEYCLOAK_MCP_URL: ${STUDIO_KEYCLOAK_MCP_URL:-http://mcp-keycloak:8766/mcp}
+      # MCP Runner: when set, stdio MCP servers run isolated in the runner (not on
+      # this host) and become available to non-admins. Set STUDIO_MCP_RUNNER_TOKEN
+      # to a strong shared secret so only the backend can reach the runner.
+      STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
+      STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
     ports:
       - "${DJANGO_BIND_HOST:-127.0.0.1}:${DJANGO_HOST_PORT:-9000}:9000"
     volumes:
@@ -221,7 +227,7 @@ services:
         condition: service_healthy
       mcp-demo:
         condition: service_healthy
-      mcp-keycloak:
+      mcp-runner:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
@@ -323,11 +329,11 @@ services:
         http_proxy: ${http_proxy:-}
         https_proxy: ${https_proxy:-}
         ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
     container_name: mini-prod-frontend
     environment:
       NODE_ENV: production
@@ -383,11 +389,11 @@ services:
         http_proxy: ${http_proxy:-}
         https_proxy: ${https_proxy:-}
         ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
     container_name: mini-prod-mcp-demo
     ports:
       - "${MCP_BIND_HOST:-127.0.0.1}:${STUDIO_MCP_DEMO_PORT:-8765}:8765"
@@ -405,67 +411,40 @@ services:
       retries: 5
     logging: *json-logging
 
-  mcp-keycloak:
+  mcp-runner:
     build:
       context: .
-      dockerfile: docker/keycloak-mcp.Dockerfile
+      dockerfile: docker/mcp-runner.Dockerfile
       args:
         http_proxy: ${http_proxy:-}
         https_proxy: ${https_proxy:-}
         ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-keycloak
-    container_name: mini-prod-mcp-keycloak
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+    container_name: mini-prod-mcp-runner
     environment:
       <<: *proxy-env
-      KEYCLOAK_URL: ${KEYCLOAK_URL:-}
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-}
-      KEYCLOAK_TOKEN_REALM: ${KEYCLOAK_TOKEN_REALM:-}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-admin-cli}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-}
-      KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
-      KEYCLOAK_DEFAULT_PROFILE: ${KEYCLOAK_DEFAULT_PROFILE:-}
-      KEYCLOAK_PROFILES_FILE: ${KEYCLOAK_PROFILES_FILE:-config/keycloak_profiles.json}
-      KEYCLOAK_VERIFY_SSL: ${KEYCLOAK_VERIFY_SSL:-true}
-      KEYCLOAK_ALLOW_INSECURE_HTTP: ${KEYCLOAK_ALLOW_INSECURE_HTTP:-false}
-      KEYCLOAK_PROD_URL: ${KEYCLOAK_PROD_URL:-}
-      KEYCLOAK_PROD_REALM: ${KEYCLOAK_PROD_REALM:-}
-      KEYCLOAK_PROD_TOKEN_REALM: ${KEYCLOAK_PROD_TOKEN_REALM:-}
-      KEYCLOAK_PROD_CLIENT_ID: ${KEYCLOAK_PROD_CLIENT_ID:-admin-cli}
-      KEYCLOAK_PROD_ADMIN_USER: ${KEYCLOAK_PROD_ADMIN_USER:-}
-      KEYCLOAK_PROD_ADMIN_PASSWORD: ${KEYCLOAK_PROD_ADMIN_PASSWORD:-}
-      KEYCLOAK_PROD_CLIENT_SECRET: ${KEYCLOAK_PROD_CLIENT_SECRET:-}
-      KEYCLOAK_PROD_VERIFY_SSL: ${KEYCLOAK_PROD_VERIFY_SSL:-true}
-      KEYCLOAK_TEST_URL: ${KEYCLOAK_TEST_URL:-}
-      KEYCLOAK_TEST_REALM: ${KEYCLOAK_TEST_REALM:-}
-      KEYCLOAK_TEST_TOKEN_REALM: ${KEYCLOAK_TEST_TOKEN_REALM:-}
-      KEYCLOAK_TEST_CLIENT_ID: ${KEYCLOAK_TEST_CLIENT_ID:-admin-cli}
-      KEYCLOAK_TEST_ADMIN_USER: ${KEYCLOAK_TEST_ADMIN_USER:-}
-      KEYCLOAK_TEST_ADMIN_PASSWORD: ${KEYCLOAK_TEST_ADMIN_PASSWORD:-}
-      KEYCLOAK_TEST_CLIENT_SECRET: ${KEYCLOAK_TEST_CLIENT_SECRET:-}
-      KEYCLOAK_TEST_VERIFY_SSL: ${KEYCLOAK_TEST_VERIFY_SSL:-true}
-      KEYCLOAK_EMAIL_DOMAINS: ${KEYCLOAK_EMAIL_DOMAINS:-erg.kz,corp.erg.kz,mail.erg.kz}
-      KEYCLOAK_MAX_RETRIES: ${KEYCLOAK_MAX_RETRIES:-3}
-      KEYCLOAK_RETRY_DELAY: ${KEYCLOAK_RETRY_DELAY:-1.5}
-      KEYCLOAK_REQUEST_TIMEOUT: ${KEYCLOAK_REQUEST_TIMEOUT:-30}
-      KEYCLOAK_MAX_SEARCH_RESULTS: ${KEYCLOAK_MAX_SEARCH_RESULTS:-50}
-      KEYCLOAK_GROUP_PAGE_SIZE: ${KEYCLOAK_GROUP_PAGE_SIZE:-200}
-    ports:
-      - "${MCP_BIND_HOST:-127.0.0.1}:${STUDIO_KEYCLOAK_MCP_PORT:-8766}:8766"
+      MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+      MCP_RUNNER_SESSION_TTL_SECONDS: ${MCP_RUNNER_SESSION_TTL_SECONDS:-300}
+      MCP_RUNNER_MAX_SESSIONS: ${MCP_RUNNER_MAX_SESSIONS:-50}
+      MCP_RUNNER_REQUEST_TIMEOUT_SECONDS: ${MCP_RUNNER_REQUEST_TIMEOUT_SECONDS:-120}
+    # Internal only: reachable by the backend over the compose network, never
+    # published to the host.
+    expose:
+      - "9000"
     restart: unless-stopped
     healthcheck:
       test:
         [
           "CMD",
-          "python",
+          "python3",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8766/health', timeout=5).read()",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9000/health', timeout=5).read()",
         ]
-      interval: 10s
+      interval: 15s
       timeout: 5s
       retries: 5
     logging: *json-logging

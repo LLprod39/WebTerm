@@ -5,7 +5,9 @@ from django.db import models
 
 
 class PluginSecretBinding(models.Model):
-    installation = models.ForeignKey("plugin_marketplace.PluginInstallation", on_delete=models.CASCADE, related_name="secret_bindings")
+    installation = models.ForeignKey(
+        "plugin_marketplace.PluginInstallation", on_delete=models.CASCADE, related_name="secret_bindings"
+    )
     key = models.CharField(max_length=120)
     secret_ref = models.CharField(max_length=240)
     created_by = models.ForeignKey(

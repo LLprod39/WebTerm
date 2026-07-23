@@ -73,7 +73,11 @@ def build_initial_session_context(
         "source": "login_probe+tracked_env",
         "confidence": "best_effort",
     }
-    if context["venv"] and "VIRTUAL_ENV" not in context["env_hints"] and "CONDA_DEFAULT_ENV" not in context["env_hints"]:
+    if (
+        context["venv"]
+        and "VIRTUAL_ENV" not in context["env_hints"]
+        and "CONDA_DEFAULT_ENV" not in context["env_hints"]
+    ):
         context["env_hints"] = dict(context["env_hints"])
         context["env_hints"]["VIRTUAL_ENV"] = context["venv"]
     return context
@@ -158,7 +162,9 @@ def build_nova_context_bundle(
     include_recent_activity: bool,
 ) -> NovaContextBundle:
     session_view = _build_session_view(snapshot) if include_session_context else {}
-    recent_activity = _merge_activity_entries(live_activity or [], persisted_activity or []) if include_recent_activity else []
+    recent_activity = (
+        _merge_activity_entries(live_activity or [], persisted_activity or []) if include_recent_activity else []
+    )
 
     session_context = ""
     if session_view:
@@ -223,7 +229,10 @@ def _build_session_view(snapshot: dict[str, Any] | None) -> dict[str, Any]:
         "source": _clean_value(raw.get("source"), 80) or "best_effort",
         "confidence": _clean_value(raw.get("confidence"), 40) or "best_effort",
     }
-    if not any(value for key, value in view.items() if key not in {"source", "confidence", "env_summary"}) and not view["env_summary"]:
+    if (
+        not any(value for key, value in view.items() if key not in {"source", "confidence", "env_summary"})
+        and not view["env_summary"]
+    ):
         return {}
     return view
 

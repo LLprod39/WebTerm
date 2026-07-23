@@ -88,12 +88,30 @@ def sync_rancher_provider(
         token = resolve_provider_token(provider)
         client = RancherClient(provider, transport=transport)
         clusters = [normalize_rancher_cluster(provider, item) for item in payload_items(client.list_clusters())]
-        namespaces = [normalize_rancher_namespace(item) for item in _with_default_cluster_context(payload_items(client.list_namespaces()), clusters)]
-        workloads = [normalize_rancher_workload(item) for item in _with_default_cluster_context(payload_items(client.list_workloads()), clusters)]
-        pods = [normalize_rancher_pod(item) for item in _with_default_cluster_context(payload_items(client.list_pods()), clusters)]
-        services = [normalize_rancher_service(item) for item in _with_default_cluster_context(payload_items(client.list_services()), clusters)]
-        ingresses = [normalize_rancher_ingress(item) for item in _with_default_cluster_context(payload_items(client.list_ingresses()), clusters)]
-        events = [normalize_rancher_event(item) for item in _with_default_cluster_context(payload_items(client.list_events()), clusters)]
+        namespaces = [
+            normalize_rancher_namespace(item)
+            for item in _with_default_cluster_context(payload_items(client.list_namespaces()), clusters)
+        ]
+        workloads = [
+            normalize_rancher_workload(item)
+            for item in _with_default_cluster_context(payload_items(client.list_workloads()), clusters)
+        ]
+        pods = [
+            normalize_rancher_pod(item)
+            for item in _with_default_cluster_context(payload_items(client.list_pods()), clusters)
+        ]
+        services = [
+            normalize_rancher_service(item)
+            for item in _with_default_cluster_context(payload_items(client.list_services()), clusters)
+        ]
+        ingresses = [
+            normalize_rancher_ingress(item)
+            for item in _with_default_cluster_context(payload_items(client.list_ingresses()), clusters)
+        ]
+        events = [
+            normalize_rancher_event(item)
+            for item in _with_default_cluster_context(payload_items(client.list_events()), clusters)
+        ]
         bundles = [normalize_fleet_bundle(provider, item) for item in payload_items(client.list_fleet_bundles())]
         if not dry_run:
             _upsert_rancher_rows(provider, clusters, namespaces, workloads, pods, services + ingresses, events, bundles)
@@ -370,10 +388,16 @@ def _prune_stale_rancher_rows(provider: K8sProvider, synced_at) -> None:
 
 def _refresh_cluster_inventory_counts(provider: K8sProvider) -> None:
     namespace_counts = dict(
-        K8sNamespace.objects.filter(cluster__rancher_provider=provider).values("cluster_id").annotate(total=Count("id")).values_list("cluster_id", "total")
+        K8sNamespace.objects.filter(cluster__rancher_provider=provider)
+        .values("cluster_id")
+        .annotate(total=Count("id"))
+        .values_list("cluster_id", "total")
     )
     workload_counts = dict(
-        K8sWorkloadRef.objects.filter(cluster__rancher_provider=provider).values("cluster_id").annotate(total=Count("id")).values_list("cluster_id", "total")
+        K8sWorkloadRef.objects.filter(cluster__rancher_provider=provider)
+        .values("cluster_id")
+        .annotate(total=Count("id"))
+        .values_list("cluster_id", "total")
     )
     for cluster in K8sCluster.objects.filter(rancher_provider=provider):
         update_fields = []
@@ -397,7 +421,11 @@ def _upsert_devtron_rows(apps: list[dict]) -> None:
         cluster = None
         if row["devtron_cluster_id"]:
             cluster = K8sCluster.objects.filter(devtron_cluster_id=row["devtron_cluster_id"]).first()
-        cluster = cluster or K8sCluster.objects.filter(name=row["cluster_name"]).first() or K8sCluster(name=row["cluster_name"])
+        cluster = (
+            cluster
+            or K8sCluster.objects.filter(name=row["cluster_name"]).first()
+            or K8sCluster(name=row["cluster_name"])
+        )
         cluster.devtron_cluster_id = row["devtron_cluster_id"] or cluster.devtron_cluster_id
         cluster.environment = cluster.environment or row["environment"]
         cluster.health = cluster.health or K8sCluster.HEALTH_UNKNOWN
@@ -420,7 +448,9 @@ def _upsert_devtron_rows(apps: list[dict]) -> None:
             },
         )
     if touched_cluster_ids:
-        K8sAppRef.objects.filter(owner=K8sAppRef.OWNER_DEVTRON, cluster_id__in=touched_cluster_ids).exclude(last_sync_at=now).delete()
+        K8sAppRef.objects.filter(owner=K8sAppRef.OWNER_DEVTRON, cluster_id__in=touched_cluster_ids).exclude(
+            last_sync_at=now
+        ).delete()
 
 
 def _mark_provider_success(provider: K8sProvider, *, dry_run: bool) -> None:

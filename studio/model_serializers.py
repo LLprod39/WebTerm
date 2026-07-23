@@ -29,12 +29,16 @@ def agent_config_to_dict(agent) -> dict:
 def pipeline_get_last_run(pipeline):
     from .models import PipelineRun
 
-    live_run = pipeline.runs.filter(
-        status__in=[
-            PipelineRun.STATUS_PENDING,
-            PipelineRun.STATUS_RUNNING,
-        ]
-    ).order_by("-created_at", "-id").first()
+    live_run = (
+        pipeline.runs.filter(
+            status__in=[
+                PipelineRun.STATUS_PENDING,
+                PipelineRun.STATUS_RUNNING,
+            ]
+        )
+        .order_by("-created_at", "-id")
+        .first()
+    )
     if live_run:
         return live_run
     return pipeline.runs.order_by("-created_at", "-id").first()
@@ -53,7 +57,9 @@ def pipeline_get_trigger_summary(pipeline) -> dict:
         "active_total": len(active_triggers),
         "active_manual": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MANUAL),
         "active_webhook": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_WEBHOOK),
-        "active_schedule": sum(1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_SCHEDULE),
+        "active_schedule": sum(
+            1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_SCHEDULE
+        ),
         "active_monitoring": sum(
             1 for trigger in active_triggers if trigger.trigger_type == PipelineTrigger.TYPE_MONITORING
         ),

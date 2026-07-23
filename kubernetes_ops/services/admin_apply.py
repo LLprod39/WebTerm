@@ -41,7 +41,9 @@ def apply_kubernetes_resource(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes apply is disabled by policy.", code="native_apply_disabled", status=403)
+        raise AdminResourceError(
+            "Native Kubernetes apply is disabled by policy.", code="native_apply_disabled", status=403
+        )
     cluster = _required_cluster(cluster_id)
     ref = _ref_from_manifest(manifest, namespace=namespace, resource=resource)
     session = _active_apply_session_for_user(user, session_id, cluster, ref=ref)
@@ -50,7 +52,11 @@ def apply_kubernetes_resource(
         raise AdminResourceError("reason is required for apply.", code="reason_required")
     assert_production_write_approved(session=session, cluster=cluster, ref=ref, action="apply")
     assert_admin_session_approved(session=session, action=K8sAdminAction.VERB_APPLY)
-    proof = None if _session_uses_break_glass_apply_bypass(session) else _required_dry_run_proof(dry_run_action_id, session=session, cluster=cluster, ref=ref, manifest=manifest)
+    proof = (
+        None
+        if _session_uses_break_glass_apply_bypass(session)
+        else _required_dry_run_proof(dry_run_action_id, session=session, cluster=cluster, ref=ref, manifest=manifest)
+    )
     provider = _required_rancher_provider(cluster)
     path = _apply_path(rancher_resource_path(provider, cluster, ref))
     sanitized_submitted = sanitize_kubernetes_resource(manifest)
@@ -83,7 +89,9 @@ def apply_kubernetes_resource(
 
     sanitized_response = sanitize_kubernetes_resource(response)
     redacted = resource_was_redacted(sanitized_submitted) or resource_was_redacted(sanitized_response)
-    ownership = build_admin_resource_ownership(cluster=cluster, ref=ref, resource=sanitized_response or sanitized_submitted)
+    ownership = build_admin_resource_ownership(
+        cluster=cluster, ref=ref, resource=sanitized_response or sanitized_submitted
+    )
     action = _record_apply_action(
         user=user,
         session=session,
@@ -129,7 +137,9 @@ def apply_kubernetes_resource(
     }
 
 
-def _active_apply_session_for_user(user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef) -> K8sAdminSession:
+def _active_apply_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef
+) -> K8sAdminSession:
     policy = kubernetes_permission_policy(user)
     if not (policy["can_apply_yaml"] or policy.get("can_break_glass_apply")):
         if policy["can_break_glass"] and bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED", False)):
@@ -140,24 +150,40 @@ def _active_apply_session_for_user(user, session_id: str, cluster: K8sCluster, *
             code = "admin_write_required"
         raise AdminResourceError("Kubernetes apply access is required.", code=code, status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError) as exc:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403)
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Write admin session is not active.", code="admin_write_session_not_active", status=403)
+        raise AdminResourceError(
+            "Write admin session is not active.", code="admin_write_session_not_active", status=403
+        )
     if session.mode == K8sAdminSession.MODE_WRITE:
         if not policy["can_apply_yaml"]:
             raise AdminResourceError("Kubernetes apply access is required.", code="native_apply_disabled", status=403)
     elif session.mode == K8sAdminSession.MODE_BREAK_GLASS:
         if not policy.get("can_break_glass_apply"):
-            raise AdminResourceError("Break-glass apply bypass is disabled by policy.", code="break_glass_apply_disabled", status=403)
+            raise AdminResourceError(
+                "Break-glass apply bypass is disabled by policy.", code="break_glass_apply_disabled", status=403
+            )
     else:
-        raise AdminResourceError("Apply requires a write or break-glass admin session.", code="write_session_required", status=403)
+        raise AdminResourceError(
+            "Apply requires a write or break-glass admin session.", code="write_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if K8sAdminAction.VERB_APPLY not in set(session.allowed_verbs or []):
         raise AdminResourceError("Admin session does not allow apply.", code="admin_session_verb_denied", status=403)
     _check_session_scope(session, ref)
@@ -173,7 +199,9 @@ def _required_dry_run_proof(
     manifest: dict[str, Any],
 ) -> K8sAdminAction:
     if not str(action_id or "").strip():
-        raise AdminResourceError("dry_run_action_id is required before apply.", code="dry_run_proof_required", status=409)
+        raise AdminResourceError(
+            "dry_run_action_id is required before apply.", code="dry_run_proof_required", status=409
+        )
     try:
         proof = K8sAdminAction.objects.filter(
             action_id=action_id,
@@ -183,11 +211,22 @@ def _required_dry_run_proof(
             status=K8sAdminAction.STATUS_DRY_RUN,
         ).first()
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Valid dry_run_action_id is required before apply.", code="dry_run_proof_required", status=409) from exc
+        raise AdminResourceError(
+            "Valid dry_run_action_id is required before apply.", code="dry_run_proof_required", status=409
+        ) from exc
     if proof is None:
-        raise AdminResourceError("Successful dry-run proof is required before apply.", code="dry_run_proof_required", status=409)
-    if proof.resource_api_version != ref.api_version or proof.resource_kind != ref.kind or proof.namespace != ref.namespace or proof.resource_name != ref.name:
-        raise AdminResourceError("Dry-run proof target does not match apply target.", code="dry_run_target_mismatch", status=409)
+        raise AdminResourceError(
+            "Successful dry-run proof is required before apply.", code="dry_run_proof_required", status=409
+        )
+    if (
+        proof.resource_api_version != ref.api_version
+        or proof.resource_kind != ref.kind
+        or proof.namespace != ref.namespace
+        or proof.resource_name != ref.name
+    ):
+        raise AdminResourceError(
+            "Dry-run proof target does not match apply target.", code="dry_run_target_mismatch", status=409
+        )
     max_age = int(getattr(settings, "KUBERNETES_ADMIN_DRY_RUN_PROOF_MAX_AGE_SECONDS", 1800))
     if proof.created_at < timezone.now() - timedelta(seconds=max_age):
         raise AdminResourceError("Dry-run proof has expired.", code="dry_run_proof_expired", status=409)
@@ -222,10 +261,14 @@ def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -
     if ref.namespace:
         allowed_namespaces = set(session.allowed_namespaces or [])
         if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-            raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+            )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
 def _ref_from_manifest(manifest: dict[str, Any], *, namespace: str, resource: str) -> KubernetesResourceRef:
@@ -285,7 +328,9 @@ def _record_apply_action(
             "manifest_fingerprint": manifest_fingerprint(submitted),
             "submitted_top_level_fields": sorted(submitted.keys()),
         },
-        diff_summary=sanitize_metadata(proof.diff_summary if proof is not None else {"available": False, "reason": "break_glass_dry_run_bypass"}),
+        diff_summary=sanitize_metadata(
+            proof.diff_summary if proof is not None else {"available": False, "reason": "break_glass_dry_run_bypass"}
+        ),
         response_summary=sanitize_metadata(response_summary),
     )
 
@@ -300,7 +345,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode apply.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode apply.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

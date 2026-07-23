@@ -23,7 +23,9 @@ def test_resource_summary_includes_bounded_redacted_condition_context():
                 "namespace": "payments",
                 "generation": 3,
                 "resourceVersion": "99",
-                "ownerReferences": [{"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "payments-api-7d9", "controller": True}],
+                "ownerReferences": [
+                    {"apiVersion": "apps/v1", "kind": "ReplicaSet", "name": "payments-api-7d9", "controller": True}
+                ],
             },
             "spec": {
                 "replicas": 2,
@@ -44,7 +46,9 @@ def test_resource_summary_includes_bounded_redacted_condition_context():
             },
         }
     )
-    ref = SimpleNamespace(api_version="apps/v1", kind="Deployment", resource="deployments", namespace="payments", name="")
+    ref = SimpleNamespace(
+        api_version="apps/v1", kind="Deployment", resource="deployments", namespace="payments", name=""
+    )
 
     summary = build_resource_row_summary(resource, ref=ref)
 
@@ -56,7 +60,9 @@ def test_resource_summary_includes_bounded_redacted_condition_context():
     assert summary["condition_summary"]["failing"][0]["message"] == "password=[redacted]"
     assert summary["generation"] == 3
     assert summary["resource_version"] == "99"
-    assert summary["owner_references"] == [{"api_version": "apps/v1", "kind": "ReplicaSet", "name": "payments-api-7d9", "controller": True}]
+    assert summary["owner_references"] == [
+        {"api_version": "apps/v1", "kind": "ReplicaSet", "name": "payments-api-7d9", "controller": True}
+    ]
     assert summary["containers"]["init_count"] == 1
     assert summary["containers"]["images"] == ["registry.example/api:1-token=[redacted]", "registry.example/migrate:1"]
     assert summary["workload"]["selector_keys"] == ["[redacted]", "app"]
@@ -82,7 +88,13 @@ def test_resource_summary_includes_storage_ingress_and_config_context():
             },
             "status": {"phase": "Bound", "capacity": {"storage": "20Gi"}},
         },
-        ref=SimpleNamespace(api_version="v1", kind="PersistentVolumeClaim", resource="persistentvolumeclaims", namespace="payments", name="data"),
+        ref=SimpleNamespace(
+            api_version="v1",
+            kind="PersistentVolumeClaim",
+            resource="persistentvolumeclaims",
+            namespace="payments",
+            name="data",
+        ),
     )
     ingress = build_resource_row_summary(
         sanitize_kubernetes_resource(
@@ -102,7 +114,13 @@ def test_resource_summary_includes_storage_ingress_and_config_context():
                 },
             }
         ),
-        ref=SimpleNamespace(api_version="networking.k8s.io/v1", kind="Ingress", resource="ingresses", namespace="payments", name="payments"),
+        ref=SimpleNamespace(
+            api_version="networking.k8s.io/v1",
+            kind="Ingress",
+            resource="ingresses",
+            namespace="payments",
+            name="payments",
+        ),
     )
     secret = build_resource_row_summary(
         sanitize_kubernetes_resource(
@@ -156,7 +174,9 @@ def test_resource_summary_includes_batch_autoscaling_and_policy_context():
             },
             "status": {"active": [{"name": "nightly-1"}], "lastScheduleTime": "2026-07-02T01:00:00Z"},
         },
-        ref=SimpleNamespace(api_version="batch/v1", kind="CronJob", resource="cronjobs", namespace="payments", name="nightly"),
+        ref=SimpleNamespace(
+            api_version="batch/v1", kind="CronJob", resource="cronjobs", namespace="payments", name="nightly"
+        ),
     )
     hpa = build_resource_row_summary(
         {
@@ -167,11 +187,22 @@ def test_resource_summary_includes_batch_autoscaling_and_policy_context():
                 "scaleTargetRef": {"apiVersion": "apps/v1", "kind": "Deployment", "name": "payments-api"},
                 "minReplicas": 2,
                 "maxReplicas": 10,
-                "metrics": [{"type": "Resource", "resource": {"name": "cpu", "target": {"type": "Utilization", "averageUtilization": 70}}}],
+                "metrics": [
+                    {
+                        "type": "Resource",
+                        "resource": {"name": "cpu", "target": {"type": "Utilization", "averageUtilization": 70}},
+                    }
+                ],
             },
             "status": {"currentReplicas": 3, "desiredReplicas": 4},
         },
-        ref=SimpleNamespace(api_version="autoscaling/v2", kind="HorizontalPodAutoscaler", resource="horizontalpodautoscalers", namespace="payments", name="payments-api"),
+        ref=SimpleNamespace(
+            api_version="autoscaling/v2",
+            kind="HorizontalPodAutoscaler",
+            resource="horizontalpodautoscalers",
+            namespace="payments",
+            name="payments-api",
+        ),
     )
     pdb = build_resource_row_summary(
         {
@@ -181,16 +212,33 @@ def test_resource_summary_includes_batch_autoscaling_and_policy_context():
             "spec": {"minAvailable": "50%", "selector": {"matchLabels": {"app": "payments", "token": "raw-token"}}},
             "status": {"currentHealthy": 2, "desiredHealthy": 2, "disruptionsAllowed": 0, "expectedPods": 3},
         },
-        ref=SimpleNamespace(api_version="policy/v1", kind="PodDisruptionBudget", resource="poddisruptionbudgets", namespace="payments", name="payments-api"),
+        ref=SimpleNamespace(
+            api_version="policy/v1",
+            kind="PodDisruptionBudget",
+            resource="poddisruptionbudgets",
+            namespace="payments",
+            name="payments-api",
+        ),
     )
     netpol = build_resource_row_summary(
         {
             "apiVersion": "networking.k8s.io/v1",
             "kind": "NetworkPolicy",
             "metadata": {"name": "payments-api", "namespace": "payments"},
-            "spec": {"podSelector": {"matchLabels": {"app": "payments"}}, "policyTypes": ["Ingress", "Egress"], "ingress": [{}], "egress": [{}, {}]},
+            "spec": {
+                "podSelector": {"matchLabels": {"app": "payments"}},
+                "policyTypes": ["Ingress", "Egress"],
+                "ingress": [{}],
+                "egress": [{}, {}],
+            },
         },
-        ref=SimpleNamespace(api_version="networking.k8s.io/v1", kind="NetworkPolicy", resource="networkpolicies", namespace="payments", name="payments-api"),
+        ref=SimpleNamespace(
+            api_version="networking.k8s.io/v1",
+            kind="NetworkPolicy",
+            resource="networkpolicies",
+            namespace="payments",
+            name="payments-api",
+        ),
     )
 
     assert job["batch"]["succeeded"] == 3
@@ -217,7 +265,13 @@ def test_resource_summary_includes_rbac_endpoint_quota_and_service_account_conte
             "metadata": {"name": "operator", "namespace": "payments"},
             "rules": [{"apiGroups": [""], "resources": ["pods", "secrets"], "verbs": ["get", "list", "patch"]}],
         },
-        ref=SimpleNamespace(api_version="rbac.authorization.k8s.io/v1", kind="Role", resource="roles", namespace="payments", name="operator"),
+        ref=SimpleNamespace(
+            api_version="rbac.authorization.k8s.io/v1",
+            kind="Role",
+            resource="roles",
+            namespace="payments",
+            name="operator",
+        ),
     )
     binding = build_resource_row_summary(
         {
@@ -225,9 +279,18 @@ def test_resource_summary_includes_rbac_endpoint_quota_and_service_account_conte
             "kind": "RoleBinding",
             "metadata": {"name": "operator", "namespace": "payments"},
             "roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": "operator"},
-            "subjects": [{"kind": "User", "name": "raw-user@example.test"}, {"kind": "ServiceAccount", "name": "operator"}],
+            "subjects": [
+                {"kind": "User", "name": "raw-user@example.test"},
+                {"kind": "ServiceAccount", "name": "operator"},
+            ],
         },
-        ref=SimpleNamespace(api_version="rbac.authorization.k8s.io/v1", kind="RoleBinding", resource="rolebindings", namespace="payments", name="operator"),
+        ref=SimpleNamespace(
+            api_version="rbac.authorization.k8s.io/v1",
+            kind="RoleBinding",
+            resource="rolebindings",
+            namespace="payments",
+            name="operator",
+        ),
     )
     endpoint_slice = build_resource_row_summary(
         {
@@ -241,7 +304,13 @@ def test_resource_summary_includes_rbac_endpoint_quota_and_service_account_conte
             ],
             "ports": [{"name": "http", "port": 8080, "protocol": "TCP"}],
         },
-        ref=SimpleNamespace(api_version="discovery.k8s.io/v1", kind="EndpointSlice", resource="endpointslices", namespace="payments", name="payments-api"),
+        ref=SimpleNamespace(
+            api_version="discovery.k8s.io/v1",
+            kind="EndpointSlice",
+            resource="endpointslices",
+            namespace="payments",
+            name="payments-api",
+        ),
     )
     quota = build_resource_row_summary(
         {
@@ -251,7 +320,9 @@ def test_resource_summary_includes_rbac_endpoint_quota_and_service_account_conte
             "spec": {"scopes": ["NotTerminating"]},
             "status": {"hard": {"requests.cpu": "4", "secrets": "10"}, "used": {"requests.cpu": "2", "secrets": "4"}},
         },
-        ref=SimpleNamespace(api_version="v1", kind="ResourceQuota", resource="resourcequotas", namespace="payments", name="payments"),
+        ref=SimpleNamespace(
+            api_version="v1", kind="ResourceQuota", resource="resourcequotas", namespace="payments", name="payments"
+        ),
     )
     service_account = build_resource_row_summary(
         {
@@ -262,7 +333,9 @@ def test_resource_summary_includes_rbac_endpoint_quota_and_service_account_conte
             "imagePullSecrets": [{"name": "raw-pull-secret"}],
             "automountServiceAccountToken": False,
         },
-        ref=SimpleNamespace(api_version="v1", kind="ServiceAccount", resource="serviceaccounts", namespace="payments", name="operator"),
+        ref=SimpleNamespace(
+            api_version="v1", kind="ServiceAccount", resource="serviceaccounts", namespace="payments", name="operator"
+        ),
     )
 
     assert role["rbac"]["rule_count"] == 1

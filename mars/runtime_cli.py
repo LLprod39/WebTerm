@@ -65,7 +65,10 @@ def ensure_mars_codex_home(command: list[str]) -> Path | None:
     if _command_uses_wsl_windows_exe(command) and str(configured) == str(Path.home() / ".mars_codex_home"):
         for candidate_home in _codex_home_candidates():
             try:
-                if str(candidate_home).replace("\\", "/").startswith("/mnt/c/Users/") and (candidate_home / "auth.json").exists():
+                if (
+                    str(candidate_home).replace("\\", "/").startswith("/mnt/c/Users/")
+                    and (candidate_home / "auth.json").exists()
+                ):
                     configured = candidate_home.parent / ".mars_codex_home"
                     break
             except OSError:
@@ -123,16 +126,26 @@ def docker_workspace_path() -> str:
 
 def _docker_host_path(path: str | Path) -> str:
     resolved = Path(path).expanduser().resolve(strict=False)
-    container_prefix = str(getattr(settings, "MARS_DOCKER_CONTAINER_PATH_PREFIX", "") or "").replace("\\", "/").rstrip("/")
+    container_prefix = (
+        str(getattr(settings, "MARS_DOCKER_CONTAINER_PATH_PREFIX", "") or "").replace("\\", "/").rstrip("/")
+    )
     host_prefix = str(getattr(settings, "MARS_DOCKER_HOST_PATH_PREFIX", "") or "").strip()
     normalized = str(resolved).replace("\\", "/")
-    if container_prefix and host_prefix and (normalized == container_prefix or normalized.startswith(f"{container_prefix}/")):
+    if (
+        container_prefix
+        and host_prefix
+        and (normalized == container_prefix or normalized.startswith(f"{container_prefix}/"))
+    ):
         suffix = normalized[len(container_prefix) :].lstrip("/")
         clean_host_prefix = host_prefix.rstrip("\\/")
         if ":" in clean_host_prefix[:4] or "\\" in clean_host_prefix:
             return clean_host_prefix + (("\\" + suffix.replace("/", "\\")) if suffix else "")
         host_base = Path(clean_host_prefix).expanduser()
-        return str((host_base / PurePosixPath(suffix)).resolve(strict=False)) if suffix else str(host_base.resolve(strict=False))
+        return (
+            str((host_base / PurePosixPath(suffix)).resolve(strict=False))
+            if suffix
+            else str(host_base.resolve(strict=False))
+        )
     return str(resolved)
 
 
@@ -241,9 +254,13 @@ def build_mars_agent_docker_command(
 
     if include_gemini_home:
         gemini_home_volume = str(getattr(settings, "MARS_AGENT_DOCKER_GEMINI_HOME_VOLUME", "") or "").strip()
-        gemini_home = Path(getattr(settings, "MARS_GEMINI_HOME", Path.home() / ".gemini")).expanduser().resolve(strict=False)
+        gemini_home = (
+            Path(getattr(settings, "MARS_GEMINI_HOME", Path.home() / ".gemini")).expanduser().resolve(strict=False)
+        )
         if gemini_home_volume:
-            command.extend(["--mount", _docker_named_volume_mount(gemini_home_volume, "/home/node/.gemini", readonly=True)])
+            command.extend(
+                ["--mount", _docker_named_volume_mount(gemini_home_volume, "/home/node/.gemini", readonly=True)]
+            )
         elif gemini_home.exists():
             command.extend(["-v", _docker_volume_arg(gemini_home, "/home/node/.gemini", "ro")])
 

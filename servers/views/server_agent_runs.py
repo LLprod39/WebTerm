@@ -190,7 +190,9 @@ def agent_run_artifacts_download_all(request, run_id):
     used_names: set[str] = set()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for artifact in artifacts:
-            filename = (artifact.name or f"artifact-{artifact.id}.txt").replace("\\", "_").replace("/", "_").replace('"', "")
+            filename = (
+                (artifact.name or f"artifact-{artifact.id}.txt").replace("\\", "_").replace("/", "_").replace('"', "")
+            )
             if not filename:
                 filename = f"artifact-{artifact.id}.txt"
             base_name = filename

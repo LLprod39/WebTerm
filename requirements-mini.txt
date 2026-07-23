@@ -1,7 +1,7 @@
 # MINI PROD runtime dependencies (servers + mini web settings).
 
 # Web / ASGI
-django>=5.2
+django>=5.2,<5.3
 daphne>=4.1
 channels>=4.1
 channels-redis>=4.2
@@ -39,11 +39,6 @@ croniter>=3.0
 celery>=5.3
 redis>=5.0
 
-# Architecture fitness checks (see scripts/check_architecture_sizes.py, .importlinter)
-import-linter>=2.0        # provides lint-imports CLI; required when enforce_import_boundaries=true
-tomli>=2.0; python_version < "3.11"  # tomllib stdlib backport for Python 3.10
-
-# Test tooling used by the in-repo pytest suite.
-pytest>=8.0
-pytest-django>=4.8
-pytest-asyncio>=0.23
+# Development, test and architecture tools intentionally live in
+# requirements-dev.in / requirements-dev.lock. Production images install only
+# this runtime set through requirements.lock.

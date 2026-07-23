@@ -164,10 +164,14 @@ class ProviderJsonClient:
         self.labels = labels
         self.verify_tls = str(labels.get("tls_verify", "true")).strip().lower() not in {"0", "false", "no", "off"}
 
-    def get(self, path: str, *, include_token: bool = True, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
+    def get(
+        self, path: str, *, include_token: bool = True, extra_headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         return self.request("GET", path, include_token=include_token, extra_headers=extra_headers)
 
-    def get_log_payload(self, path: str, *, include_token: bool = True, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
+    def get_log_payload(
+        self, path: str, *, include_token: bool = True, extra_headers: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         headers = {"Accept": "application/json, text/plain, */*"}
         if extra_headers:
             headers.update(extra_headers)
@@ -190,7 +194,9 @@ class ProviderJsonClient:
         url = _join_url(self.provider.base_url, path)
         try:
             if self.transport:
-                return _coerce_log_stream_lines(self._call_transport(url, headers, method="GET", body=None), max_lines=max_lines)
+                return _coerce_log_stream_lines(
+                    self._call_transport(url, headers, method="GET", body=None), max_lines=max_lines
+                )
             return _default_log_stream_lines(
                 url,
                 headers,
@@ -252,7 +258,9 @@ class ProviderJsonClient:
         try:
             if self.transport:
                 return _coerce_log_transport_payload(self._call_transport(url, headers, method=method, body=body))
-            data = _default_raw_transport(url, headers, self.timeout, verify_tls=self.verify_tls, method=method, body=body)
+            data = _default_raw_transport(
+                url, headers, self.timeout, verify_tls=self.verify_tls, method=method, body=body
+            )
             return _decode_log_payload(data)
         except Exception as exc:
             raise KubernetesProviderError(redact_secret(exc, self.token)) from exc
@@ -266,7 +274,9 @@ class ProviderJsonClient:
             return {"Authorization": f"{scheme} {token}" if scheme else token}
         return {header_name: token}
 
-    def _call_transport(self, url: str, headers: dict[str, str], *, method: str, body: dict[str, Any] | None) -> dict[str, Any]:
+    def _call_transport(
+        self, url: str, headers: dict[str, str], *, method: str, body: dict[str, Any] | None
+    ) -> dict[str, Any]:
         if _transport_accepts_request_kwargs(self.transport):
             return self.transport(url, headers, self.timeout, method=method, body=body)
         if method.upper() == "GET" and body is None:
@@ -396,7 +406,9 @@ class DevtronClient:
         self._session_headers: dict[str, str] | None = None
 
     def get(self, path: str) -> dict[str, Any]:
-        return self.client.get(path, include_token=not self._uses_session_auth(), extra_headers=self._devtron_auth_headers())
+        return self.client.get(
+            path, include_token=not self._uses_session_auth(), extra_headers=self._devtron_auth_headers()
+        )
 
     def list_apps(self) -> dict[str, Any]:
         return self.get(provider_path(self.provider, "apps_path", "/orchestrator/app/list"))

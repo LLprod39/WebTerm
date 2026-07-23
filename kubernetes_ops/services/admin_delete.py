@@ -71,7 +71,9 @@ def delete_kubernetes_resource(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes delete is disabled by policy.", code="native_delete_disabled", status=403)
+        raise AdminResourceError(
+            "Native Kubernetes delete is disabled by policy.", code="native_delete_disabled", status=403
+        )
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
     _validate_delete_target(ref)
     reason_value = _required_reason(reason)
@@ -170,24 +172,38 @@ def protected_delete_namespaces() -> set[str]:
     return _protected_namespaces()
 
 
-def _active_delete_session_for_user(user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef) -> K8sAdminSession:
+def _active_delete_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef
+) -> K8sAdminSession:
     policy = kubernetes_permission_policy(user)
     if not policy.get("can_delete"):
         code = "native_delete_disabled" if policy["can_admin_write"] else "admin_write_required"
         raise AdminResourceError("Kubernetes delete access is required.", code=code, status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403)
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Write admin session is not active.", code="admin_write_session_not_active", status=403)
+        raise AdminResourceError(
+            "Write admin session is not active.", code="admin_write_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_WRITE:
         raise AdminResourceError("Delete requires a write admin session.", code="write_session_required", status=403)
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if K8sAdminAction.VERB_DELETE not in set(session.allowed_verbs or []):
         raise AdminResourceError("Admin session does not allow delete.", code="admin_session_verb_denied", status=403)
     _check_session_scope(session, ref)
@@ -198,29 +214,36 @@ def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -
     if ref.namespace:
         allowed_namespaces = set(session.allowed_namespaces or [])
         if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-            raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+            )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
 def _validate_delete_target(ref: KubernetesResourceRef) -> None:
     if not ref.name:
         raise AdminResourceError("name is required for delete.", code="resource_name_required")
     if ref.kind in PROTECTED_CLUSTER_KINDS:
-        raise AdminResourceError("This resource kind cannot be deleted through Admin Mode.", code="delete_kind_blocked", status=403)
+        raise AdminResourceError(
+            "This resource kind cannot be deleted through Admin Mode.", code="delete_kind_blocked", status=403
+        )
     if not ref.namespace:
-        raise AdminResourceError("Cluster-scoped deletes are blocked by Admin Mode.", code="delete_cluster_scope_blocked", status=403)
+        raise AdminResourceError(
+            "Cluster-scoped deletes are blocked by Admin Mode.", code="delete_cluster_scope_blocked", status=403
+        )
     if ref.namespace in _protected_namespaces():
-        raise AdminResourceError("Deletes in protected namespaces are blocked by Admin Mode.", code="delete_namespace_protected", status=403)
+        raise AdminResourceError(
+            "Deletes in protected namespaces are blocked by Admin Mode.", code="delete_namespace_protected", status=403
+        )
 
 
 def _protected_namespaces() -> set[str]:
     configured = getattr(settings, "KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES", None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     cleaned = {str(item).strip() for item in values if str(item).strip()}
     return cleaned or set(DEFAULT_PROTECTED_NAMESPACES)
 
@@ -231,7 +254,9 @@ def _clean_propagation_policy(value: str) -> str:
         return ""
     normalized = policy[:1].upper() + policy[1:].lower()
     if normalized not in PROPAGATION_POLICIES:
-        raise AdminResourceError("propagation_policy must be Foreground, Background, or Orphan.", code="propagation_policy_invalid")
+        raise AdminResourceError(
+            "propagation_policy must be Foreground, Background, or Orphan.", code="propagation_policy_invalid"
+        )
     return normalized
 
 
@@ -284,7 +309,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode delete.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode delete.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

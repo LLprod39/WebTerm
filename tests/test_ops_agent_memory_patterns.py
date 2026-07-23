@@ -81,13 +81,17 @@ def test_django_server_memory_store_promotes_command_patterns_to_habits_and_runb
     assert result["skipped"] is False
     habits = ServerMemorySnapshot.objects.get(server=server, memory_key="human_habits", is_active=True)
     runbook = ServerMemorySnapshot.objects.get(server=server, memory_key="runbook", is_active=True)
-    pattern_candidates = ServerMemorySnapshot.objects.filter(server=server, memory_key__startswith="pattern_candidate:", is_active=True)
+    pattern_candidates = ServerMemorySnapshot.objects.filter(
+        server=server, memory_key__startswith="pattern_candidate:", is_active=True
+    )
     automation_candidates = ServerMemorySnapshot.objects.filter(
         server=server,
         memory_key__startswith="automation_candidate:",
         is_active=True,
     )
-    skill_drafts = ServerMemorySnapshot.objects.filter(server=server, memory_key__startswith="skill_draft:", is_active=True)
+    skill_drafts = ServerMemorySnapshot.objects.filter(
+        server=server, memory_key__startswith="skill_draft:", is_active=True
+    )
     assert "systemctl status nginx" in habits.content
     assert "docker ps --format table" not in runbook.content
     assert any("docker ps --format table" in item.content for item in pattern_candidates)
@@ -140,7 +144,7 @@ def test_django_server_memory_store_extracts_recent_docker_changes_without_false
         raw_text=(
             "$ docker ps\n"
             "CONTAINER ID   IMAGE          COMMAND                  CREATED          STATUS         PORTS                  NAMES\n"
-            "6f00abc123     nginx:alpine   \"/docker-entrypoint.…\"   9 seconds ago    Up 2 seconds   0.0.0.0:80->80/tcp     nginx-web"
+            '6f00abc123     nginx:alpine   "/docker-entrypoint.…"   9 seconds ago    Up 2 seconds   0.0.0.0:80->80/tcp     nginx-web'
         ),
         structured_payload={"command": "docker ps", "exit_code": 0},
         importance_hint=0.72,
@@ -450,12 +454,8 @@ def test_django_server_memory_store_learns_verified_command_sequences():
     assert automation.exists()
     assert skill_drafts.exists()
 
-    automation_snapshot = next(
-        item for item in automation if item.metadata.get("pattern_kind") == "sequence"
-    )
-    skill_snapshot = next(
-        item for item in skill_drafts if item.metadata.get("pattern_kind") == "sequence"
-    )
+    automation_snapshot = next(item for item in automation if item.metadata.get("pattern_kind") == "sequence")
+    skill_snapshot = next(item for item in skill_drafts if item.metadata.get("pattern_kind") == "sequence")
     assert automation_snapshot.metadata["intent"] == "service"
     assert automation_snapshot.metadata["intent_label"] == "nginx restart with health verification"
     assert automation_snapshot.metadata["commands"] == ["systemctl restart nginx", "systemctl is-active nginx"]

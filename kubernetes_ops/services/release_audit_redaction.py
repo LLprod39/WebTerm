@@ -52,7 +52,9 @@ def build_kubernetes_release_audit_redaction_evidence(enabled: bool = True) -> d
         checks["api_serializer_raw_values_absent"] = _raw_absent(serialized_api)
         checks["cluster_event_raw_values_absent"] = _raw_absent(serialized_cluster)
         checks["sensitive_key_redacted"] = api_payload.get("payload", {}).get("token") == "[redacted]"
-        checks["credentialed_url_sanitized"] = api_payload.get("payload", {}).get("url") == "https://rancher.redaction-proof.invalid/path"
+        checks["credentialed_url_sanitized"] = (
+            api_payload.get("payload", {}).get("url") == "https://rancher.redaction-proof.invalid/path"
+        )
         checks["connection_string_redacted"] = "[REDACTED:connection_string]" in serialized_api
         checks["bearer_redacted"] = "audit.redaction.jwt" not in serialized_api
     except Exception as exc:

@@ -91,9 +91,7 @@ class KubernetesOpsAdminInteractiveTransportReadinessTests(TestCase):
         KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED=True,
     )
     def test_node_debug_readiness_rejects_invalid_provider_contract(self):
-        self.provider.labels = {
-            "node_debug_path_template": "/k8s/clusters/{cluster_id}/api/v1/nodes/debug"
-        }
+        self.provider.labels = {"node_debug_path_template": "/k8s/clusters/{cluster_id}/api/v1/nodes/debug"}
         self.provider.save(update_fields=["labels"])
 
         report = build_admin_interactive_transport_report()
@@ -305,4 +303,6 @@ class KubernetesOpsAdminInteractiveTransportReadinessTests(TestCase):
         self.assertEqual(checks["admin_interactive_transport"]["status"], "missing")
         self.assertFalse(checks["admin_interactive_transport"]["required"])
         self.assertEqual(payload["admin_interactive_transport"]["status"], "missing")
-        self.assertIn("exec_stream:restricted_credential_evidence_required", payload["admin_interactive_transport"]["blockers"])
+        self.assertIn(
+            "exec_stream:restricted_credential_evidence_required", payload["admin_interactive_transport"]["blockers"]
+        )

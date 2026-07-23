@@ -2,33 +2,24 @@ import hashlib
 import io
 import json
 import zipfile
-from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth.models import User
-from django.test import Client, override_settings
-from django.utils import timezone
+from django.test import Client
 
-from app.runtime_limits import get_terminal_session_limit_error
 from servers.agent_run_report import refresh_agent_run_report_payload
 from servers.models import (
     AgentRun,
     AgentRunArtifact,
-    AgentRunDispatch,
     AgentRunEvent,
-    BackgroundWorkerState,
     ServerAgent,
-    ServerConnection,
 )
 from tests.servers_api_smoke_harness import (
     create_server as _create_server,
 )
 from tests.servers_api_smoke_harness import (
     grant_feature as _grant_feature,
-)
-from tests.servers_api_smoke_harness import (
-    json_payload as _json,
 )
 
 
@@ -214,7 +205,9 @@ def test_agent_run_report_refresh_persists_artifacts_and_downloads_for_owner():
     assert payload["artifacts"][0]["checksum_sha256"]
     assert payload["artifacts"][-1]["name"] == "artifact-manifest.json"
     assert payload["artifact_state"]["bundle_ready"] is True
-    assert payload["artifact_state"]["bundle_download_url"] == f"/servers/api/agents/runs/{run.id}/artifacts/download-all/"
+    assert (
+        payload["artifact_state"]["bundle_download_url"] == f"/servers/api/agents/runs/{run.id}/artifacts/download-all/"
+    )
     assert payload["artifact_state"]["artifact_count"] == 5
     assert payload["artifact_state"]["manifest_ready"] is True
 
@@ -230,7 +223,13 @@ def test_agent_run_report_refresh_persists_artifacts_and_downloads_for_owner():
     assert f"agent-run-{run.id}-artifacts.zip" in bundle.headers["Content-Disposition"]
     with zipfile.ZipFile(io.BytesIO(bundle.content)) as archive:
         names = set(archive.namelist())
-        assert {"final-report.md", "run-context.json", "commands-output.json", "events.json", "artifact-manifest.json"} <= names
+        assert {
+            "final-report.md",
+            "run-context.json",
+            "commands-output.json",
+            "events.json",
+            "artifact-manifest.json",
+        } <= names
         final_report = archive.read("final-report.md")
         assert "# Final" in final_report.decode()
         manifest = json.loads(archive.read("artifact-manifest.json").decode())
@@ -346,7 +345,9 @@ def test_agent_run_report_delivery_retry_endpoint_requires_ready_report():
         report_delivery={"telegram": {"enabled": True, "chat_id": "123456789", "include_link": True}},
     )
     agent.servers.set([server])
-    run = AgentRun.objects.create(agent=agent, server=server, user=user, status=AgentRun.STATUS_RUNNING, report_payload={})
+    run = AgentRun.objects.create(
+        agent=agent, server=server, user=user, status=AgentRun.STATUS_RUNNING, report_payload={}
+    )
 
     response = client.post(f"/servers/api/agents/runs/{run.id}/report/deliver/")
     assert response.status_code == 409

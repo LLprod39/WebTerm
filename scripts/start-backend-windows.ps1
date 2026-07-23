@@ -14,13 +14,14 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 
-$Python = Join-Path $Root ".venv\Scripts\python.exe"
+$Python = Join-Path $Root ".venv-windows\Scripts\python.exe"
 if (-not (Test-Path $Python)) {
-  Write-Host "Windows venv not found at .venv\Scripts\python.exe" -ForegroundColor Red
+  Write-Host "Windows venv not found at .venv-windows\Scripts\python.exe" -ForegroundColor Red
   Write-Host "Create it with:" -ForegroundColor Yellow
-  Write-Host '  py -3.12 -m venv .venv'
-  Write-Host '  .\.venv\Scripts\python.exe -m pip install -r requirements-mini.txt'
-  Write-Host "(On Windows, skip python-ldap if build fails — LDAP is optional for local login.)"
+  Write-Host '  py -3.11 -m venv .venv-windows'
+  Write-Host '  .\.venv-windows\Scripts\python.exe -m pip install -r requirements-mini.txt'
+  Write-Host "Native Windows backend is compatibility-only and is not accepted as release evidence."
+  Write-Host "Use WSL with .venv-wsl and requirements-dev.lock for the canonical locked development path."
   exit 1
 }
 

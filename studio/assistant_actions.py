@@ -17,8 +17,12 @@ from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
 from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
 from studio.readiness_issues import runtime_limit_issue, validation_issues
-from studio.skill_authoring import validate_skills
-from studio.skill_registry import list_skills, normalise_skill_slugs
+from studio.services.pipeline_assistant_interview import (
+    build_revision_interview_message,
+    merge_revision_goal,
+)
+from studio.skill_authoring import scaffold_skill, validate_skill_dir, validate_skills
+from studio.skill_registry import SkillNotFoundError, get_skill, list_skills, normalise_skill_slugs
 from studio.trigger_dispatch import get_pipeline_run_limit_error, pipeline_run_creation_error_details
 from studio.views.mcp_views import _mcp_read_queryset_for_user, _mcp_to_dict
 from studio.views.pipeline_assistant_preview import pipeline_assistant_risk
@@ -47,12 +51,6 @@ from studio.views.skill_helpers import (
     _skill_dir_from_slug,
     _skill_to_detail_dict,
     _skill_to_summary_dict,
-)
-from studio.skill_authoring import scaffold_skill, validate_skill_dir
-from studio.skill_registry import SkillNotFoundError, get_skill
-from studio.services.pipeline_assistant_interview import (
-    build_revision_interview_message,
-    merge_revision_goal,
 )
 from studio.views.skill_views import (
     _has_skill_metadata_update,
@@ -132,7 +130,9 @@ def list_mcp_servers(ctx: AssistantActionContext) -> dict[str, Any]:
     items = []
     for mcp in _mcp_read_queryset_for_user(ctx.user)[:50]:
         payload = _mcp_to_dict(mcp, ctx.user)
-        blob = " ".join(str(payload.get(key) or "") for key in ("name", "description", "transport", "url", "command")).lower()
+        blob = " ".join(
+            str(payload.get(key) or "") for key in ("name", "description", "transport", "url", "command")
+        ).lower()
         if query and query not in blob:
             continue
         items.append(payload)
@@ -167,11 +167,7 @@ def validate_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:
     strict = bool(ctx.input_payload.get("strict"))
     if slugs:
         access_map = _skill_access_map(slugs)
-        denied = [
-            slug
-            for slug in slugs
-            if not _can_read_skill(ctx.user, access_map.get(slug.lower()))
-        ]
+        denied = [slug for slug in slugs if not _can_read_skill(ctx.user, access_map.get(slug.lower()))]
         if denied:
             raise AssistantActionError(f"Skills not accessible: {', '.join(denied)}", status=403)
         results = validate_skills(slugs)
@@ -179,9 +175,7 @@ def validate_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:
         skills = list_skills()
         access_map = _skill_access_map([skill.slug for skill in skills])
         visible_slugs = [
-            skill.slug
-            for skill in skills
-            if _can_read_skill(ctx.user, access_map.get(skill.slug.lower()))
+            skill.slug for skill in skills if _can_read_skill(ctx.user, access_map.get(skill.slug.lower()))
         ]
         results = validate_skills(visible_slugs) if visible_slugs else []
     error_count = sum(len(item.errors) for item in results)
@@ -273,7 +267,9 @@ def apply_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
     if latest.validation.get("ok") is False:
         raise AssistantActionError("Draft validation must pass before apply")
     if latest.risk.get("level") == "dangerous":
-        raise AssistantActionError("Draft contains dangerous actions. Revise it with approval or safer commands before apply.")
+        raise AssistantActionError(
+            "Draft contains dangerous actions. Revise it with approval or safer commands before apply."
+        )
 
     create_new = ctx.input_payload.get("create_new") is not False or draft.source_pipeline_id is None
     title = str(ctx.input_payload.get("name") or draft.title or "AI Chat Pipeline").strip()
@@ -318,10 +314,16 @@ def apply_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
     draft.applied_pipeline = pipeline
     draft.applied_at = timezone.now()
     draft.save(update_fields=["status", "applied_pipeline", "applied_at", "updated_at"])
-    return {"draft": draft.to_dict(include_latest=True), "pipeline": pipeline.to_detail_dict(), "target_url": f"/studio/pipeline/{pipeline.pk}"}
+    return {
+        "draft": draft.to_dict(include_latest=True),
+        "pipeline": pipeline.to_detail_dict(),
+        "target_url": f"/studio/pipeline/{pipeline.pk}",
+    }
 
 
-def _pipeline_run_check(pipeline: Pipeline, *, context: dict[str, Any], entry_node_id: str, validate_only: bool) -> dict[str, Any]:
+def _pipeline_run_check(
+    pipeline: Pipeline, *, context: dict[str, Any], entry_node_id: str, validate_only: bool
+) -> dict[str, Any]:
     validation_errors = validate_pipeline_definition(
         nodes=pipeline.nodes,
         edges=pipeline.edges,
@@ -356,9 +358,20 @@ def _pipeline_run_check(pipeline: Pipeline, *, context: dict[str, Any], entry_no
     limit_error = get_pipeline_run_limit_error(pipeline.owner, cleanup_stale=not validate_only)
     limit_errors = [str(limit_error.get("error") or "Runtime limit reached.")] if limit_error else []
     limit_issues = [runtime_limit_issue(limit_error)] if limit_error else []
-    all_errors = [*validation_errors, *trigger_errors, *branch_errors, *context_errors, *integration["errors"], *limit_errors]
+    all_errors = [
+        *validation_errors,
+        *trigger_errors,
+        *branch_errors,
+        *context_errors,
+        *integration["errors"],
+        *limit_errors,
+    ]
     risk = pipeline_assistant_risk(pipeline.nodes, pipeline.edges)
-    issues = [*validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]), *integration["issues"], *limit_issues]
+    issues = [
+        *validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]),
+        *integration["issues"],
+        *limit_issues,
+    ]
     validation = {"ok": not all_errors, "errors": all_errors, "issues": issues}
     return {
         "selected_trigger": selected_trigger,
@@ -380,7 +393,15 @@ def validate_pipeline_run(ctx: AssistantActionContext) -> dict[str, Any]:
         "ok": check["validation"]["ok"] and check["risk"].get("level") != "dangerous",
         "executed": False,
         "mode": "validate_only",
-        "checks": ["graph_contract", "manual_trigger", "references", "risk_review", "runtime_context", "integrations", "runtime_limits"],
+        "checks": [
+            "graph_contract",
+            "manual_trigger",
+            "references",
+            "risk_review",
+            "runtime_context",
+            "integrations",
+            "runtime_limits",
+        ],
         "message": "Dry-run validation completed without creating a pipeline run.",
     }
     selected_trigger = check["selected_trigger"]
@@ -404,7 +425,9 @@ def run_pipeline(ctx: AssistantActionContext) -> dict[str, Any]:
     entry_node_id = str(ctx.input_payload.get("entry_node_id") or "").strip()
     check = _pipeline_run_check(pipeline, context=raw_context, entry_node_id=entry_node_id, validate_only=False)
     if check["all_errors"]:
-        raise AssistantActionError("Pipeline is not runnable: " + "; ".join(check["all_errors"]), details={"validation": check["validation"]})
+        raise AssistantActionError(
+            "Pipeline is not runnable: " + "; ".join(check["all_errors"]), details={"validation": check["validation"]}
+        )
     selected_trigger = check["selected_trigger"]
     if selected_trigger is None:
         raise AssistantActionError("Pipeline has no runnable manual trigger")
@@ -437,7 +460,12 @@ def stop_pipeline_run(ctx: AssistantActionContext) -> dict[str, Any]:
         run.status = PipelineRun.STATUS_STOPPED
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "finished_at"])
-    return {"ok": True, "live_executor": stop_delivered, "runtime_control": control, "target_url": f"/studio/runs?run={run.pk}"}
+    return {
+        "ok": True,
+        "live_executor": stop_delivered,
+        "runtime_control": control,
+        "target_url": f"/studio/runs?run={run.pk}",
+    }
 
 
 def approve_pipeline_node(ctx: AssistantActionContext) -> dict[str, Any]:
@@ -453,7 +481,11 @@ def approve_pipeline_node(ctx: AssistantActionContext) -> dict[str, Any]:
     if not state:
         raise AssistantActionError(f"Node '{node_id}' not found in run #{run.pk}", status=404)
     if state.get("approval_decision"):
-        return {"ok": True, "message": f"Already decided: {state['approval_decision']}", "target_url": f"/studio/runs?run={run.pk}"}
+        return {
+            "ok": True,
+            "message": f"Already decided: {state['approval_decision']}",
+            "target_url": f"/studio/runs?run={run.pk}",
+        }
     run.node_states[node_id] = {
         **state,
         "approval_decision": decision,
@@ -769,9 +801,7 @@ def update_studio_skill(ctx: AssistantActionContext) -> dict[str, Any]:
         updated = True
 
     if not updated:
-        raise AssistantActionError(
-            "Nothing to update — pass name/description/content (or other metadata fields)"
-        )
+        raise AssistantActionError("Nothing to update — pass name/description/content (or other metadata fields)")
 
     access = _get_skill_access(skill.slug)
     return {

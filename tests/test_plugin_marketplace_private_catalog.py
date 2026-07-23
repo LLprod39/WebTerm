@@ -31,10 +31,12 @@ def test_private_catalog_source_payload_redacts_credentials():
 
     source = client.post(
         "/api/plugins/marketplace/sources/",
-        data=_json({
-            "name": "Private With Token",
-            "source_url": "https://user:pass@catalog.example/feed.json?token=secret-value&version=1",
-        }),
+        data=_json(
+            {
+                "name": "Private With Token",
+                "source_url": "https://user:pass@catalog.example/feed.json?token=secret-value&version=1",
+            }
+        ),
         content_type="application/json",
     )
     assert source.status_code == 200, source.content
@@ -61,29 +63,37 @@ def test_private_catalog_item_embeds_redacted_source_payload():
     client.force_login(user)
     source_id = client.post(
         "/api/plugins/marketplace/sources/",
-        data=_json({
-            "name": "Private Item Source",
-            "source_url": "https://catalog.example/feed.json?api_key=private-key",
-        }),
+        data=_json(
+            {
+                "name": "Private Item Source",
+                "source_url": "https://catalog.example/feed.json?api_key=private-key",
+            }
+        ),
         content_type="application/json",
     ).json()["source"]["id"]
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.catalog-redacted",
-        "name": "Catalog Redacted",
-        "slug": "catalog-redacted",
-        "publisher": {"id": "acme", "name": "Acme"},
-    })
+    manifest.update(
+        {
+            "id": "acme.catalog-redacted",
+            "name": "Catalog Redacted",
+            "slug": "catalog-redacted",
+            "publisher": {"id": "acme", "name": "Acme"},
+        }
+    )
     sync = client.post(
         f"/api/plugins/marketplace/sources/{source_id}/sync/",
-        data=_json({
-            "plugins": [{
-                "manifest": manifest,
-                "compatibility": {"api_versions": ["plugins.v1"]},
-                "review_status": "verified",
-                "signature_status": "signed",
-            }],
-        }),
+        data=_json(
+            {
+                "plugins": [
+                    {
+                        "manifest": manifest,
+                        "compatibility": {"api_versions": ["plugins.v1"]},
+                        "review_status": "verified",
+                        "signature_status": "signed",
+                    }
+                ],
+            }
+        ),
         content_type="application/json",
     )
     assert sync.status_code == 200, sync.content

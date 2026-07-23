@@ -77,7 +77,9 @@ def record_canonical_note_candidate(store, run, note: dict, *, source_ref: str) 
     if not content:
         return
     category = str(note.get("category") or "other")
-    memory_key = store._preferred_memory_key_for_note(title=title, category=category, content=content) or guess_memory_key(
+    memory_key = store._preferred_memory_key_for_note(
+        title=title, category=category, content=content
+    ) or guess_memory_key(
         title=title,
         category=category,
         content=content,
@@ -138,8 +140,9 @@ def upsert_server_fact(
 
         conflict_info = conflicts[0]
         existing_snapshot = (
-            ServerMemorySnapshot.objects
-            .filter(server_id=server_id, title=conflict_info.get("title", ""), is_active=True)
+            ServerMemorySnapshot.objects.filter(
+                server_id=server_id, title=conflict_info.get("title", ""), is_active=True
+            )
             .order_by("-updated_at")
             .first()
         )
@@ -246,7 +249,9 @@ def detect_conflicts(server_id: int, new_facts: list[dict]) -> list[dict]:
     from servers.models import ServerMemorySnapshot
 
     existing = list(
-        ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True).values("title", "memory_key", "content", "metadata")
+        ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True).values(
+            "title", "memory_key", "content", "metadata"
+        )
     )
     normalized_existing = []
     for item in existing:

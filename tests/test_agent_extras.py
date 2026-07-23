@@ -74,9 +74,7 @@ class TestLazyExtrasConnect:
             open_target=open_target,
         )
 
-        result = await ShellTool().run(
-            ShellArgs(cmd="hostname", target="worker-1"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="hostname", target="worker-1"), ctx)
         assert result.ok is True
         assert "hi-from-worker-1" in result.output
         assert opened == ["worker-1"]  # open_target invoked exactly once
@@ -91,9 +89,7 @@ class TestLazyExtrasConnect:
             is_primary=True,
         )
         extra_conn = FakeConn("worker-1")
-        extra = ServerTarget(
-            name="worker-1", server_id=2, ssh_conn=None, is_primary=False
-        )
+        extra = ServerTarget(name="worker-1", server_id=2, ssh_conn=None, is_primary=False)
 
         open_count = {"n": 0}
 
@@ -107,12 +103,8 @@ class TestLazyExtrasConnect:
             open_target=open_target,
         )
 
-        await ShellTool().run(
-            ShellArgs(cmd="hostname", target="worker-1"), ctx
-        )
-        await ShellTool().run(
-            ShellArgs(cmd="uptime", target="worker-1"), ctx
-        )
+        await ShellTool().run(ShellArgs(cmd="hostname", target="worker-1"), ctx)
+        await ShellTool().run(ShellArgs(cmd="uptime", target="worker-1"), ctx)
         assert open_count["n"] == 1
         assert extra_conn.calls == ["hostname", "uptime"]
 
@@ -124,9 +116,7 @@ class TestLazyExtrasConnect:
             ssh_conn=FakeConn("primary"),
             is_primary=True,
         )
-        extra = ServerTarget(
-            name="worker-1", server_id=2, ssh_conn=None, is_primary=False
-        )
+        extra = ServerTarget(name="worker-1", server_id=2, ssh_conn=None, is_primary=False)
 
         async def open_target(_name: str):
             return None  # simulate connection failure
@@ -137,9 +127,7 @@ class TestLazyExtrasConnect:
             open_target=open_target,
         )
 
-        result = await ShellTool().run(
-            ShellArgs(cmd="hostname", target="worker-1"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="hostname", target="worker-1"), ctx)
         assert result.ok is False
         assert "unavailable" in result.error.lower()
         # Primary target should NOT have been called.
@@ -165,9 +153,7 @@ class TestLazyExtrasConnect:
             open_target=open_target,
         )
 
-        result = await ShellTool().run(
-            ShellArgs(cmd="hostname", target="worker-1"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="hostname", target="worker-1"), ctx)
         assert result.ok is False
         assert "unknown target" in result.error.lower()
         assert opened == []  # never reached open_target

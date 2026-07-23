@@ -25,7 +25,9 @@ def compatibility_matrix(request):
         return denied
     results = run_compatibility_matrix_update() if request.method == "POST" else build_compatibility_matrix()
     compatible = sum(1 for item in results if item["compatible"])
-    return JsonResponse({"success": True, "items": results, "summary": {"total": len(results), "compatible": compatible}})
+    return JsonResponse(
+        {"success": True, "items": results, "summary": {"total": len(results), "compatible": compatible}}
+    )
 
 
 @login_required

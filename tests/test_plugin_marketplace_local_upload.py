@@ -38,12 +38,14 @@ def test_admin_can_upload_local_package_and_install_disabled():
     client.force_login(user)
 
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.uploaded-extension",
-        "name": "Uploaded Extension",
-        "slug": "uploaded-extension",
-        "publisher": {"id": "acme", "name": "Acme"},
-    })
+    manifest.update(
+        {
+            "id": "acme.uploaded-extension",
+            "name": "Uploaded Extension",
+            "slug": "uploaded-extension",
+            "publisher": {"id": "acme", "name": "Acme"},
+        }
+    )
 
     response = client.post(
         "/api/plugins/packages/install-local-upload/",

@@ -12,8 +12,8 @@ _EDITORS = ("nano", "vim", "vi", "mcedit", "joe", "pico", "sudoedit")
 _EDITOR_RE = re.compile(
     r"^(?:sudo\s+)?(?:" + "|".join(re.escape(e) for e in _EDITORS) + r")"
     r"\s+"
-    r"(?:(?:-\S+)\s+)*"   # skip flags like -w, --line=5
-    r"([^\s;|&]+)",        # capture first positional arg (the file path)
+    r"(?:(?:-\S+)\s+)*"  # skip flags like -w, --line=5
+    r"([^\s;|&]+)",  # capture first positional arg (the file path)
     re.IGNORECASE,
 )
 
@@ -69,7 +69,11 @@ def detect_editor_command(raw_command: str) -> dict | None:
 
     sudo = stripped.lower().startswith("sudo")
     # Extract the editor name
-    after_sudo = stripped.split(None, 1)[0].lower() if not sudo else (stripped.split(None, 2)[1].lower() if len(stripped.split()) > 1 else "")
+    after_sudo = (
+        stripped.split(None, 1)[0].lower()
+        if not sudo
+        else (stripped.split(None, 2)[1].lower() if len(stripped.split()) > 1 else "")
+    )
     editor = after_sudo if after_sudo in _EDITORS else "unknown"
 
     return {"editor": editor, "path": path, "sudo": sudo}

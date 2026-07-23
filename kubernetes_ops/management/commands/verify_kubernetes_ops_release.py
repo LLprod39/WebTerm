@@ -18,14 +18,42 @@ class Command(BaseCommand):
         parser.add_argument("--skip-provider-probe", action="store_true", help="Skip live provider probes.")
         parser.add_argument("--skip-sync-dry-run", action="store_true", help="Skip provider sync dry-run.")
         parser.add_argument("--skip-mcp-call", action="store_true", help="Skip Studio Kubernetes MCP smoke call.")
-        parser.add_argument("--skip-action-controls", action="store_true", help="Skip controlled action request safety proof.")
-        parser.add_argument("--skip-post-review-retention", action="store_true", help="Skip Admin action post-review and recording retention proof.")
-        parser.add_argument("--skip-external-evidence-bundle", action="store_true", help="Skip external production evidence bundle artifact check.")
-        parser.add_argument("--skip-interactive-transport-evidence", action="store_true", help="Skip interactive transport prerequisite artifact check.")
-        parser.add_argument("--skip-interactive-live-smoke", action="store_true", help="Skip interactive provider opener live-smoke artifact check.")
-        parser.add_argument("--skip-interactive-shell-streams", action="store_true", help="Skip cluster terminal/node debug provider-stream safety proof.")
-        parser.add_argument("--skip-readonly-rbac-live", action="store_true", help="Skip live kubectl auth can-i proof for read-only RBAC.")
-        parser.add_argument("--no-fail", action="store_true", help="Return exit code 0 even when evidence has blockers.")
+        parser.add_argument(
+            "--skip-action-controls", action="store_true", help="Skip controlled action request safety proof."
+        )
+        parser.add_argument(
+            "--skip-post-review-retention",
+            action="store_true",
+            help="Skip Admin action post-review and recording retention proof.",
+        )
+        parser.add_argument(
+            "--skip-external-evidence-bundle",
+            action="store_true",
+            help="Skip external production evidence bundle artifact check.",
+        )
+        parser.add_argument(
+            "--skip-interactive-transport-evidence",
+            action="store_true",
+            help="Skip interactive transport prerequisite artifact check.",
+        )
+        parser.add_argument(
+            "--skip-interactive-live-smoke",
+            action="store_true",
+            help="Skip interactive provider opener live-smoke artifact check.",
+        )
+        parser.add_argument(
+            "--skip-interactive-shell-streams",
+            action="store_true",
+            help="Skip cluster terminal/node debug provider-stream safety proof.",
+        )
+        parser.add_argument(
+            "--skip-readonly-rbac-live",
+            action="store_true",
+            help="Skip live kubectl auth can-i proof for read-only RBAC.",
+        )
+        parser.add_argument(
+            "--no-fail", action="store_true", help="Return exit code 0 even when evidence has blockers."
+        )
 
     def handle(self, *args, **options):
         user = resolve_kubernetes_mcp_user(options.get("username"))
@@ -58,14 +86,20 @@ class Command(BaseCommand):
         blockers = evidence.get("blockers") or []
         release_summary = evidence.get("release_summary") if isinstance(evidence.get("release_summary"), dict) else {}
         release_scope = evidence.get("release_scope") or {}
-        backend_workstream = evidence.get("backend_workstream") if isinstance(evidence.get("backend_workstream"), dict) else {}
+        backend_workstream = (
+            evidence.get("backend_workstream") if isinstance(evidence.get("backend_workstream"), dict) else {}
+        )
         self.stdout.write(
             f"Kubernetes Ops release evidence: production_ready={evidence.get('production_ready')} "
             f"ready_for_sidebar={evidence.get('ready_for_sidebar')} "
             f"release_scope={release_scope.get('status') or 'unknown'} blockers={len(blockers)}"
         )
         if backend_workstream:
-            next_step = backend_workstream.get("next_backend_step") if isinstance(backend_workstream.get("next_backend_step"), dict) else {}
+            next_step = (
+                backend_workstream.get("next_backend_step")
+                if isinstance(backend_workstream.get("next_backend_step"), dict)
+                else {}
+            )
             blocker_summary = (
                 backend_workstream.get("external_production_blocker_summary")
                 if isinstance(backend_workstream.get("external_production_blocker_summary"), dict)

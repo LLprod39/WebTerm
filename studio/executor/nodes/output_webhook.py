@@ -6,6 +6,7 @@ POSTs pipeline result payload to an external URL.
 
 Migrated from: studio/pipeline_executor.py:_execute_output_webhook()
 """
+
 from __future__ import annotations
 
 import re

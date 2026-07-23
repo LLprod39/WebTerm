@@ -125,7 +125,7 @@ async def chat_api(request):
     """
     Stream assistant chat responses.
 
-    Body: { "message": "...", "model": "auto|gemini|grok|openai|fair|claude|ollama", "chat_id": null|int }
+    Body: { "message": "...", "model": "auto|gemini|grok|openai|claude|ollama", "chat_id": null|int }
     """
     if request.method != "POST":
         return JsonResponse({"error": "Method not allowed"}, status=405)

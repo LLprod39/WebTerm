@@ -34,7 +34,9 @@ class KubernetesOpsStudioDraftTests(TestCase):
             owner=user,
             last_test_ok=True,
         )
-        cluster = K8sCluster.objects.create(name="prod-kz-1", environment="prod", labels={"kube_context": "prod-kz-context"})
+        cluster = K8sCluster.objects.create(
+            name="prod-kz-1", environment="prod", labels={"kube_context": "prod-kz-context"}
+        )
         app = K8sAppRef.objects.create(
             name="payments-api",
             cluster=cluster,
@@ -78,7 +80,9 @@ class KubernetesOpsStudioDraftTests(TestCase):
         )
         self.assertNotIn("kubernetes_rollout_restart", [node.get("data", {}).get("tool_name") for node in nodes])
         self.assertTrue(draft["latest_revision"]["response"]["validation"]["ok"])
-        self.assertEqual(draft["latest_revision"]["response"]["resource_plan"]["skills"][0]["slug"], "kubernetes-safety")
+        self.assertEqual(
+            draft["latest_revision"]["response"]["resource_plan"]["skills"][0]["slug"], "kubernetes-safety"
+        )
         self.assertNotEqual(draft["latest_revision"]["response"]["risk"]["level"], "dangerous")
         self.assertTrue(K8sAuditEvent.objects.filter(action="k8s.diagnosis_draft.create", cluster=cluster).exists())
 

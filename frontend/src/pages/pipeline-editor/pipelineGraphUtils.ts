@@ -15,7 +15,6 @@ export const AGENT_PROVIDER_OPTIONS = [
   { value: "auto", label: "Auto" },
   { value: "gemini", label: "Gemini" },
   { value: "openai", label: "OpenAI" },
-  { value: "fair", label: "FAIR.Hyperion" },
   { value: "grok", label: "Grok" },
   { value: "claude", label: "Claude" },
   { value: "ollama", label: "Ollama" },
@@ -225,9 +224,9 @@ export function isLivePipelineRunStatus(status: string | null | undefined) {
   return status === "running" || status === "pending";
 }
 
-export type ModelProvider = "gemini" | "grok" | "openai" | "fair" | "claude" | "ollama";
+export type ModelProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
 
-export const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "fair", "claude", "ollama"];
+export const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude", "ollama"];
 
 export function isModelProvider(value: string): value is ModelProvider {
   return MODEL_PROVIDERS.includes(value as ModelProvider);

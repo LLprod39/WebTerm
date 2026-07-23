@@ -2,6 +2,7 @@
 SSH Agent Tool for Remote Operations
 Allows the agent to connect to SSH servers and execute commands
 """
+
 import re
 import secrets
 import shlex
@@ -101,31 +102,31 @@ class SSHConnectionManager:
                 nc = effective_network_config
 
                 # Bastion/Jump host
-                bastion = nc.get('network', {}).get('bastion_host')
+                bastion = nc.get("network", {}).get("bastion_host")
                 if bastion:
                     # Format: host:port или host
-                    if ':' in bastion:
-                        jump_host, jump_port = bastion.split(':')
-                        options['jump_host'] = (jump_host, int(jump_port))
+                    if ":" in bastion:
+                        jump_host, jump_port = bastion.split(":")
+                        options["jump_host"] = (jump_host, int(jump_port))
                     else:
-                        options['jump_host'] = bastion
+                        options["jump_host"] = bastion
                     logger.info(f"Using bastion host: {bastion}")
 
                 # Proxy command (для работы через HTTP прокси)
-                proxy = nc.get('proxy', {}).get('http_proxy')
+                proxy = nc.get("proxy", {}).get("http_proxy")
                 if proxy:
                     # Используем ProxyCommand через netcat
                     # Формат прокси: http://proxy.corp.com:8080
-                    proxy_url = proxy.replace('http://', '').replace('https://', '')
-                    if ':' in proxy_url:
-                        proxy_host, proxy_port = proxy_url.split(':')
+                    proxy_url = proxy.replace("http://", "").replace("https://", "")
+                    if ":" in proxy_url:
+                        proxy_host, proxy_port = proxy_url.split(":")
                         # ProxyCommand: nc -X connect -x proxy:port %h %p
-                        options['tunnel'] = (proxy_host, int(proxy_port))
+                        options["tunnel"] = (proxy_host, int(proxy_port))
                     logger.info(f"Using proxy: {proxy}")
 
                 # Environment variables (для команд на удалённом сервере)
                 # Сохраняем для использования в execute
-                if nc.get('environment'):
+                if nc.get("environment"):
                     # Будем добавлять в команды: export VAR=value && command
                     pass
 
@@ -134,12 +135,12 @@ class SSHConnectionManager:
             # - key only -> public key auth
             # - key + password -> encrypted private key passphrase
             if key_path:
-                options['client_keys'] = [key_path]
+                options["client_keys"] = [key_path]
             if password:
                 if key_path:
-                    options['passphrase'] = password
+                    options["passphrase"] = password
                 else:
-                    options['password'] = password
+                    options["password"] = password
 
             conn = await asyncssh.connect(
                 host=normalized_host,
@@ -150,9 +151,9 @@ class SSHConnectionManager:
 
             # Сохраняем network_config вместе с connection для использования в execute
             self.connections[conn_id] = {
-                'connection': conn,
-                'network_config': effective_network_config,
-                'server': server,
+                "connection": conn,
+                "network_config": effective_network_config,
+                "server": server,
             }
             logger.success(f"Connected to {conn_id}")
             return conn_id
@@ -167,8 +168,8 @@ class SSHConnectionManager:
             conn_data = self.connections[conn_id]
             # Поддержка старого формата (прямой connection) и нового (dict)
             if isinstance(conn_data, dict):
-                conn_data['connection'].close()
-                await conn_data['connection'].wait_closed()
+                conn_data["connection"].close()
+                await conn_data["connection"].wait_closed()
             else:
                 conn_data.close()
                 await conn_data.wait_closed()
@@ -191,9 +192,9 @@ class SSHConnectionManager:
             conn_data = self.connections[conn_id]
 
             if isinstance(conn_data, dict):
-                conn = conn_data['connection']
-                network_config = conn_data.get('network_config') or {}
-                server = conn_data.get('server')
+                conn = conn_data["connection"]
+                network_config = conn_data.get("network_config") or {}
+                server = conn_data.get("server")
             else:
                 conn = conn_data
                 network_config = {}
@@ -201,8 +202,8 @@ class SSHConnectionManager:
 
             # Добавляем environment variables из network_config
             final_command = command
-            if network_config.get('environment'):
-                env_vars = network_config['environment']
+            if network_config.get("environment"):
+                env_vars = network_config["environment"]
                 if not isinstance(env_vars, dict):
                     raise ValueError("network_config.environment must be an object")
                 exports = _build_env_exports(env_vars)
@@ -217,10 +218,7 @@ class SSHConnectionManager:
             else:
                 resolved_sudo_auth_mode = getattr(server, "sudo_auth_mode", "none") or "none"
             resolved_sudo_password = sudo_password or ""
-            if (
-                not resolved_sudo_password
-                and str(resolved_sudo_auth_mode).strip().lower() == "stored_password"
-            ):
+            if not resolved_sudo_password and str(resolved_sudo_auth_mode).strip().lower() == "stored_password":
                 try:
                     resolved_sudo_password = await sync_to_async(
                         get_server_sudo_secret,
@@ -255,12 +253,7 @@ class SSHConnectionManager:
             }
         except Exception as e:
             logger.error(f"Command execution failed: {e}")
-            return {
-                "stdout": "",
-                "stderr": str(e),
-                "exit_code": -1,
-                "success": False
-            }
+            return {"stdout": "", "stderr": str(e), "exit_code": -1, "success": False}
 
 
 # Global SSH manager instance
@@ -279,13 +272,16 @@ class SSHConnectTool(BaseTool):
                 ToolParameter(name="host", type="string", description="SSH host address"),
                 ToolParameter(name="username", type="string", description="SSH username"),
                 ToolParameter(name="password", type="string", description="SSH password (optional)", required=False),
-                ToolParameter(name="key_path", type="string", description="Path to SSH private key (optional)", required=False),
+                ToolParameter(
+                    name="key_path", type="string", description="Path to SSH private key (optional)", required=False
+                ),
                 ToolParameter(name="port", type="number", description="SSH port", required=False, default=22),
-            ]
+            ],
         )
 
-    async def execute(self, host: str, username: str, password: str | None = None,
-                     key_path: str | None = None, port: int = 22) -> str:
+    async def execute(
+        self, host: str, username: str, password: str | None = None, key_path: str | None = None, port: int = 22
+    ) -> str:
         """Execute SSH connection"""
         conn_id = await ssh_manager.connect(host, username, password, key_path, port)
         return f"Successfully connected to {conn_id}. Use this ID for subsequent SSH commands."
@@ -308,7 +304,7 @@ class SSHExecuteTool(BaseTool):
                     description="Allow potentially destructive commands (explicit user confirmation required)",
                     required=False,
                 ),
-            ]
+            ],
         )
 
     async def execute(
@@ -328,7 +324,9 @@ class SSHExecuteTool(BaseTool):
             mode="DIRECT",
             allowed=not command_risk.is_dangerous or allow_destructive,
             sandbox_profile="ops_mutation" if command_risk.is_dangerous and allow_destructive else "ops_read",
-            reason="dangerous_command_requires_allow_destructive" if command_risk.is_dangerous and not allow_destructive else "",
+            reason="dangerous_command_requires_allow_destructive"
+            if command_risk.is_dangerous and not allow_destructive
+            else "",
             requires_approval=command_risk.is_dangerous,
             risk_categories=command_risk.categories,
             matched_patterns=command_risk.matched_patterns,
@@ -352,7 +350,12 @@ class SSHExecuteTool(BaseTool):
                     "execution_policy": policy_metadata,
                 },
             )
-            return {"success": False, "stderr": "Команда выглядит опасной. Нужен явный допуск allow_destructive=true.", "stdout": "", "exit_code": -1}
+            return {
+                "success": False,
+                "stderr": "Команда выглядит опасной. Нужен явный допуск allow_destructive=true.",
+                "stdout": "",
+                "exit_code": -1,
+            }
         try:
             result = await ssh_manager.execute(
                 conn_id,
@@ -362,7 +365,9 @@ class SSHExecuteTool(BaseTool):
             )
         except ValueError as exc:
             result = {"success": False, "stderr": str(exc), "stdout": "", "exit_code": -1}
-        output_text = (result.get("stdout") or "") + (("\n" + (result.get("stderr") or "")) if result.get("stderr") else "")
+        output_text = (result.get("stdout") or "") + (
+            ("\n" + (result.get("stderr") or "")) if result.get("stderr") else ""
+        )
         await log_tool_user_activity(
             user_id=audit_ctx.get("user_id"),
             username_snapshot=str(audit_ctx.get("username_snapshot") or ""),
@@ -393,7 +398,7 @@ class SSHDisconnectTool(BaseTool):
             category="ssh",
             parameters=[
                 ToolParameter(name="conn_id", type="string", description="SSH connection ID to close"),
-            ]
+            ],
         )
 
     async def execute(self, conn_id: str) -> str:

@@ -137,7 +137,9 @@ def retention_inventory() -> dict[str, Any]:
                 "path": relative_path,
                 "size": size,
                 "referenced": relative_path in referenced,
-                "modified_at": timezone.datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.get_current_timezone()).isoformat(),
+                "modified_at": timezone.datetime.fromtimestamp(
+                    path.stat().st_mtime, tz=timezone.get_current_timezone()
+                ).isoformat(),
             }
         )
     return {

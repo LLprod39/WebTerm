@@ -33,10 +33,7 @@ BOOTSTRAP_MAX_SERVERS = 15
 
 def resolved_os_kind(server: Server | str | None) -> str:
     """Return a known ServerOsKind or empty string when unresolved."""
-    if isinstance(server, Server):
-        kind = (server.detected_os or "").strip().lower()
-    else:
-        kind = (server or "").strip().lower()
+    kind = (server.detected_os or "").strip().lower() if isinstance(server, Server) else (server or "").strip().lower()
     if kind in VALID_OS_KINDS:
         return kind
     return ""

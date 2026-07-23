@@ -1,4 +1,5 @@
 """Tests for servers.services.terminal_ai.policy (F2-6 + F2-8)."""
+
 from __future__ import annotations
 
 import pytest

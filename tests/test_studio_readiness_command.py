@@ -114,7 +114,9 @@ def test_check_studio_readiness_command_can_scope_to_pipeline_id():
     stdout = io.StringIO()
 
     with pytest.raises(CommandError, match="status=not_ready"):
-        call_command("check_studio_readiness", "--username", user.username, "--pipeline-id", str(broken.id), stdout=stdout)
+        call_command(
+            "check_studio_readiness", "--username", user.username, "--pipeline-id", str(broken.id), stdout=stdout
+        )
 
     output = stdout.getvalue()
     assert f"pipeline_ids={broken.id}" in output

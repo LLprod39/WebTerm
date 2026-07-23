@@ -26,7 +26,11 @@ urlpatterns = [
     path("pipelines/", pipeline_views.api_pipelines, name="pipelines"),
     path("pipelines/assistant/", pipeline_assistant_views.api_pipeline_assistant, name="pipeline_assistant"),
     path("assistant/drafts/", pipeline_draft_views.api_pipeline_drafts, name="pipeline_assistant_drafts"),
-    path("assistant/drafts/<int:draft_id>/", pipeline_draft_views.api_pipeline_draft_detail, name="pipeline_assistant_draft_detail"),
+    path(
+        "assistant/drafts/<int:draft_id>/",
+        pipeline_draft_views.api_pipeline_draft_detail,
+        name="pipeline_assistant_draft_detail",
+    ),
     path(
         "assistant/drafts/<int:draft_id>/revise/",
         pipeline_draft_views.api_pipeline_draft_revise,

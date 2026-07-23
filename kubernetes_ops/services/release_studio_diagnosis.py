@@ -22,7 +22,11 @@ def build_kubernetes_release_studio_diagnosis_draft_evidence(user, enabled: bool
     if not enabled:
         return {"success": False, "status": "skipped", "reason": "studio diagnosis draft proof skipped"}
     if not user:
-        return {"success": False, "status": "missing", "reason": "staff user is required for Studio diagnosis draft proof"}
+        return {
+            "success": False,
+            "status": "missing",
+            "reason": "staff user is required for Studio diagnosis draft proof",
+        }
     app = K8sAppRef.objects.select_related("cluster").order_by("id").first()
     if app is None:
         return {"success": False, "status": "missing", "reason": "no Kubernetes app target for diagnosis draft proof"}

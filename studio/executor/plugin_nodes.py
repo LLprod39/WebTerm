@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from asgiref.sync import sync_to_async
 
@@ -70,7 +70,9 @@ async def sync_plugin_node_registry_async() -> None:
 
 def clear_plugin_node_registry() -> None:
     snapshot = registry.snapshot()
-    filtered = {node_type: node_class for node_type, node_class in snapshot.items() if not node_type.startswith("plugin/")}
+    filtered = {
+        node_type: node_class for node_type, node_class in snapshot.items() if not node_type.startswith("plugin/")
+    }
     if len(filtered) != len(snapshot):
         registry.replace_all(filtered)
 

@@ -116,8 +116,13 @@ def scan_package_entries(entries: list[tuple[str, int]], *, allow_sandboxed_code
                     message="Package entry path escapes the archive root.",
                 )
             )
-        if path_name in BLOCKED_NAMES or (path_name in DEPENDENCY_MANIFEST_NAMES and not allow_sandboxed_code) or (
-            path_name.endswith(BLOCKED_SUFFIXES) and not (allow_sandboxed_code and _sandbox_code_entry_allowed(name))
+        if (
+            path_name in BLOCKED_NAMES
+            or (path_name in DEPENDENCY_MANIFEST_NAMES and not allow_sandboxed_code)
+            or (
+                path_name.endswith(BLOCKED_SUFFIXES)
+                and not (allow_sandboxed_code and _sandbox_code_entry_allowed(name))
+            )
         ):
             findings.append(
                 StaticScanFinding(

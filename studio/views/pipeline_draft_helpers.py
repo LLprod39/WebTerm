@@ -28,7 +28,9 @@ CLOSED_DRAFT_STATUSES = {
 
 
 def draft_queryset_for_user(user):
-    qs = PipelineDraftSession.objects.select_related("owner", "source_pipeline", "applied_pipeline").prefetch_related("revisions")
+    qs = PipelineDraftSession.objects.select_related("owner", "source_pipeline", "applied_pipeline").prefetch_related(
+        "revisions"
+    )
     if getattr(user, "is_staff", False):
         return qs.order_by("-updated_at", "-id")
     return qs.filter(owner=user).order_by("-updated_at", "-id")
@@ -71,7 +73,9 @@ def revision_from_response(
         assumptions=response.get("assumptions") if isinstance(response.get("assumptions"), list) else [],
         questions=response.get("questions") if isinstance(response.get("questions"), list) else [],
         resource_plan=response.get("resource_plan") if isinstance(response.get("resource_plan"), dict) else {},
-        node_explanations=response.get("node_explanations") if isinstance(response.get("node_explanations"), dict) else {},
+        node_explanations=response.get("node_explanations")
+        if isinstance(response.get("node_explanations"), dict)
+        else {},
         warnings=response.get("warnings") if isinstance(response.get("warnings"), list) else [],
         patch_summary=str(response.get("patch_summary") or ""),
         suggested_next_actions=(

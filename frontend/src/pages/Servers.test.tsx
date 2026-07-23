@@ -1,22 +1,12 @@
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import type { HTMLAttributes, ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as api from "@/lib/api";
 import {
   activateTab,
-  getActionsContainer,
-  getSparklesButton,
   renderServers,
   setupServersPageApiMocks,
 } from "@/pages/servers/serversPageTestHarness";
-
-vi.mock("framer-motion", () => ({
-  AnimatePresence: ({ children }: { children: ReactNode }) => <>{children}</>,
-  motion: {
-    div: ({ children, ...props }: HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
-  },
-}));
 
 vi.mock("@/lib/api", () => ({
   addServerGroupMember: vi.fn(),
@@ -140,7 +130,11 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.click(getSparklesButton(getActionsContainer()));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Advanced" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Server Rules" }));
     expect(await screen.findByText("Scope: Server")).toBeInTheDocument();
@@ -219,7 +213,11 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.click(getSparklesButton(getActionsContainer()));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Advanced" }));
     fireEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
 
     expect(screen.getByText("Canonical Profile")).toBeInTheDocument();
@@ -240,9 +238,8 @@ describe("Servers page rules and translations", () => {
     expect(screen.getByRole("tab", { name: "Группа" })).toBeInTheDocument();
 
     await activateTab("Плейбуки");
-    expect(await screen.findByText("Ansible playbooks")).toBeInTheDocument();
-    expect(screen.getByText(/YAML · multi-host run/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Новый" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Playbooks" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Новый playbook" })).toBeInTheDocument();
   });
 
   it("uses the redesigned server form with inline validation and custom selects", async () => {
@@ -251,8 +248,7 @@ describe("Servers page rules and translations", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
 
     expect(await screen.findByRole("dialog", { name: "Create Server" })).toBeInTheDocument();
-    expect(screen.getByText("Required fields are missing")).toBeInTheDocument();
-    expect(screen.getAllByText("Enter a server name.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Enter a server name.").length).toBeGreaterThan(1);
     expect(document.querySelector("select")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/Name/), { target: { value: "edge-01" } });
@@ -276,7 +272,11 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.click(screen.getByRole("button", { name: "Edit server prod-web-01" }));
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Server" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
 

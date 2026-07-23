@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -156,13 +156,18 @@ def load_kubernetes_interactive_live_smoke_artifact(path: Path | None = None) ->
         errors.append("dangerous live action flag is not false")
     if payload.get("live_provider_stream_opened") is not False:
         errors.append("live provider stream opened during live-smoke artifact collection")
-    simulated = payload.get("simulated_provider_streams") if isinstance(payload.get("simulated_provider_streams"), dict) else {}
+    simulated = (
+        payload.get("simulated_provider_streams") if isinstance(payload.get("simulated_provider_streams"), dict) else {}
+    )
     if simulated.get("status") != "ready" or simulated.get("success") is not True:
         errors.append("simulated provider stream smoke is not ready")
     if simulated and simulated.get("provider_requests_safe") is not True:
         errors.append("simulated provider stream request summary is unsafe")
     errors.extend(_contract_errors(payload))
-    if payload.get("live_smoke_required") is True and payload.get("production_live_provider_evidence_ref_present") is not True:
+    if (
+        payload.get("live_smoke_required") is True
+        and payload.get("production_live_provider_evidence_ref_present") is not True
+    ):
         errors.append("production interactive live-smoke evidence ref is required")
     age_seconds, age_error = _artifact_age(payload)
     if age_error:
@@ -182,7 +187,9 @@ def load_kubernetes_interactive_live_smoke_artifact(path: Path | None = None) ->
         "admin_interactive_transport": payload.get("admin_interactive_transport")
         if isinstance(payload.get("admin_interactive_transport"), dict)
         else {},
-        "live_transport_contracts": payload.get("live_transport_contracts") if isinstance(payload.get("live_transport_contracts"), list) else [],
+        "live_transport_contracts": payload.get("live_transport_contracts")
+        if isinstance(payload.get("live_transport_contracts"), list)
+        else [],
         "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {},
         "production_live_provider_evidence": bool(payload.get("production_live_provider_evidence")),
         "live_smoke_required": bool(payload.get("live_smoke_required")),
@@ -190,16 +197,14 @@ def load_kubernetes_interactive_live_smoke_artifact(path: Path | None = None) ->
     }
 
 
-def _live_transport_contracts(*, transport: dict[str, Any], simulated: dict[str, Any], production: bool, evidence_present: bool) -> list[dict[str, Any]]:
+def _live_transport_contracts(
+    *, transport: dict[str, Any], simulated: dict[str, Any], production: bool, evidence_present: bool
+) -> list[dict[str, Any]]:
     simulated_checks = {
-        str(item.get("id") or ""): item
-        for item in simulated.get("checks") or []
-        if isinstance(item, dict)
+        str(item.get("id") or ""): item for item in simulated.get("checks") or [] if isinstance(item, dict)
     }
     transport_reports = {
-        str(item.get("id") or ""): item
-        for item in transport.get("transports") or []
-        if isinstance(item, dict)
+        str(item.get("id") or ""): item for item in transport.get("transports") or [] if isinstance(item, dict)
     }
     contracts: list[dict[str, Any]] = []
     for spec in LIVE_TRANSPORT_CONTRACTS:
@@ -226,7 +231,9 @@ def _live_transport_contracts(*, transport: dict[str, Any], simulated: dict[str,
 
 def _coverage_summary(live_transport_contracts: list[dict[str, Any]]) -> dict[str, Any]:
     transports = [str(item.get("transport") or "") for item in live_transport_contracts]
-    simulated_check_ids = [str(item.get("simulated_check_id") or "") for item in live_transport_contracts if item.get("simulated_check_id")]
+    simulated_check_ids = [
+        str(item.get("simulated_check_id") or "") for item in live_transport_contracts if item.get("simulated_check_id")
+    ]
     expected_transports = [str(item["transport"]) for item in LIVE_TRANSPORT_CONTRACTS]
     expected_check_ids = [str(item["simulated_check_id"]) for item in LIVE_TRANSPORT_CONTRACTS]
     simulated_complete = (
@@ -251,7 +258,9 @@ def _coverage_summary(live_transport_contracts: list[dict[str, Any]]) -> dict[st
 
 
 def _contract_errors(payload: dict[str, Any]) -> list[str]:
-    contracts = payload.get("live_transport_contracts") if isinstance(payload.get("live_transport_contracts"), list) else []
+    contracts = (
+        payload.get("live_transport_contracts") if isinstance(payload.get("live_transport_contracts"), list) else []
+    )
     coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
     errors: list[str] = []
     if len(contracts) != len(LIVE_TRANSPORT_CONTRACTS):
@@ -262,11 +271,16 @@ def _contract_errors(payload: dict[str, Any]) -> list[str]:
         errors.append("production_interactive_evidence_contract:incomplete")
     for spec in LIVE_TRANSPORT_CONTRACTS:
         transport_id = str(spec["transport"])
-        matching = next((item for item in contracts if isinstance(item, dict) and item.get("transport") == transport_id), None)
+        matching = next(
+            (item for item in contracts if isinstance(item, dict) and item.get("transport") == transport_id), None
+        )
         if not matching:
             errors.append(f"live_transport_contract:{transport_id}:missing")
             continue
-        if matching.get("simulated_check_id") != spec["simulated_check_id"] or matching.get("simulated_check_ready") is not True:
+        if (
+            matching.get("simulated_check_id") != spec["simulated_check_id"]
+            or matching.get("simulated_check_ready") is not True
+        ):
             errors.append(f"simulated_provider_opener:{transport_id}:missing")
         if not matching.get("production_evidence_required_items"):
             errors.append(f"production_interactive_evidence:{transport_id}:missing")
@@ -319,11 +333,18 @@ def _simulated_provider_stream_smoke() -> dict[str, Any]:
             "persistent_provider_rows": K8sProvider.objects.count() - initial_provider_count,
         }
     except Exception as exc:
-        return {"success": False, "status": "error", "error": str(exc), "persistent_provider_rows": K8sProvider.objects.count() - initial_provider_count}
+        return {
+            "success": False,
+            "status": "error",
+            "error": str(exc),
+            "persistent_provider_rows": K8sProvider.objects.count() - initial_provider_count,
+        }
 
 
 def _exec_stream_check(*, provider: K8sProvider, requests: list[dict[str, Any]]) -> dict[str, Any]:
-    captured = _capture_transport({"events": [{"stream": "stdout", "data": "TOKEN=exec-smoke-secret"}, {"stream": "status", "exit_code": 0}]})
+    captured = _capture_transport(
+        {"events": [{"stream": "stdout", "data": "TOKEN=exec-smoke-secret"}, {"stream": "status", "exit_code": 0}]}
+    )
     stream = open_provider_exec_stream(
         provider,
         "/k8s/clusters/c-live-smoke/api/v1/namespaces/payments/pods/api-1/exec",
@@ -341,7 +362,10 @@ def _exec_stream_check(*, provider: K8sProvider, requests: list[dict[str, Any]])
     requests.append(request)
     return {
         "id": "provider_exec_stream_opener",
-        "success": request["method"] == "POST" and request["body_keys"] == ["command", "container", "stdin", "tty"] and stdin_ok and event.stream == "stdout",
+        "success": request["method"] == "POST"
+        and request["body_keys"] == ["command", "container", "stdin", "tty"]
+        and stdin_ok
+        and event.stream == "stdout",
         "method": request["method"],
         "body_keys": request["body_keys"],
         "stdin_supported": stdin_ok,
@@ -359,14 +383,19 @@ def _port_forward_tunnel_check(*, provider: K8sProvider, requests: list[dict[str
         duration_seconds=60,
         transport=captured["transport"],
     )
-    client_data_ok = stream.write_client_data(b"GET /health HTTP/1.1\r\nAuthorization: Bearer port-forward-secret\r\n\r\n")
+    client_data_ok = stream.write_client_data(
+        b"GET /health HTTP/1.1\r\nAuthorization: Bearer port-forward-secret\r\n\r\n"
+    )
     event = stream.read_event(max_bytes=4096)
     stream.close()
     request = _request_summary(captured, operation="port_forward_tunnel")
     requests.append(request)
     return {
         "id": "provider_port_forward_tunnel_opener",
-        "success": request["method"] == "POST" and request["body_keys"] == ["duration_seconds", "target"] and client_data_ok and bool(event.data),
+        "success": request["method"] == "POST"
+        and request["body_keys"] == ["duration_seconds", "target"]
+        and client_data_ok
+        and bool(event.data),
         "method": request["method"],
         "body_keys": request["body_keys"],
         "client_data_supported": client_data_ok,
@@ -374,8 +403,12 @@ def _port_forward_tunnel_check(*, provider: K8sProvider, requests: list[dict[str
     }
 
 
-def _interactive_shell_check(*, provider: K8sProvider, requests: list[dict[str, Any]], operation: str, path: str, target: dict[str, Any]) -> dict[str, Any]:
-    captured = _capture_transport({"events": [{"stream": "stdout", "data": "TOKEN=shell-smoke-secret"}, {"stream": "status", "exit_code": 0}]})
+def _interactive_shell_check(
+    *, provider: K8sProvider, requests: list[dict[str, Any]], operation: str, path: str, target: dict[str, Any]
+) -> dict[str, Any]:
+    captured = _capture_transport(
+        {"events": [{"stream": "stdout", "data": "TOKEN=shell-smoke-secret"}, {"stream": "status", "exit_code": 0}]}
+    )
     stream = open_provider_interactive_shell_stream(
         provider,
         path,
@@ -393,7 +426,10 @@ def _interactive_shell_check(*, provider: K8sProvider, requests: list[dict[str, 
     requests.append(request)
     return {
         "id": f"provider_{operation}_opener",
-        "success": request["method"] == "POST" and request["operation"] == operation and stdin_ok and event.stream == "stdout",
+        "success": request["method"] == "POST"
+        and request["operation"] == operation
+        and stdin_ok
+        and event.stream == "stdout",
         "method": request["method"],
         "operation": request["operation"],
         "target_keys": request["target_keys"],
@@ -450,11 +486,14 @@ def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if checked_at is None:
         return None, "checked_at is invalid"
     if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=datetime_timezone.utc)
+        checked_at = timezone.make_aware(checked_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:
-        return age_seconds, f"interactive live-smoke artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}"
+        return (
+            age_seconds,
+            f"interactive live-smoke artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
+        )
     return age_seconds, ""
 
 

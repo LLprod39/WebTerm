@@ -60,8 +60,14 @@ def test_release_evidence_embeds_safe_production_execution_plan():
     assert backend_workstream["external_production_blocker_summary"]["primary_category"] == "production_scope"
     external_blocker_ids = {item["id"] for item in backend_workstream["external_production_blockers"]}
     assert {"production_scope", "release_artifact", "release_evidence"} <= external_blocker_ids
-    assert build_kubernetes_release_evidence_artifact_safety_report({"production_execution_plan": plan})["status"] == "ready"
-    assert build_kubernetes_release_evidence_artifact_safety_report({"backend_workstream": backend_workstream})["status"] == "ready"
+    assert (
+        build_kubernetes_release_evidence_artifact_safety_report({"production_execution_plan": plan})["status"]
+        == "ready"
+    )
+    assert (
+        build_kubernetes_release_evidence_artifact_safety_report({"backend_workstream": backend_workstream})["status"]
+        == "ready"
+    )
 
 
 def test_release_evidence_backend_workstream_requires_completion_audit_gate():
@@ -88,9 +94,7 @@ def test_release_evidence_backend_workstream_requires_completion_audit_gate():
             ],
             "runtime_missing_required_checks": [],
             "production_scope_readiness_checks": [],
-            "production_evidence_checks": [
-                {"id": "release_artifact", "complete": False, "detail": "missing"}
-            ],
+            "production_evidence_checks": [{"id": "release_artifact", "complete": False, "detail": "missing"}],
         },
     }
 

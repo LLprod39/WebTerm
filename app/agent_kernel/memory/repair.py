@@ -52,7 +52,12 @@ def detect_fact_conflicts(existing_records: list[dict], new_facts: list[dict]) -
             current_title = (current.get("title") or "").strip().lower()
             current_category = (current.get("category") or "").strip().lower()
             current_content = (current.get("content") or "").strip()
-            if title == current_title and category == current_category and current_content and current_content != content:
+            if (
+                title == current_title
+                and category == current_category
+                and current_content
+                and current_content != content
+            ):
                 conflicts.append(
                     {
                         "title": fact.get("title"),

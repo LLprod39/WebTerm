@@ -27,7 +27,9 @@ from kubernetes_ops.services.admin_resources import AdminResourceError
 from kubernetes_ops.services.admin_workload_actions import restart_kubernetes_workload, scale_kubernetes_workload
 
 
-def execute_approved_action_request(*, action_request: K8sActionRequest, user, data: dict[str, Any]) -> K8sActionRequest:
+def execute_approved_action_request(
+    *, action_request: K8sActionRequest, user, data: dict[str, Any]
+) -> K8sActionRequest:
     if not bool(getattr(settings, "KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED", False)):
         return block_kubernetes_action_execution(action_request=action_request, user=user)
     _ensure_action_request_status(
@@ -61,7 +63,9 @@ def execute_approved_action_request(*, action_request: K8sActionRequest, user, d
         )
     target = action_request.target or {}
     try:
-        execution = _execute_workload_action(action_request=action_request, user=user, session_id=session_id, target=target, data=data)
+        execution = _execute_workload_action(
+            action_request=action_request, user=user, session_id=session_id, target=target, data=data
+        )
     except AdminResourceError as exc:
         raise ActionRequestValidationError(
             str(exc),
@@ -70,9 +74,17 @@ def execute_approved_action_request(*, action_request: K8sActionRequest, user, d
         ) from exc
 
     executed_at = timezone.now()
-    verification_plan = build_native_action_verification_plan(action_request=action_request, execution=execution, created_at=executed_at)
+    verification_plan = build_native_action_verification_plan(
+        action_request=action_request, execution=execution, created_at=executed_at
+    )
     preview = action_request.preview if isinstance(action_request.preview, dict) else {}
-    rollback_plan = preview.get("rollback_plan") if isinstance(preview.get("rollback_plan"), dict) else build_action_rollback_plan(action=action_request.action, target=action_request.target or {}, preview=preview)
+    rollback_plan = (
+        preview.get("rollback_plan")
+        if isinstance(preview.get("rollback_plan"), dict)
+        else build_action_rollback_plan(
+            action=action_request.action, target=action_request.target or {}, preview=preview
+        )
+    )
     action_request.status = K8sActionRequest.STATUS_EXECUTED_NATIVE
     action_request.execution_policy = {
         **(action_request.execution_policy or {}),
@@ -93,7 +105,9 @@ def execute_approved_action_request(*, action_request: K8sActionRequest, user, d
         "verified": False,
         "requires_verification": True,
         "operation": execution.get("operation"),
-        "dry_run_action_id": reference_action_text(((execution.get("dry_run_proof") or {}).get("id")) or target.get("dry_run_action_id") or ""),
+        "dry_run_action_id": reference_action_text(
+            ((execution.get("dry_run_proof") or {}).get("id")) or target.get("dry_run_action_id") or ""
+        ),
         "dry_run_bypassed": bool((execution.get("policy") or {}).get("dry_run_bypassed")),
         "replicas": execution.get("replicas"),
         "patch_type": execution.get("patch_type"),
@@ -109,7 +123,9 @@ def execute_approved_action_request(*, action_request: K8sActionRequest, user, d
     return action_request
 
 
-def _execute_workload_action(*, action_request: K8sActionRequest, user, session_id: str, target: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+def _execute_workload_action(
+    *, action_request: K8sActionRequest, user, session_id: str, target: dict[str, Any], data: dict[str, Any]
+) -> dict[str, Any]:
     common = {
         "user": user,
         "session_id": session_id,
@@ -123,7 +139,9 @@ def _execute_workload_action(*, action_request: K8sActionRequest, user, session_
     if action_request.action == K8sActionRequest.ACTION_K8S_RESOURCE_APPLY:
         manifest = data.get("manifest")
         if not isinstance(manifest, dict):
-            raise ActionRequestValidationError("manifest is required for native apply execution.", code="manifest_required")
+            raise ActionRequestValidationError(
+                "manifest is required for native apply execution.", code="manifest_required"
+            )
         return apply_kubernetes_resource(
             user=user,
             session_id=session_id,
@@ -135,7 +153,9 @@ def _execute_workload_action(*, action_request: K8sActionRequest, user, session_
             resource=str(target.get("resource") or ""),
         )
     if action_request.action == K8sActionRequest.ACTION_K8S_RESOURCE_PATCH:
-        return patch_kubernetes_resource(**common, patch_body=target.get("patch_body"), patch_type=str(target.get("patch_type") or "merge"))
+        return patch_kubernetes_resource(
+            **common, patch_body=target.get("patch_body"), patch_type=str(target.get("patch_type") or "merge")
+        )
     if action_request.action == K8sActionRequest.ACTION_K8S_RESOURCE_DELETE:
         return delete_kubernetes_resource(
             **common,

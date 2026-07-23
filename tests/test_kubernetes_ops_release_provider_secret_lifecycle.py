@@ -50,7 +50,10 @@ def test_kubernetes_release_evidence_provider_secret_lifecycle_is_rollback_only(
     assert lifecycle["persistent_rows"] is False
     assert lifecycle["checks"]["plaintext_not_serialized"] is True
     assert set(K8sProvider.objects.values_list("id", flat=True)) == before_provider_ids
-    assert set(ManagedSecret.objects.filter(namespace=KUBERNETES_PROVIDER_TOKEN_NAMESPACE).values_list("id", flat=True)) == before_secret_ids
+    assert (
+        set(ManagedSecret.objects.filter(namespace=KUBERNETES_PROVIDER_TOKEN_NAMESPACE).values_list("id", flat=True))
+        == before_secret_ids
+    )
 
 
 @pytest.mark.django_db

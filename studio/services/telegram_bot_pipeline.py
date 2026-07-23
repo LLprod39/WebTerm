@@ -60,9 +60,7 @@ def build_telegram_bot_nodes() -> list[dict]:
                     "targets an unknown server, or could be destructive without confirmation."
                 ),
                 "prompt": (
-                    "Incoming Telegram message from {tg_user_name}:\n\n"
-                    "{user_task}\n\n"
-                    "Return the JSON analysis."
+                    "Incoming Telegram message from {tg_user_name}:\n\n{user_task}\n\nReturn the JSON analysis."
                 ),
             },
         },
@@ -84,11 +82,7 @@ def build_telegram_bot_nodes() -> list[dict]:
             "position": {"x": 960, "y": 80},
             "data": {
                 "label": "Ask Clarifying Question",
-                "message": (
-                    "🤔 *Уточняющий вопрос*\n\n"
-                    "{all_outputs}\n\n"
-                    "_Ответьте на это сообщение текстом._"
-                ),
+                "message": ("🤔 *Уточняющий вопрос*\n\n{all_outputs}\n\n_Ответьте на это сообщение текстом._"),
             },
         },
         {
@@ -98,9 +92,7 @@ def build_telegram_bot_nodes() -> list[dict]:
             "data": {
                 "label": "Wait for Clarification",
                 "message": (
-                    "⏳ *Ожидание уточнения*\n\n"
-                    "Пайплайн: *{pipeline_name}* (#{run_id})\n\n"
-                    "Жду вашего ответа..."
+                    "⏳ *Ожидание уточнения*\n\nПайплайн: *{pipeline_name}* (#{run_id})\n\nЖду вашего ответа..."
                 ),
                 "timeout_minutes": 120,
             },
@@ -137,9 +129,7 @@ def build_telegram_bot_nodes() -> list[dict]:
                     "6. Verify the result.\n"
                     "7. Return a concise Russian-language summary: what was done, result, warnings."
                 ),
-                "expected_output": (
-                    "Отчёт о выполнении: что сделано, результат, статус серверов, предупреждения."
-                ),
+                "expected_output": ("Отчёт о выполнении: что сделано, результат, статус серверов, предупреждения."),
             },
         },
         {
@@ -154,11 +144,7 @@ def build_telegram_bot_nodes() -> list[dict]:
             "position": {"x": 1920, "y": 400},
             "data": {
                 "label": "Report to User",
-                "message": (
-                    "📊 *Отчёт по задаче*\n"
-                    "*Пайплайн:* {pipeline_name} | *Запуск:* #{run_id}\n\n"
-                    "{all_outputs}"
-                ),
+                "message": ("📊 *Отчёт по задаче*\n*Пайплайн:* {pipeline_name} | *Запуск:* #{run_id}\n\n{all_outputs}"),
             },
         },
     ]

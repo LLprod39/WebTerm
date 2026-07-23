@@ -116,7 +116,13 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 verb=K8sAdminAction.VERB_DRY_RUN_APPLY,
                 status=K8sAdminAction.STATUS_DRY_RUN,
                 request_payload_sanitized={
-                    "target": {"api_version": "apps/v1", "kind": "Deployment", "resource": "deployments", "namespace": "release-evidence", "name": "restart-smoke"},
+                    "target": {
+                        "api_version": "apps/v1",
+                        "kind": "Deployment",
+                        "resource": "deployments",
+                        "namespace": "release-evidence",
+                        "name": "restart-smoke",
+                    },
                     "manifest_fingerprint": manifest_fingerprint(apply_manifest),
                     "submitted_top_level_fields": sorted(apply_manifest.keys()),
                     "redacted": False,
@@ -149,7 +155,11 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 data={
                     "action": K8sActionRequest.ACTION_K8S_WORKLOAD_SCALE,
                     "reason": "release evidence scale smoke",
-                    "target": {"workload_id": f"workload_{workload.id}", "replicas": 2, "token": "release-secret-token"},
+                    "target": {
+                        "workload_id": f"workload_{workload.id}",
+                        "replicas": 2,
+                        "token": "release-secret-token",
+                    },
                 },
             )
             patch_request = create_kubernetes_action_request(
@@ -234,11 +244,19 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
             terminal_verify_rejected = _terminal_verify_rejected(blocked_request, user)
             restart_verification_plan = build_native_action_verification_plan(
                 action_request=action_request,
-                execution={"operation": "restart", "target": action_request.target, "action": {"status": K8sAdminAction.STATUS_COMPLETED}},
+                execution={
+                    "operation": "restart",
+                    "target": action_request.target,
+                    "action": {"status": K8sAdminAction.STATUS_COMPLETED},
+                },
             )
             apply_verification_plan = build_native_action_verification_plan(
                 action_request=apply_request,
-                execution={"operation": "apply", "target": apply_request.target, "action": {"status": K8sAdminAction.STATUS_COMPLETED}},
+                execution={
+                    "operation": "apply",
+                    "target": apply_request.target,
+                    "action": {"status": K8sAdminAction.STATUS_COMPLETED},
+                },
             )
             native_action = K8sAdminAction.objects.create(
                 session=dry_run_session,
@@ -291,11 +309,18 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "admin_action_id": str(native_action.action_id),
                 "verification_plan": build_native_action_verification_plan(
                     action_request=native_evaluation_request,
-                    execution={"operation": "restart", "target": native_evaluation_request.target, "action": {"id": str(native_action.action_id), "status": K8sAdminAction.STATUS_COMPLETED}},
+                    execution={
+                        "operation": "restart",
+                        "target": native_evaluation_request.target,
+                        "action": {"id": str(native_action.action_id), "status": K8sAdminAction.STATUS_COMPLETED},
+                    },
                     created_at=executed_at,
                 ),
             }
-            native_evaluation_request.execution_policy = {"native_execution_enabled": True, "native_execution_performed_by_webterm": True}
+            native_evaluation_request.execution_policy = {
+                "native_execution_enabled": True,
+                "native_execution_performed_by_webterm": True,
+            }
             native_evaluation_request.save(update_fields=["status", "report", "execution_policy", "updated_at"])
             native_evaluated_request = record_native_action_verification_evaluation(
                 action_request=native_evaluation_request,
@@ -332,30 +357,46 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "scale_target_redacted": scale_request.target.get("token", "[redacted]") == "[redacted]",
                 "apply_request_status": apply_request.status,
                 "apply_preview_blast_radius": apply_request.preview.get("blast_radius"),
-                "apply_manifest_not_stored": "manifest" not in apply_request.target and "release-secret-token" not in str(apply_request.target),
-                "apply_dry_run_proof_linked": apply_request.target.get("dry_run_action_id") == str(dry_run_proof.action_id),
+                "apply_manifest_not_stored": "manifest" not in apply_request.target
+                and "release-secret-token" not in str(apply_request.target),
+                "apply_dry_run_proof_linked": apply_request.target.get("dry_run_action_id")
+                == str(dry_run_proof.action_id),
                 "patch_request_status": patch_request.status,
                 "patch_preview_blast_radius": patch_request.preview.get("blast_radius"),
                 "patch_preview_shape": patch_request.preview.get("patch_shape", {}).get("body_shape"),
                 "delete_request_status": delete_request.status,
                 "delete_preview_blast_radius": delete_request.preview.get("blast_radius"),
-                "delete_confirmation_stored": delete_request.target.get("confirmation") == "delete Deployment release-evidence/restart-smoke",
+                "delete_confirmation_stored": delete_request.target.get("confirmation")
+                == "delete Deployment release-evidence/restart-smoke",
                 "rollback_plan_status": (action_request.preview.get("rollback_plan") or {}).get("status"),
                 "production_restart_template_status": production_restart_template.get("status"),
-                "production_restart_template_approval_required": bool((production_restart_template.get("approval") or {}).get("required")),
-                "production_restart_template_verification_required": bool((production_restart_template.get("verification") or {}).get("required")),
-                "production_restart_template_report_required": bool((production_restart_template.get("report") or {}).get("required")),
-                "production_restart_template_safe": production_rollout_restart_template_is_safe(production_restart_template),
-                "rollback_scale_previous_replicas": (scale_request.preview.get("rollback_plan") or {}).get("previous_replicas"),
-                "rollback_apply_requires_dry_run": "rollback_dry_run_action_id" in list((apply_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
-                "rollback_delete_requires_restore_source": "restore_source_ref" in list((delete_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
+                "production_restart_template_approval_required": bool(
+                    (production_restart_template.get("approval") or {}).get("required")
+                ),
+                "production_restart_template_verification_required": bool(
+                    (production_restart_template.get("verification") or {}).get("required")
+                ),
+                "production_restart_template_report_required": bool(
+                    (production_restart_template.get("report") or {}).get("required")
+                ),
+                "production_restart_template_safe": production_rollout_restart_template_is_safe(
+                    production_restart_template
+                ),
+                "rollback_scale_previous_replicas": (scale_request.preview.get("rollback_plan") or {}).get(
+                    "previous_replicas"
+                ),
+                "rollback_apply_requires_dry_run": "rollback_dry_run_action_id"
+                in list((apply_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
+                "rollback_delete_requires_restore_source": "restore_source_ref"
+                in list((delete_request.preview.get("rollback_plan") or {}).get("evidence_required") or []),
                 "rollback_plan_payload_safe": all(
                     rollback_plan_is_payload_safe(request.preview.get("rollback_plan") or {})
                     for request in [action_request, scale_request, apply_request, patch_request, delete_request]
                 ),
                 "native_execution_enabled": bool(approved_request.execution_policy.get("native_execution_enabled")),
                 "external_verification_status": verified_request.status,
-                "external_verification_redacted": verified_request.report.get("evidence", {}).get("token") == "[redacted]",
+                "external_verification_redacted": verified_request.report.get("evidence", {}).get("token")
+                == "[redacted]",
                 "terminal_execute_rejected": terminal_execute_rejected,
                 "blocked_execution_status": blocked_request.status,
                 "blocked_execution_verified": bool(blocked_request.report.get("verified")),
@@ -363,17 +404,24 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "native_verification_plan_status": restart_verification_plan.get("status"),
                 "native_verification_plan_check_ids": list(restart_verification_plan.get("check_ids") or []),
                 "apply_verification_plan_check_ids": list(apply_verification_plan.get("check_ids") or []),
-                "native_verification_auto_status": (native_evaluated_request.report.get("verification_plan") or {}).get("status"),
+                "native_verification_auto_status": (native_evaluated_request.report.get("verification_plan") or {}).get(
+                    "status"
+                ),
                 "native_verification_auto_request_status": native_evaluated_request.status,
-                "native_verification_auto_recorded": bool(native_evaluated_request.execution_policy.get("native_verification_auto_recorded")),
+                "native_verification_auto_recorded": bool(
+                    native_evaluated_request.execution_policy.get("native_verification_auto_recorded")
+                ),
                 "native_verification_auto_check_statuses": [
                     item.get("status")
                     for item in (native_evaluated_request.report.get("verification_plan") or {}).get("checks", [])
                     if isinstance(item, dict)
                 ],
                 "restricted_write_gate_required": bool(restricted_gate_missing.get("required")),
-                "restricted_write_gate_blocks_without_ref": restricted_gate_missing.get("blocker") == "restricted_credential_evidence_required",
-                "restricted_write_gate_allows_with_ref": bool(restricted_gate_ready.get("ready") and restricted_gate_ready.get("evidence_ref_present")),
+                "restricted_write_gate_blocks_without_ref": restricted_gate_missing.get("blocker")
+                == "restricted_credential_evidence_required",
+                "restricted_write_gate_allows_with_ref": bool(
+                    restricted_gate_ready.get("ready") and restricted_gate_ready.get("evidence_ref_present")
+                ),
                 "restricted_write_gate_setting": restricted_gate_missing.get("setting"),
                 "restricted_write_gate_target_environment": restricted_gate_missing.get("target_environment"),
                 "native_verification_plan_payload_safe": not restart_verification_plan.get("payload_stored")
@@ -390,8 +438,12 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "gitops_provider": gitops_request.preview.get("git_provider"),
                 "gitops_write_performed": bool(gitops_request.preview.get("gitops_write_performed")),
                 "gitops_cluster_mutation_performed": bool(gitops_request.preview.get("cluster_mutation_performed")),
-                "gitops_gitlab_payload_ready": bool((gitops_request.preview.get("merge_request_template") or {}).get("api_payload")),
-                "gitops_merge_request_draft": bool((gitops_request.preview.get("merge_request_template") or {}).get("draft")),
+                "gitops_gitlab_payload_ready": bool(
+                    (gitops_request.preview.get("merge_request_template") or {}).get("api_payload")
+                ),
+                "gitops_merge_request_draft": bool(
+                    (gitops_request.preview.get("merge_request_template") or {}).get("draft")
+                ),
                 "gitops_merge_request_removes_source_branch": bool(
                     (gitops_request.preview.get("merge_request_template") or {}).get("remove_source_branch")
                 ),
@@ -405,8 +457,11 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "fleet_resume_preview_blast_radius": fleet_resume_request.preview.get("blast_radius"),
                 "devtron_rollback_request_status": devtron_rollback_request.status,
                 "devtron_rollback_preview_blast_radius": devtron_rollback_request.preview.get("blast_radius"),
-                "devtron_rollback_execution_mode": devtron_rollback_request.execution_policy.get("native_execution_mode"),
-                "devtron_rollback_links_sanitized": "release-secret-token" not in str(devtron_rollback_request.preview.get("links")),
+                "devtron_rollback_execution_mode": devtron_rollback_request.execution_policy.get(
+                    "native_execution_mode"
+                ),
+                "devtron_rollback_links_sanitized": "release-secret-token"
+                not in str(devtron_rollback_request.preview.get("links")),
                 "persistent_rows": False,
             }
             transaction.set_rollback(True)

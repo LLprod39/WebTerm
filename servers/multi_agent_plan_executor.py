@@ -38,7 +38,9 @@ class PlanExecutionCallbacks:
     set_waiting: Callable[[str, list[dict[str, Any]]], Awaitable[None]]
     clear_waiting: Callable[[], Awaitable[None]]
     run_task: Callable[[dict[str, Any], str, float], Awaitable[tuple[str, list[dict[str, Any]]]]]
-    handle_failure: Callable[[dict[str, Any], str, list[dict[str, Any]], list[dict[str, Any]]], Awaitable[dict[str, Any]]]
+    handle_failure: Callable[
+        [dict[str, Any], str, list[dict[str, Any]], list[dict[str, Any]]], Awaitable[dict[str, Any]]
+    ]
     replan: Callable[[str, list[dict[str, Any]], list[dict[str, Any]]], Awaitable[list[dict[str, Any]]]]
     wait_for_user_reply: Callable[[], Awaitable[str]]
     # When True, orchestrator recovery action "ask_user" must not block on wait_for_user_reply.

@@ -3,6 +3,7 @@
 These tests are deliberately tight and self-contained: they only exercise
 the dry-run machinery without spinning up a real SSH connection.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -103,6 +104,7 @@ class _FakeConn:
     async def run(self, cmd, *, check=False):  # noqa: ANN001, ANN002
         self.run_calls.append(cmd)
         from types import SimpleNamespace
+
         return SimpleNamespace(stdout="", stderr="", exit_status=0)
 
 

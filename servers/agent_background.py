@@ -54,6 +54,7 @@ def _make_event_callback(run_id: int):
 
     return callback
 
+
 def _mark_background_failure(run_id: int, exc: Exception, *, phase: str) -> None:
     message = f"Background {phase} failed: {exc}"
     record_run_event(
@@ -75,7 +76,9 @@ def _mark_background_failure(run_id: int, exc: Exception, *, phase: str) -> None
     refresh_agent_run_report_payload(run)
 
 
-def launch_agent_run_background(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False) -> AgentRunDispatch:
+def launch_agent_run_background(
+    run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False
+) -> AgentRunDispatch:
     """Queue a mini/full/multi agent run for the dedicated execution worker."""
     run = AgentRun.objects.get(pk=run_id)
     return enqueue_agent_run_dispatch(
@@ -88,8 +91,12 @@ def launch_agent_run_background(run_id: int, agent_id: int, server_ids: list[int
     )
 
 
-async def _run_agent_background(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False) -> None:
-    await record_run_event_async(run_id, "agent_background_started", {"plan_only": bool(plan_only), "server_ids": list(server_ids)})
+async def _run_agent_background(
+    run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False
+) -> None:
+    await record_run_event_async(
+        run_id, "agent_background_started", {"plan_only": bool(plan_only), "server_ids": list(server_ids)}
+    )
     run = await sync_to_async(
         lambda: AgentRun.objects.select_related("agent", "server", "user").get(pk=run_id),
         thread_sensitive=True,
@@ -128,14 +135,18 @@ async def _run_agent_background(run_id: int, agent_id: int, server_ids: list[int
 
     callback = _make_event_callback(run_id)
     if agent.is_multi:
-        engine = MultiAgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
+        engine = MultiAgentEngine(
+            agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors
+        )
         await engine.run(plan_only=plan_only, run_record=run)
     else:
         engine = AgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
         await engine.run(run_record=run)
 
 
-def launch_plan_execution_background(run_id: int, agent_id: int, server_ids: list[int], user_id: int) -> AgentRunDispatch:
+def launch_plan_execution_background(
+    run_id: int, agent_id: int, server_ids: list[int], user_id: int
+) -> AgentRunDispatch:
     """Queue execution of an approved multi-agent plan for the execution worker."""
     run = AgentRun.objects.get(pk=run_id)
     return enqueue_agent_run_dispatch(
@@ -217,13 +228,15 @@ async def execute_agent_dispatch(
             )
             try:
                 await asyncio.wait_for(stop_heartbeat.wait(), timeout=interval)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     heartbeat_task = asyncio.create_task(_heartbeat_loop())
     try:
         if dispatch.dispatch_kind == AgentRunDispatch.KIND_PLAN_EXECUTION:
-            await _run_plan_execution_background(run_id, dispatch.agent_id, list(dispatch.server_ids or []), dispatch.user_id)
+            await _run_plan_execution_background(
+                run_id, dispatch.agent_id, list(dispatch.server_ids or []), dispatch.user_id
+            )
         else:
             await _run_agent_background(
                 run_id,
@@ -253,8 +266,5 @@ async def execute_agent_dispatch(
 
 
 def _load_servers_in_order(server_ids: list[int]) -> list[Server]:
-    servers_by_id = {
-        server.id: server
-        for server in Server.objects.filter(id__in=server_ids)
-    }
+    servers_by_id = {server.id: server for server in Server.objects.filter(id__in=server_ids)}
     return [servers_by_id[server_id] for server_id in server_ids if server_id in servers_by_id]

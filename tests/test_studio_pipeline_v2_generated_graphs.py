@@ -5,12 +5,6 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
 
-from studio.keycloak_provisioning import (
-    build_keycloak_edges,
-    build_keycloak_nodes,
-    build_keycloak_ops_edges,
-    build_keycloak_ops_nodes,
-)
 from studio.mcp_showcase import build_showcase_edges, build_showcase_nodes
 from studio.models import MCPServerPool, PipelineRun
 from studio.pipeline_executor import PipelineExecutor
@@ -34,12 +28,6 @@ def _disable_activity_logging(monkeypatch):
 @pytest.mark.parametrize(
     ("graph_name", "build_nodes", "build_edges"),
     [
-        ("keycloak_provisioning", lambda mcp_id: build_keycloak_nodes(mcp_id), build_keycloak_edges),
-        (
-            "keycloak_ops_test",
-            lambda mcp_id: build_keycloak_ops_nodes(mcp_id, fixed_profile="test", environment_label="TEST"),
-            build_keycloak_ops_edges,
-        ),
         ("mcp_showcase", lambda mcp_id: build_showcase_nodes(mcp_id), build_showcase_edges),
         ("webhook_smoke", lambda _mcp_id: build_webhook_smoke_nodes(), build_webhook_smoke_edges),
     ],

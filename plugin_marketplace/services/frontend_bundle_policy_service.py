@@ -89,7 +89,9 @@ def _latest_frontend_bundle_review(package: PluginPackage) -> dict[str, Any] | N
         and str(item.get("kind") or "") == FRONTEND_BUNDLE_REVIEW_ATTESTATION_KIND
         and str(item.get("status") or "") == "passed"
     ]
-    candidates.sort(key=lambda item: _created_at(item.get("created_at")) or timezone.datetime.min.replace(tzinfo=timezone.utc))
+    candidates.sort(
+        key=lambda item: _created_at(item.get("created_at")) or timezone.datetime.min.replace(tzinfo=timezone.utc)
+    )
     return candidates[-1] if candidates else None
 
 
@@ -99,9 +101,7 @@ def _attestation_matches_package(package: PluginPackage, attestation: dict[str, 
     manifest_hash = str(report.get("manifest_hash") or "").strip()
     if package_hash and package_hash != package.package_hash:
         return False
-    if manifest_hash and manifest_hash != canonical_manifest_hash(package.manifest or {}):
-        return False
-    return True
+    return not (manifest_hash and manifest_hash != canonical_manifest_hash(package.manifest or {}))
 
 
 def frontend_bundle_policy_for_package(package: PluginPackage) -> dict[str, Any]:
@@ -114,7 +114,9 @@ def frontend_bundle_policy_for_package(package: PluginPackage) -> dict[str, Any]
     blockers: list[str] = []
     settings_snapshot = {
         "allow_dynamic_frontend_bundles": allow_dynamic_frontend_bundles(),
-        "allow_sandboxed_code_packages": bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)),
+        "allow_sandboxed_code_packages": bool(
+            getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)
+        ),
         "frontend_sandbox_enabled": bool(getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED", False)),
     }
     if not settings_snapshot["allow_dynamic_frontend_bundles"]:

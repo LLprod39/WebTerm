@@ -152,17 +152,36 @@ def api_pipeline_run(request, pipeline_id: int):
     limit_error = get_pipeline_run_limit_error(pipeline.owner, cleanup_stale=not validate_only)
     limit_errors = [str(limit_error.get("error") or "Runtime limit reached.")] if limit_error else []
     limit_issues = [runtime_limit_issue(limit_error)] if limit_error else []
-    all_errors = [*validation_errors, *trigger_errors, *branch_errors, *context_errors, *integration["errors"], *limit_errors]
+    all_errors = [
+        *validation_errors,
+        *trigger_errors,
+        *branch_errors,
+        *context_errors,
+        *integration["errors"],
+        *limit_errors,
+    ]
 
     if validate_only:
         risk = pipeline_assistant_risk(pipeline.nodes, pipeline.edges)
-        issues = [*validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]), *integration["issues"], *limit_issues]
+        issues = [
+            *validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]),
+            *integration["issues"],
+            *limit_issues,
+        ]
         validation = {"ok": not all_errors, "errors": all_errors, "issues": issues}
         dry_run = {
             "ok": validation["ok"] and risk.get("level") != "dangerous",
             "executed": False,
             "mode": "validate_only",
-            "checks": ["graph_contract", "manual_trigger", "references", "risk_review", "runtime_context", "integrations", "runtime_limits"],
+            "checks": [
+                "graph_contract",
+                "manual_trigger",
+                "references",
+                "risk_review",
+                "runtime_context",
+                "integrations",
+                "runtime_limits",
+            ],
             "message": (
                 "Dry-run validation checked graph structure, manual trigger routing, references and risk. "
                 "No pipeline run was created and no runtime actions were executed."
@@ -185,7 +204,10 @@ def api_pipeline_run(request, pipeline_id: int):
         return _limit_err(limit_error)
 
     if all_errors:
-        issues = [*validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]), *integration["issues"]]
+        issues = [
+            *validation_issues([*validation_errors, *trigger_errors, *branch_errors, *context_errors]),
+            *integration["issues"],
+        ]
         return _validation_err(all_errors, prefix="Pipeline is not runnable", issues=issues)
 
     try:

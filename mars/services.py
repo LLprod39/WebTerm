@@ -106,7 +106,9 @@ def ensure_personal_workspace_directory(user) -> Path:
         run_git(root, "add", "README.md")
         commit = run_git(root, "commit", "-m", "Initialize MARS personal workspace", check=False)
         if commit.returncode != 0 and "nothing to commit" not in (commit.stdout + commit.stderr).lower():
-            raise MarsPolicyError((commit.stderr or commit.stdout or "Unable to initialize personal workspace.").strip())
+            raise MarsPolicyError(
+                (commit.stderr or commit.stdout or "Unable to initialize personal workspace.").strip()
+            )
     return root
 
 
@@ -299,7 +301,9 @@ def generate_plan(session: MarsSession) -> str:
     )
 
 
-def record_event(run: MarsRun, event_type: str, message: str = "", payload: dict[str, Any] | None = None) -> MarsRunEvent:
+def record_event(
+    run: MarsRun, event_type: str, message: str = "", payload: dict[str, Any] | None = None
+) -> MarsRunEvent:
     event = MarsRunEvent.objects.create(
         run=run,
         event_type=event_type,

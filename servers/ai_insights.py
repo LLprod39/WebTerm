@@ -240,7 +240,11 @@ def build_server_context(server: Server, *, now: datetime | None = None) -> tupl
         lines.append("## Сертификаты")
         for cert in certs:
             days_left = round((cert.not_after - now).total_seconds() / 86400, 1) if cert.not_after else None
-            changed = " (недавно менялся)" if cert.fingerprint_changed_at and (now - cert.fingerprint_changed_at).days <= 7 else ""
+            changed = (
+                " (недавно менялся)"
+                if cert.fingerprint_changed_at and (now - cert.fingerprint_changed_at).days <= 7
+                else ""
+            )
             lines.append(f"- :{cert.port} {cert.subject[:80]} — осталось {days_left} дн{changed}")
 
     try:
@@ -330,9 +334,7 @@ def run_fleet_insight(*, force: bool = False, now: datetime | None = None) -> Se
     fingerprint = hashlib.sha256(
         json.dumps(sorted((row.endpoint_key, row.id) for row in rows)).encode("utf-8")
     ).hexdigest()
-    existing = (
-        ServerAiInsight.objects.filter(kind=ServerAiInsight.KIND_FLEET).order_by("-created_at").first()
-    )
+    existing = ServerAiInsight.objects.filter(kind=ServerAiInsight.KIND_FLEET).order_by("-created_at").first()
     if (
         not force
         and existing is not None
@@ -365,9 +367,9 @@ def run_fleet_insight(*, force: bool = False, now: datetime | None = None) -> Se
 
 def _latest_per_endpoint() -> list[ServerAiInsight]:
     rows: dict[str, ServerAiInsight] = {}
-    for row in ServerAiInsight.objects.filter(kind=ServerAiInsight.KIND_SERVER, content__gt="").order_by(
-        "-created_at"
-    )[:500]:
+    for row in ServerAiInsight.objects.filter(kind=ServerAiInsight.KIND_SERVER, content__gt="").order_by("-created_at")[
+        :500
+    ]:
         rows.setdefault(row.endpoint_key, row)
     return list(rows.values())
 
@@ -430,9 +432,9 @@ def serialize_insight(row: ServerAiInsight | None) -> dict[str, Any] | None:
 
 def latest_insights_by_endpoint(endpoint_keys: list[str]) -> dict[str, ServerAiInsight]:
     rows: dict[str, ServerAiInsight] = {}
-    qs = ServerAiInsight.objects.filter(
-        kind=ServerAiInsight.KIND_SERVER, endpoint_key__in=endpoint_keys
-    ).order_by("-created_at")
+    qs = ServerAiInsight.objects.filter(kind=ServerAiInsight.KIND_SERVER, endpoint_key__in=endpoint_keys).order_by(
+        "-created_at"
+    )
     for row in qs[:1000]:
         rows.setdefault(row.endpoint_key, row)
     return rows

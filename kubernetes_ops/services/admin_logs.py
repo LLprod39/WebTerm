@@ -58,8 +58,12 @@ def get_admin_pod_log_snapshot(
     )
     provider = _required_rancher_provider(cluster)
     tail = _tail_limit(tail_lines)
-    template = provider_path(provider, "pod_logs_path_template", "").strip() or _default_pod_logs_path_template(provider)
-    ref = KubernetesResourceRef(api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value)
+    template = provider_path(provider, "pod_logs_path_template", "").strip() or _default_pod_logs_path_template(
+        provider
+    )
+    ref = KubernetesResourceRef(
+        api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value
+    )
     payload = _base_response(cluster, provider, ref, tail=tail, container=container_value)
 
     if not template:
@@ -68,7 +72,9 @@ def get_admin_pod_log_snapshot(
         _record_log_action(user=user, session=session, cluster=cluster, ref=ref, payload=payload)
         return payload
 
-    path = _format_log_path(template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value)
+    path = _format_log_path(
+        template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value
+    )
     payload["path"] = _public_path(path)
     try:
         raw = ProviderJsonClient(provider, transport=transport).get_log_payload(path)
@@ -126,7 +132,9 @@ def get_admin_pod_log_stream_batch(
     tail = _tail_limit(tail_lines)
     timeout = _stream_timeout(timeout_seconds)
     template = provider_path(provider, "pod_logs_stream_path_template", "").strip()
-    ref = KubernetesResourceRef(api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value)
+    ref = KubernetesResourceRef(
+        api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value
+    )
     payload = _base_response(cluster, provider, ref, tail=tail, container=container_value)
     payload["policy"]["streaming"] = True
     payload["policy"]["timeout_seconds"] = timeout
@@ -143,10 +151,14 @@ def get_admin_pod_log_stream_batch(
             transport=transport,
         )
 
-    path = _format_log_path(template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value)
+    path = _format_log_path(
+        template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value
+    )
     payload["path"] = _public_path(path)
     try:
-        raw_lines, provider_truncated = ProviderJsonClient(provider, transport=transport, timeout=timeout).stream_log_lines(path, max_lines=tail)
+        raw_lines, provider_truncated = ProviderJsonClient(
+            provider, transport=transport, timeout=timeout
+        ).stream_log_lines(path, max_lines=tail)
         lines, normalized_truncated = _normalize_log_payload({"lines": raw_lines}, tail)
     except (KubernetesProviderError, ValueError, KeyError) as exc:
         payload["source"] = "provider_stream_error"
@@ -207,11 +219,19 @@ def prepare_admin_pod_log_continuous_stream(
             status=409,
         )
 
-    ref = KubernetesResourceRef(api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value)
-    path = _format_log_path(template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value)
+    ref = KubernetesResourceRef(
+        api_version="v1", kind="Pod", resource="pods", namespace=namespace_value, name=pod_value
+    )
+    path = _format_log_path(
+        template, cluster=cluster, namespace=namespace_value, pod_name=pod_value, tail=tail, container=container_value
+    )
     payload = _base_response(cluster, provider, ref, tail=tail, container=container_value)
-    payload.update({"operation": "pod_logs_stream_continuous", "source": "provider_stream_continuous", "path": _public_path(path)})
-    payload["policy"].update({"streaming": True, "stream_transport": "provider_native_continuous", "timeout_seconds": timeout})
+    payload.update(
+        {"operation": "pod_logs_stream_continuous", "source": "provider_stream_continuous", "path": _public_path(path)}
+    )
+    payload["policy"].update(
+        {"streaming": True, "stream_transport": "provider_native_continuous", "timeout_seconds": timeout}
+    )
     return {"provider": provider, "path": path, "timeout_seconds": timeout, "tail_lines": tail, "payload": payload}
 
 
@@ -253,7 +273,11 @@ def _base_response(
         "success": True,
         "mode": "admin_read_only",
         "operation": "pod_logs_snapshot",
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": {
             "api_version": ref.api_version,
@@ -282,7 +306,9 @@ def _base_response(
     }
 
 
-def _record_log_action(*, user, session, cluster: K8sCluster, ref: KubernetesResourceRef, payload: dict[str, Any]) -> None:
+def _record_log_action(
+    *, user, session, cluster: K8sCluster, ref: KubernetesResourceRef, payload: dict[str, Any]
+) -> None:
     record_admin_resource_action(
         user=user,
         session=session,
@@ -311,11 +337,17 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode pod logs.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode pod logs.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 
-def _format_log_path(template: str, *, cluster: K8sCluster, namespace: str, pod_name: str, tail: int, container: str) -> str:
+def _format_log_path(
+    template: str, *, cluster: K8sCluster, namespace: str, pod_name: str, tail: int, container: str
+) -> str:
     values = {
         "cluster_id": _quote(cluster.rancher_cluster_id or str(cluster.id)),
         "cluster_name": _quote(cluster.name),

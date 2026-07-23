@@ -32,12 +32,14 @@ def test_pending_unsigned_package_cannot_enable_until_reviewed_and_signed():
     client.force_login(user)
 
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.reviewed",
-        "name": "Reviewed Plugin",
-        "slug": "reviewed",
-        "publisher": {"id": "acme", "name": "Acme"},
-    })
+    manifest.update(
+        {
+            "id": "acme.reviewed",
+            "name": "Reviewed Plugin",
+            "slug": "reviewed",
+            "publisher": {"id": "acme", "name": "Acme"},
+        }
+    )
     package = PluginPackage.objects.create(
         plugin_id="acme.reviewed",
         version="0.1.0",
@@ -104,38 +106,42 @@ def test_lifecycle_impact_update_soft_uninstall_and_rollback():
     client.force_login(user)
 
     base_manifest = dict(DEMO_PLUGIN_MANIFEST)
-    base_manifest.update({
-        "id": "acme.lifecycle",
-        "name": "Lifecycle Plugin",
-        "slug": "lifecycle",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "version": "0.1.0",
-        "settings_schema": {
-            "type": "object",
-            "properties": {"display_label": {"type": "string"}},
-        },
-        "secrets": [{"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True}],
-    })
-    next_manifest = dict(base_manifest)
-    next_manifest.update({
-        "version": "0.2.0",
-        "permissions": [
-            *base_manifest["permissions"],
-            {"scope": "acme.lifecycle.write", "reason": "Write lifecycle output.", "risk_tier": "internal_write"},
-        ],
-        "settings_schema": {
-            "type": "object",
-            "properties": {
-                "display_label": {"type": "string"},
-                "channel": {"type": "string"},
+    base_manifest.update(
+        {
+            "id": "acme.lifecycle",
+            "name": "Lifecycle Plugin",
+            "slug": "lifecycle",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "version": "0.1.0",
+            "settings_schema": {
+                "type": "object",
+                "properties": {"display_label": {"type": "string"}},
             },
-        },
-        "secrets": [
-            *base_manifest["secrets"],
-            {"id": "webhook_token", "label": "Webhook token", "kind": "bearer_token", "required": True},
-        ],
-        "egress": [{"hosts": ["hooks.example.com"]}],
-    })
+            "secrets": [{"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True}],
+        }
+    )
+    next_manifest = dict(base_manifest)
+    next_manifest.update(
+        {
+            "version": "0.2.0",
+            "permissions": [
+                *base_manifest["permissions"],
+                {"scope": "acme.lifecycle.write", "reason": "Write lifecycle output.", "risk_tier": "internal_write"},
+            ],
+            "settings_schema": {
+                "type": "object",
+                "properties": {
+                    "display_label": {"type": "string"},
+                    "channel": {"type": "string"},
+                },
+            },
+            "secrets": [
+                *base_manifest["secrets"],
+                {"id": "webhook_token", "label": "Webhook token", "kind": "bearer_token", "required": True},
+            ],
+            "egress": [{"hosts": ["hooks.example.com"]}],
+        }
+    )
     package_v1 = PluginPackage.objects.create(
         plugin_id="acme.lifecycle",
         version="0.1.0",
@@ -227,16 +233,18 @@ def test_sandbox_policy_blocks_dynamic_plugin_enable_until_sandbox_is_enabled():
     client = Client()
     client.force_login(user)
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.sandboxed",
-        "name": "Sandboxed Plugin",
-        "slug": "sandboxed",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "surfaces": {
-            "pages": [{"id": "dynamic", "title": "Dynamic", "renderer": "iframe_sandbox"}],
-            "agent_tools": [{"name": "acme_dynamic", "executor_ref": "acme.worker.run"}],
-        },
-    })
+    manifest.update(
+        {
+            "id": "acme.sandboxed",
+            "name": "Sandboxed Plugin",
+            "slug": "sandboxed",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "surfaces": {
+                "pages": [{"id": "dynamic", "title": "Dynamic", "renderer": "iframe_sandbox"}],
+                "agent_tools": [{"name": "acme_dynamic", "executor_ref": "acme.worker.run"}],
+            },
+        }
+    )
     package = PluginPackage.objects.create(
         plugin_id="acme.sandboxed",
         version="0.1.0",
@@ -288,12 +296,14 @@ def test_sandbox_policy_blocks_dynamic_plugin_enable_until_sandbox_is_enabled():
 )
 def test_sandbox_policy_blocks_stored_dependency_scan_blockers():
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.blocked-dependency",
-        "name": "Blocked Dependency",
-        "slug": "blocked-dependency",
-        "publisher": {"id": "acme", "name": "Acme"},
-    })
+    manifest.update(
+        {
+            "id": "acme.blocked-dependency",
+            "name": "Blocked Dependency",
+            "slug": "blocked-dependency",
+            "publisher": {"id": "acme", "name": "Acme"},
+        }
+    )
     package = PluginPackage.objects.create(
         plugin_id="acme.blocked-dependency",
         version="0.1.0",

@@ -292,9 +292,7 @@ class TestAgentLoop:
             assert "data" in ev, f"missing data in event: {ev}"
             assert isinstance(ev["data"], dict)
         # Shell tool populates exit_code in its data payload.
-        shell_result = next(
-            (e for e in tool_results if e.get("tool") == "shell"), None
-        )
+        shell_result = next((e for e in tool_results if e.get("tool") == "shell"), None)
         assert shell_result is not None
         assert "exit_code" in shell_result["data"]
 

@@ -85,7 +85,9 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
         )
         if state is None:
-            self.stdout.write(self.style.WARNING(f"Telegram bot worker {worker_key!r} is already leased by another process"))
+            self.stdout.write(
+                self.style.WARNING(f"Telegram bot worker {worker_key!r} is already leased by another process")
+            )
             return
 
         self.stdout.write("")
@@ -163,9 +165,7 @@ class Command(BaseCommand):
                 )
 
         trigger = (
-            pipeline.triggers.filter(trigger_type=PipelineTrigger.TYPE_WEBHOOK, is_active=True)
-            .order_by("id")
-            .first()
+            pipeline.triggers.filter(trigger_type=PipelineTrigger.TYPE_WEBHOOK, is_active=True).order_by("id").first()
         )
         if not trigger:
             raise CommandError(
@@ -283,7 +283,9 @@ class Command(BaseCommand):
                 entry_node_id=trigger.node_id,
             )
         except ValueError as exc:
-            self.stderr.write(f"Pipeline run creation failed — fix it in Studio: {pipeline_run_creation_error_details(exc)[:2]}")
+            self.stderr.write(
+                f"Pipeline run creation failed — fix it in Studio: {pipeline_run_creation_error_details(exc)[:2]}"
+            )
             return "ignored"
         trigger.last_triggered_at = timezone.now()
         trigger.save(update_fields=["last_triggered_at"])

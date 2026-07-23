@@ -1,4 +1,5 @@
 """Tests for 2.11: per-server AI read-only mode."""
+
 from __future__ import annotations
 
 import asyncio
@@ -27,9 +28,7 @@ class TestIsServerAiReadOnly:
         from servers.models import Server
 
         user = django_user_model.objects.create_user("ro_test_u", password="x")
-        server = Server.objects.create(
-            user=user, name="srv", host="1.2.3.4", port=22, username="u"
-        )
+        server = Server.objects.create(user=user, name="srv", host="1.2.3.4", port=22, username="u")
         assert is_server_ai_read_only(server.pk) is False
 
     def test_returns_true_when_flag_set(self, django_user_model):
@@ -37,7 +36,11 @@ class TestIsServerAiReadOnly:
 
         user = django_user_model.objects.create_user("ro_test_v", password="x")
         server = Server.objects.create(
-            user=user, name="srv2", host="1.2.3.5", port=22, username="u",
+            user=user,
+            name="srv2",
+            host="1.2.3.5",
+            port=22,
+            username="u",
             ai_read_only=True,
         )
         assert is_server_ai_read_only(server.pk) is True

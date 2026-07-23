@@ -31,14 +31,32 @@ class Command(BaseCommand):
     help = "Run background server health monitoring (lite TCP every 5 min, deep SSH every 10 min)"
 
     def add_arguments(self, parser):
-        parser.add_argument("--quick-interval", type=int, default=300, help="Quick check interval in seconds (default 300)")
-        parser.add_argument("--deep-interval", type=int, default=600, help="Deep check interval in seconds (default 600)")
-        parser.add_argument("--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)")
-        parser.add_argument("--rollup-interval", type=int, default=3600, help="Metric rollup interval in seconds (default 3600)")
-        parser.add_argument("--cert-interval", type=int, default=21600, help="TLS certificate scan interval in seconds (default 21600)")
-        parser.add_argument("--ai-interval", type=int, default=21600, help="AI insight analysis interval in seconds (default 21600)")
+        parser.add_argument(
+            "--quick-interval", type=int, default=300, help="Quick check interval in seconds (default 300)"
+        )
+        parser.add_argument(
+            "--deep-interval", type=int, default=600, help="Deep check interval in seconds (default 600)"
+        )
+        parser.add_argument(
+            "--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)"
+        )
+        parser.add_argument(
+            "--rollup-interval", type=int, default=3600, help="Metric rollup interval in seconds (default 3600)"
+        )
+        parser.add_argument(
+            "--cert-interval", type=int, default=21600, help="TLS certificate scan interval in seconds (default 21600)"
+        )
+        parser.add_argument(
+            "--ai-interval", type=int, default=21600, help="AI insight analysis interval in seconds (default 21600)"
+        )
         parser.add_argument("--concurrency", type=int, default=5, help="Max concurrent SSH connections (default 5)")
-        parser.add_argument("--server-id", dest="server_ids", action="append", type=int, help="Restrict checks to one or more server IDs (repeatable)")
+        parser.add_argument(
+            "--server-id",
+            dest="server_ids",
+            action="append",
+            type=int,
+            help="Restrict checks to one or more server IDs (repeatable)",
+        )
         parser.add_argument("--once", action="store_true", help="Run a single check and exit")
         parser.add_argument("--deep", action="store_true", help="Force deep SSH check (with --once)")
         parser.add_argument(
@@ -105,9 +123,11 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f"Checked {len(results)} servers"))
                 return
 
-            self.stdout.write(self.style.SUCCESS(
-                f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency}, scope={scope_text})"
-            ))
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Starting server monitor (quick={quick_interval}s, deep={deep_interval}s, concurrency={concurrency}, scope={scope_text})"
+                )
+            )
 
             try:
                 summary = asyncio.run(
@@ -237,9 +257,7 @@ class Command(BaseCommand):
                 except Exception as exc:
                     logger.error("Monitor: metric rollup failed: {}", exc)
                 try:
-                    forecast_summary = await sync_to_async(run_forecast_persistence, thread_sensitive=True)(
-                        server_ids
-                    )
+                    forecast_summary = await sync_to_async(run_forecast_persistence, thread_sensitive=True)(server_ids)
                     logger.info(
                         "Monitor: forecasts persisted ({} servers, {} predictions, +{}/-{} alerts)",
                         forecast_summary["servers"],
@@ -254,9 +272,7 @@ class Command(BaseCommand):
             if cert_counter >= cert_every_n or quick_counter == 1:
                 cert_counter = 0
                 try:
-                    cert_summary = await collect_certificates_for_all(
-                        concurrency=concurrency, server_ids=server_ids
-                    )
+                    cert_summary = await collect_certificates_for_all(concurrency=concurrency, server_ids=server_ids)
                     logger.info(
                         "Monitor: certificate scan done ({} of {} servers, {} certs)",
                         cert_summary.get("scanned", 0),
@@ -272,9 +288,9 @@ class Command(BaseCommand):
                 try:
                     from core_ui.services.operator_duty import deliver_briefings_for_all_users
 
-                    briefing_summary = await sync_to_async(
-                        deliver_briefings_for_all_users, thread_sensitive=True
-                    )(force=False)
+                    briefing_summary = await sync_to_async(deliver_briefings_for_all_users, thread_sensitive=True)(
+                        force=False
+                    )
                     if briefing_summary.get("delivered"):
                         logger.info("Monitor: operator duty briefings {}", briefing_summary)
                 except Exception as exc:
@@ -285,9 +301,7 @@ class Command(BaseCommand):
             if ai_counter >= ai_every_n:
                 ai_counter = 0
                 try:
-                    ai_summary = await sync_to_async(run_ai_insights_for_servers, thread_sensitive=True)(
-                        server_ids
-                    )
+                    ai_summary = await sync_to_async(run_ai_insights_for_servers, thread_sensitive=True)(server_ids)
                     if ai_summary.get("enabled"):
                         logger.info(
                             "Monitor: AI insights pass done (analyzed {}, reused {}, errors {})",
@@ -301,7 +315,7 @@ class Command(BaseCommand):
             try:
                 await asyncio.wait_for(stop.wait(), timeout=quick_interval)
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
         logger.info("Monitor: graceful shutdown complete")

@@ -47,10 +47,7 @@ def filter_tools_for_policy(user, tools: list[dict[str, Any]]) -> list[dict[str,
         entry["requires_confirmation"] = True
         # Drop pure external/unconfirmed dangerous without confirm path
         if risk == AssistantAction.RISK_DANGEROUS:
-            entry["description"] = (
-                str(entry.get("description") or "")
-                + " [pilot: typed_confirm required]"
-            )
+            entry["description"] = str(entry.get("description") or "") + " [pilot: typed_confirm required]"
         out.append(entry)
     return out
 

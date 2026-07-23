@@ -46,6 +46,7 @@ def ingest_memory_event_task(
     except Exception as e:
         logger.error(f"Failed to ingest memory event in Celery background task: {e}")
 
+
 @shared_task(name="servers.tasks.run_dream_cycle_task")
 def run_dream_cycle_task(server_id: int, job_kind: str = "nearline"):
     """

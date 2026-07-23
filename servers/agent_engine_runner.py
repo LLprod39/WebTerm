@@ -61,7 +61,9 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         if not current_status:
             engine.run_record = run
             return run
-        if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
+        if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(
+            current_status["runtime_control"]
+        ):
             engine.run_record = run
             return run
         await sync_to_async(engine._update_run)(
@@ -95,7 +97,9 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         command_timeout=int(getattr(engine, "command_timeout", 90) or 90),
         event_callback=engine.event_callback,
         available_skills=[skill.to_detail_dict() for skill in engine.skills],
-        available_materials=list(getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []),
+        available_materials=list(
+            getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
+        ),
         sudo_policy=engine.permission_engine.sudo_policy,
     )
 
@@ -115,10 +119,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             engine.specific_model,
         )
         if engine.skill_policy_errors:
-            raise RuntimeError(
-                "Invalid skill policy configuration: "
-                + "; ".join(engine.skill_policy_errors)
-            )
+            raise RuntimeError("Invalid skill policy configuration: " + "; ".join(engine.skill_policy_errors))
         await engine._emit("agent_status", {"status": "connecting"})
 
         disconnected: list[str] = []
@@ -138,11 +139,11 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     raise
         engine._disconnected_servers = disconnected
         if disconnected and bool(getattr(engine, "require_all_servers", False)):
-            raise RuntimeError(
-                "require_all_servers: failed to connect to: " + ", ".join(disconnected)
-            )
+            raise RuntimeError("require_all_servers: failed to connect to: " + ", ".join(disconnected))
 
-        loaded_mcp_tools, engine.mcp_tool_errors = await load_mcp_bindings(engine._mcp_runtime_provider, engine.mcp_servers)
+        loaded_mcp_tools, engine.mcp_tool_errors = await load_mcp_bindings(
+            engine._mcp_runtime_provider, engine.mcp_servers
+        )
         if engine.allowed_tool_names is None:
             engine.mcp_tools = loaded_mcp_tools
             engine.disabled_mcp_tools = set()
@@ -159,10 +160,9 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         )
 
         connected = engine.session.get_connected_info()
-        await sync_to_async(engine._update_run)(run, connected_servers=[
-            {"server_id": c["server_id"], "server_name": c["server_name"]}
-            for c in connected
-        ])
+        await sync_to_async(engine._update_run)(
+            run, connected_servers=[{"server_id": c["server_id"], "server_name": c["server_name"]} for c in connected]
+        )
 
         if not engine.session.connections and not engine.mcp_tools and not engine.skills:
             raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
@@ -259,11 +259,14 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     iterations_log.append(iter_entry)
                     history.append({"role": "assistant", "content": llm_response})
                     history.append({"role": "user", "content": correction})
-                    await engine._emit("agent_observation", {
-                        "iteration": iteration,
-                        "tool": "parser_guard",
-                        "observation": correction,
-                    })
+                    await engine._emit(
+                        "agent_observation",
+                        {
+                            "iteration": iteration,
+                            "tool": "parser_guard",
+                            "observation": correction,
+                        },
+                    )
                     continue
 
                 exit_reason = EXIT_FINAL_ANSWER
@@ -273,15 +276,19 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                 history.append({"role": "assistant", "content": llm_response})
                 break
 
-            await engine._emit("agent_action", {
-                "iteration": iteration,
-                "tool": action_name,
-                "args": action_args,
-            })
+            await engine._emit(
+                "agent_action",
+                {
+                    "iteration": iteration,
+                    "tool": action_name,
+                    "args": action_args,
+                },
+            )
 
             if action_name == "ask_user":
                 await sync_to_async(engine._update_run)(
-                    run, status=AgentRun.STATUS_WAITING,
+                    run,
+                    status=AgentRun.STATUS_WAITING,
                     pending_question=action_args.get("question", ""),
                 )
 
@@ -296,16 +303,20 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
 
             if action_name == "ask_user":
                 await sync_to_async(engine._update_run)(
-                    run, status=AgentRun.STATUS_RUNNING, pending_question="",
+                    run,
+                    status=AgentRun.STATUS_RUNNING,
+                    pending_question="",
                 )
 
-            tool_calls_log.append({
-                "tool": action_name,
-                "args": action_args,
-                "result": observation[:2000],
-                "duration_ms": 0,
-                "timestamp": timezone.now().isoformat(),
-            })
+            tool_calls_log.append(
+                {
+                    "tool": action_name,
+                    "args": action_args,
+                    "result": observation[:2000],
+                    "duration_ms": 0,
+                    "timestamp": timezone.now().isoformat(),
+                }
+            )
 
             iter_entry["observation"] = observation[:3000]
             iterations_log.append(iter_entry)
@@ -327,11 +338,14 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     remaining_fraction=1.0 - iteration / engine.max_iterations,
                 )
 
-            await engine._emit("agent_observation", {
-                "iteration": iteration,
-                "tool": action_name,
-                "observation": observation[:1000],
-            })
+            await engine._emit(
+                "agent_observation",
+                {
+                    "iteration": iteration,
+                    "tool": action_name,
+                    "observation": observation[:1000],
+                },
+            )
 
             history.append({"role": "assistant", "content": llm_response})
             history.append(
@@ -412,8 +426,10 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
         run.tool_calls = tool_calls_log
         run.total_iterations = iteration
         run.final_report = final_report
-        run.ai_analysis = final_report if final_status == AgentRun.STATUS_COMPLETED else (
-            outcome.reason or final_report or f"Agent ended with status {final_status}"
+        run.ai_analysis = (
+            final_report
+            if final_status == AgentRun.STATUS_COMPLETED
+            else (outcome.reason or final_report or f"Agent ended with status {final_status}")
         )
         run.completed_at = timezone.now()
         run.duration_ms = int((time.monotonic() - t0) * 1000)
@@ -448,17 +464,23 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
 
         await sync_to_async(engine._touch_agent_last_run)()
 
-        await engine._emit("agent_status", {
-            "status": final_status,
-            "outcome": outcome.outcome,
-            "outcome_reason": outcome.reason,
-            "policy_blocked_count": report_payload["policy_blocked_count"],
-        })
-        await engine._emit("agent_report", {
-            "text": final_report,
-            "interim": False,
-            "outcome": outcome.outcome,
-        })
+        await engine._emit(
+            "agent_status",
+            {
+                "status": final_status,
+                "outcome": outcome.outcome,
+                "outcome_reason": outcome.reason,
+                "policy_blocked_count": report_payload["policy_blocked_count"],
+            },
+        )
+        await engine._emit(
+            "agent_report",
+            {
+                "text": final_report,
+                "interim": False,
+                "outcome": outcome.outcome,
+            },
+        )
 
     except Exception as exc:
         logger.error("Agent engine error: {}", exc)

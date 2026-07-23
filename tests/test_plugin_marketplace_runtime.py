@@ -124,23 +124,25 @@ def test_local_plugin_package_validation_records_dependency_manifest_sbom(tmp_pa
 )
 def test_sandboxed_plugin_package_blocks_dependencies_without_allowlist(tmp_path):
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.dependency-tool",
-        "name": "Dependency Tool",
-        "slug": "dependency-tool",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "surfaces": {
-            "agent_tools": [
-                {
-                    "id": "dependency-echo",
-                    "name": "acme_dependency_echo",
-                    "title": "Dependency echo",
-                    "executor_ref": "sandbox:backend/plugin.py:handle",
-                    "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
-                }
-            ]
-        },
-    })
+    manifest.update(
+        {
+            "id": "acme.dependency-tool",
+            "name": "Dependency Tool",
+            "slug": "dependency-tool",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "surfaces": {
+                "agent_tools": [
+                    {
+                        "id": "dependency-echo",
+                        "name": "acme_dependency_echo",
+                        "title": "Dependency echo",
+                        "executor_ref": "sandbox:backend/plugin.py:handle",
+                        "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
+                    }
+                ]
+            },
+        }
+    )
     package = tmp_path / "dependency-tool.wtp"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("webtrerm.plugin.json", json.dumps(manifest))
@@ -164,23 +166,25 @@ def test_sandboxed_plugin_package_blocks_dependencies_without_allowlist(tmp_path
 )
 def test_sandboxed_plugin_package_accepts_allowlisted_dependencies(tmp_path):
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.allowed-dependency-tool",
-        "name": "Allowed Dependency Tool",
-        "slug": "allowed-dependency-tool",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "surfaces": {
-            "agent_tools": [
-                {
-                    "id": "allowed-dependency-echo",
-                    "name": "acme_allowed_dependency_echo",
-                    "title": "Allowed dependency echo",
-                    "executor_ref": "sandbox:backend/plugin.py:handle",
-                    "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
-                }
-            ]
-        },
-    })
+    manifest.update(
+        {
+            "id": "acme.allowed-dependency-tool",
+            "name": "Allowed Dependency Tool",
+            "slug": "allowed-dependency-tool",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "surfaces": {
+                "agent_tools": [
+                    {
+                        "id": "allowed-dependency-echo",
+                        "name": "acme_allowed_dependency_echo",
+                        "title": "Allowed dependency echo",
+                        "executor_ref": "sandbox:backend/plugin.py:handle",
+                        "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
+                    }
+                ]
+            },
+        }
+    )
     package = tmp_path / "allowed-dependency-tool.wtp"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("webtrerm.plugin.json", json.dumps(manifest))
@@ -229,7 +233,9 @@ def test_plugin_developer_commands_scaffold_validate_pack_and_audit(tmp_path):
 def test_plugin_scaffold_dashboard_template_creates_metadata_surfaces(tmp_path):
     source_dir = tmp_path / "dashboard-demo"
 
-    call_command("plugin_scaffold", "acme.dashboard-demo", directory=str(source_dir), template="dashboard", stdout=StringIO())
+    call_command(
+        "plugin_scaffold", "acme.dashboard-demo", directory=str(source_dir), template="dashboard", stdout=StringIO()
+    )
 
     source_validation = validate_plugin_source_dir(source_dir)
     manifest = source_validation.manifest
@@ -249,7 +255,9 @@ def test_plugin_scaffold_agent_tool_template_creates_sandbox_executor(tmp_path):
     source_dir = tmp_path / "agent-tool-demo"
     dist_dir = tmp_path / "dist"
 
-    call_command("plugin_scaffold", "acme.agent-tool-demo", directory=str(source_dir), template="agent-tool", stdout=StringIO())
+    call_command(
+        "plugin_scaffold", "acme.agent-tool-demo", directory=str(source_dir), template="agent-tool", stdout=StringIO()
+    )
 
     source_validation = validate_plugin_source_dir(source_dir)
     manifest = source_validation.manifest
@@ -293,33 +301,35 @@ def test_local_plugin_package_installs_disabled(tmp_path):
 )
 def test_sandboxed_backend_agent_tool_executes_from_retained_package(tmp_path):
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.sandbox-tool",
-        "name": "Sandbox Tool",
-        "slug": "sandbox-tool",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "surfaces": {
-            "agent_tools": [
-                {
-                    "id": "sandbox-echo",
-                    "name": "acme_sandbox_echo",
-                    "title": "Sandbox echo",
-                    "description": "Runs in the backend sandbox worker.",
-                    "executor_ref": "sandbox:backend/plugin.py:handle",
-                    "params": {"message": {"type": "string", "required": False}},
-                    "tool_spec": {
-                        "category": "general",
-                        "risk": "read",
-                        "runner": "plugin",
-                        "input_schema": {"message": {"type": "string", "required": False}},
-                        "mutates_state": False,
-                        "requires_verification": False,
-                        "output_compactor": "tail",
-                    },
-                }
-            ]
-        },
-    })
+    manifest.update(
+        {
+            "id": "acme.sandbox-tool",
+            "name": "Sandbox Tool",
+            "slug": "sandbox-tool",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "surfaces": {
+                "agent_tools": [
+                    {
+                        "id": "sandbox-echo",
+                        "name": "acme_sandbox_echo",
+                        "title": "Sandbox echo",
+                        "description": "Runs in the backend sandbox worker.",
+                        "executor_ref": "sandbox:backend/plugin.py:handle",
+                        "params": {"message": {"type": "string", "required": False}},
+                        "tool_spec": {
+                            "category": "general",
+                            "risk": "read",
+                            "runner": "plugin",
+                            "input_schema": {"message": {"type": "string", "required": False}},
+                            "mutates_state": False,
+                            "requires_verification": False,
+                            "output_compactor": "tail",
+                        },
+                    }
+                ]
+            },
+        }
+    )
     package = tmp_path / "sandbox-tool.wtp"
     with zipfile.ZipFile(package, "w") as archive:
         archive.writestr("webtrerm.plugin.json", json.dumps(manifest))

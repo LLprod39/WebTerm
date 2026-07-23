@@ -136,7 +136,6 @@ current_automation_baseline:
       - "tests/test_parallel_executor.py"
       - "tests/test_prompt_caching.py"
       - "app/test_runtime_limits.py"
-      - "app/test_key_mcp.py"
       - "app/test_keycloak_provisioning_setup.py"
   frontend_unit:
     - "frontend/src/components/pipeline/nodes/nodes.test.tsx"

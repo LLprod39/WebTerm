@@ -18,7 +18,12 @@ def sync_to_async(func, thread_sensitive=False):
 
 
 async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
-    logger.info("agent_run {} execute_tool start: tool={} args={}", engine.run_record.pk if engine.run_record else "?", name, safe_payload_preview(args))
+    logger.info(
+        "agent_run {} execute_tool start: tool={} args={}",
+        engine.run_record.pk if engine.run_record else "?",
+        name,
+        safe_payload_preview(args),
+    )
     if name == "ask_user" and bool(getattr(engine, "unattended", False)):
         message = (
             "Human input unavailable in unattended pipeline/agent run. "
@@ -45,6 +50,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
         # GAP 8: audit trail persistence
         try:
             from core_ui.activity import log_user_activity
+
             await sync_to_async(log_user_activity)(
                 user=engine.user,
                 category="agent_security",
@@ -61,9 +67,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
         return decision.reason
 
     prepared_args, _sudo_notes = (
-        prepare_sudo_command_args(args, engine.permission_engine.sudo_policy)
-        if name == "ssh_execute"
-        else (args, ())
+        prepare_sudo_command_args(args, engine.permission_engine.sudo_policy) if name == "ssh_execute" else (args, ())
     )
     args = prepared_args
     if decision and spec:
@@ -205,9 +209,7 @@ def validate_agent_tool_args(name: str, args: dict, spec) -> str:
 
     required = ", ".join(missing)
     example_args = {
-        param_name: f"<{param_name}>"
-        for param_name, param_info in schema.items()
-        if param_info.get("required")
+        param_name: f"<{param_name}>" for param_name, param_info in schema.items() if param_info.get("required")
     }
     example_json = json.dumps(example_args, ensure_ascii=False)
     return (

@@ -38,7 +38,7 @@ export function KubernetesHelmWizard({
     retry: false,
   });
 
-  const items = releasesQuery.data?.items || [];
+  const items = useMemo(() => releasesQuery.data?.items || [], [releasesQuery.data?.items]);
   const conflicts = useMemo(() => items.filter((i) => i.conflict), [items]);
 
   const requestMutation = useMutation({

@@ -113,9 +113,17 @@ class KubernetesOpsAdminCustomResourceTests(TestCase):
         self.assertEqual(resource_get["summary"]["kind"], "Index")
         self.assertEqual(resource_get["summary"]["replicas"]["desired"], None)
         self.assertEqual(yaml_payload["target"]["resource"], "indices")
-        self.assertEqual(yaml_payload["path"], "/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices/catalog")
-        self.assertIn("https://rancher.example.test/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices", seen_urls)
-        self.assertIn("https://rancher.example.test/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices/catalog", seen_urls)
+        self.assertEqual(
+            yaml_payload["path"], "/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices/catalog"
+        )
+        self.assertIn(
+            "https://rancher.example.test/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices",
+            seen_urls,
+        )
+        self.assertIn(
+            "https://rancher.example.test/k8s/clusters/c-prod/apis/search.example.com/v1/namespaces/search/indices/catalog",
+            seen_urls,
+        )
         self.assertNotIn("/indexes", " ".join(seen_urls))
         self.assertNotIn("raw-token", str(listing))
 

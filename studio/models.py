@@ -52,6 +52,12 @@ class MCPServerPool(models.Model):
 
     # sse: url
     url = models.CharField(max_length=500, blank=True, help_text="SSE endpoint URL")
+    headers = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Extra HTTP headers for SSE transport, e.g. {"X-Api-Version": "1"}. '
+        "For auth, store MCP_BEARER_TOKEN / MCP_AUTHORIZATION as a managed secret instead.",
+    )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_pool")
     is_shared = models.BooleanField(default=False, help_text="Visible to all users")
@@ -84,8 +90,11 @@ class MCPServerPool(models.Model):
     def to_mcp_config(self) -> dict:
         """Return dict for Claude/Cursor MCP config format."""
         if self.transport == self.TRANSPORT_SSE:
-            return {"url": self.url}
-        config: dict = {"command": self.command, "args": self.args}
+            config: dict = {"url": self.url}
+            if self.headers:
+                config["headers"] = self.headers
+            return config
+        config = {"command": self.command, "args": self.args}
         if self.env:
             config["env"] = self.env
         return config
@@ -148,7 +157,7 @@ class AgentConfig(models.Model):
     skill_slugs = models.JSONField(
         default=list,
         blank=True,
-        help_text='List of attached skill slugs, e.g. ["keycloak-safety", "keycloak-prod-profile"]',
+        help_text='List of attached skill slugs, e.g. ["kubernetes-safety"]',
     )
 
     # Servers this agent is allowed to operate on (empty = all accessible servers)
@@ -274,7 +283,7 @@ class PipelineTrigger(models.Model):
     webhook_payload_map = models.JSONField(
         default=dict,
         blank=True,
-        help_text='Map incoming payload fields to pipeline context vars',
+        help_text="Map incoming payload fields to pipeline context vars",
     )
 
     # Schedule (cron)
@@ -287,8 +296,7 @@ class PipelineTrigger(models.Model):
         default=dict,
         blank=True,
         help_text=(
-            "Alert filter for monitoring triggers: "
-            "{server_ids, severities, alert_types, container_names, match_text}"
+            "Alert filter for monitoring triggers: {server_ids, severities, alert_types, container_names, match_text}"
         ),
     )
     last_triggered_at = models.DateTimeField(null=True, blank=True)
@@ -428,6 +436,8 @@ class PipelineRun(models.Model):
 
     def to_dict(self) -> dict:
         return pipeline_run_to_dict(self)
+
+
 class PipelineTemplate(models.Model):
     """
     Bundled pipeline template for quick start.

@@ -14,9 +14,22 @@ from studio.pipeline_runtime_context import get_pipeline_runtime_context_fields,
 from studio.pipeline_validation import validate_pipeline_definition
 from studio.readiness_requirements import integration_requirements as build_integration_requirements
 
-_MONITORING_CONTEXT_FIELDS = set(
-    ["alert_id", "alert_type", "alert_severity", "alert_title", "alert_message", "alert_metadata", "server_id", "server_name", "server_host", "server_username", "container_name", "container_names", "container_names_csv", "trigger_source"]
-)
+_MONITORING_CONTEXT_FIELDS = {
+    "alert_id",
+    "alert_type",
+    "alert_severity",
+    "alert_title",
+    "alert_message",
+    "alert_metadata",
+    "server_id",
+    "server_name",
+    "server_host",
+    "server_username",
+    "container_name",
+    "container_names",
+    "container_names_csv",
+    "trigger_source",
+}
 
 
 def _is_admin(user) -> bool:
@@ -34,10 +47,13 @@ def _pipeline_queryset_for_user(user, *, pipeline_ids: list[int] | None = None, 
 
 
 def _node_types(nodes: Any) -> set[str]:
-    return {str(node.get("type") or "") for node in nodes if isinstance(node, dict)} if isinstance(nodes, list) else set()
+    return (
+        {str(node.get("type") or "") for node in nodes if isinstance(node, dict)} if isinstance(nodes, list) else set()
+    )
 
 
-def _node_data(node: dict[str, Any]) -> dict[str, Any]: return node.get("data") if isinstance(node.get("data"), dict) else {}
+def _node_data(node: dict[str, Any]) -> dict[str, Any]:
+    return node.get("data") if isinstance(node.get("data"), dict) else {}
 
 
 def _node_by_id(nodes: Any, node_id: str) -> dict[str, Any] | None:
@@ -155,7 +171,9 @@ def _pipeline_payload(pipeline: Pipeline, *, entry_node_id: str = "") -> dict[st
     }
 
 
-def _worker_requirements(pipelines: list[dict[str, Any]], raw_pipelines: list[Pipeline], *, entry_node_id: str = "") -> list[dict[str, Any]]:
+def _worker_requirements(
+    pipelines: list[dict[str, Any]], raw_pipelines: list[Pipeline], *, entry_node_id: str = ""
+) -> list[dict[str, Any]]:
     required = Counter()
     for pipeline in pipelines:
         for trigger in pipeline["triggers"]:
@@ -210,18 +228,18 @@ def build_studio_readiness_report(
     if scope_issue:
         issues.insert(0, scope_issue)
     integration_error_count = sum(
-        1
-        for pipeline in pipelines
-        for item in pipeline["integration_requirements"]
-        if item["severity"] == "error"
+        1 for pipeline in pipelines for item in pipeline["integration_requirements"] if item["severity"] == "error"
     )
     integration_warning_count = sum(
-        1
-        for pipeline in pipelines
-        for item in pipeline["integration_requirements"]
-        if item["severity"] == "warning"
+        1 for pipeline in pipelines for item in pipeline["integration_requirements"] if item["severity"] == "warning"
     )
-    overall = "not_ready" if error_count or worker_not_ready_count or missing_pipeline_ids else "warning" if warning_count else "ready"
+    overall = (
+        "not_ready"
+        if error_count or worker_not_ready_count or missing_pipeline_ids
+        else "warning"
+        if warning_count
+        else "ready"
+    )
     nodes = node_manifest_payload(enabled_plugin_ids_for_user(user))
     scope = {"active_only": active_only, "pipeline_ids": requested_pipeline_ids}
     if entry:

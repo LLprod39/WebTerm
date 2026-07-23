@@ -67,7 +67,7 @@ async def wait_for_pty_command_completion(
     timeout = STREAMING_TIMEOUT_SEC if is_streaming else COMMAND_TIMEOUT_SEC
     try:
         exit_code = int(await asyncio.wait_for(future, timeout=timeout))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         if not is_streaming:
             raise TimeoutError("Timeout waiting for command completion marker") from None
         _write_interrupt_safely(write_interrupt)

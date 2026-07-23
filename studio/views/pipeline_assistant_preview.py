@@ -105,16 +105,8 @@ def apply_pipeline_assistant_patch(nodes: list, edges: list, response: dict) -> 
             data = {}
         node_map[target_node_id]["data"] = {**data, **_clone_json_snapshot(node_patch)}
 
-    remove_node_ids = {
-        str(item).strip()
-        for item in (graph_patch.get("remove_node_ids") or [])
-        if str(item).strip()
-    }
-    remove_edge_ids = {
-        str(item).strip()
-        for item in (graph_patch.get("remove_edge_ids") or [])
-        if str(item).strip()
-    }
+    remove_node_ids = {str(item).strip() for item in (graph_patch.get("remove_node_ids") or []) if str(item).strip()}
+    remove_edge_ids = {str(item).strip() for item in (graph_patch.get("remove_edge_ids") or []) if str(item).strip()}
     if remove_node_ids:
         preview_nodes = [node for node in preview_nodes if str(node.get("id") or "") not in remove_node_ids]
         node_map = {str(node.get("id") or ""): node for node in preview_nodes if isinstance(node, dict)}
@@ -172,7 +164,9 @@ def apply_pipeline_assistant_patch(nodes: list, edges: list, response: dict) -> 
             data["label"] = label
         x_offset = item.get("x_offset")
         y_offset = item.get("y_offset")
-        x = anchor_x + (float(x_offset) if isinstance(x_offset, (int, float)) else (260 * (index + 1 if anchor_node else index)))
+        x = anchor_x + (
+            float(x_offset) if isinstance(x_offset, (int, float)) else (260 * (index + 1 if anchor_node else index))
+        )
         y = anchor_y + (float(y_offset) if isinstance(y_offset, (int, float)) else (90 * index))
         preview_nodes.append(
             {

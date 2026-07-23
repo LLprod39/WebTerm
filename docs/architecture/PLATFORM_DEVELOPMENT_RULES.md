@@ -358,10 +358,10 @@ Minimum checks by change type:
 | Integration/egress | permission-deny, redaction, audit, health check tests |
 | Docs only | grep stale references and verify paths |
 
-Use WSL `.venv` for backend Django checks in this workspace when needed:
+Use the locked WSL `.venv-wsl` for backend Django checks in this workspace when needed:
 
 ```powershell
-wsl -e bash -lc 'cd /mnt/c/WebTrerm && .venv/bin/python manage.py check --settings=web_ui.settings.test'
+wsl -e bash -lc 'cd /mnt/c/WebTrerm && .venv-wsl/bin/python manage.py check --settings=web_ui.settings.test'
 ```
 
 Architecture guard:

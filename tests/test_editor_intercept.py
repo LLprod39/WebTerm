@@ -53,10 +53,10 @@ class TestIsInteractiveTuiCommand:
             "",
             "   ",
             "ls -la",
-            "echo nano",            # literal, not invocation
-            "nanorc --help",        # different binary, prefix-only match would be wrong
-            "topdump",              # prefix-only match would be wrong
-            "vimdiff a b",          # not in the whitelist (distinct program)
+            "echo nano",  # literal, not invocation
+            "nanorc --help",  # different binary, prefix-only match would be wrong
+            "topdump",  # prefix-only match would be wrong
+            "vimdiff a b",  # not in the whitelist (distinct program)
             "cat /etc/hosts",
             "sudo systemctl status nginx",
             "python3 -c 'print(1)'",

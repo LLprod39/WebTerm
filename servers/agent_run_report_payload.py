@@ -229,7 +229,9 @@ def normalize_agent_run_report_payload(run: AgentRun, payload: Any | None = None
     return merged
 
 
-def build_agent_run_events_payload(run: AgentRun, *, event_rows: list[AgentRunEvent] | None = None) -> list[dict[str, Any]]:
+def build_agent_run_events_payload(
+    run: AgentRun, *, event_rows: list[AgentRunEvent] | None = None
+) -> list[dict[str, Any]]:
     return _build_events(run, event_rows)
 
 
@@ -251,7 +253,9 @@ def refresh_agent_run_report_payload(run: AgentRun) -> dict[str, Any]:
     return run.report_payload
 
 
-def record_run_event_and_refresh_report(run: AgentRun, event_type: str, payload: dict[str, Any] | None = None) -> AgentRunEvent | None:
+def record_run_event_and_refresh_report(
+    run: AgentRun, event_type: str, payload: dict[str, Any] | None = None
+) -> AgentRunEvent | None:
     event = record_run_event(run.id, event_type, payload or {})
     refresh_agent_run_report_payload(run)
     return event
@@ -260,5 +264,6 @@ def record_run_event_and_refresh_report(run: AgentRun, event_type: str, payload:
 def build_agent_run_report_response(run: AgentRun) -> dict[str, Any]:
     payload = normalize_agent_run_report_payload(run)
     return {"success": True, **payload}
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

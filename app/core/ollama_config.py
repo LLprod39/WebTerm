@@ -11,22 +11,18 @@ OLLAMA_THINK_MODES = {"", "off", "on", "low", "medium", "high"}
 
 
 def normalize_ollama_base_url(raw: str | None = None) -> str:
-    value = (
-        (raw or "").strip()
-        or (os.getenv("OLLAMA_BASE_URL") or "").strip()
-        or "http://127.0.0.1:11434"
-    ).rstrip("/")
+    value = ((raw or "").strip() or (os.getenv("OLLAMA_BASE_URL") or "").strip() or "http://127.0.0.1:11434").rstrip(
+        "/"
+    )
     if "://" not in value:
         value = f"http://{value}"
     return value.rstrip("/")
 
 
 def normalize_ollama_cloud_base_url(raw: str | None = None) -> str:
-    value = (
-        (raw or "").strip()
-        or (os.getenv("OLLAMA_CLOUD_BASE_URL") or "").strip()
-        or "https://ollama.com"
-    ).rstrip("/")
+    value = ((raw or "").strip() or (os.getenv("OLLAMA_CLOUD_BASE_URL") or "").strip() or "https://ollama.com").rstrip(
+        "/"
+    )
     if "://" not in value:
         value = f"https://{value}"
     return value.rstrip("/")
@@ -203,7 +199,6 @@ def get_ollama_base_urls(primary: str) -> list[str]:
     primary = normalize_ollama_base_url(primary)
     sticky = _sticky_ollama_url()
     parsed = urlsplit(primary)
-    port = parsed.port or 11434
     primary_host = (parsed.hostname or "").strip().lower()
 
     ordered: list[str] = []

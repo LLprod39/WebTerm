@@ -24,7 +24,11 @@ def _blocked_evidence() -> dict:
             "approval_ref_present": False,
             "local_indicator_count": 8,
             "local_indicators": [
-                {"source": "provider_probe.provider_base_url", "value": "https://host.docker.internal:8443", "classification": "local"}
+                {
+                    "source": "provider_probe.provider_base_url",
+                    "value": "https://host.docker.internal:8443",
+                    "classification": "local",
+                }
             ],
             "reason": "production target environment is not selected",
         },
@@ -157,7 +161,9 @@ def _blocked_evidence() -> dict:
         "release_summary": {
             "status": "blocked",
             "top_blockers": ["readiness:sidebar_release_scope=missing", "release_scope:local"],
-            "next_steps": ["Run release evidence in production with non-local Rancher/Devtron/MCP endpoints, approval ref and core evidence refs."],
+            "next_steps": [
+                "Run release evidence in production with non-local Rancher/Devtron/MCP endpoints, approval ref and core evidence refs."
+            ],
         },
     }
 
@@ -192,7 +198,12 @@ def test_kubernetes_release_handoff_summarizes_blocked_local_evidence(tmp_path):
     assert "production_scope" in blocker_categories
     assert blocker_categories["production_scope"]["count"] >= 2
     external_blocker_ids = {item["id"] for item in handoff["backend_workstream"]["external_production_blockers"]}
-    assert {"target_environment", "no_local_indicators", "select_production_environment", "production_scope"} <= external_blocker_ids
+    assert {
+        "target_environment",
+        "no_local_indicators",
+        "select_production_environment",
+        "production_scope",
+    } <= external_blocker_ids
     proof_status = {item["id"]: item["status"] for item in handoff["release_proofs"]}
     assert proof_status["post_review_retention"] == "ready"
     assert proof_status["external_evidence_bundle"] == "ready"
@@ -211,7 +222,9 @@ def test_kubernetes_release_handoff_summarizes_blocked_local_evidence(tmp_path):
     assert "credential_scan=ready" in normal_user_surface["detail"]
     assert "secret_ref_serialized=False" in normal_user_surface["detail"]
     assert "forbidden_values=False" in normal_user_surface["detail"]
-    production_action_evidence = next(item for item in handoff["release_proofs"] if item["id"] == "production_action_evidence")
+    production_action_evidence = next(
+        item for item in handoff["release_proofs"] if item["id"] == "production_action_evidence"
+    )
     assert "rollback_actions=5" in production_action_evidence["detail"]
     assert "native_checks=10" in production_action_evidence["detail"]
     assert "blocked_actions=11" in production_action_evidence["detail"]
@@ -237,11 +250,7 @@ def test_kubernetes_release_handoff_summarizes_blocked_local_evidence(tmp_path):
         "production_evidence_complete",
         "sidebar_enablement_complete",
     } <= blocked_ids
-    phase_commands = {
-        command["id"]
-        for phase in execution_plan["phases"]
-        for command in phase.get("commands", [])
-    }
+    phase_commands = {command["id"] for phase in execution_plan["phases"] for command in phase.get("commands", [])}
     assert {
         "live_provider_smoke",
         "readonly_rbac_live",
@@ -269,7 +278,10 @@ def test_kubernetes_release_handoff_summarizes_blocked_local_evidence(tmp_path):
     local_commands = {command["id"]: command for command in local_phase["commands"]}
     assert local_commands["local_demo_fixture"]["scope"] == "local_demo"
     assert ".tools/k8s-provider-fixture.py" in local_commands["local_demo_fixture"]["command"]
-    assert local_commands["local_demo_seed"]["command"] == "python manage.py seed_kubernetes_ops_demo --username admin --admin-write"
+    assert (
+        local_commands["local_demo_seed"]["command"]
+        == "python manage.py seed_kubernetes_ops_demo --username admin --admin-write"
+    )
     env_flags = {item["name"]: item["expected"] for item in handoff["production_env_flags"]}
     assert "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF" in env_flags
     assert "KUBERNETES_OPS_IDENTITY_RUNTIME_EVIDENCE_REF" in env_flags
@@ -292,7 +304,9 @@ def test_kubernetes_release_handoff_summarizes_blocked_local_evidence(tmp_path):
     assert any("interactive production controls artifact" in item for item in handoff["external_evidence_required"])
     assert any("port-forward network policy evidence" in item for item in handoff["external_evidence_required"])
     assert any("interactive transports require recording gates" in item for item in handoff["safety_guards"])
-    assert any("port-forward additionally requires network policy evidence" in item for item in handoff["safety_guards"])
+    assert any(
+        "port-forward additionally requires network policy evidence" in item for item in handoff["safety_guards"]
+    )
 
 
 def test_kubernetes_release_handoff_recomputes_stale_backend_workstream(tmp_path):
@@ -466,23 +480,55 @@ def test_kubernetes_release_handoff_markdown_is_operator_readable(tmp_path):
         "--output artifacts/kubernetes_ops_release_evidence.json`"
     ) in markdown
     assert "## Release Proofs" in markdown
-    assert "`post_review_retention`: ready - pending_review=True, deleted_events=1, post_review_redacted=True" in markdown
+    assert (
+        "`post_review_retention`: ready - pending_review=True, deleted_events=1, post_review_redacted=True" in markdown
+    )
     assert "`external_evidence_bundle`: ready - refs_missing=0, artifacts=6/6, local_indicators=0" in markdown
-    assert "`production_action_evidence`: ready - rollback_actions=5, native_checks=10, blocked_actions=11, blocked_contract=True" in markdown
-    assert "`interactive_transport_evidence`: ready - enabled=0, blockers=0, dangerous_live_action_started=False" in markdown
-    assert "`interactive_live_smoke`: ready - simulated_checks=4, live_contracts=4, required=False, production_live_provider_evidence=False" in markdown
-    assert "`interactive_shell_streams`: ready - actions=2, recordings=2, events=4, provider_requests_safe=True" in markdown
+    assert (
+        "`production_action_evidence`: ready - rollback_actions=5, native_checks=10, blocked_actions=11, blocked_contract=True"
+        in markdown
+    )
+    assert (
+        "`interactive_transport_evidence`: ready - enabled=0, blockers=0, dangerous_live_action_started=False"
+        in markdown
+    )
+    assert (
+        "`interactive_live_smoke`: ready - simulated_checks=4, live_contracts=4, required=False, production_live_provider_evidence=False"
+        in markdown
+    )
+    assert (
+        "`interactive_shell_streams`: ready - actions=2, recordings=2, events=4, provider_requests_safe=True"
+        in markdown
+    )
     assert "`definition_of_done`: ready - ready=13/13, missing=0, missing_ids=none" in markdown
     assert (
         "`normal_user_surface`: ready - reader_external_links_visible=False, credential_scan=ready, surfaces=16, "
         "secret_ref_serialized=False, forbidden_values=False"
     ) in markdown
-    assert "`action_controls`: ready - native_execution_enabled=False, approval_status=approved_external, rollback_plan=required, restart_template=ready, verification_plan=pending, auto_verification=verified, gitops=gitlab, git_write=False, cluster_mutation=False, restricted_write_gate=ready" in markdown
-    assert "`secret_read_controls`: ready - default_redacted=True, list_metadata_only=True, denied_without_grant=True, denied_without_runtime_flag=True, allowed_all_gates=True" in markdown
-    assert "`provider_secret_lifecycle`: ready - storage=managed, rotation_supported=True, plaintext_serialized=False, persistent_rows=False" in markdown
-    assert "`audit_redaction`: ready - api_serializer_redacted=True, cluster_event_redacted=True, credentialed_url_sanitized=True, persistent_rows=False" in markdown
-    assert "`python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json`" in markdown
-    assert "`python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md`" in markdown
+    assert (
+        "`action_controls`: ready - native_execution_enabled=False, approval_status=approved_external, rollback_plan=required, restart_template=ready, verification_plan=pending, auto_verification=verified, gitops=gitlab, git_write=False, cluster_mutation=False, restricted_write_gate=ready"
+        in markdown
+    )
+    assert (
+        "`secret_read_controls`: ready - default_redacted=True, list_metadata_only=True, denied_without_grant=True, denied_without_runtime_flag=True, allowed_all_gates=True"
+        in markdown
+    )
+    assert (
+        "`provider_secret_lifecycle`: ready - storage=managed, rotation_supported=True, plaintext_serialized=False, persistent_rows=False"
+        in markdown
+    )
+    assert (
+        "`audit_redaction`: ready - api_serializer_redacted=True, cluster_event_redacted=True, credentialed_url_sanitized=True, persistent_rows=False"
+        in markdown
+    )
+    assert (
+        "`python manage.py verify_kubernetes_ops_release --username <staff-user> --output artifacts/kubernetes_ops_release_evidence.json`"
+        in markdown
+    )
+    assert (
+        "`python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md`"
+        in markdown
+    )
     assert "`KUBERNETES_OPS_READY_FOR_SIDEBAR`" in markdown
     assert "`KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF`" in markdown
     assert "`KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF`" in markdown

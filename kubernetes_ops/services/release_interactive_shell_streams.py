@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import timedelta
 from typing import Any
 
@@ -30,7 +30,11 @@ def build_kubernetes_release_interactive_shell_stream_evidence(user, enabled: bo
     if not enabled:
         return {"success": False, "status": "skipped", "reason": "interactive shell stream proof skipped"}
     if not user or not getattr(user, "is_staff", False):
-        return {"success": False, "status": "missing", "reason": "staff user is required for interactive shell stream proof"}
+        return {
+            "success": False,
+            "status": "missing",
+            "reason": "staff user is required for interactive shell stream proof",
+        }
     try:
         with transaction.atomic():
             _grant_break_glass_features(user)
@@ -112,8 +116,12 @@ def _terminal_stream_proof(*, user, session: K8sAdminSession, requests: list[dic
         stream_id="release-terminal-smoke",
         timeout_seconds=2,
     )
-    append_interactive_recording_event(recording_pk=context["_recording_pk"], stream="stdin", data="PASSWORD=release-terminal-secret", sequence=1)
-    append_interactive_recording_event(recording_pk=context["_recording_pk"], stream="stdout", data="TOKEN=release-terminal-token", sequence=2)
+    append_interactive_recording_event(
+        recording_pk=context["_recording_pk"], stream="stdin", data="PASSWORD=release-terminal-secret", sequence=1
+    )
+    append_interactive_recording_event(
+        recording_pk=context["_recording_pk"], stream="stdout", data="TOKEN=release-terminal-token", sequence=2
+    )
     summary = complete_cluster_terminal_stream(
         user=user,
         action_id=context["action"]["id"],
@@ -162,8 +170,12 @@ def _node_debug_stream_proof(*, user, session: K8sAdminSession, requests: list[d
         stream_id="release-node-debug-smoke",
         timeout_seconds=2,
     )
-    append_interactive_recording_event(recording_pk=context["_recording_pk"], stream="stdout", data="TOKEN=release-node-token", sequence=1)
-    append_interactive_recording_event(recording_pk=context["_recording_pk"], stream="stderr", data="PASSWORD=release-node-secret", sequence=2)
+    append_interactive_recording_event(
+        recording_pk=context["_recording_pk"], stream="stdout", data="TOKEN=release-node-token", sequence=1
+    )
+    append_interactive_recording_event(
+        recording_pk=context["_recording_pk"], stream="stderr", data="PASSWORD=release-node-secret", sequence=2
+    )
     summary = complete_node_debug_stream(
         user=user,
         action_id=context["action"]["id"],
@@ -213,7 +225,10 @@ def _provider_stream_open_proof(*, provider: K8sProvider, requests: list[dict[st
     )
     return {
         "id": "provider_interactive_shell_stream_opener",
-        "success": request["method"] == "POST" and request["stdin"] is True and request["tty"] is True and request["event_stream_ok"] is True,
+        "success": request["method"] == "POST"
+        and request["stdin"] is True
+        and request["tty"] is True
+        and request["event_stream_ok"] is True,
         "method": request["method"],
         "stdin": request["stdin"],
         "tty": request["tty"],
@@ -221,7 +236,9 @@ def _provider_stream_open_proof(*, provider: K8sProvider, requests: list[dict[st
     }
 
 
-def _open_provider_stream(*, provider: K8sProvider, path: str, operation: str, target: dict[str, Any], requests: list[dict[str, Any]]) -> dict[str, Any]:
+def _open_provider_stream(
+    *, provider: K8sProvider, path: str, operation: str, target: dict[str, Any], requests: list[dict[str, Any]]
+) -> dict[str, Any]:
     captured: dict[str, Any] = {}
 
     def transport(url, _headers, _timeout, *, method="GET", body=None):
@@ -302,7 +319,12 @@ def _node_session(*, user, cluster: K8sCluster) -> K8sAdminSession:
 
 def _events_are_redacted(events: list[K8sAdminRecordingEvent]) -> bool:
     serialized = " ".join(event.data for event in events)
-    return bool(events) and "release-terminal-secret" not in serialized and "release-node-secret" not in serialized and "provider-secret" not in serialized
+    return (
+        bool(events)
+        and "release-terminal-secret" not in serialized
+        and "release-node-secret" not in serialized
+        and "provider-secret" not in serialized
+    )
 
 
 def _request_body_safe(request: dict[str, Any]) -> bool:
@@ -332,9 +354,7 @@ def _temporary_settings(**overrides):
     finally:
         for key, value in previous.items():
             if key in missing:
-                try:
+                with suppress(AttributeError):
                     delattr(settings, key)
-                except AttributeError:
-                    pass
             else:
                 setattr(settings, key, value)

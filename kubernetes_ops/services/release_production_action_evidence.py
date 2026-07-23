@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -28,27 +28,63 @@ ROLLBACK_DRILL_ACTIONS = (
 ACTION_CLASS_CONTRACTS: dict[str, dict[str, tuple[str, ...]]] = {
     "k8s.rollout.restart": {
         "rollback_evidence_required": ("rollout_status", "gitops_or_devtron_rollback_ref_if_used", "pod_readiness"),
-        "native_verification_check_ids": ("rollout_status_observed", "pod_readiness_observed", "recent_warning_events_checked"),
+        "native_verification_check_ids": (
+            "rollout_status_observed",
+            "pod_readiness_observed",
+            "recent_warning_events_checked",
+        ),
     },
     "k8s.workload.scale": {
-        "rollback_evidence_required": ("previous_replicas", "post_rollback_workload_readiness", "recent_warning_events"),
-        "native_verification_check_ids": ("desired_replicas_observed", "workload_readiness_observed", "recent_warning_events_checked"),
+        "rollback_evidence_required": (
+            "previous_replicas",
+            "post_rollback_workload_readiness",
+            "recent_warning_events",
+        ),
+        "native_verification_check_ids": (
+            "desired_replicas_observed",
+            "workload_readiness_observed",
+            "recent_warning_events_checked",
+        ),
     },
     "k8s.resource.apply": {
-        "rollback_evidence_required": ("rollback_source_ref", "rollback_dry_run_action_id", "post_rollback_resource_generation"),
-        "native_verification_check_ids": ("apply_action_completed", "resource_generation_observed", "recent_warning_events_checked"),
+        "rollback_evidence_required": (
+            "rollback_source_ref",
+            "rollback_dry_run_action_id",
+            "post_rollback_resource_generation",
+        ),
+        "native_verification_check_ids": (
+            "apply_action_completed",
+            "resource_generation_observed",
+            "recent_warning_events_checked",
+        ),
     },
     "k8s.resource.patch": {
-        "rollback_evidence_required": ("previous_resource_snapshot_ref", "reverse_patch_dry_run_ref", "post_rollback_resource_generation"),
-        "native_verification_check_ids": ("patch_action_completed", "resource_generation_observed", "recent_warning_events_checked"),
+        "rollback_evidence_required": (
+            "previous_resource_snapshot_ref",
+            "reverse_patch_dry_run_ref",
+            "post_rollback_resource_generation",
+        ),
+        "native_verification_check_ids": (
+            "patch_action_completed",
+            "resource_generation_observed",
+            "recent_warning_events_checked",
+        ),
     },
     "k8s.resource.delete": {
         "rollback_evidence_required": ("restore_source_ref", "rollback_dry_run_action_id", "dependent_health"),
-        "native_verification_check_ids": ("resource_absence_observed", "dependent_health_checked", "recent_warning_events_checked"),
+        "native_verification_check_ids": (
+            "resource_absence_observed",
+            "dependent_health_checked",
+            "recent_warning_events_checked",
+        ),
     },
 }
 NATIVE_VERIFICATION_CHECKS = tuple(
-    dict.fromkeys(check_id for action in ROLLBACK_DRILL_ACTIONS for check_id in ACTION_CLASS_CONTRACTS[action]["native_verification_check_ids"])
+    dict.fromkeys(
+        check_id
+        for action in ROLLBACK_DRILL_ACTIONS
+        for check_id in ACTION_CLASS_CONTRACTS[action]["native_verification_check_ids"]
+    )
 )
 
 
@@ -59,7 +95,11 @@ def build_kubernetes_production_action_evidence() -> dict[str, Any]:
         _reference_item("production_rollback", PRODUCTION_ROLLBACK_EVIDENCE_SETTING, production),
         _reference_item("native_verification", PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_SETTING, production),
     ]
-    errors = [f"reference:{item['id']}:{item['setting']}:missing" for item in references if item["required"] and not item["present"]]
+    errors = [
+        f"reference:{item['id']}:{item['setting']}:missing"
+        for item in references
+        if item["required"] and not item["present"]
+    ]
     action_class_contracts = _action_class_contracts()
     blocked_action_contracts = _blocked_action_contracts()
     coverage = _coverage_summary(action_class_contracts)
@@ -123,7 +163,12 @@ def write_kubernetes_production_action_evidence(report: dict[str, Any], output_p
 def load_kubernetes_production_action_evidence_artifact(path: Path | None = None) -> dict[str, Any]:
     artifact_path = path or Path(settings.BASE_DIR) / PRODUCTION_ACTION_EVIDENCE_ARTIFACT
     if not artifact_path.exists():
-        return {"success": False, "status": "missing", "path": str(artifact_path), "errors": ["production action evidence artifact is missing"]}
+        return {
+            "success": False,
+            "status": "missing",
+            "path": str(artifact_path),
+            "errors": ["production action evidence artifact is missing"],
+        }
     try:
         payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -156,8 +201,12 @@ def load_kubernetes_production_action_evidence_artifact(path: Path | None = None
         "summary": payload.get("summary") if isinstance(payload.get("summary"), dict) else {},
         "references": payload.get("references") if isinstance(payload.get("references"), list) else [],
         "coverage": payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {},
-        "action_class_contracts": payload.get("action_class_contracts") if isinstance(payload.get("action_class_contracts"), list) else [],
-        "blocked_action_contracts": payload.get("blocked_action_contracts") if isinstance(payload.get("blocked_action_contracts"), list) else [],
+        "action_class_contracts": payload.get("action_class_contracts")
+        if isinstance(payload.get("action_class_contracts"), list)
+        else [],
+        "blocked_action_contracts": payload.get("blocked_action_contracts")
+        if isinstance(payload.get("blocked_action_contracts"), list)
+        else [],
         "errors": list(dict.fromkeys(errors)),
     }
 
@@ -215,9 +264,13 @@ def _coverage_summary(action_class_contracts: list[dict[str, Any]]) -> dict[str,
         bool(item.get("rollback_contract_ready")) and bool(item.get("rollback_evidence_required"))
         for item in action_class_contracts
     )
-    native_complete = actions == list(ROLLBACK_DRILL_ACTIONS) and tuple(dict.fromkeys(check_ids)) == NATIVE_VERIFICATION_CHECKS and all(
-        bool(item.get("native_verification_contract_ready")) and bool(item.get("native_verification_check_ids"))
-        for item in action_class_contracts
+    native_complete = (
+        actions == list(ROLLBACK_DRILL_ACTIONS)
+        and tuple(dict.fromkeys(check_ids)) == NATIVE_VERIFICATION_CHECKS
+        and all(
+            bool(item.get("native_verification_contract_ready")) and bool(item.get("native_verification_check_ids"))
+            for item in action_class_contracts
+        )
     )
     blocked_complete = _blocked_action_contract_complete(blocked_contracts)
     return {
@@ -236,7 +289,9 @@ def _coverage_summary(action_class_contracts: list[dict[str, Any]]) -> dict[str,
 def _contract_errors(payload: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     contracts = payload.get("action_class_contracts") if isinstance(payload.get("action_class_contracts"), list) else []
-    blocked_contracts = payload.get("blocked_action_contracts") if isinstance(payload.get("blocked_action_contracts"), list) else []
+    blocked_contracts = (
+        payload.get("blocked_action_contracts") if isinstance(payload.get("blocked_action_contracts"), list) else []
+    )
     coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     if len(contracts) != len(ROLLBACK_DRILL_ACTIONS):
@@ -308,11 +363,14 @@ def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if checked_at is None:
         return None, "checked_at is invalid"
     if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=datetime_timezone.utc)
+        checked_at = timezone.make_aware(checked_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:
-        return age_seconds, f"production action evidence artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}"
+        return (
+            age_seconds,
+            f"production action evidence artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
+        )
     return age_seconds, ""
 
 

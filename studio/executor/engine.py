@@ -18,6 +18,7 @@ Nodes are being migrated one-by-one from pipeline_executor.py to
 studio/executor/nodes/ — each migration step is a separate PR.
 When all nodes are migrated, pipeline_executor.py is retired.
 """
+
 from __future__ import annotations
 
 import logging

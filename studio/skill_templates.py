@@ -26,33 +26,6 @@ class SkillTemplateDefinition:
 
 SKILL_TEMPLATES: tuple[SkillTemplateDefinition, ...] = (
     SkillTemplateDefinition(
-        slug="keycloak-ops",
-        name="Keycloak Operations",
-        description="Identity and access workflow for Keycloak MCP with preflight, exact target discovery, and explicit environment control.",
-        summary="Best starting point for Keycloak user, group, client, and role automation.",
-        defaults={
-            "name": "Keycloak Operations Workflow",
-            "description": "Safe workflow for Keycloak MCP tasks with preflight, exact target resolution, explicit profile usage, and verification after every mutation.",
-            "service": "keycloak",
-            "category": "Identity and Access",
-            "safety_level": "high",
-            "ui_hint": "Attach this to every Keycloak bot so the runtime enforces preflight before mutating calls.",
-            "tags": ["keycloak", "iam", "mcp", "safety"],
-            "recommended_tools": ["report", "ask_user", "analyze_output"],
-            "guardrail_summary": [
-                "Requires environment preflight before mutating calls",
-                "Supports pinned profile or realm arguments",
-                "Blocks profile switching when configured",
-            ],
-            "runtime_policy": build_runtime_policy(
-                applicable_tool_patterns=["^keycloak_"],
-                blocked_tool_patterns=["^keycloak_use_profile$"],
-                mutating_tool_patterns=["^keycloak_create_", "^keycloak_assign_", "^keycloak_add_", "^keycloak_delete_", "^keycloak_update_"],
-                required_preflight_tools=["keycloak_current_environment"],
-            ),
-        },
-    ),
-    SkillTemplateDefinition(
         slug="gitlab-ops",
         name="GitLab Operations",
         description="Repository and platform workflow for GitLab MCP with project discovery, branch safety, and post-change verification.",
@@ -73,7 +46,13 @@ SKILL_TEMPLATES: tuple[SkillTemplateDefinition, ...] = (
             ],
             "runtime_policy": build_runtime_policy(
                 applicable_tool_patterns=["^gitlab_"],
-                mutating_tool_patterns=["^gitlab_create_", "^gitlab_update_", "^gitlab_delete_", "^gitlab_add_", "^gitlab_assign_"],
+                mutating_tool_patterns=[
+                    "^gitlab_create_",
+                    "^gitlab_update_",
+                    "^gitlab_delete_",
+                    "^gitlab_add_",
+                    "^gitlab_assign_",
+                ],
                 required_preflight_tools=["gitlab_current_context"],
             ),
         },
@@ -99,7 +78,13 @@ SKILL_TEMPLATES: tuple[SkillTemplateDefinition, ...] = (
             ],
             "runtime_policy": build_runtime_policy(
                 applicable_tool_patterns=["^jira_"],
-                mutating_tool_patterns=["^jira_create_", "^jira_update_", "^jira_delete_", "^jira_transition_", "^jira_assign_"],
+                mutating_tool_patterns=[
+                    "^jira_create_",
+                    "^jira_update_",
+                    "^jira_delete_",
+                    "^jira_transition_",
+                    "^jira_assign_",
+                ],
                 required_preflight_tools=["jira_current_context"],
             ),
         },
@@ -125,7 +110,13 @@ SKILL_TEMPLATES: tuple[SkillTemplateDefinition, ...] = (
             ],
             "runtime_policy": build_runtime_policy(
                 applicable_tool_patterns=["^kubernetes_"],
-                mutating_tool_patterns=["^kubernetes_apply_", "^kubernetes_patch_", "^kubernetes_scale_", "^kubernetes_delete_", "^kubernetes_rollout_"],
+                mutating_tool_patterns=[
+                    "^kubernetes_apply_",
+                    "^kubernetes_patch_",
+                    "^kubernetes_scale_",
+                    "^kubernetes_delete_",
+                    "^kubernetes_rollout_",
+                ],
                 required_preflight_tools=["kubernetes_current_context"],
             ),
         },
@@ -151,7 +142,13 @@ SKILL_TEMPLATES: tuple[SkillTemplateDefinition, ...] = (
             ],
             "runtime_policy": build_runtime_policy(
                 applicable_tool_patterns=["^postgres_"],
-                mutating_tool_patterns=["^postgres_create_", "^postgres_update_", "^postgres_delete_", "^postgres_grant_", "^postgres_alter_"],
+                mutating_tool_patterns=[
+                    "^postgres_create_",
+                    "^postgres_update_",
+                    "^postgres_delete_",
+                    "^postgres_grant_",
+                    "^postgres_alter_",
+                ],
                 required_preflight_tools=["postgres_current_context"],
             ),
         },

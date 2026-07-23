@@ -228,18 +228,18 @@ class OpsPackageActionNode(BaseNode):
         result = await _run_command_result(
             server,
             secret=secret,
-            command=(
-                f"{command} 2>&1\n"
-                "action_exit=$?\n"
-                "printf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"
-            ),
+            command=(f"{command} 2>&1\naction_exit=$?\nprintf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"),
         )
         combined_output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
         action_exit = _coerce_int(result.get("exit_code")) or 0
         exit_match = re.search(r"__ACTION_EXIT__=(\d+)", combined_output)
         if exit_match:
             action_exit = int(exit_match.group(1))
-        verification = await get_linux_ui_packages(server, secret=secret) if _coerce_bool(config.get("verify"), default=True) else {}
+        verification = (
+            await get_linux_ui_packages(server, secret=secret)
+            if _coerce_bool(config.get("verify"), default=True)
+            else {}
+        )
         payload = {
             "server": {"id": server.id, "name": server.name, "host": server.host},
             "action": action,
@@ -254,7 +254,10 @@ class OpsPackageActionNode(BaseNode):
         text = f"Package action {action} on {server.name}: {status_text} ({', '.join(package_names)})\n\n```text\n{payload['output_excerpt']}\n```"
         if payload["success"]:
             return NodeResult(output={"output": text, "package_action": payload})
-        return NodeResult(error=payload["output_excerpt"] or "Package action failed", output={"output": text, "package_action": payload})
+        return NodeResult(
+            error=payload["output_excerpt"] or "Package action failed",
+            output={"output": text, "package_action": payload},
+        )
 
 
 @registry.register
@@ -266,7 +269,9 @@ class OpsServerSnapshotNode(BaseNode):
         server = await _load_owned_server(ctx, config)
         secret = await _server_secret(server)
         raw_sections = _coerce_list(config.get("sections")) or ["overview", "services", "docker", "disk"]
-        sections = [str(item).strip().lower() for item in raw_sections if str(item).strip().lower() in SERVER_SNAPSHOT_SECTIONS]
+        sections = [
+            str(item).strip().lower() for item in raw_sections if str(item).strip().lower() in SERVER_SNAPSHOT_SECTIONS
+        ]
         if not sections:
             sections = ["overview"]
 
@@ -274,7 +279,10 @@ class OpsServerSnapshotNode(BaseNode):
         lines = _coerce_int(config.get("lines")) or 80
         service = ctx.resolve_template(str(config.get("service") or ""))
         log_source = str(config.get("log_source") or "journal").strip().lower() or "journal"
-        payload: dict[str, Any] = {"server": {"id": server.id, "name": server.name, "host": server.host}, "sections": {}}
+        payload: dict[str, Any] = {
+            "server": {"id": server.id, "name": server.name, "host": server.host},
+            "sections": {},
+        }
 
         if "overview" in sections:
             payload["sections"]["overview"] = await get_linux_ui_overview(server, secret=secret)
@@ -285,7 +293,9 @@ class OpsServerSnapshotNode(BaseNode):
         if "docker" in sections:
             payload["sections"]["docker"] = await get_linux_ui_docker(server, secret=secret)
         if "logs" in sections:
-            payload["sections"]["logs"] = await get_linux_ui_logs(server, secret=secret, source=log_source, lines=lines, service=service)
+            payload["sections"]["logs"] = await get_linux_ui_logs(
+                server, secret=secret, source=log_source, lines=lines, service=service
+            )
         if "disk" in sections:
             payload["sections"]["disk"] = await get_linux_ui_disk(server, secret=secret)
         if "network" in sections:
@@ -342,11 +352,7 @@ class OpsDiskCleanupNode(BaseNode):
         result = await _run_command_result(
             server,
             secret=secret,
-            command=(
-                f"{command}\n"
-                "action_exit=$?\n"
-                "printf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"
-            ),
+            command=(f"{command}\naction_exit=$?\nprintf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"),
         )
         combined_output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
         action_exit = _coerce_int(result.get("exit_code")) or 0
@@ -375,7 +381,9 @@ class OpsDiskCleanupNode(BaseNode):
         text = f"Disk cleanup {action} on {server.name}: {status_text}\n\n```text\n{payload['action_excerpt'] or payload['plan_excerpt']}\n```"
         if payload["success"]:
             return NodeResult(output={"output": text, "disk_cleanup": payload})
-        return NodeResult(error=payload["action_excerpt"] or "Disk cleanup failed", output={"output": text, "disk_cleanup": payload})
+        return NodeResult(
+            error=payload["action_excerpt"] or "Disk cleanup failed", output={"output": text, "disk_cleanup": payload}
+        )
 
 
 @registry.register
@@ -426,10 +434,15 @@ class OpsBackupRestoreCheckNode(BaseNode):
         status_text = "fresh" if summary.get("fresh") else "stale_or_missing"
         if action == "verify_latest":
             status_text = "verified" if verification["success"] else "verification_failed"
-        text = f"Backup restore check {action} on {server.name}: {status_text}\n\n```json\n{_compact_json(payload)}\n```"
+        text = (
+            f"Backup restore check {action} on {server.name}: {status_text}\n\n```json\n{_compact_json(payload)}\n```"
+        )
         if verification["success"]:
             return NodeResult(output={"output": text, "backup_restore_check": payload})
-        return NodeResult(error=verification["output_excerpt"] or "Backup verification failed", output={"output": text, "backup_restore_check": payload})
+        return NodeResult(
+            error=verification["output_excerpt"] or "Backup verification failed",
+            output={"output": text, "backup_restore_check": payload},
+        )
 
 
 @registry.register
@@ -497,6 +510,7 @@ class OpsHttpCheckNode(BaseNode):
 
     async def execute(self, ctx: ExecutionContext) -> NodeResult:
         return await _execute_http_check(ctx, self.node_data, async_client_factory=httpx.AsyncClient)
+
 
 @registry.register
 class OpsAlertUpdateNode(BaseNode):

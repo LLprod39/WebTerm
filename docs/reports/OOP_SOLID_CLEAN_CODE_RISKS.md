@@ -45,7 +45,6 @@ This report captures architecture and maintainability risks found in the current
 - `servers/agent_engine.py` is now 409 lines and removed from legacy baselines; the main run loop and tool execution/argument validation live in focused `servers/agent_engine_runner.py` and `servers/agent_engine_tools.py` modules while `AgentEngine` remains the public API surface.
 - `mars/services.py` is now 308 lines and removed from legacy baselines; CLI/Docker runtime helpers, interview question normalization, and Codex interview execution live in focused `mars/runtime_cli.py`, `mars/interview_questions.py`, and `mars/interview_codex.py` modules.
 - `servers/multi_agent_engine.py` is now a 469-line compatibility coordinator and removed from legacy baselines; lifecycle execution, planning/report synthesis, task mini-ReAct execution, LLM calls, and memory summary context live in focused `servers/multi_agent_*` modules.
-- `key_mcp.py` is now a 483-line compatibility entry point and removed from legacy baselines; Keycloak admin client core, user/client/group operations, shared client support, and non-role handlers live in focused `key_mcp_client*.py` and `key_mcp_handlers.py` modules.
 - `servers/models.py` is now a 67-line compatibility export and removed from legacy baselines; group, inventory, knowledge, monitoring, memory, and agent ORM classes live in focused `servers/models_*.py` modules while Django model discovery and public imports still go through `servers.models`.
 - `servers/consumers/ssh_terminal.py` is now a 77-line compatibility WebSocket consumer and removed from legacy baselines; connection lifecycle, session input, AI controls, AI plan helpers, queue execution, agent orchestration, agent support, stream IO, and compatibility lookups live in focused `servers/consumers/ssh_terminal_*.py` modules.
 - `frontend/src/components/pipeline/nodes/nodeMeta.tsx` is now 191 lines and removed from legacy baselines; node guidance metadata and shared metadata types live in focused `nodeGuidanceMeta.ts` and `nodeMetaTypes.ts` modules.
@@ -165,19 +164,19 @@ Recommended direction:
 
 Evidence:
 
-- `app/core/provider_adapters.py:14-234` now owns provider metadata, API-key aliases, CLI binary policy, provider-specific status details for FAIR/Ollama, and the explicit default fallback order.
+- `app/core/provider_adapters.py` now owns provider metadata, API-key aliases, CLI binary policy, provider-specific Ollama status details, and the explicit default fallback order.
 - `app/core/provider_registry.py:16-178` now composes provider adapters for enabled/configured checks, provider payloads, detailed status, and default fallback instead of owning those provider conditionals directly.
 - `app/core/llm_provider_resolution.py:7-85` now owns auto provider resolution for `LLMProvider.stream_chat`, including key-vs-enabled behavior and runtime fallback order.
 - `app/core/model_catalog.py:57-151` now owns provider model-selection metadata: chat model field, agent-model fallback chain, available-model cache attribute, default model list, and config enabled field.
 - `app/core/llm.py:207-216` delegates auto provider/model selection to `resolve_stream_provider`.
 - `app/core/model_config.py:38-119` stores provider-specific config fields in one model.
-- `app/core/model_refresh.py:18-291` now owns provider model-list refresh for Gemini, Grok, Claude, OpenAI, FAIR.Hyperion, and Ollama local/cloud catalogs.
+- `app/core/model_refresh.py` now owns provider model-list refresh for Gemini, Grok, Claude, OpenAI, and Ollama local/cloud catalogs.
 - `app/core/model_config.py:244-260` keeps the public `ModelManager.fetch_available_*` API as thin delegating methods.
 - `app/core/model_config.py:262-441` now delegates default model lists, chat/agent model selection, available-model cache lookup, and enabled checks to the provider model catalog instead of keeping local provider branches.
 - `app/core/model_config.py` is now below the standard architecture size limit and no longer needs a legacy baseline.
 - `ModelConfig` purpose-specific provider/model defaults are empty strings again, matching the documented inheritance contract: empty purpose overrides inherit `internal_llm_provider` and that provider's chat/agent model.
 - `app/core/llm_openai_compatible.py:30-282` now owns OpenAI-compatible request construction, SSE parsing for Responses/Completions/Chat Completions, retry/backoff, HTTP error handling, timeout/error messages, `trust_env` session policy, and usage logging for OpenAI-compatible providers.
-- `app/core/llm.py:261-299`, `328-367`, and `369-407` now keep Grok/FAIR/OpenAI provider guards, key checks, model selection, and request wiring but delegate the shared streaming loop to `stream_openai_compatible_response`.
+- `app/core/llm.py` keeps Grok/OpenAI provider guards, key checks, model selection, and request wiring but delegates the shared streaming loop to `stream_openai_compatible_response`.
 - `app/core/llm_anthropic.py:17-101` now owns Claude request construction, Anthropic prompt-cache `cache_control`, stream timeout/retry behavior, timeout/error messages, and usage logging.
 - `app/core/llm.py:301-326` now keeps only Claude provider guards, key lookup, model selection, and delegation to `stream_claude_response`.
 - `app/core/llm_gemini.py:17-119` now owns Gemini request construction, `system_instruction`, JSON-mode `response_mime_type`, stream consumption, timeout/retry behavior, timeout/error messages, and usage logging.

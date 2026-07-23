@@ -13,7 +13,9 @@ def is_agent_due(agent: ServerAgent, now=None) -> bool:
     return is_agent_due_by_schedule(agent, now)
 
 
-def dispatch_scheduled_agents(*, now=None, limit: int = 50, agent_ids: list[int] | None = None, user_ids: list[int] | None = None) -> dict:
+def dispatch_scheduled_agents(
+    *, now=None, limit: int = 50, agent_ids: list[int] | None = None, user_ids: list[int] | None = None
+) -> dict:
     current_time = now or timezone.now()
     queryset = (
         ServerAgent.objects.select_related("user")

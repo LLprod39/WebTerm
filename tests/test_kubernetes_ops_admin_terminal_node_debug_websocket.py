@@ -37,7 +37,9 @@ def _create_shell_fixture(username: str, *, include_contracts: bool = True) -> t
         auth_mode=K8sProvider.AUTH_NONE,
         labels=labels,
     )
-    cluster = K8sCluster.objects.create(name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local")
+    cluster = K8sCluster.objects.create(
+        name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local"
+    )
     user = User.objects.create_user(username=username, password="password-123")
     UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
     UserAppPermission.objects.create(user=user, feature="kubernetes_break_glass", allowed=True)
@@ -111,13 +113,18 @@ class _FakeShellStream:
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED=True, KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED=True)
+@override_settings(
+    KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED=True, KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED=True
+)
 async def test_cluster_terminal_websocket_can_use_provider_stream_and_records_transcript():
     user, terminal_session_id, _, _ = await database_sync_to_async(_create_shell_fixture)("k8s-ws-terminal")
     path = f"/ws/kubernetes/admin/terminal/{terminal_session_id}/?provider_stream=1&reason=inspect%20namespace&stdin=1&stream_timeout_seconds=4"
     fake_stream = _FakeShellStream()
 
-    with patch("kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream", return_value=fake_stream) as open_stream:
+    with patch(
+        "kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream",
+        return_value=fake_stream,
+    ) as open_stream:
         communicator = await _connect(path, user)
         started = await communicator.receive_json_from(timeout=1)
         await communicator.send_json_to({"type": "stdin", "data": "PASSWORD=stdin-secret"})
@@ -142,11 +149,15 @@ async def test_cluster_terminal_websocket_can_use_provider_stream_and_records_tr
     assert action.status == K8sAdminAction.STATUS_COMPLETED
     recording = await database_sync_to_async(K8sAdminRecording.objects.get)(action=action)
     assert recording.status == K8sAdminRecording.STATUS_COMPLETED
-    events = await database_sync_to_async(lambda: list(K8sAdminRecordingEvent.objects.filter(recording=recording).values("stream", "data", "redacted")))()
+    events = await database_sync_to_async(
+        lambda: list(K8sAdminRecordingEvent.objects.filter(recording=recording).values("stream", "data", "redacted"))
+    )()
     assert {event["stream"] for event in events} == {"stdin", "stdout", "stderr"}
     assert "raw-secret" not in str(events)
     assert "stdin-secret" not in str(events)
-    audit_count = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_terminal.stream_stopped").count)()
+    audit_count = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_terminal.stream_stopped").count
+    )()
     assert audit_count == 1
 
 
@@ -158,7 +169,10 @@ async def test_node_debug_websocket_can_use_provider_stream_and_records_transcri
     path = f"/ws/kubernetes/admin/node-debug/{node_session_id}/?provider_stream=1&node=worker-1&reason=debug%20node&stream_timeout_seconds=4"
     fake_stream = _FakeShellStream()
 
-    with patch("kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream", return_value=fake_stream) as open_stream:
+    with patch(
+        "kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream",
+        return_value=fake_stream,
+    ) as open_stream:
         communicator = await _connect(path, user)
         started = await communicator.receive_json_from(timeout=1)
         stdout = await communicator.receive_json_from(timeout=1)
@@ -184,12 +198,18 @@ async def test_node_debug_websocket_can_use_provider_stream_and_records_transcri
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED=True, KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED=True)
+@override_settings(
+    KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED=True, KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED=True
+)
 async def test_cluster_terminal_websocket_blocks_before_action_without_provider_contract():
-    user, terminal_session_id, _, _ = await database_sync_to_async(_create_shell_fixture)("k8s-ws-terminal-no-contract", include_contracts=False)
+    user, terminal_session_id, _, _ = await database_sync_to_async(_create_shell_fixture)(
+        "k8s-ws-terminal-no-contract", include_contracts=False
+    )
     path = f"/ws/kubernetes/admin/terminal/{terminal_session_id}/?provider_stream=1&reason=inspect%20namespace"
 
-    with patch("kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream") as open_stream:
+    with patch(
+        "kubernetes_ops.continuous_interactive_shell_streams.open_provider_interactive_shell_stream"
+    ) as open_stream:
         communicator = await _connect(path, user)
         rejected = await communicator.receive_json_from(timeout=1)
         await communicator.disconnect()

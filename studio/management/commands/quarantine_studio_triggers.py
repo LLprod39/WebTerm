@@ -27,7 +27,9 @@ class Command(BaseCommand):
             action="store_true",
             help="Also quarantine warning pipelines. By default only error/not_ready pipelines are selected.",
         )
-        parser.add_argument("--apply", action="store_true", help="Apply the quarantine. Without this, only report candidates.")
+        parser.add_argument(
+            "--apply", action="store_true", help="Apply the quarantine. Without this, only report candidates."
+        )
         parser.add_argument("--json", action="store_true", help="Print machine-readable output.")
 
     def handle(self, *args, **options):

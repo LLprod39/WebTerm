@@ -92,7 +92,13 @@ def prepare_kubernetes_port_forward_bridge(
         status=K8sAdminRecording.STATUS_BLOCKED,
         summary=action.response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording_policy": recording_policy, "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {
+            **(action.response_summary or {}),
+            "recording_policy": recording_policy,
+            "recording": recording_public_payload(recording),
+        }
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_port_forward(
         user=user,
@@ -161,8 +167,12 @@ def _prepare_port_forward_context(
     stream_id: str = "",
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes port-forward is disabled by policy.", code="native_port_forward_disabled", status=403)
-    ref = build_resource_ref(api_version=api_version or "v1", kind=kind, namespace=namespace, name=name, resource=resource)
+        raise AdminResourceError(
+            "Native Kubernetes port-forward is disabled by policy.", code="native_port_forward_disabled", status=403
+        )
+    ref = build_resource_ref(
+        api_version=api_version or "v1", kind=kind, namespace=namespace, name=name, resource=resource
+    )
     _validate_port_forward_target(ref)
     remote_port_value = _clean_port(remote_port, field="remote_port")
     local_port_value = _clean_optional_port(local_port)
@@ -176,7 +186,12 @@ def _prepare_port_forward_context(
     stream_ref = stream_id or str(uuid.uuid4())
     target = _target_payload(ref, remote_port=remote_port_value, local_port=local_port_value)
     path = _port_forward_path(provider, cluster, ref)
-    request_summary = {"target": target, "reason": reason_value, "duration_seconds": duration_value, "stream_id": stream_ref}
+    request_summary = {
+        "target": target,
+        "reason": reason_value,
+        "duration_seconds": duration_value,
+        "stream_id": stream_ref,
+    }
     return {
         "cluster": cluster,
         "provider": provider,
@@ -191,26 +206,44 @@ def _prepare_port_forward_context(
     }
 
 
-def _active_port_forward_session_for_user(user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef) -> K8sAdminSession:
+def _active_port_forward_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef
+) -> K8sAdminSession:
     policy = kubernetes_permission_policy(user)
     if not policy.get("can_port_forward"):
         code = "native_port_forward_disabled" if policy.get("can_break_glass") else "break_glass_required"
         raise AdminResourceError("Kubernetes port-forward access is required.", code=code, status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403)
+        raise AdminResourceError(
+            "Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Port-forward requires a break-glass admin session.", code="break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Port-forward requires a break-glass admin session.", code="break_glass_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if K8sAdminAction.VERB_PORT_FORWARD not in set(session.allowed_verbs or []):
-        raise AdminResourceError("Admin session does not allow port-forward.", code="admin_session_verb_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not allow port-forward.", code="admin_session_verb_denied", status=403
+        )
     _check_session_scope(session, ref)
     return session
 
@@ -218,21 +251,33 @@ def _active_port_forward_session_for_user(user, session_id: str, cluster: K8sClu
 def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -> None:
     allowed_namespaces = set(session.allowed_namespaces or [])
     if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-        raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+        )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
 def _validate_port_forward_target(ref: KubernetesResourceRef) -> None:
     if ref.kind not in PORT_FORWARD_KINDS:
-        raise AdminResourceError("Port-forward is only supported for Pod or Service targets.", code="port_forward_kind_not_supported", status=403)
+        raise AdminResourceError(
+            "Port-forward is only supported for Pod or Service targets.",
+            code="port_forward_kind_not_supported",
+            status=403,
+        )
     if not ref.namespace:
         raise AdminResourceError("namespace is required for port-forward.", code="namespace_required")
     if not ref.name:
         raise AdminResourceError("target name is required for port-forward.", code="resource_name_required")
     if ref.namespace in _protected_namespaces():
-        raise AdminResourceError("Port-forward in protected namespaces is blocked by Admin Mode.", code="port_forward_namespace_protected", status=403)
+        raise AdminResourceError(
+            "Port-forward in protected namespaces is blocked by Admin Mode.",
+            code="port_forward_namespace_protected",
+            status=403,
+        )
 
 
 def _validate_target_allowlist(ref: KubernetesResourceRef, remote_port: int) -> None:
@@ -241,7 +286,13 @@ def _validate_target_allowlist(ref: KubernetesResourceRef, remote_port: int) -> 
     wildcard_port = _target_key(ref, "*")
     wildcard_name = f"{ref.namespace.lower()}/{ref.kind.lower()}/*:{remote_port}"
     wildcard_kind = f"{ref.namespace.lower()}/{ref.kind.lower()}/*:*"
-    if "*" in allowed or target_key in allowed or wildcard_port in allowed or wildcard_name in allowed or wildcard_kind in allowed:
+    if (
+        "*" in allowed
+        or target_key in allowed
+        or wildcard_port in allowed
+        or wildcard_name in allowed
+        or wildcard_kind in allowed
+    ):
         return
     raise AdminResourceError(
         "Port-forward target is not allowlisted.",
@@ -253,10 +304,7 @@ def _validate_target_allowlist(ref: KubernetesResourceRef, remote_port: int) -> 
 
 def _allowed_targets() -> set[str]:
     configured = getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS", None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     return {str(item).strip().lower() for item in values if str(item).strip()}
 
 
@@ -268,10 +316,7 @@ def _protected_namespaces() -> set[str]:
     configured = getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_PROTECTED_NAMESPACES", None)
     if configured is None:
         configured = getattr(settings, "KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES", None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     cleaned = {str(item).strip() for item in values if str(item).strip()}
     return cleaned or set(DEFAULT_PROTECTED_NAMESPACES)
 
@@ -307,7 +352,10 @@ def _clean_duration(value: Any) -> int:
 
 def _max_duration_seconds() -> int:
     try:
-        value = int(getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS", DEFAULT_MAX_DURATION_SECONDS) or DEFAULT_MAX_DURATION_SECONDS)
+        value = int(
+            getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS", DEFAULT_MAX_DURATION_SECONDS)
+            or DEFAULT_MAX_DURATION_SECONDS
+        )
     except (TypeError, ValueError):
         value = DEFAULT_MAX_DURATION_SECONDS
     return max(60, min(value, 3600))
@@ -330,7 +378,11 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode port-forward.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode port-forward.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 
@@ -360,7 +412,9 @@ def _record_port_forward_action(
     )
 
 
-def _audit_port_forward(*, user, session: K8sAdminSession, cluster: K8sCluster, action: str, stream_id: str, payload: dict[str, Any]) -> None:
+def _audit_port_forward(
+    *, user, session: K8sAdminSession, cluster: K8sCluster, action: str, stream_id: str, payload: dict[str, Any]
+) -> None:
     K8sAuditEvent.objects.create(
         user=user,
         username_snapshot=getattr(user, "username", ""),

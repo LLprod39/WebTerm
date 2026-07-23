@@ -1,4 +1,5 @@
 """Terminal AI agent run orchestration."""
+
 from __future__ import annotations
 
 import asyncio
@@ -80,13 +81,9 @@ class SSHTerminalAgentRunnerMixin:
             rules_context = ""
 
         memory_context = ""
-        memory_enabled = bool(
-            (self._ai_settings or {}).get("memory_enabled", True)
-        )
+        memory_enabled = bool((self._ai_settings or {}).get("memory_enabled", True))
         if memory_enabled:
-            server_ids = [int(self.server.id)] + [
-                int(t.server_id) for t in extras.values() if t.server_id
-            ]
+            server_ids = [int(self.server.id)] + [int(t.server_id) for t in extras.values() if t.server_id]
             memory_context = await self._ai_build_agent_memory_context(server_ids)
 
         nova_context = await self._collect_nova_context_bundle()
@@ -120,7 +117,7 @@ class SSHTerminalAgentRunnerMixin:
                     send_event=self._send_ai_event,
                     timeout_seconds=max(5.0, float(request.timeout_seconds)),
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return None
             except asyncio.CancelledError:
                 raise
@@ -209,7 +206,4 @@ class SSHTerminalAgentRunnerMixin:
             self._add_to_history("assistant", final_text)
             # Mirror into the legacy ai_response stream so clients that
             # only subscribed to the plan-based flow still see the answer.
-            await self._send_ai_event(
-                {"type": "ai_response", "assistant_text": final_text}
-            )
-
+            await self._send_ai_event({"type": "ai_response", "assistant_text": final_text})

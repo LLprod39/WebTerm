@@ -69,9 +69,7 @@ class ArchitectureConfig:
     contract_file: str = "docs/local/ARCHITECTURE_CONTRACT.md"
     legacy_baselines: dict[str, int] = field(default_factory=dict)
     exclude_dirs: frozenset[str] = field(default_factory=lambda: _DEFAULT_EXCLUDE_DIRS)
-    exclude_path_fragments: frozenset[str] = field(
-        default_factory=lambda: _DEFAULT_EXCLUDE_FRAGMENTS
-    )
+    exclude_path_fragments: frozenset[str] = field(default_factory=lambda: _DEFAULT_EXCLUDE_FRAGMENTS)
     extensions: frozenset[str] = field(default_factory=lambda: _DEFAULT_EXTENSIONS)
 
     @classmethod
@@ -90,10 +88,7 @@ class ArchitectureConfig:
                 enforce_import_boundaries=arch.get("enforce_import_boundaries", False),
                 strict_new_files=arch.get("strict_new_files", False),
                 contract_file=arch.get("contract_file", "docs/local/ARCHITECTURE_CONTRACT.md"),
-                legacy_baselines={
-                    PathNormalizer.normalize(k): v
-                    for k, v in arch.get("legacy_baselines", {}).items()
-                },
+                legacy_baselines={PathNormalizer.normalize(k): v for k, v in arch.get("legacy_baselines", {}).items()},
             )
         except Exception as exc:  # noqa: BLE001
             print(f"Warning: could not load architecture config from {config_path}: {exc}")

@@ -38,6 +38,7 @@ class PipelineAssistantError(Exception):
         self.message = message
         self.status = status
 
+
 async def _call_llm(*, user_prompt: str) -> str:
     provider = LLMProvider()
     chunks: list[str] = []
@@ -136,30 +137,40 @@ def build_pipeline_assistant_response(
         known_node_types=known_node_types,
     )
     if fallback_response is not None:
-        fallback_response.setdefault("template_recommendations", assistant_context.get("template_recommendations") or [])
+        fallback_response.setdefault(
+            "template_recommendations", assistant_context.get("template_recommendations") or []
+        )
         return augment_response_with_interview_questions(fallback_response)
     if fallback_error:
         raise PipelineAssistantError(fallback_error, 502)
     if not parsed:
-        fallback_reply = sanitize_prompt_context_text(raw_response).text.strip() or "Ассистент вернул невалидный JSON-ответ."
-        return augment_response_with_interview_questions({
-            "reply": fallback_reply,
-            "requirements": [],
-            "assumptions": [],
-            "questions": [],
-            "resource_plan": _normalize_resource_plan({}, assistant_context),
-            "target_node_id": None,
-            "node_patch": {},
-            "graph_patch": _sanitize_graph_patch(None),
-            "node_explanations": {},
-            "confidence": None,
-            "warnings": ["Ассистент вернул невалидный structured output."],
-            "patch_summary": "",
-            "suggested_next_actions": [],
-            "template_recommendations": assistant_context.get("template_recommendations") or [],
-        })
+        fallback_reply = (
+            sanitize_prompt_context_text(raw_response).text.strip() or "Ассистент вернул невалидный JSON-ответ."
+        )
+        return augment_response_with_interview_questions(
+            {
+                "reply": fallback_reply,
+                "requirements": [],
+                "assumptions": [],
+                "questions": [],
+                "resource_plan": _normalize_resource_plan({}, assistant_context),
+                "target_node_id": None,
+                "node_patch": {},
+                "graph_patch": _sanitize_graph_patch(None),
+                "node_explanations": {},
+                "confidence": None,
+                "warnings": ["Ассистент вернул невалидный structured output."],
+                "patch_summary": "",
+                "suggested_next_actions": [],
+                "template_recommendations": assistant_context.get("template_recommendations") or [],
+            }
+        )
 
-    reply = str(parsed.get("reply") or "").strip() or sanitize_prompt_context_text(raw_response).text.strip() or "No assistant response."
+    reply = (
+        str(parsed.get("reply") or "").strip()
+        or sanitize_prompt_context_text(raw_response).text.strip()
+        or "No assistant response."
+    )
     target_node_id = str(parsed.get("target_node_id") or "").strip() or None
     node_patch = parsed.get("node_patch")
     if not isinstance(node_patch, dict):
@@ -192,20 +203,24 @@ def build_pipeline_assistant_response(
         warnings=warning_items,
     )
 
-    return augment_response_with_interview_questions({
-        "reply": reply,
-        "requirements": _string_items(parsed.get("requirements"), limit=12),
-        "assumptions": _string_items(parsed.get("assumptions"), limit=8),
-        "questions": _string_items(parsed.get("questions"), limit=3),
-        "resource_plan": _normalize_resource_plan(parsed.get("resource_plan"), assistant_context),
-        "target_node_id": target_node_id,
-        "node_patch": node_patch,
-        "graph_patch": graph_patch,
-        "node_explanations": _normalize_node_explanations(parsed.get("node_explanations")),
-        "confidence": _normalize_confidence(parsed.get("confidence")),
-        "warnings": warning_items[:8],
-        "patch_summary": str(parsed.get("patch_summary") or "").strip(),
-        "suggested_next_actions": suggested_next_action_items,
-        "template_recommendations": assistant_context.get("template_recommendations") or [],
-        "selected_template": parsed.get("selected_template") if isinstance(parsed.get("selected_template"), dict) else None,
-    })
+    return augment_response_with_interview_questions(
+        {
+            "reply": reply,
+            "requirements": _string_items(parsed.get("requirements"), limit=12),
+            "assumptions": _string_items(parsed.get("assumptions"), limit=8),
+            "questions": _string_items(parsed.get("questions"), limit=3),
+            "resource_plan": _normalize_resource_plan(parsed.get("resource_plan"), assistant_context),
+            "target_node_id": target_node_id,
+            "node_patch": node_patch,
+            "graph_patch": graph_patch,
+            "node_explanations": _normalize_node_explanations(parsed.get("node_explanations")),
+            "confidence": _normalize_confidence(parsed.get("confidence")),
+            "warnings": warning_items[:8],
+            "patch_summary": str(parsed.get("patch_summary") or "").strip(),
+            "suggested_next_actions": suggested_next_action_items,
+            "template_recommendations": assistant_context.get("template_recommendations") or [],
+            "selected_template": parsed.get("selected_template")
+            if isinstance(parsed.get("selected_template"), dict)
+            else None,
+        }
+    )

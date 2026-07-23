@@ -82,7 +82,9 @@ def dry_run_apply_kubernetes_resource(
 
     sanitized_response = sanitize_kubernetes_resource(response)
     redacted = resource_was_redacted(sanitized_submitted) or resource_was_redacted(sanitized_response)
-    ownership = build_admin_resource_ownership(cluster=cluster, ref=ref, resource=sanitized_response or sanitized_submitted)
+    ownership = build_admin_resource_ownership(
+        cluster=cluster, ref=ref, resource=sanitized_response or sanitized_submitted
+    )
     diff_summary = _diff_summary(sanitized_submitted, sanitized_response, redacted=redacted)
     diff = _structured_diff(sanitized_submitted, sanitized_response, redacted=redacted)
     action = _record_dry_run_action(
@@ -132,25 +134,43 @@ def dry_run_apply_kubernetes_resource(
     }
 
 
-def _active_write_session_for_user(user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef) -> K8sAdminSession:
+def _active_write_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef
+) -> K8sAdminSession:
     policy = kubernetes_permission_policy(user)
     if not policy["can_admin_write"]:
         raise AdminResourceError("Kubernetes admin write access is required.", code="admin_write_required", status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError) as exc:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403)
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Write admin session is not active.", code="admin_write_session_not_active", status=403)
+        raise AdminResourceError(
+            "Write admin session is not active.", code="admin_write_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_WRITE:
-        raise AdminResourceError("Dry-run apply requires a write admin session.", code="write_session_required", status=403)
+        raise AdminResourceError(
+            "Dry-run apply requires a write admin session.", code="write_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if K8sAdminAction.VERB_DRY_RUN_APPLY not in set(session.allowed_verbs or []):
-        raise AdminResourceError("Admin session does not allow dry-run apply.", code="admin_session_verb_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not allow dry-run apply.", code="admin_session_verb_denied", status=403
+        )
     _check_session_scope(session, ref)
     return session
 
@@ -159,10 +179,14 @@ def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -
     if ref.namespace:
         allowed_namespaces = set(session.allowed_namespaces or [])
         if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-            raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+            )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
 def _parse_manifest(*, manifest: Any, manifest_yaml: str) -> dict[str, Any]:
@@ -175,7 +199,9 @@ def _parse_manifest(*, manifest: Any, manifest_yaml: str) -> dict[str, Any]:
         try:
             parsed = yaml.safe_load(text)
         except yaml.YAMLError as exc:
-            raise AdminResourceError("Manifest YAML is invalid.", code="manifest_yaml_invalid", payload={"detail": str(exc)[:500]}) from exc
+            raise AdminResourceError(
+                "Manifest YAML is invalid.", code="manifest_yaml_invalid", payload={"detail": str(exc)[:500]}
+            ) from exc
     if not isinstance(parsed, dict):
         raise AdminResourceError("Manifest must be a Kubernetes object.", code="manifest_object_required")
     return parsed
@@ -193,7 +219,9 @@ def _ref_from_manifest(manifest: dict[str, Any], *, namespace: str, resource: st
         raise AdminResourceError("manifest.kind is required.", code="kind_required")
     if not name:
         raise AdminResourceError("manifest.metadata.name is required for dry-run apply.", code="resource_name_required")
-    return build_resource_ref(api_version=api_version, kind=kind, namespace=namespace_value, name=name, resource=resource)
+    return build_resource_ref(
+        api_version=api_version, kind=kind, namespace=namespace_value, name=name, resource=resource
+    )
 
 
 def _dry_run_path(path: str) -> str:
@@ -232,7 +260,9 @@ def _structured_diff(submitted: dict[str, Any], response: dict[str, Any], *, red
     }
 
 
-def _collect_diff_changes(before: Any, after: Any, *, path: str, changes: list[dict[str, Any]], state: dict[str, bool]) -> None:
+def _collect_diff_changes(
+    before: Any, after: Any, *, path: str, changes: list[dict[str, Any]], state: dict[str, bool]
+) -> None:
     if state["truncated"]:
         return
     if before == after:
@@ -243,11 +273,17 @@ def _collect_diff_changes(before: Any, after: Any, *, path: str, changes: list[d
             key = str(raw_key)
             child_path = _json_pointer(path, key)
             if raw_key not in before:
-                _append_diff_change(changes, state, path=child_path, operation="added", before=None, after=after.get(raw_key))
+                _append_diff_change(
+                    changes, state, path=child_path, operation="added", before=None, after=after.get(raw_key)
+                )
             elif raw_key not in after:
-                _append_diff_change(changes, state, path=child_path, operation="removed", before=before.get(raw_key), after=None)
+                _append_diff_change(
+                    changes, state, path=child_path, operation="removed", before=before.get(raw_key), after=None
+                )
             else:
-                _collect_diff_changes(before.get(raw_key), after.get(raw_key), path=child_path, changes=changes, state=state)
+                _collect_diff_changes(
+                    before.get(raw_key), after.get(raw_key), path=child_path, changes=changes, state=state
+                )
             if state["truncated"]:
                 return
         return
@@ -293,7 +329,7 @@ def _diff_value_summary(value: Any) -> dict[str, Any]:
     if isinstance(value, list):
         return {"type": "array", "length": len(value)}
     if isinstance(value, dict):
-        keys = sorted(str(key) for key in value.keys())
+        keys = sorted(str(key) for key in value)
         return {
             "type": "object",
             "key_count": len(keys),
@@ -345,7 +381,9 @@ def _record_dry_run_action(
             "manifest_fingerprint": manifest_fingerprint_value,
             "submitted_top_level_fields": sorted(submitted.keys()),
         },
-        diff_summary=sanitize_metadata(diff_summary or _diff_summary(submitted, response, redacted=resource_was_redacted(submitted))),
+        diff_summary=sanitize_metadata(
+            diff_summary or _diff_summary(submitted, response, redacted=resource_was_redacted(submitted))
+        ),
         response_summary=sanitize_metadata(response_summary or {}),
     )
 
@@ -360,7 +398,11 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode dry-run apply.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode dry-run apply.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 

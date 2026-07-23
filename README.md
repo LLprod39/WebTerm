@@ -64,28 +64,26 @@ but the product direction is private/self-hosted plugin extensions.
 
 ### Backend
 
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements-mini.txt
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
-```
+The canonical backend development path is WSL/Linux with Python 3.11. Native
+Windows is compatibility-only and is not release evidence. Never reuse one
+virtual environment from both Windows and WSL; see the
+[support matrix](docs/releases/SUPPORT_MATRIX.md).
 
 WSL/Linux:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements-mini.txt
+python3.11 -m venv .venv-wsl
+source .venv-wsl/bin/activate
+python -m pip install --require-hashes -r requirements-dev.lock
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver 0.0.0.0:9000
+```
+
+From Windows PowerShell, the same locked setup can be launched inside WSL:
+
+```powershell
+wsl -e bash -lc 'cd /mnt/c/WebTrerm && ./bootstrap-linux.sh --no-docker --skip-frontend'
 ```
 
 Backend URLs:
@@ -94,6 +92,9 @@ Backend URLs:
 - Health check: `http://127.0.0.1:9000/api/health/`
 
 ### Frontend
+
+Use Node.js `22.23.1` with npm `10.9.8` (`.nvmrc` and `packageManager` are
+versioned):
 
 ```powershell
 cd frontend
@@ -169,11 +170,13 @@ python -m pytest
 python scripts/check_architecture_sizes.py --strict-new
 ```
 
-After editing `requirements-mini.txt`, regenerate the pinned lock used by the
-Docker backend image:
+After editing runtime or development inputs, regenerate both Linux/Python 3.11
+locks:
 
 ```bash
 uv pip compile requirements-mini.txt -o requirements.lock \
+  --python-version 3.11 --python-platform linux --generate-hashes
+uv pip compile requirements-dev.in -o requirements-dev.lock \
   --python-version 3.11 --python-platform linux --generate-hashes
 ```
 

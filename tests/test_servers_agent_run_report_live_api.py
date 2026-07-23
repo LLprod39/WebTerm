@@ -1,31 +1,23 @@
-import hashlib
-import io
-import json
-import zipfile
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth.models import User
-from django.test import Client, override_settings
+from django.test import Client
 from django.utils import timezone
 
-from app.runtime_limits import get_terminal_session_limit_error
-from servers.agent_run_report import refresh_agent_run_report_payload
 from servers.models import (
     AgentRun,
-    AgentRunArtifact,
     AgentRunDispatch,
     AgentRunEvent,
     BackgroundWorkerState,
     ServerAgent,
-    ServerConnection,
 )
 from tests.servers_api_smoke_harness import create_server as _create_server
 from tests.servers_api_smoke_harness import grant_feature as _grant_feature
 from tests.servers_api_smoke_harness import json_payload as _json
 
 pytestmark = pytest.mark.django_db
+
 
 def test_agent_run_report_endpoint_live_run_does_not_expose_final_artifacts():
     user = User.objects.create_user(username="report-live-user", password="x")
@@ -67,6 +59,7 @@ def test_agent_run_report_endpoint_live_run_does_not_expose_final_artifacts():
     assert payload["report"]["markdown"] == ""
     assert payload["artifacts"] == []
     assert payload["events"][0]["title"] == "Поставлен в очередь"
+
 
 def test_agent_run_report_endpoint_explains_queued_run_without_worker(settings):
     settings.AGENT_RUN_STALE_SECONDS = 60
@@ -360,5 +353,3 @@ def test_agent_run_report_endpoint_fallback_redacts_and_promotes_failures():
     assert any("Validate package manager" in item["title"] for item in payload["report"]["findings"])
     assert payload["report"]["risks"]
     assert payload["report"]["recommendations"]
-
-

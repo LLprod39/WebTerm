@@ -54,9 +54,7 @@ def build_tool_catalogue(tools: dict[str, TerminalTool]) -> str:
             arg_type = arg_spec.get("type", arg_spec.get("anyOf", [{}])[0].get("type", "any"))
             desc = arg_spec.get("description", "") or arg_spec.get("title", "")
             default_s = f" default={default!r}" if default is not None and is_req == "opt" else ""
-            arg_lines.append(
-                f"    - {arg_name} [{is_req}:{arg_type}]{default_s}: {desc}"
-            )
+            arg_lines.append(f"    - {arg_name} [{is_req}:{arg_type}]{default_s}: {desc}")
         arg_block = "\n".join(arg_lines) if arg_lines else "    (no args)"
         lines.append(f"\n● {name}\n  {tool.description}\n  args:\n{arg_block}")
     return "\n".join(lines)
@@ -68,25 +66,18 @@ def build_targets_block(primary: ServerTarget, extras: dict[str, ServerTarget]) 
     lines = [
         "Authorised servers for this session:",
         f"- PRIMARY {primary.name!r} → {primary.display_name or primary.host} "
-        f"(server_id={primary.server_id}"
-        + (", read-only" if primary.read_only else "")
-        + primary_sudo
-        + ")",
+        f"(server_id={primary.server_id}" + (", read-only" if primary.read_only else "") + primary_sudo + ")",
     ]
     for t in extras.values():
         sudo_hint = f", sudo-auth={t.sudo_auth_mode}" if t.sudo_auth_mode != "none" else ""
         lines.append(
             f"- extra   {t.name!r} → {t.display_name or t.host} "
-            f"(server_id={t.server_id}"
-            + (", read-only" if t.read_only else "")
-            + sudo_hint
-            + ")"
+            f"(server_id={t.server_id}" + (", read-only" if t.read_only else "") + sudo_hint + ")"
         )
     if not extras:
         lines.append("  (no extra targets granted — user can add them via settings)")
     lines.append(
-        "Pass `target: \"<name>\"` on file/shell/grep tools to select a "
-        "non-primary server. Empty `target` means PRIMARY."
+        'Pass `target: "<name>"` on file/shell/grep tools to select a non-primary server. Empty `target` means PRIMARY.'
     )
     return "\n".join(lines)
 
@@ -208,9 +199,7 @@ def build_system_prompt(
         tool_catalogue=build_tool_catalogue(tools),
     )
     if rules_context.strip():
-        base += "\n\nAdditional rules from the user:\n" + sanitize_for_prompt(
-            rules_context, mode="context"
-        )
+        base += "\n\nAdditional rules from the user:\n" + sanitize_for_prompt(rules_context, mode="context")
     return base
 
 
@@ -256,13 +245,10 @@ def compact_agent_history(
             snippet = sanitize_for_prompt(str(raw)[:240], mode="observation")
             tool_lines.append(f"- turn {turn} observation: {snippet}")
         elif role == "user":
-            tool_lines.append(
-                f"- turn {turn} user: {sanitize_for_prompt(str(content or '')[:200], mode='context')}"
-            )
+            tool_lines.append(f"- turn {turn} user: {sanitize_for_prompt(str(content or '')[:200], mode='context')}")
 
-    summary_text = (
-        "Сжатый журнал более ранних шагов (не полный лог):\n"
-        + ("\n".join(tool_lines[-40:]) if tool_lines else "(нет деталей)")
+    summary_text = "Сжатый журнал более ранних шагов (не полный лог):\n" + (
+        "\n".join(tool_lines[-40:]) if tool_lines else "(нет деталей)"
     )
     summary_entry = {
         "turn": "summary",
@@ -390,10 +376,7 @@ def build_user_turn_prompt(
     if user_message.strip():
         parts.append(f"User task: {sanitize_for_prompt(user_message, mode='context')}")
     if session_context.strip():
-        parts.append(
-            "\nLive shell/session context:\n"
-            + sanitize_for_prompt(session_context, mode="context")
-        )
+        parts.append("\nLive shell/session context:\n" + sanitize_for_prompt(session_context, mode="context"))
     if recent_activity_context.strip():
         parts.append(
             "\nRecent human activity in this terminal session:\n"
@@ -405,31 +388,19 @@ def build_user_turn_prompt(
         content = entry.get("content")
         if role == "summary":
             parts.append(
-                "\n[compacted earlier work]\n"
-                + sanitize_for_prompt(str(content or "")[:3500], mode="context")
+                "\n[compacted earlier work]\n" + sanitize_for_prompt(str(content or "")[:3500], mode="context")
             )
         elif role == "tool_call":
             # Content is {tool, args, thinking}
             parts.append(
-                f"\n[turn {entry.get('turn', '?')}] agent → tool:\n"
-                + json.dumps(content, ensure_ascii=False)[:2000]
+                f"\n[turn {entry.get('turn', '?')}] agent → tool:\n" + json.dumps(content, ensure_ascii=False)[:2000]
             )
         elif role == "tool_result":
-            raw = content if isinstance(content, str) else json.dumps(
-                content, ensure_ascii=False
-            )
+            raw = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
             sanitized = sanitize_for_prompt(raw[:4000], mode="observation")
-            parts.append(
-                f"\n[turn {entry.get('turn', '?')}] tool → observation:\n{sanitized}"
-            )
+            parts.append(f"\n[turn {entry.get('turn', '?')}] tool → observation:\n{sanitized}")
         elif role == "user":
-            parts.append(
-                "\nUser interjection: "
-                + sanitize_for_prompt(str(content or ""), mode="context")
-            )
+            parts.append("\nUser interjection: " + sanitize_for_prompt(str(content or ""), mode="context"))
 
-    parts.append(
-        "\nPick the next tool. Respond ONLY with the JSON object described "
-        "in the system prompt."
-    )
+    parts.append("\nPick the next tool. Respond ONLY with the JSON object described in the system prompt.")
     return "\n".join(parts)

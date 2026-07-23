@@ -51,5 +51,8 @@ def test_release_command_plan_exposes_local_demo_smoke_without_changing_producti
     assert plan["recommended_next"]["id"] == "select_production_environment"
     assert local_commands["local_demo_fixture"]["scope"] == "local_demo"
     assert ".tools/k8s-provider-fixture.py" in local_commands["local_demo_fixture"]["command"]
-    assert local_commands["local_demo_seed"]["command"] == "python manage.py seed_kubernetes_ops_demo --username admin --admin-write"
+    assert (
+        local_commands["local_demo_seed"]["command"]
+        == "python manage.py seed_kubernetes_ops_demo --username admin --admin-write"
+    )
     assert all(command["scope"] == "local_demo" for command in local_phase["commands"])

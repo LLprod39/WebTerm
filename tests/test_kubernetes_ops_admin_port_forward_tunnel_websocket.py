@@ -30,9 +30,13 @@ def _create_port_forward_fixture(username: str) -> tuple[User, str, str]:
         kind=K8sProvider.KIND_RANCHER,
         base_url="https://rancher.example.test",
         auth_mode=K8sProvider.AUTH_NONE,
-        labels={"port_forward_tunnel_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/services/{name}/portforward"},
+        labels={
+            "port_forward_tunnel_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/services/{name}/portforward"
+        },
     )
-    cluster = K8sCluster.objects.create(name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local")
+    cluster = K8sCluster.objects.create(
+        name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local"
+    )
     user = User.objects.create_user(username=username, password="password-123")
     UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
     UserAppPermission.objects.create(user=user, feature="kubernetes_break_glass", allowed=True)
@@ -105,10 +109,18 @@ async def test_port_forward_websocket_can_use_provider_tunnel_and_records_metada
     )
     fake_tunnel = _FakePortForwardTunnel()
 
-    with patch("kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel", return_value=fake_tunnel) as open_tunnel:
+    with patch(
+        "kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel", return_value=fake_tunnel
+    ) as open_tunnel:
         communicator = await _connect(path, user)
         started = await communicator.receive_json_from(timeout=1)
-        await communicator.send_json_to({"type": "port_forward_data", "encoding": "base64", "data": base64.b64encode(b"GET / HTTP/1.1\r\n\r\n").decode("ascii")})
+        await communicator.send_json_to(
+            {
+                "type": "port_forward_data",
+                "encoding": "base64",
+                "data": base64.b64encode(b"GET / HTTP/1.1\r\n\r\n").decode("ascii"),
+            }
+        )
         data = await communicator.receive_json_from(timeout=2)
         stopped = await communicator.receive_json_from(timeout=2)
         await communicator.disconnect()
@@ -139,7 +151,9 @@ async def test_port_forward_websocket_can_use_provider_tunnel_and_records_metada
     assert recording.transcript_required is False
     assert recording.payload_stored is False
     assert stopped["summary"]["recording"]["id"] == str(recording.recording_id)
-    stopped_events = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.port_forward_stopped").count)()
+    stopped_events = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_stream.port_forward_stopped").count
+    )()
     assert stopped_events == 1
 
 
@@ -151,7 +165,9 @@ async def test_port_forward_websocket_can_use_provider_tunnel_and_records_metada
     KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS=["payments/service/payments-api:8080"],
 )
 async def test_port_forward_websocket_tunnel_requires_separate_flag_before_action():
-    user, session_id, cluster_id = await database_sync_to_async(_create_port_forward_fixture)("k8s-ws-pf-tunnel-disabled")
+    user, session_id, cluster_id = await database_sync_to_async(_create_port_forward_fixture)(
+        "k8s-ws-pf-tunnel-disabled"
+    )
     path = f"/ws/kubernetes/admin/port-forward/{session_id}/?provider_stream=1&cluster_id={cluster_id}&namespace=payments&kind=Service&name=payments-api&remote_port=8080&reason=debug%20service"
 
     with patch("kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel") as open_tunnel:
@@ -175,7 +191,9 @@ async def test_port_forward_websocket_tunnel_requires_separate_flag_before_actio
     KUBERNETES_ADMIN_PORT_FORWARD_ALLOWED_TARGETS=["payments/service/payments-api:8080"],
 )
 async def test_port_forward_websocket_tunnel_requires_recording_before_action():
-    user, session_id, cluster_id = await database_sync_to_async(_create_port_forward_fixture)("k8s-ws-pf-recording-required")
+    user, session_id, cluster_id = await database_sync_to_async(_create_port_forward_fixture)(
+        "k8s-ws-pf-recording-required"
+    )
     path = f"/ws/kubernetes/admin/port-forward/{session_id}/?provider_stream=1&cluster_id={cluster_id}&namespace=payments&kind=Service&name=payments-api&remote_port=8080&reason=debug%20service"
 
     with patch("kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel") as open_tunnel:
@@ -208,10 +226,14 @@ async def test_port_forward_websocket_tunnel_stops_when_session_expires():
     )
     fake_tunnel = _FakePortForwardTunnel()
 
-    with patch("kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel", return_value=fake_tunnel):
+    with patch(
+        "kubernetes_ops.continuous_port_forward_tunnels.open_provider_port_forward_tunnel", return_value=fake_tunnel
+    ):
         communicator = await _connect(path, user)
         started = await communicator.receive_json_from(timeout=1)
-        await database_sync_to_async(K8sAdminSession.objects.filter(session_id=session_id).update)(expires_at=timezone.now() - timedelta(seconds=1))
+        await database_sync_to_async(K8sAdminSession.objects.filter(session_id=session_id).update)(
+            expires_at=timezone.now() - timedelta(seconds=1)
+        )
         stopped = await communicator.receive_json_from(timeout=2)
         await communicator.disconnect()
 

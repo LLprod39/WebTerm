@@ -33,7 +33,7 @@ export default function KubernetesDevtronPage() {
     queryFn: fetchKubernetesDevtronApps,
     staleTime: 15_000,
   });
-  const apps = appsQuery.data?.apps || [];
+  const apps = useMemo(() => appsQuery.data?.apps || [], [appsQuery.data?.apps]);
   const buckets = countHealth(apps);
   const teams = new Set(apps.map((app) => app.team).filter(Boolean)).size;
   const refresh = () => void queryClient.invalidateQueries({ queryKey: ["kubernetes", "devtron", "apps"] });

@@ -63,7 +63,10 @@ _VERIFICATION_MARKERS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 _READ_ONLY_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"\b(ls|cat|grep|find|head|tail|less|more|pwd|whoami|env|printenv|ps|top|ss|netstat|ip\b|hostname)\b", re.IGNORECASE),
+    re.compile(
+        r"\b(ls|cat|grep|find|head|tail|less|more|pwd|whoami|env|printenv|ps|top|ss|netstat|ip\b|hostname)\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\b(df\s+-h|free\s+-m|uptime|du\s+-sh)\b", re.IGNORECASE),
     re.compile(r"\bsystemctl\s+status\b|\bservice\s+\S+\s+status\b|\bjournalctl\b", re.IGNORECASE),
     re.compile(r"\bdocker\s+(ps|inspect|logs)\b|\bdocker\s+compose\s+(ps|config)\b", re.IGNORECASE),
@@ -123,7 +126,9 @@ class PermissionEngine:
                     extra_audit={"sudo_policy": sudo_decision.policy},
                 )
 
-        if self.mode == MODE_PLAN and (spec.mutates_state or spec.risk in {"write", "admin"} or self._is_mutating_command(command)):
+        if self.mode == MODE_PLAN and (
+            spec.mutates_state or spec.risk in {"write", "admin"} or self._is_mutating_command(command)
+        ):
             return self._decision(
                 spec,
                 args,
@@ -161,12 +166,12 @@ class PermissionEngine:
                     args,
                     allowed=True,
                     sandbox_profile="ops_mutation",
-                risk_categories=(_kind,),
-                notes=(
-                    *self._sudo_notes(command),
-                    "После изменения обязательно выполни post-change verification.",
-                ),
-            )
+                    risk_categories=(_kind,),
+                    notes=(
+                        *self._sudo_notes(command),
+                        "После изменения обязательно выполни post-change verification.",
+                    ),
+                )
 
         if self.mode == MODE_SAFE and spec.risk == "admin":
             return self._decision(

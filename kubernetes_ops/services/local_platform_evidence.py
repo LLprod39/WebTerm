@@ -4,7 +4,7 @@ import json
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -64,7 +64,7 @@ def verify_kubernetes_local_platform(
     return {
         "schema_version": LOCAL_PLATFORM_SCHEMA_VERSION,
         "status": "ready" if not errors else "missing",
-        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "checked_at": datetime.now(UTC).isoformat(),
         "context": current_context,
         "expected_context": options.context,
         "kubectl": options.kubectl,
@@ -79,12 +79,21 @@ def write_local_platform_evidence(report: dict[str, Any], output_path: Path) -> 
     output_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
-def _component_report(component: dict[str, Any], *, options: LocalPlatformProbeOptions, runner: KubectlRunner) -> dict[str, Any]:
+def _component_report(
+    component: dict[str, Any], *, options: LocalPlatformProbeOptions, runner: KubectlRunner
+) -> dict[str, Any]:
     namespace = str(component["namespace"])
     namespace_report = _resource_report(runner, options, "namespace", namespace, namespace="")
-    services = [_resource_report(runner, options, "service", name, namespace=namespace) for name in component["services"]]
-    deployments = [_workload_report(runner, options, "deployment", name, namespace=namespace) for name in component["deployments"]]
-    statefulsets = [_workload_report(runner, options, "statefulset", name, namespace=namespace) for name in component["statefulsets"]]
+    services = [
+        _resource_report(runner, options, "service", name, namespace=namespace) for name in component["services"]
+    ]
+    deployments = [
+        _workload_report(runner, options, "deployment", name, namespace=namespace) for name in component["deployments"]
+    ]
+    statefulsets = [
+        _workload_report(runner, options, "statefulset", name, namespace=namespace)
+        for name in component["statefulsets"]
+    ]
     errors = []
     if not namespace_report["exists"]:
         errors.append(f"namespace_missing:{namespace}")
@@ -107,7 +116,9 @@ def _component_report(component: dict[str, Any], *, options: LocalPlatformProbeO
     }
 
 
-def _resource_report(runner: KubectlRunner, options: LocalPlatformProbeOptions, kind: str, name: str, *, namespace: str) -> dict[str, Any]:
+def _resource_report(
+    runner: KubectlRunner, options: LocalPlatformProbeOptions, kind: str, name: str, *, namespace: str
+) -> dict[str, Any]:
     result = _kubectl(runner, _get_args(options, kind, name, namespace=namespace))
     payload = _json(result)
     metadata = payload.get("metadata") if isinstance(payload, dict) else {}
@@ -122,7 +133,9 @@ def _resource_report(runner: KubectlRunner, options: LocalPlatformProbeOptions, 
     }
 
 
-def _workload_report(runner: KubectlRunner, options: LocalPlatformProbeOptions, kind: str, name: str, *, namespace: str) -> dict[str, Any]:
+def _workload_report(
+    runner: KubectlRunner, options: LocalPlatformProbeOptions, kind: str, name: str, *, namespace: str
+) -> dict[str, Any]:
     result = _kubectl(runner, _get_args(options, kind, name, namespace=namespace))
     payload = _json(result)
     spec = payload.get("spec") if isinstance(payload, dict) else {}
@@ -164,7 +177,9 @@ def _default_runner(options: LocalPlatformProbeOptions) -> KubectlRunner:
         except FileNotFoundError as exc:
             return subprocess.CompletedProcess(command, 127, stdout="", stderr=str(exc))
         except subprocess.TimeoutExpired as exc:
-            return subprocess.CompletedProcess(command, 124, stdout=exc.stdout or "", stderr=exc.stderr or "kubectl command timed out")
+            return subprocess.CompletedProcess(
+                command, 124, stdout=exc.stdout or "", stderr=exc.stderr or "kubectl command timed out"
+            )
 
     return run
 

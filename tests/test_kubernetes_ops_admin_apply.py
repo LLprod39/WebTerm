@@ -94,7 +94,9 @@ class KubernetesOpsAdminApplyTests(TestCase):
             "spec": {"replicas": replicas},
         }
 
-    def create_dry_run_proof(self, user: User, session: K8sAdminSession, manifest: dict | None = None) -> K8sAdminAction:
+    def create_dry_run_proof(
+        self, user: User, session: K8sAdminSession, manifest: dict | None = None
+    ) -> K8sAdminAction:
         dry_run_apply_kubernetes_resource(
             user=user,
             session_id=str(session.session_id),
@@ -207,7 +209,9 @@ class KubernetesOpsAdminApplyTests(TestCase):
         self.assertEqual(action.response_summary["dry_run_action_id"], str(proof.action_id))
         self.assertEqual(action.diff_summary["available"], True)
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True, KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True, KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED=True
+    )
     def test_break_glass_apply_bypasses_dry_run_with_explicit_audit_marker(self):
         user = self.create_user("k8s-break-glass-apply", grant_break_glass=True)
         session = self.create_break_glass_session(user)

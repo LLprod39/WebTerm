@@ -17,7 +17,9 @@ def safe_release_handoff_backend_workstream(payload: dict[str, Any]) -> dict[str
         "remaining_backend_gaps": _safe_workstream_items(payload.get("remaining_backend_gaps")),
         "external_production_blocker_count": int(payload.get("external_production_blocker_count") or 0),
         "external_production_blockers": _safe_workstream_items(payload.get("external_production_blockers")),
-        "external_production_blocker_summary": _safe_external_blocker_summary(payload.get("external_production_blocker_summary")),
+        "external_production_blocker_summary": _safe_external_blocker_summary(
+            payload.get("external_production_blocker_summary")
+        ),
         "safe_to_continue_frontend": bool(payload.get("safe_to_continue_frontend")),
         "next_backend_step": _safe_next_step(payload.get("next_backend_step")),
     }

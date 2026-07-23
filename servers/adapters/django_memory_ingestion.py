@@ -85,7 +85,9 @@ def ingest_event(
         },
     )
     if created:
-        maybe_compact_event_group(event, threshold=max(int(policy.nearline_event_threshold or 6), 2), force=force_compact)
+        maybe_compact_event_group(
+            event, threshold=max(int(policy.nearline_event_threshold or 6), 2), force=force_compact
+        )
     return str(event.pk)
 
 
@@ -94,12 +96,17 @@ def maybe_compact_event_group(event, *, threshold: int, force: bool) -> None:
 
     filters = event_group_filters(event)
     count = ServerMemoryEvent.objects.filter(**filters, is_archived=False, compacted_episode__isnull=True).count()
-    if force or count >= threshold or event.event_type in {
-        "session_closed",
-        "run_completed",
-        "run_failed",
-        "run_stopped",
-    }:
+    if (
+        force
+        or count >= threshold
+        or event.event_type
+        in {
+            "session_closed",
+            "run_completed",
+            "run_failed",
+            "run_stopped",
+        }
+    ):
         compact_group(
             server_id=event.server_id,
             source_kind=event.source_kind,
@@ -167,9 +174,7 @@ def compact_group(
 
     with transaction.atomic():
         events = list(
-            ServerMemoryEvent.objects.select_for_update()
-            .filter(**filters)
-            .order_by("created_at", "id")[:120]
+            ServerMemoryEvent.objects.select_for_update().filter(**filters).order_by("created_at", "id")[:120]
         )
         if not events:
             return 0

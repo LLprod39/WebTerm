@@ -34,7 +34,9 @@ def _safe_json(handler):
 
 
 def _error_response(error: AdminResourceError) -> JsonResponse:
-    return JsonResponse({"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status)
+    return JsonResponse(
+        {"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status
+    )
 
 
 @login_required
@@ -79,7 +81,11 @@ def _node_action(request, *, cluster_id: str, action: str):
             _audit(
                 request,
                 f"k8s.admin_node_maintenance.{action}_rejected",
-                payload={"code": exc.code, "cluster_id": cluster_id, "node": str(data.get("node_name") or data.get("node") or "")[:253]},
+                payload={
+                    "code": exc.code,
+                    "cluster_id": cluster_id,
+                    "node": str(data.get("node_name") or data.get("node") or "")[:253],
+                },
                 session_id=session_id,
             )
             return _error_response(exc)

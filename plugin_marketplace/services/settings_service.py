@@ -80,14 +80,16 @@ def secret_bindings_payload(installation: PluginInstallation) -> list[dict[str, 
     for secret in _declared_secrets(installation):
         key = str(secret.get("id") or "")
         binding = bindings.get(key)
-        result.append({
-            "key": key,
-            "label": str(secret.get("label") or key),
-            "kind": str(secret.get("kind") or ""),
-            "required": bool(secret.get("required")),
-            "bound": bool(binding),
-            "secret_ref": _masked_ref(binding.secret_ref) if binding else "",
-        })
+        result.append(
+            {
+                "key": key,
+                "label": str(secret.get("label") or key),
+                "kind": str(secret.get("kind") or ""),
+                "required": bool(secret.get("required")),
+                "bound": bool(binding),
+                "secret_ref": _masked_ref(binding.secret_ref) if binding else "",
+            }
+        )
     return result
 
 

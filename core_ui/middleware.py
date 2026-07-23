@@ -1,6 +1,7 @@
 """
 Middleware: русский язык для админки Django + определение мобильных устройств.
 """
+
 import contextlib
 import json
 import re
@@ -90,6 +91,7 @@ def _extract_request_payload(request):
         metadata["payload_raw"] = _sanitize_request_value(body_bytes[:4096].decode("utf-8", "ignore"))
     return metadata
 
+
 # CSRF trust for rotating ngrok hostnames is handled statically via wildcard
 # entries in CSRF_TRUSTED_ORIGINS (see web_ui/settings/security.py,
 # CSRF_TRUST_NGROK env flag). The former CsrfTrustNgrokMiddleware mutated
@@ -142,11 +144,7 @@ class RequestAuditMiddleware:
         request_id = getattr(request, "request_id", "")
         if request_id:
             return str(request_id)
-        incoming = (
-            request.META.get("HTTP_X_REQUEST_ID")
-            or request.META.get("HTTP_X_CORRELATION_ID")
-            or ""
-        )
+        incoming = request.META.get("HTTP_X_REQUEST_ID") or request.META.get("HTTP_X_CORRELATION_ID") or ""
         request_id = self._normalize_request_id(incoming)
         request.request_id = request_id
         return request_id
@@ -213,7 +211,7 @@ class RequestAuditMiddleware:
         start_ts = time.monotonic()
         request_id = self._ensure_request_id(request)
         scope = self._audit_scope(request)
-        with (scope or contextlib.nullcontext(), self._logger_scope(request)):
+        with scope or contextlib.nullcontext(), self._logger_scope(request):
             try:
                 response = self.get_response(request)
             except Exception as exc:
@@ -237,7 +235,7 @@ class RequestAuditMiddleware:
         start_ts = time.monotonic()
         request_id = self._ensure_request_id(request)
         scope = self._audit_scope(request)
-        with (scope or contextlib.nullcontext(), self._logger_scope(request)):
+        with scope or contextlib.nullcontext(), self._logger_scope(request):
             try:
                 response = await self.get_response(request)
             except Exception as exc:
@@ -265,22 +263,32 @@ class MobileDetectionMiddleware:
     """
 
     MOBILE_KEYWORDS = [
-        'mobile', 'android', 'iphone', 'ipad', 'ipod',
-        'webos', 'blackberry', 'opera mini', 'opera mobi',
-        'iemobile', 'windows phone', 'palm', 'symbian'
+        "mobile",
+        "android",
+        "iphone",
+        "ipad",
+        "ipod",
+        "webos",
+        "blackberry",
+        "opera mini",
+        "opera mobi",
+        "iemobile",
+        "windows phone",
+        "palm",
+        "symbian",
     ]
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        user_agent = request.META.get('HTTP_USER_AGENT', '').lower()
+        user_agent = request.META.get("HTTP_USER_AGENT", "").lower()
         request.is_mobile = any(kw in user_agent for kw in self.MOBILE_KEYWORDS)
 
         # Также проверяем query параметр для тестирования
-        if request.GET.get('mobile') == '1':
+        if request.GET.get("mobile") == "1":
             request.is_mobile = True
-        elif request.GET.get('mobile') == '0':
+        elif request.GET.get("mobile") == "0":
             request.is_mobile = False
 
         response = self.get_response(request)
@@ -298,6 +306,6 @@ def get_template_name(request, default_template: str) -> str:
     Returns:
         Путь к шаблону: 'mobile/chat.html' или 'chat.html'
     """
-    if getattr(request, 'is_mobile', False):
-        return f'mobile/{default_template}'
+    if getattr(request, "is_mobile", False):
+        return f"mobile/{default_template}"
     return default_template

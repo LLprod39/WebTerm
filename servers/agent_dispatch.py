@@ -91,7 +91,11 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
         if dispatch is None:
             return None
 
-        if dispatch.status == AgentRunDispatch.STATUS_CLAIMED and dispatch.lease_expires_at and dispatch.lease_expires_at > now:
+        if (
+            dispatch.status == AgentRunDispatch.STATUS_CLAIMED
+            and dispatch.lease_expires_at
+            and dispatch.lease_expires_at > now
+        ):
             return None
 
         dispatch.status = AgentRunDispatch.STATUS_CLAIMED
@@ -127,7 +131,9 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
         return dispatch
 
 
-def heartbeat_agent_dispatch(dispatch_id: int, *, worker_name: str, lease_seconds: int = 180) -> AgentRunDispatch | None:
+def heartbeat_agent_dispatch(
+    dispatch_id: int, *, worker_name: str, lease_seconds: int = 180
+) -> AgentRunDispatch | None:
     dispatch = AgentRunDispatch.objects.filter(pk=dispatch_id).select_related("run").first()
     if dispatch is None or dispatch.status != AgentRunDispatch.STATUS_CLAIMED:
         return None

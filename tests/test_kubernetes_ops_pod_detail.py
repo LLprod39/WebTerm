@@ -166,14 +166,18 @@ class KubernetesOpsPodDetailTests(TestCase):
             phase="Running",
             owner_kind="ReplicaSet",
             owner_name="ingress-nginx-controller-abc123",
-            links={"rancher": "https://rancher.example.test/pod/ingress-nginx-controller-abc123?token=raw-link-token#tail"},
+            links={
+                "rancher": "https://rancher.example.test/pod/ingress-nginx-controller-abc123?token=raw-link-token#tail"
+            },
         )
 
         response = self.client.get(reverse("api_kubernetes_pod_detail", kwargs={"pod_id": f"pod_{pod.id}"}))
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["pod"]["links"]["rancher"], "https://rancher.example.test/pod/ingress-nginx-controller-abc123")
+        self.assertEqual(
+            payload["pod"]["links"]["rancher"], "https://rancher.example.test/pod/ingress-nginx-controller-abc123"
+        )
         self.assertNotIn("raw-link-token", str(payload))
         self.assertNotIn("#tail", str(payload))
 

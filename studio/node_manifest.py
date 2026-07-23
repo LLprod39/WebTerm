@@ -135,7 +135,9 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
             },
             required=("command",),
         ),
-        output_schema=_schema({"output": _str(), "command": _obj(), "preflight": _array(_obj()), "verification": _array(_obj())}),
+        output_schema=_schema(
+            {"output": _str(), "command": _obj(), "preflight": _array(_obj()), "verification": _array(_obj())}
+        ),
     ),
     "agent/llm_query": _manifest(
         "agent/llm_query",
@@ -189,7 +191,9 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         input_schema=_schema(
             {
                 "source_node_id": _str(description="Optional node output to inspect."),
-                "check_type": _str(enum=("contains", "not_contains", "status_ok", "status_failed", "always_true"), default="contains"),
+                "check_type": _str(
+                    enum=("contains", "not_contains", "status_ok", "status_failed", "always_true"), default="contains"
+                ),
                 "check_value": _str(description="Substring used by contains/not_contains checks."),
             }
         ),
@@ -255,7 +259,9 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "timeout_minutes": _int(minimum=1, maximum=1440, default=30),
             }
         ),
-        output_schema=_schema({"decision": _str(enum=("received", "timeout")), "operator_response": _str(), "output": _str()}),
+        output_schema=_schema(
+            {"decision": _str(enum=("received", "timeout")), "operator_response": _str(), "output": _str()}
+        ),
     ),
     "output/report": _manifest(
         "output/report",

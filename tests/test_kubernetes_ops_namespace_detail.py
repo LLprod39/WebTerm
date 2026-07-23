@@ -108,7 +108,10 @@ class KubernetesOpsNamespaceDetailTests(TestCase):
         )
 
         response = self.client.get(
-            reverse("api_kubernetes_namespace_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": f"namespace_{namespace.id}"})
+            reverse(
+                "api_kubernetes_namespace_detail",
+                kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": f"namespace_{namespace.id}"},
+            )
         )
 
         self.assertEqual(response.status_code, 200)
@@ -144,7 +147,7 @@ class KubernetesOpsNamespaceDetailTests(TestCase):
     def test_namespace_detail_staff_gets_sanitized_fallback_links(self):
         staff = self.create_user("k8s-namespace-detail-staff", is_staff=True)
         self.client.force_login(staff)
-        namespace = K8sNamespace.objects.create(
+        K8sNamespace.objects.create(
             name="ingress-nginx",
             cluster=self.cluster,
             health=K8sCluster.HEALTH_HEALTHY,
@@ -160,7 +163,10 @@ class KubernetesOpsNamespaceDetailTests(TestCase):
         )
 
         response = self.client.get(
-            reverse("api_kubernetes_namespace_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "ingress-nginx"})
+            reverse(
+                "api_kubernetes_namespace_detail",
+                kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "ingress-nginx"},
+            )
         )
 
         self.assertEqual(response.status_code, 200)
@@ -186,7 +192,10 @@ class KubernetesOpsNamespaceDetailTests(TestCase):
         )
 
         response = self.client.get(
-            reverse("api_kubernetes_namespace_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "jobs"})
+            reverse(
+                "api_kubernetes_namespace_detail",
+                kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "jobs"},
+            )
         )
 
         self.assertEqual(response.status_code, 200)
@@ -202,7 +211,10 @@ class KubernetesOpsNamespaceDetailTests(TestCase):
         self.client.force_login(user)
 
         response = self.client.get(
-            reverse("api_kubernetes_namespace_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "missing"})
+            reverse(
+                "api_kubernetes_namespace_detail",
+                kwargs={"cluster_id": f"cluster_{self.cluster.id}", "namespace_id": "missing"},
+            )
         )
 
         self.assertEqual(response.status_code, 404)

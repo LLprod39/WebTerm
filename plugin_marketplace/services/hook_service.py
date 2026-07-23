@@ -12,10 +12,14 @@ from plugin_marketplace.services.install_service import record_event
 
 
 def _enabled_installation(plugin_id: str, user=None) -> PluginInstallation | None:
-    installation = PluginInstallation.objects.prefetch_related("scoped_groups").filter(
-        plugin_id=plugin_id,
-        status=PluginInstallation.STATUS_ENABLED,
-    ).first()
+    installation = (
+        PluginInstallation.objects.prefetch_related("scoped_groups")
+        .filter(
+            plugin_id=plugin_id,
+            status=PluginInstallation.STATUS_ENABLED,
+        )
+        .first()
+    )
     if installation is None or not installation_allowed_for_user(installation, user):
         return None
     return installation

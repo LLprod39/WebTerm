@@ -40,11 +40,14 @@ def test_plugin_installation_scope_limits_surfaces_and_permissions_to_access_gro
     owner_client.force_login(owner)
     installation = owner_client.get("/api/plugins/installed/").json()["installations"][0]
     assert owner_client.post(f"/api/plugins/installed/{installation['id']}/enable/").status_code == 200
-    assert owner_client.post(
-        f"/api/plugins/installed/{installation['id']}/permissions/grant/",
-        data=_json({"scope": "demo.alerts.send"}),
-        content_type="application/json",
-    ).status_code == 200
+    assert (
+        owner_client.post(
+            f"/api/plugins/installed/{installation['id']}/permissions/grant/",
+            data=_json({"scope": "demo.alerts.send"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
 
     scope = owner_client.post(
         f"/api/plugins/installed/{installation['id']}/scope/update/",
@@ -74,7 +77,9 @@ def test_plugin_installation_scope_limits_surfaces_and_permissions_to_access_gro
     assert outsider_surfaces.json()["surfaces"]["pages"] == []
     outsider_nodes = outsider_client.get("/api/studio/node-manifests/")
     assert PLUGIN_STUDIO_NODE_TYPE not in {item["type"] for item in outsider_nodes.json()["nodes"]}
-    assert any("unknown type" in item for item in validate_pipeline_definition(nodes=nodes, edges=edges, owner=outsider))
+    assert any(
+        "unknown type" in item for item in validate_pipeline_definition(nodes=nodes, edges=edges, owner=outsider)
+    )
     assert outsider_client.get(f"/api/plugins/pages/{DEMO_PLUGIN_ID}/overview/").status_code == 404
     assert outsider_client.post("/api/plugins/demo/action/").status_code == 403
 
@@ -104,22 +109,28 @@ def test_federated_marketplace_source_sync_fetches_https_catalog(monkeypatch):
     assert source.json()["source"]["sync_mode"] == "remote"
 
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.federated-alerts",
-        "name": "Federated Alerts",
-        "slug": "federated-alerts",
-        "version": "0.2.0",
-        "api_version": "plugins.v1",
-        "publisher": {"id": "acme", "name": "Acme Federation", "verified": True},
-    })
-    payload = _json({
-        "plugins": [{
-            "manifest": manifest,
-            "compatibility": {"api_versions": ["plugins.v1"]},
-            "review_status": "verified",
-            "signature_status": "signed",
-        }],
-    }).encode("utf-8")
+    manifest.update(
+        {
+            "id": "acme.federated-alerts",
+            "name": "Federated Alerts",
+            "slug": "federated-alerts",
+            "version": "0.2.0",
+            "api_version": "plugins.v1",
+            "publisher": {"id": "acme", "name": "Acme Federation", "verified": True},
+        }
+    )
+    payload = _json(
+        {
+            "plugins": [
+                {
+                    "manifest": manifest,
+                    "compatibility": {"api_versions": ["plugins.v1"]},
+                    "review_status": "verified",
+                    "signature_status": "signed",
+                }
+            ],
+        }
+    ).encode("utf-8")
 
     class FakeResponse:
         headers = {"Content-Length": str(len(payload))}

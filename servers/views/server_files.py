@@ -70,9 +70,13 @@ def _sftp_error_response(exc: Exception) -> JsonResponse:
     if isinstance(exc, (FileExistsError, _asyncssh.SFTPFileAlreadyExists)):
         return JsonResponse({"success": False, "error": "Файл уже существует", "code": "already_exists"}, status=409)
     if isinstance(exc, NotADirectoryError):
-        return JsonResponse({"success": False, "error": "Указанный путь не является папкой", "code": "not_a_directory"}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Указанный путь не является папкой", "code": "not_a_directory"}, status=400
+        )
     if isinstance(exc, IsADirectoryError):
-        return JsonResponse({"success": False, "error": "Операция требует файл, а не папку", "code": "is_directory"}, status=400)
+        return JsonResponse(
+            {"success": False, "error": "Операция требует файл, а не папку", "code": "is_directory"}, status=400
+        )
     if isinstance(exc, (PermissionError, _asyncssh.SFTPPermissionDenied)):
         return JsonResponse(
             {
@@ -84,7 +88,9 @@ def _sftp_error_response(exc: Exception) -> JsonResponse:
         )
     if isinstance(exc, ValueError):
         return JsonResponse({"success": False, "error": str(exc), "code": "invalid_request"}, status=400)
-    return JsonResponse({"success": False, "error": str(exc) or "SFTP operation failed", "code": "sftp_error"}, status=500)
+    return JsonResponse(
+        {"success": False, "error": str(exc) or "SFTP operation failed", "code": "sftp_error"}, status=500
+    )
 
 
 def _missing_capability_response(capability: str) -> JsonResponse:

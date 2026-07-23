@@ -21,10 +21,16 @@ from kubernetes_ops.services.provider_watch_streams import (
 
 async def run_continuous_watch_follow(consumer, params: dict[str, str], stream: dict) -> None:
     max_batches = bounded_stream_int(params.get("max_batches"), default=5, minimum=1, maximum=25)
-    batch_events = bounded_stream_int(params.get("batch_events") or params.get("limit"), default=20, minimum=1, maximum=50)
+    batch_events = bounded_stream_int(
+        params.get("batch_events") or params.get("limit"), default=20, minimum=1, maximum=50
+    )
     idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=60.0, minimum=1.0, maximum=300.0)
-    heartbeat_interval = bounded_stream_float(params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0)
-    empty_read_sleep = bounded_stream_float(params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0)
+    heartbeat_interval = bounded_stream_float(
+        params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0
+    )
+    empty_read_sleep = bounded_stream_float(
+        params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0
+    )
     close_reason = "max_batches"
     stream_handle = None
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="k8s-watch-stream")
@@ -46,7 +52,9 @@ async def run_continuous_watch_follow(consumer, params: dict[str, str], stream: 
         consumer._last_payload = dict(context["payload"])
         stream_handle = await loop.run_in_executor(
             executor,
-            lambda: open_provider_watch_event_stream(context["provider"], context["path"], timeout=context["timeout_seconds"]),
+            lambda: open_provider_watch_event_stream(
+                context["provider"], context["path"], timeout=context["timeout_seconds"]
+            ),
         )
         last_heartbeat = monotonic()
         while consumer._batch_count < max_batches:
@@ -60,17 +68,27 @@ async def run_continuous_watch_follow(consumer, params: dict[str, str], stream: 
             try:
                 batch = await loop.run_in_executor(
                     executor,
-                    lambda: stream_handle.read_batch(max_events=batch_events, max_bytes=MAX_PROVIDER_WATCH_STREAM_BYTES),
+                    lambda: stream_handle.read_batch(
+                        max_events=batch_events, max_bytes=MAX_PROVIDER_WATCH_STREAM_BYTES
+                    ),
                 )
             except KubernetesProviderError as exc:
-                await consumer._fail_active_stream(stream, AdminResourceError(str(exc), code="provider_watch_stream_error", status=502))
+                await consumer._fail_active_stream(
+                    stream, AdminResourceError(str(exc), code="provider_watch_stream_error", status=502)
+                )
                 return
             if not batch.events:
                 if batch.eof:
                     close_reason = "provider_eof"
                     break
                 if monotonic() - last_heartbeat >= heartbeat_interval:
-                    await consumer.send_json({"type": "stream_heartbeat", "stream_id": stream["stream_id"], "batch_index": consumer._batch_count})
+                    await consumer.send_json(
+                        {
+                            "type": "stream_heartbeat",
+                            "stream_id": stream["stream_id"],
+                            "batch_index": consumer._batch_count,
+                        }
+                    )
                     last_heartbeat = monotonic()
                 await asyncio.sleep(empty_read_sleep)
                 continue
@@ -81,21 +99,34 @@ async def run_continuous_watch_follow(consumer, params: dict[str, str], stream: 
                 eof=batch.eof,
                 event_limit=batch_events,
             )
-            context["payload"]["latest_resource_version"] = payload.get("latest_resource_version", context["payload"].get("latest_resource_version", ""))
+            context["payload"]["latest_resource_version"] = payload.get(
+                "latest_resource_version", context["payload"].get("latest_resource_version", "")
+            )
             consumer._track_follow_batch(payload, consumer._batch_count + 1)
-            await consumer.send_json({"type": "watch_batch", "stream_id": stream["stream_id"], "batch_index": consumer._batch_count, "payload": payload})
+            await consumer.send_json(
+                {
+                    "type": "watch_batch",
+                    "stream_id": stream["stream_id"],
+                    "batch_index": consumer._batch_count,
+                    "payload": payload,
+                }
+            )
             if batch.eof:
                 close_reason = "provider_eof"
                 break
         summary = await consumer._close_active_stream(close_reason)
         if summary is not None:
-            await consumer.send_json({"type": "stream_stopped", "stream_id": stream["stream_id"], "stream_type": "watch", "summary": summary})
+            await consumer.send_json(
+                {"type": "stream_stopped", "stream_id": stream["stream_id"], "stream_type": "watch", "summary": summary}
+            )
             await consumer.close(code=1000)
     except asyncio.CancelledError:
         await consumer._close_active_stream("client_disconnect")
         raise
     except KubernetesProviderError as exc:
-        await consumer._fail_active_stream(stream, AdminResourceError(str(exc), code="provider_watch_stream_error", status=502))
+        await consumer._fail_active_stream(
+            stream, AdminResourceError(str(exc), code="provider_watch_stream_error", status=502)
+        )
     except AdminResourceError as exc:
         await consumer._fail_active_stream(stream, exc)
     finally:

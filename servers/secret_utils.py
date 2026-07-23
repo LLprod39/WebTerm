@@ -96,7 +96,9 @@ def get_server_sudo_secret(server, *, master_password: str = "", fallback_plain:
         if not resolved_master_password:
             return fallback_plain or ""
         if not getattr(server, "sudo_salt", None):
-            raise ValueError("У сервера есть encrypted_sudo_password, но отсутствует sudo_salt — расшифровка невозможна")
+            raise ValueError(
+                "У сервера есть encrypted_sudo_password, но отсутствует sudo_salt — расшифровка невозможна"
+            )
         try:
             return PasswordEncryption.decrypt_password(
                 encrypted,

@@ -264,9 +264,7 @@ def _build_assistant_response_for_payload(request, data: dict) -> tuple[dict | N
                 assistant_context=assistant_context,
                 known_node_ids=set(node_map.keys()),
                 known_node_types={
-                    node_id: str(node.get("type") or "")
-                    for node_id, node in node_map.items()
-                    if isinstance(node, dict)
+                    node_id: str(node.get("type") or "") for node_id, node in node_map.items() if isinstance(node, dict)
                 },
                 known_edges=[edge for edge in edges if isinstance(edge, dict)],
             )

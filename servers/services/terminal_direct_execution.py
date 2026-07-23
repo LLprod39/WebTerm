@@ -36,7 +36,7 @@ async def execute_direct_terminal_command(
             ssh_conn.run(clean_cmd, check=False),
             timeout=timeout_seconds,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         output_snippet = "WEUAI_EXECUTION_ERROR: direct exec timed out"
         exit_code = 124
     else:

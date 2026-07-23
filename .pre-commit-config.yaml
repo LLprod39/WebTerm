@@ -16,19 +16,28 @@ repos:
     hooks:
       - id: architecture-sizes
         name: Architecture god-file prevention
-        language: python
+        language: system
         entry: python scripts/check_architecture_sizes.py --strict-new
         pass_filenames: false
         always_run: true
-        additional_dependencies:
-          - tomli
-          - import-linter
 
       - id: import-linter
         name: Import boundary contracts
-        language: python
+        language: system
         entry: lint-imports --no-cache
         pass_filenames: false
         always_run: true
-        additional_dependencies:
-          - import-linter
+
+      - id: runtime-contract
+        name: Frozen runtime contract
+        language: system
+        entry: python scripts/verify_runtime_contract.py
+        pass_filenames: false
+        always_run: true
+
+      - id: docs-contract
+        name: Authoritative documentation contract
+        language: system
+        entry: python scripts/verify_docs_contract.py
+        pass_filenames: false
+        always_run: true

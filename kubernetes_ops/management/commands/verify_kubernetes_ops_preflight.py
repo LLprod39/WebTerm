@@ -15,8 +15,12 @@ class Command(BaseCommand):
     help = "Run Kubernetes Ops release preflight checks and write a bounded evidence artifact."
 
     def add_arguments(self, parser):
-        parser.add_argument("--output", default="artifacts/kubernetes_ops_preflight_evidence.json", help="Output JSON evidence path.")
-        parser.add_argument("--no-fail", action="store_true", help="Return exit code 0 even when preflight checks fail.")
+        parser.add_argument(
+            "--output", default="artifacts/kubernetes_ops_preflight_evidence.json", help="Output JSON evidence path."
+        )
+        parser.add_argument(
+            "--no-fail", action="store_true", help="Return exit code 0 even when preflight checks fail."
+        )
 
     def handle(self, *args, **options):
         report = collect_kubernetes_release_preflight()

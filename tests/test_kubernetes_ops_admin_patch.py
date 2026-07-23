@@ -112,7 +112,9 @@ class KubernetesOpsAdminPatchTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "patch")
         self.assertEqual(payload["patch_type"], "merge")
-        self.assertEqual(payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api")
+        self.assertEqual(
+            payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api"
+        )
         self.assertEqual(seen["method"], "PATCH")
         self.assertEqual(seen["headers"]["Content-Type"], "application/merge-patch+json")
         self.assertEqual(seen["body"], {"metadata": {"labels": {"patched": "true"}}})

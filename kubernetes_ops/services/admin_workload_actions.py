@@ -43,14 +43,18 @@ def scale_kubernetes_workload(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes scale is disabled by policy.", code="native_scale_disabled", status=403)
+        raise AdminResourceError(
+            "Native Kubernetes scale is disabled by policy.", code="native_scale_disabled", status=403
+        )
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
     if ref.kind not in SCALABLE_KINDS:
         raise AdminResourceError("This kind cannot be scaled by Admin Mode.", code="kind_not_scalable")
     replicas_value = _clean_replicas(replicas)
     reason_value = _required_reason(reason, action="scale")
     cluster = _required_cluster(cluster_id)
-    session = _active_workload_session_for_user(user, session_id, cluster, ref=ref, verb=K8sAdminAction.VERB_SCALE, policy_key="can_scale")
+    session = _active_workload_session_for_user(
+        user, session_id, cluster, ref=ref, verb=K8sAdminAction.VERB_SCALE, policy_key="can_scale"
+    )
     assert_production_write_approved(session=session, cluster=cluster, ref=ref, action="scale")
     assert_admin_session_approved(session=session, action=K8sAdminAction.VERB_SCALE)
     provider = _required_rancher_provider(cluster)
@@ -117,14 +121,18 @@ def restart_kubernetes_workload(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes restart is disabled by policy.", code="native_restart_disabled", status=403)
+        raise AdminResourceError(
+            "Native Kubernetes restart is disabled by policy.", code="native_restart_disabled", status=403
+        )
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
     if ref.kind not in RESTARTABLE_KINDS:
         raise AdminResourceError("This kind cannot be restarted by Admin Mode.", code="kind_not_restartable")
     reason_value = _required_reason(reason, action="restart")
     restarted_at = timezone.now().isoformat()
     cluster = _required_cluster(cluster_id)
-    session = _active_workload_session_for_user(user, session_id, cluster, ref=ref, verb=K8sAdminAction.VERB_RESTART, policy_key="can_restart")
+    session = _active_workload_session_for_user(
+        user, session_id, cluster, ref=ref, verb=K8sAdminAction.VERB_RESTART, policy_key="can_restart"
+    )
     assert_production_write_approved(session=session, cluster=cluster, ref=ref, action="restart")
     assert_admin_session_approved(session=session, action=K8sAdminAction.VERB_RESTART)
     provider = _required_rancher_provider(cluster)
@@ -191,20 +199,36 @@ def _active_workload_session_for_user(
         code = f"native_{verb}_disabled" if policy["can_admin_write"] else "admin_write_required"
         raise AdminResourceError("Kubernetes workload mutation access is required.", code=code, status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active write admin session is required.", code="admin_write_session_required", status=403)
+        raise AdminResourceError(
+            "Active write admin session is required.", code="admin_write_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Write admin session is not active.", code="admin_write_session_not_active", status=403)
+        raise AdminResourceError(
+            "Write admin session is not active.", code="admin_write_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_WRITE:
-        raise AdminResourceError("Workload mutations require a write admin session.", code="write_session_required", status=403)
+        raise AdminResourceError(
+            "Workload mutations require a write admin session.", code="write_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if verb not in set(session.allowed_verbs or []):
-        raise AdminResourceError("Admin session does not allow this workload mutation.", code="admin_session_verb_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not allow this workload mutation.", code="admin_session_verb_denied", status=403
+        )
     _check_session_scope(session, ref)
     return session
 
@@ -213,13 +237,19 @@ def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -
     if ref.namespace:
         allowed_namespaces = set(session.allowed_namespaces or [])
         if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-            raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+            raise AdminResourceError(
+                "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+            )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
-def _provider_patch(provider: K8sProvider, path: str, body: dict[str, Any], *, transport: ProviderTransport | None) -> dict[str, Any]:
+def _provider_patch(
+    provider: K8sProvider, path: str, body: dict[str, Any], *, transport: ProviderTransport | None
+) -> dict[str, Any]:
     try:
         return ProviderJsonClient(provider, transport=transport).request(
             "PATCH",
@@ -285,17 +315,33 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode workload actions.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode workload actions.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 
-def _base_response(operation: str, cluster: K8sCluster, provider: K8sProvider, ref: KubernetesResourceRef, path: str, action: K8sAdminAction, extra: dict[str, Any]) -> dict[str, Any]:
+def _base_response(
+    operation: str,
+    cluster: K8sCluster,
+    provider: K8sProvider,
+    ref: KubernetesResourceRef,
+    path: str,
+    action: K8sAdminAction,
+    extra: dict[str, Any],
+) -> dict[str, Any]:
     return {
         "success": True,
         "mode": "admin_write_workload",
         "operation": operation,
         "mutates_state": True,
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": _target_payload(ref),
         "path": _public_path(path),

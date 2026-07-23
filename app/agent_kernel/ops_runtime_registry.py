@@ -4,6 +4,7 @@ Feature apps register concrete adapters here so Studio pipeline nodes can run
 server-bound operations through an app-level port instead of importing the
 servers app directly.
 """
+
 from __future__ import annotations
 
 from typing import Any

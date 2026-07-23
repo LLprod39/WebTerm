@@ -11,4 +11,3 @@ websocket_urlpatterns = [
     path("ws/agents/<int:run_id>/live/", AgentLiveConsumer.as_asgi()),
     path("ws/monitoring/live/", MonitoringLiveConsumer.as_asgi()),
 ]
-

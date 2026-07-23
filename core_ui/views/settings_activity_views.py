@@ -4,7 +4,7 @@ Settings activity log API and export endpoints.
 
 import csv
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 
 from django.contrib.auth.decorators import login_required
@@ -131,7 +131,7 @@ def api_settings_activity_logs(request):
         export_format = (request.GET.get("format") or "").strip().lower() or None
 
         filtered = UserActivityLog.objects.select_related("user").filter(
-            created_at__gte=datetime.now(timezone.utc) - timedelta(days=days)
+            created_at__gte=datetime.now(UTC) - timedelta(days=days)
         )
 
         if user_id_raw:

@@ -50,7 +50,9 @@ def list_cluster_resource_events(
         kind=ref.kind,
     )
     provider = _required_rancher_provider(cluster)
-    snapshot = fetch_resource_events_snapshot(provider=provider, cluster=cluster, ref=ref, limit=limit, transport=transport)
+    snapshot = fetch_resource_events_snapshot(
+        provider=provider, cluster=cluster, ref=ref, limit=limit, transport=transport
+    )
     record_admin_resource_action(
         user=user,
         session=session,
@@ -122,7 +124,11 @@ def _base_response(
         "success": True,
         "mode": "admin_read_only",
         "operation": "resource_events",
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": {
             "api_version": ref.api_version,
@@ -153,7 +159,9 @@ def _safe_event(event: dict[str, Any]) -> dict[str, Any]:
     message = _safe_text(raw_message, max_length=700)
     involved_object = sanitize_kubernetes_resource(involved if isinstance(involved, dict) else {})
     safe_source = sanitize_kubernetes_resource(source)
-    redacted = message != raw_message[:700] or resource_was_redacted(involved_object) or resource_was_redacted(safe_source)
+    redacted = (
+        message != raw_message[:700] or resource_was_redacted(involved_object) or resource_was_redacted(safe_source)
+    )
     series = event.get("series") if isinstance(event.get("series"), dict) else {}
     return {
         "name": str(metadata.get("name") or "")[:180],
@@ -167,7 +175,9 @@ def _safe_event(event: dict[str, Any]) -> dict[str, Any]:
         "involved_object": involved_object,
         "count": _safe_int(event.get("count") or event.get("deprecatedCount") or series.get("count")),
         "first_timestamp": str(event.get("firstTimestamp") or event.get("deprecatedFirstTimestamp") or "")[:80],
-        "last_timestamp": str(event.get("lastTimestamp") or event.get("deprecatedLastTimestamp") or series.get("lastObservedTime") or "")[:80],
+        "last_timestamp": str(
+            event.get("lastTimestamp") or event.get("deprecatedLastTimestamp") or series.get("lastObservedTime") or ""
+        )[:80],
         "event_time": str(event.get("eventTime") or "")[:80],
         "resource_version": str(metadata.get("resourceVersion") or "")[:120],
         "redacted": redacted,
@@ -211,7 +221,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for resource events.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for resource events.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

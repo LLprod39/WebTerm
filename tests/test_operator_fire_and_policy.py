@@ -25,9 +25,7 @@ from servers.operator_tools import register_operator_tools
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
-        UserAppPermission.objects.update_or_create(
-            user=user, feature=feature, defaults={"allowed": True}
-        )
+        UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
 
 
 class ScriptedToolsLLM:

@@ -4,6 +4,7 @@ import shlex
 
 RESTRICTED_AGENT_TOOLS = ["ssh_execute", "read_console", "send_ctrl_c"]
 
+
 def _quote_shell_arg(value: str) -> str:
     return shlex.quote(str(value or "").strip())
 
@@ -30,9 +31,7 @@ def _build_container_verify_command(container_name: str) -> str:
     return (
         f"status=\"$(docker inspect -f '{{{{{{{{.State.Status}}}}}}}}' {quoted} 2>/dev/null || echo missing)\"; "
         f"health=\"$(docker inspect -f '{{{{{{{{if .State.Health}}}}}}}}{{{{{{{{.State.Health.Status}}}}}}}}{{{{{{{{else}}}}}}}}n/a{{{{{{{{end}}}}}}}}' {quoted} 2>/dev/null || echo missing)\"; "
-        "echo \"status=$status health=$health\"; "
-        "[ \"$status\" = \"running\" ] || exit 1; "
-        "[ \"$health\" != \"unhealthy\" ] || exit 1"
+        'echo "status=$status health=$health"; '
+        '[ "$status" = "running" ] || exit 1; '
+        '[ "$health" != "unhealthy" ] || exit 1'
     )
-
-

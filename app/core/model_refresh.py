@@ -16,9 +16,11 @@ from app.core.redacted_logging import redacted_log_text
 
 
 async def fetch_available_gemini_models(manager: Any) -> list[str]:
-    key = await manager._aget_managed_llm_api_key("gemini") or manager.gemini_api_key or (
-        os.getenv("GEMINI_API_KEY") or ""
-    ).strip()
+    key = (
+        await manager._aget_managed_llm_api_key("gemini")
+        or manager.gemini_api_key
+        or (os.getenv("GEMINI_API_KEY") or "").strip()
+    )
     if key:
         manager.gemini_api_key = key
     if not key:
@@ -39,7 +41,9 @@ async def fetch_available_gemini_models(manager: Any) -> list[str]:
                     params=params,
                 )
                 if response.status_code != 200:
-                    logger.error("Gemini API returned status {}: {}", response.status_code, redacted_log_text(response.text))
+                    logger.error(
+                        "Gemini API returned status {}: {}", response.status_code, redacted_log_text(response.text)
+                    )
                     return manager._get_default_gemini_models()
 
                 payload = response.json()
@@ -116,9 +120,11 @@ async def fetch_available_grok_models(manager: Any) -> list[str]:
 
 
 async def fetch_available_claude_models(manager: Any) -> list[str]:
-    key = await manager._aget_managed_llm_api_key("claude") or manager.anthropic_api_key or (
-        os.getenv("ANTHROPIC_API_KEY") or ""
-    ).strip()
+    key = (
+        await manager._aget_managed_llm_api_key("claude")
+        or manager.anthropic_api_key
+        or (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    )
     if key:
         manager.anthropic_api_key = key
     if not key:
@@ -135,7 +141,9 @@ async def fetch_available_claude_models(manager: Any) -> list[str]:
                 },
             )
             if response.status_code != 200:
-                logger.error("Anthropic API returned status {}: {}", response.status_code, redacted_log_text(response.text))
+                logger.error(
+                    "Anthropic API returned status {}: {}", response.status_code, redacted_log_text(response.text)
+                )
                 return manager._get_default_claude_models()
 
             payload = response.json()
@@ -174,7 +182,9 @@ async def fetch_available_openai_models(manager: Any) -> list[str]:
             )
 
             if response.status_code != 200:
-                logger.error("OpenAI API returned status {}: {}", response.status_code, redacted_log_text(response.text))
+                logger.error(
+                    "OpenAI API returned status {}: {}", response.status_code, redacted_log_text(response.text)
+                )
                 return manager._get_default_openai_models()
 
             payload = response.json()
@@ -190,44 +200,6 @@ async def fetch_available_openai_models(manager: Any) -> list[str]:
     except Exception as exc:
         logger.error(f"Failed to fetch OpenAI models: {exc}")
         return manager._get_default_openai_models()
-
-
-async def fetch_available_fair_models(manager: Any) -> list[str]:
-    key = await manager._aget_managed_llm_api_key("fair") or manager.fair_api_key or manager._get_fair_api_key()
-    if key:
-        manager.fair_api_key = key
-    if not key:
-        logger.warning("FAIR.Hyperion API key not set")
-        return manager._get_default_fair_models()
-
-    base_url = manager._get_fair_base_url()
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{base_url}/models",
-                headers={"Authorization": f"Bearer {key}"},
-            )
-
-            if response.status_code != 200:
-                logger.error(
-                    "FAIR.Hyperion API returned status {}: {}",
-                    response.status_code,
-                    redacted_log_text(response.text),
-                )
-                return manager._get_default_fair_models()
-
-            payload = response.json()
-            models = sorted(set(extract_model_ids(payload)))
-            if not models:
-                logger.warning("FAIR.Hyperion API returned empty model list; using defaults")
-                return manager._get_default_fair_models()
-
-            manager.available_fair_models = models
-            logger.success(f"Fetched {len(models)} FAIR.Hyperion models")
-            return models
-    except Exception as exc:
-        logger.error(f"Failed to fetch FAIR.Hyperion models: {exc}")
-        return manager._get_default_fair_models()
 
 
 async def fetch_available_ollama_models(manager: Any) -> list[str]:

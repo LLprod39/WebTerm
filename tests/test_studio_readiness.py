@@ -296,7 +296,11 @@ def test_readiness_marks_required_workers_ready_when_heartbeating():
             _node("monitoring", "trigger/monitoring", {"monitoring_filters": {}}),
             _node("join", "logic/merge", {"mode": "any"}),
             _node("report", "output/report", {"template": "ok"}),
-            _node("operator_reply", "logic/telegram_input", {"message": "Need action?", "bot_token": "token", "chat_id": "123"}),
+            _node(
+                "operator_reply",
+                "logic/telegram_input",
+                {"message": "Need action?", "bot_token": "token", "chat_id": "123"},
+            ),
         ],
         edges=[
             {"id": "e-schedule-join", "source": "schedule", "target": "join", "sourceHandle": "out"},
@@ -363,7 +367,12 @@ def test_readiness_reports_missing_integration_requirements(monkeypatch, tmp_pat
     assert requirements["MCP server"]["severity"] == "error"
     assert requirements["Telegram chat"]["severity"] == "warning"
     issue_codes = {issue["code"] for issue in item["issues"]}
-    assert {"llm_credentials_missing", "telegram_token_missing", "email_recipient_missing", "mcp_server_missing"} <= issue_codes
+    assert {
+        "llm_credentials_missing",
+        "telegram_token_missing",
+        "email_recipient_missing",
+        "mcp_server_missing",
+    } <= issue_codes
     assert requirements["MCP server"]["issue"]["code"] == "mcp_server_missing"
     assert "Select an owner-accessible MCP server" in requirements["MCP server"]["issue"]["next_action"]
 

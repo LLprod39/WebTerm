@@ -11,16 +11,8 @@ def build_kubernetes_production_evidence_checklist(*, production_gate: dict[str,
     core_references = _core_references(production_gate, production_target=production_target)
     external_bundle = _external_bundle_payload(load_kubernetes_external_evidence_bundle_artifact())
     core_missing = [item for item in core_references if item["required"] and not item["present"]]
-    external_missing = [
-        item
-        for item in external_bundle["references"]
-        if item["required"] and not item["present"]
-    ]
-    artifact_missing = [
-        item
-        for item in external_bundle["artifact_checks"]
-        if item["status"] != "ready"
-    ]
+    external_missing = [item for item in external_bundle["references"] if item["required"] and not item["present"]]
+    artifact_missing = [item for item in external_bundle["artifact_checks"] if item["status"] != "ready"]
     blockers = []
     blockers.extend(f"core_ref:{item['id']}" for item in core_missing)
     blockers.extend(f"external_ref:{item['id']}" for item in external_missing)
@@ -80,15 +72,9 @@ def _reference_item(item: dict[str, Any]) -> dict[str, Any]:
 
 def _external_bundle_payload(bundle: dict[str, Any]) -> dict[str, Any]:
     summary = bundle.get("summary") if isinstance(bundle.get("summary"), dict) else {}
-    references = [
-        _reference_item(item)
-        for item in bundle.get("references") or []
-        if isinstance(item, dict)
-    ]
+    references = [_reference_item(item) for item in bundle.get("references") or [] if isinstance(item, dict)]
     artifact_checks = [
-        _artifact_check_item(item)
-        for item in bundle.get("artifact_checks") or []
-        if isinstance(item, dict)
+        _artifact_check_item(item) for item in bundle.get("artifact_checks") or [] if isinstance(item, dict)
     ]
     local_indicator_count = int(summary.get("local_indicator_count") or 0)
     if not local_indicator_count:
@@ -99,10 +85,17 @@ def _external_bundle_payload(bundle: dict[str, Any]) -> dict[str, Any]:
         "checked_at": str(bundle.get("checked_at") or ""),
         "age_seconds": bundle.get("age_seconds"),
         "max_age_seconds": bundle.get("max_age_seconds"),
-        "required_ref_count": int(summary.get("required_ref_count") or sum(1 for item in references if item["required"])),
-        "missing_required_ref_count": int(summary.get("missing_required_ref_count") or sum(1 for item in references if item["required"] and not item["present"])),
+        "required_ref_count": int(
+            summary.get("required_ref_count") or sum(1 for item in references if item["required"])
+        ),
+        "missing_required_ref_count": int(
+            summary.get("missing_required_ref_count")
+            or sum(1 for item in references if item["required"] and not item["present"])
+        ),
         "artifact_check_count": int(summary.get("artifact_check_count") or len(artifact_checks)),
-        "artifact_ready_count": int(summary.get("artifact_ready_count") or sum(1 for item in artifact_checks if item["status"] == "ready")),
+        "artifact_ready_count": int(
+            summary.get("artifact_ready_count") or sum(1 for item in artifact_checks if item["status"] == "ready")
+        ),
         "local_indicator_count": local_indicator_count,
         "error_count": len(bundle.get("errors") or []),
         "references": references,

@@ -65,7 +65,10 @@ def test_production_action_evidence_blocks_production_without_refs():
     assert report["success"] is False
     assert report["summary"]["missing_required_ref_count"] == 2
     assert "reference:production_rollback:KUBERNETES_OPS_PRODUCTION_ROLLBACK_EVIDENCE_REF:missing" in report["errors"]
-    assert "reference:native_verification:KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF:missing" in report["errors"]
+    assert (
+        "reference:native_verification:KUBERNETES_OPS_PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_REF:missing"
+        in report["errors"]
+    )
 
 
 @override_settings(

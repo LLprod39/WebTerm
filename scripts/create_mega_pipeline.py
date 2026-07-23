@@ -2,6 +2,7 @@
 One-shot script: creates the Full DevOps Autopilot mega-pipeline.
 Run from the repository root:  python scripts/create_mega_pipeline.py
 """
+
 import os
 import sys
 from pathlib import Path
@@ -14,9 +15,9 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings.development")
 django.setup()
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User  # noqa: E402
 
-from studio.models import Pipeline
+from studio.models import Pipeline  # noqa: E402
 
 user = User.objects.filter(is_superuser=True).first()
 if not user:
@@ -27,14 +28,15 @@ if not user:
 nodes = [
     # ── Trigger ──────────────────────────────────────────────────────────
     {
-        "id": "t1", "type": "trigger/schedule",
+        "id": "t1",
+        "type": "trigger/schedule",
         "position": {"x": 520, "y": 0},
         "data": {"label": "Daily Autopilot 04:00", "cron_expression": "0 4 * * *"},
     },
-
     # ── Phase 1: Parallel data collection (5 SSH nodes) ──────────────────
     {
-        "id": "s_disk", "type": "agent/ssh_cmd",
+        "id": "s_disk",
+        "type": "agent/ssh_cmd",
         "position": {"x": 0, "y": 160},
         "data": {
             "label": "💾 Disk & Inodes",
@@ -45,7 +47,8 @@ nodes = [
         },
     },
     {
-        "id": "s_mem", "type": "agent/ssh_cmd",
+        "id": "s_mem",
+        "type": "agent/ssh_cmd",
         "position": {"x": 260, "y": 160},
         "data": {
             "label": "🧠 CPU / Memory",
@@ -57,7 +60,8 @@ nodes = [
         },
     },
     {
-        "id": "s_svc", "type": "agent/ssh_cmd",
+        "id": "s_svc",
+        "type": "agent/ssh_cmd",
         "position": {"x": 520, "y": 160},
         "data": {
             "label": "⚙️ Services Status",
@@ -70,7 +74,8 @@ nodes = [
         },
     },
     {
-        "id": "s_sec", "type": "agent/ssh_cmd",
+        "id": "s_sec",
+        "type": "agent/ssh_cmd",
         "position": {"x": 780, "y": 160},
         "data": {
             "label": "🔒 Security Scan",
@@ -83,7 +88,8 @@ nodes = [
         },
     },
     {
-        "id": "s_logs", "type": "agent/ssh_cmd",
+        "id": "s_logs",
+        "type": "agent/ssh_cmd",
         "position": {"x": 1040, "y": 160},
         "data": {
             "label": "📋 Recent Errors",
@@ -95,10 +101,10 @@ nodes = [
             ),
         },
     },
-
     # ── Phase 2: AI synthesis #1 ─────────────────────────────────────────
     {
-        "id": "ai_triage", "type": "agent/llm_query",
+        "id": "ai_triage",
+        "type": "agent/llm_query",
         "position": {"x": 520, "y": 360},
         "data": {
             "label": "🧠 AI Triage & Scoring",
@@ -121,10 +127,10 @@ nodes = [
             "model": "gemini-2.0-flash-exp",
         },
     },
-
     # ── Phase 3: Branch on severity ──────────────────────────────────────
     {
-        "id": "c_critical", "type": "logic/condition",
+        "id": "c_critical",
+        "type": "logic/condition",
         "position": {"x": 520, "y": 530},
         "data": {
             "label": "🔴 Critical Issues?",
@@ -132,10 +138,10 @@ nodes = [
             "check_value": "FLAG:CRITICAL",
         },
     },
-
     # ── Branch TRUE: Agent actually FIXES things ──────────────────────────
     {
-        "id": "ai_plan", "type": "agent/llm_query",
+        "id": "ai_plan",
+        "type": "agent/llm_query",
         "position": {"x": 100, "y": 700},
         "data": {
             "label": "🧠 AI: Build Fix Plan",
@@ -158,7 +164,8 @@ nodes = [
         },
     },
     {
-        "id": "a_fix", "type": "agent/react",
+        "id": "a_fix",
+        "type": "agent/react",
         "position": {"x": 100, "y": 880},
         "data": {
             "label": "🤖 Agent: Execute Fixes",
@@ -181,7 +188,8 @@ nodes = [
         },
     },
     {
-        "id": "s_verify", "type": "agent/ssh_cmd",
+        "id": "s_verify",
+        "type": "agent/ssh_cmd",
         "position": {"x": 100, "y": 1060},
         "data": {
             "label": "✅ Verify Fixes",
@@ -194,7 +202,8 @@ nodes = [
         },
     },
     {
-        "id": "ai_fix_report", "type": "agent/llm_query",
+        "id": "ai_fix_report",
+        "type": "agent/llm_query",
         "position": {"x": 100, "y": 1220},
         "data": {
             "label": "🧠 AI: Fix Summary",
@@ -210,10 +219,10 @@ nodes = [
             "model": "gemini-2.0-flash-exp",
         },
     },
-
     # ── Branch FALSE: Routine maintenance + AI check ──────────────────────
     {
-        "id": "s_maint", "type": "agent/ssh_cmd",
+        "id": "s_maint",
+        "type": "agent/ssh_cmd",
         "position": {"x": 940, "y": 700},
         "data": {
             "label": "🔧 Routine Maintenance",
@@ -226,7 +235,8 @@ nodes = [
         },
     },
     {
-        "id": "ai_maint_check", "type": "agent/llm_query",
+        "id": "ai_maint_check",
+        "type": "agent/llm_query",
         "position": {"x": 940, "y": 880},
         "data": {
             "label": "🧠 AI: Maintenance Review",
@@ -243,10 +253,10 @@ nodes = [
             "model": "gemini-2.0-flash-exp",
         },
     },
-
     # ── Phase 4: Executive summary (merges both branches) ────────────────
     {
-        "id": "ai_exec", "type": "agent/llm_query",
+        "id": "ai_exec",
+        "type": "agent/llm_query",
         "position": {"x": 520, "y": 1380},
         "data": {
             "label": "🧠 AI: Executive Summary",
@@ -272,10 +282,10 @@ nodes = [
             "model": "gemini-2.0-flash-exp",
         },
     },
-
     # ── Phase 5: Outputs ──────────────────────────────────────────────────
     {
-        "id": "o_report", "type": "output/report",
+        "id": "o_report",
+        "type": "output/report",
         "position": {"x": 260, "y": 1560},
         "data": {
             "label": "📋 Full Pipeline Report",
@@ -292,21 +302,19 @@ nodes = [
         },
     },
     {
-        "id": "o_email", "type": "output/email",
+        "id": "o_email",
+        "type": "output/email",
         "position": {"x": 680, "y": 1560},
         "data": {
             "label": "✉️ Email Report to Admin",
             "to_email": "admin@example.com",
             "subject": "🤖 Daily DevOps Autopilot Report",
-            "body": (
-                "# Daily DevOps Autopilot Report\n\n"
-                "{ai_exec}\n\n"
-                "---\n## AI Triage Details\n{ai_triage}"
-            ),
+            "body": ("# Daily DevOps Autopilot Report\n\n{ai_exec}\n\n---\n## AI Triage Details\n{ai_triage}"),
         },
     },
     {
-        "id": "o_slack", "type": "output/webhook",
+        "id": "o_slack",
+        "type": "output/webhook",
         "position": {"x": 1060, "y": 1560},
         "data": {
             "label": "💬 Slack Notification",
@@ -319,38 +327,33 @@ nodes = [
 # ── EDGES ──────────────────────────────────────────────────────────────────
 edges = [
     # Trigger → Phase 1 (fan-out to 5 parallel SSH)
-    {"id": "e01", "source": "t1",      "target": "s_disk",  "animated": True},
-    {"id": "e02", "source": "t1",      "target": "s_mem",   "animated": True},
-    {"id": "e03", "source": "t1",      "target": "s_svc",   "animated": True},
-    {"id": "e04", "source": "t1",      "target": "s_sec",   "animated": True},
-    {"id": "e05", "source": "t1",      "target": "s_logs",  "animated": True},
-
+    {"id": "e01", "source": "t1", "target": "s_disk", "animated": True},
+    {"id": "e02", "source": "t1", "target": "s_mem", "animated": True},
+    {"id": "e03", "source": "t1", "target": "s_svc", "animated": True},
+    {"id": "e04", "source": "t1", "target": "s_sec", "animated": True},
+    {"id": "e05", "source": "t1", "target": "s_logs", "animated": True},
     # Phase 1 → AI triage (fan-in)
-    {"id": "e06", "source": "s_disk",  "target": "ai_triage", "animated": True},
-    {"id": "e07", "source": "s_mem",   "target": "ai_triage", "animated": True},
-    {"id": "e08", "source": "s_svc",   "target": "ai_triage", "animated": True},
-    {"id": "e09", "source": "s_sec",   "target": "ai_triage", "animated": True},
-    {"id": "e10", "source": "s_logs",  "target": "ai_triage", "animated": True},
-
+    {"id": "e06", "source": "s_disk", "target": "ai_triage", "animated": True},
+    {"id": "e07", "source": "s_mem", "target": "ai_triage", "animated": True},
+    {"id": "e08", "source": "s_svc", "target": "ai_triage", "animated": True},
+    {"id": "e09", "source": "s_sec", "target": "ai_triage", "animated": True},
+    {"id": "e10", "source": "s_logs", "target": "ai_triage", "animated": True},
     # AI triage → Condition
     {"id": "e11", "source": "ai_triage", "target": "c_critical", "animated": True},
-
     # Condition TRUE → Fix branch
-    {"id": "e12", "source": "c_critical", "target": "ai_plan",  "sourceHandle": "true",  "animated": True},
-    {"id": "e13", "source": "ai_plan",    "target": "a_fix",    "animated": True},
-    {"id": "e14", "source": "a_fix",      "target": "s_verify", "animated": True},
-    {"id": "e15", "source": "s_verify",   "target": "ai_fix_report", "animated": True},
+    {"id": "e12", "source": "c_critical", "target": "ai_plan", "sourceHandle": "true", "animated": True},
+    {"id": "e13", "source": "ai_plan", "target": "a_fix", "animated": True},
+    {"id": "e14", "source": "a_fix", "target": "s_verify", "animated": True},
+    {"id": "e15", "source": "s_verify", "target": "ai_fix_report", "animated": True},
     {"id": "e16", "source": "ai_fix_report", "target": "ai_exec", "animated": True},
-
     # Condition FALSE → Maintenance branch
-    {"id": "e17", "source": "c_critical",   "target": "s_maint",       "sourceHandle": "false", "animated": True},
-    {"id": "e18", "source": "s_maint",      "target": "ai_maint_check", "animated": True},
-    {"id": "e19", "source": "ai_maint_check","target": "ai_exec",        "animated": True},
-
+    {"id": "e17", "source": "c_critical", "target": "s_maint", "sourceHandle": "false", "animated": True},
+    {"id": "e18", "source": "s_maint", "target": "ai_maint_check", "animated": True},
+    {"id": "e19", "source": "ai_maint_check", "target": "ai_exec", "animated": True},
     # Executive summary → outputs
     {"id": "e20", "source": "ai_exec", "target": "o_report", "animated": True},
-    {"id": "e21", "source": "ai_exec", "target": "o_email",  "animated": True},
-    {"id": "e22", "source": "ai_exec", "target": "o_slack",  "animated": True},
+    {"id": "e21", "source": "ai_exec", "target": "o_email", "animated": True},
+    {"id": "e22", "source": "ai_exec", "target": "o_slack", "animated": True},
 ]
 
 # ── CREATE OR UPDATE ────────────────────────────────────────────────────────

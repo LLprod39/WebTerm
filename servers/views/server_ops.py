@@ -270,7 +270,11 @@ def server_detect_os(request, server_id):
 
     fields = _serialize_detected_os_fields(server)
     # Cached/queued probes stay 200; unresolved known-failure probes also 200 with needs_retry.
-    status_code = 200 if result.get("success") or result.get("cached") or result.get("queued") or result.get("needs_retry") else 500
+    status_code = (
+        200
+        if result.get("success") or result.get("cached") or result.get("queued") or result.get("needs_retry")
+        else 500
+    )
     return JsonResponse(
         {
             **result,

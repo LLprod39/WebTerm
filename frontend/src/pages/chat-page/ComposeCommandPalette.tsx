@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -59,7 +60,7 @@ export const ComposeCommandPalette = forwardRef<ComposePaletteHandle, Props>(fun
     } else {
       onOpenChange(false);
     }
-  }, [mentionTrigger?.query, Boolean(mentionTrigger)]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mentionTrigger, onOpenChange]);
 
   const serversQuery = useQuery({
     queryKey: ["compose", "servers"],
@@ -68,9 +69,9 @@ export const ComposeCommandPalette = forwardRef<ComposePaletteHandle, Props>(fun
     staleTime: 30_000,
   });
 
-  const servers = serversQuery.data?.servers || [];
   const serverItems = useMemo(() => {
     if (!mentionTrigger) return [];
+    const servers = serversQuery.data?.servers || [];
     const q = filter.toLowerCase();
     return servers
       .filter(
@@ -81,7 +82,7 @@ export const ComposeCommandPalette = forwardRef<ComposePaletteHandle, Props>(fun
           String(s.id).includes(q),
       )
       .slice(0, 40);
-  }, [filter, servers, mentionTrigger]);
+  }, [filter, mentionTrigger, serversQuery.data?.servers]);
 
   useEffect(() => {
     setHighlight(0);
@@ -92,37 +93,43 @@ export const ComposeCommandPalette = forwardRef<ComposePaletteHandle, Props>(fun
     el?.scrollIntoView({ block: "nearest" });
   }, [highlight]);
 
-  const pickServer = (s: FrontendServer) => {
-    onPinServer({ id: s.id, name: s.name, host: s.host });
-    if (trigger) {
-      const next = replaceComposeRange(draft, trigger.start, trigger.end, `@${s.name} `);
-      onDraftChange(next, trigger.start + `@${s.name} `.length);
-    }
-    onOpenChange(false);
-  };
-
-  const handleKeyDown = (event: React.KeyboardEvent): boolean => {
-    if (!open || !mentionTrigger) return false;
-    if (event.key === "Escape") {
+  const pickServer = useCallback(
+    (server: FrontendServer) => {
+      onPinServer({ id: server.id, name: server.name, host: server.host });
+      if (trigger) {
+        const next = replaceComposeRange(draft, trigger.start, trigger.end, `@${server.name} `);
+        onDraftChange(next, trigger.start + `@${server.name} `.length);
+      }
       onOpenChange(false);
-      return true;
-    }
-    if (event.key === "ArrowDown") {
-      setHighlight((h) => Math.min(Math.max(serverItems.length - 1, 0), h + 1));
-      return true;
-    }
-    if (event.key === "ArrowUp") {
-      setHighlight((h) => Math.max(0, h - 1));
-      return true;
-    }
-    if (event.key === "Enter" && !event.shiftKey && serverItems[highlight]) {
-      pickServer(serverItems[highlight]);
-      return true;
-    }
-    return false;
-  };
+    },
+    [draft, onDraftChange, onOpenChange, onPinServer, trigger],
+  );
 
-  useImperativeHandle(ref, () => ({ handleKeyDown }), [open, mentionTrigger, highlight, serverItems]);
+  const handleKeyDown = useCallback(
+    (event: React.KeyboardEvent): boolean => {
+      if (!open || !mentionTrigger) return false;
+      if (event.key === "Escape") {
+        onOpenChange(false);
+        return true;
+      }
+      if (event.key === "ArrowDown") {
+        setHighlight((current) => Math.min(Math.max(serverItems.length - 1, 0), current + 1));
+        return true;
+      }
+      if (event.key === "ArrowUp") {
+        setHighlight((current) => Math.max(0, current - 1));
+        return true;
+      }
+      if (event.key === "Enter" && !event.shiftKey && serverItems[highlight]) {
+        pickServer(serverItems[highlight]);
+        return true;
+      }
+      return false;
+    },
+    [highlight, mentionTrigger, onOpenChange, open, pickServer, serverItems],
+  );
+
+  useImperativeHandle(ref, () => ({ handleKeyDown }), [handleKeyDown]);
 
   if (!open || !mentionTrigger) return null;
 

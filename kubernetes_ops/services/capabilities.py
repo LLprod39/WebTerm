@@ -41,7 +41,8 @@ def _modes(policy: dict[str, Any]) -> list[dict[str, Any]]:
             "granted": bool(policy.get("has_kubernetes_feature")),
             "active": bool(policy.get("can_read")),
             "purpose": "Safe read-only cockpit, diagnosis drafts and action requests.",
-            "capabilities": list(policy.get("read_only_capabilities") or []) + list(policy.get("action_request_capabilities") or []),
+            "capabilities": list(policy.get("read_only_capabilities") or [])
+            + list(policy.get("action_request_capabilities") or []),
         },
         {
             "id": "kubernetes_admin_read",
@@ -141,7 +142,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             mutates_state=False,
             feature=KUBERNETES_SECRET_READ_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_SECRET_READ_ENABLED",
-            requirements=["kubernetes_admin_read_feature", "kubernetes_secret_read_feature", "active_admin_read_session", "include_secret_values=1"],
+            requirements=[
+                "kubernetes_admin_read_feature",
+                "kubernetes_secret_read_feature",
+                "active_admin_read_session",
+                "include_secret_values=1",
+            ],
         ),
         _workflow(
             policy,
@@ -163,7 +169,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             mutates_state=True,
             feature=KUBERNETES_ADMIN_WRITE_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED",
-            requirements=["active_approved_write_session", "fresh_matching_dry_run_proof", "ownership_guard", "production_restricted_credential_evidence_when_required"],
+            requirements=[
+                "active_approved_write_session",
+                "fresh_matching_dry_run_proof",
+                "ownership_guard",
+                "production_restricted_credential_evidence_when_required",
+            ],
         ),
         _workflow(
             policy,
@@ -207,7 +218,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             mutates_state=True,
             feature=KUBERNETES_ADMIN_WRITE_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED",
-            requirements=["active_approved_write_session", "exact_typed_confirmation", "protected_namespace_guard", "ownership_guard"],
+            requirements=[
+                "active_approved_write_session",
+                "exact_typed_confirmation",
+                "protected_namespace_guard",
+                "ownership_guard",
+            ],
         ),
         _workflow(
             policy,
@@ -219,7 +235,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             feature=KUBERNETES_BREAK_GLASS_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED",
             transport_flag="KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED",
-            requirements=["active_approved_break_glass_session", "command_policy", "recording_enabled", "restricted_credential_evidence_when_required"],
+            requirements=[
+                "active_approved_break_glass_session",
+                "command_policy",
+                "recording_enabled",
+                "restricted_credential_evidence_when_required",
+            ],
         ),
         _workflow(
             policy,
@@ -231,7 +252,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             feature=KUBERNETES_BREAK_GLASS_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
             transport_flag="KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED",
-            requirements=["active_approved_break_glass_session", "exact_target_allowlist", "recording_enabled", "network_policy_evidence_when_required"],
+            requirements=[
+                "active_approved_break_glass_session",
+                "exact_target_allowlist",
+                "recording_enabled",
+                "network_policy_evidence_when_required",
+            ],
         ),
         _workflow(
             policy,
@@ -242,7 +268,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             mutates_state=True,
             feature=KUBERNETES_BREAK_GLASS_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED",
-            requirements=["active_approved_break_glass_session", "node_scope", "reason", "eviction_preflight_for_drain"],
+            requirements=[
+                "active_approved_break_glass_session",
+                "node_scope",
+                "reason",
+                "eviction_preflight_for_drain",
+            ],
         ),
         _workflow(
             policy,
@@ -265,7 +296,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             feature=KUBERNETES_BREAK_GLASS_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_CLUSTER_TERMINAL_ENABLED",
             transport_flag="KUBERNETES_ADMIN_CLUSTER_TERMINAL_RECORDING_ENABLED",
-            requirements=["active_approved_break_glass_session", "restricted_context", "recording_enabled", "provider_path_template"],
+            requirements=[
+                "active_approved_break_glass_session",
+                "restricted_context",
+                "recording_enabled",
+                "provider_path_template",
+            ],
         ),
         _workflow(
             policy,
@@ -277,7 +313,12 @@ def _workflows(policy: dict[str, Any]) -> list[dict[str, Any]]:
             feature=KUBERNETES_BREAK_GLASS_FEATURE,
             runtime_flag="KUBERNETES_ADMIN_NODE_DEBUG_ENABLED",
             transport_flag="KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED",
-            requirements=["active_approved_break_glass_session", "node_scope", "recording_enabled", "provider_path_template"],
+            requirements=[
+                "active_approved_break_glass_session",
+                "node_scope",
+                "recording_enabled",
+                "provider_path_template",
+            ],
         ),
     ]
 
@@ -328,7 +369,11 @@ def _blocked_reason(policy: dict[str, Any], *, feature: str, runtime_flag: str) 
         return "kubernetes_secret_read_feature_required"
     if runtime_flag and not _flag(runtime_flag):
         return f"{runtime_flag.lower()}_disabled"
-    if not policy.get("admin_mode_enabled") and feature in {KUBERNETES_ADMIN_READ_FEATURE, KUBERNETES_ADMIN_WRITE_FEATURE, KUBERNETES_BREAK_GLASS_FEATURE}:
+    if not policy.get("admin_mode_enabled") and feature in {
+        KUBERNETES_ADMIN_READ_FEATURE,
+        KUBERNETES_ADMIN_WRITE_FEATURE,
+        KUBERNETES_BREAK_GLASS_FEATURE,
+    }:
         return "kubernetes_admin_mode_disabled"
     return "policy_not_satisfied"
 

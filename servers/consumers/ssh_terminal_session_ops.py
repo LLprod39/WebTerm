@@ -1,4 +1,5 @@
 """Interactive terminal input, resize, and session context behavior."""
+
 from __future__ import annotations
 
 import asyncio
@@ -58,30 +59,21 @@ class SSHTerminalSessionOpsMixin:
             if isinstance(current, BaseExceptionGroup):
                 stack.extend(current.exceptions)
 
-        if (
-            isinstance(exc, ConnectionResetError)
-            or errno.ECONNRESET in errnos
-        ):
+        if isinstance(exc, ConnectionResetError) or errno.ECONNRESET in errnos:
             return (
                 "SSH сервер принял TCP-соединение и сразу закрыл его "
                 "(Connection reset by peer). Проверьте sshd, порт, firewall, "
                 "bastion/VPN и allowlist по IP."
             )
         if errno.ECONNREFUSED in errnos:
-            return (
-                "SSH порт недоступен (Connection refused). "
-                "Проверьте, что sshd запущен и слушает нужный порт."
-            )
+            return "SSH порт недоступен (Connection refused). Проверьте, что sshd запущен и слушает нужный порт."
         if errno.EHOSTUNREACH in errnos or errno.ENETUNREACH in errnos:
             return (
                 "Нет маршрута до SSH-хоста (host/network unreachable). "
                 "Проверьте IP, VPN/bastion, маршрутизацию и firewall."
             )
         if errno.ETIMEDOUT in errnos or isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
-            return (
-                "Таймаут подключения к SSH серверу. "
-                "Проверьте маршрут, firewall, bastion/VPN и доступность порта."
-            )
+            return "Таймаут подключения к SSH серверу. Проверьте маршрут, firewall, bastion/VPN и доступность порта."
         if isinstance(exc, asyncssh.misc.HostKeyNotVerifiable):
             return f"SSH host key не доверен: {exc}"
         if isinstance(exc, asyncssh.misc.PermissionDenied):
@@ -93,20 +85,14 @@ class SSHTerminalSessionOpsMixin:
         # Fallback for wrapped OSError messages without errno on the outer type.
         lowered = text.lower()
         if "connection refused" in lowered:
-            return (
-                "SSH порт недоступен (Connection refused). "
-                "Проверьте, что sshd запущен и слушает нужный порт."
-            )
+            return "SSH порт недоступен (Connection refused). Проверьте, что sshd запущен и слушает нужный порт."
         if "unreachable" in lowered or "no route" in lowered:
             return (
                 "Нет маршрута до SSH-хоста (host/network unreachable). "
                 "Проверьте IP, VPN/bastion, маршрутизацию и firewall."
             )
         if "timed out" in lowered or "timeout" in lowered:
-            return (
-                "Таймаут подключения к SSH серверу. "
-                "Проверьте маршрут, firewall, bastion/VPN и доступность порта."
-            )
+            return "Таймаут подключения к SSH серверу. Проверьте маршрут, firewall, bastion/VPN и доступность порта."
         if "connection reset" in lowered:
             return (
                 "SSH сервер принял TCP-соединение и сразу закрыл его "
@@ -343,4 +329,3 @@ class SSHTerminalSessionOpsMixin:
                 with contextlib.suppress(Exception):
                     fut.set_result(130)
         return cmd_id
-

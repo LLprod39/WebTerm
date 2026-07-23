@@ -60,10 +60,7 @@ async def _resolve_conn(
             None,
             tool_err(
                 f"unknown target '{target_name}'; available: {avail}",
-                output=(
-                    f"Target '{target_name}' is not authorised for this "
-                    f"session. Available: {avail}."
-                ),
+                output=(f"Target '{target_name}' is not authorised for this session. Available: {avail}."),
             ),
         )
     conn = await ctx.ensure_connection(target)
@@ -125,13 +122,8 @@ class ReadFileTool:
         q_path = shlex.quote(path)
         # Combined stat + dd call to fetch metadata + bytes in one round-trip.
         # base64 on the content keeps binary safe; we decode client-side.
-        stat_cmd = (
-            f"stat -c '%s %Y' {q_path} 2>/dev/null || echo 'MISSING MISSING'"
-        )
-        dd_cmd = (
-            f"dd if={q_path} bs=1 skip={args.offset} count={args.length} "
-            "2>/dev/null | base64 -w0"
-        )
+        stat_cmd = f"stat -c '%s %Y' {q_path} 2>/dev/null || echo 'MISSING MISSING'"
+        dd_cmd = f"dd if={q_path} bs=1 skip={args.offset} count={args.length} 2>/dev/null | base64 -w0"
         full_cmd = f"printf 'STAT:'; {stat_cmd}; printf '\\nDATA:'; {dd_cmd}"
 
         try:
@@ -139,7 +131,7 @@ class ReadFileTool:
                 conn.run(full_cmd, check=False),
                 timeout=READ_TIMEOUT_SEC,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return tool_err(f"read_file timeout ({READ_TIMEOUT_SEC}s)")
         except asyncio.CancelledError:
             raise
@@ -176,8 +168,7 @@ class ReadFileTool:
             return tool_err(f"base64 decode failed: {exc}")
 
         header = (
-            f"Path: {path}\nTarget: {target.name}\nSize: {size_bytes} bytes"
-            f"\nMTime: {mtime_epoch}\n--- content ---\n"
+            f"Path: {path}\nTarget: {target.name}\nSize: {size_bytes} bytes\nMTime: {mtime_epoch}\n--- content ---\n"
         )
         return tool_ok(
             header + content,
@@ -240,10 +231,7 @@ class EditFileTool:
         if target.read_only:
             return tool_err(
                 f"target '{target.name}' is read-only; edit_file refused",
-                output=(
-                    f"Server '{target.display_name or target.name}' is in "
-                    "read-only mode."
-                ),
+                output=(f"Server '{target.display_name or target.name}' is in read-only mode."),
             )
 
         if ctx.dry_run:
@@ -275,17 +263,12 @@ class EditFileTool:
         if not file_existed and not args.create:
             return tool_err(
                 f"file not found: {path} (pass create=true to create)",
-                output=(
-                    f"'{path}' does not exist on {target.name}. Pass "
-                    "create=true if you really want to create it."
-                ),
+                output=(f"'{path}' does not exist on {target.name}. Pass create=true if you really want to create it."),
             )
 
         if file_existed:
             try:
-                cat_res = await asyncio.wait_for(
-                    conn.run(f"cat {q_path}"), timeout=10.0
-                )
+                cat_res = await asyncio.wait_for(conn.run(f"cat {q_path}"), timeout=10.0)
                 original = str(getattr(cat_res, "stdout", "") or "")
                 if ctx.user_id is not None and target.server_id and original:
                     from asgiref.sync import sync_to_async
@@ -309,15 +292,10 @@ class EditFileTool:
         b64 = base64.b64encode(args.content.encode("utf-8")).decode("ascii")
         tmp_path = f"{path}.weuagent-{asyncio.get_running_loop().time():.0f}.tmp"
         q_tmp = shlex.quote(tmp_path)
-        write_cmd = (
-            f"printf %s {shlex.quote(b64)} | base64 -d > {q_tmp} "
-            f"&& mv {q_tmp} {q_path}"
-        )
+        write_cmd = f"printf %s {shlex.quote(b64)} | base64 -d > {q_tmp} && mv {q_tmp} {q_path}"
         try:
-            res = await asyncio.wait_for(
-                conn.run(write_cmd, check=False), timeout=EDIT_TIMEOUT_SEC
-            )
-        except asyncio.TimeoutError:
+            res = await asyncio.wait_for(conn.run(write_cmd, check=False), timeout=EDIT_TIMEOUT_SEC)
+        except TimeoutError:
             return tool_err(f"edit_file timeout ({EDIT_TIMEOUT_SEC}s)")
         except asyncio.CancelledError:
             raise
@@ -333,9 +311,7 @@ class EditFileTool:
                 output=f"Write failed on {target.name}: {stderr}",
             )
 
-        summary = (
-            f"Wrote {len(args.content)} bytes to {path} on {target.name}."
-        )
+        summary = f"Wrote {len(args.content)} bytes to {path} on {target.name}."
         if snapshot_saved:
             summary += f" Rollback snapshot #{snapshot_id} saved."
         elif file_existed:
@@ -393,10 +369,8 @@ class ListFilesTool:
         cmd = f"ls {flags} --time-style=+%s {q_path} 2>&1"
 
         try:
-            res = await asyncio.wait_for(
-                conn.run(cmd, check=False), timeout=LIST_TIMEOUT_SEC
-            )
-        except asyncio.TimeoutError:
+            res = await asyncio.wait_for(conn.run(cmd, check=False), timeout=LIST_TIMEOUT_SEC)
+        except TimeoutError:
             return tool_err(f"list_files timeout ({LIST_TIMEOUT_SEC}s)")
         except asyncio.CancelledError:
             raise
@@ -422,13 +396,7 @@ class ListFilesTool:
                 entries.append(
                     {
                         "name": name,
-                        "type": (
-                            "dir"
-                            if perm.startswith("d")
-                            else "link"
-                            if perm.startswith("l")
-                            else "file"
-                        ),
+                        "type": ("dir" if perm.startswith("d") else "link" if perm.startswith("l") else "file"),
                         "perm": perm,
                         "size": int(size),
                         "mtime": int(mtime),
@@ -439,17 +407,11 @@ class ListFilesTool:
             except ValueError:
                 continue
 
-        summary = (
-            f"Directory: {path} on {target.name}\n"
-            f"Entries: {len(entries)}"
-        )
+        summary = f"Directory: {path} on {target.name}\nEntries: {len(entries)}"
         return tool_ok(
             summary
             + "\n"
-            + "\n".join(
-                f"  {e['type']:4s} {e['perm']} {e['size']:>10d} {e['name']}"
-                for e in entries[:100]
-            ),
+            + "\n".join(f"  {e['type']:4s} {e['perm']} {e['size']:>10d} {e['name']}" for e in entries[:100]),
             data={"path": path, "target": target.name, "entries": entries},
         )
 

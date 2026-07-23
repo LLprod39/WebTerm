@@ -4,6 +4,7 @@ Global registry for SkillPromotionGateway implementations.
 The registry lives in app.agent_kernel so feature apps can communicate through
 an app-level port instead of importing each other directly.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

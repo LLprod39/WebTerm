@@ -161,27 +161,33 @@ def test_backend_workstream_reports_sidebar_ready_when_all_gates_are_complete():
 
 
 def test_sidebar_enablement_gate_requires_completion_audit_complete():
-    assert can_enable_kubernetes_release_sidebar(
-        production_ready=True,
-        ready_for_sidebar=True,
-        artifact_ready=True,
-        release_scope_ready=True,
-        completion_audit={
-            "production_evidence_complete": True,
-            "sidebar_enablement_complete": False,
-        },
-    ) is False
+    assert (
+        can_enable_kubernetes_release_sidebar(
+            production_ready=True,
+            ready_for_sidebar=True,
+            artifact_ready=True,
+            release_scope_ready=True,
+            completion_audit={
+                "production_evidence_complete": True,
+                "sidebar_enablement_complete": False,
+            },
+        )
+        is False
+    )
 
-    assert can_enable_kubernetes_release_sidebar(
-        production_ready=True,
-        ready_for_sidebar=True,
-        artifact_ready=True,
-        release_scope_ready=True,
-        completion_audit={
-            "production_evidence_complete": True,
-            "sidebar_enablement_complete": True,
-        },
-    ) is True
+    assert (
+        can_enable_kubernetes_release_sidebar(
+            production_ready=True,
+            ready_for_sidebar=True,
+            artifact_ready=True,
+            release_scope_ready=True,
+            completion_audit={
+                "production_evidence_complete": True,
+                "sidebar_enablement_complete": True,
+            },
+        )
+        is True
+    )
 
 
 def test_backend_workstream_blocker_groups_do_not_mark_blocked_release_artifact_ready():

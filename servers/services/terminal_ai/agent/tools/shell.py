@@ -173,9 +173,7 @@ class ShellTool:
 
         # Multi-line guard: each shell call should be one statement.
         if "\n" in cmd:
-            return tool_err(
-                "multi-line commands are not allowed; call `shell` once per line"
-            )
+            return tool_err("multi-line commands are not allowed; call `shell` once per line")
 
         # Target resolution (multi-server).
         target = ctx.resolve_target(args.target)
@@ -280,7 +278,7 @@ class ShellTool:
                 conn.run(cmd, **run_kwargs),
                 timeout=timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return tool_err(
                 f"command timed out after {timeout}s on {target.name}",
                 output=f"TIMEOUT after {timeout}s on {target.name}: {cmd[:200]}",
@@ -288,9 +286,7 @@ class ShellTool:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.warning(
-                "agent shell tool failed on %s: %s", target.name, exc
-            )
+            logger.warning("agent shell tool failed on %s: %s", target.name, exc)
             return tool_err(f"{type(exc).__name__}: {exc}")
 
         stdout = str(getattr(result, "stdout", "") or "")
@@ -305,13 +301,10 @@ class ShellTool:
         # of long logs. Prepend a marker so the LLM knows output was cut.
         if len(combined) > _MAX_OUTPUT_CHARS:
             combined = (
-                f"[... {len(combined) - _MAX_OUTPUT_CHARS} chars truncated ...]\n"
-                + combined[-_MAX_OUTPUT_CHARS:]
+                f"[... {len(combined) - _MAX_OUTPUT_CHARS} chars truncated ...]\n" + combined[-_MAX_OUTPUT_CHARS:]
             )
 
-        output_payload = (
-            f"Target: {target.name}\nExit: {exit_code}\n{combined}"
-        ).strip()
+        output_payload = (f"Target: {target.name}\nExit: {exit_code}\n{combined}").strip()
         return tool_ok(
             output_payload,
             data={

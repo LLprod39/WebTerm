@@ -40,10 +40,7 @@ def configured_attestation_max_age_days() -> int:
 def _created_at(value: Any):
     if not value:
         return None
-    if hasattr(value, "utcoffset"):
-        parsed = value
-    else:
-        parsed = parse_datetime(str(value))
+    parsed = value if hasattr(value, "utcoffset") else parse_datetime(str(value))
     if parsed is None:
         return None
     if timezone.is_naive(parsed):
@@ -56,11 +53,11 @@ def _latest_passed_attestation(package: PluginPackage, kind: str) -> dict[str, A
     candidates = [
         item
         for item in attestations
-        if isinstance(item, dict)
-        and str(item.get("kind") or "") == kind
-        and str(item.get("status") or "") == "passed"
+        if isinstance(item, dict) and str(item.get("kind") or "") == kind and str(item.get("status") or "") == "passed"
     ]
-    candidates.sort(key=lambda item: _created_at(item.get("created_at")) or timezone.datetime.min.replace(tzinfo=timezone.utc))
+    candidates.sort(
+        key=lambda item: _created_at(item.get("created_at")) or timezone.datetime.min.replace(tzinfo=timezone.utc)
+    )
     return candidates[-1] if candidates else None
 
 

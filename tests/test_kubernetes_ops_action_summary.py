@@ -127,7 +127,12 @@ class KubernetesOpsActionSummaryTests(TestCase):
             status=K8sActionRequest.STATUS_PENDING_APPROVAL,
             risk_tier=K8sActionRequest.RISK_HIGH,
             cluster=self.cluster,
-            target={"cluster_id": f"cluster_{self.cluster.id}", "namespace": "payments", "kind": "Deployment", "name": "payments-api"},
+            target={
+                "cluster_id": f"cluster_{self.cluster.id}",
+                "namespace": "payments",
+                "kind": "Deployment",
+                "name": "payments-api",
+            },
             preview={"blast_radius": "single_workload"},
             execution_policy={"native_execution_enabled": False},
             report={"status": "not_executed"},

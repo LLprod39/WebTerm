@@ -1,4 +1,5 @@
 """Connection setup, dispatch, and heartbeat behavior."""
+
 from __future__ import annotations
 
 import asyncio
@@ -164,9 +165,7 @@ class SSHTerminalLifecycleMixin:
         # a user who turned memory off still sees an empty context on the
         # next connect, even if the DB hasn't been wiped yet (e.g. they
         # flipped the setting through another client).
-        memory_enabled_now = bool(
-            (self._ai_settings or {}).get("memory_enabled", True)
-        )
+        memory_enabled_now = bool((self._ai_settings or {}).get("memory_enabled", True))
         if memory_enabled_now:
             try:
                 from servers.services.terminal_ai import load_recent as _load_history
@@ -361,4 +360,3 @@ class SSHTerminalLifecycleMixin:
 
         redact_ai_event(payload)
         await self._safe_send_json(self._with_ai_run_id(payload))
-

@@ -96,11 +96,7 @@ def _incoming_map(edges: list[dict[str, Any]] | None) -> dict[str, list[dict[str
 
 
 def _id_map(nodes: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {
-        _node_id(node): node
-        for node in nodes
-        if isinstance(node, dict) and _node_id(node)
-    }
+    return {_node_id(node): node for node in nodes if isinstance(node, dict) and _node_id(node)}
 
 
 def _all_paths_have_approved_approval(
@@ -122,7 +118,10 @@ def _all_paths_have_approved_approval(
         if not source_node:
             memo[node_id] = False
             return False
-        if str(source_node.get("type") or "") == "logic/human_approval" and _normalized_handle(edge.get("sourceHandle")) == "approved":
+        if (
+            str(source_node.get("type") or "") == "logic/human_approval"
+            and _normalized_handle(edge.get("sourceHandle")) == "approved"
+        ):
             continue
         if not _all_paths_have_approved_approval(
             source,
@@ -299,7 +298,9 @@ def _classify_external_output(
                 has_approved_approval_path=has_approved_approval_path,
                 command=_redact_url(url),
                 categories=("external_side_effect", "webhook"),
-                reasons=("Webhook sends workflow data to an external URL; review payload redaction and delivery target.",),
+                reasons=(
+                    "Webhook sends workflow data to an external URL; review payload redaction and delivery target.",
+                ),
             )
         ]
     if node_type == "output/email":
@@ -335,7 +336,9 @@ def _classify_external_output(
                 has_approved_approval_path=has_approved_approval_path,
                 command=f"telegram_chat:{chat_id or '[configured]'}",
                 categories=("external_side_effect", "telegram"),
-                reasons=("Telegram output sends workflow data outside the run; review chat target and message content.",),
+                reasons=(
+                    "Telegram output sends workflow data outside the run; review chat target and message content.",
+                ),
             )
         ]
     return []
@@ -373,7 +376,9 @@ def _classify_ssh_cmd(
                 has_approved_approval_path=has_approved_approval_path,
                 command=command,
                 categories=tuple(verdict.categories) if verdict.is_dangerous else ("ssh_mutation",),
-                matched_patterns=tuple(verdict.matched_patterns) if verdict.is_dangerous else (SSH_MUTATING_COMMAND_RE.pattern,),
+                matched_patterns=tuple(verdict.matched_patterns)
+                if verdict.is_dangerous
+                else (SSH_MUTATING_COMMAND_RE.pattern,),
                 reasons=tuple(reasons),
             )
         )
@@ -394,7 +399,9 @@ def _classify_ops_action(
         return []
     if node_type == "ops/disk_cleanup" and action == "inspect":
         return []
-    action_class: PolicyActionClass = "dangerous" if node_type == "ops/process_action" and action == "kill_force" else "mutating"
+    action_class: PolicyActionClass = (
+        "dangerous" if node_type == "ops/process_action" and action == "kill_force" else "mutating"
+    )
     reasons = ["OPS action mutates service/container/process/file/package/disk/alert state."]
     if has_approved_approval_path is False:
         reasons.append("Missing approved human approval path.")
@@ -446,7 +453,15 @@ def build_execution_policy_decisions(
             decisions.extend(_classify_dynamic_agent(node, has_approved_approval_path=has_approval))
         elif node_type == "agent/ssh_cmd":
             decisions.extend(_classify_ssh_cmd(node, has_approved_approval_path=has_approval))
-        elif node_type in {"ops/service_action", "ops/docker_action", "ops/process_action", "ops/file_action", "ops/package_action", "ops/disk_cleanup", "ops/alert_update"}:
+        elif node_type in {
+            "ops/service_action",
+            "ops/docker_action",
+            "ops/process_action",
+            "ops/file_action",
+            "ops/package_action",
+            "ops/disk_cleanup",
+            "ops/alert_update",
+        }:
             decisions.extend(_classify_ops_action(node, has_approved_approval_path=has_approval))
         elif node_type in {"output/webhook", "output/email", "output/telegram"}:
             decisions.extend(_classify_external_output(node, has_approved_approval_path=has_approval))

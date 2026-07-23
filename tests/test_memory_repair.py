@@ -1,4 +1,5 @@
 """Tests for app.agent_kernel.memory.repair — freshness, decay, conflict detection."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -66,10 +67,7 @@ class TestFreshnessScore:
     def test_monotonic_decay(self):
         """Freshness should strictly decrease with age."""
         now = timezone.now()
-        scores = [
-            compute_freshness_score(now - timedelta(hours=h))
-            for h in [0, 6, 12, 24, 48, 168, 720]
-        ]
+        scores = [compute_freshness_score(now - timedelta(hours=h)) for h in [0, 6, 12, 24, 48, 168, 720]]
         for i in range(len(scores) - 1):
             assert scores[i] >= scores[i + 1], f"Not monotonic at index {i}: {scores}"
 

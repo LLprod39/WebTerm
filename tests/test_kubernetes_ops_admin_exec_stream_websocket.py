@@ -29,9 +29,13 @@ def _create_exec_fixture(username: str) -> tuple[User, str, str]:
         kind=K8sProvider.KIND_RANCHER,
         base_url="https://rancher.example.test",
         auth_mode=K8sProvider.AUTH_NONE,
-        labels={"pod_exec_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/exec"},
+        labels={
+            "pod_exec_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/exec"
+        },
     )
-    cluster = K8sCluster.objects.create(name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local")
+    cluster = K8sCluster.objects.create(
+        name=f"{username}-cluster", environment="test", rancher_provider=provider, rancher_cluster_id="local"
+    )
     user = User.objects.create_user(username=username, password="password-123")
     UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
     UserAppPermission.objects.create(user=user, feature="kubernetes_break_glass", allowed=True)
@@ -107,7 +111,11 @@ def _expire_exec_session_when_stream_opens(session_id: str, stream):
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
+@override_settings(
+    KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True,
+)
 async def test_exec_websocket_can_use_provider_stream_and_records_redacted_transcript_events():
     user, session_id, cluster_id = await database_sync_to_async(_create_exec_fixture)("k8s-ws-exec-stream")
     path = (
@@ -117,7 +125,9 @@ async def test_exec_websocket_can_use_provider_stream_and_records_redacted_trans
     )
     fake_stream = _FakeExecStream()
 
-    with patch("kubernetes_ops.continuous_exec_streams.open_provider_exec_stream", return_value=fake_stream) as open_stream:
+    with patch(
+        "kubernetes_ops.continuous_exec_streams.open_provider_exec_stream", return_value=fake_stream
+    ) as open_stream:
         communicator = await _connect(path, user)
         started = await communicator.receive_json_from(timeout=1)
         await communicator.send_json_to({"type": "stdin", "data": "PASSWORD=stdin-secret"})
@@ -172,13 +182,19 @@ async def test_exec_websocket_can_use_provider_stream_and_records_redacted_trans
     assert events_by_stream["stdout"]["metadata"] == {"source": "provider_exec_stream"}
     assert "stdin-secret" not in str(events)
     assert "raw-secret" not in str(events)
-    audit_count = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count)()
+    audit_count = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count
+    )()
     assert audit_count == 1
 
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
+@override_settings(
+    KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True,
+)
 async def test_exec_websocket_provider_stream_stops_when_session_expires_after_start():
     user, session_id, cluster_id = await database_sync_to_async(_create_exec_fixture)("k8s-ws-exec-expired-stream")
     path = (
@@ -206,7 +222,9 @@ async def test_exec_websocket_provider_stream_stops_when_session_expires_after_s
     assert action.response_summary["close_reason"] == "admin_session_expired"
     recording = await database_sync_to_async(K8sAdminRecording.objects.get)(action=action)
     assert recording.status == K8sAdminRecording.STATUS_COMPLETED
-    stopped_events = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count)()
+    stopped_events = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_stream.exec_stopped").count
+    )()
     assert stopped_events == 1
 
 
@@ -231,7 +249,11 @@ async def test_exec_websocket_streaming_requires_separate_flag_before_action():
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=False)
+@override_settings(
+    KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=False,
+)
 async def test_exec_websocket_streaming_requires_recording_before_action():
     user, session_id, cluster_id = await database_sync_to_async(_create_exec_fixture)("k8s-ws-exec-recording-required")
     path = f"/ws/kubernetes/admin/exec/{session_id}/?provider_stream=1&cluster_id={cluster_id}&namespace=payments&pod=payments-api-abc123&command=env&reason=inspect%20pod%20env"
@@ -251,7 +273,11 @@ async def test_exec_websocket_streaming_requires_recording_before_action():
 
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
-@override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
+@override_settings(
+    KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True,
+    KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True,
+)
 async def test_exec_websocket_disconnect_closes_provider_stream():
     user, session_id, cluster_id = await database_sync_to_async(_create_exec_fixture)("k8s-ws-exec-disconnect")
     path = (

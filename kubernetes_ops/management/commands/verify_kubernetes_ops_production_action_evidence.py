@@ -24,6 +24,11 @@ class Command(BaseCommand):
         output_path = Path(options["output"]).resolve()
         write_kubernetes_production_action_evidence(report, output_path)
         self.stdout.write(f"Wrote Kubernetes Ops production action evidence: {output_path}")
-        self.stdout.write(json.dumps({"status": report["status"], "summary": report["summary"], "errors": report["errors"]}, ensure_ascii=False))
+        self.stdout.write(
+            json.dumps(
+                {"status": report["status"], "summary": report["summary"], "errors": report["errors"]},
+                ensure_ascii=False,
+            )
+        )
         if report["status"] != "ready" and not options["no_fail"]:
             raise CommandError("; ".join(str(item) for item in report["errors"][:8]))

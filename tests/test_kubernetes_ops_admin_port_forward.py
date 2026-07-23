@@ -310,7 +310,9 @@ class KubernetesOpsAdminPortForwardTests(TestCase):
         self.assertEqual(envelope["status"], K8sAdminAction.STATUS_PLANNED)
         self.assertTrue(envelope["policy"]["provider_tunnel_enabled"])
         self.assertTrue(envelope["policy"]["recording_policy"]["enabled"])
-        self.assertEqual(envelope["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/services/payments-api/portforward")
+        self.assertEqual(
+            envelope["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/services/payments-api/portforward"
+        )
         self.assertEqual(envelope["target"]["remote_port"], 8080)
         self.assertNotIn("token", str(envelope).lower())
         action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_PORT_FORWARD)

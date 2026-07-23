@@ -18,10 +18,14 @@ def build_task_subagent_spec(
     max_task_iterations_cap: int | None = None,
 ) -> SubagentSpec:
     parent_role = get_role_spec(parent_agent_type, parent_goal)
-    role_slug = requested_role if requested_role in ROLE_SPECS else resolve_task_role_slug(
-        task_name,
-        task_description,
-        fallback_role=parent_role.slug,
+    role_slug = (
+        requested_role
+        if requested_role in ROLE_SPECS
+        else resolve_task_role_slug(
+            task_name,
+            task_description,
+            fallback_role=parent_role.slug,
+        )
     )
     role_spec = ROLE_SPECS[role_slug]
 
@@ -35,7 +39,9 @@ def build_task_subagent_spec(
     # ~10–12 tool iterations; role defaults remain the floor preference when
     # no explicit request is provided.
     try:
-        cap = int(max_task_iterations_cap) if max_task_iterations_cap is not None else int(role_spec.max_task_iterations)
+        cap = (
+            int(max_task_iterations_cap) if max_task_iterations_cap is not None else int(role_spec.max_task_iterations)
+        )
     except (TypeError, ValueError):
         cap = int(role_spec.max_task_iterations)
     cap = max(1, cap)

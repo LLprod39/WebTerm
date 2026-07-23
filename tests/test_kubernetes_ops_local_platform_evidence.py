@@ -12,7 +12,9 @@ from kubernetes_ops.services.local_platform_evidence import (
 )
 
 
-def _completed(payload: dict | None = None, *, stdout: str = "", stderr: str = "", returncode: int = 0) -> subprocess.CompletedProcess[str]:
+def _completed(
+    payload: dict | None = None, *, stdout: str = "", stderr: str = "", returncode: int = 0
+) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(
         args=["kubectl"],
         returncode=returncode,
@@ -26,11 +28,18 @@ def _namespace(name: str) -> dict:
 
 
 def _service(name: str) -> dict:
-    return {"metadata": {"name": name, "resourceVersion": "42"}, "spec": {"ports": [{"name": "http", "port": 80, "targetPort": 80}]}}
+    return {
+        "metadata": {"name": name, "resourceVersion": "42"},
+        "spec": {"ports": [{"name": "http", "port": 80, "targetPort": 80}]},
+    }
 
 
 def _workload(name: str, *, replicas: int = 1, ready: int = 1) -> dict:
-    return {"metadata": {"name": name}, "spec": {"replicas": replicas}, "status": {"readyReplicas": ready, "availableReplicas": ready}}
+    return {
+        "metadata": {"name": name},
+        "spec": {"replicas": replicas},
+        "status": {"readyReplicas": ready, "availableReplicas": ready},
+    }
 
 
 def test_local_platform_evidence_reports_ready_components():
@@ -41,8 +50,18 @@ def test_local_platform_evidence_reports_ready_components():
     }
     for namespace, services, deployments, statefulsets in (
         ("cattle-system", ["rancher"], ["rancher", "rancher-webhook"], []),
-        ("cattle-fleet-system", ["gitjob", "monitoring-fleet-controller"], ["fleet-controller", "gitjob", "helmops"], []),
-        ("devtroncd", ["devtron-service", "dashboard-service"], ["devtron", "dashboard", "kubelink", "argocd-dex-server"], ["postgresql-postgresql"]),
+        (
+            "cattle-fleet-system",
+            ["gitjob", "monitoring-fleet-controller"],
+            ["fleet-controller", "gitjob", "helmops"],
+            [],
+        ),
+        (
+            "devtroncd",
+            ["devtron-service", "dashboard-service"],
+            ["devtron", "dashboard", "kubelink", "argocd-dex-server"],
+            ["postgresql-postgresql"],
+        ),
     ):
         for service in services:
             resources[("service", namespace, service)] = _service(service)
@@ -97,7 +116,10 @@ def test_local_platform_evidence_writer(tmp_path: Path):
 
 
 def test_local_platform_evidence_handles_missing_kubectl():
-    with patch("kubernetes_ops.services.local_platform_evidence.subprocess.run", side_effect=FileNotFoundError("kubectl missing")):
+    with patch(
+        "kubernetes_ops.services.local_platform_evidence.subprocess.run",
+        side_effect=FileNotFoundError("kubectl missing"),
+    ):
         report = verify_kubernetes_local_platform(LocalPlatformProbeOptions(kubectl="missing-kubectl"))
 
     assert report["status"] == "missing"

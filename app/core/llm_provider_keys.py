@@ -6,7 +6,7 @@ from loguru import logger
 
 from app.core.llm_secrets import get_managed_llm_api_keys
 
-LLM_KEY_PROVIDERS = ("gemini", "grok", "openai", "fair", "claude", "ollama")
+LLM_KEY_PROVIDERS = ("gemini", "grok", "openai", "claude", "ollama")
 
 
 async def load_managed_llm_keys() -> dict[str, str]:
@@ -36,10 +36,6 @@ def apply_managed_llm_keys(provider: Any, model_manager: Any, keys: dict[str, st
     if openai_key:
         provider.openai_api_key = openai_key
 
-    fair_key = (keys.get("fair") or "").strip()
-    if fair_key:
-        provider.fair_api_key = fair_key
-
     ollama_key = (keys.get("ollama") or "").strip()
     if ollama_key:
         provider.ollama_api_key = ollama_key
@@ -54,6 +50,5 @@ def apply_managed_llm_keys(provider: Any, model_manager: Any, keys: dict[str, st
         grok_key=grok_key or None,
         anthropic_key=claude_key or None,
         openai_key=openai_key or None,
-        fair_key=fair_key or None,
         ollama_key=ollama_key or None,
     )

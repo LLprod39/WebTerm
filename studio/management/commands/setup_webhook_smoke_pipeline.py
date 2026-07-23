@@ -31,9 +31,7 @@ class Command(BaseCommand):
             raise CommandError("Webhook trigger was not created for the smoke-test pipeline.")
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.'
-            )
+            self.style.SUCCESS(f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.')
         )
         self.stdout.write(f"Studio path: /studio/pipeline/{pipeline.id}")
         self.stdout.write(f"Webhook path: /api/studio/triggers/{trigger.webhook_token}/receive/")

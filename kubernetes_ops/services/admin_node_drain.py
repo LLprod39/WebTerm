@@ -139,7 +139,11 @@ def build_node_drain_preflight(
     transport: ProviderTransport | None = None,
 ) -> dict[str, Any]:
     if session.status != K8sAdminSession.STATUS_ACTIVE or session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Active approved break-glass session is required for node drain preflight.", code="admin_break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Active approved break-glass session is required for node drain preflight.",
+            code="admin_break_glass_session_required",
+            status=403,
+        )
     assert_admin_session_approved(session=session, action=K8sAdminAction.VERB_DRAIN)
     client = ProviderJsonClient(provider, transport=transport)
     pods_path = _pods_on_node_path(provider, cluster, node=ref.name, limit=int(options.get("max_pods") or 50))
@@ -152,11 +156,18 @@ def build_node_drain_preflight(
             cluster=cluster,
             ref=ref,
             status=K8sAdminAction.STATUS_FAILED,
-            request_payload={"reason": reason, "confirmation": confirmation, "options": options, "preflight_only": True},
+            request_payload={
+                "reason": reason,
+                "confirmation": confirmation,
+                "options": options,
+                "preflight_only": True,
+            },
             response_summary={"source": "provider_node_drain_preflight", "error": str(exc), "pods_considered": 0},
         )
         raise
-    plan = _drain_plan(payload_items(pods_payload), node=ref.name, options=options, list_truncated=_list_truncated(pods_payload))
+    plan = _drain_plan(
+        payload_items(pods_payload), node=ref.name, options=options, list_truncated=_list_truncated(pods_payload)
+    )
     action_row = _record_action(
         user=user,
         session=session,
@@ -244,10 +255,18 @@ def _blocked_response(
     )
 
 
-def _drain_plan(pods: list[dict[str, Any]], *, node: str, options: dict[str, Any], list_truncated: bool = False) -> dict[str, Any]:
+def _drain_plan(
+    pods: list[dict[str, Any]], *, node: str, options: dict[str, Any], list_truncated: bool = False
+) -> dict[str, Any]:
     evictable: list[dict[str, str]] = []
     skipped = {"daemonset": 0, "mirror": 0, "terminal": 0, "other_node": 0}
-    blockers = {"daemonset": 0, "emptydir": 0, "unmanaged": 0, "pod_limit": 0, "pod_list_truncated": int(list_truncated)}
+    blockers = {
+        "daemonset": 0,
+        "emptydir": 0,
+        "unmanaged": 0,
+        "pod_limit": 0,
+        "pod_list_truncated": int(list_truncated),
+    }
     for pod in pods:
         namespace, name = _pod_identity(pod)
         if not name or _pod_node(pod) != node:
@@ -436,7 +455,11 @@ def _base_response(
         "mode": "admin_break_glass_node_maintenance",
         "operation": operation,
         "status": status,
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": _target_payload(ref),
         "path": _public_path(path),
@@ -453,14 +476,23 @@ def _policy_payload(*, mutates_state: bool, drain_execution: bool) -> dict[str, 
         "requires_approval": True,
         "requires_node_scope": True,
         "uses_eviction_api": True,
-        "native_node_maintenance_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False)),
-        "node_drain_execution_enabled": drain_execution and bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False)),
+        "native_node_maintenance_enabled": bool(
+            getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False)
+        ),
+        "node_drain_execution_enabled": drain_execution
+        and bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False)),
         "blocked_actions": ["exec", "port_forward", "node_debug", "cluster_terminal"],
     }
 
 
 def _target_payload(ref: KubernetesResourceRef) -> dict[str, Any]:
-    return {"api_version": ref.api_version, "kind": ref.kind, "resource": ref.resource, "namespace": ref.namespace, "name": ref.name}
+    return {
+        "api_version": ref.api_version,
+        "kind": ref.kind,
+        "resource": ref.resource,
+        "namespace": ref.namespace,
+        "name": ref.name,
+    }
 
 
 def _quote(value: str) -> str:

@@ -43,8 +43,4 @@ class Command(BaseCommand):
                 updated += 1
                 self.stdout.write(f"  Updated: {tpl['name']}")
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Done: {created} created, {updated} updated, {skipped} skipped"
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Done: {created} created, {updated} updated, {skipped} skipped"))

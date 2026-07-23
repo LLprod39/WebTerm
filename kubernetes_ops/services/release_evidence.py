@@ -10,7 +10,7 @@ from django.conf import settings
 from django.utils import timezone
 
 from app.egress_redaction import redact_egress_text
-from kubernetes_ops.models import K8sAppRef, K8sCluster, K8sProvider, K8sWorkloadRef
+from kubernetes_ops.models import K8sAppRef, K8sProvider, K8sWorkloadRef
 from kubernetes_ops.services.provider_probe import probe_kubernetes_provider, probe_result_payload
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 from kubernetes_ops.services.release_action_controls import build_kubernetes_release_action_controls_evidence
@@ -89,7 +89,9 @@ def build_kubernetes_release_evidence(
     interactive_shell_streams = _interactive_shell_streams_evidence(user, run_interactive_shell_streams)
     normal_user_surface = _normal_user_surface_evidence(run_normal_user_surface)
     secret_read_controls = build_kubernetes_release_secret_read_controls_evidence(user, run_secret_read_controls)
-    provider_secret_lifecycle = build_kubernetes_release_provider_secret_lifecycle_evidence(run_provider_secret_lifecycle)
+    provider_secret_lifecycle = build_kubernetes_release_provider_secret_lifecycle_evidence(
+        run_provider_secret_lifecycle
+    )
     audit_redaction = build_kubernetes_release_audit_redaction_evidence(run_audit_redaction)
     production_action_evidence = _production_action_evidence(run_production_action_evidence)
     readonly_rbac_live = _readonly_rbac_live_evidence(run_readonly_rbac_live)
@@ -254,6 +256,7 @@ def _provider_probe_evidence(enabled: bool) -> list[dict[str, Any]]:
         results.append(payload)
     return results
 
+
 def _sync_dry_run_evidence(enabled: bool) -> list[dict[str, Any]]:
     if not enabled:
         return [{"status": "skipped", "success": False, "reason": "sync dry-run skipped"}]
@@ -261,6 +264,7 @@ def _sync_dry_run_evidence(enabled: bool) -> list[dict[str, Any]]:
     if not results:
         return [{"status": "missing", "success": False, "reason": "no enabled providers matched sync"}]
     return [_sync_result_payload(item) for item in results]
+
 
 def _sync_result_payload(result: KubernetesSyncResult) -> dict[str, Any]:
     return {
@@ -281,6 +285,7 @@ def _sync_result_payload(result: KubernetesSyncResult) -> dict[str, Any]:
         "error": _redacted_text(result.error),
     }
 
+
 def _public_base_url(value: str) -> str:
     parsed = urllib.parse.urlsplit(str(value or ""))
     if not parsed.scheme or not parsed.netloc:
@@ -290,6 +295,7 @@ def _public_base_url(value: str) -> str:
         return ""
     return urllib.parse.urlunsplit((parsed.scheme, netloc, "", "", ""))[:300]
 
+
 def _public_path(value: str) -> str:
     parsed = urllib.parse.urlsplit(str(value or ""))
     if not parsed.scheme and not parsed.netloc:
@@ -298,6 +304,7 @@ def _public_path(value: str) -> str:
     if not netloc:
         return ""
     return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path or "/", "", ""))[:300]
+
 
 def _safe_netloc(parsed: urllib.parse.SplitResult) -> str:
     host = parsed.hostname or ""
@@ -311,8 +318,10 @@ def _safe_netloc(parsed: urllib.parse.SplitResult) -> str:
         port = None
     return f"{host}:{port}" if port else host
 
+
 def _redacted_text(value: object) -> str:
     return redact_egress_text(str(value or "")).text[:1000]
+
 
 def _studio_mcp_evidence(user, enabled: bool) -> dict[str, Any]:
     if not enabled:
@@ -322,11 +331,22 @@ def _studio_mcp_evidence(user, enabled: bool) -> dict[str, Any]:
         return {"success": False, "status": "missing", "reason": "owned Kubernetes MCP server is missing"}
     target = _diagnosis_target()
     if target is None:
-        return {"success": False, "status": "missing", "mcp_server": _mcp_summary(mcp), "reason": "no app/workload target for diagnosis smoke"}
+        return {
+            "success": False,
+            "status": "missing",
+            "mcp_server": _mcp_summary(mcp),
+            "reason": "no app/workload target for diagnosis smoke",
+        }
     try:
         result = asyncio.run(call_mcp_tool(mcp, "kubernetes_describe_workload", target["arguments"]))
     except Exception as exc:
-        return {"success": False, "status": "error", "mcp_server": _mcp_summary(mcp), "target": target, "error": str(exc)}
+        return {
+            "success": False,
+            "status": "error",
+            "mcp_server": _mcp_summary(mcp),
+            "target": target,
+            "error": str(exc),
+        }
     policy = (result.get("structuredContent") or {}).get("policy", {})
     policy_errors = _studio_mcp_policy_errors(policy)
     success = not bool(result.get("isError")) and not policy_errors
@@ -408,8 +428,11 @@ def _readonly_rbac_live_evidence(enabled: bool) -> dict[str, Any]:
     errors = payload.get("errors") if isinstance(payload.get("errors"), list) else []
     allowed = payload.get("allowed") if isinstance(payload.get("allowed"), list) else []
     denied = payload.get("denied") if isinstance(payload.get("denied"), list) else []
-    success = payload.get("status") == "ready" and not errors and all(item.get("decision") == "yes" for item in allowed) and all(
-        item.get("decision") == "no" for item in denied
+    success = (
+        payload.get("status") == "ready"
+        and not errors
+        and all(item.get("decision") == "yes" for item in allowed)
+        and all(item.get("decision") == "no" for item in denied)
     )
     return {
         "success": success,
@@ -469,7 +492,9 @@ def _diagnosis_target() -> dict[str, Any] | None:
 
 def _cluster_context(cluster) -> str:
     labels = cluster.labels if isinstance(cluster.labels, dict) else {}
-    return str(labels.get("kube_context") or labels.get("context") or labels.get("cluster_context") or cluster.name).strip()
+    return str(
+        labels.get("kube_context") or labels.get("context") or labels.get("cluster_context") or cluster.name
+    ).strip()
 
 
 def _kind_from_labels(labels: dict[str, Any]) -> str:

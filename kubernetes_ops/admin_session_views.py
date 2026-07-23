@@ -67,7 +67,9 @@ def _resource_error_response(error: AdminResourceError) -> JsonResponse:
     )
 
 
-def _audit(request, action: str, *, session: K8sAdminSession | None = None, payload: dict[str, Any] | None = None) -> None:
+def _audit(
+    request, action: str, *, session: K8sAdminSession | None = None, payload: dict[str, Any] | None = None
+) -> None:
     K8sAuditEvent.objects.create(
         user=request.user,
         username_snapshot=getattr(request.user, "username", ""),
@@ -100,9 +102,13 @@ def api_kubernetes_admin_sessions(request):
     def handler():
         if request.method == "GET":
             include_all = str(request.GET.get("all") or "").lower() in {"1", "true", "yes"}
-            sessions = visible_admin_sessions_for_user(request.user, include_all=include_all).order_by("-created_at", "-id")[:100]
+            sessions = visible_admin_sessions_for_user(request.user, include_all=include_all).order_by(
+                "-created_at", "-id"
+            )[:100]
             refreshed = [refresh_admin_session_state(session) for session in sessions]
-            return JsonResponse({"success": True, "sessions": [serialize_admin_session(session) for session in refreshed]})
+            return JsonResponse(
+                {"success": True, "sessions": [serialize_admin_session(session) for session in refreshed]}
+            )
 
         data, error_response = _json_body(request)
         if error_response:
@@ -129,7 +135,9 @@ def api_kubernetes_admin_session_detail(request, session_id):
     def handler():
         session = _session_or_none(request.user, session_id)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         return JsonResponse({"success": True, "session": serialize_admin_session(refresh_admin_session_state(session))})
 
     return _safe_json(handler)
@@ -145,11 +153,18 @@ def api_kubernetes_admin_session_approve(request, session_id):
             return error_response
         session = _session_or_none(request.user, session_id, for_approval=True)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             session = approve_admin_session(session=session, user=request.user, data=data)
         except AdminSessionValidationError as exc:
-            _audit(request, "k8s.admin_session.approval_rejected", session=session, payload={"code": exc.code, "error": str(exc)})
+            _audit(
+                request,
+                "k8s.admin_session.approval_rejected",
+                session=session,
+                payload={"code": exc.code, "error": str(exc)},
+            )
             return _error_response(exc)
         _audit(request, "k8s.admin_session.approve", session=session, payload={"approval_ref": session.approval_ref})
         return JsonResponse({"success": True, "session": serialize_admin_session(session)})
@@ -167,11 +182,18 @@ def api_kubernetes_admin_session_revoke(request, session_id):
             return error_response
         session = _session_or_none(request.user, session_id, for_approval=True)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             session = revoke_admin_session(session=session, user=request.user, reason=str(data.get("reason") or ""))
         except AdminSessionValidationError as exc:
-            _audit(request, "k8s.admin_session.revoke_rejected", session=session, payload={"code": exc.code, "error": str(exc)})
+            _audit(
+                request,
+                "k8s.admin_session.revoke_rejected",
+                session=session,
+                payload={"code": exc.code, "error": str(exc)},
+            )
             return _error_response(exc)
         _audit(request, "k8s.admin_session.revoke", session=session)
         return JsonResponse({"success": True, "session": serialize_admin_session(session)})
@@ -189,11 +211,18 @@ def api_kubernetes_admin_session_close(request, session_id):
             return error_response
         session = _session_or_none(request.user, session_id, for_approval=True)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             session = close_admin_session(session=session, user=request.user, reason=str(data.get("reason") or ""))
         except AdminSessionValidationError as exc:
-            _audit(request, "k8s.admin_session.close_rejected", session=session, payload={"code": exc.code, "error": str(exc)})
+            _audit(
+                request,
+                "k8s.admin_session.close_rejected",
+                session=session,
+                payload={"code": exc.code, "error": str(exc)},
+            )
             return _error_response(exc)
         _audit(request, "k8s.admin_session.close", session=session)
         return JsonResponse({"success": True, "session": serialize_admin_session(session)})
@@ -211,13 +240,22 @@ def api_kubernetes_admin_session_review(request, session_id):
             return error_response
         session = _session_or_none(request.user, session_id, for_approval=True)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             session = review_break_glass_session(session=session, user=request.user, data=data)
         except AdminSessionValidationError as exc:
-            _audit(request, "k8s.admin_session.post_review_rejected", session=session, payload={"code": exc.code, "error": str(exc)})
+            _audit(
+                request,
+                "k8s.admin_session.post_review_rejected",
+                session=session,
+                payload={"code": exc.code, "error": str(exc)},
+            )
             return _error_response(exc)
-        _audit(request, "k8s.admin_session.post_review", session=session, payload=session.metadata.get("post_review", {}))
+        _audit(
+            request, "k8s.admin_session.post_review", session=session, payload=session.metadata.get("post_review", {})
+        )
         return JsonResponse({"success": True, "session": serialize_admin_session(session)})
 
     return _safe_json(handler)
@@ -233,14 +271,21 @@ def api_kubernetes_admin_session_restricted_context(request, session_id):
             return error_response
         session = _session_or_none(request.user, session_id, for_approval=True)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             context = build_restricted_kube_context_for_session(
                 session=session,
                 include_manifest=str(data.get("include_manifest") or "").lower() in {"1", "true", "yes"},
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_session.restricted_context_rejected", session=session, payload={"code": exc.code, "error": str(exc)})
+            _audit(
+                request,
+                "k8s.admin_session.restricted_context_rejected",
+                session=session,
+                payload={"code": exc.code, "error": str(exc)},
+            )
             return _resource_error_response(exc)
         _audit(
             request,

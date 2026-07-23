@@ -39,7 +39,10 @@ def _is_session_noise_line(line: str) -> bool:
         "ssh terminal session closed",
     }:
         return True
-    return bool(any(marker in normalized for marker in ("connection_id", "user_id")) and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed")))
+    return bool(
+        any(marker in normalized for marker in ("connection_id", "user_id"))
+        and any(term in normalized for term in ("session_opened", "session_closed", "session opened", "session closed"))
+    )
 
 
 def _clean_episode_summary(summary: str, *, limit: int = 3) -> str:
@@ -68,7 +71,9 @@ def _summarize_operational_playbook(title: str, content: str, *, metadata: dict 
         lowered = line.lower()
         if "открыть/редактировать skill" in lowered:
             continue
-        if lowered.startswith(("связанный skill:", "когда использовать:", "workflow:", "команда:", "сигналы успеха:", "типовой cwd:")):
+        if lowered.startswith(
+            ("связанный skill:", "когда использовать:", "workflow:", "команда:", "сигналы успеха:", "типовой cwd:")
+        ):
             focus_lines.append(line)
     if not focus_lines:
         focus_lines = _snapshot_lines(content, limit=150)[:2]
@@ -144,7 +149,9 @@ def build_server_memory_card(
             known_risks.append(
                 _with_provenance(
                     "Запрещенные команды: " + ", ".join(global_rules.forbidden_commands[:6]),
-                    metadata=_provenance_metadata(TRUST_MANUAL_VERIFIED, VERIFICATION_VERIFIED, source_actor_kind="human"),
+                    metadata=_provenance_metadata(
+                        TRUST_MANUAL_VERIFIED, VERIFICATION_VERIFIED, source_actor_kind="human"
+                    ),
                     confidence=0.9,
                     source_kind="global_rules",
                     source_ref=f"rules:{global_rules.id}",
@@ -154,7 +161,9 @@ def build_server_memory_card(
             known_risks.append(
                 _with_provenance(
                     "Обязательные проверки: " + ", ".join(global_rules.required_checks[:6]),
-                    metadata=_provenance_metadata(TRUST_MANUAL_VERIFIED, VERIFICATION_VERIFIED, source_actor_kind="human"),
+                    metadata=_provenance_metadata(
+                        TRUST_MANUAL_VERIFIED, VERIFICATION_VERIFIED, source_actor_kind="human"
+                    ),
                     confidence=0.9,
                     source_kind="global_rules",
                     source_ref=f"rules:{global_rules.id}",
@@ -405,7 +414,9 @@ def build_server_memory_card(
                             "category": getattr(item, "category", ""),
                             "source": getattr(item, "source", ""),
                             "trust_level": TRUST_MANUAL_VERIFIED if item.source == "manual" else TRUST_HUMAN_OBSERVED,
-                            "verification_status": VERIFICATION_VERIFIED if item.source == "manual" else VERIFICATION_UNVERIFIED,
+                            "verification_status": VERIFICATION_VERIFIED
+                            if item.source == "manual"
+                            else VERIFICATION_UNVERIFIED,
                             "source_actor_kind": "human",
                         },
                         confidence=float(item.confidence or 0.8),
@@ -426,7 +437,9 @@ def build_server_memory_card(
                     metadata={
                         "source": item.source,
                         "trust_level": TRUST_MANUAL_VERIFIED if item.source == "manual" else TRUST_HUMAN_OBSERVED,
-                        "verification_status": VERIFICATION_VERIFIED if item.source == "manual" else VERIFICATION_UNVERIFIED,
+                        "verification_status": VERIFICATION_VERIFIED
+                        if item.source == "manual"
+                        else VERIFICATION_UNVERIFIED,
                         "source_actor_kind": "human",
                     },
                 )

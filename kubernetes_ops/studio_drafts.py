@@ -56,13 +56,17 @@ def create_kubernetes_diagnosis_draft(*, user, app: K8sAppRef) -> PipelineDraftS
 
 def _workload_kind_for_app(app: K8sAppRef) -> str:
     labels = app.labels if isinstance(app.labels, dict) else {}
-    raw = str(
-        labels.get("workload_kind")
-        or labels.get("k8s_kind")
-        or labels.get("resource_kind")
-        or labels.get("kind")
-        or "deployment"
-    ).strip().lower()
+    raw = (
+        str(
+            labels.get("workload_kind")
+            or labels.get("k8s_kind")
+            or labels.get("resource_kind")
+            or labels.get("kind")
+            or "deployment"
+        )
+        .strip()
+        .lower()
+    )
     raw = raw.rsplit("/", 1)[-1]
     aliases = {
         "deploy": "deployment",
@@ -76,10 +80,14 @@ def _workload_kind_for_app(app: K8sAppRef) -> str:
 
 def _cluster_context_for_draft(cluster: K8sCluster) -> str:
     labels = cluster.labels if isinstance(cluster.labels, dict) else {}
-    return str(labels.get("kube_context") or labels.get("context") or labels.get("cluster_context") or cluster.name).strip()
+    return str(
+        labels.get("kube_context") or labels.get("context") or labels.get("cluster_context") or cluster.name
+    ).strip()
 
 
-def _diagnosis_node_graph(app: K8sAppRef, mcp_server) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
+def _diagnosis_node_graph(
+    app: K8sAppRef, mcp_server
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     cluster = app.cluster
     workload_kind = _workload_kind_for_app(app)
     target = {
@@ -168,13 +176,21 @@ def _diagnosis_node_graph(app: K8sAppRef, mcp_server) -> tuple[list[dict[str, An
     ]
     edges = [
         {"id": "e-manual-inspect", "source": "manual", "target": "inspect", "sourceHandle": "out", "animated": True},
-        {"id": "e-inspect-assess", "source": "inspect", "target": "assess", "sourceHandle": "success", "animated": True},
+        {
+            "id": "e-inspect-assess",
+            "source": "inspect",
+            "target": "assess",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "e-assess-report", "source": "assess", "target": "report", "sourceHandle": "success", "animated": True},
     ]
     return nodes, edges, target
 
 
-def _diagnosis_draft_response(user, app: K8sAppRef) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+def _diagnosis_draft_response(
+    user, app: K8sAppRef
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     mcp_server = owned_kubernetes_mcp_server(user)
     nodes, edges, target = _diagnosis_node_graph(app, mcp_server)
     validation_errors = validate_pipeline_definition(
@@ -200,7 +216,9 @@ def _diagnosis_draft_response(user, app: K8sAppRef) -> tuple[dict[str, Any], lis
         resource_plan_missing.append("Owned Kubernetes MCP server")
         questions.append("Bind an owned Kubernetes MCP server before validating or applying this draft.")
     if not getattr(user, "is_staff", False):
-        questions.append("MCP execution is admin-only in this Studio installation; ask a staff operator to bind and run the draft.")
+        questions.append(
+            "MCP execution is admin-only in this Studio installation; ask a staff operator to bind and run the draft."
+        )
 
     response = {
         "reply": (

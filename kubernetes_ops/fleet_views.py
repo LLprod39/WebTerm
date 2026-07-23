@@ -29,7 +29,9 @@ def api_kubernetes_fleet_bundle_detail(request, bundle_id: str):
     def handler():
         bundle = fleet_bundle_for_value(bundle_id)
         if bundle is None:
-            return JsonResponse({"success": False, "error": "Fleet bundle not found.", "code": "bundle_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Fleet bundle not found.", "code": "bundle_not_found"}, status=404
+            )
         payload = build_fleet_bundle_detail(bundle, user=request.user)
         K8sAuditEvent.objects.create(
             user=request.user,

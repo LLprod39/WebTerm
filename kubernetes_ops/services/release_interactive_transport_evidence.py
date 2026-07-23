@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -71,7 +71,11 @@ def load_kubernetes_interactive_transport_evidence_artifact(path: Path | None = 
     if payload.get("provider_stream_opened") is not False:
         errors.append("provider stream opened during prerequisite evidence")
 
-    transport = payload.get("admin_interactive_transport") if isinstance(payload.get("admin_interactive_transport"), dict) else {}
+    transport = (
+        payload.get("admin_interactive_transport")
+        if isinstance(payload.get("admin_interactive_transport"), dict)
+        else {}
+    )
     if not transport:
         errors.append("admin interactive transport report is missing")
     elif transport.get("status") != "ready":
@@ -114,11 +118,14 @@ def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if checked_at is None:
         return None, "checked_at is invalid"
     if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=datetime_timezone.utc)
+        checked_at = timezone.make_aware(checked_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:
-        return age_seconds, f"interactive transport evidence artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}"
+        return (
+            age_seconds,
+            f"interactive transport evidence artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
+        )
     return age_seconds, ""
 
 

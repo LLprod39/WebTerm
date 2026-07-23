@@ -53,9 +53,7 @@ class Command(BaseCommand):
                 self.stdout.write(f"  warning: {item}")
 
         self.stdout.write("")
-        self.stdout.write(
-            f"Validated {len(results)} skill(s): {error_count} error(s), {warning_count} warning(s)"
-        )
+        self.stdout.write(f"Validated {len(results)} skill(s): {error_count} error(s), {warning_count} warning(s)")
 
         if error_count:
             raise CommandError("Skill validation failed.")

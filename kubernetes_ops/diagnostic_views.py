@@ -34,7 +34,9 @@ def api_kubernetes_diagnostics_summary(request):
             network_id=request.GET.get("network_id", ""),
         )
         if payload is None:
-            return JsonResponse({"success": False, "error": _error_message(error), "code": error}, status=_status_for_error(error))
+            return JsonResponse(
+                {"success": False, "error": _error_message(error), "code": error}, status=_status_for_error(error)
+            )
         audit_payload = diagnostics_summary_audit_payload(payload)
         K8sAuditEvent.objects.create(
             user=request.user,

@@ -32,11 +32,7 @@ def _service_by_name(blueprint: dict, name: str) -> dict:
 
 
 def _env_keys(service: dict) -> set[str]:
-    return {
-        str(item["key"])
-        for item in service.get("envVars", [])
-        if isinstance(item, dict) and item.get("key")
-    }
+    return {str(item["key"]) for item in service.get("envVars", []) if isinstance(item, dict) and item.get("key")}
 
 
 def _dotenv_values(path: str) -> dict[str, str]:
@@ -71,10 +67,15 @@ def test_render_kubernetes_ops_sync_worker_is_declared():
     worker = _service_by_name(blueprint, "mini-prod-kubernetes-ops-sync")
     env_keys = _env_keys(worker)
 
-    assert any(item.get("key") == "MANAGED_SECRET_KEY" and item.get("generateValue") is True for item in backend["envVars"])
+    assert any(
+        item.get("key") == "MANAGED_SECRET_KEY" and item.get("generateValue") is True for item in backend["envVars"]
+    )
     assert worker["type"] == "worker"
     assert worker["runtime"] == "docker"
-    assert worker["dockerCommand"] == "python manage.py run_kubernetes_ops_sync_worker --daemon --interval 300 --worker-key render"
+    assert (
+        worker["dockerCommand"]
+        == "python manage.py run_kubernetes_ops_sync_worker --daemon --interval 300 --worker-key render"
+    )
     assert {
         "DJANGO_SECRET_KEY",
         "MANAGED_SECRET_KEY",

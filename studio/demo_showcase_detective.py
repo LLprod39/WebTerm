@@ -213,11 +213,7 @@ def build_detective_nodes() -> list[dict]:
             "data": {
                 "label": "Final Detective Report",
                 "label_ru": "Финальный отчёт детектива",
-                "template": (
-                    "# 🕵️ Data Detective — итог\n\n"
-                    "{dt_intake_output}\n\n"
-                    "## Синтез\n{dt_synth_output}\n"
-                ),
+                "template": ("# 🕵️ Data Detective — итог\n\n{dt_intake_output}\n\n## Синтез\n{dt_synth_output}\n"),
                 "on_failure": "continue",
             },
         },
@@ -238,9 +234,35 @@ def build_detective_edges() -> list[dict]:
         {"id": "d_e10", "source": "expert_ux", "target": "dt_merge_out", "sourceHandle": "success", "animated": True},
         {"id": "d_e11", "source": "dt_merge_out", "target": "dt_synth", "sourceHandle": "out", "animated": True},
         {"id": "d_e12", "source": "dt_synth", "target": "confidence_gate", "sourceHandle": "success", "animated": True},
-        {"id": "d_e13", "source": "confidence_gate", "target": "green_light_report", "sourceHandle": "true", "animated": True, "label": "HIGH"},
-        {"id": "d_e14", "source": "confidence_gate", "target": "needs_more_report", "sourceHandle": "false", "animated": True, "label": "other"},
-        {"id": "d_e15", "source": "green_light_report", "target": "dt_final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "d_e16", "source": "needs_more_report", "target": "dt_final_merge", "sourceHandle": "success", "animated": True},
+        {
+            "id": "d_e13",
+            "source": "confidence_gate",
+            "target": "green_light_report",
+            "sourceHandle": "true",
+            "animated": True,
+            "label": "HIGH",
+        },
+        {
+            "id": "d_e14",
+            "source": "confidence_gate",
+            "target": "needs_more_report",
+            "sourceHandle": "false",
+            "animated": True,
+            "label": "other",
+        },
+        {
+            "id": "d_e15",
+            "source": "green_light_report",
+            "target": "dt_final_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "d_e16",
+            "source": "needs_more_report",
+            "target": "dt_final_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "d_e17", "source": "dt_final_merge", "target": "dt_final", "sourceHandle": "out", "animated": True},
     ]

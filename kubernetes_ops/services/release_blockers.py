@@ -32,9 +32,21 @@ def build_kubernetes_release_blockers(
     release_scope: dict[str, Any],
     definition_of_done: dict[str, Any],
 ) -> list[str]:
-    blockers = [f"readiness:{item.get('id')}={item.get('status')}" for item in readiness.get("checks", []) if item.get("status") != "ready"]
-    blockers.extend(f"provider_probe:{item.get('provider_name') or item.get('reason')}={item.get('status')}" for item in provider_probes if not item.get("success"))
-    blockers.extend(f"sync_dry_run:{item.get('provider_name') or item.get('reason')}=failed" for item in sync_dry_run if not item.get("success"))
+    blockers = [
+        f"readiness:{item.get('id')}={item.get('status')}"
+        for item in readiness.get("checks", [])
+        if item.get("status") != "ready"
+    ]
+    blockers.extend(
+        f"provider_probe:{item.get('provider_name') or item.get('reason')}={item.get('status')}"
+        for item in provider_probes
+        if not item.get("success")
+    )
+    blockers.extend(
+        f"sync_dry_run:{item.get('provider_name') or item.get('reason')}=failed"
+        for item in sync_dry_run
+        if not item.get("success")
+    )
     if not studio_mcp.get("success"):
         blockers.append(f"studio_mcp:{studio_mcp.get('status') or 'failed'}")
     if not studio_diagnosis_draft.get("success"):

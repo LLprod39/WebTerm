@@ -51,7 +51,11 @@ _MONITORING_CONTEXT = {
 
 def _activation_context(trigger_type: str, webhook_payload_map) -> dict:
     if trigger_type == PipelineTrigger.TYPE_WEBHOOK and isinstance(webhook_payload_map, dict):
-        return {str(key): "__mapped__" for key, path in webhook_payload_map.items() if str(key).strip() and str(path).strip()}
+        return {
+            str(key): "__mapped__"
+            for key, path in webhook_payload_map.items()
+            if str(key).strip() and str(path).strip()
+        }
     if trigger_type == PipelineTrigger.TYPE_MONITORING:
         return dict.fromkeys(_MONITORING_CONTEXT, "__monitoring__")
     return {}
@@ -64,7 +68,9 @@ def _node_type_for_id(pipeline, node_id: str) -> str:
     return ""
 
 
-def _activation_validation(pipeline, *, node_id: str, trigger_type: str, webhook_payload_map) -> tuple[list[str], list[dict]]:
+def _activation_validation(
+    pipeline, *, node_id: str, trigger_type: str, webhook_payload_map
+) -> tuple[list[str], list[dict]]:
     errors = validate_pipeline_definition(
         nodes=pipeline.nodes,
         edges=pipeline.edges,
@@ -165,7 +171,9 @@ def api_trigger_detail(request, trigger_id: int):
         if (
             next_node_id
             and next_node_id != trigger.node_id
-            and PipelineTrigger.objects.filter(pipeline=trigger.pipeline, node_id=next_node_id).exclude(pk=trigger.pk).exists()
+            and PipelineTrigger.objects.filter(pipeline=trigger.pipeline, node_id=next_node_id)
+            .exclude(pk=trigger.pk)
+            .exists()
         ):
             return _err(f"Trigger for node '{next_node_id}' already exists")
         next_trigger_type = data.get("trigger_type", trigger.trigger_type)

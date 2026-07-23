@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
 from servers.agent_background import launch_plan_execution_background
-from servers.agent_cleanup_service import cleanup_stale_agent_runs_for_user
+from servers.agent_cleanup_service import cleanup_stale_agent_runs_for_user as cleanup_stale_agent_runs_for_user
 from servers.agent_dispatch import cancel_agent_dispatches_for_run, serialize_agent_dispatch
 from servers.agent_execution_state import (
     get_agent_execution_readiness,
@@ -19,11 +19,13 @@ from servers.agent_run_lifecycle import mark_agent_run_stopped
 from servers.agent_run_report import record_run_event_and_refresh_report, refresh_agent_run_report_payload
 from servers.agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
 from servers.agent_runtime_overview import (
-    get_agent_runtime_overview,
+    get_agent_runtime_overview as get_agent_runtime_overview,
+)
+from servers.agent_runtime_overview import (
     get_agent_worker_states,
 )
 from servers.agent_schedule import compute_next_due_by_schedule, normalize_schedule_config
-from servers.models import AgentRun, AgentRunDispatch, BackgroundWorkerState, ServerAgent, ServerWatcherDraft
+from servers.models import AgentRun, BackgroundWorkerState, ServerAgent, ServerWatcherDraft
 from servers.run_events import record_run_event
 from servers.scheduled_agents import dispatch_scheduled_agents, is_agent_due
 from servers.watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
@@ -86,7 +88,9 @@ def serialize_agent_item(
         "server_ids": list(agent.servers.values_list("id", flat=True)),
         "server_names": list(agent.servers.values_list("name", flat=True)),
         "schedule_minutes": int(agent.schedule_minutes or 0),
-        "schedule_config": normalize_schedule_config(agent.schedule_config, fallback_minutes=int(agent.schedule_minutes or 0)),
+        "schedule_config": normalize_schedule_config(
+            agent.schedule_config, fallback_minutes=int(agent.schedule_minutes or 0)
+        ),
         "is_enabled": bool(agent.is_enabled),
         "commands": agent.commands,
         "ai_prompt": agent.ai_prompt,
@@ -136,9 +140,7 @@ def list_agents_for_user(user, *, mode_filter: str | None = None) -> list[dict]:
     for agent in queryset:
         last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
         active_run = (
-            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
-            .select_related("server")
-            .first()
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).select_related("server").first()
         )
         data.append(
             serialize_agent_item(
@@ -173,9 +175,7 @@ def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
     for agent in agents:
         last_run = AgentRun.objects.filter(agent=agent).select_related("server").first()
         active_run = (
-            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES)
-            .select_related("server")
-            .first()
+            AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).select_related("server").first()
         )
         item = serialize_agent_item(
             agent,
@@ -320,10 +320,14 @@ def stop_agent_run_for_user(*, agent_id: int, user, run_id: int | None = None, s
 
 
 def reply_to_agent_run_for_user(*, run_id: int, user, answer: str, source: str = "http") -> dict:
-    run = _owned_agent_run_queryset(user).filter(
-        id=run_id,
-        status=AgentRun.STATUS_WAITING,
-    ).first()
+    run = (
+        _owned_agent_run_queryset(user)
+        .filter(
+            id=run_id,
+            status=AgentRun.STATUS_WAITING,
+        )
+        .first()
+    )
     if not run:
         return {"ok": False, "status": 404, "payload": {"success": False, "error": "Run not found or not waiting"}}
 
@@ -351,10 +355,15 @@ def reply_to_agent_run_for_user(*, run_id: int, user, answer: str, source: str =
 
 
 def approve_agent_plan_for_user(*, run_id: int, user, accessible_servers_queryset, source: str = "http") -> dict:
-    run = _owned_agent_run_queryset(user).filter(
-        id=run_id,
-        status=AgentRun.STATUS_PLAN_REVIEW,
-    ).select_related("agent", "server").first()
+    run = (
+        _owned_agent_run_queryset(user)
+        .filter(
+            id=run_id,
+            status=AgentRun.STATUS_PLAN_REVIEW,
+        )
+        .select_related("agent", "server")
+        .first()
+    )
     if not run:
         return {
             "ok": False,

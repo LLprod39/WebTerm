@@ -10,6 +10,7 @@ Inventory and credentials are written to a temporary workdir and cleaned up afte
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -72,6 +73,7 @@ ANSIBLE_TIMEOUT_SEC = int(os.environ.get("WEBTERM_ANSIBLE_TIMEOUT", "1800"))
 # Do NOT use stdout_callback=json — it is NOT built into ansible-core and causes:
 #   [ERROR]: Could not load 'json' callback plugin.
 # We use the default callback + PLAY RECAP parsing (always available).
+
 
 def run_ansible_playbook(
     *,
@@ -183,8 +185,7 @@ def run_ansible_playbook(
                 "bash",
                 "-lc",
                 f"cd {shlex_quote(wsl_dir)} && ANSIBLE_HOST_KEY_CHECKING=False ANSIBLE_FORCE_COLOR=0 "
-                f"ANSIBLE_CONFIG=./ansible.cfg "
-                + " ".join(shlex_quote(a) for a in ansible_args),
+                f"ANSIBLE_CONFIG=./ansible.cfg " + " ".join(shlex_quote(a) for a in ansible_args),
             ]
             cwd = None
         else:  # docker ad-hoc (no long-running agent)
@@ -244,9 +245,8 @@ def run_ansible_playbook(
                     release = os.uname().release.lower() if hasattr(os, "uname") else ""
                 except Exception:
                     release = ""
-                if use_host_net or ("microsoft" not in release and "wsl" not in release):
-                    if os.name == "posix":
-                        cmd.extend(["--network", "host"])
+                if os.name == "posix" and (use_host_net or ("microsoft" not in release and "wsl" not in release)):
+                    cmd.extend(["--network", "host"])
             cmd.extend(
                 [
                     "-v",
@@ -363,7 +363,7 @@ def run_ansible_playbook(
                     )
 
         # Surface the classic json-callback error clearly if it somehow reappears
-        if "Could not load 'json' callback" in combined or "Could not load \"json\" callback" in combined:
+        if "Could not load 'json' callback" in combined or 'Could not load "json" callback' in combined:
             return {
                 "ok": False,
                 "method": method,
@@ -433,10 +433,8 @@ def run_ansible_playbook(
             "error": str(exc),
         }
     finally:
-        try:
+        with contextlib.suppress(Exception):
             shutil.rmtree(workdir, ignore_errors=True)
-        except Exception:
-            pass
 
 
 # Guided recipes live in ansible_recipes.py; re-exported for compatibility.

@@ -62,9 +62,11 @@ from servers.multi_agent_tool_execution import MultiAgentToolExecutionContext, e
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
+
 # ---------------------------------------------------------------------------
 # MultiAgentEngine
 # ---------------------------------------------------------------------------
+
 
 class MultiAgentEngine:
     """Two-level multi-agent pipeline."""
@@ -90,7 +92,9 @@ class MultiAgentEngine:
 
         self.session_timeout = agent.session_timeout_seconds or SESSION_TIMEOUT_DEFAULT
         self.tools_config = dict(agent.tools_config or {})
-        self.allowed_tool_names = {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
+        self.allowed_tool_names = (
+            {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
+        )
         self.enabled_tools = get_enabled_tools(self.tools_config)
 
         self._stop_requested = False
@@ -124,7 +128,9 @@ class MultiAgentEngine:
             default_provider="auto",
         )
         self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
-        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy)
+        self.permission_engine = PermissionEngine(
+            mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy
+        )
         self.sandbox_manager = SandboxManager()
         self.hook_manager = HookManager()
         self.memory_store = DjangoServerMemoryStore()
@@ -447,7 +453,7 @@ class MultiAgentEngine:
             await self._sync_runtime_control()
             try:
                 return await asyncio.wait_for(self.session.user_reply_future, timeout=timeout)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError):
                 if self._stop_requested:
                     raise RuntimeError("Stopped by user")
                 return "Нет ответа (таймаут)"

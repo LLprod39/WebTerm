@@ -59,7 +59,9 @@ def collect_node_manifest_consistency_errors(repo_root: Path | None = None) -> l
 
     catalog = assistant_node_catalog()
     _compare_sets(errors, label="assistant_node_catalog()", actual=set(catalog), expected=expected)
-    _compare_sets(errors, label="pipeline_assistant.NODE_TYPE_CATALOG", actual=set(NODE_TYPE_CATALOG), expected=expected)
+    _compare_sets(
+        errors, label="pipeline_assistant.NODE_TYPE_CATALOG", actual=set(NODE_TYPE_CATALOG), expected=expected
+    )
 
     for node_type, manifest in NODE_MANIFESTS.items():
         if not isinstance(manifest.input_schema, dict) or manifest.input_schema.get("type") != "object":
@@ -69,7 +71,9 @@ def collect_node_manifest_consistency_errors(repo_root: Path | None = None) -> l
         handles = set(allowed_source_handles(node_type))
         expected_handles = set(manifest.source_handles)
         if handles != expected_handles:
-            errors.append(f"{node_type} handles mismatch: manifest={sorted(expected_handles)} validation={sorted(handles)}")
+            errors.append(
+                f"{node_type} handles mismatch: manifest={sorted(expected_handles)} validation={sorted(handles)}"
+            )
         catalog_item = catalog.get(node_type) or {}
         if set(catalog_item.get("source_handles") or []) != expected_handles:
             errors.append(f"{node_type} assistant catalog handles mismatch")
@@ -92,7 +96,9 @@ def collect_node_manifest_consistency_errors(repo_root: Path | None = None) -> l
     node_guidance_meta = _read_text(
         root / "frontend" / "src" / "components" / "pipeline" / "nodes" / "nodeGuidanceMeta.ts"
     )
-    _compare_sets(errors, label="frontend NODE_TYPE_GUIDANCE_META", actual=_node_type_refs(node_guidance_meta), expected=expected)
+    _compare_sets(
+        errors, label="frontend NODE_TYPE_GUIDANCE_META", actual=_node_type_refs(node_guidance_meta), expected=expected
+    )
 
     docs = _read_text(root / "docs" / "PIPELINE_NODES_SPEC.md")
     missing_in_docs = sorted(node_type for node_type in expected if f"`{node_type}`" not in docs)

@@ -29,7 +29,9 @@ class Command(BaseCommand):
         )
         parser.add_argument("--daemon", action="store_true", help="Run continuously until interrupted.")
         parser.add_argument("--once", action="store_true", help="Run one sync cycle and exit.")
-        parser.add_argument("--max-runs", type=int, default=0, help="Stop after N daemon cycles. Useful for staging/tests.")
+        parser.add_argument(
+            "--max-runs", type=int, default=0, help="Stop after N daemon cycles. Useful for staging/tests."
+        )
         parser.add_argument("--provider-id", type=int, default=None, help="Sync one provider by database id.")
         parser.add_argument(
             "--kind",
@@ -61,7 +63,9 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
         )
         if state is None:
-            self.stdout.write(self.style.WARNING(f"Kubernetes Ops sync worker {worker_key!r} is already leased by another process."))
+            self.stdout.write(
+                self.style.WARNING(f"Kubernetes Ops sync worker {worker_key!r} is already leased by another process.")
+            )
             return
 
         summary = self._empty_summary(dry_run=dry_run, provider_id=provider_id, kind=kind)

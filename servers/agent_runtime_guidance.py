@@ -47,9 +47,7 @@ def should_inject_mid_run_replan(
     half = max(1, int(max_iterations * 0.5))
     if iteration == half:
         return True
-    if consecutive_failures >= 2 and iteration >= 3:
-        return True
-    return False
+    return bool(consecutive_failures >= 2 and iteration >= 3)
 
 
 def count_consecutive_tool_failures(tool_calls_log: list[dict[str, Any]] | None) -> int:
@@ -69,7 +67,7 @@ def count_consecutive_tool_failures(tool_calls_log: list[dict[str, Any]] | None)
         )
         # Heuristic success markers from ToolResult
         success = (
-            "exit_code\": 0" in result
+            'exit_code": 0' in result
             or "exit_code=0" in lower
             or (not failed and bool(result.strip()) and "blocked" not in lower)
         )

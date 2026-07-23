@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import {
   fetchAgentDashboardRuns,
+  fetchAuthSession,
   fetchFrontendBootstrap,
   fetchMonitoringDashboard,
   fetchPluginSurfaces,
@@ -78,6 +79,12 @@ export default function UserDashboard() {
     queryFn: fetchFrontendBootstrap,
     staleTime: 30_000,
   });
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
 
   const { data: runsResponse, isLoading: runsLoading } = useQuery({
     queryKey: ["agent-dashboard-runs"],
@@ -101,6 +108,7 @@ export default function UserDashboard() {
   const { data: pluginSurfaces } = useQuery({
     queryKey: ["plugins", "surfaces", "dashboard", "user"],
     queryFn: fetchPluginSurfaces,
+    enabled: Boolean(authData?.user?.features.plugins),
   });
 
   // Persist last good snapshot so the next visit paints immediately.

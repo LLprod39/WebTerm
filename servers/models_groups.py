@@ -120,5 +120,3 @@ class ServerGroupPermission(models.Model):
             models.Index(fields=["group"]),
             models.Index(fields=["user"]),
         ]
-
-

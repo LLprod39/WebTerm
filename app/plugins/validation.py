@@ -131,9 +131,7 @@ def validate_plugin_manifest(raw: dict[str, Any]) -> PluginManifest:
             errors.append(f"surfaces.studio_nodes[{index}].source_handles must be a list")
         required_permission = str(node.get("required_permission") or "").strip()
         if required_permission and required_permission not in declared_permission_scopes:
-            errors.append(
-                f"surfaces.studio_nodes[{index}].required_permission is not declared in permissions"
-            )
+            errors.append(f"surfaces.studio_nodes[{index}].required_permission is not declared in permissions")
 
     for index, tool in enumerate(surfaces.get("agent_tools", [])):
         tool_id = str(tool.get("id") or "").strip()
@@ -146,9 +144,7 @@ def validate_plugin_manifest(raw: dict[str, Any]) -> PluginManifest:
             errors.append(f"surfaces.agent_tools[{index}].tool_spec is required")
         required_permission = str(tool.get("required_permission") or "").strip()
         if required_permission and required_permission not in declared_permission_scopes:
-            errors.append(
-                f"surfaces.agent_tools[{index}].required_permission is not declared in permissions"
-            )
+            errors.append(f"surfaces.agent_tools[{index}].required_permission is not declared in permissions")
 
     for index, action in enumerate(surfaces.get("terminal_actions", [])):
         action_id = str(action.get("id") or "").strip()
@@ -156,9 +152,7 @@ def validate_plugin_manifest(raw: dict[str, Any]) -> PluginManifest:
             errors.append(f"surfaces.terminal_actions[{index}].id is required")
         required_permission = str(action.get("required_permission") or "").strip()
         if required_permission and required_permission not in declared_permission_scopes:
-            errors.append(
-                f"surfaces.terminal_actions[{index}].required_permission is not declared in permissions"
-            )
+            errors.append(f"surfaces.terminal_actions[{index}].required_permission is not declared in permissions")
 
     for index, hook in enumerate(surfaces.get("hooks", [])):
         hook_id = str(hook.get("id") or "").strip()
@@ -169,9 +163,7 @@ def validate_plugin_manifest(raw: dict[str, Any]) -> PluginManifest:
             errors.append(f"surfaces.hooks[{index}].event is required")
         required_permission = str(hook.get("required_permission") or "").strip()
         if required_permission and required_permission not in declared_permission_scopes:
-            errors.append(
-                f"surfaces.hooks[{index}].required_permission is not declared in permissions"
-            )
+            errors.append(f"surfaces.hooks[{index}].required_permission is not declared in permissions")
 
     actions = []
     for index, item in enumerate(_as_list(raw.get("actions"), "actions", errors)):
@@ -187,7 +179,12 @@ def validate_plugin_manifest(raw: dict[str, Any]) -> PluginManifest:
                 description=str(item_dict.get("description") or ""),
                 input_schema=_as_dict(item_dict.get("input_schema") or {}, f"actions[{index}].input_schema", errors),
                 output_schema=_as_dict(item_dict.get("output_schema") or {}, f"actions[{index}].output_schema", errors),
-                required_permissions=tuple(str(scope) for scope in _as_list(item_dict.get("required_permissions"), f"actions[{index}].required_permissions", errors)),
+                required_permissions=tuple(
+                    str(scope)
+                    for scope in _as_list(
+                        item_dict.get("required_permissions"), f"actions[{index}].required_permissions", errors
+                    )
+                ),
                 risk_tier=str(item_dict.get("risk_tier") or risk_tier),
                 audit_category=str(item_dict.get("audit_category") or "plugin"),
                 executor_ref=str(item_dict.get("executor_ref") or ""),

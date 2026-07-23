@@ -39,7 +39,9 @@ def _freeze_json_value(value: Any) -> Any:
     return value
 
 
-def _compile_patterns(raw_patterns: Any, *, skill_slug: str, field_name: str) -> tuple[tuple[re.Pattern[str], ...], list[str]]:
+def _compile_patterns(
+    raw_patterns: Any, *, skill_slug: str, field_name: str
+) -> tuple[tuple[re.Pattern[str], ...], list[str]]:
     if not raw_patterns:
         return (), []
 
@@ -131,9 +133,7 @@ def compile_skill_policies(skills: list[SkillDefinition]) -> tuple[list[Compiled
         rendered = ", ".join(
             f"{value} via {', '.join(skill_names)}" for value, skill_names in sorted(value_map.items())
         )
-        errors.append(
-            f"Conflicting pinned arguments for service '{service_key}', argument '{arg_name}': {rendered}"
-        )
+        errors.append(f"Conflicting pinned arguments for service '{service_key}', argument '{arg_name}': {rendered}")
 
     return policies, errors
 
@@ -154,8 +154,12 @@ def apply_skill_policies(
 
     for policy in policies:
         if policy.blocked_tool_patterns and _matches_any(policy.blocked_tool_patterns, tool_name):
-            return current_args, messages, (
-                f"Blocked by skill '{policy.skill_name}': MCP tool '{tool_name}' is forbidden by corporate guardrails."
+            return (
+                current_args,
+                messages,
+                (
+                    f"Blocked by skill '{policy.skill_name}': MCP tool '{tool_name}' is forbidden by corporate guardrails."
+                ),
             )
 
         applies = not policy.applicable_tool_patterns or _matches_any(policy.applicable_tool_patterns, tool_name)
@@ -165,9 +169,13 @@ def apply_skill_policies(
         if policy.mutating_tool_patterns and _matches_any(policy.mutating_tool_patterns, tool_name):
             missing_preflight = [name for name in policy.required_preflight_tools if name not in executed_mcp_tools]
             if missing_preflight:
-                return current_args, messages, (
-                    f"Blocked by skill '{policy.skill_name}': run the required preflight MCP tools first: "
-                    f"{', '.join(missing_preflight)}."
+                return (
+                    current_args,
+                    messages,
+                    (
+                        f"Blocked by skill '{policy.skill_name}': run the required preflight MCP tools first: "
+                        f"{', '.join(missing_preflight)}."
+                    ),
                 )
 
         injected_items: list[str] = []
@@ -175,18 +183,26 @@ def apply_skill_policies(
             current_value = current_args.get(arg_name)
             if current_value in (None, ""):
                 if not policy.auto_inject_pinned_arguments:
-                    return current_args, messages, (
-                        f"Blocked by skill '{policy.skill_name}': argument '{arg_name}' must be set to "
-                        f"{expected_value!r}."
+                    return (
+                        current_args,
+                        messages,
+                        (
+                            f"Blocked by skill '{policy.skill_name}': argument '{arg_name}' must be set to "
+                            f"{expected_value!r}."
+                        ),
                     )
                 current_args[arg_name] = expected_value
                 injected_items.append(f"{arg_name}={expected_value!r}")
                 continue
 
             if current_value != expected_value:
-                return current_args, messages, (
-                    f"Blocked by skill '{policy.skill_name}': argument '{arg_name}' must be "
-                    f"{expected_value!r}, got {current_value!r}."
+                return (
+                    current_args,
+                    messages,
+                    (
+                        f"Blocked by skill '{policy.skill_name}': argument '{arg_name}' must be "
+                        f"{expected_value!r}, got {current_value!r}."
+                    ),
                 )
 
         if injected_items:

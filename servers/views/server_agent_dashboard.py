@@ -57,16 +57,11 @@ def agent_dashboard_runs(request):
     ]
     owned_runs = AgentRun.objects.filter(Q(user=request.user) | Q(agent__user=request.user)).distinct()
     active_runs = list(
-        owned_runs.filter(status__in=active_statuses)
-        .select_related("agent", "server")
-        .order_by("-started_at")[:10]
+        owned_runs.filter(status__in=active_statuses).select_related("agent", "server").order_by("-started_at")[:10]
     )
     active_ids = {run.id for run in active_runs}
     recent_runs = list(
-        owned_runs
-        .exclude(id__in=active_ids)
-        .select_related("agent", "server")
-        .order_by("-started_at")[:10]
+        owned_runs.exclude(id__in=active_ids).select_related("agent", "server").order_by("-started_at")[:10]
     )
     return JsonResponse(
         {

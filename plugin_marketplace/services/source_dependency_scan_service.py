@@ -12,9 +12,8 @@ def analyze_plugin_source_dependencies(
     *,
     allow_sandboxed_code: bool,
 ) -> dict:
-    handle = tempfile.NamedTemporaryFile(suffix=".wtp", delete=False)
-    package_path = Path(handle.name)
-    handle.close()
+    with tempfile.NamedTemporaryFile(suffix=".wtp", delete=False) as handle:
+        package_path = Path(handle.name)
     try:
         with zipfile.ZipFile(package_path, "w") as archive:
             for file_path, relative in files:

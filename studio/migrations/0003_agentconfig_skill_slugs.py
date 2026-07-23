@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
             field=models.JSONField(
                 blank=True,
                 default=list,
-                help_text='List of attached skill slugs, e.g. ["keycloak-safety", "keycloak-prod-profile"]',
+                help_text='List of attached skill slugs, e.g. ["kubernetes-safety"]',
             ),
         ),
     ]

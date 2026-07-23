@@ -23,21 +23,12 @@ from studio.views.common import (
 def _skill_access_map(slugs: list[str]) -> dict[str, StudioSkillAccess]:
     if not slugs:
         return {}
-    rows = (
-        StudioSkillAccess.objects.filter(slug__in=slugs)
-        .select_related("owner")
-        .prefetch_related("shared_with")
-    )
+    rows = StudioSkillAccess.objects.filter(slug__in=slugs).select_related("owner").prefetch_related("shared_with")
     return {row.slug.lower(): row for row in rows}
 
 
 def _get_skill_access(slug: str) -> StudioSkillAccess | None:
-    return (
-        StudioSkillAccess.objects.filter(slug=slug)
-        .select_related("owner")
-        .prefetch_related("shared_with")
-        .first()
-    )
+    return StudioSkillAccess.objects.filter(slug=slug).select_related("owner").prefetch_related("shared_with").first()
 
 
 def _ensure_skill_access(slug: str, owner: User | None = None) -> StudioSkillAccess:
@@ -45,12 +36,7 @@ def _ensure_skill_access(slug: str, owner: User | None = None) -> StudioSkillAcc
     if owner is not None and access.owner_id is None:
         access.owner = owner
         access.save()
-    return (
-        StudioSkillAccess.objects.filter(pk=access.pk)
-        .select_related("owner")
-        .prefetch_related("shared_with")
-        .get()
-    )
+    return StudioSkillAccess.objects.filter(pk=access.pk).select_related("owner").prefetch_related("shared_with").get()
 
 
 def _can_read_skill(user, access: StudioSkillAccess | None) -> bool:

@@ -228,7 +228,12 @@ def test_manual_run_validate_only_ignores_other_trigger_branch_integrations(monk
         owner=user,
         nodes=[
             {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
-            {"id": "webhook", "type": "trigger/webhook", "position": {"x": 0, "y": 120}, "data": {"webhook_payload_map": {}}},
+            {
+                "id": "webhook",
+                "type": "trigger/webhook",
+                "position": {"x": 0, "y": 120},
+                "data": {"webhook_payload_map": {}},
+            },
             {"id": "report", "type": "output/report", "position": {"x": 200, "y": 0}, "data": {"template": "ok"}},
             {
                 "id": "webhook_llm",

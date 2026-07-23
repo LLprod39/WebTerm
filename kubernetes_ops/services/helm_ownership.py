@@ -57,7 +57,10 @@ def build_helm_ownership_payload(
     rows = [_bucket_payload(bucket, user=user) for bucket in buckets.values()]
     if owner:
         rows = [row for row in rows if owner in set(row.get("owners") or []) or row.get("primary_owner") == owner]
-    rows = sorted(rows, key=lambda item: (item.get("cluster_name") or "", item.get("namespace") or "", item.get("release_name") or ""))[:max_items]
+    rows = sorted(
+        rows,
+        key=lambda item: (item.get("cluster_name") or "", item.get("namespace") or "", item.get("release_name") or ""),
+    )[:max_items]
     summary = _summary(rows)
     return {
         "success": True,
@@ -95,7 +98,9 @@ def helm_ownership_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _add_workloads(buckets: dict[str, ReleaseBucket], *, cluster: K8sCluster | None, namespace: str) -> None:
-    queryset = K8sWorkloadRef.objects.select_related("cluster").order_by("cluster__name", "namespace", "kind", "name")[:600]
+    queryset = K8sWorkloadRef.objects.select_related("cluster").order_by("cluster__name", "namespace", "kind", "name")[
+        :600
+    ]
     for workload in queryset:
         if cluster and workload.cluster_id != cluster.id:
             continue
@@ -135,7 +140,9 @@ def _add_fleet_bundles(buckets: dict[str, ReleaseBucket], *, cluster: K8sCluster
         target_namespace = _target_namespace(bundle)
         if namespace and target_namespace and namespace != target_namespace:
             continue
-        key = _existing_bundle_key(buckets, candidates=candidates, namespace=namespace or target_namespace, cluster=cluster)
+        key = _existing_bundle_key(
+            buckets, candidates=candidates, namespace=namespace or target_namespace, cluster=cluster
+        )
         if key:
             bucket = buckets[key]
         elif cluster:
@@ -147,7 +154,9 @@ def _add_fleet_bundles(buckets: dict[str, ReleaseBucket], *, cluster: K8sCluster
         bucket.owner_evidence.add("fleet_bundle:fleet")
 
 
-def _bucket(buckets: dict[str, ReleaseBucket], *, cluster: K8sCluster | None, namespace: str, release: str) -> ReleaseBucket:
+def _bucket(
+    buckets: dict[str, ReleaseBucket], *, cluster: K8sCluster | None, namespace: str, release: str
+) -> ReleaseBucket:
     safe_release = bounded_action_text(release, limit=180)
     safe_namespace = bounded_action_text(namespace, limit=120)
     key = _bucket_key(cluster=cluster, namespace=safe_namespace, release=safe_release)
@@ -224,12 +233,19 @@ def _policy(*, primary_owner: str, conflict: bool) -> dict[str, Any]:
         change_path = "webterm_admin_session"
     else:
         change_path = "ownership_review_required"
-    guarded = conflict or primary_owner in {K8sAppRef.OWNER_FLEET, K8sAppRef.OWNER_DEVTRON, K8sAppRef.OWNER_EXTERNAL, "unknown"}
+    guarded = conflict or primary_owner in {
+        K8sAppRef.OWNER_FLEET,
+        K8sAppRef.OWNER_DEVTRON,
+        K8sAppRef.OWNER_EXTERNAL,
+        "unknown",
+    }
     return {
         "change_path": change_path,
         "direct_mutation_policy": "blocked_by_default" if guarded else "webterm_admin_session_required",
         "write_requires_approval": True,
-        "blocked_actions": ["helm_delete", "direct_apply", "direct_patch", "direct_restart", "direct_scale"] if guarded else [],
+        "blocked_actions": ["helm_delete", "direct_apply", "direct_patch", "direct_restart", "direct_scale"]
+        if guarded
+        else [],
     }
 
 
@@ -241,7 +257,9 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "release_count": len(rows),
         "conflict_count": sum(1 for row in rows if row.get("conflict")),
-        "guarded_count": sum(1 for row in rows if row.get("policy", {}).get("direct_mutation_policy") == "blocked_by_default"),
+        "guarded_count": sum(
+            1 for row in rows if row.get("policy", {}).get("direct_mutation_policy") == "blocked_by_default"
+        ),
         "one_owner_count": sum(1 for row in rows if row.get("one_release_one_owner")),
         "owners": dict(sorted(owner_counts.items())),
     }
@@ -274,7 +292,11 @@ def _owner_from_workload(workload: K8sWorkloadRef) -> str:
     owner_text = str(workload.owner or "").lower()
     if "devtron" in managed_by or "devtron" in owner_text:
         return K8sAppRef.OWNER_DEVTRON
-    if "fleet" in managed_by or "fleet" in owner_text or any(str(key).startswith(FLEET_LABEL_PREFIXES) for key in labels):
+    if (
+        "fleet" in managed_by
+        or "fleet" in owner_text
+        or any(str(key).startswith(FLEET_LABEL_PREFIXES) for key in labels)
+    ):
         return K8sAppRef.OWNER_FLEET
     if "external" in owner_text:
         return K8sAppRef.OWNER_EXTERNAL
@@ -309,7 +331,10 @@ def _status(bucket: ReleaseBucket) -> str:
     states.extend(item.status for item in bucket.fleet_bundles if item.status)
     if any(state in {K8sCluster.HEALTH_DEGRADED, K8sFleetBundle.STATUS_DEGRADED} for state in states):
         return "degraded"
-    if any(state in {K8sCluster.HEALTH_WARNING, K8sFleetBundle.STATUS_ROLLING, K8sFleetBundle.STATUS_PAUSED} for state in states):
+    if any(
+        state in {K8sCluster.HEALTH_WARNING, K8sFleetBundle.STATUS_ROLLING, K8sFleetBundle.STATUS_PAUSED}
+        for state in states
+    ):
         return "warning"
     if states and all(state in {K8sCluster.HEALTH_HEALTHY, K8sFleetBundle.STATUS_READY} for state in states):
         return "healthy"

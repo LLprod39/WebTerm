@@ -1,7 +1,5 @@
 """Tests for servers.os_detect parser and mapping."""
 
-import pytest
-
 from servers.os_detect import map_to_os_kind, parse_os_release
 
 

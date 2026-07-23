@@ -184,11 +184,7 @@ def build_incident_nodes() -> list[dict]:
             "data": {
                 "label": "Slack Draft",
                 "label_ru": "Черновик Slack",
-                "template": (
-                    "# 💬 Slack (мок)\n\n"
-                    "*#incidents*: `{title}` @ `{service}`\n"
-                    "{ai_classifier_output}"
-                ),
+                "template": ("# 💬 Slack (мок)\n\n*#incidents*: `{title}` @ `{service}`\n{ai_classifier_output}"),
                 "on_failure": "continue",
             },
         },
@@ -200,10 +196,7 @@ def build_incident_nodes() -> list[dict]:
                 "label": "Statuspage Draft",
                 "label_ru": "Черновик Statuspage",
                 "template": (
-                    "# 📊 Statuspage (мок)\n\n"
-                    "**Investigating — {service}**\n\n"
-                    "{summary}\n\n"
-                    "{ai_classifier_output}"
+                    "# 📊 Statuspage (мок)\n\n**Investigating — {service}**\n\n{summary}\n\n{ai_classifier_output}"
                 ),
                 "on_failure": "continue",
             },
@@ -217,8 +210,7 @@ def build_incident_nodes() -> list[dict]:
                 "label_ru": "AI-подсказка runbook",
                 "system_prompt": "Ты on-call engineer. Пишешь 3 конкретных первых шага для разбора инцидента.",
                 "prompt": (
-                    "На основе данных ниже предложи 3 первых шага runbook (bullet-ы, без кода).\n\n"
-                    "{all_outputs}"
+                    "На основе данных ниже предложи 3 первых шага runbook (bullet-ы, без кода).\n\n{all_outputs}"
                 ),
                 "include_all_outputs": True,
                 "on_failure": "continue",
@@ -280,23 +272,130 @@ def build_incident_edges() -> list[dict]:
         {"id": "i_e1", "source": "trigger_webhook", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
         {"id": "i_e2", "source": "trigger_manual", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
         {"id": "i_e3", "source": "trigger_merge", "target": "payload_echo", "sourceHandle": "out", "animated": True},
-        {"id": "i_e4", "source": "payload_echo", "target": "ai_classifier", "sourceHandle": "success", "animated": True},
-        {"id": "i_e5", "source": "ai_classifier", "target": "severity_gate", "sourceHandle": "success", "animated": True},
-        {"id": "i_e6", "source": "severity_gate", "target": "human_gate", "sourceHandle": "true", "animated": True, "label": "P0"},
-        {"id": "i_e7", "source": "severity_gate", "target": "auto_handled_report", "sourceHandle": "false", "animated": True, "label": "P1/P2"},
-        {"id": "i_e8", "source": "human_gate", "target": "gate_merge", "sourceHandle": "approved", "animated": True, "label": "approved"},
-        {"id": "i_e9", "source": "human_gate", "target": "human_failure_merge", "sourceHandle": "rejected", "animated": True, "label": "rejected"},
-        {"id": "i_e10", "source": "human_gate", "target": "human_failure_merge", "sourceHandle": "timeout", "animated": True, "label": "timeout"},
-        {"id": "i_e10b", "source": "human_failure_merge", "target": "rejected_report", "sourceHandle": "out", "animated": True},
-        {"id": "i_e11", "source": "auto_handled_report", "target": "gate_merge", "sourceHandle": "success", "animated": True},
-        {"id": "i_e12", "source": "rejected_report", "target": "gate_merge", "sourceHandle": "success", "animated": True},
+        {
+            "id": "i_e4",
+            "source": "payload_echo",
+            "target": "ai_classifier",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "i_e5",
+            "source": "ai_classifier",
+            "target": "severity_gate",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "i_e6",
+            "source": "severity_gate",
+            "target": "human_gate",
+            "sourceHandle": "true",
+            "animated": True,
+            "label": "P0",
+        },
+        {
+            "id": "i_e7",
+            "source": "severity_gate",
+            "target": "auto_handled_report",
+            "sourceHandle": "false",
+            "animated": True,
+            "label": "P1/P2",
+        },
+        {
+            "id": "i_e8",
+            "source": "human_gate",
+            "target": "gate_merge",
+            "sourceHandle": "approved",
+            "animated": True,
+            "label": "approved",
+        },
+        {
+            "id": "i_e9",
+            "source": "human_gate",
+            "target": "human_failure_merge",
+            "sourceHandle": "rejected",
+            "animated": True,
+            "label": "rejected",
+        },
+        {
+            "id": "i_e10",
+            "source": "human_gate",
+            "target": "human_failure_merge",
+            "sourceHandle": "timeout",
+            "animated": True,
+            "label": "timeout",
+        },
+        {
+            "id": "i_e10b",
+            "source": "human_failure_merge",
+            "target": "rejected_report",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "i_e11",
+            "source": "auto_handled_report",
+            "target": "gate_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "i_e12",
+            "source": "rejected_report",
+            "target": "gate_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "i_e13", "source": "gate_merge", "target": "channels_parallel", "sourceHandle": "out", "animated": True},
-        {"id": "i_e14", "source": "channels_parallel", "target": "channel_slack", "sourceHandle": "out", "animated": True},
-        {"id": "i_e15", "source": "channels_parallel", "target": "channel_status", "sourceHandle": "out", "animated": True},
-        {"id": "i_e16", "source": "channels_parallel", "target": "channel_runbook", "sourceHandle": "out", "animated": True},
-        {"id": "i_e17", "source": "channel_slack", "target": "channels_merge", "sourceHandle": "success", "animated": True},
-        {"id": "i_e18", "source": "channel_status", "target": "channels_merge", "sourceHandle": "success", "animated": True},
-        {"id": "i_e19", "source": "channel_runbook", "target": "channels_merge", "sourceHandle": "success", "animated": True},
+        {
+            "id": "i_e14",
+            "source": "channels_parallel",
+            "target": "channel_slack",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "i_e15",
+            "source": "channels_parallel",
+            "target": "channel_status",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "i_e16",
+            "source": "channels_parallel",
+            "target": "channel_runbook",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "i_e17",
+            "source": "channel_slack",
+            "target": "channels_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "i_e18",
+            "source": "channel_status",
+            "target": "channels_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "i_e19",
+            "source": "channel_runbook",
+            "target": "channels_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "i_e20", "source": "channels_merge", "target": "final_summary", "sourceHandle": "out", "animated": True},
-        {"id": "i_e21", "source": "final_summary", "target": "final_report", "sourceHandle": "success", "animated": True},
+        {
+            "id": "i_e21",
+            "source": "final_summary",
+            "target": "final_report",
+            "sourceHandle": "success",
+            "animated": True,
+        },
     ]

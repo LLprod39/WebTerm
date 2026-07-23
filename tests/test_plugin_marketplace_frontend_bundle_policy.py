@@ -115,7 +115,10 @@ def test_dynamic_frontend_bundle_enable_requires_matching_review_attestation():
     frontend_policy = impact["package"]["sandbox_policy"]["frontend_bundle_policy"]
     assert frontend_policy["required"] is True
     assert frontend_policy["allowed"] is False
-    assert f"Required attestation missing or stale: {FRONTEND_BUNDLE_REVIEW_ATTESTATION_KIND}." in frontend_policy["blockers"]
+    assert (
+        f"Required attestation missing or stale: {FRONTEND_BUNDLE_REVIEW_ATTESTATION_KIND}."
+        in frontend_policy["blockers"]
+    )
 
     with pytest.raises(ValueError) as missing_attestation:
         set_installation_status(installation.id, enable=True)
@@ -177,7 +180,10 @@ def test_dynamic_frontend_bundle_policy_requires_https_url_and_integrity():
 
     assert frontend_policy["allowed"] is False
     assert "surfaces.pages[0]: Dynamic frontend bundle URL must be HTTPS." in frontend_policy["blockers"]
-    assert "surfaces.pages[0]: Dynamic frontend bundle must declare a 64-character SHA-256 hex digest." in frontend_policy["blockers"]
+    assert (
+        "surfaces.pages[0]: Dynamic frontend bundle must declare a 64-character SHA-256 hex digest."
+        in frontend_policy["blockers"]
+    )
 
     with pytest.raises(ValueError) as exc:
         set_installation_status(installation.id, enable=True)

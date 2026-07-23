@@ -60,7 +60,9 @@ def _create_pipeline_run(
     )
 
 
-def _resolve_manual_entry_trigger(pipeline: Pipeline, requested_entry_node_id: str = "") -> tuple[PipelineTrigger | None, list[str]]:
+def _resolve_manual_entry_trigger(
+    pipeline: Pipeline, requested_entry_node_id: str = ""
+) -> tuple[PipelineTrigger | None, list[str]]:
     entry = str(requested_entry_node_id or "").strip()
     manual_triggers = list(
         pipeline.triggers.filter(
@@ -82,7 +84,9 @@ def _resolve_manual_entry_trigger(pipeline: Pipeline, requested_entry_node_id: s
         return manual_triggers[0], []
 
     options = ", ".join(item.node_id for item in manual_triggers[:6])
-    return None, [f"Pipeline has multiple manual triggers. Provide entry_node_id. Available manual triggers: {options}."]
+    return None, [
+        f"Pipeline has multiple manual triggers. Provide entry_node_id. Available manual triggers: {options}."
+    ]
 
 
 def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:

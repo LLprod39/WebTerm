@@ -46,9 +46,7 @@ def _manifest_egress(manifest: dict[str, Any]) -> set[str]:
 def _surface_counts(manifest: dict[str, Any]) -> dict[str, int]:
     surfaces = manifest.get("surfaces") if isinstance(manifest.get("surfaces"), dict) else {}
     return {
-        kind: len(items) if isinstance(items, list) else 0
-        for kind, items in surfaces.items()
-        if kind in SURFACE_KINDS
+        kind: len(items) if isinstance(items, list) else 0 for kind, items in surfaces.items() if kind in SURFACE_KINDS
     }
 
 
@@ -64,7 +62,7 @@ def _surface_items(manifest: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
 def _declared_setting_keys(manifest: dict[str, Any]) -> set[str]:
     schema = manifest.get("settings_schema") if isinstance(manifest.get("settings_schema"), dict) else {}
     properties = schema.get("properties") if isinstance(schema.get("properties"), dict) else {}
-    return {str(key) for key in properties.keys()}
+    return {str(key) for key in properties}
 
 
 def _package_ready(package: PluginPackage) -> tuple[bool, list[str]]:
@@ -81,15 +79,9 @@ def _package_ready(package: PluginPackage) -> tuple[bool, list[str]]:
 def installation_impact(installation: PluginInstallation) -> dict[str, Any]:
     manifest = installation.package.manifest or {}
     declared_permissions = _manifest_permissions(manifest)
-    grants = {
-        grant.scope: grant.granted
-        for grant in installation.permission_grants.all()
-    }
+    grants = {grant.scope: grant.granted for grant in installation.permission_grants.all()}
     declared_secrets = _manifest_secrets(manifest)
-    bound_secrets = {
-        binding.key
-        for binding in installation.secret_bindings.all()
-    }
+    bound_secrets = {binding.key for binding in installation.secret_bindings.all()}
     ready, enable_blockers = _package_ready(installation.package)
     return {
         "installation_id": installation.id,
@@ -125,14 +117,16 @@ def installation_impact(installation: PluginInstallation) -> dict[str, Any]:
             ),
         },
         "settings": {
-            "stored_keys": sorted(str(key) for key in installation.settings.keys()),
+            "stored_keys": sorted(str(key) for key in installation.settings),
             "declared_keys": sorted(_declared_setting_keys(manifest)),
         },
         "egress_hosts": sorted(_manifest_egress(manifest)),
         "uninstall": {
             "soft_supported": True,
             "full_supported": False,
-            "reversible": PluginPackage.objects.filter(plugin_id=installation.plugin_id).exclude(id=installation.package_id).exists(),
+            "reversible": PluginPackage.objects.filter(plugin_id=installation.plugin_id)
+            .exclude(id=installation.package_id)
+            .exists(),
         },
     }
 

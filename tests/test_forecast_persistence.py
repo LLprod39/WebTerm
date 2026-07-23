@@ -151,9 +151,15 @@ def test_run_forecast_persistence_end_to_end():
     for index, value in enumerate([50.0 + i * 0.5 for i in range(48)]):
         rows.append(
             ServerMetricRollup(
-                server=server, metric_key="disk./.percent", granularity="hour",
+                server=server,
+                metric_key="disk./.percent",
+                granularity="hour",
                 bucket_start=floor - timedelta(hours=48 - index),
-                value_min=value, value_avg=value, value_max=value, value_last=value, sample_count=6,
+                value_min=value,
+                value_avg=value,
+                value_max=value,
+                value_last=value,
+                sample_count=6,
             )
         )
     ServerMetricRollup.objects.bulk_create(rows)

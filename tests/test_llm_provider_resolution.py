@@ -18,18 +18,17 @@ class _ModelManager:
 
 def test_resolve_stream_provider_uses_preferred_key_even_when_disabled():
     manager = _ModelManager(
-        "fair",
-        "fair-spark",
+        "openai",
+        "gpt-test",
         SimpleNamespace(
-            fair_enabled=False,
-            openai_enabled=True,
+            openai_enabled=False,
             claude_enabled=False,
             grok_enabled=False,
             gemini_enabled=False,
             ollama_enabled=False,
         ),
     )
-    keys = RuntimeProviderKeys(fair="fair-key", openai="openai-key")
+    keys = RuntimeProviderKeys(openai="openai-key")
 
     provider, model = resolve_stream_provider(
         requested_provider="auto",
@@ -40,17 +39,16 @@ def test_resolve_stream_provider_uses_preferred_key_even_when_disabled():
         ollama_base_url="http://127.0.0.1:11434",
     )
 
-    assert provider == "fair"
-    assert model == "fair-spark"
+    assert provider == "openai"
+    assert model == "gpt-test"
 
 
 def test_resolve_stream_provider_falls_back_to_first_enabled_provider():
     warnings: list[str] = []
     manager = _ModelManager(
-        "fair",
-        "fair-spark",
+        "claude",
+        "claude-test",
         SimpleNamespace(
-            fair_enabled=False,
             openai_enabled=True,
             claude_enabled=False,
             grok_enabled=True,
@@ -72,11 +70,11 @@ def test_resolve_stream_provider_falls_back_to_first_enabled_provider():
 
     assert provider == "openai"
     assert model == "manual-model"
-    assert warnings == ["[agent] provider 'fair' is disabled/unconfigured, falling back to 'openai'"]
+    assert warnings == ["[agent] provider 'claude' is disabled/unconfigured, falling back to 'openai'"]
 
 
 def test_resolve_stream_provider_returns_requested_provider_unchanged():
-    manager = _ModelManager("fair", "fair-spark", SimpleNamespace())
+    manager = _ModelManager("openai", "gpt-test", SimpleNamespace())
 
     provider, model = resolve_stream_provider(
         requested_provider="gemini",

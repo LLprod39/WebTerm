@@ -74,9 +74,7 @@ def slugify_skill_name(value: str) -> str:
     if len(text) > 64:
         text = text[:64].rstrip("-")
     if not SKILL_SLUG_RE.fullmatch(text):
-        raise ValueError(
-            "Skill slug must use lowercase letters, digits, and hyphens only, up to 64 characters."
-        )
+        raise ValueError("Skill slug must use lowercase letters, digits, and hyphens only, up to 64 characters.")
     return text
 
 
@@ -183,9 +181,7 @@ def render_skill_markdown(
 
     service_label = service.strip() or "the target service"
     mcp_example = f"{service.strip()}_" if service.strip() else "service_"
-    runtime_note = (
-        "If this skill defines runtime policy, treat it as mandatory and assume those guardrails are enforced by the platform."
-    )
+    runtime_note = "If this skill defines runtime policy, treat it as mandatory and assume those guardrails are enforced by the platform."
 
     body = f"""# {name}
 

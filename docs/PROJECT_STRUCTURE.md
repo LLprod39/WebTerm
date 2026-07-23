@@ -15,7 +15,6 @@ This repository is a Django + Channels backend, React/Vite SPA, and Studio autom
 | `requirements*.txt` | Python dependency sets: default, mini, and full. |
 | `docker-compose*.yml`, `render.yaml` | Local, production, smoke, and Render deployment entry points. |
 | `.env.example`, `.env.production.example`, `.notification_config.example.json` | Versioned environment/config templates only. |
-| `key_mcp.py` | Standalone Keycloak-oriented MCP server entry point. |
 
 ## Active Application Areas
 
@@ -48,7 +47,7 @@ These paths are intentionally not documentation sources of truth:
 
 | Path | Treatment |
 | --- | --- |
-| `.venv/`, `node_modules/`, `frontend/node_modules/` | Local dependency installs. Ignored. |
+| `.venv-wsl/`, `.venv-windows/`, `node_modules/`, `frontend/node_modules/` | OS-specific local dependency installs. Ignored. Never share one virtual environment between Windows and WSL. |
 | `frontend/dist/`, `frontend/playwright-report/`, `frontend/test-results/` | Generated frontend artifacts. Ignored. |
 | `runtime_logs/`, `logs/`, `mars_logs/`, `.codex-logs/` | Runtime and agent logs. Ignored. |
 | `agent_projects/` | Generated/local agent project storage. Ignored. |

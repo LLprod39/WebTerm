@@ -236,12 +236,10 @@ async def _handle_recovery_question(
         elif recovery_action(decision2) == "abort":
             action = "abort"
             await owner._send_ai_event(
-                terminal_events.ai_error(
-                    recovery_abort_message(decision2, default="Выполнение прервано")
-                )
+                terminal_events.ai_error(recovery_abort_message(decision2, default="Выполнение прервано"))
             )
         return action
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.info("ai_question timeout, skipping command")
         return "skip"
 
@@ -290,10 +288,7 @@ async def handle_step_post_command(
         elif action == "abort":
             await owner._send_ai_event(
                 terminal_events.ai_error(
-                    str(
-                        decision.get("assistant_text")
-                        or "Выполнение остановлено из-за критического состояния."
-                    )
+                    str(decision.get("assistant_text") or "Выполнение остановлено из-за критического состояния.")
                 )
             )
             return True
@@ -341,7 +336,7 @@ async def _handle_step_question(
             user_reply=user_reply,
         )
         return decision, recovery_action(decision, default="continue")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return decision, "continue"
 
 
@@ -396,10 +391,7 @@ async def _handle_step_next(owner: Any, *, decision: dict[str, Any], extra_limit
     await owner._send_ai_event(
         terminal_events.ai_response(
             mode="execute",
-            assistant_text=str(
-                decision.get("assistant_text")
-                or "Добавляю следующий шаг по результатам проверки."
-            ),
+            assistant_text=str(decision.get("assistant_text") or "Добавляю следующий шаг по результатам проверки."),
             commands=[new_item],
             execution_mode="step",
         )
@@ -407,9 +399,7 @@ async def _handle_step_next(owner: Any, *, decision: dict[str, Any], extra_limit
 
 
 async def _handle_step_done(owner: Any, *, decision: dict[str, Any]) -> None:
-    done_text = str(
-        decision.get("assistant_text") or "Цель достигнута. Останавливаю дальнейшие шаги."
-    ).strip()
+    done_text = str(decision.get("assistant_text") or "Цель достигнута. Останавливаю дальнейшие шаги.").strip()
     owner._add_to_history("assistant", done_text)
     await owner._send_ai_event(
         terminal_events.ai_response(

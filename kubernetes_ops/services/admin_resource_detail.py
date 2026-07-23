@@ -49,10 +49,14 @@ def get_cluster_resource_detail(
         raise AdminResourceError("name is required for resource detail.", code="name_required")
     cluster = _required_cluster(cluster_id)
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
-    session = active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_GET, namespace=ref.namespace, kind=ref.kind)
+    session = active_resource_session_for_user(
+        user, session_id, cluster, verb=K8sAdminAction.VERB_GET, namespace=ref.namespace, kind=ref.kind
+    )
     events_requested = _bool_value(include_events)
     if events_requested:
-        active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind=ref.kind)
+        active_resource_session_for_user(
+            user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind=ref.kind
+        )
     provider = _required_rancher_provider(cluster)
     resource_path = rancher_resource_path(provider, cluster, ref)
     secret_values_visible = secret_values_visible_for_request(user, ref, include_secret_values)
@@ -131,7 +135,14 @@ def _events_section(
     transport: ProviderTransport | None,
 ) -> dict[str, Any]:
     if not requested:
-        return {"available": False, "requested": False, "events": [], "event_count": 0, "truncated": False, "redacted": False}
+        return {
+            "available": False,
+            "requested": False,
+            "events": [],
+            "event_count": 0,
+            "truncated": False,
+            "redacted": False,
+        }
     try:
         snapshot = fetch_resource_events_snapshot(
             provider=provider,
@@ -192,7 +203,9 @@ def _describe_summary(resource: Any) -> dict[str, Any]:
                 "spec_keys": _bounded_keys(spec),
                 "status_keys": _bounded_keys(status),
                 "container_count": _container_count(spec),
-                "init_container_count": len(spec.get("initContainers") or []) if isinstance(spec.get("initContainers"), list) else 0,
+                "init_container_count": len(spec.get("initContainers") or [])
+                if isinstance(spec.get("initContainers"), list)
+                else 0,
             },
         }
     )
@@ -208,7 +221,9 @@ def _health_summary(status: dict[str, Any]) -> dict[str, Any]:
         "ready_replicas": status.get("readyReplicas"),
         "available_replicas": status.get("availableReplicas"),
         "updated_replicas": status.get("updatedReplicas"),
-        "conditions": [_condition_summary(item) for item in conditions[:MAX_DETAIL_CONDITIONS] if isinstance(item, dict)],
+        "conditions": [
+            _condition_summary(item) for item in conditions[:MAX_DETAIL_CONDITIONS] if isinstance(item, dict)
+        ],
         "conditions_truncated": len(conditions) > MAX_DETAIL_CONDITIONS,
     }
 
@@ -244,7 +259,7 @@ def _owner_references(value: Any) -> list[dict[str, str]]:
 def _bounded_keys(value: Any) -> list[str]:
     if not isinstance(value, dict):
         return []
-    return sorted(str(key)[:180] for key in value.keys())[:MAX_DETAIL_KEYS]
+    return sorted(str(key)[:180] for key in value)[:MAX_DETAIL_KEYS]
 
 
 def _container_count(spec: dict[str, Any]) -> int:
@@ -267,7 +282,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for resource detail.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for resource detail.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

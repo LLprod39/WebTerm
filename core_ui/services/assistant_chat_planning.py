@@ -162,7 +162,9 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
             }
         )
         reply = "Подготовлю черновик пайплайна через Studio Drafts. После подтверждения он появится как draft, без запуска runtime-действий."
-    elif any(word in lower for word in pipeline_words) and any(word in lower for word in ("спис", "покажи", "list", "show")):
+    elif any(word in lower for word in pipeline_words) and any(
+        word in lower for word in ("спис", "покажи", "list", "show")
+    ):
         actions.append(
             {
                 "action_type": "studio.pipelines.list",
@@ -195,8 +197,10 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
         )
         reply = "Покажу доступные MCP servers."
 
-    if not actions and any(word in lower for word in ("скилл", "skill")) and any(
-        word in lower for word in ("спис", "покажи", "list", "show")
+    if (
+        not actions
+        and any(word in lower for word in ("скилл", "skill"))
+        and any(word in lower for word in ("спис", "покажи", "list", "show"))
     ):
         actions.append(
             {
@@ -208,8 +212,10 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
         )
         reply = "Покажу доступные Studio skills."
 
-    if not actions and any(word in lower for word in ("скилл", "skill")) and any(
-        word in lower for word in ("валид", "проверь", "validate", "check")
+    if (
+        not actions
+        and any(word in lower for word in ("скилл", "skill"))
+        and any(word in lower for word in ("валид", "проверь", "validate", "check"))
     ):
         actions.append(
             {
@@ -245,7 +251,11 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
             )
             reply = "Подготовил запуск агента. Перед стартом нужно подтверждение."
 
-    if not actions and "сервер" in lower and any(word in lower for word in ("диагност", "overview", "снимок", "snapshot")):
+    if (
+        not actions
+        and "сервер" in lower
+        and any(word in lower for word in ("диагност", "overview", "снимок", "snapshot"))
+    ):
         server_id = _first_int(lower)
         if server_id:
             actions.append(
@@ -269,7 +279,11 @@ async def _call_planner(
     message: str,
 ) -> dict[str, Any]:
     if not catalog:
-        return {"reply": "У вас нет доступных assistant actions. Могу ответить текстом.", "actions": [], "_planned_by": "system"}
+        return {
+            "reply": "У вас нет доступных assistant actions. Могу ответить текстом.",
+            "actions": [],
+            "_planned_by": "system",
+        }
     prompt = json.dumps(
         {
             "message": message,
@@ -291,7 +305,11 @@ async def _call_planner(
         chunks.append(chunk)
     parsed = _extract_json_object("".join(chunks))
     if not parsed:
-        return {"reply": "".join(chunks).strip() or "Готов помочь. Уточните действие.", "actions": [], "_planned_by": "llm"}
+        return {
+            "reply": "".join(chunks).strip() or "Готов помочь. Уточните действие.",
+            "actions": [],
+            "_planned_by": "llm",
+        }
     parsed["_planned_by"] = "llm"
     return parsed
 

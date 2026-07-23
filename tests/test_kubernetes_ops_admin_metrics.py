@@ -59,8 +59,18 @@ class KubernetesOpsAdminMetricsTests(TestCase):
             seen["url"] = url
             return {
                 "items": [
-                    {"metadata": {"name": "worker-1"}, "timestamp": "2026-07-02T00:00:00Z", "window": "30s", "usage": {"cpu": "125m", "memory": "256Mi"}},
-                    {"metadata": {"name": "worker-2"}, "timestamp": "2026-07-02T00:00:01Z", "window": "30s", "usage": {"cpu": "250000000n", "memory": "1Gi"}},
+                    {
+                        "metadata": {"name": "worker-1"},
+                        "timestamp": "2026-07-02T00:00:00Z",
+                        "window": "30s",
+                        "usage": {"cpu": "125m", "memory": "256Mi"},
+                    },
+                    {
+                        "metadata": {"name": "worker-2"},
+                        "timestamp": "2026-07-02T00:00:01Z",
+                        "window": "30s",
+                        "usage": {"cpu": "250000000n", "memory": "1Gi"},
+                    },
                 ]
             }
 
@@ -75,7 +85,9 @@ class KubernetesOpsAdminMetricsTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "metrics_snapshot")
         self.assertEqual(payload["path"], "/k8s/clusters/c-prod/apis/metrics.k8s.io/v1beta1/nodes")
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/apis/metrics.k8s.io/v1beta1/nodes")
+        self.assertEqual(
+            seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/apis/metrics.k8s.io/v1beta1/nodes"
+        )
         self.assertEqual(payload["items"][0]["usage_normalized"]["cpu_millicores"], 125)
         self.assertEqual(payload["items"][0]["usage_normalized"]["memory_bytes"], 268435456)
         self.assertEqual(payload["items"][1]["usage_normalized"]["cpu_millicores"], 250)
@@ -115,7 +127,9 @@ class KubernetesOpsAdminMetricsTests(TestCase):
                 reverse("api_kubernetes_admin_metrics", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
                 {"session_id": str(session.session_id), "scope": "pods", "namespace": "payments"},
             )
-            client_cls.return_value.get.assert_called_with("/k8s/clusters/c-prod/apis/metrics.k8s.io/v1beta1/namespaces/payments/pods")
+            client_cls.return_value.get.assert_called_with(
+                "/k8s/clusters/c-prod/apis/metrics.k8s.io/v1beta1/namespaces/payments/pods"
+            )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

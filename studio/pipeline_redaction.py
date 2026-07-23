@@ -36,7 +36,10 @@ def redact_pipeline_value(value: Any, *, key: str = "", preserve_keys: set[str] 
     if value is None:
         return None
     if isinstance(value, dict):
-        return {str(child_key): redact_pipeline_value(item, key=str(child_key), preserve_keys=preserve_keys) for child_key, item in value.items()}
+        return {
+            str(child_key): redact_pipeline_value(item, key=str(child_key), preserve_keys=preserve_keys)
+            for child_key, item in value.items()
+        }
     if isinstance(value, list):
         return [redact_pipeline_value(item, preserve_keys=preserve_keys) for item in value]
     if isinstance(value, tuple):
@@ -46,7 +49,9 @@ def redact_pipeline_value(value: Any, *, key: str = "", preserve_keys: set[str] 
     return redact_pipeline_text(value)
 
 
-def redacted_mapping_context(context: dict[str, Any] | None, *, preserve_keys: set[str] | None = None) -> defaultdict[str, Any]:
+def redacted_mapping_context(
+    context: dict[str, Any] | None, *, preserve_keys: set[str] | None = None
+) -> defaultdict[str, Any]:
     return defaultdict(
         str,
         {
@@ -63,7 +68,9 @@ def redacted_execution_context(ctx: Any, *, preserve_keys: set[str] | None = Non
     return redacted_mapping_context(raw_context, preserve_keys=preserve_keys)
 
 
-def redacted_node_outputs_payload(node_outputs: dict[str, dict], *, max_output_chars: int = 1000) -> dict[str, dict[str, Any]]:
+def redacted_node_outputs_payload(
+    node_outputs: dict[str, dict], *, max_output_chars: int = 1000
+) -> dict[str, dict[str, Any]]:
     return {
         str(node_id): {
             "status": state.get("status"),

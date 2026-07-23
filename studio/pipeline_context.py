@@ -159,10 +159,7 @@ def require_agent_goal(goal: Any) -> str | None:
     """Return an error message if goal is empty after template rendering."""
     if str(goal or "").strip():
         return None
-    return (
-        "Goal is required for this agent node "
-        "(empty after template render). Set a non-empty goal."
-    )
+    return "Goal is required for this agent node (empty after template render). Set a non-empty goal."
 
 
 def build_pipeline_tool_spec(tool_name: str, *, command: str = "") -> ToolSpec:

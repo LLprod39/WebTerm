@@ -33,7 +33,7 @@ export function useServersListController(servers: FrontendServer[], userKey?: st
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => readCollapsedGroups(userKey));
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
 
-  const safeServers = servers ?? [];
+  const safeServers = servers;
 
   const filtered = useMemo(() => {
     if (!search) return safeServers;

@@ -9,8 +9,8 @@ Usage:
     DJANGO_SETTINGS_MODULE=web_ui.settings.development python manage.py runserver
     (manage.py sets this as default when no DJANGO_SETTINGS_MODULE is set)
 """
+
 from web_ui.settings.base import *  # noqa: F401, F403
-from web_ui.settings.base import DEBUG  # explicit re-import for clarity
 
 # Dev-specific guard: fail loudly if accidentally pointed at production config.
 # In base.py DEBUG is derived from DJANGO_DEBUG env var (defaults True).

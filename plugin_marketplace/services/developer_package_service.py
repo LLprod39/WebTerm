@@ -23,7 +23,18 @@ from plugin_marketplace.services.static_scan_service import (
     scan_package_entries,
 )
 
-EXCLUDED_DIRS = {".git", ".hg", ".mypy_cache", ".pytest_cache", ".ruff_cache", "__pycache__", "dist", "node_modules", "venv", ".venv"}
+EXCLUDED_DIRS = {
+    ".git",
+    ".hg",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "dist",
+    "node_modules",
+    "venv",
+    ".venv",
+}
 EXCLUDED_SUFFIXES = {".pyc", ".pyo"}
 ZIP_DATE_TIME = (1980, 1, 1, 0, 0, 0)
 SAFE_FILENAME_RE = re.compile(r"[^a-z0-9_.-]+")

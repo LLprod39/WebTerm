@@ -30,8 +30,12 @@ from kubernetes_ops.services.provider_port_forward_tunnels import (
 async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], input_queue: asyncio.Queue[Any]) -> None:
     max_frames = bounded_stream_int(params.get("max_frames"), default=500, minimum=1, maximum=4000)
     idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=300.0, minimum=5.0, maximum=1800.0)
-    heartbeat_interval = bounded_stream_float(params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0)
-    empty_read_sleep = bounded_stream_float(params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0)
+    heartbeat_interval = bounded_stream_float(
+        params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0
+    )
+    empty_read_sleep = bounded_stream_float(
+        params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0
+    )
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="k8s-port-forward")
     loop = asyncio.get_running_loop()
     stream_handle = None
@@ -56,7 +60,14 @@ async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], inp
             duration_seconds=params.get("duration_seconds", ""),
             reason=params.get("reason", ""),
         )
-        await consumer.send_json({"type": "port_forward_started", "stream_id": context["stream_id"], "stream_type": "port_forward", "payload": _public_context(context)})
+        await consumer.send_json(
+            {
+                "type": "port_forward_started",
+                "stream_id": context["stream_id"],
+                "stream_type": "port_forward",
+                "payload": _public_context(context),
+            }
+        )
         tunnel_timeout = bounded_stream_int(params.get("stream_timeout_seconds"), default=30, minimum=1, maximum=300)
         stream_handle = await loop.run_in_executor(
             executor,
@@ -78,12 +89,16 @@ async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], inp
             if elapsed >= idle_timeout:
                 close_reason = "idle_timeout"
                 break
-            session_state = await database_sync_to_async(active_admin_stream_session_status)(session_pk=context["_session_pk"])
+            session_state = await database_sync_to_async(active_admin_stream_session_status)(
+                session_pk=context["_session_pk"]
+            )
             if not session_state.get("active"):
                 close_reason = str(session_state.get("code") or "admin_session_not_active")
                 break
             bytes_from_client += await _drain_client_data(consumer, stream_handle, input_queue, loop, executor)
-            event = await loop.run_in_executor(executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_TUNNEL_BYTES))
+            event = await loop.run_in_executor(
+                executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_TUNNEL_BYTES)
+            )
             if event.data:
                 bytes_to_client += len(event.data)
                 await consumer.send_json(
@@ -100,7 +115,13 @@ async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], inp
                 break
             if not event.data:
                 if monotonic() - last_heartbeat >= heartbeat_interval:
-                    await consumer.send_json({"type": "port_forward_heartbeat", "stream_id": context["stream_id"], "frame_index": frame_index})
+                    await consumer.send_json(
+                        {
+                            "type": "port_forward_heartbeat",
+                            "stream_id": context["stream_id"],
+                            "frame_index": frame_index,
+                        }
+                    )
                     last_heartbeat = monotonic()
                 await asyncio.sleep(empty_read_sleep)
         stream_closed = await _close_stream_handle(loop, executor, stream_handle)
@@ -114,7 +135,14 @@ async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], inp
             close_reason=close_reason,
         )
         finalized = True
-        await consumer.send_json({"type": "port_forward_stopped", "stream_id": context["stream_id"], "stream_type": "port_forward", "summary": summary})
+        await consumer.send_json(
+            {
+                "type": "port_forward_stopped",
+                "stream_id": context["stream_id"],
+                "stream_type": "port_forward",
+                "summary": summary,
+            }
+        )
         await consumer.close(code=1000)
     except asyncio.CancelledError:
         if not stream_closed:
@@ -143,12 +171,28 @@ async def run_provider_port_forward_tunnel(consumer, params: dict[str, str], inp
                 bytes_from_client=bytes_from_client,
                 bytes_to_client=bytes_to_client,
             )
-            await consumer.send_json({"type": "port_forward_error", "code": "provider_port_forward_tunnel_error", "message": str(exc), "summary": summary})
+            await consumer.send_json(
+                {
+                    "type": "port_forward_error",
+                    "code": "provider_port_forward_tunnel_error",
+                    "message": str(exc),
+                    "summary": summary,
+                }
+            )
         else:
-            await consumer.send_json({"type": "port_forward_rejected", "code": "provider_port_forward_tunnel_error", "message": str(exc), "payload": {}})
+            await consumer.send_json(
+                {
+                    "type": "port_forward_rejected",
+                    "code": "provider_port_forward_tunnel_error",
+                    "message": str(exc),
+                    "payload": {},
+                }
+            )
         await consumer.close(code=4400)
     except AdminResourceError as exc:
-        await consumer.send_json({"type": "port_forward_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+        await consumer.send_json(
+            {"type": "port_forward_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+        )
         await consumer.close(code=4403 if exc.status == 403 else 4400)
     finally:
         if not stream_closed:
@@ -170,7 +214,9 @@ async def _drain_client_data(consumer, stream_handle, input_queue: asyncio.Queue
         if accepted:
             total += len(data)
         else:
-            await consumer.send_json({"type": "port_forward_input_rejected", "reason": "provider_client_data_not_supported"})
+            await consumer.send_json(
+                {"type": "port_forward_input_rejected", "reason": "provider_client_data_not_supported"}
+            )
 
 
 async def _close_stream_handle(loop, executor, stream_handle) -> bool:

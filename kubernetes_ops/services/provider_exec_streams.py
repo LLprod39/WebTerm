@@ -41,8 +41,12 @@ class UrlopenProviderExecStream:
 
     def open(self) -> UrlopenProviderExecStream:
         headers = {**self.headers, "Content-Type": self.headers.get("Content-Type", "application/json")}
-        request = urllib.request.Request(url=self.url, method="POST", headers=headers, data=json.dumps(self.body).encode("utf-8"))
-        context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        request = urllib.request.Request(
+            url=self.url, method="POST", headers=headers, data=json.dumps(self.body).encode("utf-8")
+        )
+        context = (
+            None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        )
         try:
             self._response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -145,7 +149,9 @@ def _coerce_exec_event(raw_payload: str) -> ProviderExecStreamEvent:
     if stream not in {"stdout", "stderr", "heartbeat"}:
         stream = "stdout"
     data = payload.get("data", payload.get("line", payload.get("message", "")))
-    return ProviderExecStreamEvent(stream=stream, data=str(data or ""), exit_code=_exit_code(payload), eof=bool(payload.get("eof", False)))
+    return ProviderExecStreamEvent(
+        stream=stream, data=str(data or ""), exit_code=_exit_code(payload), eof=bool(payload.get("eof", False))
+    )
 
 
 def _events_from_payload(payload: Any) -> list[ProviderExecStreamEvent]:
@@ -156,7 +162,9 @@ def _events_from_payload(payload: Any) -> list[ProviderExecStreamEvent]:
     if isinstance(payload, dict):
         raw_events = payload.get("events")
         if isinstance(raw_events, list):
-            return [_coerce_exec_event(json.dumps(item) if isinstance(item, dict) else str(item)) for item in raw_events]
+            return [
+                _coerce_exec_event(json.dumps(item) if isinstance(item, dict) else str(item)) for item in raw_events
+            ]
         events: list[ProviderExecStreamEvent] = []
         for key in ("stdout", "stderr"):
             values = payload.get(key)

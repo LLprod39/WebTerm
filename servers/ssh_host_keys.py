@@ -210,8 +210,10 @@ async def fetch_server_host_key(
         kwargs["tunnel"] = tunnel
 
     try:
-        key = await asyncio.wait_for(asyncssh.get_server_host_key(**kwargs), timeout=max(float(connect_timeout or 10), 1.0))
-    except asyncio.TimeoutError as exc:
+        key = await asyncio.wait_for(
+            asyncssh.get_server_host_key(**kwargs), timeout=max(float(connect_timeout or 10), 1.0)
+        )
+    except TimeoutError as exc:
         raise SSHHostKeyVerificationError(f"Таймаут получения SSH host key ({int(connect_timeout or 10)}s)") from exc
     if key is None:
         raise SSHHostKeyVerificationError("SSH сервер не предоставил host key")

@@ -3,7 +3,7 @@ Admin dashboard page and JSON APIs.
 """
 
 import json
-from datetime import date, timedelta, timezone
+from datetime import UTC, date, timedelta
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -128,9 +128,9 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
     total_finished_24h = succeeded_24h + failed_24h
     success_rate = round(succeeded_24h / total_finished_24h * 100) if total_finished_24h > 0 else 100
 
-    cost_per_1k = {"gemini": 0.0005, "grok": 0.005, "claude": 0.003, "openai": 0.002, "fair": 0.0, "ollama": 0.0}
+    cost_per_1k = {"gemini": 0.0005, "grok": 0.005, "claude": 0.003, "openai": 0.002, "ollama": 0.0}
     api_usage = {}
-    for provider in ("gemini", "grok", "claude", "openai", "fair", "ollama"):
+    for provider in ("gemini", "grok", "claude", "openai", "ollama"):
         qs = LLMUsageLog.objects.filter(provider=provider, created_at__date=today)
         agg = qs.aggregate(inp=Sum("input_tokens"), out=Sum("output_tokens"))
         inp, out = agg["inp"] or 0, agg["out"] or 0
@@ -149,14 +149,14 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
         }
 
     providers = {}
-    for provider in ("gemini", "grok", "claude", "openai", "fair", "ollama"):
+    for provider in ("gemini", "grok", "claude", "openai", "ollama"):
         enabled = getattr(model_manager.config, f"{provider}_enabled", False)
         providers[provider] = {
             "enabled": enabled,
             "model": model_manager.get_chat_model(provider) if enabled else "",
         }
 
-    billing_data = _get_provider_billing_snapshot(now.astimezone(timezone.utc), providers)
+    billing_data = _get_provider_billing_snapshot(now.astimezone(UTC), providers)
     for provider, usage in api_usage.items():
         billing = billing_data.get(provider, {})
         actual_spend = billing.get("actual_spend_usd")

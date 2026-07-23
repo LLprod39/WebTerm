@@ -54,7 +54,12 @@ def _ready_report(ready_for_sidebar: bool) -> dict:
         "checks": [{"id": "architecture_guard", "status": "ready", "detail": "ok", "required": True}],
         "worker_state": {"status": "running", "is_stale": False},
         "access_model": {"status": "ready", "native_mutations_enabled": False, "exec_enabled": False},
-        "identity_runtime": {"status": "ready", "identity_provider": "Keycloak/OIDC", "enforced": True, "webterm_login_gateway": {"status": "ready"}},
+        "identity_runtime": {
+            "status": "ready",
+            "identity_provider": "Keycloak/OIDC",
+            "enforced": True,
+            "webterm_login_gateway": {"status": "ready"},
+        },
     }
 
 
@@ -92,8 +97,16 @@ def _ready_action_controls() -> dict:
         "rollback_delete_requires_restore_source": True,
         "rollback_plan_payload_safe": True,
         "native_verification_plan_status": "pending",
-        "native_verification_plan_check_ids": ["rollout_status_observed", "pod_readiness_observed", "recent_warning_events_checked"],
-        "apply_verification_plan_check_ids": ["apply_action_completed", "resource_generation_observed", "recent_warning_events_checked"],
+        "native_verification_plan_check_ids": [
+            "rollout_status_observed",
+            "pod_readiness_observed",
+            "recent_warning_events_checked",
+        ],
+        "apply_verification_plan_check_ids": [
+            "apply_action_completed",
+            "resource_generation_observed",
+            "recent_warning_events_checked",
+        ],
         "native_verification_auto_status": "verified",
         "native_verification_auto_request_status": K8sActionRequest.STATUS_VERIFIED_NATIVE,
         "native_verification_auto_recorded": True,
@@ -112,7 +125,11 @@ def _ready_action_controls() -> dict:
         "gitops_gitlab_payload_ready": True,
         "gitops_merge_request_draft": True,
         "gitops_merge_request_removes_source_branch": True,
-        "gitops_verification_plan_check_ids": ["merge_request_reviewed", "ci_pipeline_passed", "fleet_bundle_reconciled"],
+        "gitops_verification_plan_check_ids": [
+            "merge_request_reviewed",
+            "ci_pipeline_passed",
+            "fleet_bundle_reconciled",
+        ],
     }
 
 
@@ -203,7 +220,10 @@ def test_kubernetes_release_evidence_blocks_broken_normal_user_surface(monkeypat
     cluster = K8sCluster.objects.create(name="prod-kz-1", labels={"kube_context": "prod-kz"})
     K8sAppRef.objects.create(name="payments-api", cluster=cluster, namespace="payments", owner=K8sAppRef.OWNER_DEVTRON)
 
-    monkeypatch.setattr("kubernetes_ops.services.release_evidence.build_kubernetes_readiness_report", lambda user, **_kwargs: _ready_report(False))
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence.build_kubernetes_readiness_report",
+        lambda user, **_kwargs: _ready_report(False),
+    )
     monkeypatch.setattr(
         "kubernetes_ops.services.release_evidence.probe_kubernetes_provider",
         lambda _provider: KubernetesProviderProbeResult(
@@ -240,20 +260,38 @@ def test_kubernetes_release_evidence_blocks_broken_normal_user_surface(monkeypat
         }
 
     monkeypatch.setattr("kubernetes_ops.services.release_evidence.call_mcp_tool", fake_call_mcp_tool)
-    monkeypatch.setattr("kubernetes_ops.services.release_evidence._action_controls_evidence", lambda _user, _enabled: _ready_action_controls())
-    monkeypatch.setattr("kubernetes_ops.services.release_evidence._admin_mode_safety_evidence", lambda _user, _enabled: _ready_admin_mode_safety())
-    monkeypatch.setattr("kubernetes_ops.services.release_evidence._studio_diagnosis_draft_evidence", lambda _user, _enabled: {"success": True, "status": "ready"})
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence._action_controls_evidence",
+        lambda _user, _enabled: _ready_action_controls(),
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence._admin_mode_safety_evidence",
+        lambda _user, _enabled: _ready_admin_mode_safety(),
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence._studio_diagnosis_draft_evidence",
+        lambda _user, _enabled: {"success": True, "status": "ready"},
+    )
     monkeypatch.setattr(
         "kubernetes_ops.services.release_evidence._readonly_rbac_live_evidence",
         lambda _enabled: {"success": True, "status": "ready", "allowed_count": 7, "denied_count": 7},
     )
-    monkeypatch.setattr("kubernetes_ops.services.release_evidence.load_kubernetes_release_preflight_artifact", lambda: _ready_preflight())
+    monkeypatch.setattr(
+        "kubernetes_ops.services.release_evidence.load_kubernetes_release_preflight_artifact",
+        lambda: _ready_preflight(),
+    )
     monkeypatch.setattr(
         "kubernetes_ops.services.release_evidence._normal_user_surface_evidence",
-        lambda _enabled: {"success": False, "status": "failed", "checks": [{"id": "reader_external_links_hidden", "success": False}]},
+        lambda _enabled: {
+            "success": False,
+            "status": "failed",
+            "checks": [{"id": "reader_external_links_hidden", "success": False}],
+        },
     )
 
-    with override_settings(KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-K8S-1"):
+    with override_settings(
+        KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-K8S-1"
+    ):
         evidence = build_kubernetes_release_evidence(user=user)
 
     assert evidence["production_ready"] is False

@@ -65,7 +65,9 @@ def get_cluster_metrics_snapshot(
     path = rancher_resource_path(provider, cluster, ref)
     payload = _provider_get(provider, path, transport=transport)
     raw_items = [payload] if ref.name else payload_items(payload)
-    items = [_metric_item_summary(item, scope=metrics_scope) for item in raw_items[:item_limit] if isinstance(item, dict)]
+    items = [
+        _metric_item_summary(item, scope=metrics_scope) for item in raw_items[:item_limit] if isinstance(item, dict)
+    ]
     summary = _metrics_summary(items=items, raw_count=len(raw_items), limit=item_limit, scope=metrics_scope)
     record_admin_resource_action(
         user=user,
@@ -250,7 +252,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode metrics.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode metrics.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

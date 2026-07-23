@@ -92,13 +92,33 @@ def test_kubernetes_unsafe_endpoints_require_csrf_token(k8s_staff_user, k8s_inve
     provider = k8s_inventory["provider"]
     app = k8s_inventory["app"]
     unsafe_requests = [
-        ("post", "api_kubernetes_providers", {}, {"name": "devtron-main", "kind": "devtron", "base_url": "https://devtron.example.test", "auth_mode": "none"}),
+        (
+            "post",
+            "api_kubernetes_providers",
+            {},
+            {
+                "name": "devtron-main",
+                "kind": "devtron",
+                "base_url": "https://devtron.example.test",
+                "auth_mode": "none",
+            },
+        ),
         ("patch", "api_kubernetes_provider_detail", {"provider_id": provider.id}, {"enabled": False}),
         ("delete", "api_kubernetes_provider_detail", {"provider_id": provider.id}, {}),
         ("post", "api_kubernetes_sync", {}, {"dry_run": True}),
         ("post", "api_kubernetes_provider_sync", {"provider_id": provider.id}, {"dry_run": True}),
         ("post", "api_kubernetes_provider_probe", {"provider_id": provider.id}, {}),
-        ("post", "api_kubernetes_deeplink_audit", {}, {"target_type": "app", "target_id": f"app_{app.id}", "link_key": "logs", "url": "https://devtron.example.test/logs"}),
+        (
+            "post",
+            "api_kubernetes_deeplink_audit",
+            {},
+            {
+                "target_type": "app",
+                "target_id": f"app_{app.id}",
+                "link_key": "logs",
+                "url": "https://devtron.example.test/logs",
+            },
+        ),
         ("post", "api_kubernetes_diagnose_action", {}, {"app_id": f"app_{app.id}"}),
         (
             "post",

@@ -27,8 +27,5 @@ class Command(BaseCommand):
             raise CommandError(str(exc)) from exc
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Packed {result.plugin_id}@{result.version} -> {result.path} ({result.sha256})."
-            )
+            self.style.SUCCESS(f"Packed {result.plugin_id}@{result.version} -> {result.path} ({result.sha256}).")
         )
-

@@ -35,13 +35,15 @@ def _grant_feature(user: User, *features: str) -> None:
 
 def _manifest(plugin_id: str = "acme.attested-remote", version: str = "1.0.0") -> dict:
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": plugin_id,
-        "name": "Attested Remote",
-        "slug": "attested-remote",
-        "version": version,
-        "publisher": {"id": "acme", "name": "Acme Apps", "verified": True},
-    })
+    manifest.update(
+        {
+            "id": plugin_id,
+            "name": "Attested Remote",
+            "slug": "attested-remote",
+            "version": version,
+            "publisher": {"id": "acme", "name": "Acme Apps", "verified": True},
+        }
+    )
     return manifest
 
 
@@ -415,7 +417,14 @@ def test_remote_provenance_replay_passes_without_resetting_review_state(monkeypa
         actor=user,
     )
     package = PluginPackage.objects.get(plugin_id="acme.attested-remote")
-    assert client.post(f"/api/plugins/review/packages/{package.id}/review/", data=_json({"status": "verified"}), content_type="application/json").status_code == 200
+    assert (
+        client.post(
+            f"/api/plugins/review/packages/{package.id}/review/",
+            data=_json({"status": "verified"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
     package.refresh_from_db()
     signed_payload = dict(package.signature_payload)
 
@@ -449,7 +458,14 @@ def test_remote_provenance_replay_uses_retained_package_when_remote_unavailable(
         actor=user,
     )
     package = PluginPackage.objects.get(plugin_id="acme.attested-remote")
-    assert client.post(f"/api/plugins/review/packages/{package.id}/review/", data=_json({"status": "verified"}), content_type="application/json").status_code == 200
+    assert (
+        client.post(
+            f"/api/plugins/review/packages/{package.id}/review/",
+            data=_json({"status": "verified"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
 
     def _unavailable(_url: str) -> bytes:
         raise RemotePackageError("network unavailable")
@@ -482,7 +498,14 @@ def test_remote_provenance_replay_invalidates_signed_package_on_hash_mismatch(mo
         actor=user,
     )
     package = PluginPackage.objects.get(plugin_id="acme.attested-remote")
-    assert client.post(f"/api/plugins/review/packages/{package.id}/review/", data=_json({"status": "verified"}), content_type="application/json").status_code == 200
+    assert (
+        client.post(
+            f"/api/plugins/review/packages/{package.id}/review/",
+            data=_json({"status": "verified"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
 
     changed_data = _package_bytes(_manifest(version="1.0.1"))
     monkeypatch.setattr(
@@ -495,4 +518,6 @@ def test_remote_provenance_replay_invalidates_signed_package_on_hash_mismatch(mo
     assert package.review_status == PluginPackage.REVIEW_SUSPENDED
     assert package.signature_status == PluginPackage.SIGNATURE_INVALID
     assert package.attestations[-1]["status"] == "failed"
-    assert any(check["name"] == "sha256" and check["ok"] is False for check in package.attestations[-1]["report"]["checks"])
+    assert any(
+        check["name"] == "sha256" and check["ok"] is False for check in package.attestations[-1]["report"]["checks"]
+    )

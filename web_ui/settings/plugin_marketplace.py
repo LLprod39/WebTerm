@@ -23,6 +23,18 @@ def _json_object_env(name: str) -> dict[str, str]:
 def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
     signing_keys = _json_object_env("PLUGIN_MARKETPLACE_SIGNING_KEYS")
     return {
+        # The first production release keeps plugin execution out of scope until
+        # the external signing/scanning/isolation trust stack is provisioned.
+        # Development remains enabled so the existing implementation is testable.
+        "PLUGIN_MARKETPLACE_RELEASE_MODE": (
+            os.getenv(
+                "PLUGIN_MARKETPLACE_RELEASE_MODE",
+                "enabled" if debug else "disabled",
+            )
+            or ("enabled" if debug else "disabled")
+        )
+        .strip()
+        .lower(),
         "PLUGIN_MARKETPLACE_SIGNING_PROVIDER": (
             os.getenv("PLUGIN_MARKETPLACE_SIGNING_PROVIDER", "local_hmac") or "local_hmac"
         ).strip(),
@@ -137,18 +149,10 @@ def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
             "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES",
             False,
         ),
-        "PLUGIN_MARKETPLACE_SANDBOX_DEPENDENCY_ALLOWLIST": env_list(
-            "PLUGIN_MARKETPLACE_SANDBOX_DEPENDENCY_ALLOWLIST"
-        ),
-        "PLUGIN_MARKETPLACE_EGRESS_DENIED_HOSTS": env_list(
-            "PLUGIN_MARKETPLACE_EGRESS_DENIED_HOSTS"
-        ),
-        "PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS": env_list(
-            "PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS"
-        ),
-        "PLUGIN_MARKETPLACE_CATALOG_SOURCE_ALLOWED_HOSTS": env_list(
-            "PLUGIN_MARKETPLACE_CATALOG_SOURCE_ALLOWED_HOSTS"
-        ),
+        "PLUGIN_MARKETPLACE_SANDBOX_DEPENDENCY_ALLOWLIST": env_list("PLUGIN_MARKETPLACE_SANDBOX_DEPENDENCY_ALLOWLIST"),
+        "PLUGIN_MARKETPLACE_EGRESS_DENIED_HOSTS": env_list("PLUGIN_MARKETPLACE_EGRESS_DENIED_HOSTS"),
+        "PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS": env_list("PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS"),
+        "PLUGIN_MARKETPLACE_CATALOG_SOURCE_ALLOWED_HOSTS": env_list("PLUGIN_MARKETPLACE_CATALOG_SOURCE_ALLOWED_HOSTS"),
         "PLUGIN_MARKETPLACE_PACKAGE_RETENTION_DIR": (
             Path(os.getenv("PLUGIN_MARKETPLACE_PACKAGE_RETENTION_DIR")).expanduser()
             if os.getenv("PLUGIN_MARKETPLACE_PACKAGE_RETENTION_DIR")
@@ -162,9 +166,7 @@ def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
             "PLUGIN_MARKETPLACE_ATTESTATION_RETENTION_LIMIT",
             20,
         ),
-        "PLUGIN_MARKETPLACE_REQUIRED_ATTESTATION_KINDS": env_list(
-            "PLUGIN_MARKETPLACE_REQUIRED_ATTESTATION_KINDS"
-        ),
+        "PLUGIN_MARKETPLACE_REQUIRED_ATTESTATION_KINDS": env_list("PLUGIN_MARKETPLACE_REQUIRED_ATTESTATION_KINDS"),
         "PLUGIN_MARKETPLACE_ATTESTATION_MAX_AGE_DAYS": env_int(
             "PLUGIN_MARKETPLACE_ATTESTATION_MAX_AGE_DAYS",
             0,

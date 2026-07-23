@@ -16,7 +16,7 @@ from app.egress_redaction import redact_egress_text
 from app.execution_policy import safe_payload_preview
 from app.runtime_limit_config import get_runtime_limit_setting
 from core_ui.managed_secrets import get_mcp_secret_env
-from studio.mcp_security import validate_mcp_runtime_policy
+from studio.mcp_security import build_mcp_subprocess_env, validate_mcp_runtime_policy
 
 from .models import MCPServerPool
 
@@ -72,7 +72,9 @@ class MCPServerInfo:
     capabilities: dict[str, Any]
 
 
-def _json_rpc_payload(method: str, params: dict[str, Any] | None = None, *, request_id: str | None = None) -> dict[str, Any]:
+def _json_rpc_payload(
+    method: str, params: dict[str, Any] | None = None, *, request_id: str | None = None
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
     if request_id is not None:
         payload["id"] = request_id
@@ -135,7 +137,7 @@ class _StdioMCPClient:
             raise MCPClientError(policy.error)
 
         secret_env = await _s2a(get_mcp_secret_env, thread_sensitive=True)(self.server.id)
-        env = {**__import__("os").environ, **(self.server.env or {}), **secret_env}
+        env = build_mcp_subprocess_env(self.server.env, secret_env)
         self.proc = await asyncio.create_subprocess_exec(
             self.server.command,
             *(self.server.args or []),
@@ -156,7 +158,7 @@ class _StdioMCPClient:
                     self.proc.wait(),
                     timeout=max(float(_setting_int("MCP_PROCESS_TERMINATE_TIMEOUT_SECONDS", 2)), 1.0),
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.proc.kill()
                 await self.proc.wait()
 
@@ -186,11 +188,7 @@ class _StdioMCPClient:
         if not self.proc or not self.proc.stdin or not self.proc.stdout:
             raise MCPClientError("MCP process is not running")
         effective_timeout = max(
-            float(
-                timeout
-                if timeout is not None
-                else _setting_int("MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30)
-            ),
+            float(timeout if timeout is not None else _setting_int("MCP_STDIO_REQUEST_TIMEOUT_SECONDS", 30)),
             1.0,
         )
 
@@ -236,12 +234,36 @@ class _HttpMCPClient:
         self._sse_url = _normalize_sse_url(server.url or "")
         self.client = httpx.AsyncClient(timeout=None)
         self.protocol_version = SUPPORTED_PROTOCOL_VERSIONS[0]
+        self._extra_headers: dict[str, str] = {}
 
     async def __aenter__(self):
+        self._extra_headers = await self._load_auth_headers()
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.client.aclose()
+
+    async def _load_auth_headers(self) -> dict[str, str]:
+        """Static custom headers plus an Authorization header derived from
+        managed secrets (MCP_BEARER_TOKEN / MCP_AUTHORIZATION), so remote MCP
+        endpoints that require auth can be reached without storing the token in
+        plaintext on the model."""
+        headers: dict[str, str] = {}
+        static = getattr(self.server, "headers", None)
+        if isinstance(static, dict):
+            for key, value in static.items():
+                if str(key).strip():
+                    headers[str(key)] = str(value)
+        server_id = getattr(self.server, "id", None)
+        if server_id:
+            secret_env = await _s2a(get_mcp_secret_env, thread_sensitive=True)(server_id)
+            token = str(secret_env.get("MCP_BEARER_TOKEN") or "").strip()
+            if token:
+                headers.setdefault("Authorization", f"Bearer {token}")
+            raw_auth = str(secret_env.get("MCP_AUTHORIZATION") or "").strip()
+            if raw_auth:
+                headers["Authorization"] = raw_auth
+        return headers
 
     async def initialize(self) -> MCPServerInfo:
         request_id = secrets.token_hex(8)
@@ -284,6 +306,7 @@ class _HttpMCPClient:
         }
         if include_protocol_header:
             headers["MCP-Protocol-Version"] = self.protocol_version
+        headers.update(getattr(self, "_extra_headers", {}))
 
         request_id = str(payload.get("id") or "")
         effective_timeout = float(
@@ -348,6 +371,7 @@ class _HttpMCPClient:
 
     async def notify(self, method: str, params: dict[str, Any] | None = None):
         headers = {"Content-Type": "application/json", "MCP-Protocol-Version": self.protocol_version}
+        headers.update(getattr(self, "_extra_headers", {}))
         try:
             await self.client.post(
                 self._sse_url,
@@ -362,6 +386,13 @@ class _HttpMCPClient:
 
 async def _with_client(server: MCPServerPool):
     if server.transport == MCPServerPool.TRANSPORT_STDIO:
+        # Imported lazily to avoid a circular import: the runner client imports
+        # shared primitives (MCPClientError, MCPServerInfo, ...) from this module.
+        from studio.mcp_runner_client import _ManagedMCPClient, _mcp_runner_url
+
+        runner_url = _mcp_runner_url()
+        if runner_url:
+            return _ManagedMCPClient(server, runner_url)
         return _StdioMCPClient(server)
     return _HttpMCPClient(server)
 
@@ -417,7 +448,9 @@ async def list_mcp_tools(server: MCPServerPool) -> list[dict[str, Any]]:
         return await _list_tools(client)
 
 
-async def call_mcp_tool(server: MCPServerPool, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+async def call_mcp_tool(
+    server: MCPServerPool, tool_name: str, arguments: dict[str, Any] | None = None
+) -> dict[str, Any]:
     arguments = arguments or {}
     logger.info(
         "mcp call start: server={} transport={} tool={} args={}",

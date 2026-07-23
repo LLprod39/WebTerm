@@ -22,6 +22,7 @@ Usage:
         task_id=123
     )
 """
+
 from typing import Any
 
 from django.contrib.auth.models import User
@@ -77,10 +78,9 @@ class ServerKnowledgeService:
                 parts.append(f"=== ПРАВИЛА ГРУППЫ '{group.name}' ===\n{group_ctx}")
 
             # Group knowledge
-            group_knowledge = ServerGroupKnowledge.objects.filter(
-                group=group,
-                is_active=True
-            ).order_by('-updated_at')[:10]
+            group_knowledge = ServerGroupKnowledge.objects.filter(group=group, is_active=True).order_by("-updated_at")[
+                :10
+            ]
 
             if group_knowledge:
                 knowledge_texts = [f"• [{k.category}] {k.title}: {k.content}" for k in group_knowledge]
@@ -103,10 +103,7 @@ class ServerKnowledgeService:
             parts.append(f"=== СЕРВЕР '{server.name}' ===\n" + "\n".join(server_parts))
 
         # 4. Server knowledge (AI-generated + manual)
-        knowledge = ServerKnowledge.objects.filter(
-            server=server,
-            is_active=True
-        ).order_by('-updated_at')[:20]
+        knowledge = ServerKnowledge.objects.filter(server=server, is_active=True).order_by("-updated_at")[:20]
 
         if knowledge:
             knowledge_by_category = {}
@@ -182,8 +179,8 @@ class ServerKnowledgeService:
             env_vars.update(server.group.environment_vars)
 
         # Server-specific from network_config
-        if server.network_config and server.network_config.get('env_vars'):
-            env_vars.update(server.network_config['env_vars'])
+        if server.network_config and server.network_config.get("env_vars"):
+            env_vars.update(server.network_config["env_vars"])
 
         return env_vars
 
@@ -192,10 +189,10 @@ class ServerKnowledgeService:
         server,
         title: str,
         content: str,
-        category: str = 'other',
+        category: str = "other",
         task_id: int = None,
         user: User = None,
-        confidence: float = 0.9
+        confidence: float = 0.9,
     ):
         """
         Save AI-generated knowledge about a server.
@@ -213,11 +210,7 @@ class ServerKnowledgeService:
         from servers.models import ServerKnowledge
 
         # Check for duplicates (similar title + category)
-        existing = ServerKnowledge.objects.filter(
-            server=server,
-            category=category,
-            title__iexact=title.strip()
-        ).first()
+        existing = ServerKnowledge.objects.filter(server=server, category=category, title__iexact=title.strip()).first()
 
         if existing:
             # Update existing knowledge
@@ -236,10 +229,10 @@ class ServerKnowledgeService:
             category=category,
             title=title.strip(),
             content=content,
-            source='ai_task' if task_id else 'ai_auto',
+            source="ai_task" if task_id else "ai_auto",
             confidence=confidence,
             task_id=task_id,
-            created_by=user
+            created_by=user,
         )
         DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         logger.info(f"Created server knowledge: {server.name} - {title}")
@@ -247,11 +240,7 @@ class ServerKnowledgeService:
 
     @staticmethod
     def analyze_and_save_knowledge(
-        server,
-        command_output: str,
-        command: str,
-        task_id: int = None,
-        user: User = None
+        server, command_output: str, command: str, task_id: int = None, user: User = None
     ) -> list[dict[str, Any]]:
         """
         Analyze command output and extract knowledge.
@@ -265,31 +254,31 @@ class ServerKnowledgeService:
         output_lower = command_output.lower()
 
         # Detect OS
-        if 'ubuntu' in output_lower:
+        if "ubuntu" in output_lower:
             k = ServerKnowledgeService.save_ai_knowledge(
                 server=server,
                 title="ОС Ubuntu",
                 content=f"Обнаружена ОС Ubuntu. Команда: {command[:100]}",
-                category='system',
+                category="system",
                 task_id=task_id,
-                user=user
+                user=user,
             )
-            created.append({'id': k.id, 'title': k.title})
+            created.append({"id": k.id, "title": k.title})
 
-        elif 'centos' in output_lower or 'red hat' in output_lower:
+        elif "centos" in output_lower or "red hat" in output_lower:
             k = ServerKnowledgeService.save_ai_knowledge(
                 server=server,
                 title="ОС CentOS/RHEL",
                 content="Обнаружена ОС CentOS или Red Hat",
-                category='system',
+                category="system",
                 task_id=task_id,
-                user=user
+                user=user,
             )
-            created.append({'id': k.id, 'title': k.title})
+            created.append({"id": k.id, "title": k.title})
 
         # Detect services
         services_detected = []
-        for service in ['nginx', 'apache', 'mysql', 'postgresql', 'redis', 'docker', 'kubernetes']:
+        for service in ["nginx", "apache", "mysql", "postgresql", "redis", "docker", "kubernetes"]:
             if service in output_lower:
                 services_detected.append(service)
 
@@ -298,37 +287,37 @@ class ServerKnowledgeService:
                 server=server,
                 title="Обнаруженные сервисы",
                 content=f"Сервисы: {', '.join(services_detected)}",
-                category='services',
+                category="services",
                 task_id=task_id,
-                user=user
+                user=user,
             )
-            created.append({'id': k.id, 'title': k.title})
+            created.append({"id": k.id, "title": k.title})
 
         # Detect disk issues
-        if 'no space left' in output_lower or ('disk' in output_lower and '100%' in output_lower):
+        if "no space left" in output_lower or ("disk" in output_lower and "100%" in output_lower):
             k = ServerKnowledgeService.save_ai_knowledge(
                 server=server,
                 title="Проблема с диском",
                 content="Обнаружена нехватка места на диске",
-                category='issues',
+                category="issues",
                 task_id=task_id,
                 user=user,
-                confidence=0.95
+                confidence=0.95,
             )
-            created.append({'id': k.id, 'title': k.title})
+            created.append({"id": k.id, "title": k.title})
 
         # Detect memory issues
-        if 'out of memory' in output_lower or 'oom' in output_lower:
+        if "out of memory" in output_lower or "oom" in output_lower:
             k = ServerKnowledgeService.save_ai_knowledge(
                 server=server,
                 title="Проблема с памятью",
                 content="Обнаружена нехватка оперативной памяти (OOM)",
-                category='issues',
+                category="issues",
                 task_id=task_id,
                 user=user,
-                confidence=0.95
+                confidence=0.95,
             )
-            created.append({'id': k.id, 'title': k.title})
+            created.append({"id": k.id, "title": k.title})
 
         return created
 
@@ -338,13 +327,7 @@ class ServerKnowledgeService:
         from servers.models import GlobalServerRules
 
         rules, created = GlobalServerRules.objects.get_or_create(
-            user=user,
-            defaults={
-                'rules': '',
-                'forbidden_commands': [],
-                'required_checks': [],
-                'environment_vars': {}
-            }
+            user=user, defaults={"rules": "", "forbidden_commands": [], "required_checks": [], "environment_vars": {}}
         )
         return rules
 
@@ -354,36 +337,34 @@ class ServerKnowledgeService:
         from servers.models import GlobalServerRules, ServerGroupKnowledge, ServerKnowledge
 
         summary = {
-            'has_global_rules': False,
-            'has_group_rules': False,
-            'has_group_knowledge': 0,
-            'has_server_notes': bool(server.notes or server.corporate_context),
-            'server_knowledge_count': 0,
-            'forbidden_commands_count': 0,
+            "has_global_rules": False,
+            "has_group_rules": False,
+            "has_group_knowledge": 0,
+            "has_server_notes": bool(server.notes or server.corporate_context),
+            "server_knowledge_count": 0,
+            "forbidden_commands_count": 0,
         }
 
         # Global
         try:
             global_rules = GlobalServerRules.objects.filter(user=user).first()
             if global_rules and (global_rules.rules or global_rules.forbidden_commands):
-                summary['has_global_rules'] = True
-                summary['forbidden_commands_count'] += len(global_rules.forbidden_commands or [])
+                summary["has_global_rules"] = True
+                summary["forbidden_commands_count"] += len(global_rules.forbidden_commands or [])
         except Exception:
             pass
 
         # Group
         if server.group:
             if server.group.rules or server.group.forbidden_commands:
-                summary['has_group_rules'] = True
-                summary['forbidden_commands_count'] += len(server.group.forbidden_commands or [])
+                summary["has_group_rules"] = True
+                summary["forbidden_commands_count"] += len(server.group.forbidden_commands or [])
 
-            summary['has_group_knowledge'] = ServerGroupKnowledge.objects.filter(
+            summary["has_group_knowledge"] = ServerGroupKnowledge.objects.filter(
                 group=server.group, is_active=True
             ).count()
 
         # Server knowledge
-        summary['server_knowledge_count'] = ServerKnowledge.objects.filter(
-            server=server, is_active=True
-        ).count()
+        summary["server_knowledge_count"] = ServerKnowledge.objects.filter(server=server, is_active=True).count()
 
         return summary

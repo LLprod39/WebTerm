@@ -68,7 +68,12 @@ def api_kubernetes_admin_delete(request, cluster_id: str):
                 reason=str(data.get("reason") or ""),
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_resource.delete_rejected", payload={"code": exc.code, "cluster_id": cluster_id}, session_id=str(data.get("session_id") or ""))
+            _audit(
+                request,
+                "k8s.admin_resource.delete_rejected",
+                payload={"code": exc.code, "cluster_id": cluster_id},
+                session_id=str(data.get("session_id") or ""),
+            )
             return _error_response(exc)
         _audit(
             request,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 import pytest
@@ -177,7 +176,7 @@ async def test_stream_claude_response_retries_retryable_errors(monkeypatch):
 @pytest.mark.asyncio
 async def test_stream_claude_response_logs_timeout_status():
     usage_calls: list[dict[str, Any]] = []
-    client = _FakeClient([asyncio.TimeoutError()])
+    client = _FakeClient([TimeoutError()])
 
     chunks = [
         chunk

@@ -30,7 +30,9 @@ def test_readonly_rbac_live_probe_passes_expected_can_i_matrix(tmp_path: Path):
             return _completed("no\n", "Warning: resource is not namespace scoped\n", 1)
         return _completed("yes\n")
 
-    report = verify_kubernetes_readonly_rbac_live(KubectlProbeOptions(manifest_path=manifest, apply_manifest=True), runner=runner)
+    report = verify_kubernetes_readonly_rbac_live(
+        KubectlProbeOptions(manifest_path=manifest, apply_manifest=True), runner=runner
+    )
 
     assert report["status"] == "ready"
     assert report["context"] == "kind-webterm-k8s"

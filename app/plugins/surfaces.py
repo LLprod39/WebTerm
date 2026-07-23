@@ -13,4 +13,3 @@ def active_plugin_surfaces(enabled_plugin_ids: set[str]) -> dict[str, list[dict]
             items = surfaces.get(kind) if isinstance(surfaces.get(kind), list) else []
             grouped[kind].extend({"plugin_id": plugin_id, **item} for item in items if isinstance(item, dict))
     return grouped
-

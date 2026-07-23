@@ -39,7 +39,9 @@ def test_rancher_provider_sync_upserts_clusters_and_fleet_bundles(monkeypatch):
     K8sNamespace.objects.create(cluster=stale_cluster, name="old-namespace")
     K8sWorkloadRef.objects.create(cluster=stale_cluster, namespace="demo", name="old-api")
     K8sPodRef.objects.create(cluster=stale_cluster, namespace="demo", name="old-api-123")
-    K8sNetworkRef.objects.create(cluster=stale_cluster, namespace="demo", name="old-api", kind=K8sNetworkRef.KIND_SERVICE)
+    K8sNetworkRef.objects.create(
+        cluster=stale_cluster, namespace="demo", name="old-api", kind=K8sNetworkRef.KIND_SERVICE
+    )
     K8sEvent.objects.create(cluster=stale_cluster, event_uid="old-event", reason="OldWarning")
     calls = []
 
@@ -103,7 +105,9 @@ def test_rancher_provider_sync_upserts_clusters_and_fleet_bundles(monkeypatch):
                         "podIP": "10.42.0.12",
                         "hostIP": "10.0.0.10",
                         "ownerReferences": [{"kind": "ReplicaSet", "name": "demo-api-abc"}],
-                        "containerStatuses": [{"name": "api", "ready": True, "restartCount": 1, "image": "demo-api:2026.06"}],
+                        "containerStatuses": [
+                            {"name": "api", "ready": True, "restartCount": 1, "image": "demo-api:2026.06"}
+                        ],
                     }
                 ]
             }
@@ -196,10 +200,14 @@ def test_rancher_provider_sync_upserts_clusters_and_fleet_bundles(monkeypatch):
     assert pod.total_containers == 1
     assert pod.restart_count == 1
     assert pod.images == ["demo-api:2026.06"]
-    service = K8sNetworkRef.objects.get(cluster=cluster, namespace="demo", name="demo-api", kind=K8sNetworkRef.KIND_SERVICE)
+    service = K8sNetworkRef.objects.get(
+        cluster=cluster, namespace="demo", name="demo-api", kind=K8sNetworkRef.KIND_SERVICE
+    )
     assert service.service_type == "ClusterIP"
     assert service.ports[0]["port"] == 80
-    ingress = K8sNetworkRef.objects.get(cluster=cluster, namespace="demo", name="demo-api", kind=K8sNetworkRef.KIND_INGRESS)
+    ingress = K8sNetworkRef.objects.get(
+        cluster=cluster, namespace="demo", name="demo-api", kind=K8sNetworkRef.KIND_INGRESS
+    )
     assert ingress.service_type == "nginx"
     assert ingress.hosts == ["demo.example.test"]
     event = K8sEvent.objects.get(cluster=cluster, event_uid="c-stage:event-1")
@@ -259,7 +267,14 @@ def test_rancher_provider_sync_accepts_native_cluster_proxy_payloads(monkeypatch
         if url.endswith("/v3/clusters"):
             return {"data": [{"id": "local", "name": "local", "state": "active", "nodeCount": 1, "readyNodes": 1}]}
         if url.endswith("/api/v1/namespaces"):
-            return {"items": [{"metadata": {"name": "webterm-stage", "labels": {"environment": "stage"}}, "status": {"phase": "Active"}}]}
+            return {
+                "items": [
+                    {
+                        "metadata": {"name": "webterm-stage", "labels": {"environment": "stage"}},
+                        "status": {"phase": "Active"},
+                    }
+                ]
+            }
         if url.endswith("/apis/apps/v1/deployments"):
             return {
                 "items": [
@@ -275,16 +290,43 @@ def test_rancher_provider_sync_accepts_native_cluster_proxy_payloads(monkeypatch
             return {
                 "items": [
                     {
-                        "metadata": {"name": "demo-api-abc", "namespace": "webterm-stage", "ownerReferences": [{"kind": "ReplicaSet", "name": "demo-api"}]},
-                        "spec": {"nodeName": "kind-control-plane", "containers": [{"name": "nginx", "image": "nginx:1.27-alpine"}]},
-                        "status": {"phase": "Running", "podIP": "10.244.0.4", "containerStatuses": [{"name": "nginx", "ready": True, "restartCount": 0, "image": "nginx:1.27-alpine"}]},
+                        "metadata": {
+                            "name": "demo-api-abc",
+                            "namespace": "webterm-stage",
+                            "ownerReferences": [{"kind": "ReplicaSet", "name": "demo-api"}],
+                        },
+                        "spec": {
+                            "nodeName": "kind-control-plane",
+                            "containers": [{"name": "nginx", "image": "nginx:1.27-alpine"}],
+                        },
+                        "status": {
+                            "phase": "Running",
+                            "podIP": "10.244.0.4",
+                            "containerStatuses": [
+                                {"name": "nginx", "ready": True, "restartCount": 0, "image": "nginx:1.27-alpine"}
+                            ],
+                        },
                     }
                 ]
             }
         if url.endswith("/api/v1/services"):
-            return {"items": [{"metadata": {"name": "demo-api", "namespace": "webterm-stage"}, "spec": {"type": "ClusterIP", "ports": [{"port": 80}]}}]}
+            return {
+                "items": [
+                    {
+                        "metadata": {"name": "demo-api", "namespace": "webterm-stage"},
+                        "spec": {"type": "ClusterIP", "ports": [{"port": 80}]},
+                    }
+                ]
+            }
         if url.endswith("/apis/networking.k8s.io/v1/ingresses"):
-            return {"items": [{"metadata": {"name": "demo-api", "namespace": "webterm-stage"}, "spec": {"ingressClassName": "nginx", "rules": [{"host": "demo.webterm.local"}]}}]}
+            return {
+                "items": [
+                    {
+                        "metadata": {"name": "demo-api", "namespace": "webterm-stage"},
+                        "spec": {"ingressClassName": "nginx", "rules": [{"host": "demo.webterm.local"}]},
+                    }
+                ]
+            }
         if url.endswith("/api/v1/events"):
             return {
                 "items": [
@@ -367,7 +409,9 @@ def test_kubernetes_ops_sync_worker_once_updates_background_state(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync)
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync
+    )
     out = io.StringIO()
 
     call_command("run_kubernetes_ops_sync_worker", "--once", "--dry-run", "--worker-key", "pytest-k8s-sync", stdout=out)
@@ -396,7 +440,9 @@ def test_kubernetes_ops_sync_worker_once_updates_background_state(monkeypatch):
 @pytest.mark.django_db(transaction=True)
 @override_settings(KUBERNETES_OPS_SYNC_INTERVAL_SECONDS=42)
 def test_kubernetes_ops_sync_worker_defaults_interval_from_settings(monkeypatch):
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", lambda **_: [])
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", lambda **_: []
+    )
 
     call_command("run_kubernetes_ops_sync_worker", "--once", "--dry-run", "--worker-key", "pytest-k8s-sync-settings")
 
@@ -424,8 +470,12 @@ def test_kubernetes_ops_sync_worker_max_runs_repeats_with_filters(monkeypatch):
             )
         ]
 
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync)
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep", lambda _seconds: None
+    )
 
     call_command(
         "run_kubernetes_ops_sync_worker",

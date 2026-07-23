@@ -151,9 +151,42 @@ def test_build_ollama_payload_includes_json_mode_and_thinking_flag():
             {"role": "user", "content": "hello"},
         ],
         "stream": True,
+        "options": {
+            "num_predict": 4096,
+            "temperature": 0.2,
+            "num_ctx": 16384,
+        },
         "format": "json",
         "think": False,
     }
+
+
+def test_build_ollama_payload_free_text_defaults_take_precedence():
+    payload = build_ollama_payload(
+        OllamaStreamRequest(
+            prompt="hello",
+            system_prompt="Be concise.",
+            json_mode=False,
+            request_targets=[
+                {
+                    "kind": "local",
+                    "base_url": "http://127.0.0.1:11434",
+                    "headers": {"Content-Type": "application/json"},
+                    "model": "llama3.2",
+                }
+            ],
+            think_value=True,
+        )
+    )
+
+    assert payload["messages"][0] == {"role": "system", "content": "Be concise."}
+    assert payload["options"] == {
+        "num_predict": -1,
+        "temperature": 0.5,
+        "num_ctx": 16384,
+    }
+    assert payload["think"] is True
+    assert "format" not in payload
 
 
 @pytest.mark.asyncio

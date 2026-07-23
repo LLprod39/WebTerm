@@ -41,14 +41,18 @@ class UrlopenProviderWatchEventStream:
 
     def open(self) -> UrlopenProviderWatchEventStream:
         request = urllib.request.Request(url=self.url, method="GET", headers=self.headers)
-        context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        context = (
+            None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        )
         try:
             self._response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
             raise KubernetesProviderError(f"Provider watch stream failed: {exc}") from exc
         return self
 
-    def read_batch(self, *, max_events: int, max_bytes: int = MAX_PROVIDER_WATCH_STREAM_BYTES) -> ProviderWatchStreamBatch:
+    def read_batch(
+        self, *, max_events: int, max_bytes: int = MAX_PROVIDER_WATCH_STREAM_BYTES
+    ) -> ProviderWatchStreamBatch:
         if self._response is None:
             raise KubernetesProviderError("Provider watch stream is not open.")
         if self._eof:
@@ -119,7 +123,9 @@ class InMemoryProviderWatchEventStream:
         self._events = _event_items_from_transport_payload(payload)
         self._offset = 0
 
-    def read_batch(self, *, max_events: int, max_bytes: int = MAX_PROVIDER_WATCH_STREAM_BYTES) -> ProviderWatchStreamBatch:
+    def read_batch(
+        self, *, max_events: int, max_bytes: int = MAX_PROVIDER_WATCH_STREAM_BYTES
+    ) -> ProviderWatchStreamBatch:
         end = min(self._offset + max_events, len(self._events))
         events = self._events[self._offset : end]
         self._offset = end
@@ -163,7 +169,12 @@ def _event_items_from_transport_payload(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
         items = payload
     elif isinstance(payload, dict):
-        items = payload.get("items") or payload.get("events") or payload.get("data") or ([payload] if payload.get("type") or isinstance(payload.get("object"), dict) else [])
+        items = (
+            payload.get("items")
+            or payload.get("events")
+            or payload.get("data")
+            or ([payload] if payload.get("type") or isinstance(payload.get("object"), dict) else [])
+        )
     else:
         items = []
     return [item for item in items[:MAX_PROVIDER_STREAM_EVENTS] if isinstance(item, dict)]

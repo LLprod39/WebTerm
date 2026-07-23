@@ -65,9 +65,7 @@ class TestGeminiJsonMode:
             mm.get_chat_model.return_value = "gemini-2.0-flash"
             mm.resolve_purpose.return_value = ("gemini", "gemini-2.0-flash")
 
-            async for _ in llm.stream_chat(
-                "test prompt", model="gemini", json_mode=True
-            ):
+            async for _ in llm.stream_chat("test prompt", model="gemini", json_mode=True):
                 pass
 
         call_kwargs = mock_stream.call_args.kwargs
@@ -86,9 +84,7 @@ class TestGeminiJsonMode:
             mm.get_chat_model.return_value = "gemini-2.0-flash"
             mm.resolve_purpose.return_value = ("gemini", "gemini-2.0-flash")
 
-            async for _ in llm.stream_chat(
-                "test prompt", model="gemini", json_mode=False
-            ):
+            async for _ in llm.stream_chat("test prompt", model="gemini", json_mode=False):
                 pass
 
         call_kwargs = mock_stream.call_args.kwargs
@@ -104,10 +100,12 @@ class TestOpenAIJsonMode:
         """response_format is added for non-gpt5 models."""
         fake_response = AsyncMock()
         fake_response.status = 200
-        fake_response.content = _AsyncByteStream([
-            b'data: {"choices":[{"delta":{"content":"{\\"mode\\":\\"answer\\"}"}}]}\n',
-            b"data: [DONE]\n",
-        ])
+        fake_response.content = _AsyncByteStream(
+            [
+                b'data: {"choices":[{"delta":{"content":"{\\"mode\\":\\"answer\\"}"}}]}\n',
+                b"data: [DONE]\n",
+            ]
+        )
 
         fake_session = AsyncMock()
         fake_session.__aenter__ = AsyncMock(return_value=fake_session)
@@ -125,9 +123,7 @@ class TestOpenAIJsonMode:
             mm.resolve_purpose.return_value = ("openai", "gpt-4o")
             mm.config.openai_reasoning_effort = ""
 
-            async for _ in llm.stream_chat(
-                "test prompt", model="openai", json_mode=True
-            ):
+            async for _ in llm.stream_chat("test prompt", model="openai", json_mode=True):
                 pass
 
         # Extract the json= argument from the post() call
@@ -141,10 +137,12 @@ class TestOpenAIJsonMode:
         """gpt-5 Responses API keeps json format and injects JSON hint into input."""
         fake_response = AsyncMock()
         fake_response.status = 200
-        fake_response.content = _AsyncByteStream([
-            b'data: {"type":"response.output_text.delta","delta":"{\\"ok\\":true}"}\n',
-            b'data: {"type":"response.completed"}\n',
-        ])
+        fake_response.content = _AsyncByteStream(
+            [
+                b'data: {"type":"response.output_text.delta","delta":"{\\"ok\\":true}"}\n',
+                b'data: {"type":"response.completed"}\n',
+            ]
+        )
 
         fake_session = AsyncMock()
         fake_session.__aenter__ = AsyncMock(return_value=fake_session)
@@ -162,9 +160,7 @@ class TestOpenAIJsonMode:
             mm.resolve_purpose.return_value = ("openai", "gpt-5-nano")
             mm.config.openai_reasoning_effort = ""
 
-            async for _ in llm.stream_chat(
-                "test prompt", model="openai", json_mode=True
-            ):
+            async for _ in llm.stream_chat("test prompt", model="openai", json_mode=True):
                 pass
 
         call_args = fake_session.post.call_args

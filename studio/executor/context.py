@@ -5,6 +5,7 @@ ExecutionContext — shared state passed to every node during pipeline execution
 Nodes read upstream outputs, emit events, and resolve template variables through
 this object. This decouples node logic from the executor engine.
 """
+
 from __future__ import annotations
 
 import re
@@ -13,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from studio.models import Pipeline, PipelineRun
+    from studio.models import Pipeline
 
 
 _TEMPLATE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -34,6 +35,7 @@ class ExecutionContext:
         hook_manager  — optional HookManager for observability
         extra         — arbitrary extras injected by the executor
     """
+
     run_id: int
     user: Any
     pipeline: Pipeline

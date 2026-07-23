@@ -12,8 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 import shlex
-from datetime import datetime
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncssh
@@ -35,15 +34,13 @@ def sync_to_async(func, thread_sensitive=True):
 def build_cert_script(server_host: str, ssh_port: int) -> str:
     """POSIX-sh command that prints one ==WTCERT:<port>== block per TLS port."""
     sni = shlex.quote((server_host or "localhost").strip() or "localhost")
-    port_pipeline = (
-        "sed 's/.*://' | grep -E '^[0-9]+$' | sort -un | grep -xv \"$SSHP\" | head -" + str(_MAX_PORTS)
-    )
+    port_pipeline = "sed 's/.*://' | grep -E '^[0-9]+$' | sort -un | grep -xv \"$SSHP\" | head -" + str(_MAX_PORTS)
     parts = [
         f"SNI={sni}",
         f"SSHP={int(ssh_port or 22)}",
         "TMO=$(command -v timeout >/dev/null 2>&1 && echo 'timeout 6' || echo '')",
         "PORTS=$(ss -tlnH 2>/dev/null | awk '{print $4}' | " + port_pipeline + ")",
-        'if [ -z "$PORTS" ]; then PORTS=$(netstat -tln 2>/dev/null | awk \'NR>2 {print $4}\' | '
+        "if [ -z \"$PORTS\" ]; then PORTS=$(netstat -tln 2>/dev/null | awk 'NR>2 {print $4}' | "
         + port_pipeline
         + "); fi",
         "if command -v openssl >/dev/null 2>&1; then "
@@ -67,7 +64,7 @@ def _parse_openssl_date(value: str) -> datetime | None:
     for fmt in ("%b %d %H:%M:%S %Y %Z", "%b %d %H:%M:%S %Y"):
         try:
             parsed = datetime.strptime(normalized, fmt)
-            return parsed.replace(tzinfo=dt_timezone.utc)
+            return parsed.replace(tzinfo=UTC)
         except ValueError:
             continue
     return None
@@ -167,9 +164,7 @@ def upsert_certificates(
             "last_seen_at": now,
             "last_checked_at": now,
         }
-        row = ServerCertificate.objects.filter(
-            server=server, source=ServerCertificate.SOURCE_LISTEN, port=port
-        ).first()
+        row = ServerCertificate.objects.filter(server=server, source=ServerCertificate.SOURCE_LISTEN, port=port).first()
         if row is None:
             ServerCertificate.objects.create(
                 server=server,
@@ -192,9 +187,7 @@ def upsert_certificates(
     deactivated = 0
     if scan_completed:
         deactivated = (
-            ServerCertificate.objects.filter(
-                server=server, source=ServerCertificate.SOURCE_LISTEN, is_active=True
-            )
+            ServerCertificate.objects.filter(server=server, source=ServerCertificate.SOURCE_LISTEN, is_active=True)
             .exclude(port__in=seen_ports)
             .update(is_active=False, last_checked_at=now)
         )

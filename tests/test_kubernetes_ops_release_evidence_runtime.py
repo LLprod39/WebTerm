@@ -16,7 +16,11 @@ def _ready_report(ready_for_sidebar: bool) -> dict:
         "worker_state": {"status": "running", "is_stale": False},
         "access_model": {"status": "ready", "native_mutations_enabled": False, "exec_enabled": False},
         "identity_runtime": {"status": "ready", "identity_provider": "Keycloak/OIDC", "enforced": True},
-        "production_gate": {"target_environment": "production", "core_evidence_ready": True, "missing_reference_count": 0},
+        "production_gate": {
+            "target_environment": "production",
+            "core_evidence_ready": True,
+            "missing_reference_count": 0,
+        },
     }
 
 
@@ -115,4 +119,6 @@ def test_kubernetes_release_evidence_blocks_missing_production_action_evidence(m
     assert evidence["production_ready"] is False
     assert "production_action_evidence:missing" in evidence["blockers"]
     assert evidence["release_summary"]["production_action_evidence_status"] == "missing"
-    assert any(step.startswith("Regenerate production action evidence") for step in evidence["release_summary"]["next_steps"])
+    assert any(
+        step.startswith("Regenerate production action evidence") for step in evidence["release_summary"]["next_steps"]
+    )

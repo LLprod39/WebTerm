@@ -146,40 +146,6 @@ def _extract_after_action(query: str, actions: tuple[str, ...]) -> str | None:
     return _clean_entity_value(match.group(1))
 
 
-def _extract_keycloak_arguments(query: str) -> dict[str, str]:
-    bindings: dict[str, str] = {}
-    realm = _extract_keyword_value(query, (r"realm", r"реалм\w*"))
-    username = None
-    email_match = _EMAIL_RE.search(query)
-    if email_match:
-        username = _clean_entity_value(email_match.group(1))
-    if not username:
-        username = _extract_keyword_value(
-            query,
-            (r"username", r"user", r"account", r"login", r"пользовател\w*", r"юзер\w*", r"аккаунт\w*", r"логин\w*"),
-        )
-    role = _extract_keyword_value(query, (r"role", r"роль", r"роли", r"рол\w*"))
-    group = _extract_keyword_value(query, (r"group", r"группа", r"группу", r"группе", r"групп\w*"))
-
-    normalized = _normalise_query(query)
-    operation = None
-    if re.search(r"\b(remove|revoke|delete|unassign|detach)\b|удал|снят|сними|отозва|забра", normalized):
-        operation = "remove"
-    elif re.search(r"\b(add|grant|assign|attach|give|create)\b|добав|назнач|выда|добавь|созда", normalized):
-        operation = "add"
-
-    for key, value in (
-        ("realm", realm),
-        ("username", username),
-        ("role", role),
-        ("group", group),
-        ("operation", operation),
-    ):
-        if value:
-            bindings[key] = value
-    return bindings
-
-
 def _extract_kubernetes_arguments(query: str) -> dict[str, str]:
     bindings: dict[str, str] = {}
     cluster = _extract_keyword_value(query, (r"cluster", r"кластер\w*"))
@@ -352,13 +318,25 @@ def _extract_backup_arguments(query: str) -> dict[str, str]:
     bindings: dict[str, str] = {}
     path = _extract_keyword_value(query, (r"path", r"dir", r"directory", r"backup[_\s-]?path", r"каталог\w*", r"путь"))
     if not path:
-        path_match = re.search(r"(?<![\w.-])(/(?:[A-Za-z0-9._@~+-]+/)*[A-Za-z0-9._@~+-]*backup[A-Za-z0-9._@~+/-]*)", query, flags=re.IGNORECASE)
+        path_match = re.search(
+            r"(?<![\w.-])(/(?:[A-Za-z0-9._@~+-]+/)*[A-Za-z0-9._@~+-]*backup[A-Za-z0-9._@~+/-]*)",
+            query,
+            flags=re.IGNORECASE,
+        )
         if not path_match:
-            path_match = re.search(r"(?<![\w.-])(/(?:var/backups|backups|srv/backups|opt/backups)(?:/[A-Za-z0-9._@~+-]+)*)", query, flags=re.IGNORECASE)
+            path_match = re.search(
+                r"(?<![\w.-])(/(?:var/backups|backups|srv/backups|opt/backups)(?:/[A-Za-z0-9._@~+-]+)*)",
+                query,
+                flags=re.IGNORECASE,
+            )
         if path_match:
             path = _clean_entity_value(path_match.group(1))
     max_age = None
-    age_match = re.search(r"(?:max[_\s-]?age|age|fresh|свежее|старше)\s*(?:[:=]|\bthan\b)?\s*(\d+)\s*(h|hour|hours|час|часов|d|day|days|день|дней)?", query, flags=re.IGNORECASE)
+    age_match = re.search(
+        r"(?:max[_\s-]?age|age|fresh|свежее|старше)\s*(?:[:=]|\bthan\b)?\s*(\d+)\s*(h|hour|hours|час|часов|d|day|days|день|дней)?",
+        query,
+        flags=re.IGNORECASE,
+    )
     if age_match:
         amount = int(age_match.group(1))
         unit = (age_match.group(2) or "h").lower()
@@ -406,8 +384,6 @@ def _extract_template_argument_bindings(template_slug: str, assistant_context: d
     query = _binding_query(assistant_context)
     if not query:
         return {}
-    if template_slug == "pilot-keycloak-access-change":
-        return _extract_keycloak_arguments(query)
     if template_slug == "pilot-kubernetes-rollout":
         return _extract_kubernetes_arguments(query)
     if template_slug == "pilot-gitlab-failed-pipeline-mr":

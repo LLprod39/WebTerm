@@ -48,15 +48,11 @@ class Command(BaseCommand):
             raise CommandError(str(exc)) from exc
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.'
-            )
+            self.style.SUCCESS(f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.')
         )
         self.stdout.write(f"Studio path: /studio/pipeline/{pipeline.id}")
         for trigger in pipeline.triggers.filter(trigger_type="monitoring", is_active=True).order_by("created_at", "id"):
-            self.stdout.write(
-                f"Monitoring trigger ({trigger.node_id}) filters: {trigger.monitoring_filters}"
-            )
+            self.stdout.write(f"Monitoring trigger ({trigger.node_id}) filters: {trigger.monitoring_filters}")
 
     def _resolve_user(self, username: str | None):
         user_model = get_user_model()

@@ -44,7 +44,11 @@ def prepare_kubernetes_exec_stream_context(
     timeout_seconds: int | str | None = None,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED", False)):
-        raise AdminResourceError("Provider-native Kubernetes exec streaming is disabled by policy.", code="exec_streaming_disabled", status=403)
+        raise AdminResourceError(
+            "Provider-native Kubernetes exec streaming is disabled by policy.",
+            code="exec_streaming_disabled",
+            status=403,
+        )
     recording_policy = require_interactive_recording("exec")
     assert_interactive_transport_prerequisites("exec_stream")
     context = _prepare_exec_context(
@@ -68,7 +72,12 @@ def prepare_kubernetes_exec_stream_context(
         ref=context["ref"],
         status=K8sAdminAction.STATUS_PLANNED,
         request_summary=context["request_summary"],
-        response_summary={"source": "provider_exec_stream", "status": K8sAdminAction.STATUS_PLANNED, "streaming_started": True, "recording_policy": recording_policy},
+        response_summary={
+            "source": "provider_exec_stream",
+            "status": K8sAdminAction.STATUS_PLANNED,
+            "streaming_started": True,
+            "recording_policy": recording_policy,
+        },
     )
     recording = create_interactive_recording(
         user=user,
@@ -78,7 +87,9 @@ def prepare_kubernetes_exec_stream_context(
         policy=recording_policy,
         summary={"source": "provider_exec_stream", "status": K8sAdminAction.STATUS_PLANNED, "streaming_started": True},
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_exec(
         user=user,
@@ -96,7 +107,15 @@ def prepare_kubernetes_exec_stream_context(
         },
     )
     envelope = _exec_envelope(context=context, action=action, status=K8sAdminAction.STATUS_PLANNED)
-    envelope["policy"].update({"provider_streaming_enabled": True, "blocked_reason": "", "records_transcript": False, "recording_policy": recording_policy, "timeout_seconds": timeout})
+    envelope["policy"].update(
+        {
+            "provider_streaming_enabled": True,
+            "blocked_reason": "",
+            "records_transcript": False,
+            "recording_policy": recording_policy,
+            "timeout_seconds": timeout,
+        }
+    )
     envelope["recording"] = recording_public_payload(recording)
     return {
         **envelope,
@@ -142,11 +161,27 @@ def complete_kubernetes_exec_stream(
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_exec(user=user, session=session, cluster=action.cluster, action="k8s.admin_stream.exec_stopped", stream_id=stream_id, payload=summary)
+    _audit_exec(
+        user=user,
+        session=session,
+        cluster=action.cluster,
+        action="k8s.admin_stream.exec_stopped",
+        stream_id=stream_id,
+        payload=summary,
+    )
     return summary
 
 
-def fail_kubernetes_exec_stream(*, user, action_id: str, session_pk: int, stream_id: str, error_code: str, stdout_count: int = 0, stderr_count: int = 0) -> dict[str, Any]:
+def fail_kubernetes_exec_stream(
+    *,
+    user,
+    action_id: str,
+    session_pk: int,
+    stream_id: str,
+    error_code: str,
+    stdout_count: int = 0,
+    stderr_count: int = 0,
+) -> dict[str, Any]:
     action = K8sAdminAction.objects.select_related("session", "cluster").get(action_id=action_id)
     action.status = K8sAdminAction.STATUS_FAILED
     summary = {
@@ -167,7 +202,14 @@ def fail_kubernetes_exec_stream(*, user, action_id: str, session_pk: int, stream
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_exec(user=user, session=session, cluster=action.cluster, action="k8s.admin_stream.exec_failed", stream_id=stream_id, payload=summary)
+    _audit_exec(
+        user=user,
+        session=session,
+        cluster=action.cluster,
+        action="k8s.admin_stream.exec_failed",
+        stream_id=stream_id,
+        payload=summary,
+    )
     return summary
 
 

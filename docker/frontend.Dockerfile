@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:22.23.1-bookworm-slim
 
 ARG http_proxy
 ARG https_proxy

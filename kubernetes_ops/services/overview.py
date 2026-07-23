@@ -19,7 +19,11 @@ def build_overview_payload(user=None) -> dict[str, Any]:
     clusters = list(K8sCluster.objects.all().order_by("environment", "name"))
     apps = list(K8sAppRef.objects.select_related("cluster").all().order_by("cluster__name", "namespace", "name")[:50])
     bundles = list(K8sFleetBundle.objects.all().order_by("name")[:50])
-    workloads = list(K8sWorkloadRef.objects.select_related("cluster").all().order_by("cluster__name", "namespace", "kind", "name")[:50])
+    workloads = list(
+        K8sWorkloadRef.objects.select_related("cluster")
+        .all()
+        .order_by("cluster__name", "namespace", "kind", "name")[:50]
+    )
     provider_rows = list(K8sProvider.objects.all().order_by("kind", "name"))
     app_counts = K8sAppRef.objects.aggregate(
         total=Count("id"),
@@ -58,8 +62,14 @@ def build_overview_payload(user=None) -> dict[str, Any]:
     serialized_apps = [serialize_app(app, user=user) for app in apps]
     serialized_workloads = [serialize_workload(workload, user=user) for workload in workloads]
     serialized_bundles = [serialize_fleet_bundle(bundle, user=user) for bundle in bundles]
-    stale_resources = sum(1 for item in [*serialized_clusters, *serialized_apps, *serialized_workloads, *serialized_bundles] if item.get("is_stale"))
-    provider_issues = sum(1 for item in serialized_providers if item.get("provider_health") in {"error", "missing", "stale"})
+    stale_resources = sum(
+        1
+        for item in [*serialized_clusters, *serialized_apps, *serialized_workloads, *serialized_bundles]
+        if item.get("is_stale")
+    )
+    provider_issues = sum(
+        1 for item in serialized_providers if item.get("provider_health") in {"error", "missing", "stale"}
+    )
     readiness = build_kubernetes_readiness_report(user=user)
     return {
         "success": True,

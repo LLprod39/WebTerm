@@ -34,8 +34,7 @@ _FILE_MOD_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
         re.compile(
             r"\bsed\s+"
             r"(?:-[a-zA-Z]*i[a-zA-Z]*(?:\.[a-zA-Z0-9]+)?\s+)"
-            r"(?:(?:'[^']*'|\"[^\"]*\"|[^\s]+)\s+)"
-            + _ABS_PATH,
+            r"(?:(?:'[^']*'|\"[^\"]*\"|[^\s]+)\s+)" + _ABS_PATH,
             re.IGNORECASE,
         ),
     ),
@@ -215,11 +214,7 @@ def build_restore_command(snapshot_id: int) -> str | None:
 
     # Use heredoc with a unique delimiter
     delimiter = "_WEUAI_RESTORE_EOF_"
-    return (
-        f"cat > {_shell_quote(snap.file_path)} << '{delimiter}'\n"
-        f"{snap.content}\n"
-        f"{delimiter}"
-    )
+    return f"cat > {_shell_quote(snap.file_path)} << '{delimiter}'\n{snap.content}\n{delimiter}"
 
 
 def _shell_quote(path: str) -> str:

@@ -30,8 +30,13 @@ def test_kubernetes_ops_sync_worker_backs_off_after_repeated_failed_results(monk
             )
         ]
 
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync)
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
     out = io.StringIO()
 
     call_command(
@@ -70,8 +75,13 @@ def test_kubernetes_ops_sync_worker_resets_backoff_after_success(monkeypatch):
     def fake_sync(**kwargs):
         return results.pop(0)
 
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync)
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
 
     call_command(
         "run_kubernetes_ops_sync_worker",
@@ -101,8 +111,13 @@ def test_kubernetes_ops_sync_worker_backoff_counts_exceptions_toward_max_runs(mo
     def fake_sync(**kwargs):
         raise RuntimeError("provider transport exploded")
 
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync)
-    monkeypatch.setattr("kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep", lambda seconds: sleeps.append(seconds))
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.sync_kubernetes_providers", fake_sync
+    )
+    monkeypatch.setattr(
+        "kubernetes_ops.management.commands.run_kubernetes_ops_sync_worker.time.sleep",
+        lambda seconds: sleeps.append(seconds),
+    )
 
     call_command(
         "run_kubernetes_ops_sync_worker",

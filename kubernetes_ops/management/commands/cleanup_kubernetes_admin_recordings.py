@@ -10,9 +10,13 @@ class Command(BaseCommand):
     help = "Apply retention cleanup for Kubernetes Admin Mode recording evidence."
 
     def add_arguments(self, parser):
-        parser.add_argument("--apply", action="store_true", help="Delete expired recording evidence. Defaults to dry-run.")
+        parser.add_argument(
+            "--apply", action="store_true", help="Delete expired recording evidence. Defaults to dry-run."
+        )
         parser.add_argument("--batch-size", type=int, default=1000, help="Delete batch size when --apply is used.")
-        parser.add_argument("--inventory", action="store_true", help="Only print retention inventory and ignore --apply.")
+        parser.add_argument(
+            "--inventory", action="store_true", help="Only print retention inventory and ignore --apply."
+        )
 
     def handle(self, *args, **options):
         try:
@@ -33,7 +37,9 @@ class Command(BaseCommand):
                 batch_size=int(options.get("batch_size") or 1000),
             )
         except (OperationalError, ProgrammingError) as exc:
-            raise CommandError("Kubernetes Admin Mode recording tables are not ready. Run `python manage.py migrate kubernetes_ops`.") from exc
+            raise CommandError(
+                "Kubernetes Admin Mode recording tables are not ready. Run `python manage.py migrate kubernetes_ops`."
+            ) from exc
 
         self.stdout.write(
             "Kubernetes admin recording retention "
@@ -50,6 +56,10 @@ class Command(BaseCommand):
         for row in result["transcript_expired_by_operation"]:
             self.stdout.write(f"  transcript expired operation={row['operation']} count={row['count']}")
         if result["dry_run"] and (result["metadata_expired_count"] or result["transcript_expired_count"]):
-            self.stdout.write(self.style.WARNING("Dry run only. Re-run with --apply to delete expired Kubernetes admin recording evidence."))
+            self.stdout.write(
+                self.style.WARNING(
+                    "Dry run only. Re-run with --apply to delete expired Kubernetes admin recording evidence."
+                )
+            )
         elif not result["dry_run"]:
             self.stdout.write(self.style.SUCCESS("Kubernetes admin recording retention cleanup applied."))

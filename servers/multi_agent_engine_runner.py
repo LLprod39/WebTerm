@@ -61,7 +61,9 @@ async def run_multi_agent_engine(
         if not current_status:
             engine.run_record = run
             return run
-        if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
+        if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(
+            current_status["runtime_control"]
+        ):
             engine.run_record = run
             return run
         await sync_to_async(engine._update_run)(
@@ -116,10 +118,7 @@ async def run_multi_agent_engine(
 
     try:
         if engine.skill_policy_errors:
-            raise RuntimeError(
-                "Invalid skill policy configuration: "
-                + "; ".join(engine.skill_policy_errors)
-            )
+            raise RuntimeError("Invalid skill policy configuration: " + "; ".join(engine.skill_policy_errors))
         await engine._emit("agent_status", {"status": "connecting"})
 
         disconnected: list[str] = []
@@ -135,9 +134,7 @@ async def run_multi_agent_engine(
                 await engine.session.open(primary_server)
         engine._disconnected_servers = disconnected
         if disconnected and bool(getattr(engine, "require_all_servers", True)):
-            raise RuntimeError(
-                "require_all_servers: failed to connect to: " + ", ".join(disconnected)
-            )
+            raise RuntimeError("require_all_servers: failed to connect to: " + ", ".join(disconnected))
 
         loaded_mcp_tools, engine.mcp_tool_errors = await load_mcp_bindings(
             engine._mcp_runtime_provider,
@@ -159,10 +156,9 @@ async def run_multi_agent_engine(
         engine.ops_prompt_context = await engine._build_ops_prompt_context()
 
         connected = engine.session.get_connected_info()
-        await sync_to_async(engine._update_run)(run, connected_servers=[
-            {"server_id": c["server_id"], "server_name": c["server_name"]}
-            for c in connected
-        ])
+        await sync_to_async(engine._update_run)(
+            run, connected_servers=[{"server_id": c["server_id"], "server_name": c["server_name"]} for c in connected]
+        )
 
         if not engine.session.connections and not engine.mcp_tools and not engine.skills:
             raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
@@ -170,10 +166,13 @@ async def run_multi_agent_engine(
         goal = engine.agent.goal or engine.agent.ai_prompt or "Analyse the servers."
 
         await engine._emit("agent_status", {"status": "planning"})
-        await engine._emit("agent_pipeline_phase", {
-            "phase": "planning",
-            "message": "Orchestrator is creating a task plan…",
-        })
+        await engine._emit(
+            "agent_pipeline_phase",
+            {
+                "phase": "planning",
+                "message": "Orchestrator is creating a task plan…",
+            },
+        )
 
         plan_tasks = await engine._plan(goal, orchestrator_log)
 
@@ -188,10 +187,13 @@ async def run_multi_agent_engine(
             run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
             await sync_to_async(run.save)()
             await engine._emit("agent_status", {"status": "plan_review"})
-            await engine._emit("agent_pipeline_phase", {
-                "phase": "plan_review",
-                "message": "План готов. Ожидаем подтверждения пользователя…",
-            })
+            await engine._emit(
+                "agent_pipeline_phase",
+                {
+                    "phase": "plan_review",
+                    "message": "План готов. Ожидаем подтверждения пользователя…",
+                },
+            )
             return run
 
         deadline = time.monotonic() + engine.session_timeout
@@ -251,7 +253,9 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
     if not current_status:
         engine.run_record = run
         return run
-    if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(current_status["runtime_control"]):
+    if current_status["status"] == AgentRun.STATUS_STOPPED or is_runtime_stop_requested(
+        current_status["runtime_control"]
+    ):
         engine.run_record = run
         return run
     engine.run_record = run
@@ -419,18 +423,24 @@ async def _finalize_multi_agent_run(
     await deliver_agent_report_async(run)
 
     await sync_to_async(engine._touch_agent_last_run)()
-    await engine._emit("agent_status", {
-        "status": final_status,
-        "outcome": outcome.outcome,
-        "outcome_reason": outcome.reason,
-        "plan_summary": outcome.plan_summary,
-        "policy_blocked_count": report_payload["policy_blocked_count"],
-    })
-    await engine._emit("agent_report", {
-        "text": final_report,
-        "interim": False,
-        "outcome": outcome.outcome,
-    })
+    await engine._emit(
+        "agent_status",
+        {
+            "status": final_status,
+            "outcome": outcome.outcome,
+            "outcome_reason": outcome.reason,
+            "plan_summary": outcome.plan_summary,
+            "policy_blocked_count": report_payload["policy_blocked_count"],
+        },
+    )
+    await engine._emit(
+        "agent_report",
+        {
+            "text": final_report,
+            "interim": False,
+            "outcome": outcome.outcome,
+        },
+    )
 
 
 async def _cleanup_multi_agent_run(engine: Any, run: AgentRun) -> None:

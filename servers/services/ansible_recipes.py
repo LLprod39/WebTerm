@@ -4,6 +4,7 @@ Extracted from ansible_engine.py to keep modules under the size limit.
 Public API (list_guided_recipes, generate_from_recipe) is re-exported from
 servers.services.ansible_engine for backward compatibility.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -152,7 +153,12 @@ def generate_from_recipe(slug: str, params: dict[str, Any] | None = None) -> dic
       when: ansible_os_family == "RedHat" and ansible_pkg_mgr != "dnf"
 """
         tasks = [
-            {"id": "t1", "command": f"# ansible apt/dnf/yum name={pkg} state={state}", "description": f"Install {pkg}", "continue_on_error": False}
+            {
+                "id": "t1",
+                "command": f"# ansible apt/dnf/yum name={pkg} state={state}",
+                "description": f"Install {pkg}",
+                "continue_on_error": False,
+            }
         ]
 
     elif slug == "manage-service":
@@ -212,7 +218,7 @@ def generate_from_recipe(slug: str, params: dict[str, Any] | None = None) -> dic
   become: true
   gather_facts: false
   tasks:
-{''.join(task_yaml)}"""
+{"".join(task_yaml)}"""
 
     elif slug == "update-system":
         family = str(params.get("family") or "auto")
@@ -257,7 +263,9 @@ def generate_from_recipe(slug: str, params: dict[str, Any] | None = None) -> dic
         state: latest
       when: ansible_os_family == "RedHat"
 """
-        tasks = [{"id": "t1", "command": "# package update", "description": "Update packages", "continue_on_error": False}]
+        tasks = [
+            {"id": "t1", "command": "# package update", "description": "Update packages", "continue_on_error": False}
+        ]
 
     elif slug == "health-check":
         name = "Health check"
@@ -317,7 +325,12 @@ def generate_from_recipe(slug: str, params: dict[str, Any] | None = None) -> dic
       changed_when: false
 """
         tasks = [
-            {"id": "t1", "command": "docker container prune -f", "description": "Prune containers", "continue_on_error": False},
+            {
+                "id": "t1",
+                "command": "docker container prune -f",
+                "description": "Prune containers",
+                "continue_on_error": False,
+            },
             {"id": "t2", "command": "docker image prune -f", "description": "Prune images", "continue_on_error": False},
         ]
     else:

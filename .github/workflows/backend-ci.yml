@@ -1,0 +1,225 @@
+name: Backend CI
+
+on:
+  pull_request:
+    branches: [test, main]
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONHASHSEED: "0"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  runtime-contract:
+    name: Runtime Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+      - name: Verify frozen runtime contract
+        run: python scripts/verify_runtime_contract.py
+
+  python-quality:
+    name: Python Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - name: Install locked development dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Ruff lint
+        run: ruff check .
+
+  django-checks:
+    name: Django Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - name: Install locked development dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Django system check
+        run: python manage.py check --settings=web_ui.settings.test
+      - name: Migration drift
+        run: python manage.py makemigrations --check --dry-run --settings=web_ui.settings.test
+
+  backend-unit:
+    name: Backend Unit and Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - name: Install locked development dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Run backend suite and enforce the coverage ratchet
+        # Frozen F-06 baseline: 71.95% in the locked runtime. --cov-fail-under
+        # mirrors [tool.coverage.report].fail_under in pyproject.toml so the
+        # ratchet is enforced regardless of pytest-cov config handling. Raise
+        # both together as coverage improves (Stage 1 exit target >=80%).
+        run: >-
+          python -m pytest tests app core_ui servers studio kubernetes_ops plugin_marketplace mars
+          --junitxml=.ci-artifacts/backend-junit.xml
+          --cov=app --cov=core_ui --cov=servers --cov=studio
+          --cov=kubernetes_ops --cov=plugin_marketplace --cov=mars --cov=web_ui
+          --cov-report=term --cov-report=xml:.ci-artifacts/backend-coverage.xml
+          --cov-fail-under=71.5
+      - name: Upload backend evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-unit-evidence-${{ github.sha }}
+          path: |
+            .ci-artifacts/backend-junit.xml
+            .ci-artifacts/backend-coverage.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  backend-integration:
+    name: PostgreSQL and Redis Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: webterm_ci
+          POSTGRES_USER: webterm_ci
+          POSTGRES_PASSWORD: webterm_ci_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U webterm_ci -d webterm_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_SETTINGS_MODULE: web_ui.settings.test_postgres
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: webterm_ci
+      POSTGRES_USER: webterm_ci
+      POSTGRES_PASSWORD: webterm_ci_password
+      CHANNEL_REDIS_URL: redis://127.0.0.1:6379/1
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      WEBTERM_REQUIRE_EXTERNAL_TEST_SERVICES: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - name: Install locked development dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Verify PostgreSQL, Redis cache and Redis channels
+        run: >-
+          python -m pytest tests/test_ci_postgres_redis.py
+          --junitxml=.ci-artifacts/backend-integration-junit.xml
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-integration-evidence-${{ github.sha }}
+          path: .ci-artifacts/backend-integration-junit.xml
+          if-no-files-found: warn
+          retention-days: 14
+
+  production-checks:
+    name: Production Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DJANGO_DEBUG: "false"
+      DJANGO_SECRET_KEY: ci-only-not-a-production-secret-please-replace-0123456789
+      ALLOWED_HOSTS: webterm.example.invalid
+      SITE_URL: https://webterm.example.invalid
+      FRONTEND_APP_URL: https://webterm.example.invalid
+      POSTGRES_DB: webterm_ci
+      POSTGRES_USER: webterm_ci
+      POSTGRES_PASSWORD: webterm_ci_password
+      POSTGRES_HOST: postgres
+      CHANNEL_REDIS_URL: redis://redis:6379/1
+      CELERY_BROKER_URL: redis://redis:6379/0
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
+      - name: Install locked development dependencies
+        run: python -m pip install --require-hashes -r requirements-dev.lock
+      - name: Create an ephemeral managed-secret key
+        run: echo "MANAGED_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+      - name: Django production deploy check
+        run: python manage.py check --deploy --settings=web_ui.settings.production
+      - name: Validate production Compose model
+        run: docker compose -f docker-compose.production.yml config --quiet
+
+  docs-contract:
+    name: Documentation Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11.15"
+      - name: Verify authoritative docs and release contracts
+        run: python scripts/verify_docs_contract.py

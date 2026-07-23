@@ -18,13 +18,23 @@ class PluginPackage(models.Model):
     REVIEW_VERIFIED = "verified"
     REVIEW_REJECTED = "rejected"
     REVIEW_SUSPENDED = "suspended"
-    REVIEW_CHOICES = [(REVIEW_PENDING, "Pending"), (REVIEW_VERIFIED, "Verified"), (REVIEW_REJECTED, "Rejected"), (REVIEW_SUSPENDED, "Suspended")]
+    REVIEW_CHOICES = [
+        (REVIEW_PENDING, "Pending"),
+        (REVIEW_VERIFIED, "Verified"),
+        (REVIEW_REJECTED, "Rejected"),
+        (REVIEW_SUSPENDED, "Suspended"),
+    ]
 
     SIGNATURE_UNSIGNED = "unsigned"
     SIGNATURE_BUILTIN = "builtin"
     SIGNATURE_SIGNED = "signed"
     SIGNATURE_INVALID = "invalid"
-    SIGNATURE_CHOICES = [(SIGNATURE_UNSIGNED, "Unsigned"), (SIGNATURE_BUILTIN, "Built-in"), (SIGNATURE_SIGNED, "Signed"), (SIGNATURE_INVALID, "Invalid")]
+    SIGNATURE_CHOICES = [
+        (SIGNATURE_UNSIGNED, "Unsigned"),
+        (SIGNATURE_BUILTIN, "Built-in"),
+        (SIGNATURE_SIGNED, "Signed"),
+        (SIGNATURE_INVALID, "Invalid"),
+    ]
 
     plugin_id = models.CharField(max_length=140)
     version = models.CharField(max_length=80)
@@ -230,7 +240,9 @@ class PluginCompatibilityJob(models.Model):
         (STATUS_ERROR, "Error"),
     ]
 
-    catalog_item = models.ForeignKey(MarketplaceCatalogItem, on_delete=models.CASCADE, related_name="compatibility_jobs")
+    catalog_item = models.ForeignKey(
+        MarketplaceCatalogItem, on_delete=models.CASCADE, related_name="compatibility_jobs"
+    )
     plugin_id = models.CharField(max_length=140)
     version = models.CharField(max_length=80)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
@@ -254,4 +266,6 @@ class PluginCompatibilityJob(models.Model):
         return f"{self.plugin_id}@{self.version}:{self.status}"
 
 
-from plugin_marketplace.access_models import PluginSecretBinding
+# Compatibility export: existing services and migrations import this model from
+# plugin_marketplace.models even though its implementation lives separately.
+from plugin_marketplace.access_models import PluginSecretBinding as PluginSecretBinding  # noqa: E402

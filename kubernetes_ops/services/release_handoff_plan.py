@@ -72,7 +72,9 @@ def build_kubernetes_handoff_execution_plan(handoff: dict[str, Any]) -> dict[str
         _manual_phase(
             "enable_sidebar_after_green",
             "Enable sidebar after green handoff",
-            ["Set KUBERNETES_OPS_READY_FOR_SIDEBAR=true only after production_ready=true and approved operator change."],
+            [
+                "Set KUBERNETES_OPS_READY_FOR_SIDEBAR=true only after production_ready=true and approved operator change."
+            ],
             ["KUBERNETES_OPS_READY_FOR_SIDEBAR"],
         ),
     ]
@@ -92,7 +94,11 @@ def build_kubernetes_release_evidence_execution_plan(evidence: dict[str, Any]) -
     release_scope = evidence.get("release_scope") if isinstance(evidence.get("release_scope"), dict) else {}
     artifact_safety = evidence.get("artifact_safety") if isinstance(evidence.get("artifact_safety"), dict) else {}
     release_contract = evidence.get("release_contract") if isinstance(evidence.get("release_contract"), dict) else {}
-    commands = release_contract.get("required_preflight_commands") if isinstance(release_contract.get("required_preflight_commands"), list) else []
+    commands = (
+        release_contract.get("required_preflight_commands")
+        if isinstance(release_contract.get("required_preflight_commands"), list)
+        else []
+    )
     completion = evidence.get("completion_audit") if isinstance(evidence.get("completion_audit"), dict) else {}
     can_enable_sidebar = (
         bool(evidence.get("production_ready"))
@@ -153,7 +159,9 @@ def render_kubernetes_handoff_execution_plan_markdown(plan: dict[str, Any]) -> l
     return lines
 
 
-def _blocked_until(*, release_scope: dict[str, Any], evidence: dict[str, Any], completion: dict[str, Any]) -> list[dict[str, str]]:
+def _blocked_until(
+    *, release_scope: dict[str, Any], evidence: dict[str, Any], completion: dict[str, Any]
+) -> list[dict[str, str]]:
     blockers: list[dict[str, str]] = []
     if str(release_scope.get("target_environment") or "") != "production":
         blockers.append({"id": "target_environment", "detail": "target environment must be production"})
@@ -169,7 +177,12 @@ def _blocked_until(*, release_scope: dict[str, Any], evidence: dict[str, Any], c
             )
     local_indicator_count = int(release_scope.get("local_indicator_count") or 0)
     if local_indicator_count:
-        blockers.append({"id": "local_indicators", "detail": f"local/test markers must be removed from evidence ({local_indicator_count})"})
+        blockers.append(
+            {
+                "id": "local_indicators",
+                "detail": f"local/test markers must be removed from evidence ({local_indicator_count})",
+            }
+        )
     if str(evidence.get("artifact_status") or "") != "ready":
         blockers.append({"id": "release_artifact", "detail": "release evidence artifact must pass safety checks"})
     if not evidence.get("production_ready"):
@@ -177,9 +190,13 @@ def _blocked_until(*, release_scope: dict[str, Any], evidence: dict[str, Any], c
     if not evidence.get("ready_for_sidebar"):
         blockers.append({"id": "ready_for_sidebar", "detail": "release evidence must report ready_for_sidebar=true"})
     if completion.get("production_evidence_complete") is not True:
-        blockers.append({"id": "production_evidence_complete", "detail": "completion audit must mark production evidence complete"})
+        blockers.append(
+            {"id": "production_evidence_complete", "detail": "completion audit must mark production evidence complete"}
+        )
     if completion.get("sidebar_enablement_complete") is not True:
-        blockers.append({"id": "sidebar_enablement_complete", "detail": "completion audit must mark sidebar enablement complete"})
+        blockers.append(
+            {"id": "sidebar_enablement_complete", "detail": "completion audit must mark sidebar enablement complete"}
+        )
     return blockers
 
 
@@ -192,13 +209,29 @@ def _recommended_next(
 ) -> dict[str, Any]:
     blocker_ids = {item["id"] for item in blocked_until}
     if can_enable_sidebar:
-        return {"type": "manual", "id": "enable_sidebar_after_approval", "label": "Enable sidebar after approved production change."}
+        return {
+            "type": "manual",
+            "id": "enable_sidebar_after_approval",
+            "label": "Enable sidebar after approved production change.",
+        }
     if "target_environment" in blocker_ids:
-        return {"type": "manual", "id": "select_production_environment", "label": "Select the production release environment."}
+        return {
+            "type": "manual",
+            "id": "select_production_environment",
+            "label": "Select the production release environment.",
+        }
     if "production_approval_ref" in blocker_ids or release_scope.get("missing_reference_count"):
-        return {"type": "manual", "id": "set_production_evidence_refs", "label": "Set approval and required production evidence refs."}
+        return {
+            "type": "manual",
+            "id": "set_production_evidence_refs",
+            "label": "Set approval and required production evidence refs.",
+        }
     if "local_indicators" in blocker_ids:
-        return {"type": "manual", "id": "replace_local_evidence", "label": "Replace local/test evidence with non-local production proofs."}
+        return {
+            "type": "manual",
+            "id": "replace_local_evidence",
+            "label": "Replace local/test evidence with non-local production proofs.",
+        }
     if evidence.get("artifact_status") != "ready" or not evidence.get("production_ready"):
         return {"type": "command", "id": "release_evidence", "label": "Regenerate production release evidence."}
     return {"type": "command", "id": "release_handoff", "label": "Render the production handoff again."}
@@ -212,7 +245,9 @@ def _command_map(commands: object) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _command_phase(phase_id: str, title: str, commands: dict[str, dict[str, Any]], command_ids: tuple[str, ...]) -> dict[str, Any]:
+def _command_phase(
+    phase_id: str, title: str, commands: dict[str, dict[str, Any]], command_ids: tuple[str, ...]
+) -> dict[str, Any]:
     selected = _selected_phase_commands(commands, command_ids)
     return {"id": phase_id, "title": title, "type": "command", "commands": selected, "command_count": len(selected)}
 

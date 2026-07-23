@@ -68,8 +68,8 @@ def test_create_paths_default_to_full_budget_constants():
     assert "FULL_DEFAULT_MAX_ITERATIONS" in assistant_src
     assert "FULL_DEFAULT_SESSION_TIMEOUT_SEC" in assistant_src
     # Explicit legacy hardcodes must be gone
-    assert "max_iterations\") or 20" not in assistant_src
-    assert "session_timeout_seconds\") or 600" not in assistant_src
+    assert 'max_iterations") or 20' not in assistant_src
+    assert 'session_timeout_seconds") or 600' not in assistant_src
 
 
 @pytest.mark.django_db
@@ -84,9 +84,7 @@ def test_agent_create_api_omitted_budgets_use_full_defaults():
     from servers.models import Server, ServerAgent
 
     user = User.objects.create_user(username="budget-create-user", password="x")
-    UserAppPermission.objects.update_or_create(
-        user=user, feature="agents", defaults={"allowed": True}
-    )
+    UserAppPermission.objects.update_or_create(user=user, feature="agents", defaults={"allowed": True})
     server = Server.objects.create(
         user=user,
         name="budget-srv",
@@ -155,10 +153,8 @@ def test_model_and_engine_defaults_wire_to_budgets():
 
 
 def test_agent_engine_runner_uses_command_timeout_from_engine():
-    src = inspect.getsource(
-        __import__("servers.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine
-    )
-    assert "command_timeout=int(getattr(engine, \"command_timeout\"" in src or "command_timeout=" in src
+    src = inspect.getsource(__import__("servers.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine)
+    assert 'command_timeout=int(getattr(engine, "command_timeout"' in src or "command_timeout=" in src
     assert "command_timeout=30" not in src
 
 
@@ -183,9 +179,7 @@ def test_complexity_simple_vs_complex_russian_english():
 
 
 def test_fast_complex_routing_ask_and_upgrade_not_silent_execute():
-    assessment = classify_goal_complexity(
-        "Разберись с инцидентом nginx, почини и проверь после"
-    )
+    assessment = classify_goal_complexity("Разберись с инцидентом nginx, почини и проверь после")
     ask = resolve_fast_complex_action(assessment, requested_mode="fast", policy="ask")
     assert ask["action"] == "ask"
     assert "Nova" in ask["assistant_text"] or "nova" in ask["assistant_text"].lower()
@@ -365,9 +359,7 @@ def test_multi_structured_handoff_and_verification_plan():
     assert "Факты:" in ctx or "path:" in ctx or "service:" in ctx
     assert task.get("handoff")
 
-    assert plan_mentions_mutation(
-        [{"name": "Fix service", "description": "restart nginx", "role": "deploy_operator"}]
-    )
+    assert plan_mentions_mutation([{"name": "Fix service", "description": "restart nginx", "role": "deploy_operator"}])
     plan = [
         {"name": "Fix", "description": "restart and edit config", "role": "deploy_operator"},
     ]

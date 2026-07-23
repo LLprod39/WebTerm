@@ -61,9 +61,7 @@ def task_is_read_only(task: dict[str, Any] | None) -> bool:
     if role in READ_ONLY_ROLES:
         return True
     # Explicit PLAN mode on non-mutating custom work may inspect in parallel.
-    if permission == "PLAN" and role in {"custom", ""}:
-        return True
-    return False
+    return bool(permission == "PLAN" and role in {"custom", ""})
 
 
 def _is_pending(task: dict[str, Any]) -> bool:

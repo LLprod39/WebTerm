@@ -253,7 +253,7 @@ Current state after fix:
 Problems:
 
 - There is no guided "choose one working provider" flow.
-- Some defaults are environment/company-specific, for example FAIR base URL.
+- Provider defaults must remain environment-neutral and configurable.
 
 Remaining improvement:
 

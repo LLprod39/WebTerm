@@ -26,14 +26,17 @@ def get_server_card(server_id: int) -> ServerMemoryCard:
             ServerGroupKnowledge.objects.filter(group=server.group, is_active=True).order_by("-updated_at")[:6]
         )
     snapshots = list(
-        ServerMemorySnapshot.objects.filter(server=server, is_active=True, layer=ServerMemorySnapshot.LAYER_CANONICAL)
-        .order_by("memory_key", "-version", "-updated_at")
+        ServerMemorySnapshot.objects.filter(
+            server=server, is_active=True, layer=ServerMemorySnapshot.LAYER_CANONICAL
+        ).order_by("memory_key", "-version", "-updated_at")
     )
     episodes = list(
         ServerMemoryEpisode.objects.filter(server=server, is_active=True).order_by("-last_event_at", "-updated_at")[:8]
     )
     revalidations = list(
-        ServerMemoryRevalidation.objects.filter(server=server, status=ServerMemoryRevalidation.STATUS_OPEN).order_by("-updated_at")[:6]
+        ServerMemoryRevalidation.objects.filter(server=server, status=ServerMemoryRevalidation.STATUS_OPEN).order_by(
+            "-updated_at"
+        )[:6]
     )
     latest_health = ServerHealthCheck.objects.filter(server=server).order_by("-checked_at").first()
     active_alerts = list(ServerAlert.objects.filter(server=server, is_resolved=False).order_by("-created_at")[:5])
@@ -93,9 +96,9 @@ def get_server_cards_batch(server_ids: list[int]) -> list[ServerMemoryCard]:
         snapshots_by_server.setdefault(s.server_id, []).append(s)
 
     episodes_by_server: dict[int, list] = {}
-    for e in ServerMemoryEpisode.objects.filter(server_id__in=server_ids, is_active=True).order_by("-last_event_at", "-updated_at")[
-        : len(server_ids) * 8
-    ]:
+    for e in ServerMemoryEpisode.objects.filter(server_id__in=server_ids, is_active=True).order_by(
+        "-last_event_at", "-updated_at"
+    )[: len(server_ids) * 8]:
         episodes_by_server.setdefault(e.server_id, []).append(e)
 
     revalidations_by_server: dict[int, list] = {}
@@ -114,7 +117,11 @@ def get_server_cards_batch(server_ids: list[int]) -> list[ServerMemoryCard]:
         alerts_by_server.setdefault(a.server_id, []).append(a)
 
     runs_by_server: dict[int, list] = {}
-    for r in AgentRun.objects.filter(server_id__in=server_ids).select_related("agent").order_by("-started_at")[: len(server_ids) * 4]:
+    for r in (
+        AgentRun.objects.filter(server_id__in=server_ids)
+        .select_related("agent")
+        .order_by("-started_at")[: len(server_ids) * 4]
+    ):
         runs_by_server.setdefault(r.server_id, []).append(r)
 
     knowledge_by_server: dict[int, list] = {}

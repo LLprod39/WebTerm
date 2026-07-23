@@ -167,6 +167,20 @@ export const settingsNavGroups: SettingsNavGroup[] = [
 
 export const allSettingsNavItems = settingsNavGroups.flatMap((group) => group.items);
 
+export function visibleSettingsNavGroups(
+  isAdmin: boolean,
+  pluginsEnabled: boolean,
+): SettingsNavGroup[] {
+  return settingsNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter(
+        (item) => (!item.adminOnly || isAdmin) && (item.id !== "plugins" || pluginsEnabled),
+      ),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
 export function findSettingsNavItem(pathname: string): SettingsNavItem | undefined {
   const exact = allSettingsNavItems.find((item) => item.path === pathname);
   if (exact) return exact;

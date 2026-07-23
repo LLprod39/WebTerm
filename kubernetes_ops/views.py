@@ -56,7 +56,9 @@ def _safe_json(handler):
 
 def _staff_required(request) -> JsonResponse | None:
     if not getattr(request.user, "is_staff", False):
-        return JsonResponse({"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403
+        )
     return None
 
 
@@ -98,12 +100,16 @@ def _validate_secret_ref(auth_mode: str, secret_ref: str) -> str | None:
     return None
 
 
-def _provider_payload_from_body(data: dict[str, Any], provider: K8sProvider | None = None) -> tuple[dict[str, Any], str, str]:
+def _provider_payload_from_body(
+    data: dict[str, Any], provider: K8sProvider | None = None
+) -> tuple[dict[str, Any], str, str]:
     name = str(data.get("name", provider.name if provider else "") or "").strip()
     kind = str(data.get("kind", provider.kind if provider else "") or "").strip()
     base_url = str(data.get("base_url", provider.base_url if provider else "") or "").strip().rstrip("/")
     enabled = _as_bool(data.get("enabled"), provider.enabled if provider else True)
-    auth_mode = str(data.get("auth_mode", provider.auth_mode if provider else K8sProvider.AUTH_SECRET_REF) or "").strip()
+    auth_mode = str(
+        data.get("auth_mode", provider.auth_mode if provider else K8sProvider.AUTH_SECRET_REF) or ""
+    ).strip()
     secret_ref = str(data.get("secret_ref", provider.secret_ref if provider else "") or "").strip()
     secret_value = str(data.get("secret_value") or "").strip() if "secret_value" in data else ""
     labels = data.get("labels", provider.labels if provider else {})
@@ -122,18 +128,24 @@ def _provider_payload_from_body(data: dict[str, Any], provider: K8sProvider | No
         return {}, "", "secret_value cannot be stored when auth_mode is none."
     if auth_mode == K8sProvider.AUTH_NONE:
         secret_ref = ""
-    secret_error = None if secret_value and auth_mode != K8sProvider.AUTH_NONE else _validate_secret_ref(auth_mode, secret_ref)
+    secret_error = (
+        None if secret_value and auth_mode != K8sProvider.AUTH_NONE else _validate_secret_ref(auth_mode, secret_ref)
+    )
     if secret_error:
         return {}, "", secret_error
-    return {
-        "name": name,
-        "kind": kind,
-        "base_url": base_url,
-        "enabled": enabled,
-        "auth_mode": auth_mode,
-        "secret_ref": secret_ref,
-        "labels": labels,
-    }, secret_value, ""
+    return (
+        {
+            "name": name,
+            "kind": kind,
+            "base_url": base_url,
+            "enabled": enabled,
+            "auth_mode": auth_mode,
+            "secret_ref": secret_ref,
+            "labels": labels,
+        },
+        secret_value,
+        "",
+    )
 
 
 def _apply_provider_secret_value(provider: K8sProvider, secret_value: str) -> bool:
@@ -266,7 +278,14 @@ def api_kubernetes_providers(request):
             denied = _staff_required(request)
             if denied:
                 return denied
-            return JsonResponse({"success": True, "providers": [serialize_provider(provider, user=request.user) for provider in K8sProvider.objects.all()]})
+            return JsonResponse(
+                {
+                    "success": True,
+                    "providers": [
+                        serialize_provider(provider, user=request.user) for provider in K8sProvider.objects.all()
+                    ],
+                }
+            )
 
         denied = _staff_required(request)
         if denied:
@@ -332,7 +351,11 @@ def api_kubernetes_provider_detail(request, provider_id: int):
             request,
             "k8s.provider.update",
             provider=provider.name,
-            payload={"provider_id": provider.id, "kind": provider.kind, "managed_secret_rotated": managed_secret_rotated},
+            payload={
+                "provider_id": provider.id,
+                "kind": provider.kind,
+                "managed_secret_rotated": managed_secret_rotated,
+            },
         )
         return JsonResponse({"success": True, "provider": serialize_provider(provider, user=request.user)})
 
@@ -378,7 +401,12 @@ def api_kubernetes_provider_sync(request, provider_id: int):
         if provider is None:
             return JsonResponse({"success": False, "error": "Provider not found"}, status=404)
         results = sync_kubernetes_providers(provider_id=provider.id, dry_run=dry_run)
-        _audit(request, "k8s.provider.sync", provider=provider.name, payload={"provider_id": provider.id, "dry_run": dry_run})
+        _audit(
+            request,
+            "k8s.provider.sync",
+            provider=provider.name,
+            payload={"provider_id": provider.id, "dry_run": dry_run},
+        )
         failed = [item for item in results if not item.success]
         return JsonResponse({"success": not failed, "results": [_sync_result_payload(item) for item in results]})
 
@@ -420,7 +448,13 @@ def api_kubernetes_cluster_namespaces(request, cluster_id: str):
         cluster = _cluster_or_none(cluster_id)
         if cluster is None:
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
-        return JsonResponse({"success": True, "cluster": serialize_cluster(cluster, user=request.user), "namespaces": _namespace_summaries(cluster, user=request.user)})
+        return JsonResponse(
+            {
+                "success": True,
+                "cluster": serialize_cluster(cluster, user=request.user),
+                "namespaces": _namespace_summaries(cluster, user=request.user),
+            }
+        )
 
     return _safe_json(handler)
 
@@ -433,7 +467,13 @@ def api_kubernetes_cluster_workloads(request, cluster_id: str):
         cluster = _cluster_or_none(cluster_id)
         if cluster is None:
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
-        return JsonResponse({"success": True, "cluster": serialize_cluster(cluster, user=request.user), "workloads": _workload_rows(cluster, user=request.user)})
+        return JsonResponse(
+            {
+                "success": True,
+                "cluster": serialize_cluster(cluster, user=request.user),
+                "workloads": _workload_rows(cluster, user=request.user),
+            }
+        )
 
     return _safe_json(handler)
 
@@ -446,7 +486,13 @@ def api_kubernetes_cluster_events(request, cluster_id: str):
         cluster = _cluster_or_none(cluster_id)
         if cluster is None:
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
-        return JsonResponse({"success": True, "cluster": serialize_cluster(cluster, user=request.user), "events": _cluster_event_rows(cluster)})
+        return JsonResponse(
+            {
+                "success": True,
+                "cluster": serialize_cluster(cluster, user=request.user),
+                "events": _cluster_event_rows(cluster),
+            }
+        )
 
     return _safe_json(handler)
 
@@ -459,7 +505,9 @@ def api_kubernetes_fleet_bundles(request):
         lambda: JsonResponse(
             {
                 "success": True,
-                "bundles": [serialize_fleet_bundle(bundle, user=request.user) for bundle in K8sFleetBundle.objects.all()],
+                "bundles": [
+                    serialize_fleet_bundle(bundle, user=request.user) for bundle in K8sFleetBundle.objects.all()
+                ],
             }
         )
     )
@@ -470,4 +518,6 @@ def api_kubernetes_fleet_bundles(request):
 @require_GET
 def api_kubernetes_devtron_apps(request):
     apps = K8sAppRef.objects.filter(owner=K8sAppRef.OWNER_DEVTRON).select_related("cluster")
-    return _safe_json(lambda: JsonResponse({"success": True, "apps": [serialize_app(app, user=request.user) for app in apps]}))
+    return _safe_json(
+        lambda: JsonResponse({"success": True, "apps": [serialize_app(app, user=request.user) for app in apps]})
+    )

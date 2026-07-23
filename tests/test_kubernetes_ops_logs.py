@@ -37,7 +37,9 @@ class KubernetesOpsLogsTests(TestCase):
             labels={"token": "raw-token"},
         )
 
-        response = self.client.get(reverse("api_kubernetes_pod_logs", kwargs={"pod_id": f"pod_{pod.id}"}), {"tail": "2"})
+        response = self.client.get(
+            reverse("api_kubernetes_pod_logs", kwargs={"pod_id": f"pod_{pod.id}"}), {"tail": "2"}
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -87,7 +89,10 @@ class KubernetesOpsLogsTests(TestCase):
         self.assertTrue(payload["available"])
         self.assertEqual(payload["source"], "provider_snapshot")
         self.assertEqual(payload["lines"], ["boot ok", "ready"])
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-abc123/log?tailLines=2")
+        self.assertEqual(
+            seen["url"],
+            "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-abc123/log?tailLines=2",
+        )
 
     def test_pod_logs_staff_fallback_links_are_sanitized(self):
         user = self.create_user("k8s-logs-staff", is_staff=True)
@@ -103,7 +108,9 @@ class KubernetesOpsLogsTests(TestCase):
             },
         )
 
-        response = self.client.get(reverse("api_kubernetes_pod_logs", kwargs={"pod_id": f"pod_{pod.id}"}), {"tail": "2"})
+        response = self.client.get(
+            reverse("api_kubernetes_pod_logs", kwargs={"pod_id": f"pod_{pod.id}"}), {"tail": "2"}
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -162,7 +169,9 @@ class KubernetesOpsLogsTests(TestCase):
             kind=K8sProvider.KIND_RANCHER,
             base_url="https://rancher.example.test",
             auth_mode=K8sProvider.AUTH_NONE,
-            labels={"pod_logs_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?tailLines={tail}"},
+            labels={
+                "pod_logs_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?tailLines={tail}"
+            },
         )
         cluster = K8sCluster.objects.create(
             name="prod-kz-logs",

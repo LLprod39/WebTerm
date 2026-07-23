@@ -52,9 +52,7 @@ class Command(BaseCommand):
 
         pipeline = tpl.instantiate_for_user(user)
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Pipeline \"{pipeline.name}\" created (ID={pipeline.id}) for user {user.username}."
-            )
+            self.style.SUCCESS(f'Pipeline "{pipeline.name}" created (ID={pipeline.id}) for user {user.username}.')
         )
         self.stdout.write("")
         self.stdout.write("Next steps:")

@@ -54,8 +54,12 @@ class KubernetesOpsInventoryTests(TestCase):
             desired=2,
         )
 
-        namespaces = self.client.get(reverse("api_kubernetes_cluster_namespaces", kwargs={"cluster_id": f"cluster_{cluster.id}"})).json()["namespaces"]
-        workloads = self.client.get(reverse("api_kubernetes_cluster_workloads", kwargs={"cluster_id": f"cluster_{cluster.id}"})).json()["workloads"]
+        namespaces = self.client.get(
+            reverse("api_kubernetes_cluster_namespaces", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        ).json()["namespaces"]
+        workloads = self.client.get(
+            reverse("api_kubernetes_cluster_workloads", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        ).json()["workloads"]
 
         self.assertEqual([item["name"] for item in namespaces], ["platform"])
         self.assertEqual(namespaces[0]["workloads"], 1)
@@ -69,7 +73,9 @@ class KubernetesOpsInventoryTests(TestCase):
         user = self.create_user("k8s-native-event-reader")
         self.client.force_login(user)
         cluster = K8sCluster.objects.create(name="stage-webterm-ops")
-        K8sAuditEvent.objects.create(user=user, username_snapshot=user.username, action="k8s.cluster.view", cluster=cluster)
+        K8sAuditEvent.objects.create(
+            user=user, username_snapshot=user.username, action="k8s.cluster.view", cluster=cluster
+        )
         K8sEvent.objects.create(
             cluster=cluster,
             event_uid="event-1",
@@ -83,7 +89,9 @@ class KubernetesOpsInventoryTests(TestCase):
             count=2,
         )
 
-        response = self.client.get(reverse("api_kubernetes_cluster_events", kwargs={"cluster_id": f"cluster_{cluster.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_cluster_events", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         events = response.json()["events"]
@@ -117,7 +125,9 @@ class KubernetesOpsInventoryTests(TestCase):
             hosts=["demo.example.test"],
         )
 
-        response = self.client.get(reverse("api_kubernetes_cluster_network", kwargs={"cluster_id": f"cluster_{cluster.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_cluster_network", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         rows = response.json()["network_refs"]
@@ -145,7 +155,9 @@ class KubernetesOpsInventoryTests(TestCase):
             images=["demo-api:2026.06"],
         )
 
-        response = self.client.get(reverse("api_kubernetes_cluster_pods", kwargs={"cluster_id": f"cluster_{cluster.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_cluster_pods", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         pods = response.json()["pods"]

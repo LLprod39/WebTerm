@@ -131,7 +131,10 @@ def _event_summary(event_type: str, payload: dict[str, Any], message: str) -> st
         status_code = payload.get("status_code")
         if status_code:
             return f"Доставка в {channel_label} завершилась ошибкой HTTP {status_code}."
-        return _text(payload.get("error") or payload.get("message") or f"Доставка в {channel_label} завершилась ошибкой.", limit=500)
+        return _text(
+            payload.get("error") or payload.get("message") or f"Доставка в {channel_label} завершилась ошибкой.",
+            limit=500,
+        )
     if event_type in {"agent_action", "agent_observation", "agent_thought"}:
         return _text(message, limit=500)
     if event_type.startswith("agent_task_"):
@@ -166,7 +169,14 @@ def _event_important(event_type: str, severity: str, payload: dict[str, Any]) ->
     }:
         return True
     if event_type == "agent_status":
-        return str(payload.get("status") or "") in {"connecting", "planning", "running", "waiting", "failed", "completed"}
+        return str(payload.get("status") or "") in {
+            "connecting",
+            "planning",
+            "running",
+            "waiting",
+            "failed",
+            "completed",
+        }
     return False
 
 
@@ -255,7 +265,9 @@ def _build_delivery_state(run: AgentRun, events: list[dict[str, Any]], report_st
     base = {
         "enabled": bool(enabled_channels),
         "channels": enabled_channels,
-        "channel": str((latest or {}).get("payload", {}).get("channel") or (enabled_channels[0] if enabled_channels else "")),
+        "channel": str(
+            (latest or {}).get("payload", {}).get("channel") or (enabled_channels[0] if enabled_channels else "")
+        ),
         "target": target,
         "status": "disabled",
         "severity": "info",
@@ -316,7 +328,9 @@ def _build_delivery_state(run: AgentRun, events: list[dict[str, Any]], report_st
                     "severity": "critical",
                     "label": "Ошибка",
                     "title": "Доставка отчёта не удалась",
-                    "description": latest.get("summary") or latest.get("message") or "Внешний канал вернул ошибку доставки.",
+                    "description": latest.get("summary")
+                    or latest.get("message")
+                    or "Внешний канал вернул ошибку доставки.",
                     "next_action": "Проверьте настройки канала и повторите отправку отчёта после исправления причины.",
                 }
             )
@@ -347,5 +361,6 @@ def _build_delivery_state(run: AgentRun, events: list[dict[str, Any]], report_st
         }
     )
     return base
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

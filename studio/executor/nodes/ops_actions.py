@@ -47,7 +47,9 @@ async def execute_service_action(
     text = f"Service action {action} {output['service']} on {server.name}: {status_text}\n\n```json\n{_compact_json(output)}\n```"
     if output["success"]:
         return NodeResult(output={"output": text, "action_result": output})
-    return NodeResult(error=str(result.get("output") or "Service action failed"), output={"output": text, "action_result": output})
+    return NodeResult(
+        error=str(result.get("output") or "Service action failed"), output={"output": text, "action_result": output}
+    )
 
 
 async def execute_docker_action(
@@ -72,7 +74,9 @@ async def execute_docker_action(
     after = await get_docker(server, secret=secret) if _coerce_bool(config.get("verify"), default=True) else None
     logs = None
     if _coerce_bool(config.get("include_logs"), default=True):
-        logs = await get_docker_logs(server, secret=secret, container=container, lines=_coerce_int(config.get("lines")) or 80)
+        logs = await get_docker_logs(
+            server, secret=secret, container=container, lines=_coerce_int(config.get("lines")) or 80
+        )
     output = {
         "server": server.name,
         "container": result.get("container") or container,
@@ -88,7 +92,9 @@ async def execute_docker_action(
     text = f"Docker action {action} {output['container']} on {server.name}: {status_text}\n\n```json\n{_compact_json(output)}\n```"
     if output["success"]:
         return NodeResult(output={"output": text, "action_result": output})
-    return NodeResult(error=str(result.get("output") or "Docker action failed"), output={"output": text, "action_result": output})
+    return NodeResult(
+        error=str(result.get("output") or "Docker action failed"), output={"output": text, "action_result": output}
+    )
 
 
 async def execute_process_action(
@@ -117,4 +123,6 @@ async def execute_process_action(
     text = f"Process action {action} PID {output['pid']} on {server.name}: {'completed' if output['success'] else 'failed'}\n\n```json\n{_compact_json(output)}\n```"
     if output["success"]:
         return NodeResult(output={"output": text, "action_result": output})
-    return NodeResult(error=str(result.get("output") or "Process action failed"), output={"output": text, "action_result": output})
+    return NodeResult(
+        error=str(result.get("output") or "Process action failed"), output={"output": text, "action_result": output}
+    )

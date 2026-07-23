@@ -33,9 +33,7 @@ async def finalize_manual_terminal_command(consumer: Any, cmd_id: int, exit_code
         return
 
     raw_output = (
-        consumer._manual_active_output
-        if int(getattr(consumer, "_manual_active_cmd_id", 0) or 0) == int(cmd_id)
-        else ""
+        consumer._manual_active_output if int(getattr(consumer, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
     )
     clean_output = consumer._normalize_manual_command_output(str(item.get("command") or ""), raw_output)
     await persist_result(

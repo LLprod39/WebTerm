@@ -227,6 +227,7 @@ def _planner_user_prompt(
 
 Верни только JSON."""
 
+
 def _planner_common_args(
     *,
     user_message: str,
@@ -378,6 +379,8 @@ def build_recovery_prompt(
 }}
 
 Верни только JSON."""
+
+
 # ---------------------------------------------------------------------------
 # Step-by-step controller
 # ---------------------------------------------------------------------------
@@ -398,10 +401,7 @@ def build_step_decision_prompt(
     step-mode needs a single LLM call per step instead of a separate
     recovery call + step-decide call.
     """
-    remaining_text = (
-        "\n".join(f"  {i + 1}. {c}" for i, c in enumerate(remaining_cmds[:6]))
-        or "(нет оставшихся команд)"
-    )
+    remaining_text = "\n".join(f"  {i + 1}. {c}" for i, c in enumerate(remaining_cmds[:6])) or "(нет оставшихся команд)"
     safe_output = sanitize_for_prompt(output, mode="observation", fallback="(нет вывода)")[:2500]
     safe_goal = sanitize_for_prompt(user_goal, mode="context", fallback="(нет цели)")
     user_reply_block = ""

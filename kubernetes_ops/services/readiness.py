@@ -78,7 +78,9 @@ def _sync_worker_check(worker_state: dict[str, Any]) -> dict[str, Any]:
     if status == "running" and not worker_state.get("is_stale"):
         return _check("sync_worker", "ready", f"Kubernetes sync worker is running. Last heartbeat/cycle: {last_cycle}.")
     if worker_state.get("is_stale") and status != "missing":
-        return _check("sync_worker", "missing", f"Kubernetes sync worker lease is stale. Last heartbeat/cycle: {last_cycle}.")
+        return _check(
+            "sync_worker", "missing", f"Kubernetes sync worker lease is stale. Last heartbeat/cycle: {last_cycle}."
+        )
     return _check(
         "sync_worker",
         "missing",
@@ -87,7 +89,9 @@ def _sync_worker_check(worker_state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sync_worker_state() -> dict[str, Any]:
-    states = BackgroundWorkerState.objects.filter(worker_kind=KUBERNETES_OPS_SYNC_WORKER).order_by("-heartbeat_at", "worker_key")
+    states = BackgroundWorkerState.objects.filter(worker_kind=KUBERNETES_OPS_SYNC_WORKER).order_by(
+        "-heartbeat_at", "worker_key"
+    )
     fallback: dict[str, Any] | None = None
     for state in states:
         serialized = serialize_background_worker_state(KUBERNETES_OPS_SYNC_WORKER, worker_key=state.worker_key)
@@ -122,7 +126,9 @@ def _provider_health_check() -> dict[str, Any]:
     if stale:
         return _check("provider_health", "missing", "Provider sync data is stale: " + ", ".join(stale) + ".")
     if missing:
-        return _check("provider_health", "missing", "Providers have not completed a successful sync: " + ", ".join(missing) + ".")
+        return _check(
+            "provider_health", "missing", "Providers have not completed a successful sync: " + ", ".join(missing) + "."
+        )
     return _check("provider_health", "ready", f"Enabled providers have fresh sync metadata: {len(providers)}.")
 
 
@@ -162,7 +168,9 @@ def _sidebar_release_scope_check(user=None) -> dict[str, Any]:
 
 
 def _sidebar_release_gate_report(user=None) -> dict[str, Any]:
-    target_environment = str(getattr(settings, "KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local") or "local").strip().lower()
+    target_environment = (
+        str(getattr(settings, "KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local") or "local").strip().lower()
+    )
     approval_ref = str(getattr(settings, "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "") or "").strip()
     local_indicators = _configured_local_release_indicators(user)
     production_target = target_environment in PRODUCTION_ENVIRONMENTS
@@ -219,7 +227,12 @@ def _public_local_indicator_value(source: str, value: str) -> str:
 
 def _studio_automation_check(user) -> dict[str, Any]:
     if not user or not getattr(user, "is_authenticated", False):
-        return _check("studio_automation", "manual", "Studio automation readiness needs an authenticated operator context.", required=False)
+        return _check(
+            "studio_automation",
+            "manual",
+            "Studio automation readiness needs an authenticated operator context.",
+            required=False,
+        )
 
     missing: list[str] = []
     if not user_has_studio_feature(user, STUDIO_FEATURE_PIPELINES):
@@ -294,7 +307,16 @@ def build_kubernetes_readiness_report(user=None, *, include_release_artifact_gat
         _provider_health_check(),
         _check(
             "read_only_sync",
-            "ready" if cluster_count or namespace_count or workload_count or pod_count or network_count or event_count or app_count or fleet_count else "missing",
+            "ready"
+            if cluster_count
+            or namespace_count
+            or workload_count
+            or pod_count
+            or network_count
+            or event_count
+            or app_count
+            or fleet_count
+            else "missing",
             f"Normalized inventory rows: clusters={cluster_count}, namespaces={namespace_count}, workloads={workload_count}, pods={pod_count}, network_refs={network_count}, events={event_count}, apps={app_count}, fleet_bundles={fleet_count}",
         ),
         _sync_worker_check(worker_state),
@@ -316,8 +338,7 @@ def build_kubernetes_readiness_report(user=None, *, include_release_artifact_gat
                 item["required"] = False
                 if item.get("status") != "ready":
                     item["detail"] = (
-                        f"{item.get('detail', '')} "
-                        "[pilot: waived for closed pilot via KUBERNETES_OPS_PILOT_SIDEBAR]"
+                        f"{item.get('detail', '')} [pilot: waived for closed pilot via KUBERNETES_OPS_PILOT_SIDEBAR]"
                     ).strip()
     required_ok = all(item["status"] == "ready" for item in checks if item["required"])
     # Production: all required ready + READY_FOR_SIDEBAR.

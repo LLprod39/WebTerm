@@ -9,6 +9,7 @@ Outcomes are more precise than AgentRun.status:
 AgentRun.status stays within existing enum values; outcome is stored in
 report_payload and returned via AgentRunSnapshot for pipeline mapping.
 """
+
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -208,7 +209,7 @@ def resolve_multi_agent_outcome(
     pending = summary["pending"] + summary["running"]
     tool_proxy_count = sum(len(task.get("iterations") or []) for task in (plan_tasks or []))
 
-    base = AgentOutcome(
+    AgentOutcome(
         outcome=OUTCOME_SUCCESS,
         status=STATUS_COMPLETED,
         reason="",

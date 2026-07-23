@@ -41,7 +41,9 @@ def test_schedule_runner_skips_invalid_pipeline_before_creating_run(monkeypatch)
     )
     pipeline.sync_triggers_from_nodes()
     trigger = pipeline.triggers.get(trigger_type="schedule")
-    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("invalid schedule launched"))
+    monkeypatch.setattr(
+        "studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("invalid schedule launched")
+    )
     stderr = StringIO()
 
     RunScheduledPipelinesCommand(stderr=stderr)._fire_trigger(trigger)
@@ -70,7 +72,9 @@ def test_schedule_runner_skips_trigger_without_downstream_nodes(monkeypatch):
     )
     pipeline.sync_triggers_from_nodes()
     trigger = pipeline.triggers.get(trigger_type="schedule")
-    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("empty schedule launched"))
+    monkeypatch.setattr(
+        "studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("empty schedule launched")
+    )
     stderr = StringIO()
 
     RunScheduledPipelinesCommand(stderr=stderr)._fire_trigger(trigger)

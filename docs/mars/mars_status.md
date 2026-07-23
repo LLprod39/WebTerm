@@ -9,7 +9,7 @@ This folder now records the current status of the MARS-driven refactor history. 
 | Area | Status |
 | --- | --- |
 | Import boundaries | Green. `import-linter` passed during `python scripts\check_architecture_sizes.py --strict-new`. |
-| Size guard | Green. `key_mcp.py`, `frontend/src/lib/api.ts`, and remaining large route/consumer files are pinned to reduced baselines; several formerly pinned service files are now below the standard limit. |
+| Size guard | Green. `frontend/src/lib/api.ts` and remaining large route/consumer files are pinned to reduced baselines; several formerly pinned service files are now below the standard limit. |
 | Memory store import path | Done. Callers use `servers.adapters.memory_store.DjangoServerMemoryStore`. |
 | MCP runtime ownership | Done. `servers.mcp_tool_runtime` is deleted; server agents use `MCPRuntimeProvider`; Studio owns concrete MCP runtime. |
 | `passwords/` package | Done. Folder is absent. |
@@ -36,7 +36,6 @@ This folder now records the current status of the MARS-driven refactor history. 
 - SSH terminal stream marker filtering, exit-future resolution, and bounded sanitized output buffers were extracted to `servers/services/terminal_stream_state.py`.
 - SSH terminal manual command output/finalization state was extracted to `servers/services/terminal_manual_command_state.py`.
 - SSH terminal Nova/session context helpers were extracted to `servers/services/terminal_nova_context.py`.
-- Keycloak MCP tool schema metadata, JSON-RPC response helpers, summary-shaping helpers, config/profile helpers, MCP transport helpers, and role-management helpers were extracted to focused `key_mcp_*` modules, reducing `key_mcp.py` while preserving private compatibility entrypoints.
 - MCP runtime bridge was inverted through `MCPRuntimeProvider`.
 - Server share permissions were converted to explicit capabilities with negative tests.
 - Shell safety detection was expanded beyond raw regex matching for the listed audit evasions.

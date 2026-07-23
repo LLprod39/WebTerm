@@ -54,9 +54,7 @@ def looks_like_inventory_prose_dump(content: str) -> bool:
     if len(bullets) >= 3:
         return True
     # Many comma-separated host names on one line
-    if len(re.findall(r"\b[\w-]+-(?:prod|stg|01|02)\b", text, flags=re.I)) >= 5:
-        return True
-    return False
+    return len(re.findall(r"\b[\w-]+-(?:prod|stg|01|02)\b", text, flags=re.I)) >= 5
 
 
 def short_inventory_line(*, count: int, status_counts: dict[str, Any] | None = None) -> str:
@@ -112,7 +110,9 @@ def compress_inventory_assistant_content(message: ChatMessage) -> bool:
     count = 0
     status_counts: dict[str, Any] | None = None
     if isinstance(servers_table, dict):
-        status_counts = servers_table.get("status_counts") if isinstance(servers_table.get("status_counts"), dict) else None
+        status_counts = (
+            servers_table.get("status_counts") if isinstance(servers_table.get("status_counts"), dict) else None
+        )
         items = servers_table.get("items") if isinstance(servers_table.get("items"), list) else []
         count = len(items) or int(meta.get("inventory_count") or 0)
         title = str(servers_table.get("title") or "")
@@ -184,11 +184,7 @@ def update_artifact_content(
 
 
 def get_artifact_for_user(user, artifact_id: int) -> ChatArtifact | None:
-    return (
-        ChatArtifact.objects.select_related("session")
-        .filter(pk=artifact_id, session__user=user)
-        .first()
-    )
+    return ChatArtifact.objects.select_related("session").filter(pk=artifact_id, session__user=user).first()
 
 
 def extract_artifacts_from_tool_result(
@@ -261,11 +257,15 @@ def maybe_attach_chart_metadata(message: ChatMessage, tool_result: dict[str, Any
 
     # Point-in-time snapshot from operator.server_metrics → nice card, not terminal dock
     if (
-        payload.get("cpu_percent") is not None
-        or payload.get("mem_percent") is not None
-        or payload.get("disk_mounts")
-        or payload.get("ui_metrics")
-    ) and payload.get("server_id") is not None and "servers" not in payload:
+        (
+            payload.get("cpu_percent") is not None
+            or payload.get("mem_percent") is not None
+            or payload.get("disk_mounts")
+            or payload.get("ui_metrics")
+        )
+        and payload.get("server_id") is not None
+        and "servers" not in payload
+    ):
         meta = dict(message.metadata or {})
         meta["metrics"] = {
             "server_id": payload.get("server_id"),
@@ -313,10 +313,7 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
 
     # Explicit suppress (lookup / resolve / connect)
     ui_table = payload.get("ui_table")
-    if ui_table is False:
-        servers = None
-    else:
-        servers = payload.get("servers")
+    servers = None if ui_table is False else payload.get("servers")
     # Servers inventory card: only when tool asks for it (show_in_chat / ui_table=true).
     # Missing ui_table on a servers list still attaches for backwards compat, except known lookup tools.
     if (
@@ -383,9 +380,7 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
             "status_counts": payload.get("status_counts") if isinstance(payload.get("status_counts"), dict) else None,
             # Never show model-facing reply_hint / "Reply with ONE short line…" in the UI.
             "note": (
-                payload.get("ui_note")
-                if isinstance(payload.get("ui_note"), str) and payload.get("ui_note")
-                else None
+                payload.get("ui_note") if isinstance(payload.get("ui_note"), str) and payload.get("ui_note") else None
             ),
         }
 
@@ -447,7 +442,9 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
                     servers_s += f" +{len(server_names) - 3}"
                 active_id = a.get("active_run_id")
                 last_st = a.get("active_run_status") or a.get("last_run_status") or "—"
-                run_label = f"#{active_id}" if active_id else (f"#{a.get('last_run_id')}" if a.get("last_run_id") else "—")
+                run_label = (
+                    f"#{active_id}" if active_id else (f"#{a.get('last_run_id')}" if a.get("last_run_id") else "—")
+                )
                 rows.append(
                     [
                         a.get("id", ""),
@@ -466,7 +463,9 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
                         "mode_display": a.get("mode_display") or a.get("mode") or "",
                         "agent_type": a.get("agent_type") or "",
                         "goal": (a.get("goal") or a.get("ai_prompt") or "")[:240],
-                        "server_count": a.get("server_count") if a.get("server_count") is not None else len(server_names),
+                        "server_count": a.get("server_count")
+                        if a.get("server_count") is not None
+                        else len(server_names),
                         "server_ids": a.get("server_ids") if isinstance(a.get("server_ids"), list) else [],
                         "server_names": server_names,
                         "is_enabled": bool(a.get("is_enabled", True)),
@@ -484,9 +483,9 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
                         "active_run_pending_question": a.get("active_run_pending_question") or "",
                         "max_iterations": a.get("max_iterations") or 0,
                         "detail_url": "/agents",
-                        "run_url": f"/agents/run/{active_id}" if active_id else (
-                            f"/agents/run/{a.get('last_run_id')}" if a.get("last_run_id") else "/agents"
-                        ),
+                        "run_url": f"/agents/run/{active_id}"
+                        if active_id
+                        else (f"/agents/run/{a.get('last_run_id')}" if a.get("last_run_id") else "/agents"),
                     }
                 )
             table = {
@@ -507,8 +506,7 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
             "forecasts",
         }
         if isinstance(preds, list) and (
-            forecast_action
-            or (preds and isinstance(preds[0], dict) and ("kind" in preds[0] or "eta_days" in preds[0]))
+            forecast_action or (preds and isinstance(preds[0], dict) and ("kind" in preds[0] or "eta_days" in preds[0]))
         ):
             headers = ["Сервер", "Kind", "Target", "Severity", "ETA дн"]
             rows = []

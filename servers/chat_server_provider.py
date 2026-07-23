@@ -86,7 +86,9 @@ class DjangoChatServerProvider:
         try:
             msg = (message or "").strip().lower()
             raw = await sync_to_async(self.get_server_names_for_user, thread_sensitive=True)(user_id)
-            names = sorted([name for name in raw if (name or "").strip()], key=lambda x: len((x or "").strip()), reverse=True)
+            names = sorted(
+                [name for name in raw if (name or "").strip()], key=lambda x: len((x or "").strip()), reverse=True
+            )
             if not names:
                 return None
 

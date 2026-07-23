@@ -18,9 +18,7 @@ from core_ui.services.operator_tools import specs_to_tools
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
-        UserAppPermission.objects.update_or_create(
-            user=user, feature=feature, defaults={"allowed": True}
-        )
+        UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
 
 
 def _ensure_test_tools() -> None:
@@ -108,9 +106,7 @@ def test_operator_loop_read_tools_then_answer(operator_user):
         events.append(ev)
 
     result = asyncio.run(
-        handle_operator_message(
-            session, operator_user, "что с флотом?", on_event=on_event, provider=llm
-        )
+        handle_operator_message(session, operator_user, "что с флотом?", on_event=on_event, provider=llm)
     )
 
     assert result.status == ChatTurnState.STATUS_DONE
@@ -205,9 +201,7 @@ def test_operator_loop_auto_executes_approved_plan_step(operator_user):
     from core_ui.services.operator_loop import run_operator_loop
 
     session = ChatSession.objects.create(user=operator_user, title="plan")
-    user_msg = ChatMessage.objects.create(
-        session=session, role=ChatMessage.ROLE_USER, content="выполни план"
-    )
+    user_msg = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content="выполни план")
     assistant_msg = ChatMessage.objects.create(
         session=session,
         role=ChatMessage.ROLE_ASSISTANT,
@@ -258,14 +252,10 @@ def test_operator_loop_auto_executes_approved_plan_step(operator_user):
         events.append(ev)
 
     tools = specs_to_tools(operator_user)
-    result = asyncio.run(
-        run_operator_loop(turn=turn, user=operator_user, tools=tools, on_event=on_event, provider=llm)
-    )
+    result = asyncio.run(run_operator_loop(turn=turn, user=operator_user, tools=tools, on_event=on_event, provider=llm))
 
     assert result.status == ChatTurnState.STATUS_DONE
-    action = AssistantAction.objects.filter(
-        session=session, action_type="operator.test_mutate"
-    ).first()
+    action = AssistantAction.objects.filter(session=session, action_type="operator.test_mutate").first()
     assert action is not None
     # Auto-executed within the approved plan — NOT parked awaiting confirmation.
     assert action.status == AssistantAction.STATUS_COMPLETED

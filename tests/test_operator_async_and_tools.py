@@ -22,9 +22,7 @@ from servers.operator_tools import register_operator_tools
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
-        UserAppPermission.objects.update_or_create(
-            user=user, feature=feature, defaults={"allowed": True}
-        )
+        UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
 
 
 @pytest.mark.django_db
@@ -134,9 +132,7 @@ def test_list_servers_lookup_mode_no_ui_table_and_resolve_registered():
     assert bare["name_index"].get("lunix")
 
     # Explicit list intent (platform injects show_in_chat)
-    listed = list_servers(
-        AssistantActionContext(user=user, input_payload={"show_in_chat": True})
-    )
+    listed = list_servers(AssistantActionContext(user=user, input_payload={"show_in_chat": True}))
     assert listed.get("ui_table") is True
     assert len(listed.get("servers") or []) >= 2
     assert listed.get("reply_hint")
@@ -178,9 +174,7 @@ def test_prepare_list_servers_arguments_policy():
     assert connect["show_in_chat"] is False
     assert not connect.get("q")
 
-    resolved = prefer_resolve_server_for_message(
-        {}, user_message="Проверь метрики сервера графаны и собери прогноз"
-    )
+    resolved = prefer_resolve_server_for_message({}, user_message="Проверь метрики сервера графаны и собери прогноз")
     assert resolved is not None
     assert resolved["q"] == "grafana"
 
@@ -315,18 +309,14 @@ def test_create_playbook_accepts_command_steps():
         {"command": "systemctl list-units --state=running | head -20", "description": "Run command"},
     ]
     # Model puts the runbook body under "steps" (the reported failing case).
-    result = create_playbook(
-        AssistantActionContext(user=user, input_payload={"name": "rb", "steps": steps})
-    )
+    result = create_playbook(AssistantActionContext(user=user, input_payload={"name": "rb", "steps": steps}))
     assert result["ok"] is True
     pb = Playbook.objects.get(pk=result["playbook"]["id"])
     assert pb.kind == Playbook.KIND_RUNBOOK
     assert len(pb.tasks) == 2
 
     # Alternate key "commands" also works.
-    alt = create_playbook(
-        AssistantActionContext(user=user, input_payload={"name": "rb2", "commands": steps})
-    )
+    alt = create_playbook(AssistantActionContext(user=user, input_payload={"name": "rb2", "commands": steps}))
     assert alt["ok"] is True and alt["playbook"]["task_count"] == 2
 
     # With nothing usable it still fails cleanly.

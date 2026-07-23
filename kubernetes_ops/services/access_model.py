@@ -39,8 +39,20 @@ ACCESS_ROLE_MAPPING: tuple[dict[str, Any], ...] = (
         "webterm_role": "Kubernetes reader",
         "rancher_role": "project/cluster read-only",
         "devtron_role": "application view + logs",
-        "allowed_webterm_capabilities": ["overview", "inventory.read", "events.read", "pod.logs.snapshot", "actions.request_approval"],
-        "denied_webterm_capabilities": ["providers.write", "rollout_restart.native", "pod.exec", "apply_yaml", "delete"],
+        "allowed_webterm_capabilities": [
+            "overview",
+            "inventory.read",
+            "events.read",
+            "pod.logs.snapshot",
+            "actions.request_approval",
+        ],
+        "denied_webterm_capabilities": [
+            "providers.write",
+            "rollout_restart.native",
+            "pod.exec",
+            "apply_yaml",
+            "delete",
+        ],
     },
     {
         "keycloak_group": "webterm-kubernetes-admins",
@@ -48,7 +60,12 @@ ACCESS_ROLE_MAPPING: tuple[dict[str, Any], ...] = (
         "webterm_role": "Kubernetes provider admin",
         "rancher_role": "cluster/project admin outside WebTerm",
         "devtron_role": "environment admin outside WebTerm",
-        "allowed_webterm_capabilities": ["providers.write", "providers.sync", "providers.probe", "actions.verify_external"],
+        "allowed_webterm_capabilities": [
+            "providers.write",
+            "providers.sync",
+            "providers.probe",
+            "actions.verify_external",
+        ],
         "denied_webterm_capabilities": ["rollout_restart.native", "pod.exec", "cluster_terminal", "node_debug"],
     },
     {
@@ -72,7 +89,11 @@ def build_kubernetes_access_model_report(*, base_dir: Path | str | None = None) 
     service_account_errors = _service_account_errors()
     rbac_report = build_kubernetes_readonly_rbac_report()
     rbac_errors = rbac_report.get("validation", {}).get("errors", [])
-    status = "ready" if not missing_markers and not role_errors and not service_account_errors and not rbac_errors else "missing"
+    status = (
+        "ready"
+        if not missing_markers and not role_errors and not service_account_errors and not rbac_errors
+        else "missing"
+    )
     return {
         "status": status,
         "identity_provider": "Keycloak/OIDC",
@@ -81,7 +102,10 @@ def build_kubernetes_access_model_report(*, base_dir: Path | str | None = None) 
             "rancher": "cluster/project RBAC and Fleet platform ownership",
             "devtron": "application/environment permissions and deployment history",
         },
-        "docs": {name: {"path": path, "required_markers": list(markers)} for name, (path, markers) in ACCESS_MODEL_DOC_MARKERS.items()},
+        "docs": {
+            name: {"path": path, "required_markers": list(markers)}
+            for name, (path, markers) in ACCESS_MODEL_DOC_MARKERS.items()
+        },
         "missing_markers": missing_markers,
         "role_mapping_errors": role_errors,
         "service_account_errors": service_account_errors,
@@ -104,7 +128,12 @@ def kubernetes_access_model_check() -> dict[str, Any]:
             "detail": "OIDC/RBAC role mapping and read-only service account contract are documented and fail-closed.",
             "required": True,
         }
-    missing = report["missing_markers"] or report["role_mapping_errors"] or report["service_account_errors"] or report["rbac_manifest_errors"]
+    missing = (
+        report["missing_markers"]
+        or report["role_mapping_errors"]
+        or report["service_account_errors"]
+        or report["rbac_manifest_errors"]
+    )
     return {
         "id": "access_model",
         "status": "missing",

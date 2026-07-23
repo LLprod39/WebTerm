@@ -13,6 +13,7 @@ logic/* и output/report — ничего не делают на ПК и без�
     python manage.py setup_demo_showcase_pipelines
     python manage.py setup_demo_showcase_pipelines --username admin
 """
+
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -37,19 +38,17 @@ class Command(BaseCommand):
         pipelines = ensure_all_demo_showcase_pipelines(user)
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Готово: создано/обновлено {len(pipelines)} демо-пайплайнов для {user.username}."
-            )
+            self.style.SUCCESS(f"Готово: создано/обновлено {len(pipelines)} демо-пайплайнов для {user.username}.")
         )
         for pipeline in pipelines:
-            triggers = list(
-                pipeline.triggers.order_by("created_at", "id").values_list("trigger_type", flat=True)
-            )
+            triggers = list(pipeline.triggers.order_by("created_at", "id").values_list("trigger_type", flat=True))
             self.stdout.write("")
             self.stdout.write(self.style.SUCCESS(f"• {pipeline.icon} {pipeline.name} (ID={pipeline.id})"))
             self.stdout.write(f"  Studio path: /studio/pipeline/{pipeline.id}")
             self.stdout.write(f"  Triggers:    {', '.join(triggers) or '—'}")
-            for trigger in pipeline.triggers.filter(trigger_type="webhook", is_active=True).order_by("created_at", "id"):
+            for trigger in pipeline.triggers.filter(trigger_type="webhook", is_active=True).order_by(
+                "created_at", "id"
+            ):
                 self.stdout.write(
                     f"  Webhook ({trigger.node_id}): /api/studio/triggers/{trigger.webhook_token}/receive/"
                 )

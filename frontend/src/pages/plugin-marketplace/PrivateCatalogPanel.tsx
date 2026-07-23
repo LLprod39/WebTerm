@@ -247,7 +247,7 @@ export function PrivateCatalogPanel() {
   const sourcesQuery = useQuery({ queryKey: ["plugins", "marketplace", "sources"], queryFn: fetchMarketplaceSources });
   const catalogQuery = useQuery({ queryKey: ["plugins", "marketplace", "catalog"], queryFn: fetchMarketplaceCatalog });
   const sources = sourcesQuery.data?.sources ?? [];
-  const items = catalogQuery.data?.items ?? [];
+  const items = useMemo(() => catalogQuery.data?.items ?? [], [catalogQuery.data?.items]);
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
   const activeSourceId = selectedSourceId ?? sources[0]?.id ?? null;
   const selectedItem = useMemo(

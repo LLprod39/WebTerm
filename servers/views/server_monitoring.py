@@ -8,6 +8,7 @@ server CRUD until that endpoint group is split separately.
 
 import contextlib
 import json
+from datetime import UTC
 from datetime import timedelta as td
 
 from asgiref.sync import async_to_sync
@@ -128,9 +129,7 @@ def _resolve_display_status(
 
     if not hc:
         if metrics_hc and metrics_hc.status:
-            metrics_age = (
-                int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
-            )
+            metrics_age = int((now - metrics_hc.checked_at).total_seconds()) if metrics_hc.checked_at else None
             if metrics_age is not None and metrics_age <= stale_seconds:
                 return metrics_hc.status, metrics_hc
         return "unknown", None
@@ -186,9 +185,9 @@ def _apply_cached_live_metrics(item: dict, live: dict | None, now) -> dict:
     if live_ts <= 0:
         return item
 
-    from datetime import datetime, timezone as dt_timezone
+    from datetime import datetime
 
-    live_dt = datetime.fromtimestamp(live_ts, tz=dt_timezone.utc)
+    live_dt = datetime.fromtimestamp(live_ts, tz=UTC)
     live_age = int((now - live_dt).total_seconds())
     # Ignore expired/stale cache entries even if TTL has not purged them.
     live_max_age = max(
@@ -203,7 +202,7 @@ def _apply_cached_live_metrics(item: dict, live: dict | None, now) -> dict:
         with contextlib.suppress(TypeError, ValueError):
             db_dt = datetime.fromisoformat(str(metrics_checked_at).replace("Z", "+00:00"))
             if db_dt.tzinfo is None:
-                db_dt = db_dt.replace(tzinfo=dt_timezone.utc)
+                db_dt = db_dt.replace(tzinfo=UTC)
             if live_dt <= db_dt:
                 return item
 
@@ -252,12 +251,8 @@ def _serialize_monitoring_status_item(
     metrics_checked_at = source.checked_at if source and source.checked_at else None
     # Age/staleness: prefer status-defining timestamp, else metrics we display.
     display_checked_at = status_checked_at or metrics_checked_at
-    display_age = (
-        int((now - display_checked_at).total_seconds()) if display_checked_at else None
-    )
-    metrics_age_seconds = (
-        int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
-    )
+    display_age = int((now - display_checked_at).total_seconds()) if display_checked_at else None
+    metrics_age_seconds = int((now - metrics_checked_at).total_seconds()) if metrics_checked_at else None
     probe_checked_at = hc.checked_at if hc and hc.checked_at else None
     is_stale = display_age is None or display_age > stale_seconds
     # Recent metrics beat a transient unreachable probe for list first-paint.
@@ -268,11 +263,7 @@ def _serialize_monitoring_status_item(
         and source
         and source.cpu_percent is not None
     ):
-        status = (
-            source.status
-            if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE
-            else "healthy"
-        )
+        status = source.status if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE else "healthy"
         is_stale = False
         status_checked_at = metrics_checked_at or status_checked_at
         display_age = metrics_age_seconds
@@ -301,7 +292,11 @@ def _serialize_monitoring_status_item(
         "probe_checked_at": probe_checked_at.isoformat() if probe_checked_at else None,
         "probe_is_lite": _is_lite_probe(hc),
         "status_from_metrics": bool(
-            status_row is not None and metrics_hc is not None and status_row.id == metrics_hc.id and hc is not None and status_row.id != hc.id
+            status_row is not None
+            and metrics_hc is not None
+            and status_row.id == metrics_hc.id
+            and hc is not None
+            and status_row.id != hc.id
         ),
     }
     return _apply_cached_live_metrics(item, live_sample, now)
@@ -429,7 +424,11 @@ def _serialize_dashboard_server_item(
         if metrics_age <= stale_seconds and source.cpu_percent is not None:
             # Still have recent metrics — do not paint a hard outage.
             if status == ServerHealthCheck.STATUS_UNREACHABLE:
-                status = source.status if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE else "healthy"
+                status = (
+                    source.status
+                    if source.status and source.status != ServerHealthCheck.STATUS_UNREACHABLE
+                    else "healthy"
+                )
             is_stale = False
             checked_at = source.checked_at
     # Stale "unreachable" is usually a failed probe window, not a confirmed outage —
@@ -595,9 +594,7 @@ def monitoring_refresh(request):
     except (json.JSONDecodeError, UnicodeDecodeError, TypeError):
         body = {}
     want_metrics = bool(
-        body.get("metrics")
-        or body.get("full")
-        or str(request.GET.get("metrics") or "").lower() in ("1", "true", "yes")
+        body.get("metrics") or body.get("full") or str(request.GET.get("metrics") or "").lower() in ("1", "true", "yes")
     )
 
     if want_metrics:

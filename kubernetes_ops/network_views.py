@@ -36,7 +36,9 @@ def api_kubernetes_network_detail(request, network_id: str):
     def handler():
         network_ref = network_for_value(network_id)
         if network_ref is None:
-            return JsonResponse({"success": False, "error": "Network reference not found.", "code": "network_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Network reference not found.", "code": "network_not_found"}, status=404
+            )
         payload = build_network_detail(network_ref, user=request.user)
         K8sAuditEvent.objects.create(
             user=request.user,

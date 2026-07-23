@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 PILOT_TEMPLATE_SLUGS = {
-    "pilot-keycloak-access-change",
     "pilot-kubernetes-rollout",
     "pilot-gitlab-failed-pipeline-mr",
     "pilot-database-diagnostics-maintenance",
@@ -14,29 +13,6 @@ PILOT_TEMPLATE_SLUGS = {
 
 
 PILOT_TEMPLATE_KEYWORDS: dict[str, tuple[str, ...]] = {
-    "pilot-keycloak-access-change": (
-        "keycloak",
-        "keycloack",
-        "kc",
-        "iam",
-        "identity",
-        "access",
-        "realm",
-        "role",
-        "roles",
-        "group",
-        "groups",
-        "user",
-        "users",
-        "client",
-        "киклок",
-        "кейклок",
-        "доступ",
-        "роль",
-        "роли",
-        "групп",
-        "пользовател",
-    ),
     "pilot-kubernetes-rollout": (
         "kubernetes",
         "k8s",

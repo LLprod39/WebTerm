@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.contrib.auth.models import User
@@ -44,7 +43,7 @@ def _make_sample(server: Server, collected_at: datetime, **fields) -> ServerMetr
 
 def test_hour_rollups_aggregate_scalars_and_mounts():
     server = _make_server("rollup-hour")
-    base = datetime(2026, 7, 16, 10, 0, tzinfo=dt_timezone.utc)
+    base = datetime(2026, 7, 16, 10, 0, tzinfo=UTC)
     _make_sample(
         server,
         base + timedelta(minutes=5),
@@ -61,9 +60,7 @@ def test_hour_rollups_aggregate_scalars_and_mounts():
     written = compute_hour_rollups(now=base + timedelta(minutes=59))
     assert written > 0
 
-    cpu = ServerMetricRollup.objects.get(
-        server=server, metric_key="cpu.percent", granularity="hour", bucket_start=base
-    )
+    cpu = ServerMetricRollup.objects.get(server=server, metric_key="cpu.percent", granularity="hour", bucket_start=base)
     assert cpu.value_min == 20.0
     assert cpu.value_max == 40.0
     assert cpu.value_avg == 30.0
@@ -82,7 +79,7 @@ def test_hour_rollups_aggregate_scalars_and_mounts():
 
 def test_hour_rollups_are_idempotent():
     server = _make_server("rollup-idem")
-    base = datetime(2026, 7, 16, 10, 0, tzinfo=dt_timezone.utc)
+    base = datetime(2026, 7, 16, 10, 0, tzinfo=UTC)
     _make_sample(server, base + timedelta(minutes=5), cpu_percent=30.0)
 
     now = base + timedelta(minutes=30)
@@ -98,7 +95,7 @@ def test_hour_rollups_are_idempotent():
 
 def test_day_rollups_weight_by_sample_count():
     server = _make_server("rollup-day")
-    day = datetime(2026, 7, 16, 0, 0, tzinfo=dt_timezone.utc)
+    day = datetime(2026, 7, 16, 0, 0, tzinfo=UTC)
     ServerMetricRollup.objects.create(
         server=server,
         metric_key="cpu.percent",
@@ -123,9 +120,7 @@ def test_day_rollups_weight_by_sample_count():
     )
 
     compute_day_rollups(now=day + timedelta(hours=12))
-    row = ServerMetricRollup.objects.get(
-        server=server, metric_key="cpu.percent", granularity="day", bucket_start=day
-    )
+    row = ServerMetricRollup.objects.get(server=server, metric_key="cpu.percent", granularity="day", bucket_start=day)
     assert row.value_min == 20.0
     assert row.value_max == 70.0
     assert row.value_avg == 50.0  # (30*2 + 60*4) / 6
@@ -167,7 +162,7 @@ def test_cleanup_metric_data_respects_retention():
 
 def test_fetch_metric_series_returns_oldest_first():
     server = _make_server("rollup-series")
-    base = datetime(2026, 7, 16, 0, 0, tzinfo=dt_timezone.utc)
+    base = datetime(2026, 7, 16, 0, 0, tzinfo=UTC)
     for hour, value in ((0, 10.0), (1, 20.0), (2, 30.0)):
         ServerMetricRollup.objects.create(
             server=server,
@@ -188,9 +183,9 @@ def test_fetch_metric_series_returns_oldest_first():
 
 
 def test_bucket_start_for_truncates_hour_and_day():
-    moment = datetime(2026, 7, 16, 13, 45, 12, tzinfo=dt_timezone.utc)
-    assert bucket_start_for(moment, "hour") == datetime(2026, 7, 16, 13, 0, tzinfo=dt_timezone.utc)
-    assert bucket_start_for(moment, "day") == datetime(2026, 7, 16, 0, 0, tzinfo=dt_timezone.utc)
+    moment = datetime(2026, 7, 16, 13, 45, 12, tzinfo=UTC)
+    assert bucket_start_for(moment, "hour") == datetime(2026, 7, 16, 13, 0, tzinfo=UTC)
+    assert bucket_start_for(moment, "day") == datetime(2026, 7, 16, 0, 0, tzinfo=UTC)
 
 
 def test_create_and_mirror_metric_sample():

@@ -19,6 +19,7 @@ Target structure (split progressively):
 
 Legacy callers can still import endpoint functions and private compatibility hooks from `studio.views`.
 """
+
 from studio.views._views_all import *  # noqa: F401, F403, F405
 
 # Explicit re-exports of private compatibility helpers.

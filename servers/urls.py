@@ -194,7 +194,9 @@ urlpatterns = [
     path("api/monitoring/status/", server_monitoring.monitoring_status, name="monitoring_status"),
     path("api/monitoring/refresh/", server_monitoring.monitoring_refresh, name="monitoring_refresh"),
     path("api/<int:server_id>/health/", server_monitoring.server_health_history, name="server_health_history"),
-    path("api/<int:server_id>/health/check/", server_monitoring.server_health_check_now, name="server_health_check_now"),
+    path(
+        "api/<int:server_id>/health/check/", server_monitoring.server_health_check_now, name="server_health_check_now"
+    ),
     path("api/alerts/", server_monitoring_actions.server_alerts_list, name="server_alerts_list"),
     path("api/watchers/scan/", server_monitoring_actions.server_watcher_scan, name="server_watcher_scan"),
     path("api/watchers/drafts/", server_monitoring_actions.server_watcher_drafts, name="server_watcher_drafts"),
@@ -217,7 +219,11 @@ urlpatterns = [
     path("api/<int:server_id>/ai-analyze/", server_monitoring_actions.ai_analyze_server, name="ai_analyze_server"),
     # Agents (mini + full)
     path("api/agents/", server_agents.agent_list, name="agent_list"),
-    path("api/agents/runtime/cleanup-stale/", server_agents.agent_runtime_cleanup_stale, name="agent_runtime_cleanup_stale"),
+    path(
+        "api/agents/runtime/cleanup-stale/",
+        server_agents.agent_runtime_cleanup_stale,
+        name="agent_runtime_cleanup_stale",
+    ),
     path("api/agents/schedules/", server_agents.agent_schedule_overview, name="agent_schedule_overview"),
     path("api/agents/schedules/dispatch/", server_agents.agent_schedule_dispatch, name="agent_schedule_dispatch"),
     path("api/agents/templates/", server_agents.agent_templates, name="agent_templates"),
@@ -229,7 +235,11 @@ urlpatterns = [
     path("api/agents/<int:agent_id>/runs/", server_agent_runs.agent_runs, name="agent_runs"),
     path("api/agents/runs/<int:run_id>/", server_agent_runs.agent_run_detail, name="agent_run_detail"),
     path("api/agents/runs/<int:run_id>/report/", server_agent_runs.agent_run_report, name="agent_run_report"),
-    path("api/agents/runs/<int:run_id>/report/deliver/", server_agent_runs.agent_run_report_deliver, name="agent_run_report_deliver"),
+    path(
+        "api/agents/runs/<int:run_id>/report/deliver/",
+        server_agent_runs.agent_run_report_deliver,
+        name="agent_run_report_deliver",
+    ),
     path(
         "api/agents/runs/<int:run_id>/artifacts/download-all/",
         server_agent_runs.agent_run_artifacts_download_all,
@@ -287,7 +297,11 @@ urlpatterns = [
         server_playbooks.playbook_template_install,
         name="playbook_template_install",
     ),
-    path("api/playbooks/inventory/preview/", server_playbooks.playbook_inventory_preview, name="playbook_inventory_preview"),
+    path(
+        "api/playbooks/inventory/preview/",
+        server_playbooks.playbook_inventory_preview,
+        name="playbook_inventory_preview",
+    ),
     path("api/playbooks/runs/", server_playbooks.playbook_run_list, name="playbook_run_list"),
     path("api/playbooks/runs/<int:run_id>/", server_playbooks.playbook_run_detail, name="playbook_run_detail"),
     path("api/playbooks/runs/<int:run_id>/cancel/", server_playbooks.playbook_run_cancel, name="playbook_run_cancel"),

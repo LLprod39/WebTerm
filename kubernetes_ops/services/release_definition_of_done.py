@@ -23,17 +23,21 @@ def build_kubernetes_release_definition_of_done(evidence: dict[str, Any]) -> dic
     checks = [
         _check(
             "explicit_admin_access",
-            _ready(evidence.get("admin_mode_safety")) and _nested_status(evidence, ("readiness", "access_model")) == "ready",
+            _ready(evidence.get("admin_mode_safety"))
+            and _nested_status(evidence, ("readiness", "access_model")) == "ready",
             ["admin_mode_safety", "readiness.access_model"],
         ),
         _check(
             "rancher_cluster_namespace",
-            _all_success(evidence.get("provider_probes")) and _all_success(evidence.get("sync_dry_run")) and _preflight_success(evidence, "live_provider_smoke"),
+            _all_success(evidence.get("provider_probes"))
+            and _all_success(evidence.get("sync_dry_run"))
+            and _preflight_success(evidence, "live_provider_smoke"),
             ["provider_probes", "sync_dry_run", "preflight.live_provider_smoke"],
         ),
         _check(
             "resources_and_crds",
-            _preflight_success(evidence, "kubernetes_backend_tests") and _preflight_success(evidence, "live_provider_smoke"),
+            _preflight_success(evidence, "kubernetes_backend_tests")
+            and _preflight_success(evidence, "live_provider_smoke"),
             ["preflight.kubernetes_backend_tests", "preflight.live_provider_smoke"],
         ),
         _check(
@@ -43,7 +47,8 @@ def build_kubernetes_release_definition_of_done(evidence: dict[str, Any]) -> dic
         ),
         _check(
             "log_streaming",
-            _preflight_success(evidence, "interactive_live_smoke") and _preflight_success(evidence, "live_provider_smoke"),
+            _preflight_success(evidence, "interactive_live_smoke")
+            and _preflight_success(evidence, "live_provider_smoke"),
             ["preflight.interactive_live_smoke", "preflight.live_provider_smoke"],
         ),
         _check(
@@ -57,16 +62,22 @@ def build_kubernetes_release_definition_of_done(evidence: dict[str, Any]) -> dic
             _dict(evidence.get("action_controls")).get("native_verification_auto_status") == "verified"
             and bool(_dict(evidence.get("action_controls")).get("approval_recorded"))
             and _dict(evidence.get("action_controls")).get("production_restart_template_status") == "ready",
-            ["action_controls.native_verification_auto_status", "action_controls.approval_recorded", "action_controls.production_restart_template_status"],
+            [
+                "action_controls.native_verification_auto_status",
+                "action_controls.approval_recorded",
+                "action_controls.production_restart_template_status",
+            ],
         ),
         _check(
             "pod_exec_session",
-            _ready(evidence.get("interactive_shell_streams")) and _preflight_success(evidence, "interactive_transport_evidence"),
+            _ready(evidence.get("interactive_shell_streams"))
+            and _preflight_success(evidence, "interactive_transport_evidence"),
             ["interactive_shell_streams", "preflight.interactive_transport_evidence"],
         ),
         _check(
             "port_forward_session",
-            _preflight_success(evidence, "interactive_transport_evidence") and _preflight_success(evidence, "interactive_live_smoke"),
+            _preflight_success(evidence, "interactive_transport_evidence")
+            and _preflight_success(evidence, "interactive_live_smoke"),
             ["preflight.interactive_transport_evidence", "preflight.interactive_live_smoke"],
         ),
         _check(
@@ -84,7 +95,8 @@ def build_kubernetes_release_definition_of_done(evidence: dict[str, Any]) -> dic
         ),
         _check(
             "regular_user_safe_cockpit",
-            _ready(evidence.get("normal_user_surface")) and _nested_status(evidence, ("normal_user_surface", "frontend_response_credential_scan")) == "ready",
+            _ready(evidence.get("normal_user_surface"))
+            and _nested_status(evidence, ("normal_user_surface", "frontend_response_credential_scan")) == "ready",
             ["normal_user_surface", "normal_user_surface.frontend_response_credential_scan"],
         ),
         _check(

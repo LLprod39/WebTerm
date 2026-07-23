@@ -119,6 +119,8 @@ diff.txt
 mars_backups/
 
 # Playwright / codex tool artifacts
+artifacts/
+.ci-artifacts/
 .codex-logs/
 .playwright-cli/
 runtime_logs/
@@ -131,11 +133,14 @@ mars_logs/
 .import_linter_cache/
 .pytest_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+graphify-out/
 
 # Deployment files that must stay tracked
 !docker-compose.yml
 !docker-compose.postgres-mcp.yml
-!config/keycloak_profiles.json
 !create_pipeline.sql
 !create_mega_pipeline.py
 

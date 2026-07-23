@@ -117,11 +117,20 @@ def build_kubernetes_release_handoff(*, evidence_path: Path | None = None) -> di
             {"name": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "expected": "<change-or-approval-id>"},
             {"name": PRODUCTION_EVIDENCE_SETTING, "expected": "<operator-reviewed production evidence bundle ref>"},
             {"name": IDENTITY_RUNTIME_EVIDENCE_SETTING, "expected": "<production SSO/Keycloak runtime evidence ref>"},
-            {"name": LIVE_PROVIDER_EVIDENCE_SETTING, "expected": "<production Rancher/Fleet/Devtron live provider evidence ref>"},
+            {
+                "name": LIVE_PROVIDER_EVIDENCE_SETTING,
+                "expected": "<production Rancher/Fleet/Devtron live provider evidence ref>",
+            },
             {"name": READONLY_RBAC_EVIDENCE_SETTING, "expected": "<production read-only RBAC can-i evidence ref>"},
-            {"name": KUBERNETES_MCP_EVIDENCE_SETTING, "expected": "<production Kubernetes MCP READ_ONLY smoke evidence ref>"},
+            {
+                "name": KUBERNETES_MCP_EVIDENCE_SETTING,
+                "expected": "<production Kubernetes MCP READ_ONLY smoke evidence ref>",
+            },
             {"name": PRODUCTION_ROLLBACK_EVIDENCE_SETTING, "expected": "<production rollback drill evidence ref>"},
-            {"name": PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_SETTING, "expected": "<production native verification evidence ref>"},
+            {
+                "name": PRODUCTION_NATIVE_VERIFICATION_EVIDENCE_SETTING,
+                "expected": "<production native verification evidence ref>",
+            },
             {"name": "KUBERNETES_OPS_READY_FOR_SIDEBAR", "expected": "true only after production_ready=true"},
             {"name": "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS", "expected": "86400 or stricter"},
             {
@@ -170,9 +179,13 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
     blockers = [str(item) for item in handoff.get("blockers") or []]
     next_steps = [str(item) for item in handoff.get("next_steps") or []]
     completion_audit = handoff.get("completion_audit") if isinstance(handoff.get("completion_audit"), dict) else {}
-    backend_workstream = handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
+    backend_workstream = (
+        handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
+    )
     proofs = handoff.get("release_proofs") if isinstance(handoff.get("release_proofs"), list) else []
-    operator_command_plan = handoff.get("operator_command_plan") if isinstance(handoff.get("operator_command_plan"), dict) else {}
+    operator_command_plan = (
+        handoff.get("operator_command_plan") if isinstance(handoff.get("operator_command_plan"), dict) else {}
+    )
     commands = handoff.get("required_commands") if isinstance(handoff.get("required_commands"), list) else []
     env_flags = handoff.get("production_env_flags") if isinstance(handoff.get("production_env_flags"), list) else []
     external = [str(item) for item in handoff.get("external_evidence_required") or []]
@@ -223,7 +236,10 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
     if not proofs:
         lines.append("- none")
     lines.extend(["", "## Next Steps"])
-    lines.extend([f"{index}. {item}" for index, item in enumerate(next_steps, start=1)] or ["1. Inspect release evidence and rerun release checks."])
+    lines.extend(
+        [f"{index}. {item}" for index, item in enumerate(next_steps, start=1)]
+        or ["1. Inspect release evidence and rerun release checks."]
+    )
     lines.extend([""])
     lines.extend(render_kubernetes_operator_command_plan_markdown(operator_command_plan))
     lines.extend([""])
@@ -238,7 +254,11 @@ def render_kubernetes_release_handoff_markdown(handoff: dict[str, Any]) -> str:
         if not isinstance(item, dict):
             continue
         lines.append(f"- `{item.get('name')}`: {item.get('expected')}")
-    missing_refs = release_scope.get("missing_required_references") if isinstance(release_scope.get("missing_required_references"), list) else []
+    missing_refs = (
+        release_scope.get("missing_required_references")
+        if isinstance(release_scope.get("missing_required_references"), list)
+        else []
+    )
     lines.extend(["", "## Missing Production Refs"])
     for item in missing_refs:
         if not isinstance(item, dict):
@@ -402,8 +422,14 @@ def _proof_detail(proof_id: str, data: dict[str, Any]) -> str:
             f"missing_ids={missing_preview or 'none'}"
         )
     if proof_id == "normal_user_surface":
-        policy = data.get("reader_external_link_policy") if isinstance(data.get("reader_external_link_policy"), dict) else {}
-        credential_scan = data.get("frontend_response_credential_scan") if isinstance(data.get("frontend_response_credential_scan"), dict) else {}
+        policy = (
+            data.get("reader_external_link_policy") if isinstance(data.get("reader_external_link_policy"), dict) else {}
+        )
+        credential_scan = (
+            data.get("frontend_response_credential_scan")
+            if isinstance(data.get("frontend_response_credential_scan"), dict)
+            else {}
+        )
         scan_detail = (
             f", credential_scan={credential_scan.get('status') or 'missing'}, "
             f"surfaces={int(credential_scan.get('surfaces_checked') or 0)}, "

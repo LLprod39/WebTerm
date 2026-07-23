@@ -77,21 +77,7 @@ class ProviderAdapter:
     def _api_key_display_name(self) -> str:
         if self.spec.id == "openai":
             return "OPENAI_API_KEY/CODEX_API_KEY"
-        if self.spec.id == "fair":
-            return "FAIR_HYPERION_API_KEY"
         return self.spec.requires_key or ""
-
-
-class FairProviderAdapter(ProviderAdapter):
-    def status_details(
-        self,
-        config: Any,
-        key_lookup: ApiKeyLookup,
-        binary_lookup: BinaryLookup,
-    ) -> dict[str, Any]:
-        result = super().status_details(config, key_lookup, binary_lookup)
-        result["base_url"] = _fair_base_url(config)
-        return result
 
 
 class OllamaProviderAdapter(ProviderAdapter):
@@ -122,14 +108,6 @@ def _binary_path(provider_id: str, binary: str) -> str | None:
     return env_path or shutil.which(binary)
 
 
-def _fair_base_url(config: Any) -> str:
-    return (
-        getattr(config, "fair_base_url", "").strip()
-        or os.getenv("FAIR_HYPERION_BASE_URL", "").strip()
-        or "https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
-    )
-
-
 def _ollama_base_url(config: Any) -> str:
     return (
         (getattr(config, "ollama_base_url", "") or "").strip()
@@ -146,7 +124,7 @@ def _ollama_cloud_base_url(config: Any) -> str:
     )
 
 
-DEFAULT_PROVIDER_ORDER = ("fair", "openai", "grok", "gemini", "ollama", "ralph", "cursor", "claude")
+DEFAULT_PROVIDER_ORDER = ("openai", "grok", "gemini", "ollama", "ralph", "cursor", "claude")
 
 PROVIDER_SPECS: dict[str, ProviderSpec] = {
     "gemini": ProviderSpec(
@@ -173,15 +151,6 @@ PROVIDER_SPECS: dict[str, ProviderSpec] = {
         enabled_field="openai_enabled",
         requires_key="OPENAI_API_KEY",
         key_env_names=("OPENAI_API_KEY", "CODEX_API_KEY"),
-    ),
-    "fair": ProviderSpec(
-        id="fair",
-        provider_type="api",
-        name="FAIR.Hyperion",
-        enabled_by_default=True,
-        enabled_field="fair_enabled",
-        requires_key="FAIR_HYPERION_API_KEY",
-        key_env_names=("FAIR_HYPERION_API_KEY", "FAIR_API_KEY"),
     ),
     "ollama": ProviderSpec(
         id="ollama",
@@ -225,9 +194,7 @@ PROVIDER_SPECS: dict[str, ProviderSpec] = {
 def build_provider_adapters() -> dict[str, ProviderAdapter]:
     adapters: dict[str, ProviderAdapter] = {}
     for provider_id, spec in PROVIDER_SPECS.items():
-        if provider_id == "fair":
-            adapters[provider_id] = FairProviderAdapter(spec)
-        elif provider_id == "ollama":
+        if provider_id == "ollama":
             adapters[provider_id] = OllamaProviderAdapter(spec)
         else:
             adapters[provider_id] = ProviderAdapter(spec)

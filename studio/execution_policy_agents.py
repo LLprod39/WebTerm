@@ -75,7 +75,9 @@ def classify_dynamic_agent_policy(data: dict[str, Any]) -> DynamicAgentPolicy | 
     if uses_saved_config:
         reasons.append("Saved agent config may include servers, MCP tools, or broad tool access.")
     if uses_mcp_scope and uses_default_tool_set:
-        reasons.append("Agent has MCP server access with default tools; tool mutation semantics are runtime-discovered.")
+        reasons.append(
+            "Agent has MCP server access with default tools; tool mutation semantics are runtime-discovered."
+        )
     if mutating_mcp_tools:
         reasons.append("Agent can use mutating or unknown MCP tools: " + ", ".join(mutating_mcp_tools[:8]) + ".")
     if mutating_tools:

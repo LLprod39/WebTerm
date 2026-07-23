@@ -118,6 +118,7 @@ def launch_pipeline_run_async(run: PipelineRun) -> None:
 
     def _run_in_thread():
         try:
+
             async def _main():
                 from asgiref.sync import sync_to_async
 

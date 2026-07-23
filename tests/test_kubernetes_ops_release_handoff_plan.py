@@ -31,10 +31,22 @@ def test_handoff_execution_plan_deduplicates_preflight_alias_commands():
     plan = build_kubernetes_handoff_execution_plan(
         _handoff(
             [
-                {"id": "preflight_evidence", "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json"},
-                {"id": "preflight", "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json"},
-                {"id": "release_evidence", "command": "python manage.py verify_kubernetes_ops_release --output artifacts/kubernetes_ops_release_evidence.json"},
-                {"id": "release_handoff", "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md"},
+                {
+                    "id": "preflight_evidence",
+                    "command": "python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+                },
+                {
+                    "id": "preflight",
+                    "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+                },
+                {
+                    "id": "release_evidence",
+                    "command": "python manage.py verify_kubernetes_ops_release --output artifacts/kubernetes_ops_release_evidence.json",
+                },
+                {
+                    "id": "release_handoff",
+                    "command": "python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+                },
             ]
         )
     )
@@ -51,9 +63,18 @@ def test_handoff_execution_plan_keeps_settings_preflight_command_when_contract_a
     plan = build_kubernetes_handoff_execution_plan(
         _handoff(
             [
-                {"id": "preflight", "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json"},
-                {"id": "release_evidence", "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_release --output artifacts/kubernetes_ops_release_evidence.json"},
-                {"id": "release_handoff", "command": "docker compose exec -T backend python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md"},
+                {
+                    "id": "preflight",
+                    "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json",
+                },
+                {
+                    "id": "release_evidence",
+                    "command": "docker compose exec -T backend python manage.py verify_kubernetes_ops_release --output artifacts/kubernetes_ops_release_evidence.json",
+                },
+                {
+                    "id": "release_handoff",
+                    "command": "docker compose exec -T backend python manage.py render_kubernetes_ops_release_handoff --output artifacts/kubernetes_ops_release_handoff.md",
+                },
             ]
         )
     )

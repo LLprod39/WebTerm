@@ -27,7 +27,12 @@ class KubernetesOpsAdminRecordingReadinessTests(TestCase):
 
     def test_recording_retention_report_exposes_cleanup_commands_and_counts(self):
         user = self.create_user("k8s-recording-readiness")
-        provider = K8sProvider.objects.create(name="rancher-recording-readiness", kind=K8sProvider.KIND_RANCHER, base_url="https://rancher.example.test", auth_mode=K8sProvider.AUTH_NONE)
+        provider = K8sProvider.objects.create(
+            name="rancher-recording-readiness",
+            kind=K8sProvider.KIND_RANCHER,
+            base_url="https://rancher.example.test",
+            auth_mode=K8sProvider.AUTH_NONE,
+        )
         cluster = K8sCluster.objects.create(name="recording-readiness", environment="prod", rancher_provider=provider)
         session = K8sAdminSession.objects.create(
             user=user,
@@ -70,14 +75,18 @@ class KubernetesOpsAdminRecordingReadinessTests(TestCase):
             metadata_delete_after=timezone.now() + timedelta(days=1),
             transcript_delete_after=timezone.now() - timedelta(days=1),
         )
-        K8sAdminRecordingEvent.objects.create(recording=recording, sequence=1, stream=K8sAdminRecordingEvent.STREAM_STDOUT, data="TOKEN=raw-event-token")
+        K8sAdminRecordingEvent.objects.create(
+            recording=recording, sequence=1, stream=K8sAdminRecordingEvent.STREAM_STDOUT, data="TOKEN=raw-event-token"
+        )
 
         report = build_admin_recording_retention_report()
 
         self.assertEqual(report["status"], "ready")
         self.assertEqual(report["command"], "python manage.py cleanup_kubernetes_admin_recordings --apply")
         self.assertEqual(report["dry_run_command"], "python manage.py cleanup_kubernetes_admin_recordings")
-        self.assertEqual(report["inventory_command"], "python manage.py cleanup_kubernetes_admin_recordings --inventory")
+        self.assertEqual(
+            report["inventory_command"], "python manage.py cleanup_kubernetes_admin_recordings --inventory"
+        )
         self.assertEqual(report["summary"]["transcript_expired_count"], 1)
         self.assertEqual(report["summary"]["transcript_event_expired_count"], 1)
         self.assertNotIn("raw-event-token", str(report))
@@ -94,4 +103,7 @@ class KubernetesOpsAdminRecordingReadinessTests(TestCase):
         self.assertEqual(checks["admin_recording_retention"]["status"], "ready")
         self.assertFalse(checks["admin_recording_retention"]["required"])
         self.assertEqual(payload["admin_recording_retention"]["status"], "ready")
-        self.assertEqual(payload["admin_recording_retention"]["command"], "python manage.py cleanup_kubernetes_admin_recordings --apply")
+        self.assertEqual(
+            payload["admin_recording_retention"]["command"],
+            "python manage.py cleanup_kubernetes_admin_recordings --apply",
+        )

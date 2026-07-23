@@ -4,6 +4,7 @@ We exercise the ``_*_sync`` implementations directly — the async wrappers
 call into them through ``database_sync_to_async`` which does not cooperate
 with ``pytest.mark.django_db`` transaction semantics on Windows.
 """
+
 from __future__ import annotations
 
 import pytest

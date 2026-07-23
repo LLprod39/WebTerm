@@ -67,12 +67,22 @@ def api_kubernetes_admin_scale(request, cluster_id: str):
                 resource=str(data.get("resource") or ""),
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_resource.scale_rejected", payload={"code": exc.code, "cluster_id": cluster_id}, session_id=str(data.get("session_id") or ""))
+            _audit(
+                request,
+                "k8s.admin_resource.scale_rejected",
+                payload={"code": exc.code, "cluster_id": cluster_id},
+                session_id=str(data.get("session_id") or ""),
+            )
             return _error_response(exc)
         _audit(
             request,
             "k8s.admin_resource.scale",
-            payload={"cluster_id": cluster_id, "target": payload["target"], "replicas": payload.get("replicas"), "action_id": payload.get("action", {}).get("id", "")},
+            payload={
+                "cluster_id": cluster_id,
+                "target": payload["target"],
+                "replicas": payload.get("replicas"),
+                "action_id": payload.get("action", {}).get("id", ""),
+            },
             session_id=str(data.get("session_id") or ""),
         )
         return JsonResponse(payload)
@@ -101,12 +111,22 @@ def api_kubernetes_admin_restart(request, cluster_id: str):
                 resource=str(data.get("resource") or ""),
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_resource.restart_rejected", payload={"code": exc.code, "cluster_id": cluster_id}, session_id=str(data.get("session_id") or ""))
+            _audit(
+                request,
+                "k8s.admin_resource.restart_rejected",
+                payload={"code": exc.code, "cluster_id": cluster_id},
+                session_id=str(data.get("session_id") or ""),
+            )
             return _error_response(exc)
         _audit(
             request,
             "k8s.admin_resource.restart",
-            payload={"cluster_id": cluster_id, "target": payload["target"], "restarted_at": payload.get("restarted_at"), "action_id": payload.get("action", {}).get("id", "")},
+            payload={
+                "cluster_id": cluster_id,
+                "target": payload["target"],
+                "restarted_at": payload.get("restarted_at"),
+                "action_id": payload.get("action", {}).get("id", ""),
+            },
             session_id=str(data.get("session_id") or ""),
         )
         return JsonResponse(payload)

@@ -100,7 +100,10 @@ def test_external_backend_sandbox_provider_executes_agent_tool(tmp_path, monkeyp
         assert payload["smoke_only"] is False
         assert payload["payload"]["plugin_id"] == manifest["id"]
         requests.append(payload)
-        return {"success": True, "result": {"provider": "external_worker", "surface": payload["payload"]["payload"]["surface"]}}
+        return {
+            "success": True,
+            "result": {"provider": "external_worker", "surface": payload["payload"]["payload"]["surface"]},
+        }
 
     monkeypatch.setattr("plugin_marketplace.services.backend_sandbox_runner_service._post_json", _fake_worker)
 

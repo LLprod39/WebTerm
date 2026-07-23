@@ -158,7 +158,9 @@ class K8sWorkloadRef(models.Model):
     class Meta:
         ordering = ["cluster__name", "namespace", "kind", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["cluster", "namespace", "kind", "name"], name="k8s_workload_cluster_ns_kind_name_unique"),
+            models.UniqueConstraint(
+                fields=["cluster", "namespace", "kind", "name"], name="k8s_workload_cluster_ns_kind_name_unique"
+            ),
         ]
         indexes = [
             models.Index(fields=["kind", "health"], name="k8s_workload_kind_health_idx"),
@@ -270,7 +272,9 @@ class K8sNetworkRef(models.Model):
     class Meta:
         ordering = ["cluster__name", "namespace", "kind", "name"]
         constraints = [
-            models.UniqueConstraint(fields=["cluster", "namespace", "kind", "name"], name="k8s_network_cluster_ns_kind_name_unique"),
+            models.UniqueConstraint(
+                fields=["cluster", "namespace", "kind", "name"], name="k8s_network_cluster_ns_kind_name_unique"
+            ),
         ]
         indexes = [
             models.Index(fields=["kind", "health"], name="k8s_network_kind_health_idx"),

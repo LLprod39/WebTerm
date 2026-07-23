@@ -3,11 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import tomllib
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
-
-import tomllib
 
 from plugin_marketplace.services.dependency_policy_service import (
     configured_sandbox_dependency_allowlist,
@@ -155,7 +154,8 @@ def analyze_wtp_archive(
             if not safe_path:
                 blockers.append({"code": "unsafe_path", "path": info.filename})
             if basename in INSTALL_SCRIPT_NAMES or (
-                basename.endswith(EXECUTABLE_SUFFIXES) and not (allow_sandboxed_code and _sandbox_code_entry_allowed(info.filename))
+                basename.endswith(EXECUTABLE_SUFFIXES)
+                and not (allow_sandboxed_code and _sandbox_code_entry_allowed(info.filename))
             ):
                 blockers.append({"code": "executable_or_install_file", "path": info.filename})
             if basename in DEPENDENCY_MANIFEST_NAMES:

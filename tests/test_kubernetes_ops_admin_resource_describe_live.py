@@ -102,7 +102,14 @@ class KubernetesOpsAdminResourceLiveDescribeTests(TestCase):
                                 "name": "payments-api-7f77",
                                 "namespace": "payments",
                                 "resourceVersion": "51",
-                                "ownerReferences": [{"apiVersion": "apps/v1", "kind": "Deployment", "name": "payments-api", "controller": True}],
+                                "ownerReferences": [
+                                    {
+                                        "apiVersion": "apps/v1",
+                                        "kind": "Deployment",
+                                        "name": "payments-api",
+                                        "controller": True,
+                                    }
+                                ],
                             },
                             "status": {"replicas": 2, "readyReplicas": 1},
                         }
@@ -147,7 +154,10 @@ class KubernetesOpsAdminResourceLiveDescribeTests(TestCase):
 
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "resource_live_describe")
-        self.assertEqual(payload["paths"]["resource"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api")
+        self.assertEqual(
+            payload["paths"]["resource"],
+            "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api",
+        )
         self.assertEqual(payload["summary"]["spec"]["container_count"], 2)
         self.assertEqual(payload["summary"]["status"]["conditions"][0]["message"], "password=[redacted]")
         self.assertEqual(payload["events"]["event_count"], 1)
@@ -189,9 +199,13 @@ class KubernetesOpsAdminResourceLiveDescribeTests(TestCase):
                 "spec": {"selector": {"app": "payments"}, "ports": [{"port": 80}]},
             }
             related_client.return_value.get.return_value = {
-                "items": [{"metadata": {"name": "payments-api-abc", "namespace": "payments"}, "status": {"phase": "Running"}}]
+                "items": [
+                    {"metadata": {"name": "payments-api-abc", "namespace": "payments"}, "status": {"phase": "Running"}}
+                ]
             }
-            events_client.return_value.get.return_value = {"items": [{"metadata": {"name": "event-1"}, "message": "secret event body"}]}
+            events_client.return_value.get.return_value = {
+                "items": [{"metadata": {"name": "event-1"}, "message": "secret event body"}]
+            }
             response = self.client.get(
                 reverse("api_kubernetes_admin_resource_describe", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
                 {

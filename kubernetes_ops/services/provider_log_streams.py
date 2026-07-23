@@ -38,7 +38,9 @@ class UrlopenProviderLogLineStream:
 
     def open(self) -> UrlopenProviderLogLineStream:
         request = urllib.request.Request(url=self.url, method="GET", headers=self.headers)
-        context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        context = (
+            None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        )
         try:
             self._response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -100,7 +102,9 @@ class InMemoryProviderLogLineStream:
             lines.append(line)
             bytes_read += line_bytes
             self._offset += 1
-        return ProviderLogStreamBatch(lines=lines, truncated=truncated, eof=self._offset >= len(self._lines), bytes_read=bytes_read)
+        return ProviderLogStreamBatch(
+            lines=lines, truncated=truncated, eof=self._offset >= len(self._lines), bytes_read=bytes_read
+        )
 
     def close(self) -> None:
         return None

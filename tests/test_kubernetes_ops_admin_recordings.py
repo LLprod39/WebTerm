@@ -74,7 +74,9 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
             response_summary={"exit_code": 0, "password": "raw-action-password"},
         )
 
-    def create_recording(self, user: User, session: K8sAdminSession, action: K8sAdminAction, **kwargs) -> K8sAdminRecording:
+    def create_recording(
+        self, user: User, session: K8sAdminSession, action: K8sAdminAction, **kwargs
+    ) -> K8sAdminRecording:
         now = timezone.now()
         defaults = {
             "session": session,
@@ -118,8 +120,12 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
         )
         self.client.force_login(user)
 
-        list_response = self.client.get(reverse("api_kubernetes_admin_recordings"), {"session_id": str(session.session_id), "limit": "10"})
-        detail_response = self.client.get(reverse("api_kubernetes_admin_recording_detail", kwargs={"recording_id": recording.recording_id}))
+        list_response = self.client.get(
+            reverse("api_kubernetes_admin_recordings"), {"session_id": str(session.session_id), "limit": "10"}
+        )
+        detail_response = self.client.get(
+            reverse("api_kubernetes_admin_recording_detail", kwargs={"recording_id": recording.recording_id})
+        )
 
         self.assertEqual(list_response.status_code, 200)
         list_payload = list_response.json()
@@ -145,8 +151,12 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
         other = self.create_user("k8s-recording-private-other")
         self.client.force_login(other)
 
-        list_response = self.client.get(reverse("api_kubernetes_admin_recordings"), {"session_id": str(session.session_id)})
-        detail_response = self.client.get(reverse("api_kubernetes_admin_recording_detail", kwargs={"recording_id": recording.recording_id}))
+        list_response = self.client.get(
+            reverse("api_kubernetes_admin_recordings"), {"session_id": str(session.session_id)}
+        )
+        detail_response = self.client.get(
+            reverse("api_kubernetes_admin_recording_detail", kwargs={"recording_id": recording.recording_id})
+        )
 
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.json()["recordings"], [])
@@ -158,13 +168,25 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
         session = self.create_session(owner)
         action = self.create_action(owner, session)
         kept = self.create_recording(owner, session, action, operation=K8sAdminRecording.OP_EXEC)
-        self.create_recording(owner, session, action, operation=K8sAdminRecording.OP_PORT_FORWARD, transcript_required=False, transcript_stored=False)
+        self.create_recording(
+            owner,
+            session,
+            action,
+            operation=K8sAdminRecording.OP_PORT_FORWARD,
+            transcript_required=False,
+            transcript_stored=False,
+        )
         staff = self.create_user("k8s-recording-staff", is_staff=True)
         self.client.force_login(staff)
 
         response = self.client.get(
             reverse("api_kubernetes_admin_recordings"),
-            {"all": "1", "cluster_id": f"cluster_{self.cluster.id}", "operation": K8sAdminRecording.OP_EXEC, "limit": "1"},
+            {
+                "all": "1",
+                "cluster_id": f"cluster_{self.cluster.id}",
+                "operation": K8sAdminRecording.OP_EXEC,
+                "limit": "1",
+            },
         )
 
         self.assertEqual(response.status_code, 200)
@@ -207,7 +229,9 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
             transcript_delete_after=now + timedelta(days=10),
         )
         for recording in (metadata_expired, transcript_expired, recent):
-            K8sAdminRecordingEvent.objects.create(recording=recording, sequence=1, stream=K8sAdminRecordingEvent.STREAM_STDOUT, data="ok")
+            K8sAdminRecordingEvent.objects.create(
+                recording=recording, sequence=1, stream=K8sAdminRecordingEvent.STREAM_STDOUT, data="ok"
+            )
 
         inventory = recording_retention_inventory(now=now)
         self.assertEqual(inventory["summary"]["metadata_expired_count"], 1)
@@ -233,7 +257,9 @@ class KubernetesOpsAdminRecordingEvidenceTests(TestCase):
         user = self.create_user("k8s-recording-command")
         session = self.create_session(user)
         action = self.create_action(user, session)
-        recording = self.create_recording(user, session, action, metadata_delete_after=timezone.now() - timedelta(days=1))
+        recording = self.create_recording(
+            user, session, action, metadata_delete_after=timezone.now() - timedelta(days=1)
+        )
         dry_run_out = io.StringIO()
 
         call_command("cleanup_kubernetes_admin_recordings", stdout=dry_run_out)

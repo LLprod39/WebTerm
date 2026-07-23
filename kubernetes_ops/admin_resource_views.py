@@ -84,7 +84,9 @@ def api_kubernetes_admin_resource_discovery(request, cluster_id: str):
                 cluster_id=cluster_id,
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_resource.discovery_rejected", payload={"code": exc.code, "cluster_id": cluster_id})
+            _audit(
+                request, "k8s.admin_resource.discovery_rejected", payload={"code": exc.code, "cluster_id": cluster_id}
+            )
             return _error_response(exc)
         _audit(request, "k8s.admin_resource.discovery", payload={"cluster_id": cluster_id})
         return JsonResponse(payload)
@@ -161,7 +163,12 @@ def api_kubernetes_admin_resource_yaml(request, cluster_id: str):
             _audit(
                 request,
                 "k8s.admin_resource.yaml_rejected",
-                payload={"code": exc.code, "cluster_id": cluster_id, "kind": _query(request, "kind"), "name": _query(request, "name")},
+                payload={
+                    "code": exc.code,
+                    "cluster_id": cluster_id,
+                    "kind": _query(request, "kind"),
+                    "name": _query(request, "name"),
+                },
             )
             return _error_response(exc)
         _audit(
@@ -204,7 +211,12 @@ def api_kubernetes_admin_resource_detail(request, cluster_id: str):
             _audit(
                 request,
                 "k8s.admin_resource.detail_rejected",
-                payload={"code": exc.code, "cluster_id": cluster_id, "kind": _query(request, "kind"), "name": _query(request, "name")},
+                payload={
+                    "code": exc.code,
+                    "cluster_id": cluster_id,
+                    "kind": _query(request, "kind"),
+                    "name": _query(request, "name"),
+                },
             )
             return _error_response(exc)
         _audit(
@@ -248,7 +260,12 @@ def api_kubernetes_admin_resource_describe(request, cluster_id: str):
             _audit(
                 request,
                 "k8s.admin_resource.describe_rejected",
-                payload={"code": exc.code, "cluster_id": cluster_id, "kind": _query(request, "kind"), "name": _query(request, "name")},
+                payload={
+                    "code": exc.code,
+                    "cluster_id": cluster_id,
+                    "kind": _query(request, "kind"),
+                    "name": _query(request, "name"),
+                },
             )
             return _error_response(exc)
         related = payload.get("related", {})

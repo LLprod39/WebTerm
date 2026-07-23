@@ -136,9 +136,18 @@ def _events_section(
     transport: ProviderTransport | None,
 ) -> dict[str, Any]:
     if not requested:
-        return {"available": False, "requested": False, "events": [], "event_count": 0, "truncated": False, "redacted": False}
+        return {
+            "available": False,
+            "requested": False,
+            "events": [],
+            "event_count": 0,
+            "truncated": False,
+            "redacted": False,
+        }
     try:
-        active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind=ref.kind)
+        active_resource_session_for_user(
+            user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind=ref.kind
+        )
         snapshot = fetch_resource_events_snapshot(
             provider=provider,
             cluster=cluster,
@@ -211,7 +220,9 @@ def _resource_summary(resource: dict[str, Any]) -> dict[str, Any]:
                 "available_replicas": status.get("availableReplicas"),
                 "updated_replicas": status.get("updatedReplicas"),
                 "conditions": [_condition_summary(item) for item in _conditions(status)],
-                "conditions_truncated": len(status.get("conditions") or []) > MAX_CONDITIONS if isinstance(status.get("conditions"), list) else False,
+                "conditions_truncated": len(status.get("conditions") or []) > MAX_CONDITIONS
+                if isinstance(status.get("conditions"), list)
+                else False,
             },
         }
     )
@@ -274,7 +285,7 @@ def _owner_references(value: Any) -> list[dict[str, Any]]:
 def _bounded_keys(value: Any) -> list[str]:
     if not isinstance(value, dict):
         return []
-    return sorted(_safe_text(key, 180) for key in value.keys())[:MAX_KEYS]
+    return sorted(_safe_text(key, 180) for key in value)[:MAX_KEYS]
 
 
 def _container_count(spec: dict[str, Any]) -> int:
@@ -331,7 +342,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for live describe.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for live describe.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

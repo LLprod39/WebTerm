@@ -29,9 +29,22 @@ def open_admin_log_stream_snapshot(
     stream_id: str = "",
 ) -> dict[str, Any]:
     stream_ref = stream_id or str(uuid.uuid4())
-    session = _active_session(user=user, session_id=session_id, cluster_id=cluster_id, verb=K8sAdminAction.VERB_LOGS, namespace=namespace, kind="Pod")
+    session = _active_session(
+        user=user,
+        session_id=session_id,
+        cluster_id=cluster_id,
+        verb=K8sAdminAction.VERB_LOGS,
+        namespace=namespace,
+        kind="Pod",
+    )
     started = timezone.now()
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.logs_started", stream_id=stream_ref, payload={"target": {"namespace": namespace, "pod": pod_name, "container": container}})
+    _audit_stream(
+        user=user,
+        session=session,
+        action="k8s.admin_stream.logs_started",
+        stream_id=stream_ref,
+        payload={"target": {"namespace": namespace, "pod": pod_name, "container": container}},
+    )
     start = monotonic()
     try:
         payload = get_admin_pod_log_snapshot(
@@ -44,19 +57,56 @@ def open_admin_log_stream_snapshot(
             container=container,
         )
     except Exception as exc:
-        _audit_stream(user=user, session=session, action="k8s.admin_stream.logs_failed", stream_id=stream_ref, payload={"duration_ms": _duration_ms(start), "error_code": getattr(exc, "code", "stream_failed")})
+        _audit_stream(
+            user=user,
+            session=session,
+            action="k8s.admin_stream.logs_failed",
+            stream_id=stream_ref,
+            payload={"duration_ms": _duration_ms(start), "error_code": getattr(exc, "code", "stream_failed")},
+        )
         raise
     summary = _log_summary(payload, started_at=started, duration_ms=_duration_ms(start))
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.logs_stopped", stream_id=stream_ref, payload=summary)
-    return {"stream_id": stream_ref, "stream_type": "logs", "started_at": started.isoformat(), "payload": payload, "summary": summary}
+    _audit_stream(
+        user=user, session=session, action="k8s.admin_stream.logs_stopped", stream_id=stream_ref, payload=summary
+    )
+    return {
+        "stream_id": stream_ref,
+        "stream_type": "logs",
+        "started_at": started.isoformat(),
+        "payload": payload,
+        "summary": summary,
+    }
 
 
-def start_admin_log_stream(*, user, session_id: str, cluster_id: str, namespace: str, pod_name: str, container: str = "", stream_id: str = "", follow: bool = False) -> dict[str, Any]:
+def start_admin_log_stream(
+    *,
+    user,
+    session_id: str,
+    cluster_id: str,
+    namespace: str,
+    pod_name: str,
+    container: str = "",
+    stream_id: str = "",
+    follow: bool = False,
+) -> dict[str, Any]:
     stream_ref = stream_id or str(uuid.uuid4())
-    session = _active_session(user=user, session_id=session_id, cluster_id=cluster_id, verb=K8sAdminAction.VERB_LOGS, namespace=namespace, kind="Pod")
+    session = _active_session(
+        user=user,
+        session_id=session_id,
+        cluster_id=cluster_id,
+        verb=K8sAdminAction.VERB_LOGS,
+        namespace=namespace,
+        kind="Pod",
+    )
     started = timezone.now()
     target = {"namespace": namespace, "pod": pod_name, "container": container}
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.logs_started", stream_id=stream_ref, payload={"target": target, "follow": bool(follow)})
+    _audit_stream(
+        user=user,
+        session=session,
+        action="k8s.admin_stream.logs_started",
+        stream_id=stream_ref,
+        payload={"target": target, "follow": bool(follow)},
+    )
     return {
         "stream_id": stream_ref,
         "stream_type": "logs",
@@ -83,9 +133,22 @@ def open_admin_watch_stream_snapshot(
     stream_id: str = "",
 ) -> dict[str, Any]:
     stream_ref = stream_id or str(uuid.uuid4())
-    session = _active_session(user=user, session_id=session_id, cluster_id=cluster_id, verb=K8sAdminAction.VERB_WATCH, namespace=namespace, kind=kind)
+    session = _active_session(
+        user=user,
+        session_id=session_id,
+        cluster_id=cluster_id,
+        verb=K8sAdminAction.VERB_WATCH,
+        namespace=namespace,
+        kind=kind,
+    )
     started = timezone.now()
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.watch_started", stream_id=stream_ref, payload={"target": {"api_version": api_version, "kind": kind, "namespace": namespace, "name": name}})
+    _audit_stream(
+        user=user,
+        session=session,
+        action="k8s.admin_stream.watch_started",
+        stream_id=stream_ref,
+        payload={"target": {"api_version": api_version, "kind": kind, "namespace": namespace, "name": name}},
+    )
     start = monotonic()
     try:
         payload = get_admin_resource_watch_preview(
@@ -102,11 +165,25 @@ def open_admin_watch_stream_snapshot(
             timeout_seconds=timeout_seconds,
         )
     except Exception as exc:
-        _audit_stream(user=user, session=session, action="k8s.admin_stream.watch_failed", stream_id=stream_ref, payload={"duration_ms": _duration_ms(start), "error_code": getattr(exc, "code", "stream_failed")})
+        _audit_stream(
+            user=user,
+            session=session,
+            action="k8s.admin_stream.watch_failed",
+            stream_id=stream_ref,
+            payload={"duration_ms": _duration_ms(start), "error_code": getattr(exc, "code", "stream_failed")},
+        )
         raise
     summary = _watch_summary(payload, started_at=started, duration_ms=_duration_ms(start))
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.watch_stopped", stream_id=stream_ref, payload=summary)
-    return {"stream_id": stream_ref, "stream_type": "watch", "started_at": started.isoformat(), "payload": payload, "summary": summary}
+    _audit_stream(
+        user=user, session=session, action="k8s.admin_stream.watch_stopped", stream_id=stream_ref, payload=summary
+    )
+    return {
+        "stream_id": stream_ref,
+        "stream_type": "watch",
+        "started_at": started.isoformat(),
+        "payload": payload,
+        "summary": summary,
+    }
 
 
 def start_admin_watch_stream(
@@ -123,10 +200,23 @@ def start_admin_watch_stream(
     follow: bool = False,
 ) -> dict[str, Any]:
     stream_ref = stream_id or str(uuid.uuid4())
-    session = _active_session(user=user, session_id=session_id, cluster_id=cluster_id, verb=K8sAdminAction.VERB_WATCH, namespace=namespace, kind=kind)
+    session = _active_session(
+        user=user,
+        session_id=session_id,
+        cluster_id=cluster_id,
+        verb=K8sAdminAction.VERB_WATCH,
+        namespace=namespace,
+        kind=kind,
+    )
     started = timezone.now()
     target = {"api_version": api_version, "kind": kind, "namespace": namespace, "name": name, "resource": resource}
-    _audit_stream(user=user, session=session, action="k8s.admin_stream.watch_started", stream_id=stream_ref, payload={"target": target, "follow": bool(follow)})
+    _audit_stream(
+        user=user,
+        session=session,
+        action="k8s.admin_stream.watch_started",
+        stream_id=stream_ref,
+        payload={"target": target, "follow": bool(follow)},
+    )
     return {
         "stream_id": stream_ref,
         "stream_type": "watch",
@@ -141,7 +231,9 @@ def active_admin_stream_session_status(*, session_pk: int) -> dict[str, Any]:
     session = refresh_admin_session_state(_session_by_pk(session_pk))
     if session.status == K8sAdminSession.STATUS_ACTIVE:
         return {"active": True, "status": session.status, "code": ""}
-    close_code = "admin_session_expired" if session.status == K8sAdminSession.STATUS_EXPIRED else "admin_session_not_active"
+    close_code = (
+        "admin_session_expired" if session.status == K8sAdminSession.STATUS_EXPIRED else "admin_session_not_active"
+    )
     return {"active": False, "status": session.status, "code": close_code}
 
 
@@ -151,13 +243,23 @@ def stop_admin_stream(*, user, session_pk: int, stream_id: str, stream_type: str
     _audit_stream(user=user, session=session, action=action, stream_id=stream_id, payload=summary)
 
 
-def fail_admin_stream(*, user, session_pk: int, stream_id: str, stream_type: str, error_code: str, duration_ms: int) -> None:
+def fail_admin_stream(
+    *, user, session_pk: int, stream_id: str, stream_type: str, error_code: str, duration_ms: int
+) -> None:
     action = f"k8s.admin_stream.{stream_type}_failed"
     session = _session_by_pk(session_pk)
-    _audit_stream(user=user, session=session, action=action, stream_id=stream_id, payload={"duration_ms": duration_ms, "error_code": error_code})
+    _audit_stream(
+        user=user,
+        session=session,
+        action=action,
+        stream_id=stream_id,
+        payload={"duration_ms": duration_ms, "error_code": error_code},
+    )
 
 
-def close_admin_stream(*, user, stream: dict[str, Any], last_payload: dict[str, Any], batch_count: int, close_reason: str) -> dict[str, Any]:
+def close_admin_stream(
+    *, user, stream: dict[str, Any], last_payload: dict[str, Any], batch_count: int, close_reason: str
+) -> dict[str, Any]:
     duration_ms = max(0, int((monotonic() - float(stream["started_monotonic"])) * 1000))
     stream_type = str(stream["stream_type"])
     if stream_type == "logs":
@@ -192,13 +294,17 @@ def close_admin_stream(*, user, stream: dict[str, Any], last_payload: dict[str, 
     return summary
 
 
-def build_log_stream_summary(payload: dict[str, Any], *, started_at: str, duration_ms: int, batch_count: int, follow: bool) -> dict[str, Any]:
+def build_log_stream_summary(
+    payload: dict[str, Any], *, started_at: str, duration_ms: int, batch_count: int, follow: bool
+) -> dict[str, Any]:
     summary = _log_summary(payload, started_at=started_at, duration_ms=duration_ms)
     summary.update({"batch_count": batch_count, "follow": bool(follow)})
     return summary
 
 
-def build_watch_stream_summary(payload: dict[str, Any], *, started_at: str, duration_ms: int, batch_count: int, follow: bool) -> dict[str, Any]:
+def build_watch_stream_summary(
+    payload: dict[str, Any], *, started_at: str, duration_ms: int, batch_count: int, follow: bool
+) -> dict[str, Any]:
     summary = _watch_summary(payload, started_at=started_at, duration_ms=duration_ms)
     summary.update({"batch_count": batch_count, "follow": bool(follow)})
     return summary
@@ -220,7 +326,9 @@ def bounded_stream_float(value: float | str | None, *, default: float, minimum: 
     return max(minimum, min(parsed, maximum))
 
 
-def _active_session(*, user, session_id: str, cluster_id: str, verb: str, namespace: str = "", kind: str = "") -> K8sAdminSession:
+def _active_session(
+    *, user, session_id: str, cluster_id: str, verb: str, namespace: str = "", kind: str = ""
+) -> K8sAdminSession:
     cluster = cluster_for_value(cluster_id)
     if cluster is None:
         raise AdminResourceError("Cluster not found.", code="cluster_not_found", status=404)

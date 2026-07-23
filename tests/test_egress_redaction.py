@@ -134,10 +134,7 @@ class TestRedactAiEvent:
     def test_multiple_secrets_in_one_field(self):
         payload = {
             "type": "ai_response",
-            "assistant_text": (
-                "DB: postgres://admin:secret@db:5432/app "
-                "API: Bearer eyJhbGciOiJIUzI1NiJ9.token123"
-            ),
+            "assistant_text": ("DB: postgres://admin:secret@db:5432/app API: Bearer eyJhbGciOiJIUzI1NiJ9.token123"),
             "commands": [],
         }
         _, report = redact_ai_event(payload)

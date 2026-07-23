@@ -144,8 +144,7 @@ class TodoWriteTool:
         in_progress = sum(1 for t in new if t["status"] == "in_progress")
         completed = sum(1 for t in new if t["status"] == "completed")
         return tool_ok(
-            f"Todo updated: {len(new)} item(s), {in_progress} in progress, "
-            f"{completed} done.",
+            f"Todo updated: {len(new)} item(s), {in_progress} in progress, {completed} done.",
             data={"todos": new},
         )
 
@@ -190,9 +189,7 @@ class ListTargetsTool:
         lines = [
             f"- {'PRIMARY' if r['is_primary'] else 'extra   '} "
             f"{r['name']!r} → {r['display_name'] or r['host']} "
-            f"(id={r['server_id']}"
-            + (", read-only" if r["read_only"] else "")
-            + ")"
+            f"(id={r['server_id']}" + (", read-only" if r["read_only"] else "") + ")"
             for r in rows
         ]
         body = "\n".join(lines) if lines else "(no targets configured)"
@@ -254,8 +251,7 @@ class RememberTool:
             return tool_err(f"memory write failed: {exc}")
 
         return tool_ok(
-            f"Remembered for server {ctx.primary.display_name or ctx.primary.name}: "
-            f"{args.fact[:200]}",
+            f"Remembered for server {ctx.primary.display_name or ctx.primary.name}: {args.fact[:200]}",
             data={
                 "fact": args.fact,
                 "kind": args.kind,

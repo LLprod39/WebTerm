@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime
 
 import pytest
 from django.contrib.auth.models import User
@@ -51,13 +50,13 @@ def test_parse_cert_output_extracts_fields():
     assert first["issuer"] == "C = US, O = Example CA, CN = R3"
     assert first["serial"] == "04A1B2C3"
     assert first["fingerprint_sha256"] == "AA:BB:CC:DD"
-    assert first["not_before"] == datetime(2026, 5, 20, 0, 0, 0, tzinfo=dt_timezone.utc)
-    assert first["not_after"] == datetime(2026, 8, 18, 23, 59, 59, tzinfo=dt_timezone.utc)
+    assert first["not_before"] == datetime(2026, 5, 20, 0, 0, 0, tzinfo=UTC)
+    assert first["not_after"] == datetime(2026, 8, 18, 23, 59, 59, tzinfo=UTC)
     assert first["sans"] == ["api.example.com", "www.example.com", "10.0.0.5"]
 
     second = certs[1]
     assert second["port"] == 8443
-    assert second["not_after"] == datetime(2027, 1, 2, 12, 0, 0, tzinfo=dt_timezone.utc)
+    assert second["not_after"] == datetime(2027, 1, 2, 12, 0, 0, tzinfo=UTC)
     assert second["sans"] == []
 
 

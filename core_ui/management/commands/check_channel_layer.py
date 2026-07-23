@@ -23,7 +23,9 @@ class Command(BaseCommand):
         layer_config = dict(settings.CHANNEL_LAYERS.get("default") or {})
         backend = str(layer_config.get("BACKEND") or "").strip()
         if backend == "channels.layers.InMemoryChannelLayer":
-            raise CommandError("InMemoryChannelLayer is not valid for production verification. Configure CHANNEL_REDIS_URL.")
+            raise CommandError(
+                "InMemoryChannelLayer is not valid for production verification. Configure CHANNEL_REDIS_URL."
+            )
 
         try:
             result = asyncio.run(verify_channel_layer_config(layer_config, timeout=float(options["timeout"])))
@@ -31,8 +33,5 @@ class Command(BaseCommand):
             raise CommandError(f"Channel layer verification failed: {exc}") from exc
 
         self.stdout.write(
-            self.style.SUCCESS(
-                "Channel layer verified: "
-                f"backend={result['backend']} group={result['group_name']}"
-            )
+            self.style.SUCCESS(f"Channel layer verified: backend={result['backend']} group={result['group_name']}")
         )

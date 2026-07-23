@@ -1,4 +1,5 @@
 """Global ops controls: kill switch for scheduled pipelines/agents and new agent runs."""
+
 from __future__ import annotations
 
 import json

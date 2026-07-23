@@ -164,7 +164,9 @@ def _validate_node(value: Any, schema: dict[str, Any], *, path: str, depth: int,
     _capture_unsupported_keywords(schema, context)
 
 
-def _validate_object(value: dict[str, Any], schema: dict[str, Any], *, path: str, depth: int, context: dict[str, Any]) -> None:
+def _validate_object(
+    value: dict[str, Any], schema: dict[str, Any], *, path: str, depth: int, context: dict[str, Any]
+) -> None:
     required = schema.get("required")
     if isinstance(required, list):
         for field in required:
@@ -180,7 +182,9 @@ def _validate_object(value: dict[str, Any], schema: dict[str, Any], *, path: str
         _validate_node(value[key], property_schema, path=f"{path}.{key}", depth=depth + 1, context=context)
 
 
-def _validate_array(value: list[Any], schema: dict[str, Any], *, path: str, depth: int, context: dict[str, Any]) -> None:
+def _validate_array(
+    value: list[Any], schema: dict[str, Any], *, path: str, depth: int, context: dict[str, Any]
+) -> None:
     item_schema = schema.get("items")
     if not isinstance(item_schema, dict):
         return
@@ -297,7 +301,11 @@ def _matching_crd(items: list[Any], *, group: str, version: str, kind: str) -> d
         spec = item.get("spec") if isinstance(item.get("spec"), dict) else {}
         names = spec.get("names") if isinstance(spec.get("names"), dict) else {}
         versions = spec.get("versions") if isinstance(spec.get("versions"), list) else []
-        if spec.get("group") == group and names.get("kind") == kind and any(v.get("name") == version for v in versions if isinstance(v, dict)):
+        if (
+            spec.get("group") == group
+            and names.get("kind") == kind
+            and any(v.get("name") == version for v in versions if isinstance(v, dict))
+        ):
             return item
     return None
 
@@ -333,7 +341,9 @@ def _schema_source(crd: dict[str, Any], *, version: str, available: bool, reason
             "crd_name": str(metadata.get("name") or "")[:180],
             "group": str(spec.get("group") or "")[:180],
             "version": str(version or "")[:80],
-            "kind": str((spec.get("names") or {}).get("kind") or "")[:120] if isinstance(spec.get("names"), dict) else "",
+            "kind": str((spec.get("names") or {}).get("kind") or "")[:120]
+            if isinstance(spec.get("names"), dict)
+            else "",
         }
     )
 
@@ -342,7 +352,9 @@ def _crd_list_path(provider: K8sProvider, cluster: K8sCluster) -> str:
     return rancher_resource_path(
         provider,
         cluster,
-        KubernetesResourceRef(api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions"),
+        KubernetesResourceRef(
+            api_version="apiextensions.k8s.io/v1", kind="CustomResourceDefinition", resource="customresourcedefinitions"
+        ),
     )
 
 
@@ -364,7 +376,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for schema validation.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for schema validation.", code="rancher_provider_required", status=409
+        )
     return provider
 
 

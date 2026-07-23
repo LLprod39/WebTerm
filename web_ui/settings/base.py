@@ -23,6 +23,7 @@ from .security import build_security_settings
 # Загрузка .env до чтения os.getenv (для POSTGRES_*, CELERY_* и т.д.)
 try:
     from dotenv import load_dotenv
+
     load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 except ImportError:
     pass
@@ -45,61 +46,61 @@ SITE_URL = str(_security_settings["SITE_URL"])
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
-    'channels',
-    'corsheaders',
-    'core_ui',
-    'plugin_marketplace.apps.PluginMarketplaceConfig',
-    'servers',
-    'studio',
-    'mars',
-    'kubernetes_ops',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
+    "daphne",
+    "channels",
+    "corsheaders",
+    "core_ui",
+    "plugin_marketplace.apps.PluginMarketplaceConfig",
+    "servers",
+    "studio",
+    "mars",
+    "kubernetes_ops",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.locale.LocaleMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'core_ui.domain_auth.DomainAutoLoginMiddleware',
-    'core_ui.middleware.RequestAuditMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core_ui.middleware.AdminRussianMiddleware',
-    'core_ui.middleware.MobileDetectionMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.locale.LocaleMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core_ui.domain_auth.DomainAutoLoginMiddleware",
+    "core_ui.middleware.RequestAuditMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core_ui.middleware.AdminRussianMiddleware",
+    "core_ui.middleware.MobileDetectionMiddleware",
 ]
 
-ROOT_URLCONF = 'web_ui.urls'
+ROOT_URLCONF = "web_ui.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            BASE_DIR / 'core_ui' / 'templates',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [
+            BASE_DIR / "core_ui" / "templates",
         ],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'core_ui.context_processors.app_permissions',
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+                "core_ui.context_processors.app_permissions",
             ],
         },
     },
 ]
 
-WSGI_APPLICATION = 'web_ui.wsgi.application'
-ASGI_APPLICATION = 'web_ui.asgi.application'
+WSGI_APPLICATION = "web_ui.wsgi.application"
+ASGI_APPLICATION = "web_ui.asgi.application"
 
 globals().update(build_channel_settings(debug=DEBUG))
 globals().update(build_database_settings(base_dir=BASE_DIR))
@@ -110,16 +111,16 @@ globals().update(build_database_settings(base_dir=BASE_DIR))
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -127,9 +128,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = "UTC"
 
 USE_I18N = True
 
@@ -145,15 +146,15 @@ globals().update(build_plugin_marketplace_settings(debug=DEBUG))
 # SMTP settings for sending emails (invitations, notifications, etc.)
 # For development, use console backend. For production, configure SMTP.
 EMAIL_BACKEND = os.getenv(
-    'EMAIL_BACKEND',
-    'django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
 )
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'WEU Platform <noreply@weuai.site>')
+EMAIL_HOST = os.getenv("EMAIL_HOST", "smtp.gmail.com")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", "587"))
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "WEU Platform <noreply@weuai.site>")
 
 # Site URL for email links and approval callbacks
 SITE_URL = SITE_URL or (_RENDER_EXTERNAL_URL or "http://localhost:9000")
@@ -162,32 +163,32 @@ SITE_URL = SITE_URL or (_RENDER_EXTERNAL_URL or "http://localhost:9000")
 # Pipeline Notifications — global defaults (used when nodes don't override)
 # =============================================================================
 # Who receives pipeline notifications (approvals, reports, alerts)
-PIPELINE_NOTIFY_EMAIL = os.getenv('PIPELINE_NOTIFY_EMAIL', EMAIL_HOST_USER)
+PIPELINE_NOTIFY_EMAIL = os.getenv("PIPELINE_NOTIFY_EMAIL", EMAIL_HOST_USER)
 
 # Telegram Bot — used by output/telegram and logic/human_approval nodes globally
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [
-    BASE_DIR / 'core_ui' / 'static',
+    BASE_DIR / "core_ui" / "static",
 ]
 
 # Media files (uploaded files)
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-UPLOADED_FILES_DIR = MEDIA_ROOT / 'uploads'
-SSH_PRIVATE_KEYS_DIR = BASE_DIR / 'data' / 'ssh_keys'
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+UPLOADED_FILES_DIR = MEDIA_ROOT / "uploads"
+SSH_PRIVATE_KEYS_DIR = BASE_DIR / "data" / "ssh_keys"
 
 # Create upload directory if it doesn't exist
 UPLOADED_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 # Agent projects directory
-AGENT_PROJECTS_DIR = BASE_DIR / 'agent_projects'
+AGENT_PROJECTS_DIR = BASE_DIR / "agent_projects"
 AGENT_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # File upload settings
@@ -204,6 +205,6 @@ globals().update(
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 globals().update(build_celery_settings(debug=DEBUG, time_zone=TIME_ZONE))

@@ -92,7 +92,9 @@ class KubernetesOpsAdminTerminalTests(TestCase):
         session = self.create_break_glass_session(user)
         self.client.force_login(user)
 
-        response = self.post_start(session.session_id, {"reason": "inspect namespace", "include_restricted_context": True})
+        response = self.post_start(
+            session.session_id, {"reason": "inspect namespace", "include_restricted_context": True}
+        )
 
         self.assertEqual(response.status_code, 200)
         terminal = response.json()["terminal"]

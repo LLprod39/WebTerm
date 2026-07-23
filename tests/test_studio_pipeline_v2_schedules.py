@@ -84,7 +84,12 @@ def test_schedule_validation_rejects_invalid_fallback_cron_without_croniter(monk
 
     errors = validate_pipeline_definition(
         nodes=[
-            {"id": "schedule", "type": "trigger/schedule", "position": {"x": 0, "y": 0}, "data": {"cron_expression": "*/0 * * * *"}},
+            {
+                "id": "schedule",
+                "type": "trigger/schedule",
+                "position": {"x": 0, "y": 0},
+                "data": {"cron_expression": "*/0 * * * *"},
+            },
             report_node("report"),
         ],
         edges=[{"id": "e1", "source": "schedule", "target": "report", "sourceHandle": "out"}],

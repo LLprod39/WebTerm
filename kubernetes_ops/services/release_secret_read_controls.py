@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import timedelta
 from typing import Any
 
@@ -35,7 +35,11 @@ def build_kubernetes_release_secret_read_controls_evidence(user, enabled: bool) 
     if not enabled:
         return {"success": False, "status": "skipped", "reason": "Secret-read controls proof skipped"}
     if not user or not getattr(user, "is_staff", False):
-        return {"success": False, "status": "missing", "reason": "staff user is required for Secret-read controls proof"}
+        return {
+            "success": False,
+            "status": "missing",
+            "reason": "staff user is required for Secret-read controls proof",
+        }
     try:
         with transaction.atomic():
             _grant(user, KUBERNETES_FEATURE, KUBERNETES_ADMIN_READ_FEATURE)
@@ -54,7 +58,9 @@ def build_kubernetes_release_secret_read_controls_evidence(user, enabled: bool) 
             )
             session = _read_session(user=user, cluster=cluster)
             initial_action_count = K8sAdminAction.objects.count()
-            proof = _run_secret_read_checks(user=user, cluster=cluster, session=session, initial_action_count=initial_action_count)
+            proof = _run_secret_read_checks(
+                user=user, cluster=cluster, session=session, initial_action_count=initial_action_count
+            )
             transaction.set_rollback(True)
             return proof
     except Exception as exc:
@@ -87,7 +93,9 @@ def secret_read_controls_blocker(proof: dict[str, Any]) -> str | None:
     return None
 
 
-def _run_secret_read_checks(*, user, cluster: K8sCluster, session: K8sAdminSession, initial_action_count: int) -> dict[str, Any]:
+def _run_secret_read_checks(
+    *, user, cluster: K8sCluster, session: K8sAdminSession, initial_action_count: int
+) -> dict[str, Any]:
     default_provider_calls = 0
 
     def default_transport(*_args, **_kwargs):
@@ -197,14 +205,21 @@ def _run_secret_read_checks(*, user, cluster: K8sCluster, session: K8sAdminSessi
         "raw_secret_absent_from_action_summary": _raw_absent(default_action.response_summary if default_action else {}),
         "secret_read_rejected_without_grant": no_grant_denied["success"],
         "secret_read_rejected_without_runtime_flag": runtime_flag_denied["success"],
-        "provider_not_called_for_denied_reveal": not no_grant_denied["provider_called"] and not runtime_flag_denied["provider_called"],
+        "provider_not_called_for_denied_reveal": not no_grant_denied["provider_called"]
+        and not runtime_flag_denied["provider_called"],
         "secret_read_capability_disabled_by_default": policy_with_flag_disabled.get("can_view_secret_values") is False,
         "secret_list_metadata_only": _is_secret_list_metadata_only(list_payload),
         "secret_list_raw_secret_absent": _raw_absent(list_payload),
-        "secret_list_action_summary_raw_secret_absent": _raw_absent(list_action.response_summary if list_action else {}),
-        "secret_list_action_summary_flags_boolean": _action_secret_flags_are_booleans(list_action.response_summary if list_action else {}),
+        "secret_list_action_summary_raw_secret_absent": _raw_absent(
+            list_action.response_summary if list_action else {}
+        ),
+        "secret_list_action_summary_flags_boolean": _action_secret_flags_are_booleans(
+            list_action.response_summary if list_action else {}
+        ),
         "secret_read_allowed_with_all_gates": _is_visible_payload(visible_payload),
-        "allowed_action_summary_raw_secret_absent": _raw_absent(visible_action.response_summary if visible_action else {}),
+        "allowed_action_summary_raw_secret_absent": _raw_absent(
+            visible_action.response_summary if visible_action else {}
+        ),
         "default_provider_calls": default_provider_calls,
         "list_provider_calls": list_provider_calls,
         "visible_provider_calls": visible_provider_calls,
@@ -363,9 +378,7 @@ def _temporary_settings(**overrides):
     finally:
         for key in overrides:
             if key in missing:
-                try:
+                with suppress(AttributeError):
                     delattr(settings, key)
-                except AttributeError:
-                    pass
             else:
                 setattr(settings, key, previous[key])

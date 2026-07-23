@@ -274,8 +274,6 @@ class TerminalAiChatMessage(models.Model):
         return f"{self.role}: {preview}"
 
 
-
-
 class CommandSnapshot(models.Model):
     """Pre-execution snapshot of a file captured before AI modifies it.
 

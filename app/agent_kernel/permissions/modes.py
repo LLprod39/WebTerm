@@ -13,4 +13,3 @@ MUTATION_SANDBOX = {
     MODE_AUTONOMOUS: "ops_mutation",
     MODE_AUTO_GUARDED: "ops_mutation",
 }
-

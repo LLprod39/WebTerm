@@ -23,7 +23,9 @@ def _disable_activity_logging(monkeypatch):
         ("schedule", "schedule_task"),
     ],
 )
-def test_pipeline_executor_activates_only_selected_trigger_branch(monkeypatch, entry_node_id: str, expected_node_id: str):
+def test_pipeline_executor_activates_only_selected_trigger_branch(
+    monkeypatch, entry_node_id: str, expected_node_id: str
+):
     owner = User.objects.create_user(username=f"trigger-owner-{entry_node_id}", password="x")
     pipeline = Pipeline.objects.create(
         name="Trigger isolated flow",
@@ -138,7 +140,12 @@ def test_pipeline_executor_routes_condition_ports(monkeypatch, passed: bool, exp
         owner=owner,
         nodes=[
             {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {}},
-            {"id": "cond", "type": "logic/condition", "position": {"x": 0, "y": 100}, "data": {"check_type": "always_true"}},
+            {
+                "id": "cond",
+                "type": "logic/condition",
+                "position": {"x": 0, "y": 100},
+                "data": {"check_type": "always_true"},
+            },
             report_node("true_branch"),
             report_node("false_branch"),
         ],
@@ -246,7 +253,12 @@ def test_pipeline_executor_routes_human_approval_ports(monkeypatch, decision: st
         owner=owner,
         nodes=[
             {"id": "manual", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {}},
-            {"id": "approval", "type": "logic/human_approval", "position": {"x": 0, "y": 100}, "data": {"timeout_minutes": 5}},
+            {
+                "id": "approval",
+                "type": "logic/human_approval",
+                "position": {"x": 0, "y": 100},
+                "data": {"timeout_minutes": 5},
+            },
             report_node("approved_report"),
             report_node("rejected_report"),
             report_node("timeout_report"),

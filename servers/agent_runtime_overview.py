@@ -132,7 +132,9 @@ def _serialize_runtime_scheduled_item(
         ),
         "last_run_at": last_run_at.isoformat() if last_run_at else None,
         "next_due_at": next_due_at.isoformat() if next_due_at else None,
-        "due_age_seconds": _age_seconds(current_time, next_due_at) if next_due_at and next_due_at <= current_time else 0,
+        "due_age_seconds": _age_seconds(current_time, next_due_at)
+        if next_due_at and next_due_at <= current_time
+        else 0,
         "active_run_id": active_run.id if active_run else None,
         "active_run_status": active_run.status if active_run else "",
     }
@@ -239,13 +241,19 @@ def get_agent_runtime_overview(user) -> dict:
         "workers": worker_states,
         "execution_readiness": execution_readiness,
         "items": {
-            "active_runs": [_serialize_runtime_run_item(run, current_time, stale_seconds=stale_seconds) for run in active_run_rows],
-            "queued_dispatches": [_serialize_runtime_dispatch_item(dispatch, current_time) for dispatch in dispatch_rows],
+            "active_runs": [
+                _serialize_runtime_run_item(run, current_time, stale_seconds=stale_seconds) for run in active_run_rows
+            ],
+            "queued_dispatches": [
+                _serialize_runtime_dispatch_item(dispatch, current_time) for dispatch in dispatch_rows
+            ],
             "scheduled_due": [
                 _serialize_runtime_scheduled_item(agent, current_time, active_run=active_runs_by_agent.get(agent.id))
                 for agent in due_agents[:8]
             ],
-            "stale_candidates": [_serialize_runtime_run_item(run, current_time, stale_seconds=stale_seconds) for run in stale_run_rows],
+            "stale_candidates": [
+                _serialize_runtime_run_item(run, current_time, stale_seconds=stale_seconds) for run in stale_run_rows
+            ],
         },
         "issues": issues,
         "commands": {
@@ -257,7 +265,15 @@ def get_agent_runtime_overview(user) -> dict:
     }
 
 
-def _runtime_issues(*, queued_dispatches: int, claimed_dispatches: int, pending_runs: int, execution_readiness: dict, due_now: int, scheduled_worker: dict) -> list[dict]:
+def _runtime_issues(
+    *,
+    queued_dispatches: int,
+    claimed_dispatches: int,
+    pending_runs: int,
+    execution_readiness: dict,
+    due_now: int,
+    scheduled_worker: dict,
+) -> list[dict]:
     issues = []
     if (queued_dispatches or claimed_dispatches or pending_runs) and not execution_readiness.get("ready"):
         issues.append(
@@ -269,7 +285,9 @@ def _runtime_issues(*, queued_dispatches: int, claimed_dispatches: int, pending_
                 "next_action": AGENT_EXECUTION_COMMAND,
             }
         )
-    scheduled_worker_running = scheduled_worker.get("status") == BackgroundWorkerState.STATUS_RUNNING and not scheduled_worker.get("is_stale")
+    scheduled_worker_running = scheduled_worker.get(
+        "status"
+    ) == BackgroundWorkerState.STATUS_RUNNING and not scheduled_worker.get("is_stale")
     if due_now and not scheduled_worker_running:
         issues.append(
             {

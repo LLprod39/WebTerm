@@ -16,6 +16,7 @@ Public API
 - :class:`BudgetExceededError` — raised by callers (e.g. LLMProvider).
 - :func:`get_user_daily_budget_status` — sync; safe to call from any thread.
 """
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -62,13 +63,9 @@ def get_user_daily_budget_status(user_id: int | None) -> BudgetStatus:
         return _disabled_status()
 
     cutoff = timezone.now() - timedelta(hours=24)
-    aggregated = (
-        LLMUsageLog.objects
-        .filter(user_id=int(user_id), created_at__gte=cutoff)
-        .aggregate(
-            input_sum=Sum("input_tokens"),
-            output_sum=Sum("output_tokens"),
-        )
+    aggregated = LLMUsageLog.objects.filter(user_id=int(user_id), created_at__gte=cutoff).aggregate(
+        input_sum=Sum("input_tokens"),
+        output_sum=Sum("output_tokens"),
     )
     used = int(aggregated.get("input_sum") or 0) + int(aggregated.get("output_sum") or 0)
     remaining = max(0, limit - used)

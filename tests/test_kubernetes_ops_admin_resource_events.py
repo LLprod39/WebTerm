@@ -93,7 +93,10 @@ class KubernetesOpsAdminResourceEventsTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "resource_events")
         self.assertEqual(payload["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/events")
-        self.assertEqual(payload["field_selector"], "involvedObject.apiVersion=apps/v1,involvedObject.kind=Deployment,involvedObject.name=payments-api,involvedObject.namespace=payments")
+        self.assertEqual(
+            payload["field_selector"],
+            "involvedObject.apiVersion=apps/v1,involvedObject.kind=Deployment,involvedObject.name=payments-api,involvedObject.namespace=payments",
+        )
         self.assertEqual(payload["event_count"], 1)
         self.assertTrue(payload["redacted"])
         self.assertEqual(payload["events"][0]["message"], "pull failed password=[redacted]")
@@ -119,7 +122,9 @@ class KubernetesOpsAdminResourceEventsTests(TestCase):
         self.client.force_login(user)
 
         with patch("kubernetes_ops.services.admin_resource_events.ProviderJsonClient") as client_cls:
-            client_cls.return_value.get.return_value = {"items": [{"metadata": {"name": "event-1"}, "reason": "Pulled"}]}
+            client_cls.return_value.get.return_value = {
+                "items": [{"metadata": {"name": "event-1"}, "reason": "Pulled"}]
+            }
             response = self.client.get(
                 reverse("api_kubernetes_admin_resource_events", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
                 {

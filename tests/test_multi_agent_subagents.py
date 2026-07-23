@@ -14,7 +14,9 @@ from servers.multi_agent_subagents import (
 def _registry() -> ToolRegistry:
     return ToolRegistry(
         {
-            "ssh_execute": ToolSpec(name="ssh_execute", category="ssh", risk="exec", description="ssh", input_schema={}),
+            "ssh_execute": ToolSpec(
+                name="ssh_execute", category="ssh", risk="exec", description="ssh", input_schema={}
+            ),
             "read_console": ToolSpec(
                 name="read_console",
                 category="monitoring",

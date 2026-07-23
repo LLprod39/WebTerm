@@ -5,6 +5,7 @@ mocked ``asyncssh.SSHClientConnection`` so the tests run without any real
 SSH. The consumer's ``_send_ai_event`` is captured into a list for
 assertions.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +22,9 @@ class _FakeConn:
     Captures the last ``run`` invocation so tests can inspect what was sent.
     """
 
-    def __init__(self, *, stdout: str = "", stderr: str = "", exit_status: int | None = 0, raise_exc: Exception | None = None):
+    def __init__(
+        self, *, stdout: str = "", stderr: str = "", exit_status: int | None = 0, raise_exc: Exception | None = None
+    ):
         self._stdout = stdout
         self._stderr = stderr
         self._exit_status = exit_status

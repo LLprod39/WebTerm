@@ -13,6 +13,7 @@ Loads, for a given (user, server) pair:
 Stays under the ORM boundary via the ``@database_sync_to_async`` decorator so
 it can be called from async consumer code.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -120,9 +121,7 @@ def _load_terminal_rules_sync(*, user_id: int, server_id: int) -> TerminalRulesC
             ctx = global_rules.get_context_for_ai()
             if ctx:
                 parts.append(ctx)
-            required_checks.extend(
-                str(x) for x in (global_rules.required_checks or []) if str(x).strip()
-            )
+            required_checks.extend(str(x) for x in (global_rules.required_checks or []) if str(x).strip())
             env_vars.update(global_rules.environment_vars or {})
         if global_rules.forbidden_commands:
             forbidden.extend(str(x) for x in global_rules.forbidden_commands if x)

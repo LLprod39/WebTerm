@@ -291,6 +291,7 @@ export interface MCPServer extends StudioAccessMetadata {
   env: Record<string, string>;
   secret_env_keys?: string[];
   url: string;
+  headers?: Record<string, string>;
   is_shared: boolean;
   last_test_ok: boolean | null;
   last_test_at: string | null;

@@ -7,7 +7,7 @@ from app.agent_kernel.runtime.parsing import parse_json_action, parse_response
 
 def test_parse_classic_thought_action_text():
     text = (
-        'THOUGHT: Сначала проверю сервис\n'
+        "THOUGHT: Сначала проверю сервис\n"
         'ACTION: ssh_execute {"server": "prod-web-1", "command": "systemctl status nginx"}'
     )
     thought, name, args = parse_response(text)
@@ -39,7 +39,7 @@ def test_parse_json_action_alternate_keys():
 def test_parse_json_and_text_prefer_text_action_when_both_present():
     # Classic ACTION wins when both styles appear.
     raw = (
-        'THOUGHT: use text form\n'
+        "THOUGHT: use text form\n"
         'ACTION: ssh_execute {"command": "uptime"}\n'
         '{"tool": "report", "args": {"text": "nope"}}'
     )

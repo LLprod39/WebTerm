@@ -277,10 +277,14 @@ def promote_pattern_candidates(
             server_id=server_id,
             memory_key=pattern_key,
             title=f"Learned Pattern: {pattern.intent} :: {pattern.display_command[:72]}",
-            content=render_snapshot_lines(pattern_candidate_lines(pattern, enhancement=enhancement), fallback=pattern.display_command),
+            content=render_snapshot_lines(
+                pattern_candidate_lines(pattern, enhancement=enhancement), fallback=pattern.display_command
+            ),
             source_kind="dream",
             importance_score=0.68 if pattern.pattern_kind == "sequence" else 0.64,
-            stability_score=min(0.9, 0.45 + min(pattern.occurrences, 6) * 0.06 + (0.05 if pattern.pattern_kind == "sequence" else 0.0)),
+            stability_score=min(
+                0.9, 0.45 + min(pattern.occurrences, 6) * 0.06 + (0.05 if pattern.pattern_kind == "sequence" else 0.0)
+            ),
             confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.97),
             metadata=pattern_metadata(pattern) | pattern_enhancement_metadata(enhancement),
         )
@@ -299,9 +303,14 @@ def promote_pattern_candidates(
                 ),
                 source_kind="dream",
                 importance_score=0.78 if pattern.pattern_kind == "sequence" else 0.72,
-                stability_score=min(0.92, 0.5 + min(pattern.occurrences, 6) * 0.05 + (0.06 if pattern.pattern_kind == "sequence" else 0.0)),
+                stability_score=min(
+                    0.92,
+                    0.5 + min(pattern.occurrences, 6) * 0.05 + (0.06 if pattern.pattern_kind == "sequence" else 0.0),
+                ),
                 confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.98),
-                metadata=pattern_metadata(pattern) | {"candidate_kind": "automation"} | pattern_enhancement_metadata(enhancement),
+                metadata=pattern_metadata(pattern)
+                | {"candidate_kind": "automation"}
+                | pattern_enhancement_metadata(enhancement),
             )
             automation_candidates += 1
             if is_skill_draft_candidate(pattern):
@@ -311,12 +320,21 @@ def promote_pattern_candidates(
                     server_id=server_id,
                     memory_key=skill_key,
                     title=f"Skill Draft: {pattern.intent} :: {pattern.display_command[:68]}",
-                    content=render_snapshot_lines(skill_draft_lines(pattern, enhancement=enhancement), fallback=pattern.display_command),
+                    content=render_snapshot_lines(
+                        skill_draft_lines(pattern, enhancement=enhancement), fallback=pattern.display_command
+                    ),
                     source_kind="dream",
                     importance_score=0.84 if pattern.pattern_kind == "sequence" else 0.76,
-                    stability_score=min(0.94, 0.56 + min(pattern.occurrences, 7) * 0.04 + (0.08 if pattern.pattern_kind == "sequence" else 0.0)),
+                    stability_score=min(
+                        0.94,
+                        0.56
+                        + min(pattern.occurrences, 7) * 0.04
+                        + (0.08 if pattern.pattern_kind == "sequence" else 0.0),
+                    ),
                     confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.99),
-                    metadata=pattern_metadata(pattern) | {"candidate_kind": "skill_draft"} | pattern_enhancement_metadata(enhancement),
+                    metadata=pattern_metadata(pattern)
+                    | {"candidate_kind": "skill_draft"}
+                    | pattern_enhancement_metadata(enhancement),
                 )
                 skill_drafts += 1
 

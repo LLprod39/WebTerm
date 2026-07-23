@@ -14,6 +14,7 @@ export type FeatureFlag =
   | StudioSectionFeature
   | "kubernetes"
   | "mars"
+  | "plugins"
   | "settings"
   | "orchestrator"
   | "knowledge_base";

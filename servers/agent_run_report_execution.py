@@ -131,7 +131,9 @@ def _build_execution_state(run: AgentRun) -> dict[str, Any]:
                 state["description"] = (
                     f"{state['description']} Runtime {state['runtime_age']} превысил stale threshold {state['stale_after']}."
                 )
-                state["next_action"] = "Очистите stale run или запустите execution worker, если запуск ещё должен выполняться."
+                state["next_action"] = (
+                    "Очистите stale run или запустите execution worker, если запуск ещё должен выполняться."
+                )
             return state
         state.update(
             {
@@ -160,7 +162,9 @@ def _build_execution_state(run: AgentRun) -> dict[str, Any]:
                 state["description"] = (
                     f"{state['description']} Runtime {state['runtime_age']} превысил stale threshold {state['stale_after']}."
                 )
-                state["next_action"] = "Очистите stale run или перезапустите execution-plane worker после проверки процесса."
+                state["next_action"] = (
+                    "Очистите stale run или перезапустите execution-plane worker после проверки процесса."
+                )
             return state
         state.update(
             {
@@ -243,7 +247,9 @@ def _build_kpis(
 ) -> list[dict[str, Any]]:
     failed_logs = sum(1 for item in logs if int(item.get("exit_code") or 0) != 0)
     failed_steps = sum(1 for item in steps if item.get("status") in {"failed", "critical"})
-    high_findings = sum(1 for item in (findings or []) if _severity_rank(item.get("severity")) >= _severity_rank("high"))
+    high_findings = sum(
+        1 for item in (findings or []) if _severity_rank(item.get("severity")) >= _severity_rank("high")
+    )
     high_risks = sum(1 for item in (risks or []) if _severity_rank(item.get("severity")) >= _severity_rank("warning"))
     problem_count = failed_logs + failed_steps + high_findings + high_risks
     servers = _server_names(run)
@@ -277,5 +283,6 @@ def _build_kpis(
             "severity": "high" if problem_count else "success",
         },
     ]
+
 
 __all__ = [name for name in globals() if not name.startswith("__")]

@@ -113,7 +113,9 @@ def _validate_optional_int_range(
         errors.append(f"Node '{node_id}' field '{field_name}' must be between {min_value} and {max_value}.")
 
 
-def _validate_package_names(data: dict[str, Any], *, field_name: str, errors: list[str], node_id: str, required: bool = False) -> None:
+def _validate_package_names(
+    data: dict[str, Any], *, field_name: str, errors: list[str], node_id: str, required: bool = False
+) -> None:
     raw = data.get(field_name)
     if raw in (None, ""):
         if required:
@@ -127,7 +129,11 @@ def _validate_package_names(data: dict[str, Any], *, field_name: str, errors: li
     if required and not packages:
         errors.append(f"Node '{node_id}' field '{field_name}' is required.")
         return
-    invalid = [package for package in packages if not PLACEHOLDER_RE.fullmatch(package) and not PACKAGE_NAME_RE.fullmatch(package)]
+    invalid = [
+        package
+        for package in packages
+        if not PLACEHOLDER_RE.fullmatch(package) and not PACKAGE_NAME_RE.fullmatch(package)
+    ]
     if invalid:
         errors.append(f"Node '{node_id}' field '{field_name}' contains invalid package names: {invalid}.")
 
@@ -209,7 +215,9 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
         )
         agent_config = None
         if agent_config_id is not None:
-            agent_config = AgentConfig.objects.filter(owner=owner, id=agent_config_id).prefetch_related("mcp_servers").first()
+            agent_config = (
+                AgentConfig.objects.filter(owner=owner, id=agent_config_id).prefetch_related("mcp_servers").first()
+            )
             if agent_config is None:
                 errors.append(f"Node '{node_id}' references an inaccessible agent config: {agent_config_id}.")
             elif not _owner_can_use_mcp(owner) and agent_config.mcp_servers.exists():
@@ -224,7 +232,9 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
         if mcp_server_ids:
             if not _owner_can_use_mcp(owner):
                 errors.append(f"Node '{node_id}' attaches MCP servers, but MCP is admin-only.")
-            accessible = set(MCPServerPool.objects.filter(owner=owner, id__in=mcp_server_ids).values_list("id", flat=True))
+            accessible = set(
+                MCPServerPool.objects.filter(owner=owner, id__in=mcp_server_ids).values_list("id", flat=True)
+            )
             missing = [mid for mid in mcp_server_ids if mid not in accessible]
             if missing:
                 errors.append(f"Node '{node_id}' references inaccessible MCP servers: {missing}.")
@@ -251,26 +261,51 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
         if mcp_arguments is not None:
             _validate_mcp_arguments_schema(data, mcp_arguments, errors=errors, node_id=node_id)
 
-    if node_type in {"ops/server_snapshot", "ops/log_query", "ops/file_action", "ops/package_action", "ops/disk_cleanup", "ops/backup_restore_check", "ops/service_action", "ops/docker_action", "ops/process_action"}:
+    if node_type in {
+        "ops/server_snapshot",
+        "ops/log_query",
+        "ops/file_action",
+        "ops/package_action",
+        "ops/disk_cleanup",
+        "ops/backup_restore_check",
+        "ops/service_action",
+        "ops/docker_action",
+        "ops/process_action",
+    }:
         _validate_owned_optional_server(data, owner, errors, node_id)
 
     if node_type == "ops/server_snapshot":
         allowed_sections = {"overview", "services", "processes", "docker", "logs", "disk", "network", "packages"}
         raw_sections = data.get("sections")
-        if raw_sections not in (None, ""):
-            if not isinstance(raw_sections, list) or any(str(item or "").strip().lower() not in allowed_sections for item in raw_sections):
-                errors.append(f"Node '{node_id}' field 'sections' must be a list of known server snapshot sections.")
+        if raw_sections not in (None, "") and (
+            not isinstance(raw_sections, list)
+            or any(str(item or "").strip().lower() not in allowed_sections for item in raw_sections)
+        ):
+            errors.append(f"Node '{node_id}' field 'sections' must be a list of known server snapshot sections.")
 
     if node_type == "ops/log_query":
         _validate_choice(
             data,
             field_name="source",
-            allowed={"journal", "service", "docker", "syslog", "messages", "auth", "nginx_error", "nginx_access", "apache_error", "apache_access"},
+            allowed={
+                "journal",
+                "service",
+                "docker",
+                "syslog",
+                "messages",
+                "auth",
+                "nginx_error",
+                "nginx_access",
+                "apache_error",
+                "apache_access",
+            },
             errors=errors,
             node_id=node_id,
             required=False,
         )
-        _validate_optional_int_range(data, field_name="lines", min_value=20, max_value=240, errors=errors, node_id=node_id)
+        _validate_optional_int_range(
+            data, field_name="lines", min_value=20, max_value=240, errors=errors, node_id=node_id
+        )
 
     if node_type == "ops/file_action":
         _validate_choice(
@@ -283,7 +318,9 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
         )
         if not str(data.get("path") or "").strip():
             errors.append(f"Node '{node_id}' field 'path' is required.")
-        _validate_optional_int_range(data, field_name="max_bytes", min_value=1024, max_value=1048576, errors=errors, node_id=node_id)
+        _validate_optional_int_range(
+            data, field_name="max_bytes", min_value=1024, max_value=1048576, errors=errors, node_id=node_id
+        )
 
     if node_type == "ops/package_action":
         _validate_choice(
@@ -312,10 +349,18 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
             node_id=node_id,
             required=False,
         )
-        _validate_optional_int_range(data, field_name="min_age_days", min_value=1, max_value=365, errors=errors, node_id=node_id)
-        _validate_optional_int_range(data, field_name="max_entries", min_value=1, max_value=500, errors=errors, node_id=node_id)
-        _validate_optional_int_range(data, field_name="vacuum_time_days", min_value=1, max_value=365, errors=errors, node_id=node_id)
-        _validate_optional_int_range(data, field_name="vacuum_size_mb", min_value=64, max_value=102400, errors=errors, node_id=node_id)
+        _validate_optional_int_range(
+            data, field_name="min_age_days", min_value=1, max_value=365, errors=errors, node_id=node_id
+        )
+        _validate_optional_int_range(
+            data, field_name="max_entries", min_value=1, max_value=500, errors=errors, node_id=node_id
+        )
+        _validate_optional_int_range(
+            data, field_name="vacuum_time_days", min_value=1, max_value=365, errors=errors, node_id=node_id
+        )
+        _validate_optional_int_range(
+            data, field_name="vacuum_size_mb", min_value=64, max_value=102400, errors=errors, node_id=node_id
+        )
 
     if node_type == "ops/backup_restore_check":
         _validate_choice(
@@ -328,9 +373,15 @@ def validate_node_references(node: dict[str, Any], owner, errors: list[str]) -> 
         )
         if not str(data.get("path") or "").strip():
             errors.append(f"Node '{node_id}' field 'path' is required.")
-        _validate_optional_int_range(data, field_name="max_depth", min_value=1, max_value=5, errors=errors, node_id=node_id)
-        _validate_optional_int_range(data, field_name="max_files", min_value=1, max_value=100, errors=errors, node_id=node_id)
-        _validate_optional_int_range(data, field_name="max_age_hours", min_value=1, max_value=8760, errors=errors, node_id=node_id)
+        _validate_optional_int_range(
+            data, field_name="max_depth", min_value=1, max_value=5, errors=errors, node_id=node_id
+        )
+        _validate_optional_int_range(
+            data, field_name="max_files", min_value=1, max_value=100, errors=errors, node_id=node_id
+        )
+        _validate_optional_int_range(
+            data, field_name="max_age_hours", min_value=1, max_value=8760, errors=errors, node_id=node_id
+        )
 
     if node_type == "ops/service_action":
         _validate_choice(

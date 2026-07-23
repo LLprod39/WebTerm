@@ -75,7 +75,9 @@ class KubernetesOpsAdminStreamTests(TestCase):
             "truncated": False,
         }
 
-        with patch("kubernetes_ops.services.admin_streams.get_admin_pod_log_snapshot", return_value=log_payload) as snapshot:
+        with patch(
+            "kubernetes_ops.services.admin_streams.get_admin_pod_log_snapshot", return_value=log_payload
+        ) as snapshot:
             envelope = open_admin_log_stream_snapshot(
                 user=user,
                 session_id=str(session.session_id),
@@ -117,7 +119,9 @@ class KubernetesOpsAdminStreamTests(TestCase):
             "latest_resource_version": "42",
         }
 
-        with patch("kubernetes_ops.services.admin_streams.get_admin_resource_watch_preview", return_value=watch_payload):
+        with patch(
+            "kubernetes_ops.services.admin_streams.get_admin_resource_watch_preview", return_value=watch_payload
+        ):
             envelope = open_admin_watch_stream_snapshot(
                 user=user,
                 session_id=str(session.session_id),
@@ -140,15 +144,17 @@ class KubernetesOpsAdminStreamTests(TestCase):
         user = self.create_user("k8s-regular-stream")
         session = self.create_read_session(user)
 
-        with patch("kubernetes_ops.services.admin_streams.get_admin_pod_log_snapshot") as snapshot:
-            with self.assertRaises(AdminResourceError) as raised:
-                open_admin_log_stream_snapshot(
-                    user=user,
-                    session_id=str(session.session_id),
-                    cluster_id=f"cluster_{self.cluster.id}",
-                    namespace="payments",
-                    pod_name="payments-api-abc123",
-                )
+        with (
+            patch("kubernetes_ops.services.admin_streams.get_admin_pod_log_snapshot") as snapshot,
+            self.assertRaises(AdminResourceError) as raised,
+        ):
+            open_admin_log_stream_snapshot(
+                user=user,
+                session_id=str(session.session_id),
+                cluster_id=f"cluster_{self.cluster.id}",
+                namespace="payments",
+                pod_name="payments-api-abc123",
+            )
 
         self.assertEqual(raised.exception.code, "admin_read_required")
         snapshot.assert_not_called()
@@ -219,9 +225,17 @@ class KubernetesOpsAdminStreamTests(TestCase):
             "line_count": 1,
             "truncated": False,
         }
-        summary = build_log_stream_summary(payload, started_at=stream["started_at"], duration_ms=25, batch_count=2, follow=True)
+        summary = build_log_stream_summary(
+            payload, started_at=stream["started_at"], duration_ms=25, batch_count=2, follow=True
+        )
         summary["close_reason"] = "max_batches"
-        stop_admin_stream(user=user, session_pk=stream["session_pk"], stream_id=stream["stream_id"], stream_type="logs", summary=summary)
+        stop_admin_stream(
+            user=user,
+            session_pk=stream["session_pk"],
+            stream_id=stream["stream_id"],
+            stream_type="logs",
+            summary=summary,
+        )
 
         actions = list(K8sAuditEvent.objects.order_by("created_at").values_list("action", flat=True))
         self.assertEqual(actions, ["k8s.admin_stream.logs_started", "k8s.admin_stream.logs_stopped"])

@@ -8,13 +8,13 @@ def selected_provider_readiness(config) -> list[dict]:
 
     registry = get_provider_registry()
     roles = {
-        "default": getattr(config, "default_provider", "") or "fair",
-        "internal": getattr(config, "internal_llm_provider", "") or getattr(config, "default_provider", "") or "fair",
-        "chat": getattr(config, "chat_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "fair",
-        "agent": getattr(config, "agent_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "fair",
+        "default": getattr(config, "default_provider", "") or "grok",
+        "internal": getattr(config, "internal_llm_provider", "") or getattr(config, "default_provider", "") or "grok",
+        "chat": getattr(config, "chat_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "grok",
+        "agent": getattr(config, "agent_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "grok",
         "orchestrator": getattr(config, "orchestrator_llm_provider", "")
         or getattr(config, "internal_llm_provider", "")
-        or "fair",
+        or "grok",
     }
     any_available = bool(registry.get_available_providers())
     result = []
@@ -72,7 +72,9 @@ def ldap_status_payload() -> dict:
         "bind_password_configured": bind_password_set,
         "start_tls": bool(getattr(settings, "LDAP_START_TLS", False)),
         "ignore_cert": bool(getattr(settings, "LDAP_IGNORE_CERT", False)),
-        "ca_cert_configured": bool(getattr(settings, "LDAP_CA_CERT_FILE", "") or getattr(settings, "LDAP_CA_CERT_DIR", "")),
+        "ca_cert_configured": bool(
+            getattr(settings, "LDAP_CA_CERT_FILE", "") or getattr(settings, "LDAP_CA_CERT_DIR", "")
+        ),
         "missing": missing,
         "config_source": "env_startup",
     }

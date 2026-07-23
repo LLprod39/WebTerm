@@ -9,26 +9,30 @@ from plugin_marketplace.services.developer_package_service import validate_plugi
 
 def _write_sandbox_dependency_source(source_dir):
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.source-dependency-tool",
-        "name": "Source Dependency Tool",
-        "slug": "source-dependency-tool",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "surfaces": {
-            "agent_tools": [
-                {
-                    "id": "source-dependency-echo",
-                    "name": "acme_source_dependency_echo",
-                    "title": "Source dependency echo",
-                    "executor_ref": "sandbox:backend/plugin.py:handle",
-                    "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
-                }
-            ]
-        },
-    })
+    manifest.update(
+        {
+            "id": "acme.source-dependency-tool",
+            "name": "Source Dependency Tool",
+            "slug": "source-dependency-tool",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "surfaces": {
+                "agent_tools": [
+                    {
+                        "id": "source-dependency-echo",
+                        "name": "acme_source_dependency_echo",
+                        "title": "Source dependency echo",
+                        "executor_ref": "sandbox:backend/plugin.py:handle",
+                        "tool_spec": {"category": "general", "risk": "read", "runner": "plugin"},
+                    }
+                ]
+            },
+        }
+    )
     (source_dir / "backend").mkdir(parents=True)
     (source_dir / "webtrerm.plugin.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (source_dir / "backend" / "plugin.py").write_text("def handle(payload):\n    return {'ok': True}\n", encoding="utf-8")
+    (source_dir / "backend" / "plugin.py").write_text(
+        "def handle(payload):\n    return {'ok': True}\n", encoding="utf-8"
+    )
     (source_dir / "requirements.txt").write_text("requests==2.32.0\n", encoding="utf-8")
 
 

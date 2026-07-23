@@ -49,7 +49,9 @@ def run_node_maintenance_action(
         _require_drain_confirmation(node=node, confirmation=confirmation)
     cluster = _required_cluster(cluster_id)
     ref = KubernetesResourceRef(api_version="v1", kind="Node", resource="nodes", name=node)
-    session = _active_break_glass_node_session(user=user, session_id=session_id, cluster=cluster, ref=ref, verb=operation)
+    session = _active_break_glass_node_session(
+        user=user, session_id=session_id, cluster=cluster, ref=ref, verb=operation
+    )
     assert_production_write_approved(session=session, cluster=cluster, ref=ref, action=operation)
     assert_admin_session_approved(session=session, action=operation)
     provider = _required_rancher_provider(cluster)
@@ -108,7 +110,9 @@ def run_node_maintenance_action(
             "source": "rancher_kubernetes_node_patch",
             "node": node,
             "unschedulable": unschedulable,
-            "server_top_level_fields": sorted(sanitized_response.keys()) if isinstance(sanitized_response, dict) else [],
+            "server_top_level_fields": sorted(sanitized_response.keys())
+            if isinstance(sanitized_response, dict)
+            else [],
         },
     )
     return _base_response(
@@ -181,7 +185,9 @@ def _require_node_maintenance_policy(user) -> None:
     if not policy.get("can_break_glass"):
         raise AdminResourceError("Kubernetes break-glass access is required.", code="break_glass_required", status=403)
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False)):
-        raise AdminResourceError("Native node maintenance is disabled by policy.", code="native_node_maintenance_disabled", status=403)
+        raise AdminResourceError(
+            "Native node maintenance is disabled by policy.", code="native_node_maintenance_disabled", status=403
+        )
 
 
 def _active_break_glass_node_session(
@@ -193,27 +199,47 @@ def _active_break_glass_node_session(
     verb: str,
 ) -> K8sAdminSession:
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403)
+        raise AdminResourceError(
+            "Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Node maintenance requires a break-glass admin session.", code="break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Node maintenance requires a break-glass admin session.", code="break_glass_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if verb not in set(session.allowed_verbs or []):
-        raise AdminResourceError("Admin session does not allow this node action.", code="admin_session_verb_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not allow this node action.", code="admin_session_verb_denied", status=403
+        )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds and "node" not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover node maintenance.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover node maintenance.", code="admin_session_kind_denied", status=403
+        )
     return session
 
 
-def _provider_patch(provider: K8sProvider, path: str, body: dict[str, Any], *, transport: ProviderTransport | None) -> dict[str, Any]:
+def _provider_patch(
+    provider: K8sProvider, path: str, body: dict[str, Any], *, transport: ProviderTransport | None
+) -> dict[str, Any]:
     try:
         return ProviderJsonClient(provider, transport=transport).request(
             "PATCH",
@@ -228,7 +254,9 @@ def _provider_patch(provider: K8sProvider, path: str, body: dict[str, Any], *, t
 def _required_action(value: str) -> str:
     operation = str(value or "").strip().lower()
     if operation not in NODE_MAINTENANCE_ACTIONS:
-        raise AdminResourceError("node maintenance action must be cordon, uncordon, or drain.", code="node_action_invalid")
+        raise AdminResourceError(
+            "node maintenance action must be cordon, uncordon, or drain.", code="node_action_invalid"
+        )
     return operation
 
 
@@ -251,7 +279,9 @@ def _required_reason(value: str, *, action: str) -> str:
 def _require_drain_confirmation(*, node: str, confirmation: str) -> None:
     expected = f"drain Node {node}"
     if str(confirmation or "").strip() != expected:
-        raise AdminResourceError("Exact drain confirmation is required.", code="confirmation_required", payload={"expected": expected})
+        raise AdminResourceError(
+            "Exact drain confirmation is required.", code="confirmation_required", payload={"expected": expected}
+        )
 
 
 def _option_summary(options: dict[str, Any]) -> dict[str, Any]:
@@ -260,7 +290,9 @@ def _option_summary(options: dict[str, Any]) -> dict[str, Any]:
             "ignore_daemonsets": bool(options.get("ignore_daemonsets", True)),
             "delete_emptydir_data": bool(options.get("delete_emptydir_data", False)),
             "force": bool(options.get("force", False)),
-            "grace_period_seconds": _bounded_int(options.get("grace_period_seconds"), default=30, minimum=0, maximum=3600),
+            "grace_period_seconds": _bounded_int(
+                options.get("grace_period_seconds"), default=30, minimum=0, maximum=3600
+            ),
             "timeout_seconds": _bounded_int(options.get("timeout_seconds"), default=300, minimum=30, maximum=7200),
             "max_pods": _bounded_int(options.get("max_pods"), default=50, minimum=1, maximum=100),
         }
@@ -312,7 +344,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for node maintenance.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for node maintenance.", code="rancher_provider_required", status=409
+        )
     return provider
 
 
@@ -332,7 +366,11 @@ def _base_response(
         "mode": "admin_break_glass_node_maintenance",
         "operation": operation,
         "status": status,
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": _target_payload(ref),
         "path": _public_path(path),
@@ -348,8 +386,11 @@ def _policy_payload(*, mutates_state: bool, drain_execution: bool) -> dict[str, 
         "requires_break_glass_session": True,
         "requires_approval": True,
         "requires_node_scope": True,
-        "native_node_maintenance_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False)),
-        "node_drain_execution_enabled": drain_execution and bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False)),
+        "native_node_maintenance_enabled": bool(
+            getattr(settings, "KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED", False)
+        ),
+        "node_drain_execution_enabled": drain_execution
+        and bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED", False)),
         "blocked_actions": ["exec", "port_forward", "node_debug", "cluster_terminal"],
     }
 

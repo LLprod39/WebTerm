@@ -4,7 +4,6 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from servers.models import Server
 from studio.capability_registry import build_studio_capability_registry
 from studio.models import MCPServerPool
 
@@ -14,39 +13,6 @@ def _json(payload: dict) -> str:
 
 
 pytestmark = pytest.mark.django_db
-
-
-def test_capability_registry_maps_keycloak_to_mcp_skill_and_universal_nodes():
-    user = User.objects.create_user(username="cap-admin", password="x", is_staff=True)
-    Server.objects.create(user=user, name="ops-srv", host="10.0.0.10", username="root")
-    mcp = MCPServerPool.objects.create(
-        owner=user,
-        name="Keycloak Admin",
-        description="Manage Keycloak users, groups, roles, realms and clients",
-        transport=MCPServerPool.TRANSPORT_SSE,
-        url="http://127.0.0.1:8766/mcp",
-    )
-
-    registry = build_studio_capability_registry(user, server_count=1)
-
-    assert registry["strategy"]["mode"] == "minimal_universal_nodes"
-    assert registry["strategy"]["default_execution_node"] == "agent/mcp_call"
-    assert any(node["type"] == "agent/mcp_call" for node in registry["nodes"])
-    assert any(node["type"] == "logic/human_approval" for node in registry["nodes"])
-
-    identity = next(item for item in registry["task_families"] if item["slug"] == "identity_access")
-    assert identity["readiness"] == "ready"
-    assert identity["matching_mcp_servers"][0]["id"] == mcp.id
-    assert any(skill["slug"] == "keycloak-safety" for skill in identity["matching_skills"])
-    assert identity["capability_packs"][0]["slug"] == "identity-keycloak"
-    assert "keycloak_apply_access_change" in identity["capability_packs"][0]["tool_names"]
-    assert identity["preferred_nodes"] == [
-        "trigger/manual",
-        "agent/mcp_call",
-        "logic/human_approval",
-        "agent/mcp_call",
-        "output/report",
-    ]
 
 
 def test_capability_registry_maps_incident_response_to_observability_pack():
@@ -87,19 +53,16 @@ def test_capabilities_endpoint_returns_pilot_registry():
     assert response.status_code == 200
     payload = response.json()
     assert payload["strategy"]["service_specific_work"] == "mcp_plus_skills"
-    assert any(item["slug"] == "identity_access" for item in payload["task_families"])
     assert any(item["type"] == "ops/service_action" for item in payload["nodes"])
     log_query = next(item for item in payload["nodes"] if item["type"] == "ops/log_query")
     assert "docker" in log_query["input_schema"]["properties"]["source"]["enum"]
     assert "logs" in log_query["output_schema"]["properties"]
     assert any(pack["slug"] == "kubernetes-operations" for pack in payload["capability_packs"])
     assert any(pack["slug"] == "observability-incident" for pack in payload["capability_packs"])
-    keycloak_pack = next(pack for pack in payload["capability_packs"] if pack["slug"] == "identity-keycloak")
-    apply_tool = next(tool for tool in keycloak_pack["tools"] if tool["tool_name"] == "keycloak_apply_access_change")
-    assert apply_tool["requires_approval"] is True
-    assert apply_tool["input_schema"]["properties"]["operation"]["enum"] == ["add", "remove"]
     incident_pack = next(pack for pack in payload["capability_packs"] if pack["slug"] == "observability-incident")
-    ticket_tool = next(tool for tool in incident_pack["tools"] if tool["tool_name"] == "incident_create_or_update_ticket")
+    ticket_tool = next(
+        tool for tool in incident_pack["tools"] if tool["tool_name"] == "incident_create_or_update_ticket"
+    )
     assert ticket_tool["requires_approval"] is True
     assert ticket_tool["input_schema"]["properties"]["severity"]["enum"] == ["critical", "warning", "info", "unknown"]
 
@@ -126,7 +89,12 @@ def test_node_manifests_endpoint_returns_schema_contract():
     assert file_action["input_schema"]["properties"]["action"]["enum"] == ["read", "write"]
     assert "file" in file_action["output_schema"]["properties"]
     package_action = next(item for item in payload["nodes"] if item["type"] == "ops/package_action")
-    assert package_action["input_schema"]["properties"]["action"]["enum"] == ["list_updates", "install", "update", "remove"]
+    assert package_action["input_schema"]["properties"]["action"]["enum"] == [
+        "list_updates",
+        "install",
+        "update",
+        "remove",
+    ]
     assert "package_action" in package_action["output_schema"]["properties"]
     disk_cleanup = next(item for item in payload["nodes"] if item["type"] == "ops/disk_cleanup")
     assert disk_cleanup["input_schema"]["properties"]["action"]["enum"] == ["inspect", "journal_vacuum", "tmp_cleanup"]
@@ -174,16 +142,15 @@ def test_pipeline_assistant_context_includes_capability_registry(monkeypatch):
     client.force_login(user)
     response = client.post(
         "/api/studio/pipelines/assistant/",
-        data=_json({"user_message": "Create Keycloak workflow", "nodes": [], "edges": [], "history": []}),
+        data=_json({"user_message": "Create Kubernetes rollout workflow", "nodes": [], "edges": [], "history": []}),
         content_type="application/json",
     )
 
     assert response.status_code == 200
     registry = captured["assistant_context"]["capability_registry"]
     assert registry["strategy"]["default_execution_node"] == "agent/mcp_call"
-    assert any(item["slug"] == "identity_access" for item in registry["task_families"])
     assert any(pack["slug"] == "gitlab-ci-support" for pack in registry["capability_packs"])
     assert any(pack["slug"] == "observability-incident" for pack in registry["capability_packs"])
     recommendations = captured["assistant_context"]["template_recommendations"]
-    assert recommendations[0]["slug"] == "pilot-keycloak-access-change"
+    assert recommendations[0]["slug"] == "pilot-kubernetes-rollout"
     assert "logic/human_approval" in recommendations[0]["node_types"]

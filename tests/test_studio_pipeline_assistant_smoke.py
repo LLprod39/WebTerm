@@ -50,9 +50,24 @@ def test_pipeline_assistant_accepts_history_and_graph_edit_patch(monkeypatch):
             {
                 "pipeline_name": "Assistant Flow",
                 "nodes": [
-                    {"id": "manual_start", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual Start"}},
-                    {"id": "notify", "type": "output/telegram", "position": {"x": 240, "y": 0}, "data": {"label": "Notify"}},
-                    {"id": "old_wait", "type": "logic/wait", "position": {"x": 120, "y": 120}, "data": {"label": "Old Wait"}},
+                    {
+                        "id": "manual_start",
+                        "type": "trigger/manual",
+                        "position": {"x": 0, "y": 0},
+                        "data": {"label": "Manual Start"},
+                    },
+                    {
+                        "id": "notify",
+                        "type": "output/telegram",
+                        "position": {"x": 240, "y": 0},
+                        "data": {"label": "Notify"},
+                    },
+                    {
+                        "id": "old_wait",
+                        "type": "logic/wait",
+                        "position": {"x": 120, "y": 120},
+                        "data": {"label": "Old Wait"},
+                    },
                 ],
                 "edges": [
                     {"id": "edge_manual_notify", "source": "manual_start", "target": "notify"},
@@ -106,7 +121,12 @@ def test_pipeline_assistant_validates_preview_and_flags_dangerous_ssh(monkeypatc
                 "graph_patch": {
                     "anchor_node_id": None,
                     "nodes": [
-                        {"ref": "manual_start", "type": "trigger/manual", "label": "Manual Start", "data": {"is_active": True}},
+                        {
+                            "ref": "manual_start",
+                            "type": "trigger/manual",
+                            "label": "Manual Start",
+                            "data": {"is_active": True},
+                        },
                         {
                             "ref": "wipe_step",
                             "type": "agent/ssh_cmd",
@@ -175,7 +195,12 @@ def test_pipeline_assistant_repairs_common_ai_node_draft_mistakes(monkeypatch):
                 "graph_patch": {
                     "anchor_node_id": None,
                     "nodes": [
-                        {"ref": "manual_start", "type": "trigger/manual", "label": "Manual Start", "data": {"is_active": True}},
+                        {
+                            "ref": "manual_start",
+                            "type": "trigger/manual",
+                            "label": "Manual Start",
+                            "data": {"is_active": True},
+                        },
                         {
                             "ref": "telegram_trigger",
                             "type": "trigger/telegram_input",
@@ -223,9 +248,7 @@ def test_pipeline_assistant_repairs_common_ai_node_draft_mistakes(monkeypatch):
     assert node_types["telegram_trigger"] == "logic/telegram_input"
     assert "recheck_to_report" not in node_types
     assert any(
-        edge["source"] == "telegram_trigger"
-        and edge["target"] == "report"
-        and edge["source_handle"] == "received"
+        edge["source"] == "telegram_trigger" and edge["target"] == "report" and edge["source_handle"] == "received"
         for edge in payload["graph_patch"]["edges"]
     )
     assert payload["validation"]["ok"] is True
@@ -249,10 +272,25 @@ def test_pipeline_assistant_repairs_screenshot_like_recheck_branch(monkeypatch):
                 "graph_patch": {
                     "anchor_node_id": "telegram_input_request",
                     "nodes": [
-                        {"ref": "recheck_ssh_24", "type": "agent/ssh_cmd", "label": "Recheck SSH 24", "data": {"command": "tail -n 100 /var/log/syslog"}},
-                        {"ref": "recheck_ssh_31", "type": "agent/ssh_cmd", "label": "Recheck SSH 31", "data": {"command": "tail -n 100 /var/log/syslog"}},
+                        {
+                            "ref": "recheck_ssh_24",
+                            "type": "agent/ssh_cmd",
+                            "label": "Recheck SSH 24",
+                            "data": {"command": "tail -n 100 /var/log/syslog"},
+                        },
+                        {
+                            "ref": "recheck_ssh_31",
+                            "type": "agent/ssh_cmd",
+                            "label": "Recheck SSH 31",
+                            "data": {"command": "tail -n 100 /var/log/syslog"},
+                        },
                         {"ref": "recheck_merge", "type": "logic/merge", "label": "Merge Recheck", "data": {}},
-                        {"ref": "recheck_telegram", "type": "output/telegram", "label": "Send Recheck", "data": {"message": "Recheck done"}},
+                        {
+                            "ref": "recheck_telegram",
+                            "type": "output/telegram",
+                            "label": "Send Recheck",
+                            "data": {"message": "Recheck done"},
+                        },
                     ],
                     "edges": [
                         {"source": "recheck_parallel", "target": "recheck_24"},
@@ -274,7 +312,12 @@ def test_pipeline_assistant_repairs_screenshot_like_recheck_branch(monkeypatch):
             {
                 "pipeline_name": "Daily Logs",
                 "nodes": [
-                    {"id": "manual_start", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
+                    {
+                        "id": "manual_start",
+                        "type": "trigger/manual",
+                        "position": {"x": 0, "y": 0},
+                        "data": {"label": "Manual"},
+                    },
                     {
                         "id": "telegram_input_request",
                         "type": "logic/telegram_input",
@@ -283,7 +326,12 @@ def test_pipeline_assistant_repairs_screenshot_like_recheck_branch(monkeypatch):
                     },
                 ],
                 "edges": [
-                    {"id": "edge_manual_tg", "source": "manual_start", "target": "telegram_input_request", "sourceHandle": "out"},
+                    {
+                        "id": "edge_manual_tg",
+                        "source": "manual_start",
+                        "target": "telegram_input_request",
+                        "sourceHandle": "out",
+                    },
                 ],
                 "selected_node": None,
                 "intent": "edit",
@@ -305,9 +353,18 @@ def test_pipeline_assistant_repairs_screenshot_like_recheck_branch(monkeypatch):
         and edge["source_handle"] == "received"
         for edge in payload["graph_patch"]["edges"]
     )
-    assert any(edge["source"] == "recheck_parallel" and edge["target"] == "recheck_ssh_24" for edge in payload["graph_patch"]["edges"])
-    assert any(edge["source"] == "recheck_parallel" and edge["target"] == "recheck_ssh_31" for edge in payload["graph_patch"]["edges"])
-    assert any(edge["source"] == "recheck_ssh_31" and edge["target"] == "recheck_merge" for edge in payload["graph_patch"]["edges"])
+    assert any(
+        edge["source"] == "recheck_parallel" and edge["target"] == "recheck_ssh_24"
+        for edge in payload["graph_patch"]["edges"]
+    )
+    assert any(
+        edge["source"] == "recheck_parallel" and edge["target"] == "recheck_ssh_31"
+        for edge in payload["graph_patch"]["edges"]
+    )
+    assert any(
+        edge["source"] == "recheck_ssh_31" and edge["target"] == "recheck_merge"
+        for edge in payload["graph_patch"]["edges"]
+    )
     assert any("created 'logic/parallel'" in item for item in payload["warnings"])
 
 
@@ -327,20 +384,58 @@ def test_pipeline_assistant_drops_cycle_edges_from_ai_drafts(monkeypatch):
                 "graph_patch": {
                     "anchor_node_id": None,
                     "nodes": [
-                        {"ref": "daily_3pm_schedule", "type": "trigger/schedule", "label": "Daily 3PM", "data": {"cron_expression": "0 15 * * *"}},
-                        {"ref": "collect_logs_multi", "type": "agent/multi", "label": "Collect Logs", "data": {"goal": "Collect logs"}},
-                        {"ref": "summarize_report_llm", "type": "agent/llm_query", "label": "Summarize", "data": {"prompt": "Summarize health"}},
-                        {"ref": "telegram_report_output", "type": "output/telegram", "label": "Telegram Report", "data": {"message": "Daily report"}},
-                        {"ref": "telegram_input", "type": "logic/telegram_input", "label": "Telegram Input", "data": {"message": "Need extra checks?"}},
-                        {"ref": "route_tasks_to_monitors", "type": "agent/llm_query", "label": "Route Tasks", "data": {"prompt": "Route operator task"}},
+                        {
+                            "ref": "daily_3pm_schedule",
+                            "type": "trigger/schedule",
+                            "label": "Daily 3PM",
+                            "data": {"cron_expression": "0 15 * * *"},
+                        },
+                        {
+                            "ref": "collect_logs_multi",
+                            "type": "agent/multi",
+                            "label": "Collect Logs",
+                            "data": {"goal": "Collect logs"},
+                        },
+                        {
+                            "ref": "summarize_report_llm",
+                            "type": "agent/llm_query",
+                            "label": "Summarize",
+                            "data": {"prompt": "Summarize health"},
+                        },
+                        {
+                            "ref": "telegram_report_output",
+                            "type": "output/telegram",
+                            "label": "Telegram Report",
+                            "data": {"message": "Daily report"},
+                        },
+                        {
+                            "ref": "telegram_input",
+                            "type": "logic/telegram_input",
+                            "label": "Telegram Input",
+                            "data": {"message": "Need extra checks?"},
+                        },
+                        {
+                            "ref": "route_tasks_to_monitors",
+                            "type": "agent/llm_query",
+                            "label": "Route Tasks",
+                            "data": {"prompt": "Route operator task"},
+                        },
                     ],
                     "edges": [
                         {"source": "daily_3pm_schedule", "target": "collect_logs_multi"},
                         {"source": "collect_logs_multi", "target": "summarize_report_llm", "source_handle": "success"},
-                        {"source": "summarize_report_llm", "target": "telegram_report_output", "source_handle": "success"},
+                        {
+                            "source": "summarize_report_llm",
+                            "target": "telegram_report_output",
+                            "source_handle": "success",
+                        },
                         {"source": "telegram_report_output", "target": "telegram_input", "source_handle": "success"},
                         {"source": "telegram_input", "target": "route_tasks_to_monitors", "source_handle": "received"},
-                        {"source": "route_tasks_to_monitors", "target": "summarize_report_llm", "source_handle": "success"},
+                        {
+                            "source": "route_tasks_to_monitors",
+                            "target": "summarize_report_llm",
+                            "source_handle": "success",
+                        },
                     ],
                 },
                 "warnings": [],
@@ -393,12 +488,26 @@ def test_pipeline_assistant_inserts_merge_for_existing_shared_target_and_fills_a
                 "graph_patch": {
                     "anchor_node_id": "telegram_result_report",
                     "nodes": [
-                        {"ref": "telegram_chat_webhook", "type": "trigger/webhook", "label": "Telegram Chat Start", "data": {"is_active": True}},
-                        {"ref": "telegram_chat_processor", "type": "agent/llm_query", "label": "Telegram Chat Processor", "data": {}},
+                        {
+                            "ref": "telegram_chat_webhook",
+                            "type": "trigger/webhook",
+                            "label": "Telegram Chat Start",
+                            "data": {"is_active": True},
+                        },
+                        {
+                            "ref": "telegram_chat_processor",
+                            "type": "agent/llm_query",
+                            "label": "Telegram Chat Processor",
+                            "data": {},
+                        },
                     ],
                     "edges": [
                         {"source": "telegram_chat_webhook", "target": "telegram_chat_processor"},
-                        {"source": "telegram_chat_processor", "target": "telegram_result_report", "source_handle": "success"},
+                        {
+                            "source": "telegram_chat_processor",
+                            "target": "telegram_result_report",
+                            "source_handle": "success",
+                        },
                     ],
                 },
                 "warnings": [],
@@ -414,7 +523,12 @@ def test_pipeline_assistant_inserts_merge_for_existing_shared_target_and_fills_a
             {
                 "pipeline_name": "Telegram Agent",
                 "nodes": [
-                    {"id": "manual_start", "type": "trigger/manual", "position": {"x": 0, "y": 0}, "data": {"label": "Manual"}},
+                    {
+                        "id": "manual_start",
+                        "type": "trigger/manual",
+                        "position": {"x": 0, "y": 0},
+                        "data": {"label": "Manual"},
+                    },
                     {
                         "id": "telegram_cmd_executor",
                         "type": "agent/ssh_cmd",
@@ -429,7 +543,12 @@ def test_pipeline_assistant_inserts_merge_for_existing_shared_target_and_fills_a
                     },
                 ],
                 "edges": [
-                    {"id": "edge_manual_cmd", "source": "manual_start", "target": "telegram_cmd_executor", "sourceHandle": "out"},
+                    {
+                        "id": "edge_manual_cmd",
+                        "source": "manual_start",
+                        "target": "telegram_cmd_executor",
+                        "sourceHandle": "out",
+                    },
                     {
                         "id": "edge_cmd_result",
                         "source": "telegram_cmd_executor",

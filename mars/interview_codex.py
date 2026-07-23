@@ -30,7 +30,9 @@ from mars.runtime_cli import (
 from mars.subprocess_compat import run_process_capture
 
 
-def _build_codex_interview_prompt(task_brief: str, workspace_root: Path, selected_skills: list[str] | None = None) -> str:
+def _build_codex_interview_prompt(
+    task_brief: str, workspace_root: Path, selected_skills: list[str] | None = None
+) -> str:
     safe_task = re.sub(r"\s+", " ", (task_brief or "").strip())[:2500]
     skills = ", ".join(selected_skills or CURATED_SKILLS)
     return "\n\n".join(
@@ -97,7 +99,9 @@ async def _run_codex_interview_process(
         output_path = tmp_dir / "codex-interview.json"
         schema_path.write_text(json.dumps(MARS_INTERVIEW_OUTPUT_SCHEMA, ensure_ascii=False), encoding="utf-8")
 
-        workspace_cli_path = docker_workspace_path() if mars_agent_uses_docker() else cli_path_for_command(command, workspace_root)
+        workspace_cli_path = (
+            docker_workspace_path() if mars_agent_uses_docker() else cli_path_for_command(command, workspace_root)
+        )
         schema_cli_path = (
             docker_container_child_path("/mars-interview", tmp_dir, schema_path)
             if mars_agent_uses_docker()
@@ -153,9 +157,9 @@ async def _run_codex_interview_process(
             raise MarsInterviewError("Codex CLI interview timed out.") from exc
 
         if returncode != 0:
-            combined_output = "\n".join(
-                part for part in [stderr_text.strip(), stdout_text.strip()] if part
-            ) or "No Codex output."
+            combined_output = (
+                "\n".join(part for part in [stderr_text.strip(), stdout_text.strip()] if part) or "No Codex output."
+            )
             details = combined_output.strip().splitlines()
             raise MarsInterviewError(f"Codex CLI interview failed: {' '.join(details[-3:])[:600]}")
 
@@ -185,4 +189,3 @@ def _build_codex_interview_questions(
         )
     finally:
         loop.close()
-

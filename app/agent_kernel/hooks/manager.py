@@ -52,7 +52,10 @@ class HookManager:
         }
         logger.info(
             "agent_hook:start run_id={} server_id={} role={} mode={}",
-            run_id, server_id, role, permission_mode,
+            run_id,
+            server_id,
+            role,
+            permission_mode,
         )
 
     async def on_iteration_complete(
@@ -71,7 +74,10 @@ class HookManager:
         run_id = self._run_metadata.get("run_id", "?")
         logger.debug(
             "agent_hook:iteration run_id={} iter={} tool={} action={}",
-            run_id, iteration, tool, action[:80] if action else "",
+            run_id,
+            iteration,
+            tool,
+            action[:80] if action else "",
         )
 
     async def on_skill_triggered(
@@ -102,7 +108,11 @@ class HookManager:
         run_id = self._run_metadata.get("run_id", "?")
         logger.debug(
             "agent_hook:memory_loaded run_id={} server_id={} confidence={:.2f} patterns={} skills={}",
-            run_id, server_id, card_confidence, has_patterns, has_skill_drafts,
+            run_id,
+            server_id,
+            card_confidence,
+            has_patterns,
+            has_skill_drafts,
         )
 
     async def on_run_budget_warning(
@@ -119,7 +129,10 @@ class HookManager:
         run_id = self._run_metadata.get("run_id", "?")
         logger.warning(
             "agent_hook:budget_warning run_id={} used={}/{} remaining={:.0%}",
-            run_id, iterations_used, iterations_max, remaining_fraction,
+            run_id,
+            iterations_used,
+            iterations_max,
+            remaining_fraction,
         )
 
     # ------------------------------------------------------------------

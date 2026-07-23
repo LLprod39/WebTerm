@@ -5,7 +5,7 @@ from typing import Any
 
 from django.db.models import Q
 
-from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sEvent, K8sWorkloadRef
+from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sEvent, K8sWorkloadRef
 from kubernetes_ops.serializers import (
     serialize_app,
     serialize_cluster_event,

@@ -121,13 +121,13 @@ async def _stream_cursor_cli(
                 part = chunk.decode("utf-8", errors="replace")
                 if part:
                     yield part
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         yield "\n\n⚠️ Cursor CLI превысил время ожидания (120 с)."
     finally:
         try:
             await asyncio.wait_for(proc.wait(), timeout=5.0)
-        except (asyncio.TimeoutError, ProcessLookupError):
+        except (TimeoutError, ProcessLookupError):
             try:
                 proc.kill()
             except (ProcessLookupError, OSError) as exc:

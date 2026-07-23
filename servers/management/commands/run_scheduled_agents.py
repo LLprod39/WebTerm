@@ -32,8 +32,12 @@ class Command(BaseCommand):
         parser.add_argument("--daemon", action="store_true", help="Run continuously until interrupted")
         parser.add_argument("--once", action="store_true", help="Run one dispatch cycle and exit")
         parser.add_argument("--limit", type=int, default=100, help="Maximum number of scheduled agents to inspect")
-        parser.add_argument("--agent-id", type=int, action="append", dest="agent_ids", help="Only dispatch specific agent id")
-        parser.add_argument("--user-id", type=int, action="append", dest="user_ids", help="Only dispatch agents for specific user id")
+        parser.add_argument(
+            "--agent-id", type=int, action="append", dest="agent_ids", help="Only dispatch specific agent id"
+        )
+        parser.add_argument(
+            "--user-id", type=int, action="append", dest="user_ids", help="Only dispatch agents for specific user id"
+        )
         parser.add_argument("--lease-seconds", type=int, default=180, help="Heartbeat lease duration for this worker")
         parser.add_argument("--worker-key", type=str, default="default", help="Worker instance key")
 
@@ -57,7 +61,9 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
         )
         if state is None:
-            self.stdout.write(self.style.WARNING(f"Scheduled agents worker {worker_key!r} is already leased by another process"))
+            self.stdout.write(
+                self.style.WARNING(f"Scheduled agents worker {worker_key!r} is already leased by another process")
+            )
             return
 
         self.stdout.write(self.style.SUCCESS(f"Starting scheduled agent dispatcher ({worker_key})..."))
@@ -94,7 +100,9 @@ class Command(BaseCommand):
         finally:
             stop_background_worker(worker_kind, worker_key=worker_key, summary=last_summary, error=error)
 
-    def _tick(self, *, worker_key: str, lease_seconds: int, limit: int, agent_ids: list[int], user_ids: list[int]) -> dict:
+    def _tick(
+        self, *, worker_key: str, lease_seconds: int, limit: int, agent_ids: list[int], user_ids: list[int]
+    ) -> dict:
         worker_kind = BackgroundWorkerState.KIND_SCHEDULED_AGENTS
         heartbeat_background_worker(
             worker_kind,

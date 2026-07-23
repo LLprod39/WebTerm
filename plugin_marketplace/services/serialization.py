@@ -65,9 +65,7 @@ def catalog_payload(
 ) -> dict[str, Any]:
     package = installation.package if installation else None
     effective_enabled = (
-        bool(installation and installation.status == PluginInstallation.STATUS_ENABLED)
-        if enabled is None
-        else enabled
+        bool(installation and installation.status == PluginInstallation.STATUS_ENABLED) if enabled is None else enabled
     )
     return {
         "id": manifest.get("id"),

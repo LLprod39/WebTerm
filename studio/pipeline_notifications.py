@@ -22,7 +22,9 @@ def _load_notif_cfg() -> dict[str, Any]:
         return {
             "telegram_bot_token": getattr(settings, "TELEGRAM_BOT_TOKEN", "") or "",
             "telegram_chat_id": getattr(settings, "TELEGRAM_CHAT_ID", "") or "",
-            "notify_email": getattr(settings, "PIPELINE_NOTIFY_EMAIL", "") or getattr(settings, "EMAIL_HOST_USER", "") or "",
+            "notify_email": getattr(settings, "PIPELINE_NOTIFY_EMAIL", "")
+            or getattr(settings, "EMAIL_HOST_USER", "")
+            or "",
             "smtp_host": getattr(settings, "EMAIL_HOST", "") or "",
             "smtp_user": getattr(settings, "EMAIL_HOST_USER", "") or "",
             "smtp_password": getattr(settings, "EMAIL_HOST_PASSWORD", "") or "",

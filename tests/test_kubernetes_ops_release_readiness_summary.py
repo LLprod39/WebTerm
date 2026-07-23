@@ -160,9 +160,17 @@ def test_release_readiness_summary_is_safe_and_operator_readable(monkeypatch, tm
     assert payload["backend_workstream"]["remaining_backend_gaps"] == []
     assert payload["backend_workstream"]["safe_to_continue_frontend"] is True
     assert payload["backend_workstream"]["next_backend_step"]["id"] == "select_production_environment"
-    assert payload["backend_workstream"]["external_production_blocker_summary"]["primary_category"] == "production_scope"
+    assert (
+        payload["backend_workstream"]["external_production_blocker_summary"]["primary_category"] == "production_scope"
+    )
     external_blocker_ids = {item["id"] for item in payload["backend_workstream"]["external_production_blockers"]}
-    assert {"sidebar_release_scope", "target_environment", "select_production_environment", "production_scope", "release_artifact"} <= external_blocker_ids
+    assert {
+        "sidebar_release_scope",
+        "target_environment",
+        "select_production_environment",
+        "production_scope",
+        "release_artifact",
+    } <= external_blocker_ids
     assert payload["production_evidence_checklist"]["status"] == "not_required"
     assert payload["production_evidence_checklist"]["production_target"] is False
     assert payload["production_evidence_checklist"]["external_bundle"]["status"] == "missing"
@@ -198,15 +206,29 @@ def test_release_readiness_summary_is_safe_and_operator_readable(monkeypatch, tm
     assert "KUBERNETES_OPS_PRODUCTION_EVIDENCE_REF" in configure_phase["settings"]
     assert "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF" in configure_phase["settings"]
     execution_command_ids = {
-        command["id"]
-        for phase in execution_plan["phases"]
-        for command in phase.get("commands", [])
+        command["id"] for phase in execution_plan["phases"] for command in phase.get("commands", [])
     }
-    assert {"live_provider_smoke", "external_evidence_bundle", "preflight", "release_evidence", "release_handoff"} <= execution_command_ids
+    assert {
+        "live_provider_smoke",
+        "external_evidence_bundle",
+        "preflight",
+        "release_evidence",
+        "release_handoff",
+    } <= execution_command_ids
     command_ids = {item["id"] for item in payload["operator_command_plan"]["commands"]}
-    assert {"external_evidence_bundle", "live_provider_smoke", "readonly_rbac_live", "release_evidence", "release_handoff"} <= command_ids
+    assert {
+        "external_evidence_bundle",
+        "live_provider_smoke",
+        "readonly_rbac_live",
+        "release_evidence",
+        "release_handoff",
+    } <= command_ids
     assert payload["missing_required_references"][0]["setting"] == "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF"
-    assert {group["id"] for group in payload["blocker_groups"]} >= {"production_scope", "release_artifact", "release_evidence"}
+    assert {group["id"] for group in payload["blocker_groups"]} >= {
+        "production_scope",
+        "release_artifact",
+        "release_evidence",
+    }
     assert "runtime_readiness" not in {group["id"] for group in payload["blocker_groups"]}
     assert "Run release evidence in production with non-local endpoints." in payload["next_steps"]
     assert "verify_kubernetes_ops_release" in str(payload["required_commands"])
@@ -268,7 +290,10 @@ def test_release_readiness_progress_prefers_production_blocked_when_core_backend
         payload = build_kubernetes_release_readiness_summary(user=None)
 
     assert payload["progress"]["stage"] == "core_backend_ready_production_blocked"
-    assert payload["progress"]["plain_status"] == "Core backend proof is ready, but production/sidebar enablement is still blocked by release scope or evidence."
+    assert (
+        payload["progress"]["plain_status"]
+        == "Core backend proof is ready, but production/sidebar enablement is still blocked by release scope or evidence."
+    )
     assert payload["progress"]["backend_definition_of_done"]["percent"] == 100
     assert payload["progress"]["runtime_readiness"]["percent"] == 100
     assert payload["progress"]["remaining_categories"] == ["production_scope", "release_artifact", "release_evidence"]
@@ -501,8 +526,24 @@ def test_release_readiness_summary_returns_safe_production_evidence_checklist(mo
                 for ref_id, setting in required_refs
             ],
             "artifact_checks": [
-                {"id": "live_provider_smoke", "status": "ready", "success": True, "checked_at": now, "schema_version": "v", "local_indicators": [], "errors": []},
-                {"id": "readonly_rbac_live", "status": "ready", "success": True, "checked_at": now, "schema_version": "", "local_indicators": [], "errors": []},
+                {
+                    "id": "live_provider_smoke",
+                    "status": "ready",
+                    "success": True,
+                    "checked_at": now,
+                    "schema_version": "v",
+                    "local_indicators": [],
+                    "errors": [],
+                },
+                {
+                    "id": "readonly_rbac_live",
+                    "status": "ready",
+                    "success": True,
+                    "checked_at": now,
+                    "schema_version": "",
+                    "local_indicators": [],
+                    "errors": [],
+                },
             ],
             "errors": [],
         },
@@ -601,11 +642,29 @@ def test_production_evidence_checklist_gap_summary_prioritizes_external_missing_
                 "local_indicator_count": 0,
             },
             "references": [
-                {"id": "production_approval", "setting": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF", "required": True, "present": True},
-                {"id": "live_provider", "setting": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF", "required": True, "present": False},
+                {
+                    "id": "production_approval",
+                    "setting": "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF",
+                    "required": True,
+                    "present": True,
+                },
+                {
+                    "id": "live_provider",
+                    "setting": "KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF",
+                    "required": True,
+                    "present": False,
+                },
             ],
             "artifact_checks": [
-                {"id": "live_provider_smoke", "status": "ready", "success": True, "checked_at": now, "schema_version": "v", "local_indicators": [], "errors": []},
+                {
+                    "id": "live_provider_smoke",
+                    "status": "ready",
+                    "success": True,
+                    "checked_at": now,
+                    "schema_version": "v",
+                    "local_indicators": [],
+                    "errors": [],
+                },
             ],
             "errors": ["reference:live_provider:KUBERNETES_OPS_LIVE_PROVIDER_EVIDENCE_REF:missing"],
         },

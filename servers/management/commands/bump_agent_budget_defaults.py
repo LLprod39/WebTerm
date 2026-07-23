@@ -46,9 +46,7 @@ class Command(BaseCommand):
         if user_id is not None:
             qs = qs.filter(user_id=user_id)
 
-        targets = qs.filter(max_iterations=LEGACY_ITERATIONS) | qs.filter(
-            session_timeout_seconds=LEGACY_TIMEOUT
-        )
+        targets = qs.filter(max_iterations=LEGACY_ITERATIONS) | qs.filter(session_timeout_seconds=LEGACY_TIMEOUT)
         targets = targets.distinct().order_by("id")
         count = targets.count()
         self.stdout.write(f"Candidates: {count}")
@@ -60,9 +58,7 @@ class Command(BaseCommand):
                 changed.append(f"max_iterations {LEGACY_ITERATIONS}->{FULL_DEFAULT_MAX_ITERATIONS}")
             if agent.session_timeout_seconds == LEGACY_TIMEOUT:
                 agent.session_timeout_seconds = FULL_DEFAULT_SESSION_TIMEOUT_SEC
-                changed.append(
-                    f"session_timeout {LEGACY_TIMEOUT}->{FULL_DEFAULT_SESSION_TIMEOUT_SEC}"
-                )
+                changed.append(f"session_timeout {LEGACY_TIMEOUT}->{FULL_DEFAULT_SESSION_TIMEOUT_SEC}")
             if not changed:
                 continue
             updated += 1
@@ -73,6 +69,4 @@ class Command(BaseCommand):
         if apply:
             self.stdout.write(self.style.SUCCESS(f"Updated {updated} agent(s)."))
         else:
-            self.stdout.write(
-                self.style.WARNING(f"Dry-run: would update {updated} agent(s). Pass --apply to save.")
-            )
+            self.stdout.write(self.style.WARNING(f"Dry-run: would update {updated} agent(s). Pass --apply to save."))

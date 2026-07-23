@@ -132,44 +132,142 @@ def _run_surface_checks(*, reader, staff, provider, cluster, app, workload, pod,
         _check("reader_can_read", reader_policy.get("can_read") is True),
         _check("reader_cannot_audit_deeplinks", reader_policy.get("can_audit_deeplinks") is False),
         _check("reader_provider_base_url_hidden", reader_payloads["provider"].get("base_url") == ""),
-        _check("reader_provider_connection_hidden", reader_payloads["provider"].get("connection_details_visible") is False),
+        _check(
+            "reader_provider_connection_hidden", reader_payloads["provider"].get("connection_details_visible") is False
+        ),
         _check("reader_provider_secret_reference_hidden", not _contains_key(reader_payloads["provider"], "secret_ref")),
         _check("reader_external_links_hidden", _all_links_empty(reader_payloads)),
-        _check("reader_link_policy_webterm_only", _all_link_policies(reader_payloads, visible=False, mode="webterm_native_only")),
-        _check("reader_payload_has_no_external_hosts_or_tokens", not _contains_any(reader_payloads, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
+        _check(
+            "reader_link_policy_webterm_only",
+            _all_link_policies(reader_payloads, visible=False, mode="webterm_native_only"),
+        ),
+        _check(
+            "reader_payload_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_payloads, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
         _check("reader_network_detail_external_links_hidden", _all_nested_links_empty(reader_network_detail)),
-        _check("reader_network_detail_link_policy_webterm_only", _all_nested_link_policies(reader_network_detail, visible=False, mode="webterm_native_only")),
-        _check("reader_network_detail_has_no_external_hosts_or_tokens", not _contains_any(reader_network_detail, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
+        _check(
+            "reader_network_detail_link_policy_webterm_only",
+            _all_nested_link_policies(reader_network_detail, visible=False, mode="webterm_native_only"),
+        ),
+        _check(
+            "reader_network_detail_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_network_detail, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
         _check("reader_helm_releases_external_links_hidden", _all_nested_links_empty(reader_helm_releases)),
-        _check("reader_helm_releases_has_no_external_hosts_or_tokens", not _contains_any(reader_helm_releases, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
+        _check(
+            "reader_helm_releases_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_helm_releases, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
         _check("reader_devtron_detail_external_links_hidden", _all_nested_links_empty(reader_devtron_detail)),
-        _check("reader_devtron_detail_has_no_external_hosts_or_tokens", not _contains_any(reader_devtron_detail, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
+        _check(
+            "reader_devtron_detail_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_devtron_detail, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
         _check("reader_diagnostics_summary_read_only", _diagnostics_read_only(reader_diagnostics_summary)),
-        _check("reader_diagnostics_summary_has_no_external_hosts_or_tokens", not _contains_any(reader_diagnostics_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("reader_action_summary_read_only", (reader_action_summary.get("policy") or {}).get("mutates_state") is False),
-        _check("reader_action_summary_has_no_external_hosts_or_tokens", not _contains_any(reader_action_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("reader_capabilities_read_only", (reader_capabilities.get("policy") or {}).get("mutates_state") is False),
-        _check("reader_capabilities_has_no_external_hosts_or_tokens", not _contains_any(reader_capabilities, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("reader_frontend_response_credentials_absent", not _contains_any(reader_frontend_surface, FRONTEND_CREDENTIAL_MARKERS)),
+        _check(
+            "reader_diagnostics_summary_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_diagnostics_summary,
+                ("release-rancher.example.test", "release-devtron.example.test", "raw-token"),
+            ),
+        ),
+        _check(
+            "reader_action_summary_read_only", (reader_action_summary.get("policy") or {}).get("mutates_state") is False
+        ),
+        _check(
+            "reader_action_summary_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_action_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
+        _check(
+            "reader_capabilities_read_only", (reader_capabilities.get("policy") or {}).get("mutates_state") is False
+        ),
+        _check(
+            "reader_capabilities_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                reader_capabilities, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
+        _check(
+            "reader_frontend_response_credentials_absent",
+            not _contains_any(reader_frontend_surface, FRONTEND_CREDENTIAL_MARKERS),
+        ),
         _check("staff_can_audit_deeplinks", staff_policy.get("can_audit_deeplinks") is True),
-        _check("staff_provider_connection_visible", staff_payloads["provider"].get("connection_details_visible") is True),
+        _check(
+            "staff_provider_connection_visible", staff_payloads["provider"].get("connection_details_visible") is True
+        ),
         _check("staff_provider_secret_reference_hidden", not _contains_key(staff_payloads["provider"], "secret_ref")),
         _check("staff_external_links_visible", _staff_links_visible(staff_payloads)),
-        _check("staff_external_links_sanitized", not _contains_any(staff_payloads, ("raw-token", "?token=", "#tail", "user:pass@"))),
-        _check("staff_network_detail_fallback_links_visible", bool(staff_network_detail.get("network_ref", {}).get("links", {}).get("rancher"))),
-        _check("staff_network_detail_fallback_links_sanitized", not _contains_any(staff_network_detail, ("raw-token", "?token=", "#tail", "user:pass@"))),
-        _check("staff_helm_releases_fallback_links_sanitized", not _contains_any(staff_helm_releases, ("raw-token", "?token=", "#tail", "user:pass@"))),
-        _check("staff_devtron_detail_fallback_links_sanitized", not _contains_any(staff_devtron_detail, ("raw-token", "?token=", "#tail", "user:pass@"))),
+        _check(
+            "staff_external_links_sanitized",
+            not _contains_any(staff_payloads, ("raw-token", "?token=", "#tail", "user:pass@")),
+        ),
+        _check(
+            "staff_network_detail_fallback_links_visible",
+            bool(staff_network_detail.get("network_ref", {}).get("links", {}).get("rancher")),
+        ),
+        _check(
+            "staff_network_detail_fallback_links_sanitized",
+            not _contains_any(staff_network_detail, ("raw-token", "?token=", "#tail", "user:pass@")),
+        ),
+        _check(
+            "staff_helm_releases_fallback_links_sanitized",
+            not _contains_any(staff_helm_releases, ("raw-token", "?token=", "#tail", "user:pass@")),
+        ),
+        _check(
+            "staff_devtron_detail_fallback_links_sanitized",
+            not _contains_any(staff_devtron_detail, ("raw-token", "?token=", "#tail", "user:pass@")),
+        ),
         _check("staff_diagnostics_summary_read_only", _diagnostics_read_only(staff_diagnostics_summary)),
-        _check("staff_diagnostics_summary_has_no_external_hosts_or_tokens", not _contains_any(staff_diagnostics_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("staff_action_summary_read_only", (staff_action_summary.get("policy") or {}).get("mutates_state") is False),
-        _check("staff_action_summary_has_no_external_hosts_or_tokens", not _contains_any(staff_action_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
+        _check(
+            "staff_diagnostics_summary_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                staff_diagnostics_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
+        _check(
+            "staff_action_summary_read_only", (staff_action_summary.get("policy") or {}).get("mutates_state") is False
+        ),
+        _check(
+            "staff_action_summary_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                staff_action_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
         _check("staff_capabilities_read_only", (staff_capabilities.get("policy") or {}).get("mutates_state") is False),
-        _check("staff_capabilities_has_no_external_hosts_or_tokens", not _contains_any(staff_capabilities, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("staff_release_summary_read_only", (staff_release_summary.get("policy") or {}).get("mutates_state") is False),
-        _check("staff_release_summary_has_no_external_hosts_or_tokens", not _contains_any(staff_release_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token"))),
-        _check("staff_sensitive_link_key_redacted", staff_payloads["app"].get("links", {}).get("secret_link") == "[redacted]"),
-        _check("staff_frontend_response_credentials_absent", not _contains_any(staff_frontend_surface, FRONTEND_CREDENTIAL_MARKERS)),
+        _check(
+            "staff_capabilities_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                staff_capabilities, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
+        _check(
+            "staff_release_summary_read_only", (staff_release_summary.get("policy") or {}).get("mutates_state") is False
+        ),
+        _check(
+            "staff_release_summary_has_no_external_hosts_or_tokens",
+            not _contains_any(
+                staff_release_summary, ("release-rancher.example.test", "release-devtron.example.test", "raw-token")
+            ),
+        ),
+        _check(
+            "staff_sensitive_link_key_redacted",
+            staff_payloads["app"].get("links", {}).get("secret_link") == "[redacted]",
+        ),
+        _check(
+            "staff_frontend_response_credentials_absent",
+            not _contains_any(staff_frontend_surface, FRONTEND_CREDENTIAL_MARKERS),
+        ),
     ]
     success = all(item["success"] for item in checks)
     credential_scan_ready = all(
@@ -189,8 +287,14 @@ def _run_surface_checks(*, reader, staff, provider, cluster, app, workload, pod,
         "mode": "transaction_rollback",
         "checks": checks,
         "checked_count": len(checks),
-        "reader": {"can_read": bool(reader_policy.get("can_read")), "can_audit_deeplinks": bool(reader_policy.get("can_audit_deeplinks"))},
-        "staff": {"can_read": bool(staff_policy.get("can_read")), "can_audit_deeplinks": bool(staff_policy.get("can_audit_deeplinks"))},
+        "reader": {
+            "can_read": bool(reader_policy.get("can_read")),
+            "can_audit_deeplinks": bool(reader_policy.get("can_audit_deeplinks")),
+        },
+        "staff": {
+            "can_read": bool(staff_policy.get("can_read")),
+            "can_audit_deeplinks": bool(staff_policy.get("can_audit_deeplinks")),
+        },
         "reader_external_link_policy": reader_payloads["cluster"].get("external_links_policy", {}),
         "staff_external_link_policy": staff_payloads["cluster"].get("external_links_policy", {}),
         "frontend_response_credential_scan": {
@@ -205,10 +309,18 @@ def _run_surface_checks(*, reader, staff, provider, cluster, app, workload, pod,
     }
 
 
-def _diagnostics_summary(*, user, cluster: K8sCluster, workload: K8sWorkloadRef, network: K8sNetworkRef) -> dict[str, Any]:
-    cluster_payload, cluster_error = build_diagnostics_summary(scope="cluster", cluster_id=f"cluster_{cluster.id}", user=user)
-    workload_payload, workload_error = build_diagnostics_summary(scope="workload", workload_id=f"workload_{workload.id}", user=user)
-    network_payload, network_error = build_diagnostics_summary(scope="network", network_id=f"network_{network.id}", user=user)
+def _diagnostics_summary(
+    *, user, cluster: K8sCluster, workload: K8sWorkloadRef, network: K8sNetworkRef
+) -> dict[str, Any]:
+    cluster_payload, cluster_error = build_diagnostics_summary(
+        scope="cluster", cluster_id=f"cluster_{cluster.id}", user=user
+    )
+    workload_payload, workload_error = build_diagnostics_summary(
+        scope="workload", workload_id=f"workload_{workload.id}", user=user
+    )
+    network_payload, network_error = build_diagnostics_summary(
+        scope="network", network_id=f"network_{network.id}", user=user
+    )
     scopes = {
         "cluster": cluster_payload or {"success": False, "error": cluster_error},
         "workload": workload_payload or {"success": False, "error": workload_error},
@@ -320,7 +432,11 @@ def _inventory(*, reader):
         environment="prod",
         rancher_provider=provider,
         rancher_cluster_id="c-release-normal-user",
-        labels={"credential": "raw-token", "environment": "prod", "support_note": "kubeconfig=release-kubeconfig-context"},
+        labels={
+            "credential": "raw-token",
+            "environment": "prod",
+            "support_note": "kubeconfig=release-kubeconfig-context",
+        },
         links={"rancher": "https://release-rancher.example.test/c/c-release-normal-user?token=raw-token#tail"},
     )
     app = K8sAppRef.objects.create(
@@ -332,7 +448,11 @@ def _inventory(*, reader):
             "app.kubernetes.io/name": "release-normal-user-app",
             "meta.helm.sh/release-name": "release-normal-user-app",
             "helm.sh/chart": "release-normal-chart",
-            "helm_values": {"image": {"tag": "release"}, "password": "raw-token", "note": "Bearer release-provider-token"},
+            "helm_values": {
+                "image": {"tag": "release"},
+                "password": "raw-token",
+                "note": "Bearer release-provider-token",
+            },
             "secret": "raw-token",
             "notes": "Bearer release-provider-token",
         },
@@ -363,7 +483,11 @@ def _inventory(*, reader):
         cluster=cluster,
         namespace="payments",
         name="release-normal-user-app-abc123",
-        labels={"app.kubernetes.io/name": "release-normal-user-app", "token": "raw-token", "notes": "client-key-data: release-provider-key"},
+        labels={
+            "app.kubernetes.io/name": "release-normal-user-app",
+            "token": "raw-token",
+            "notes": "client-key-data: release-provider-key",
+        },
         links={"logs": "https://release-rancher.example.test/logs/release-normal-user?token=raw-token#tail"},
     )
     network = K8sNetworkRef.objects.create(
@@ -373,7 +497,13 @@ def _inventory(*, reader):
         kind=K8sNetworkRef.KIND_SERVICE,
         service_type="ClusterIP",
         ports=[{"port": 80, "targetPort": 8080}],
-        endpoints=[{"pod": "release-normal-user-app-abc123", "token": "raw-token", "note": "certificate-authority-data: release-provider-ca"}],
+        endpoints=[
+            {
+                "pod": "release-normal-user-app-abc123",
+                "token": "raw-token",
+                "note": "certificate-authority-data: release-provider-ca",
+            }
+        ],
         labels={"app.kubernetes.io/name": "release-normal-user-app"},
         links={"rancher": "https://release-rancher.example.test/service/release-normal-user?token=raw-token#tail"},
     )

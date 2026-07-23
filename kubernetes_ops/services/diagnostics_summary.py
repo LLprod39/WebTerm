@@ -129,8 +129,16 @@ def _from_detail(scope_type: str, detail: dict[str, Any]) -> dict[str, Any]:
 
 def _cluster_diagnostics_payload(cluster: K8sCluster, *, user=None) -> dict[str, Any]:
     namespaces = list(K8sNamespace.objects.filter(cluster=cluster).only("id", "name", "health"))
-    workloads = list(K8sWorkloadRef.objects.filter(cluster=cluster).only("id", "name", "namespace", "kind", "health", "ready", "desired", "owner", "team"))
-    pods = list(K8sPodRef.objects.filter(cluster=cluster).only("id", "name", "namespace", "health", "ready_containers", "total_containers", "restart_count"))
+    workloads = list(
+        K8sWorkloadRef.objects.filter(cluster=cluster).only(
+            "id", "name", "namespace", "kind", "health", "ready", "desired", "owner", "team"
+        )
+    )
+    pods = list(
+        K8sPodRef.objects.filter(cluster=cluster).only(
+            "id", "name", "namespace", "health", "ready_containers", "total_containers", "restart_count"
+        )
+    )
     networks = list(K8sNetworkRef.objects.filter(cluster=cluster).only("id", "name", "namespace", "kind", "health"))
     apps = list(K8sAppRef.objects.filter(cluster=cluster).only("id", "name", "owner", "team")[:100])
     events = list(K8sEvent.objects.filter(cluster=cluster).only("id", "severity")[:200])
@@ -145,15 +153,21 @@ def _cluster_diagnostics_payload(cluster: K8sCluster, *, user=None) -> dict[str,
         "network_count": len(networks),
         "pod_count": len(pods),
         "event_count": len(events),
-        "warning_event_count": sum(1 for event in events if event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}),
+        "warning_event_count": sum(
+            1 for event in events if event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+        ),
         "restart_count": sum(pod.restart_count for pod in pods),
         "ready_containers": sum(pod.ready_containers for pod in pods),
         "total_containers": sum(pod.total_containers for pod in pods),
         "unhealthy_namespace_count": sum(1 for item in namespaces if item.health != K8sCluster.HEALTH_HEALTHY),
         "unhealthy_workload_count": sum(1 for item in workloads if item.health != K8sCluster.HEALTH_HEALTHY),
         "unhealthy_pod_count": sum(1 for item in pods if item.health != K8sCluster.HEALTH_HEALTHY),
-        "owners": sorted({item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item}),
-        "teams": sorted({item for item in [*(app.team for app in apps), *(workload.team for workload in workloads)] if item}),
+        "owners": sorted(
+            {item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item}
+        ),
+        "teams": sorted(
+            {item for item in [*(app.team for app in apps), *(workload.team for workload in workloads)] if item}
+        ),
     }
     scope = {
         "type": "cluster",
@@ -219,14 +233,24 @@ def _target_payload(scope_type: str, detail: dict[str, Any]) -> dict[str, Any]:
 
 def _owner_context(detail: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
     owner_apps = [item for item in detail.get("owner_apps") or detail.get("apps") or [] if isinstance(item, dict)]
-    owners = set(str(item.get("owner") or "").strip() for item in owner_apps)
+    owners = {str(item.get("owner") or "").strip() for item in owner_apps}
     owners.update(str(item).strip() for item in summary.get("owners") or [])
     owners.discard("")
-    teams = set(str(item.get("team") or "").strip() for item in owner_apps)
+    teams = {str(item.get("team") or "").strip() for item in owner_apps}
     teams.update(str(item).strip() for item in summary.get("teams") or [])
     teams.discard("")
-    owner_names = sorted({str(item.get("name") or "").strip() for item in owner_apps if str(item.get("name") or "").strip()})
-    primary_owner = "devtron" if K8sAppRef.OWNER_DEVTRON in owners else "fleet" if K8sAppRef.OWNER_FLEET in owners else sorted(owners)[0] if owners else "unknown"
+    owner_names = sorted(
+        {str(item.get("name") or "").strip() for item in owner_apps if str(item.get("name") or "").strip()}
+    )
+    primary_owner = (
+        "devtron"
+        if K8sAppRef.OWNER_DEVTRON in owners
+        else "fleet"
+        if K8sAppRef.OWNER_FLEET in owners
+        else sorted(owners)[0]
+        if owners
+        else "unknown"
+    )
     return {
         "primary_owner": primary_owner,
         "owners": sorted(owners),
@@ -274,7 +298,14 @@ def _findings(
     findings: list[dict[str, Any]] = []
     health = signals["health"]
     if health in {K8sCluster.HEALTH_DEGRADED, K8sCluster.HEALTH_WARNING, K8sCluster.HEALTH_UNKNOWN}:
-        findings.append(_finding("target_health", HEALTH_SEVERITY.get(health, "unknown"), f"{scope_type} health is {health}", {"health": health}))
+        findings.append(
+            _finding(
+                "target_health",
+                HEALTH_SEVERITY.get(health, "unknown"),
+                f"{scope_type} health is {health}",
+                {"health": health},
+            )
+        )
     if signals["desired"] and signals["ready"] < signals["desired"]:
         findings.append(
             _finding(
@@ -303,15 +334,45 @@ def _findings(
             )
         )
     if signals["restart_count"] > 0:
-        findings.append(_finding("pod_restarts", "warning", "pod restarts observed", {"restart_count": signals["restart_count"]}))
+        findings.append(
+            _finding("pod_restarts", "warning", "pod restarts observed", {"restart_count": signals["restart_count"]})
+        )
     if signals["warning_event_count"] > 0:
-        findings.append(_finding("warning_events", "warning", "warning or error events are present", {"warning_event_count": signals["warning_event_count"]}))
+        findings.append(
+            _finding(
+                "warning_events",
+                "warning",
+                "warning or error events are present",
+                {"warning_event_count": signals["warning_event_count"]},
+            )
+        )
     if signals["unhealthy_namespace_count"] > 0:
-        findings.append(_finding("unhealthy_namespaces", "warning", "unhealthy namespaces are present", {"unhealthy_namespace_count": signals["unhealthy_namespace_count"]}))
+        findings.append(
+            _finding(
+                "unhealthy_namespaces",
+                "warning",
+                "unhealthy namespaces are present",
+                {"unhealthy_namespace_count": signals["unhealthy_namespace_count"]},
+            )
+        )
     if signals["unhealthy_workload_count"] > 0:
-        findings.append(_finding("unhealthy_workloads", "warning", "unhealthy workloads are present", {"unhealthy_workload_count": signals["unhealthy_workload_count"]}))
+        findings.append(
+            _finding(
+                "unhealthy_workloads",
+                "warning",
+                "unhealthy workloads are present",
+                {"unhealthy_workload_count": signals["unhealthy_workload_count"]},
+            )
+        )
     if signals["unhealthy_pod_count"] > 0:
-        findings.append(_finding("unhealthy_pods", "warning", "unhealthy related pods are present", {"unhealthy_pod_count": signals["unhealthy_pod_count"]}))
+        findings.append(
+            _finding(
+                "unhealthy_pods",
+                "warning",
+                "unhealthy related pods are present",
+                {"unhealthy_pod_count": signals["unhealthy_pod_count"]},
+            )
+        )
     if owner_context["primary_owner"] in {K8sAppRef.OWNER_DEVTRON, K8sAppRef.OWNER_FLEET}:
         findings.append(
             _finding(
@@ -342,13 +403,23 @@ def _safe_next_steps(
         {"id": "check_events", "label": "Review related events", "mutates_state": False},
     ]
     if scope_type == "cluster":
-        steps.append({"id": "review_cluster_inventory", "label": "Review cluster namespaces, workloads and nodes", "mutates_state": False})
+        steps.append(
+            {
+                "id": "review_cluster_inventory",
+                "label": "Review cluster namespaces, workloads and nodes",
+                "mutates_state": False,
+            }
+        )
     if scope_type in {"pod", "workload", "network"} or (scope_type == "namespace" and signals["pod_count"] > 0):
         steps.append({"id": "logs_snapshot", "label": "Open bounded logs snapshot", "mutates_state": False})
     if owner_context["primary_owner"] == K8sAppRef.OWNER_DEVTRON:
-        steps.append({"id": "devtron_context", "label": "Review Devtron AppOps context in WebTerm", "mutates_state": False})
+        steps.append(
+            {"id": "devtron_context", "label": "Review Devtron AppOps context in WebTerm", "mutates_state": False}
+        )
     if owner_context["primary_owner"] == K8sAppRef.OWNER_FLEET:
-        steps.append({"id": "fleet_context", "label": "Review Fleet rollout context in WebTerm", "mutates_state": False})
+        steps.append(
+            {"id": "fleet_context", "label": "Review Fleet rollout context in WebTerm", "mutates_state": False}
+        )
     if signals["health"] != K8sCluster.HEALTH_HEALTHY:
         steps.append({"id": "request_approval", "label": "Request approval before any change", "mutates_state": False})
     return steps

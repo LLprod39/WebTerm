@@ -24,13 +24,22 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
     )
     active = [item for item in snapshots if item.is_active]
     archived = [item for item in snapshots if not item.is_active or item.layer == ServerMemorySnapshot.LAYER_ARCHIVE]
-    episodes = list(ServerMemoryEpisode.objects.filter(server_id=server_id).order_by("-last_event_at", "-updated_at")[:20])
-    revalidations = list(ServerMemoryRevalidation.objects.filter(server_id=server_id).order_by("status", "-updated_at")[:20])
-    canonical = [item for item in active if item.layer == ServerMemorySnapshot.LAYER_CANONICAL and item.memory_key in CANONICAL_MEMORY_KEYS]
+    episodes = list(
+        ServerMemoryEpisode.objects.filter(server_id=server_id).order_by("-last_event_at", "-updated_at")[:20]
+    )
+    revalidations = list(
+        ServerMemoryRevalidation.objects.filter(server_id=server_id).order_by("status", "-updated_at")[:20]
+    )
+    canonical = [
+        item
+        for item in active
+        if item.layer == ServerMemorySnapshot.LAYER_CANONICAL and item.memory_key in CANONICAL_MEMORY_KEYS
+    ]
     manual = [
         item
         for item in active
-        if item.layer == ServerMemorySnapshot.LAYER_CANONICAL and item.memory_key.startswith(("manual_note:", "knowledge_note:"))
+        if item.layer == ServerMemorySnapshot.LAYER_CANONICAL
+        and item.memory_key.startswith(("manual_note:", "knowledge_note:"))
     ]
     patterns = [item for item in active if item.memory_key.startswith(PATTERN_CANDIDATE_PREFIX)]
     automation_candidates = [item for item in active if item.memory_key.startswith(AUTOMATION_CANDIDATE_PREFIX)]
@@ -63,19 +72,28 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
             "scheduled_agents": serialize_background_worker_state("scheduled_agents"),
             "watchers": serialize_background_worker_state("watchers"),
         },
-        "canonical": [serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in canonical],
-        "manual": [serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in manual],
-        "patterns": [serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in patterns],
+        "canonical": [
+            serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in canonical
+        ],
+        "manual": [
+            serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in manual
+        ],
+        "patterns": [
+            serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in patterns
+        ],
         "automation_candidates": [
             serialize_snapshot(item, history_items=history_map.get(item.version_group_id, []))
             for item in automation_candidates
         ],
-        "skill_drafts": [serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in skill_drafts],
+        "skill_drafts": [
+            serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) for item in skill_drafts
+        ],
         "revalidation": [serialize_revalidation(item) for item in revalidations],
         "episodes": [serialize_episode(item) for item in episodes if item.is_active],
         "archive": [
             *[
-                serialize_snapshot(item, history_items=history_map.get(item.version_group_id, [])) | {"kind": "snapshot"}
+                serialize_snapshot(item, history_items=history_map.get(item.version_group_id, []))
+                | {"kind": "snapshot"}
                 for item in archived[:20]
             ],
             *[serialize_episode(item) | {"kind": "episode"} for item in episodes if not item.is_active][:12],

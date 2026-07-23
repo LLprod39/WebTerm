@@ -56,7 +56,9 @@ def test_server_memory_purge_user_clears_ai_memory_everywhere():
     )
     store._sync_manual_knowledge_snapshot_sync(ai_knowledge.id)
 
-    canonical_snapshot = ServerMemorySnapshot.objects.filter(server=server, memory_key="profile", is_active=True).first()
+    canonical_snapshot = ServerMemorySnapshot.objects.filter(
+        server=server, memory_key="profile", is_active=True
+    ).first()
     if canonical_snapshot is None:
         canonical_snapshot = ServerMemorySnapshot.objects.create(
             server=server,
@@ -112,10 +114,16 @@ def test_server_memory_purge_user_clears_ai_memory_everywhere():
     assert payload["deleted"]["knowledge"] >= 1
 
     assert ServerKnowledge.objects.filter(pk=manual_knowledge.id, server=server).exists() is True
-    assert ServerMemorySnapshot.objects.filter(server=server, memory_key=f"manual_note:{manual_knowledge.id}").exists() is True
+    assert (
+        ServerMemorySnapshot.objects.filter(server=server, memory_key=f"manual_note:{manual_knowledge.id}").exists()
+        is True
+    )
     assert ServerKnowledge.objects.filter(pk=ai_knowledge.id, server=server).exists() is False
     assert ServerMemorySnapshot.objects.filter(server=server, memory_key="profile").exists() is False
-    assert ServerMemorySnapshot.objects.filter(server=server, memory_key=f"knowledge_note:{ai_knowledge.id}").exists() is False
+    assert (
+        ServerMemorySnapshot.objects.filter(server=server, memory_key=f"knowledge_note:{ai_knowledge.id}").exists()
+        is False
+    )
     assert ServerMemoryEpisode.objects.filter(server=server).exists() is False
     assert ServerMemoryEvent.objects.filter(server=server).exists() is False
     assert ServerMemoryRevalidation.objects.filter(server=server).exists() is False
@@ -279,7 +287,9 @@ def test_server_memory_snapshot_actions_promote_archive_and_skill_scaffold(tmp_p
         assert "Success Signals" in skill.content
         assert promote_skill_payload["knowledge_id"] > 0
         assert "worker_states" in promote_skill_payload["overview"]
-        assert ServerKnowledge.objects.filter(server=server, id=promote_skill_payload["knowledge_id"], is_active=True).exists()
+        assert ServerKnowledge.objects.filter(
+            server=server, id=promote_skill_payload["knowledge_id"], is_active=True
+        ).exists()
         assert StudioSkillAccess.objects.filter(slug=skill_slug, owner=owner).exists()
 
     skill_snapshot.refresh_from_db()

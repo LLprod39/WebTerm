@@ -193,7 +193,9 @@ def build_snapshot_candidates(
         SnapshotCandidate(
             memory_key="human_habits",
             title=SNAPSHOT_TITLES["human_habits"],
-            content=render_snapshot_lines(human_habits_points, fallback="Повторяющиеся ручные привычки пока не выделены."),
+            content=render_snapshot_lines(
+                human_habits_points, fallback="Повторяющиеся ручные привычки пока не выделены."
+            ),
             importance_score=0.7,
             stability_score=0.62,
             confidence=0.7 if human_habits_points else 0.55,
@@ -218,9 +220,7 @@ def _item_can_feed_canonical(item: Any) -> bool:
 def _pattern_can_feed_canonical(pattern: OperationalPattern) -> bool:
     if not pattern.measured_runs or pattern.success_rate is None:
         return False
-    if "agent" in pattern.actor_kinds and "human" not in pattern.actor_kinds:
-        return False
-    return True
+    return not ("agent" in pattern.actor_kinds and "human" not in pattern.actor_kinds)
 
 
 def _candidate_metadata(

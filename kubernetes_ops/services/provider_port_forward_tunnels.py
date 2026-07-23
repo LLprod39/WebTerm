@@ -40,8 +40,12 @@ class UrlopenProviderPortForwardTunnel:
 
     def open(self) -> UrlopenProviderPortForwardTunnel:
         headers = {**self.headers, "Content-Type": self.headers.get("Content-Type", "application/json")}
-        request = urllib.request.Request(url=self.url, method="POST", headers=headers, data=json.dumps(self.body).encode("utf-8"))
-        context = None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        request = urllib.request.Request(
+            url=self.url, method="POST", headers=headers, data=json.dumps(self.body).encode("utf-8")
+        )
+        context = (
+            None if self.verify_tls or not self.url.lower().startswith("https://") else ssl._create_unverified_context()
+        )
         try:
             self._response = urllib.request.urlopen(request, timeout=self.timeout, context=context)
         except (urllib.error.URLError, TimeoutError, OSError) as exc:
@@ -117,7 +121,13 @@ def open_provider_port_forward_tunnel(
     if transport:
         url = _join_url(provider.base_url, path)
         return InMemoryProviderPortForwardTunnel(client._call_transport(url, headers, method="POST", body=body))
-    return UrlopenProviderPortForwardTunnel(url=_join_url(provider.base_url, path), headers=headers, timeout=timeout, body=body, verify_tls=client.verify_tls).open()
+    return UrlopenProviderPortForwardTunnel(
+        url=_join_url(provider.base_url, path),
+        headers=headers,
+        timeout=timeout,
+        body=body,
+        verify_tls=client.verify_tls,
+    ).open()
 
 
 def _events_from_payload(payload: Any) -> list[ProviderPortForwardTunnelEvent]:

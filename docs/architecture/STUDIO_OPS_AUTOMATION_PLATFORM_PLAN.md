@@ -45,7 +45,6 @@ Studio должна уметь принимать задачу вида:
 Пример: задачи Keycloak "создать группу", "добавить роль", "выдать пользователю доступ" не требуют отдельных нод `keycloak/create_group`, `keycloak/assign_role`, `keycloak/create_user`. Для них достаточно:
 
 - `agent/mcp_call` или универсальной `tool/action` ноды, которая вызывает Keycloak MCP tool;
-- skill `keycloak-safety`, который объясняет агенту правильный порядок, проверки и ограничения;
 - approval node для production IAM changes;
 - verification node, которая читает состояние Keycloak после изменения;
 - report node, которая пишет аудит-friendly отчет.
@@ -193,7 +192,7 @@ AI не должен напрямую превращать любую прось
       "username": "{username}",
       "role": "{role}"
     },
-    "skill_slugs": ["keycloak-safety"],
+    "skill_slugs": ["kubernetes-safety"],
     "permission_mode": "ASSISTED"
   }
 }

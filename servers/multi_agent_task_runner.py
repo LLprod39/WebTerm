@@ -61,14 +61,17 @@ async def run_multi_agent_task(engine: Any, task: dict, context_summary: str, de
 
     iterations: list[dict] = []
     final_answer = ""
-    await engine._emit("agent_subagent_start", {
-        "task_id": task["id"],
-        "role": task_role_spec.slug,
-        "title": task_runtime.title,
-        "permission_mode": task_permission_engine.mode,
-        "tool_names": list(task_tool_names),
-        "max_iterations": task_max_iterations,
-    })
+    await engine._emit(
+        "agent_subagent_start",
+        {
+            "task_id": task["id"],
+            "role": task_role_spec.slug,
+            "title": task_runtime.title,
+            "permission_mode": task_permission_engine.mode,
+            "tool_names": list(task_tool_names),
+            "max_iterations": task_max_iterations,
+        },
+    )
 
     for iteration in range(1, task_max_iterations + 1):
         if engine._stop_requested:
@@ -161,24 +164,26 @@ async def run_multi_agent_task(engine: Any, task: dict, context_summary: str, de
         final_answer = await engine._summarize_task(task, iterations)
 
     task["verification_summary"] = task_permission_engine.verification_summary()
-    await engine._emit("agent_subagent_done", {
-        "task_id": task["id"],
-        "role": task_role_spec.slug,
-        "verification_summary": task["verification_summary"],
-        "pending_verifications": sorted(task_permission_engine.pending_verifications),
-    })
+    await engine._emit(
+        "agent_subagent_done",
+        {
+            "task_id": task["id"],
+            "role": task_role_spec.slug,
+            "verification_summary": task["verification_summary"],
+            "pending_verifications": sorted(task_permission_engine.pending_verifications),
+        },
+    )
     return final_answer, iterations
 
 
 async def summarize_multi_agent_task(engine: Any, task: dict, iterations: list[dict]) -> str:
     """Ask the LLM to summarize task results when no explicit final answer exists."""
     obs_summary = "\n".join(
-        f"Шаг {it['iteration']} ({it.get('action', 'N/A')}): {it.get('observation', '')[:300]}"
-        for it in iterations
+        f"Шаг {it['iteration']} ({it.get('action', 'N/A')}): {it.get('observation', '')[:300]}" for it in iterations
     )
     prompt = f"""Кратко суммируй результат выполнения задачи.
-Задача: {task['name']}
-Описание: {task['description']}
+Задача: {task["name"]}
+Описание: {task["description"]}
 
 Выполненные шаги:
 {obs_summary}

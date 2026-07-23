@@ -121,7 +121,7 @@ def disk_cleanup_command(
             "else "
             f"find /tmp /var/tmp -xdev -mindepth 1 -mtime +{min_age_days} -print 2>/dev/null | head -n {max_entries} | "
             "while IFS= read -r path; do "
-            "case \"$path\" in /tmp/*|/var/tmp/*) rm -rf -- \"$path\" && printf 'removed=%s\\n' \"$path\" ;; *) printf 'skipped=%s\\n' \"$path\" ;; esac; "
+            'case "$path" in /tmp/*|/var/tmp/*) rm -rf -- "$path" && printf \'removed=%s\\n\' "$path" ;; *) printf \'skipped=%s\\n\' "$path" ;; esac; '
             "done; "
             "fi\n"
         )
@@ -136,23 +136,23 @@ def backup_restore_check_command(path: str, *, action: str, max_depth: int, max_
         f"MAX_DEPTH={max_depth}\n"
         f"MAX_FILES={max_files}\n"
         "printf '__FILES__\\n'\n"
-        "if [ ! -d \"$BACKUP_DIR\" ]; then printf 'missing_dir\\t0\\t%s\\n' \"$BACKUP_DIR\"; exit 0; fi\n"
-        "find \"$BACKUP_DIR\" -maxdepth \"$MAX_DEPTH\" -type f -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -nr | head -n \"$MAX_FILES\"\n"
+        'if [ ! -d "$BACKUP_DIR" ]; then printf \'missing_dir\\t0\\t%s\\n\' "$BACKUP_DIR"; exit 0; fi\n'
+        'find "$BACKUP_DIR" -maxdepth "$MAX_DEPTH" -type f -printf \'%T@\\t%s\\t%p\\n\' 2>/dev/null | sort -nr | head -n "$MAX_FILES"\n'
         "printf '__VERIFY__\\n'\n"
         f"if [ {1 if action == 'verify_latest' else 0} -eq 0 ]; then printf 'verification=skipped\\n'; exit 0; fi\n"
-        "latest=$(find \"$BACKUP_DIR\" -maxdepth \"$MAX_DEPTH\" -type f -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -nr | head -n 1 | cut -f3-)\n"
+        'latest=$(find "$BACKUP_DIR" -maxdepth "$MAX_DEPTH" -type f -printf \'%T@\\t%s\\t%p\\n\' 2>/dev/null | sort -nr | head -n 1 | cut -f3-)\n'
         "if [ -z \"$latest\" ]; then printf 'verification=no_files\\n'; exit 3; fi\n"
         "printf 'latest=%s\\n' \"$latest\"\n"
-        "case \"$latest\" in\n"
-        "  *.tar) tar -tf \"$latest\" >/dev/null 2>&1 ;;\n"
-        "  *.tar.gz|*.tgz) tar -tzf \"$latest\" >/dev/null 2>&1 ;;\n"
-        "  *.gz) gzip -t \"$latest\" >/dev/null 2>&1 ;;\n"
+        'case "$latest" in\n'
+        '  *.tar) tar -tf "$latest" >/dev/null 2>&1 ;;\n'
+        '  *.tar.gz|*.tgz) tar -tzf "$latest" >/dev/null 2>&1 ;;\n'
+        '  *.gz) gzip -t "$latest" >/dev/null 2>&1 ;;\n'
         "  *.zip) if command -v unzip >/dev/null 2>&1; then unzip -t \"$latest\" >/dev/null 2>&1; else printf 'verification=missing_unzip\\n'; exit 4; fi ;;\n"
         "  *) printf 'verification=unsupported_extension\\n'; exit 2 ;;\n"
         "esac\n"
         "status=$?\n"
         "printf 'verification_exit=%s\\n' \"$status\"\n"
-        "exit \"$status\"\n"
+        'exit "$status"\n'
     )
 
 

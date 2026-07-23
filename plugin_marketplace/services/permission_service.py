@@ -23,20 +23,21 @@ def _declared_permission(installation: PluginInstallation, scope: str) -> dict[s
 
 
 def permission_provider(plugin_id: str, scope: str, user=None) -> bool:
-    grants = PluginPermissionGrant.objects.select_related("installation").prefetch_related("installation__scoped_groups").filter(
-        installation__plugin_id=plugin_id,
-        installation__status=PluginInstallation.STATUS_ENABLED,
-        scope=scope,
-        granted=True,
+    grants = (
+        PluginPermissionGrant.objects.select_related("installation")
+        .prefetch_related("installation__scoped_groups")
+        .filter(
+            installation__plugin_id=plugin_id,
+            installation__status=PluginInstallation.STATUS_ENABLED,
+            scope=scope,
+            granted=True,
+        )
     )
     return any(installation_allowed_for_user(grant.installation, user) for grant in grants)
 
 
 def permission_preview(installation: PluginInstallation) -> list[dict[str, Any]]:
-    grants = {
-        item.scope: item
-        for item in installation.permission_grants.all()
-    }
+    grants = {item.scope: item for item in installation.permission_grants.all()}
     result: list[dict[str, Any]] = []
     for item in _manifest_permissions(installation):
         scope = str(item.get("scope") or "")

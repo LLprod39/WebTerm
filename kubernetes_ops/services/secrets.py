@@ -31,7 +31,9 @@ def resolve_provider_token(provider: K8sProvider) -> str:
         return token
     if ref.startswith("managed:kubernetes-provider-token:"):
         if ref != managed_provider_secret_ref(provider.id):
-            raise KubernetesSecretError(f"{provider.name} provider managed secret reference does not match provider id.")
+            raise KubernetesSecretError(
+                f"{provider.name} provider managed secret reference does not match provider id."
+            )
         token = get_kubernetes_provider_token(provider.id)
         if not token:
             raise KubernetesSecretError(f"{provider.name} provider managed secret is missing.")

@@ -139,10 +139,13 @@ def test_runtime_context_helper_ignores_builtin_and_output_placeholders():
     fields = get_pipeline_runtime_context_fields(nodes)
 
     assert fields == ["container_name", "dry_run", "ticket_id"]
-    assert get_missing_pipeline_runtime_context_fields(
-        nodes,
-        {"container_name": "app", "dry_run": False, "ticket_id": "INC-100"},
-    ) == []
+    assert (
+        get_missing_pipeline_runtime_context_fields(
+            nodes,
+            {"container_name": "app", "dry_run": False, "ticket_id": "INC-100"},
+        )
+        == []
+    )
 
 
 @pytest.mark.django_db
@@ -347,7 +350,9 @@ def test_webhook_trigger_rejects_trigger_without_downstream_nodes(monkeypatch):
     user = User.objects.create_user(username="runtime-context-webhook-empty", password="x")
     pipeline = _trigger_only_pipeline(user, trigger_type="trigger/webhook")
     trigger = pipeline.triggers.get(node_id="webhook")
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("empty webhook branch launched"))
+    monkeypatch.setattr(
+        "studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("empty webhook branch launched")
+    )
 
     response = Client().post(
         f"/api/studio/triggers/{trigger.webhook_token}/receive/",

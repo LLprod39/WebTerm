@@ -18,10 +18,14 @@ from kubernetes_ops.services.readonly_rbac_live import (  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Verify WebTerm Kubernetes Ops read-only RBAC against a live kubectl context.")
+    parser = argparse.ArgumentParser(
+        description="Verify WebTerm Kubernetes Ops read-only RBAC against a live kubectl context."
+    )
     parser.add_argument("--manifest", default="artifacts/kubernetes_ops_readonly_rbac.yaml")
     parser.add_argument("--output", default="artifacts/kubernetes_ops_readonly_rbac_live_evidence.json")
-    parser.add_argument("--apply", action="store_true", help="Apply the manifest before running kubectl auth can-i probes.")
+    parser.add_argument(
+        "--apply", action="store_true", help="Apply the manifest before running kubectl auth can-i probes."
+    )
     parser.add_argument("--context", default="")
     parser.add_argument("--kubectl", default="kubectl")
     parser.add_argument("--namespace", default=READONLY_SERVICE_ACCOUNT_CONTRACT["namespace"])
@@ -32,7 +36,9 @@ def main() -> int:
 
     report = verify_kubernetes_readonly_rbac_live(
         KubectlProbeOptions(
-            manifest_path=(ROOT / args.manifest).resolve() if not Path(args.manifest).is_absolute() else Path(args.manifest),
+            manifest_path=(ROOT / args.manifest).resolve()
+            if not Path(args.manifest).is_absolute()
+            else Path(args.manifest),
             apply_manifest=args.apply,
             context=args.context,
             kubectl=args.kubectl,
@@ -43,7 +49,17 @@ def main() -> int:
     )
     output_path = (ROOT / args.output).resolve() if not Path(args.output).is_absolute() else Path(args.output)
     write_live_rbac_evidence(report, output_path)
-    print(json.dumps({"status": report["status"], "context": report["context"], "errors": report["errors"], "output": str(output_path)}, ensure_ascii=False))
+    print(
+        json.dumps(
+            {
+                "status": report["status"],
+                "context": report["context"],
+                "errors": report["errors"],
+                "output": str(output_path),
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0 if report["status"] == "ready" or args.no_fail else 1
 
 

@@ -209,7 +209,9 @@ def _load_skill_from_dir(skill_dir: Path) -> SkillDefinition | None:
 
     guardrails_value = metadata.get("guardrail_summary") or []
     if isinstance(guardrails_value, str):
-        guardrail_summary = tuple(item for item in (_clean_scalar(part) for part in guardrails_value.split(",")) if item)
+        guardrail_summary = tuple(
+            item for item in (_clean_scalar(part) for part in guardrails_value.split(",")) if item
+        )
     elif isinstance(guardrails_value, list):
         guardrail_summary = tuple(str(item).strip() for item in guardrails_value if str(item).strip())
     else:

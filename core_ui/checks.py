@@ -4,10 +4,7 @@ from django.core.checks import Error, Tags, register
 
 @register(Tags.security, deploy=True)
 def channels_redis_deploy_check(app_configs, **kwargs):
-    backend = (
-        settings.CHANNEL_LAYERS.get("default", {})
-        .get("BACKEND", "")
-    )
+    backend = settings.CHANNEL_LAYERS.get("default", {}).get("BACKEND", "")
     if settings.DEBUG or backend != "channels.layers.InMemoryChannelLayer":
         return []
 

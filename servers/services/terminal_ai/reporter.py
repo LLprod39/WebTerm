@@ -12,6 +12,7 @@ without Django ORM or WebSocket dependencies:
 The LLM prompt for the report itself lives in
 :mod:`servers.services.terminal_ai.prompts.build_report_prompt`.
 """
+
 from __future__ import annotations
 
 from typing import Any

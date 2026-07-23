@@ -68,14 +68,12 @@ def _should_capture_health_check(instance: ServerHealthCheck) -> bool:
         return True
     # OK status → only if previous was not OK (recovery signal)
     previous = (
-        ServerHealthCheck.objects
-        .filter(server_id=instance.server_id, checked_at__lt=instance.checked_at)
+        ServerHealthCheck.objects.filter(server_id=instance.server_id, checked_at__lt=instance.checked_at)
         .order_by("-checked_at")
         .first()
     )
-    if previous and previous.status != ServerHealthCheck.STATUS_HEALTHY:
-        return True  # Transition to OK — recovery signal worth capturing
-    return False
+    # Transition to OK — recovery signal worth capturing.
+    return bool(previous and previous.status != ServerHealthCheck.STATUS_HEALTHY)
 
 
 def _deferred_ingest_health_check(pk: int):

@@ -42,7 +42,9 @@ def cleanup_stale_agent_runs_for_user(user, *, limit: int = 100) -> dict:
     canceled_total = 0
     for run in runs:
         age_seconds = _age_seconds(current_time, run.started_at)
-        message = f"Agent run exceeded stale runtime threshold ({stale_seconds}s) and was marked failed by operator cleanup."
+        message = (
+            f"Agent run exceeded stale runtime threshold ({stale_seconds}s) and was marked failed by operator cleanup."
+        )
         record_run_event(
             run.id,
             "agent_stale_cleanup",

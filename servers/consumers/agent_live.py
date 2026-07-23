@@ -134,14 +134,18 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
                 "message": "Run stopped from live session",
             },
         )
-        await self.channel_layer.group_send(self.group_name, {
-            "type": "agent_status",
-            "status": "stopped",
-            "reason": "user_requested",
-        })
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "agent_status",
+                "status": "stopped",
+                "reason": "user_requested",
+            },
+        )
 
     async def _handle_pause(self):
         from servers.models import AgentRun
+
         await self._issue_runtime_control(pause_requested=True)
         await self._update_run_status(AgentRun.STATUS_PAUSED)
         await self._record_event(
@@ -151,13 +155,17 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
                 "message": "Run paused from live session",
             },
         )
-        await self.channel_layer.group_send(self.group_name, {
-            "type": "agent_status",
-            "status": "paused",
-        })
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "agent_status",
+                "status": "paused",
+            },
+        )
 
     async def _handle_resume(self):
         from servers.models import AgentRun
+
         await self._issue_runtime_control(pause_requested=False)
         await self._update_run_status(AgentRun.STATUS_RUNNING)
         await self._record_event(
@@ -167,15 +175,19 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
                 "message": "Run resumed from live session",
             },
         )
-        await self.channel_layer.group_send(self.group_name, {
-            "type": "agent_status",
-            "status": "running",
-        })
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "agent_status",
+                "status": "running",
+            },
+        )
 
     async def _handle_reply(self, answer: str):
         if not answer:
             return
         from servers.models import AgentRun
+
         await self._issue_runtime_control(reply_text=answer, pause_requested=False)
 
         @database_sync_to_async
@@ -195,11 +207,14 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
                 "message": "Operator replied from live session",
             },
         )
-        await self.channel_layer.group_send(self.group_name, {
-            "type": "agent_status",
-            "status": "running",
-            "user_reply": answer,
-        })
+        await self.channel_layer.group_send(
+            self.group_name,
+            {
+                "type": "agent_status",
+                "status": "running",
+                "user_reply": answer,
+            },
+        )
 
     # ------------------------------------------------------------------
     # DB helpers
@@ -212,7 +227,8 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
             return False
 
         return AgentRun.objects.filter(
-            id=self.run_id, agent__user_id=self._user_id,
+            id=self.run_id,
+            agent__user_id=self._user_id,
         ).exists()
 
     @database_sync_to_async
@@ -265,7 +281,11 @@ class AgentLiveConsumer(AsyncJsonWebsocketConsumer):
     def _record_event(self, event_type: str, payload: dict):
         if not self.run_id:
             return None
-        run = AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id).select_related("agent", "server").first()
+        run = (
+            AgentRun.objects.filter(id=self.run_id, agent__user_id=self._user_id)
+            .select_related("agent", "server")
+            .first()
+        )
         if not run:
             return None
         return record_run_event_and_refresh_report(run, event_type, payload)

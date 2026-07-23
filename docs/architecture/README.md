@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last reviewed: 2026-06-28
+Last reviewed: 2026-07-22
 
 This folder is the public architecture entry point. The detailed working contract currently lives in the local-only file `docs/local/ARCHITECTURE_CONTRACT.md` because it came from internal root docs and is ignored by git.
 
@@ -33,7 +33,8 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Active Refactor Status
 
-- Current architecture command status: rechecked on 2026-06-29; `PATH=.venv/bin:$PATH .venv/bin/python scripts/check_architecture_sizes.py --strict-new` passes in the current dirty worktree. The plugin work now targets self-hosted extensions, not a public paid marketplace. Implemented foundations include pure `app.plugins` contracts, the internal `plugin_marketplace` store/API, permission grants, scaffold/validate/pack/install-disabled/audit commands, `.wtp` static no-code scan with SBOM/dependency metadata, private catalog sync/install-disabled, HTTPS federated catalog source sync, settings/secret refs, access-group scoped visibility, active surfaces, plugin pages/dashboard widgets with sandbox gates, reviewed/signed package state, connector health/action contracts, Studio node bridge, agent tool/terminal action bridges, hook bridge, lifecycle impact/update/soft-uninstall/rollback APIs, admin quarantine, package retention/cleanup, attestations, remote package staging with HTTPS+sha256 provenance replay, compatibility jobs, sandbox policy/enable gates, admin egress deny policy, backend sandbox provider boundary, local review/signing gates, optional external signing/scanner/sandbox/frontend-bundle boundaries, and production deploy checks for the private extension trust settings.
+- Current architecture command status: **FAIL** on commit `b8924ee`, rechecked 2026-07-22. The live guard reports 28 size violations and a broken `core_ui -> servers` boundary with 11 forbidden import paths. The mandatory cleanup and release gates are tracked in [the WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md); do not start another large product domain until Stage 1 is complete.
+- Plugin work targets self-hosted extensions, not a public paid marketplace. Existing foundations include pure `app.plugins` contracts, the internal `plugin_marketplace` store/API, permission grants, package audit/signing/scanning metadata, private catalogs, lifecycle/rollback/quarantine APIs, sandbox policy boundaries, and production trust checks.
 - Backend view endpoint groups have mostly been split into focused modules.
 - `core_ui/views/_views_all.py`, `servers/views/_views_all.py`, and `studio/views/_views_all.py` remain compatibility shims.
 - `studio/pipeline_executor.py` remains the production pipeline executor.
@@ -53,6 +54,10 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Current Architecture Plans
 
+- [ADR-0001: primary runtime and toolchain](adr/0001-primary-runtime-and-toolchain.md) freezes the supported Python/Django/Node/npm contract and the boundary between WSL release evidence and native Windows compatibility.
+- [CI and Git governance](CI_GOVERNANCE.md) defines independent product gates, the no-regression rollout, `test -> main` promotion and safe branch-protection bootstrap.
+- [Release documentation](../releases/README.md) contains the v0.1 support matrix, frozen capability scope and evidence-driven release checklist.
+- [WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md) is the current stabilization and endpoint-management roadmap: first close tests, CI, architecture, security, docs, brand, and release readiness; only then add a separate agent-managed device plane.
 - `STUDIO_OPS_AUTOMATION_PLATFORM_PLAN.md` describes the target shape for turning Studio into a broad admin/DevOps automation platform using pipeline nodes, MCP connectors, skills, policy, approvals, and domain capability packs.
 - `PLUGIN_PLATFORM_ARCHITECTURE_PLAN.md` describes the next plugin-platform layer: manifests, registries, hooks, connector contracts, dashboard widgets, plugin pages, Studio nodes, agent tools, terminal actions, permissions, and rollout phases.
 - `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md` describes the roadmap for the self-hosted plugin extension system: package format, local install store, permissions, private catalogs, safe code gates, health, rollback, and quarantine.

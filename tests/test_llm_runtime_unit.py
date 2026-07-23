@@ -10,7 +10,7 @@ from core_ui.audit import audit_context
 
 
 def test_is_timeout_error_detects_timeout_variants():
-    assert _is_timeout_error(asyncio.TimeoutError())
+    assert _is_timeout_error(TimeoutError())
     assert _is_timeout_error(TimeoutError("timed out"))
     assert not _is_timeout_error(RuntimeError("boom"))
 
@@ -102,7 +102,7 @@ async def test_gemini_stream_chat_returns_timeout_message(monkeypatch):
     async def _raise_timeout(awaitable, timeout=None):
         if asyncio.iscoroutine(awaitable):
             awaitable.close()
-        raise asyncio.TimeoutError
+        raise TimeoutError
 
     monkeypatch.setattr("app.core.llm_gemini.asyncio.wait_for", _raise_timeout)
 
@@ -173,10 +173,14 @@ async def test_ollama_stream_chat_falls_back_to_next_base_url(monkeypatch):
     monkeypatch.setattr(model_manager.config, "ollama_base_url", "http://127.0.0.1:11434")
     monkeypatch.setattr(model_manager.config, "ollama_runtime_mode", "auto")
     monkeypatch.setattr(model_manager, "get_chat_model", lambda _provider: "glm-4.7-flash:latest")
-    monkeypatch.setattr(model_manager, "_get_ollama_base_urls", lambda: [
-        "http://127.0.0.1:11434",
-        "http://10.255.255.254:11434",
-    ])
+    monkeypatch.setattr(
+        model_manager,
+        "_get_ollama_base_urls",
+        lambda: [
+            "http://127.0.0.1:11434",
+            "http://10.255.255.254:11434",
+        ],
+    )
     monkeypatch.setattr("app.core.llm._log_llm_usage", lambda *args, **kwargs: None)
 
     calls = []
@@ -244,10 +248,14 @@ async def test_fetch_available_ollama_models_uses_wsl_fallback(monkeypatch):
     manager = ModelManager()
     manager.config.ollama_enabled = True
     manager.config.ollama_base_url = "http://127.0.0.1:11434"
-    monkeypatch.setattr(manager, "_get_ollama_base_urls", lambda: [
-        "http://127.0.0.1:11434",
-        "http://10.255.255.254:11434",
-    ])
+    monkeypatch.setattr(
+        manager,
+        "_get_ollama_base_urls",
+        lambda: [
+            "http://127.0.0.1:11434",
+            "http://10.255.255.254:11434",
+        ],
+    )
 
     class FakeResponse:
         def __init__(self, status_code, payload=None, text=""):

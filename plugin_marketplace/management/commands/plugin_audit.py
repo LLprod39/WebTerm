@@ -72,8 +72,9 @@ class Command(BaseCommand):
                     "installation": installation_impact(installation) if installation else None,
                     "package": _package_payload(package) if package else None,
                     "recent_events": list(
-                        PluginInstallEvent.objects.filter(plugin_id=target)
-                        .values("event_type", "status", "message", "metadata", "created_at")[:20]
+                        PluginInstallEvent.objects.filter(plugin_id=target).values(
+                            "event_type", "status", "message", "metadata", "created_at"
+                        )[:20]
                     ),
                 }
         except PluginPackageValidationError as exc:

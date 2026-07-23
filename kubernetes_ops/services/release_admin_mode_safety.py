@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import timedelta
 from typing import Any
 
@@ -255,7 +255,19 @@ def _unapproved_write_session(*, user, cluster: K8sCluster) -> K8sAdminSession:
         mode=K8sAdminSession.MODE_WRITE,
         status=K8sAdminSession.STATUS_ACTIVE,
         risk_tier=K8sAdminSession.RISK_HIGH,
-        allowed_verbs=["get", "list", "watch", "logs", "yaml", "dry_run_apply", "apply", "patch", "scale", "restart", "delete"],
+        allowed_verbs=[
+            "get",
+            "list",
+            "watch",
+            "logs",
+            "yaml",
+            "dry_run_apply",
+            "apply",
+            "patch",
+            "scale",
+            "restart",
+            "delete",
+        ],
         allowed_kinds=["Deployment", "Service", "Ingress"],
         allowed_namespaces=["release-safety"],
         reason="release Admin Mode safety unapproved write session",
@@ -322,9 +334,7 @@ def _temporary_settings(**overrides):
     finally:
         for key in overrides:
             if key in missing:
-                try:
+                with suppress(AttributeError):
                     delattr(settings, key)
-                except AttributeError:
-                    pass
             else:
                 setattr(settings, key, previous[key])

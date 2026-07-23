@@ -124,7 +124,7 @@ export default function ChatPage() {
         lines: prev.serverId === opts.serverId ? prev.lines : [],
       }));
     },
-    [lang],
+    [],
   );
 
   const pushSessionLine = useCallback((line: Omit<OperatorSessionLine, "id" | "at"> & { id?: string }) => {
@@ -218,9 +218,10 @@ export default function ChatPage() {
     staleTime: 10_000,
   });
 
-  const chats = chatsQuery.data?.chats || [];
+  const chats = useMemo(() => chatsQuery.data?.chats || [], [chatsQuery.data?.chats]);
   const activeChat = activeChatQuery.data;
-  const messages = activeChat?.messages || [];
+  const messages = useMemo(() => activeChat?.messages || [], [activeChat?.messages]);
+  const activeTurn = activeChat?.active_turn;
 
   // Hydrate pins from session.pinned_context
   useEffect(() => {
@@ -469,21 +470,30 @@ export default function ChatPage() {
       refreshChat();
     },
   });
+  const {
+    busy: operatorBusy,
+    hydrateFromSnapshot: hydrateOperatorSnapshot,
+    ready: operatorReady,
+    resetStream: resetOperatorStream,
+    sendMessage: sendOperatorMessage,
+    stopTurn: stopOperatorTurn,
+    streamText: operatorStreamText,
+  } = operatorWs;
 
   // Resume mid-turn after navigation: hydrate from REST active_turn
   useEffect(() => {
-    const turn = activeChat?.active_turn;
+    const turn = activeTurn;
     if (!turn) return;
     if (turn.busy || turn.status === "running" || turn.status === "resuming" || turn.status === "awaiting_async") {
       const text = String(turn.assistant_text || "");
       // Prefer longer server text (poll progress) over a short local stream buffer
-      if (!operatorWs.streamText || text.length >= operatorWs.streamText.length) {
-        operatorWs.hydrateFromSnapshot(text, {
+      if (!operatorStreamText || text.length >= operatorStreamText.length) {
+        hydrateOperatorSnapshot(text, {
           busy: true,
           iteration: turn.iteration,
         });
       } else {
-        operatorWs.hydrateFromSnapshot(operatorWs.streamText, {
+        hydrateOperatorSnapshot(operatorStreamText, {
           busy: true,
           iteration: turn.iteration,
         });
@@ -491,11 +501,10 @@ export default function ChatPage() {
       setStreamHold(true);
     }
   }, [
-    activeChatId,
-    activeChat?.active_turn?.turn_id,
-    activeChat?.active_turn?.status,
-    activeChat?.active_turn?.assistant_text,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+    activeTurn,
+    hydrateOperatorSnapshot,
+    operatorStreamText,
+  ]);
 
   // While turn runs (even after leaving/rejoining), poll history for progressive text
   useEffect(() => {
@@ -592,11 +601,11 @@ export default function ChatPage() {
       return;
     }
     // Safety: if operator is already working, the send landed — drop optimistic UI
-    if (operatorWs.busy) {
+    if (operatorBusy) {
       const anyMatch = messages.some((m) => m.role === "user" && matchesPending(m.content || ""));
       if (anyMatch) setPendingUserText(null);
     }
-  }, [messages, pendingUserText, operatorWs.busy]);
+  }, [messages, pendingUserText, operatorBusy]);
 
   // Drop held stream once the assistant message with inventory (or any new turn) is in the list.
   useEffect(() => {
@@ -607,24 +616,24 @@ export default function ChatPage() {
     const hasActions = Array.isArray(last?.metadata?.actions) && last.metadata.actions.length > 0;
     const assistantSettled =
       last?.role === "assistant" && Boolean(last.content || hasInventory || hasActions);
-    if (assistantSettled || !operatorWs.busy) {
+    if (assistantSettled || !operatorBusy) {
       const t = window.setTimeout(() => {
         setStreamHold(false);
-        operatorWs.resetStream();
+        resetOperatorStream();
       }, assistantSettled ? 180 : 700);
       return () => window.clearTimeout(t);
     }
-  }, [streamHold, messages, operatorWs.busy, operatorWs.resetStream]);
+  }, [streamHold, messages, operatorBusy, resetOperatorStream]);
 
   // After creating a new chat for streaming, send once WS is ready
   useEffect(() => {
-    if (!pendingSend || !activeChatId || !operatorWs.ready) return;
+    if (!pendingSend || !activeChatId || !operatorReady) return;
     const text = pendingSend;
-    if (operatorWs.sendMessage(text)) {
+    if (sendOperatorMessage(text)) {
       setDraft("");
       setPendingSend(null);
     }
-  }, [pendingSend, activeChatId, operatorWs.ready, operatorWs.sendMessage]);
+  }, [pendingSend, activeChatId, operatorReady, sendOperatorMessage]);
 
   const sendMutation = useMutation({
     mutationFn: (message: string) => (
@@ -716,10 +725,10 @@ export default function ChatPage() {
   }, [activeChat?.total_usage]);
 
   const turnOpen =
-    Boolean(activeChat?.active_turn?.busy) ||
-    activeChat?.active_turn?.status === "running" ||
-    activeChat?.active_turn?.status === "resuming" ||
-    activeChat?.active_turn?.status === "awaiting_async";
+    Boolean(activeTurn?.busy) ||
+    activeTurn?.status === "running" ||
+    activeTurn?.status === "resuming" ||
+    activeTurn?.status === "awaiting_async";
   const isBusy =
     sendMutation.isPending ||
     operatorWs.busy ||
@@ -797,7 +806,7 @@ export default function ChatPage() {
   // the live stream. Never hide a settled bubble (content / actions / tables) —
   // that was wiping the whole answer on confirm and looking like "messages gone".
   const displayMessages = useMemo(() => {
-    const turn = activeChat?.active_turn;
+    const turn = activeTurn;
     const liveAssistantId = turn?.assistant_message_id;
     if (!liveAssistantId) return messages;
     if (!(isBusy || streamHold || showLiveStream)) return messages;
@@ -823,8 +832,7 @@ export default function ChatPage() {
     return messages.filter((m) => m.id !== liveAssistantId);
   }, [
     messages,
-    activeChat?.active_turn?.assistant_message_id,
-    activeChat?.active_turn?.status,
+    activeTurn,
     isBusy,
     streamHold,
     showLiveStream,
@@ -919,8 +927,8 @@ export default function ChatPage() {
   const handleStop = useCallback(() => {
     setPendingSend(null);
     setPendingUserText(null);
-    if (operatorWs.ready) operatorWs.stopTurn();
-  }, [operatorWs.ready, operatorWs.stopTurn]);
+    if (operatorReady) stopOperatorTurn();
+  }, [operatorReady, stopOperatorTurn]);
 
   /** Re-send the latest user message (retry after error / weak answer). */
   const handleRetry = useCallback(() => {

@@ -48,9 +48,7 @@ class WatcherService:
             }
 
         latest_health_rows = list(
-            ServerHealthCheck.objects.filter(server_id__in=server_ids)
-            .values("server_id")
-            .annotate(last_id=Max("id"))
+            ServerHealthCheck.objects.filter(server_id__in=server_ids).values("server_id").annotate(last_id=Max("id"))
         )
         latest_health_ids = [row["last_id"] for row in latest_health_rows if row.get("last_id")]
         latest_health = {
@@ -58,10 +56,16 @@ class WatcherService:
             for item in ServerHealthCheck.objects.filter(id__in=latest_health_ids).select_related("server")
         }
         alerts_by_server: dict[int, list] = {}
-        for alert in ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False).select_related("server").order_by("-created_at")[:100]:
+        for alert in (
+            ServerAlert.objects.filter(server_id__in=server_ids, is_resolved=False)
+            .select_related("server")
+            .order_by("-created_at")[:100]
+        ):
             alerts_by_server.setdefault(alert.server_id, []).append(alert)
         recent_runs_by_server: dict[int, list] = {}
-        for run in AgentRun.objects.filter(server_id__in=server_ids).select_related("agent").order_by("-started_at")[:100]:
+        for run in (
+            AgentRun.objects.filter(server_id__in=server_ids).select_related("agent").order_by("-started_at")[:100]
+        ):
             recent_runs_by_server.setdefault(run.server_id, []).append(run)
         predictions_by_server: dict[int, list] = {}
         for prediction in ServerPrediction.objects.filter(
@@ -99,7 +103,9 @@ class WatcherService:
                     _promote("critical")
                     reasons.append(f"Health status: {health.status}")
                     role = "incident_commander"
-                    objective = f"Расследовать критическое состояние сервера {server.name} и подготовить remediation plan"
+                    objective = (
+                        f"Расследовать критическое состояние сервера {server.name} и подготовить remediation plan"
+                    )
                 elif health.status == ServerHealthCheck.STATUS_WARNING:
                     _promote("warning")
                     reasons.append("Health status: warning")
@@ -118,7 +124,11 @@ class WatcherService:
                 else:
                     _promote("warning")
 
-                if alert.alert_type in {ServerAlert.TYPE_SERVICE, ServerAlert.TYPE_LOG_ERROR, ServerAlert.TYPE_UNREACHABLE}:
+                if alert.alert_type in {
+                    ServerAlert.TYPE_SERVICE,
+                    ServerAlert.TYPE_LOG_ERROR,
+                    ServerAlert.TYPE_UNREACHABLE,
+                }:
                     role = "incident_commander"
                     objective = f"Разобрать инцидент на сервере {server.name}: {alert.title}"
                 elif alert.alert_type in {ServerAlert.TYPE_CPU, ServerAlert.TYPE_MEMORY, ServerAlert.TYPE_DISK}:
@@ -134,11 +144,7 @@ class WatcherService:
                         objective = f"Понять, почему недавний агентный run на сервере {server.name} завершился ошибкой"
 
             for prediction in predictions[:3]:
-                eta_text = (
-                    f" через ~{round(prediction.eta_days, 1)} дн"
-                    if prediction.eta_days is not None
-                    else ""
-                )
+                eta_text = f" через ~{round(prediction.eta_days, 1)} дн" if prediction.eta_days is not None else ""
                 reasons.append(f"[{prediction.severity}] Прогноз: {prediction.kind} {prediction.target}{eta_text}")
                 _promote("critical" if prediction.severity == "critical" else "warning")
                 if prediction.kind in {"disk_full", "inode_full"}:
@@ -227,7 +233,11 @@ class WatcherService:
             existing.objective = draft["objective"]
             existing.reasons = draft["reasons"]
             existing.memory_excerpt = draft["memory_excerpt"]
-            existing.metadata = {**(existing.metadata or {}), "source": "watcher_scan", "server_name": draft["server_name"]}
+            existing.metadata = {
+                **(existing.metadata or {}),
+                "source": "watcher_scan",
+                "server_name": draft["server_name"],
+            }
             existing.last_seen_at = now
             if existing.status == ServerWatcherDraft.STATUS_RESOLVED:
                 existing.status = ServerWatcherDraft.STATUS_OPEN

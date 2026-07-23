@@ -19,9 +19,7 @@ from core_ui.services.operator_rate_limit import check_turn_rate_limit
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
-        UserAppPermission.objects.update_or_create(
-            user=user, feature=feature, defaults={"allowed": True}
-        )
+        UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
 
 
 @pytest.mark.django_db

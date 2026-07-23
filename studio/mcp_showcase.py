@@ -330,22 +330,76 @@ def build_showcase_edges() -> list[dict]:
         {"id": "e7", "source": "ai_brief", "target": "compose_ready", "sourceHandle": "success", "animated": True},
         {"id": "e8", "source": "ai_brief", "target": "compose_ready", "sourceHandle": "error", "animated": True},
         {"id": "e9", "source": "compose_ready", "target": "compose_plan", "sourceHandle": "out", "animated": True},
-        {"id": "e10", "source": "compose_plan", "target": "compose_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e11", "source": "compose_plan", "target": "artifact_write_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e12", "source": "compose_manifest", "target": "artifact_write_ready", "sourceHandle": "success", "animated": True},
-        {"id": "e13", "source": "artifact_write_ready", "target": "approve_artifact_write", "sourceHandle": "out", "animated": True},
-        {"id": "e14", "source": "approve_artifact_write", "target": "write_plan", "sourceHandle": "approved", "animated": True},
-        {"id": "e15", "source": "approve_artifact_write", "target": "write_manifest", "sourceHandle": "approved", "animated": True},
+        {
+            "id": "e10",
+            "source": "compose_plan",
+            "target": "compose_manifest",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "e11",
+            "source": "compose_plan",
+            "target": "artifact_write_ready",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "e12",
+            "source": "compose_manifest",
+            "target": "artifact_write_ready",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "e13",
+            "source": "artifact_write_ready",
+            "target": "approve_artifact_write",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e14",
+            "source": "approve_artifact_write",
+            "target": "write_plan",
+            "sourceHandle": "approved",
+            "animated": True,
+        },
+        {
+            "id": "e15",
+            "source": "approve_artifact_write",
+            "target": "write_manifest",
+            "sourceHandle": "approved",
+            "animated": True,
+        },
         {"id": "e16", "source": "write_plan", "target": "check_plan", "sourceHandle": "success", "animated": True},
         {"id": "e17", "source": "write_plan", "target": "preview_plan", "sourceHandle": "success", "animated": True},
-        {"id": "e18", "source": "write_manifest", "target": "check_manifest", "sourceHandle": "success", "animated": True},
-        {"id": "e19", "source": "write_manifest", "target": "preview_manifest", "sourceHandle": "success", "animated": True},
+        {
+            "id": "e18",
+            "source": "write_manifest",
+            "target": "check_manifest",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "e19",
+            "source": "write_manifest",
+            "target": "preview_manifest",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "e20", "source": "todo_flag", "target": "final_merge", "sourceHandle": "true", "animated": True},
         {"id": "e21", "source": "todo_flag", "target": "final_merge", "sourceHandle": "false", "animated": True},
         {"id": "e22", "source": "check_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
         {"id": "e23", "source": "preview_plan", "target": "final_merge", "sourceHandle": "success", "animated": True},
         {"id": "e24", "source": "check_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
-        {"id": "e25", "source": "preview_manifest", "target": "final_merge", "sourceHandle": "success", "animated": True},
+        {
+            "id": "e25",
+            "source": "preview_manifest",
+            "target": "final_merge",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "e26", "source": "final_merge", "target": "final_report", "sourceHandle": "out", "animated": True},
     ]
 
@@ -373,7 +427,9 @@ def ensure_showcase_pipeline(user, mcp_server: MCPServerPool) -> Pipeline:
 
 
 def create_showcase_run(pipeline: Pipeline, user) -> PipelineRun:
-    manual_trigger = pipeline.triggers.filter(trigger_type="manual", is_active=True).order_by("created_at", "id").first()
+    manual_trigger = (
+        pipeline.triggers.filter(trigger_type="manual", is_active=True).order_by("created_at", "id").first()
+    )
     entry_node_id = manual_trigger.node_id if manual_trigger else ""
     return create_pipeline_run(
         pipeline=pipeline,

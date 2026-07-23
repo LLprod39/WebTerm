@@ -130,7 +130,9 @@ def is_agent_due_by_schedule(agent: ServerAgent, now=None) -> bool:
     if not agent.is_enabled:
         return False
 
-    config = normalize_schedule_config(getattr(agent, "schedule_config", None), fallback_minutes=int(agent.schedule_minutes or 0))
+    config = normalize_schedule_config(
+        getattr(agent, "schedule_config", None), fallback_minutes=int(agent.schedule_minutes or 0)
+    )
     mode = config["mode"]
     if mode == "manual":
         return False
@@ -169,7 +171,9 @@ def is_agent_due_by_schedule(agent: ServerAgent, now=None) -> bool:
 
 def compute_next_due_by_schedule(agent: ServerAgent, now=None):
     current_time = now or timezone.now()
-    config = normalize_schedule_config(getattr(agent, "schedule_config", None), fallback_minutes=int(agent.schedule_minutes or 0))
+    config = normalize_schedule_config(
+        getattr(agent, "schedule_config", None), fallback_minutes=int(agent.schedule_minutes or 0)
+    )
     mode = config["mode"]
     if mode == "manual" or not agent.is_enabled:
         return None

@@ -73,7 +73,9 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
         )
         if state is None:
-            self.stdout.write(self.style.WARNING(f"Pipeline scheduler worker {worker_key!r} is already leased by another process"))
+            self.stdout.write(
+                self.style.WARNING(f"Pipeline scheduler worker {worker_key!r} is already leased by another process")
+            )
             return
 
         self.stdout.write("Starting pipeline scheduler...")
@@ -150,9 +152,7 @@ class Command(BaseCommand):
 
         limit_error = get_pipeline_run_limit_error(trigger.pipeline.owner)
         if limit_error:
-            self.stderr.write(
-                f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {limit_error['error']}"
-            )
+            self.stderr.write(f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {limit_error['error']}")
             return "skipped"
 
         validation_errors = validate_pipeline_definition(
@@ -172,9 +172,7 @@ class Command(BaseCommand):
             trigger.node_id,
         )
         if branch_errors:
-            self.stderr.write(
-                f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {'; '.join(branch_errors)}"
-            )
+            self.stderr.write(f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {'; '.join(branch_errors)}")
             return "skipped"
 
         fired_at = timezone.now()
@@ -190,9 +188,7 @@ class Command(BaseCommand):
             entry_node_id=trigger.node_id,
         )
         if context_errors:
-            self.stderr.write(
-                f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {'; '.join(context_errors)}"
-            )
+            self.stderr.write(f"Skipped trigger #{trigger.pk} ({trigger.pipeline.name}): {'; '.join(context_errors)}")
             return "skipped"
 
         try:

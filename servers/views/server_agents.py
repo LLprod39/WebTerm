@@ -161,7 +161,9 @@ def agent_create(request):
         requested_schedule_minutes = int(data.get("schedule_minutes", 0) or 0)
     except (TypeError, ValueError):
         requested_schedule_minutes = 0
-    schedule_config = normalize_schedule_config(data.get("schedule_config"), fallback_minutes=requested_schedule_minutes)
+    schedule_config = normalize_schedule_config(
+        data.get("schedule_config"), fallback_minutes=requested_schedule_minutes
+    )
     schedule = schedule_minutes_for_config(schedule_config, requested_schedule_minutes)
 
     tpl = get_template(agent_type)
@@ -190,7 +192,9 @@ def agent_create(request):
 
     try:
         raw_iterations = data.get("max_iterations", FULL_DEFAULT_MAX_ITERATIONS)
-        max_iterations = clamp_full_iterations(int(raw_iterations if raw_iterations not in (None, "") else FULL_DEFAULT_MAX_ITERATIONS))
+        max_iterations = clamp_full_iterations(
+            int(raw_iterations if raw_iterations not in (None, "") else FULL_DEFAULT_MAX_ITERATIONS)
+        )
     except (TypeError, ValueError):
         max_iterations = FULL_DEFAULT_MAX_ITERATIONS
     max_iterations = min(max_iterations, FULL_MAX_ITERATIONS_CAP)

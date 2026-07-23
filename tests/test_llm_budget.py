@@ -1,4 +1,5 @@
 """Tests for B2: per-user LLM token budget."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -46,12 +47,18 @@ class TestBudgetService:
         settings.LLM_DAILY_TOKEN_LIMIT_PER_USER = 1000
         user = django_user_model.objects.create_user("budget_u2", password="x")
         LLMUsageLog.objects.create(
-            provider="openai", model_name="gpt-x", user=user,
-            input_tokens=100, output_tokens=200,
+            provider="openai",
+            model_name="gpt-x",
+            user=user,
+            input_tokens=100,
+            output_tokens=200,
         )
         LLMUsageLog.objects.create(
-            provider="openai", model_name="gpt-x", user=user,
-            input_tokens=50, output_tokens=50,
+            provider="openai",
+            model_name="gpt-x",
+            user=user,
+            input_tokens=50,
+            output_tokens=50,
         )
         status = get_user_daily_budget_status(user.pk)
         assert status.used_tokens == 400  # 100+200+50+50
@@ -63,8 +70,11 @@ class TestBudgetService:
         settings.LLM_DAILY_TOKEN_LIMIT_PER_USER = 1000
         user = django_user_model.objects.create_user("budget_u3", password="x")
         LLMUsageLog.objects.create(
-            provider="openai", model_name="gpt-x", user=user,
-            input_tokens=600, output_tokens=500,
+            provider="openai",
+            model_name="gpt-x",
+            user=user,
+            input_tokens=600,
+            output_tokens=500,
         )
         status = get_user_daily_budget_status(user.pk)
         assert status.used_tokens == 1100
@@ -76,13 +86,14 @@ class TestBudgetService:
         settings.LLM_DAILY_TOKEN_LIMIT_PER_USER = 1000
         user = django_user_model.objects.create_user("budget_u4", password="x")
         old = LLMUsageLog.objects.create(
-            provider="openai", model_name="gpt-x", user=user,
-            input_tokens=500, output_tokens=500,
+            provider="openai",
+            model_name="gpt-x",
+            user=user,
+            input_tokens=500,
+            output_tokens=500,
         )
         # Backdate 25 hours
-        LLMUsageLog.objects.filter(pk=old.pk).update(
-            created_at=timezone.now() - timedelta(hours=25)
-        )
+        LLMUsageLog.objects.filter(pk=old.pk).update(created_at=timezone.now() - timedelta(hours=25))
         status = get_user_daily_budget_status(user.pk)
         assert status.used_tokens == 0
         assert status.remaining_tokens == 1000
@@ -94,8 +105,11 @@ class TestBudgetService:
         u1 = django_user_model.objects.create_user("budget_u5a", password="x")
         u2 = django_user_model.objects.create_user("budget_u5b", password="x")
         LLMUsageLog.objects.create(
-            provider="openai", model_name="gpt-x", user=u2,
-            input_tokens=900, output_tokens=900,
+            provider="openai",
+            model_name="gpt-x",
+            user=u2,
+            input_tokens=900,
+            output_tokens=900,
         )
         status = get_user_daily_budget_status(u1.pk)
         assert status.used_tokens == 0

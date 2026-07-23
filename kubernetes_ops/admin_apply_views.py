@@ -33,9 +33,20 @@ def _manifest_from_body(data: dict[str, Any]) -> tuple[dict[str, Any], JsonRespo
     try:
         parsed = yaml.safe_load(str(data.get("manifest_yaml") or "").strip())
     except yaml.YAMLError as exc:
-        return {}, JsonResponse({"success": False, "error": "Manifest YAML is invalid.", "code": "manifest_yaml_invalid", "payload": {"detail": str(exc)[:500]}}, status=400)
+        return {}, JsonResponse(
+            {
+                "success": False,
+                "error": "Manifest YAML is invalid.",
+                "code": "manifest_yaml_invalid",
+                "payload": {"detail": str(exc)[:500]},
+            },
+            status=400,
+        )
     if not isinstance(parsed, dict):
-        return {}, JsonResponse({"success": False, "error": "Manifest must be a Kubernetes object.", "code": "manifest_object_required"}, status=400)
+        return {}, JsonResponse(
+            {"success": False, "error": "Manifest must be a Kubernetes object.", "code": "manifest_object_required"},
+            status=400,
+        )
     return parsed, None
 
 

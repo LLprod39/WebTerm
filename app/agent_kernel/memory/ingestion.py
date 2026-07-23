@@ -28,6 +28,7 @@ Migration plan:
 
 Constants shared with ingestion:
 """
+
 from app.agent_kernel.memory.types import (  # noqa: F401
     AUTOMATION_CANDIDATE_PREFIX,
     CANONICAL_MEMORY_KEYS,

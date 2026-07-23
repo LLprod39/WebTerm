@@ -12,7 +12,9 @@ from servers.agent_tools import get_tools_description
 
 def build_system_prompt(engine) -> str:
     connected = engine.session.get_connected_info()
-    servers_desc = "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected) or "- Нет активных SSH подключений"
+    servers_desc = (
+        "\n".join(f"- {c['server_name']} (id: {c['server_id']})" for c in connected) or "- Нет активных SSH подключений"
+    )
     all_servers_desc = (
         "\n".join(f"- {s.name} (id: {s.id}, host: {s.host})" for s in engine.servers) or "- SSH серверы не выбраны"
     )
@@ -21,7 +23,9 @@ def build_system_prompt(engine) -> str:
     materials_prompt = build_agent_materials_prompt(engine.agent.input_artifacts)
     tools_desc = get_tools_description(engine.enabled_tools)
     mcp_tools_desc = describe_mcp_bindings(engine._mcp_runtime_provider, engine.mcp_tools)
-    skills_desc = engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
+    skills_desc = (
+        engine._skill_provider.build_skill_catalog_description(engine.skills) if engine._skill_provider else ""
+    )
     if mcp_tools_desc:
         tools_desc = f"{tools_desc}\n\n{mcp_tools_desc}" if tools_desc else mcp_tools_desc
 
@@ -55,7 +59,9 @@ def build_system_prompt(engine) -> str:
     if "read_console" in engine.enabled_tools:
         tool_rules.append("- Используй read_console для проверки текущего состояния терминала, если не уверен")
     if "ask_user" in engine.enabled_tools:
-        tool_rules.append("- Используй ask_user только когда действительно нужен ввод человека для критического решения")
+        tool_rules.append(
+            "- Используй ask_user только когда действительно нужен ввод человека для критического решения"
+        )
     if "report" in engine.enabled_tools:
         tool_rules.append("- Используй report для отправки промежуточного отчёта пользователю при длительных задачах")
     if any(name in engine.enabled_tools for name in ("list_materials", "read_material", "run_script_material")):
@@ -184,10 +190,10 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
 
 Данные для отчёта:
 - Агент: {engine.agent.name}
-- Цель: {engine.agent.goal or engine.agent.ai_prompt or 'Не указана'}
+- Цель: {engine.agent.goal or engine.agent.ai_prompt or "Не указана"}
 - Итераций выполнено: {len(iterations)}
 - Шаги агента: {steps_summary}
-- Итоговый ответ агента: {history[-1]['content'][:3000] if history else 'Нет данных'}
+- Итоговый ответ агента: {history[-1]["content"][:3000] if history else "Нет данных"}
 
 Сгенерируй отчёт СТРОГО в следующем формате — не добавляй лишних секций, не меняй структуру.
 Если корневая причина не подтверждена фактами, прямо напиши: "Корневая причина не подтверждена".

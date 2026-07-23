@@ -21,13 +21,6 @@ from app.core.llm_openai_compatible import (
     build_openai_request,
     stream_openai_compatible_response,
 )
-from app.core.llm_tools import (
-    ollama_model_supports_tools,
-    stream_anthropic_tools,
-    stream_json_tools_fallback,
-    stream_ollama_tools,
-    stream_openai_tools,
-)
 from app.core.llm_provider_keys import apply_managed_llm_keys, load_managed_llm_keys
 from app.core.llm_provider_resolution import RuntimeProviderKeys, resolve_stream_provider
 from app.core.llm_runtime import (
@@ -44,6 +37,13 @@ from app.core.llm_runtime import (
 )
 from app.core.llm_runtime import (
     with_retry as with_retry,
+)
+from app.core.llm_tools import (
+    ollama_model_supports_tools,
+    stream_anthropic_tools,
+    stream_json_tools_fallback,
+    stream_ollama_tools,
+    stream_openai_tools,
 )
 from app.core.llm_usage import log_llm_usage as _log_llm_usage
 from app.core.model_config import model_manager
@@ -89,7 +89,6 @@ class LLMProvider:
         self.grok_api_key = os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY")
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")
-        self.fair_api_key = os.getenv("FAIR_HYPERION_API_KEY") or os.getenv("FAIR_API_KEY")
         self.ollama_api_key = os.getenv("OLLAMA_API_KEY")
 
         # Set keys in model manager
@@ -98,7 +97,6 @@ class LLMProvider:
             grok_key=self.grok_api_key,
             anthropic_key=self.anthropic_api_key,
             openai_key=self.openai_api_key,
-            fair_key=self.fair_api_key,
             ollama_key=self.ollama_api_key,
         )
 
@@ -121,10 +119,6 @@ class LLMProvider:
     @staticmethod
     def _get_ollama_runtime_mode() -> str:
         return model_manager._get_ollama_runtime_mode()
-
-    @staticmethod
-    def _get_fair_base_url() -> str:
-        return model_manager._get_fair_base_url()
 
     @staticmethod
     def _get_ollama_think_value() -> Any | None:
@@ -187,9 +181,6 @@ class LLMProvider:
         elif model == "openai":
             self.openai_api_key = key
             model_manager.set_api_keys(openai_key=key)
-        elif model == "fair":
-            self.fair_api_key = key
-            model_manager.set_api_keys(fair_key=key)
         elif model == "ollama":
             self.ollama_api_key = key
             model_manager.set_api_keys(ollama_key=key)
@@ -208,7 +199,7 @@ class LLMProvider:
 
         Args:
             prompt: The prompt to send (user message when system_prompt is given)
-            model: Provider name (auto/gemini/grok/openai/fair/claude/ollama). «auto» resolves via purpose.
+            model: Provider name (auto/gemini/grok/openai/claude/ollama). «auto» resolves via purpose.
             specific_model: Specific model version to use (overrides config)
             purpose: One of 'chat', 'agent', 'orchestrator' — used when model=='auto'
             system_prompt: Optional system-level instructions. When provided,
@@ -339,47 +330,6 @@ class LLMProvider:
                 timeout_seconds=float(_provider_timeout_seconds("claude")),
                 max_attempts=_retry_attempts(),
                 usage_logger=_log_llm_usage,
-            ):
-                yield chunk
-            return
-
-        elif model == "fair":
-            if not model_manager.config.fair_enabled:
-                yield "Error: FAIR.Hyperion API disabled. Enable in settings."
-                return
-
-            if not self.fair_api_key:
-                yield "Error: FAIR.Hyperion API Key not configured."
-                return
-
-            target_model = specific_model or model_manager.get_chat_model("fair")
-            base_url = self._get_fair_base_url()
-            request = build_chat_completions_request(
-                api_url=f"{base_url}/chat/completions",
-                target_model=target_model,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                json_mode=json_mode,
-                temperature=0.7,
-            )
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.fair_api_key}",
-            }
-            logger.info("FAIR.Hyperion: model={}, endpoint=chat, api_key=configured", target_model)
-
-            async for chunk in stream_openai_compatible_response(
-                provider="fair",
-                display_name="FAIR.Hyperion",
-                request=request,
-                headers=headers,
-                target_model=target_model,
-                prompt=prompt,
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds("fair")),
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-                log_metadata={"base_url": base_url},
             ):
                 yield chunk
             return
@@ -515,10 +465,7 @@ class LLMProvider:
         if messages:
             last = messages[-1]
             content = last.get("content")
-            if isinstance(content, str):
-                prompt_for_usage = content[:2000]
-            else:
-                prompt_for_usage = json_safe_preview(messages)[:2000]
+            prompt_for_usage = content[:2000] if isinstance(content, str) else json_safe_preview(messages)[:2000]
 
         if model == "claude":
             if not model_manager.config.claude_enabled:
@@ -542,7 +489,7 @@ class LLMProvider:
                 yield event
             return
 
-        if model in {"openai", "grok", "fair"}:
+        if model in {"openai", "grok"}:
             if model == "openai":
                 if not self.openai_api_key:
                     yield {"type": "error", "message": "OpenAI API Key not configured"}
@@ -551,7 +498,7 @@ class LLMProvider:
                 api_url = "https://api.openai.com/v1/chat/completions"
                 target_model = specific_model or model_manager.get_chat_model("openai")
                 provider = "openai"
-            elif model == "grok":
+            else:
                 if not self.grok_api_key:
                     yield {"type": "error", "message": "Grok API Key not configured"}
                     return
@@ -559,14 +506,6 @@ class LLMProvider:
                 api_url = "https://api.x.ai/v1/chat/completions"
                 target_model = specific_model or model_manager.get_chat_model("grok")
                 provider = "grok"
-            else:
-                if not self.fair_api_key:
-                    yield {"type": "error", "message": "FAIR API Key not configured"}
-                    return
-                api_key = self.fair_api_key
-                api_url = f"{self._get_fair_base_url()}/chat/completions"
-                target_model = specific_model or model_manager.get_chat_model("fair")
-                provider = "fair"
             async for event in stream_openai_tools(
                 api_url=api_url,
                 api_key=api_key,
@@ -590,9 +529,7 @@ class LLMProvider:
             request_targets = self._build_ollama_request_targets(target_model) if target_model else []
             if request_targets:
                 first = request_targets[0]
-                supports_tools = await ollama_model_supports_tools(
-                    first["base_url"], first["model"], first["headers"]
-                )
+                supports_tools = await ollama_model_supports_tools(first["base_url"], first["model"], first["headers"])
                 if supports_tools:
                     async for event in stream_ollama_tools(
                         request_targets=request_targets,

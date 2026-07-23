@@ -36,7 +36,11 @@ def build_kubernetes_release_backend_workstream(
     production_evidence_checklist: dict[str, Any],
     can_enable_sidebar: bool,
 ) -> dict[str, Any]:
-    core_proofs = completion_audit.get("core_backend_proofs") if isinstance(completion_audit.get("core_backend_proofs"), list) else []
+    core_proofs = (
+        completion_audit.get("core_backend_proofs")
+        if isinstance(completion_audit.get("core_backend_proofs"), list)
+        else []
+    )
     completed_proofs = sum(1 for item in core_proofs if isinstance(item, dict) and item.get("complete"))
     runtime_missing = [str(item) for item in completion_audit.get("runtime_missing_required_checks") or []][:12]
     remaining_backend_gaps = _remaining_backend_gaps(core_proofs, runtime_missing)
@@ -45,7 +49,9 @@ def build_kubernetes_release_backend_workstream(
         blocker_groups=blocker_groups,
         production_evidence_checklist=production_evidence_checklist,
     )
-    backend_complete = bool(completion_audit.get("core_backend_complete")) and bool(completion_audit.get("runtime_readiness_complete"))
+    backend_complete = bool(completion_audit.get("core_backend_complete")) and bool(
+        completion_audit.get("runtime_readiness_complete")
+    )
     status = _status(can_enable_sidebar=can_enable_sidebar, backend_complete=backend_complete)
     return {
         "status": status,
@@ -116,14 +122,36 @@ def _external_production_blockers(
         blockers.append({"id": str(item), "type": "production_scope_readiness", "status": "missing"})
     for item in completion_audit.get("production_evidence_checks") or []:
         if isinstance(item, dict) and not item.get("complete"):
-            blockers.append({"id": str(item.get("id") or ""), "type": "production_evidence", "status": str(item.get("detail") or "blocked")})
-    gap_summary = production_evidence_checklist.get("gap_summary") if isinstance(production_evidence_checklist.get("gap_summary"), dict) else {}
+            blockers.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "type": "production_evidence",
+                    "status": str(item.get("detail") or "blocked"),
+                }
+            )
+    gap_summary = (
+        production_evidence_checklist.get("gap_summary")
+        if isinstance(production_evidence_checklist.get("gap_summary"), dict)
+        else {}
+    )
     next_gap = str(gap_summary.get("next_gap_id") or "")
     if next_gap and next_gap != "ready":
-        blockers.append({"id": next_gap, "type": "production_evidence_checklist", "status": str(production_evidence_checklist.get("status") or "blocked")})
+        blockers.append(
+            {
+                "id": next_gap,
+                "type": "production_evidence_checklist",
+                "status": str(production_evidence_checklist.get("status") or "blocked"),
+            }
+        )
     for group in blocker_groups:
         if group.get("id") in {"production_scope", "release_artifact", "release_evidence"}:
-            blockers.append({"id": str(group.get("id") or ""), "type": "blocker_group", "status": str(group.get("status") or "blocked")})
+            blockers.append(
+                {
+                    "id": str(group.get("id") or ""),
+                    "type": "blocker_group",
+                    "status": str(group.get("status") or "blocked"),
+                }
+            )
     return _unique_blockers(blockers)
 
 
@@ -173,11 +201,19 @@ def _external_blocker_category(blocker: dict[str, str]) -> str:
         return "production_scope"
     if blocker_id in {"required_references", "set_core_evidence_refs", "set_external_bundle_refs"}:
         return "production_refs"
-    if blocker_id in {"refresh_external_evidence_bundle", "replace_local_evidence", "external_evidence_bundle", "release_evidence"}:
+    if blocker_id in {
+        "refresh_external_evidence_bundle",
+        "replace_local_evidence",
+        "external_evidence_bundle",
+        "release_evidence",
+    }:
         return "external_bundle"
     if blocker_id == "release_artifact":
         return "release_artifact"
-    if blocker_id in {"sidebar_release_scope", "release_evidence_artifact"} or blocker_type == "production_scope_readiness":
+    if (
+        blocker_id in {"sidebar_release_scope", "release_evidence_artifact"}
+        or blocker_type == "production_scope_readiness"
+    ):
         return "readiness_gate"
     if blocker_type == "production_evidence_checklist":
         return "external_bundle"
@@ -229,7 +265,11 @@ def _next_step(
         return {"id": "close_backend_gaps", "type": "backend", "gap_count": len(remaining_backend_gaps)}
     if status == "ready_for_sidebar":
         return {"id": "none", "type": "complete", "gap_count": 0}
-    gap_summary = production_evidence_checklist.get("gap_summary") if isinstance(production_evidence_checklist.get("gap_summary"), dict) else {}
+    gap_summary = (
+        production_evidence_checklist.get("gap_summary")
+        if isinstance(production_evidence_checklist.get("gap_summary"), dict)
+        else {}
+    )
     return {
         "id": str(gap_summary.get("next_gap_id") or "collect_production_evidence"),
         "type": "production_evidence",

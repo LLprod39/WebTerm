@@ -15,13 +15,19 @@ SAFE_AUTO_CREATE_PROFILES = {"server_only", "custom", "reset_defaults"}
 
 
 def build_kubernetes_identity_runtime_report(*, use_model_config: bool = True) -> dict[str, Any]:
-    target_environment = str(getattr(settings, "KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local") or "local").strip().lower()
+    target_environment = (
+        str(getattr(settings, "KUBERNETES_OPS_RELEASE_ENVIRONMENT", "local") or "local").strip().lower()
+    )
     domain_auth = _domain_auth_config(use_model_config=use_model_config)
     ldap = _ldap_config()
     keycloak = _keycloak_config()
     gateway = _webterm_login_gateway(domain_auth=domain_auth, ldap=ldap)
     enforced = target_environment in PRODUCTION_ENVIRONMENTS
-    errors = _production_identity_errors(domain_auth=domain_auth, ldap=ldap, keycloak=keycloak, gateway=gateway) if enforced else []
+    errors = (
+        _production_identity_errors(domain_auth=domain_auth, ldap=ldap, keycloak=keycloak, gateway=gateway)
+        if enforced
+        else []
+    )
     status = "ready" if not errors else "missing"
     gateway["status"] = status
     gateway["production_enforced"] = enforced
@@ -66,13 +72,32 @@ def kubernetes_identity_runtime_check() -> dict[str, Any]:
 
 
 def _domain_auth_config(*, use_model_config: bool) -> dict[str, Any]:
-    enabled = bool(_model_config_value("domain_auth_enabled", getattr(settings, "DOMAIN_AUTH_ENABLED", False), use_model_config))
-    header = str(_model_config_value("domain_auth_header", getattr(settings, "DOMAIN_AUTH_HEADER", "REMOTE_USER"), use_model_config) or "").strip()
-    auto_create = bool(_model_config_value("domain_auth_auto_create", getattr(settings, "DOMAIN_AUTH_AUTO_CREATE", True), use_model_config))
-    default_profile = str(
-        _model_config_value("domain_auth_default_profile", getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only"), use_model_config)
-        or "server_only"
-    ).strip().lower()
+    enabled = bool(
+        _model_config_value("domain_auth_enabled", getattr(settings, "DOMAIN_AUTH_ENABLED", False), use_model_config)
+    )
+    header = str(
+        _model_config_value(
+            "domain_auth_header", getattr(settings, "DOMAIN_AUTH_HEADER", "REMOTE_USER"), use_model_config
+        )
+        or ""
+    ).strip()
+    auto_create = bool(
+        _model_config_value(
+            "domain_auth_auto_create", getattr(settings, "DOMAIN_AUTH_AUTO_CREATE", True), use_model_config
+        )
+    )
+    default_profile = (
+        str(
+            _model_config_value(
+                "domain_auth_default_profile",
+                getattr(settings, "DOMAIN_AUTH_DEFAULT_PROFILE", "server_only"),
+                use_model_config,
+            )
+            or "server_only"
+        )
+        .strip()
+        .lower()
+    )
     return {
         "enabled": enabled,
         "header": header,

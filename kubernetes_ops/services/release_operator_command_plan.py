@@ -19,7 +19,9 @@ def build_kubernetes_handoff_operator_command_plan(
 
 
 def build_kubernetes_handoff_production_checklist(release_scope: dict[str, Any]) -> dict[str, Any]:
-    production_target = str(release_scope.get("target_environment") or "") == "production" or release_scope.get("status") == "ready"
+    production_target = (
+        str(release_scope.get("target_environment") or "") == "production" or release_scope.get("status") == "ready"
+    )
     missing_refs = [item for item in release_scope.get("missing_required_references") or [] if isinstance(item, dict)]
     core_references = [
         {
@@ -33,13 +35,37 @@ def build_kubernetes_handoff_production_checklist(release_scope: dict[str, Any])
     ]
     local_indicator_count = int(release_scope.get("local_indicator_count") or 0)
     if not production_target:
-        status, next_gap, commands, count, external_bundle_status = "not_required", "select_production_environment", [], 1, "not_required"
+        status, next_gap, commands, count, external_bundle_status = (
+            "not_required",
+            "select_production_environment",
+            [],
+            1,
+            "not_required",
+        )
     elif missing_refs:
-        status, next_gap, commands, count, external_bundle_status = "missing_core_refs", "set_core_evidence_refs", [], len(missing_refs), "blocked"
+        status, next_gap, commands, count, external_bundle_status = (
+            "missing_core_refs",
+            "set_core_evidence_refs",
+            [],
+            len(missing_refs),
+            "blocked",
+        )
     elif local_indicator_count:
-        status, next_gap, commands, count, external_bundle_status = "blocked", "replace_local_evidence", ["external_evidence_bundle"], local_indicator_count, "blocked"
+        status, next_gap, commands, count, external_bundle_status = (
+            "blocked",
+            "replace_local_evidence",
+            ["external_evidence_bundle"],
+            local_indicator_count,
+            "blocked",
+        )
     else:
-        status, next_gap, commands, count, external_bundle_status = "ready", "ready", ["release_evidence", "release_handoff"], 0, "ready"
+        status, next_gap, commands, count, external_bundle_status = (
+            "ready",
+            "ready",
+            ["release_evidence", "release_handoff"],
+            0,
+            "ready",
+        )
     return {
         "status": status,
         "production_target": production_target,

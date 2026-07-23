@@ -13,6 +13,7 @@ Lifecycle:
 This is the Service-Locator pattern used specifically to break the
   servers → studio  import dependency at startup time.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any

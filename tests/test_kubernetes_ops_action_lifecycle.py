@@ -38,7 +38,9 @@ class KubernetesOpsActionLifecycleTests(TestCase):
             desired=2,
         )
 
-    def _action_request(self, *, user: User, status: str = K8sActionRequest.STATUS_PENDING_APPROVAL, **overrides) -> K8sActionRequest:
+    def _action_request(
+        self, *, user: User, status: str = K8sActionRequest.STATUS_PENDING_APPROVAL, **overrides
+    ) -> K8sActionRequest:
         defaults = {
             "requested_by": user,
             "username_snapshot": user.username,
@@ -163,7 +165,11 @@ class KubernetesOpsActionLifecycleTests(TestCase):
             user=staff,
             status=K8sActionRequest.STATUS_VERIFIED_EXTERNAL,
             execution_policy={"native_execution_enabled": False, "external_verification_recorded": True},
-            report={"status": K8sActionRequest.STATUS_VERIFIED_EXTERNAL, "verified": True, "summary": "already verified"},
+            report={
+                "status": K8sActionRequest.STATUS_VERIFIED_EXTERNAL,
+                "verified": True,
+                "summary": "already verified",
+            },
         )
 
         response = self.client.post(
@@ -358,7 +364,9 @@ class KubernetesOpsActionLifecycleTests(TestCase):
         )
         verify_response = self.client.post(
             reverse("api_kubernetes_action_verify_external", kwargs={"request_id": request_id}),
-            data=json.dumps({"outcome": "succeeded", "summary": "External action completed.", "checks": ["pods ready"]}),
+            data=json.dumps(
+                {"outcome": "succeeded", "summary": "External action completed.", "checks": ["pods ready"]}
+            ),
             content_type="application/json",
         )
         staff_report = self.client.get(reverse("api_kubernetes_action_report", kwargs={"request_id": request_id}))
@@ -417,7 +425,9 @@ class KubernetesOpsActionLifecycleTests(TestCase):
             },
         )
 
-        response = self.client.get(reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id}))
+        response = self.client.get(
+            reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

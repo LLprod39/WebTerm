@@ -79,7 +79,13 @@ def _normalise_skill_metadata_update(skill, data: dict) -> tuple[dict | None, st
             metadata.pop(key, None)
         return None
 
-    for key, required in (("name", True), ("description", True), ("service", False), ("category", False), ("ui_hint", False)):
+    for key, required in (
+        ("name", True),
+        ("description", True),
+        ("service", False),
+        ("category", False),
+        ("ui_hint", False),
+    ):
         error = set_text(key, required=required)
         if error:
             return None, error
@@ -117,7 +123,9 @@ def _normalise_skill_metadata_update(skill, data: dict) -> tuple[dict | None, st
         return None, "description is required"
     metadata["name"] = name
     metadata["description"] = description
-    metadata["safety_level"] = str(metadata.get("safety_level") or skill.safety_level or "standard").strip() or "standard"
+    metadata["safety_level"] = (
+        str(metadata.get("safety_level") or skill.safety_level or "standard").strip() or "standard"
+    )
     return metadata, None
 
 
@@ -267,8 +275,12 @@ def api_skill_scaffold(request):
             or "standard",
             ui_hint=str(data.get("ui_hint") or defaults.get("ui_hint") or "").strip(),
             tags=_normalise_string_list(data.get("tags") or defaults.get("tags")),
-            guardrail_summary=_normalise_string_list(data.get("guardrail_summary") or defaults.get("guardrail_summary")),
-            recommended_tools=_normalise_string_list(data.get("recommended_tools") or defaults.get("recommended_tools")),
+            guardrail_summary=_normalise_string_list(
+                data.get("guardrail_summary") or defaults.get("guardrail_summary")
+            ),
+            recommended_tools=_normalise_string_list(
+                data.get("recommended_tools") or defaults.get("recommended_tools")
+            ),
             runtime_policy=runtime_policy,
             with_scripts=bool(data.get("with_scripts")),
             with_references=bool(data.get("with_references")),
@@ -336,9 +348,7 @@ def api_skill_validate(request):
         all_skills = list_skills()
         access_map = _skill_access_map([skill.slug for skill in all_skills])
         visible_slugs = [
-            skill.slug
-            for skill in all_skills
-            if _can_read_skill(request.user, access_map.get(skill.slug.lower()))
+            skill.slug for skill in all_skills if _can_read_skill(request.user, access_map.get(skill.slug.lower()))
         ]
         results = validate_skills(visible_slugs) if visible_slugs else []
 

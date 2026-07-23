@@ -397,7 +397,7 @@ class UserActivityLog(models.Model):
 class LLMUsageLog(models.Model):
     """Tracks LLM API calls for monitoring and cost estimation."""
 
-    provider = models.CharField(max_length=20)  # gemini, grok, openai, fair, claude, ollama
+    provider = models.CharField(max_length=20)  # gemini, grok, openai, claude, ollama
     model_name = models.CharField(max_length=100)
     user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     input_tokens = models.IntegerField(default=0)

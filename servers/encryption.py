@@ -2,6 +2,7 @@
 Encryption utilities for server credential storage.
 Moved from passwords/encryption.py — passwords/ module is being retired.
 """
+
 import base64
 import os
 

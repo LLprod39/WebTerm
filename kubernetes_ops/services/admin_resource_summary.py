@@ -70,7 +70,9 @@ def _replicas(status: dict[str, Any], spec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _container_summary(spec: dict[str, Any], status: dict[str, Any], pod_statuses: list[dict[str, Any]]) -> dict[str, Any]:
+def _container_summary(
+    spec: dict[str, Any], status: dict[str, Any], pod_statuses: list[dict[str, Any]]
+) -> dict[str, Any]:
     containers = _containers_from_spec(spec)
     init_containers = _init_containers_from_spec(spec)
     return {
@@ -132,7 +134,11 @@ def _containers_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     template = spec.get("template") if isinstance(spec.get("template"), dict) else {}
     pod_spec = template.get("spec") if isinstance(template.get("spec"), dict) else {}
     template_containers = pod_spec.get("containers")
-    return [item for item in template_containers if isinstance(item, dict)] if isinstance(template_containers, list) else []
+    return (
+        [item for item in template_containers if isinstance(item, dict)]
+        if isinstance(template_containers, list)
+        else []
+    )
 
 
 def _init_containers_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -142,7 +148,11 @@ def _init_containers_from_spec(spec: dict[str, Any]) -> list[dict[str, Any]]:
     template = spec.get("template") if isinstance(spec.get("template"), dict) else {}
     pod_spec = template.get("spec") if isinstance(template.get("spec"), dict) else {}
     template_containers = pod_spec.get("initContainers")
-    return [item for item in template_containers if isinstance(item, dict)] if isinstance(template_containers, list) else []
+    return (
+        [item for item in template_containers if isinstance(item, dict)]
+        if isinstance(template_containers, list)
+        else []
+    )
 
 
 def _container_images(containers: list[dict[str, Any]]) -> list[str]:
@@ -214,11 +224,13 @@ def _owner_references(value: Any) -> list[dict[str, Any]]:
 def _node_roles(metadata: dict[str, Any]) -> list[str]:
     labels = metadata.get("labels") if isinstance(metadata.get("labels"), dict) else {}
     prefix = "node-role.kubernetes.io/"
-    return sorted(str(key).removeprefix(prefix) or "control-plane" for key in labels if str(key).startswith(prefix))[:20]
+    return sorted(str(key).removeprefix(prefix) or "control-plane" for key in labels if str(key).startswith(prefix))[
+        :20
+    ]
 
 
 def _keys(value: Any) -> list[str]:
-    return sorted(_safe_key(key) for key in value.keys())[:40] if isinstance(value, dict) else []
+    return sorted(_safe_key(key) for key in value)[:40] if isinstance(value, dict) else []
 
 
 def _text(value: Any, limit: int) -> str:
@@ -228,6 +240,9 @@ def _text(value: Any, limit: int) -> str:
 def _safe_key(value: Any) -> str:
     key = str(value or "")[:120]
     normalized = key.replace("-", "_").lower()
-    if any(part in normalized for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")):
+    if any(
+        part in normalized
+        for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
+    ):
         return "[redacted]"
     return key

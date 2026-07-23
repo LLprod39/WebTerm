@@ -59,7 +59,10 @@ class KubernetesOpsAdminPlainTextLogsTests(TestCase):
         self.assertEqual(payload["source"], "provider_snapshot")
         self.assertEqual(payload["line_count"], 3)
         self.assertEqual(payload["lines"], ["password=[redacted]", "Authorization: Bearer [redacted]", "ready"])
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-plain/log?tailLines=3")
+        self.assertEqual(
+            seen["url"],
+            "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-plain/log?tailLines=3",
+        )
         self.assertNotIn("raw-secret", str(payload))
         self.assertNotIn("abc.def", str(payload))
         action = K8sAdminAction.objects.get()
@@ -73,7 +76,9 @@ class KubernetesOpsAdminPlainTextLogsTests(TestCase):
             kind=K8sProvider.KIND_RANCHER,
             base_url="https://rancher.example.test",
             auth_mode=K8sProvider.AUTH_NONE,
-            labels={"pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}"},
+            labels={
+                "pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}"
+            },
         )
         cluster = K8sCluster.objects.create(
             name="admin-stream-logs-cluster",
@@ -123,7 +128,10 @@ class KubernetesOpsAdminPlainTextLogsTests(TestCase):
         self.assertEqual(payload["line_count"], 2)
         self.assertTrue(payload["truncated"])
         self.assertEqual(seen["timeout"], 3)
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-stream/log?follow=1&tailLines=2")
+        self.assertEqual(
+            seen["url"],
+            "https://rancher.example.test/k8s/clusters/local/api/v1/namespaces/payments/pods/payments-api-stream/log?follow=1&tailLines=2",
+        )
         self.assertIn("text/plain", seen["headers"]["Accept"])
         self.assertNotIn("raw-secret", str(payload))
         action = K8sAdminAction.objects.get()
@@ -191,7 +199,9 @@ class KubernetesOpsAdminPlainTextLogsTests(TestCase):
             kind=K8sProvider.KIND_RANCHER,
             base_url="https://rancher.example.test",
             auth_mode=K8sProvider.AUTH_NONE,
-            labels={"pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}"},
+            labels={
+                "pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}"
+            },
         )
         cluster = K8sCluster.objects.create(
             name="admin-container-stream-logs-cluster",
@@ -247,7 +257,9 @@ class KubernetesOpsAdminPlainTextLogsTests(TestCase):
             kind=K8sProvider.KIND_RANCHER,
             base_url="https://rancher.example.test",
             auth_mode=K8sProvider.AUTH_NONE,
-            labels={"pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}&container={container}"},
+            labels={
+                "pod_logs_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/log?follow=1&tailLines={tail}&container={container}"
+            },
         )
         cluster = K8sCluster.objects.create(
             name="admin-container-placeholder-logs-cluster",

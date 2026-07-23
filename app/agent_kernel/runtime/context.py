@@ -25,7 +25,9 @@ def build_ops_prompt_context(
     focus = ", ".join(role_spec.focus_areas)
     verification_rules = "\n".join(f"- {item}" for item in role_spec.verification_rules)
     safe_server_memory = sanitize_prompt_context_text(server_memory_prompt).text or "- Нет доступной памяти сервера"
-    safe_operational_recipes = sanitize_prompt_context_text(operational_recipes_prompt).text or "- Нет релевантных operational recipes"
+    safe_operational_recipes = (
+        sanitize_prompt_context_text(operational_recipes_prompt).text or "- Нет релевантных operational recipes"
+    )
     safe_tool_registry = sanitize_prompt_context_text(tool_registry_prompt).text or "- Нет доступных инструментов"
     safe_warmup = sanitize_prompt_context_text(memory_warmup_prompt).text if memory_warmup_prompt else ""
 

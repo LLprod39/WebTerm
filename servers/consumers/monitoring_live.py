@@ -100,7 +100,5 @@ class MonitoringLiveConsumer(AsyncJsonWebsocketConsumer):
         user = User.objects.filter(id=self._user_id).first()
         if not user:
             return set()
-        qs = _accessible_servers_queryset(user).filter(
-            id__in=requested, server_type="ssh", is_active=True
-        )
+        qs = _accessible_servers_queryset(user).filter(id__in=requested, server_type="ssh", is_active=True)
         return set(qs.values_list("id", flat=True))

@@ -235,7 +235,9 @@ def test_assistant_chat_upgrades_named_agent_list_to_confirmed_run(monkeypatch):
 
     response = client.post(
         "/api/assistant/chats/message/",
-        data=_json({"message": "Chat Agent можешь его запустить что бы он устанавливал GIT репозитории на сервер linux"}),
+        data=_json(
+            {"message": "Chat Agent можешь его запустить что бы он устанавливал GIT репозитории на сервер linux"}
+        ),
         content_type="application/json",
     )
 

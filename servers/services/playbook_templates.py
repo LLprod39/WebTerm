@@ -179,9 +179,7 @@ def list_templates() -> list[dict[str, Any]]:
                 "category": item["category"],
                 "tags": list(item.get("tags") or []),
                 "task_count": len(tasks),
-                "tasks_preview": [
-                    {"description": t["description"], "command": t["command"]} for t in tasks[:3]
-                ],
+                "tasks_preview": [{"description": t["description"], "command": t["command"]} for t in tasks[:3]],
             }
         )
     return out

@@ -20,7 +20,9 @@ def _safe_json(handler):
 
 def _staff_required(request) -> JsonResponse | None:
     if not getattr(request.user, "is_staff", False):
-        return JsonResponse({"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403
+        )
     return None
 
 

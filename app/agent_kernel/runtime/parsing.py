@@ -9,6 +9,7 @@ Also accepts an optional **JSON action** form (provider-agnostic JSON mode)
 as an alternate to free-text ``ACTION: tool {...}``. Text parsing remains
 the fallback when JSON is absent or invalid.
 """
+
 from __future__ import annotations
 
 import json
@@ -115,17 +116,25 @@ def parse_json_action(response: str) -> tuple[str, str | None, dict] | None:
             break
     # Allow top-level non-meta keys as args when no args object present.
     if not args:
-        reserved = set(_TOOL_KEYS) | set(_ARGS_KEYS) | set(_THOUGHT_KEYS) | {
-            "final_text",
-            "finalText",
-            "mode",
-            "execution_mode",
-        }
+        reserved = (
+            set(_TOOL_KEYS)
+            | set(_ARGS_KEYS)
+            | set(_THOUGHT_KEYS)
+            | {
+                "final_text",
+                "finalText",
+                "mode",
+                "execution_mode",
+            }
+        )
         leftover = {k: v for k, v in data.items() if k not in reserved}
-        if leftover and all(not isinstance(v, (dict, list)) or k == "options" for k, v in leftover.items()):
-            # Only promote simple leftover maps; avoid swallowing nested plans.
-            if any(k in leftover for k in ("command", "server", "path", "query", "question", "final_text")):
-                args = dict(leftover)
+        # Only promote simple leftover maps; avoid swallowing nested plans.
+        if (
+            leftover
+            and all(not isinstance(v, (dict, list)) or k == "options" for k, v in leftover.items())
+            and any(k in leftover for k in ("command", "server", "path", "query", "question", "final_text"))
+        ):
+            args = dict(leftover)
 
     thought = ""
     for key in _THOUGHT_KEYS:
@@ -135,9 +144,13 @@ def parse_json_action(response: str) -> tuple[str, str | None, dict] | None:
             break
 
     # done / final_text convenience
-    if tool_name == "done" and "final_text" in data and "final_text" not in args:
-        if isinstance(data.get("final_text"), str):
-            args = {**args, "final_text": data["final_text"]}
+    if (
+        tool_name == "done"
+        and "final_text" in data
+        and "final_text" not in args
+        and isinstance(data.get("final_text"), str)
+    ):
+        args = {**args, "final_text": data["final_text"]}
 
     return thought, tool_name, args
 

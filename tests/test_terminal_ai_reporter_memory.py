@@ -1,4 +1,5 @@
 """Tests for servers.services.terminal_ai.reporter + memory (F2-3)."""
+
 from __future__ import annotations
 
 import pytest
@@ -30,10 +31,7 @@ class TestComputeReportStatus:
         assert compute_report_status([]) == "warning"
 
     def test_all_ok_returns_ok(self):
-        assert (
-            compute_report_status([{"exit_code": 0}, {"exit_code": 0}, {"exit_code": 0}])
-            == "ok"
-        )
+        assert compute_report_status([{"exit_code": 0}, {"exit_code": 0}, {"exit_code": 0}]) == "ok"
 
     def test_only_interrupts_is_warning(self):
         # exit=130 = captured streaming; alone it is not "ok"
@@ -57,9 +55,7 @@ class TestComputeReportStatus:
 
     def test_single_failure_with_ok_returns_warning(self):
         assert (
-            compute_report_status(
-                [{"exit_code": 0}, {"exit_code": 0}, {"exit_code": 0}, {"exit_code": 127}]
-            )
+            compute_report_status([{"exit_code": 0}, {"exit_code": 0}, {"exit_code": 0}, {"exit_code": 127}])
             == "warning"
         )
 

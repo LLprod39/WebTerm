@@ -136,9 +136,7 @@ class AgentSessionManager:
                     if isinstance(exc, (asyncio.TimeoutError, TimeoutError))
                     else type(exc).__name__
                 )
-            raise RuntimeError(
-                f"SSH connection failed to {server.name} ({host}:{port}): {detail}"
-            ) from exc
+            raise RuntimeError(f"SSH connection failed to {server.name} ({host}:{port}): {detail}") from exc
         session.proc = await session.conn.create_process(
             term_type="xterm-256color",
             term_size=(120, 40),
@@ -150,11 +148,14 @@ class AgentSessionManager:
         self._name_to_id[server.name.lower()] = server.id
 
         if self.event_callback:
-            await self.event_callback("agent_console", {
-                "server_id": server.id,
-                "server_name": server.name,
-                "event": "connected",
-            })
+            await self.event_callback(
+                "agent_console",
+                {
+                    "server_id": server.id,
+                    "server_name": server.name,
+                    "event": "connected",
+                },
+            )
 
         logger.info("Agent session opened: {} ({})", server.name, server.host)
 
@@ -301,8 +302,8 @@ class AgentSessionManager:
     async def _execute_via_pty(self, session: _ServerSession, command: str) -> dict[str, Any]:
         """Execute a plain command through the interactive PTY."""
 
-        marker = f"__AGENT_EXIT_{id(session)}_{int(time.monotonic()*1000)}__"
-        full_cmd = f"{command}; echo \"{marker}:$?:\"\n"
+        marker = f"__AGENT_EXIT_{id(session)}_{int(time.monotonic() * 1000)}__"
+        full_cmd = f'{command}; echo "{marker}:$?:"\n'
 
         t0 = time.monotonic()
 
@@ -315,7 +316,7 @@ class AgentSessionManager:
                 self._wait_for_marker(session, marker),
                 timeout=self.command_timeout,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "stdout": "".join(stdout_parts) if stdout_parts else "(timeout)",
                 "stderr": f"Command timed out after {self.command_timeout}s",
@@ -327,14 +328,17 @@ class AgentSessionManager:
 
         if self.event_callback:
             output_text = "".join(stdout_parts)[:500]
-            await self.event_callback("agent_console", {
-                "server_id": session.server_id,
-                "server_name": session.server_name,
-                "event": "command_done",
-                "command": command,
-                "exit_code": exit_code,
-                "output_preview": output_text,
-            })
+            await self.event_callback(
+                "agent_console",
+                {
+                    "server_id": session.server_id,
+                    "server_name": session.server_name,
+                    "event": "command_done",
+                    "command": command,
+                    "exit_code": exit_code,
+                    "output_preview": output_text,
+                },
+            )
 
         return {
             "stdout": "".join(stdout_parts),
@@ -368,7 +372,9 @@ class AgentSessionManager:
         result["auto_sudo_reason"] = reason
         return result
 
-    async def _execute_with_sudo_password(self, session: _ServerSession, server_obj: Any, command: str) -> dict[str, Any]:
+    async def _execute_with_sudo_password(
+        self, session: _ServerSession, server_obj: Any, command: str
+    ) -> dict[str, Any]:
         t0 = time.monotonic()
         sudo_password = await sync_to_async(get_server_sudo_secret, thread_sensitive=True)(server_obj)
         prepared = prepare_sudo_command(
@@ -390,14 +396,17 @@ class AgentSessionManager:
             stdout = "\n".join(prepared.notes) + "\n" + stdout
 
         if self.event_callback:
-            await self.event_callback("agent_console", {
-                "server_id": session.server_id,
-                "server_name": session.server_name,
-                "event": "command_done",
-                "command": prepared.command,
-                "exit_code": result.exit_status,
-                "output_preview": stdout[:500],
-            })
+            await self.event_callback(
+                "agent_console",
+                {
+                    "server_id": session.server_id,
+                    "server_name": session.server_name,
+                    "event": "command_done",
+                    "command": prepared.command,
+                    "exit_code": result.exit_status,
+                    "output_preview": stdout[:500],
+                },
+            )
 
         return {
             "stdout": stdout,
@@ -415,7 +424,7 @@ class AgentSessionManager:
             idx = current.find(marker)
             if idx != -1:
                 before_marker = current[:idx]
-                after_marker = current[idx + len(marker):]
+                after_marker = current[idx + len(marker) :]
                 exit_code = 0
                 match = re.search(r":(\d+):", after_marker[:20])
                 if match:
@@ -444,12 +453,15 @@ class AgentSessionManager:
                 for ch in data:
                     session.output_buffer.append(ch)
                 if self.event_callback:
-                    await self.event_callback("agent_console", {
-                        "server_id": session.server_id,
-                        "server_name": session.server_name,
-                        "event": "output",
-                        "data": data[:500],
-                    })
+                    await self.event_callback(
+                        "agent_console",
+                        {
+                            "server_id": session.server_id,
+                            "server_name": session.server_name,
+                            "event": "output",
+                            "data": data[:500],
+                        },
+                    )
         except asyncio.CancelledError:
             pass
         except Exception as exc:
@@ -484,7 +496,7 @@ class AgentSessionManager:
             if match:
                 return match.group(0)
             await asyncio.sleep(0.3)
-        raise asyncio.TimeoutError(f"Pattern '{pattern}' not found in {timeout}s")
+        raise TimeoutError(f"Pattern '{pattern}' not found in {timeout}s")
 
     # ------------------------------------------------------------------
     # Resolution helpers
@@ -549,6 +561,7 @@ class AgentSessionManager:
         patterns = []
         try:
             from servers.models import GlobalServerRules
+
             rules = GlobalServerRules.objects.filter(user=server.user).first()
             if rules and rules.forbidden_commands:
                 patterns.extend(rules.forbidden_commands)

@@ -38,6 +38,7 @@ class ServerMemoryPolicy(models.Model):
     def __str__(self):
         return f"Memory policy for {self.user.username}"
 
+
 class ServerMemoryEvent(models.Model):
     """L0 inbox event for any interaction or signal related to a server."""
 
@@ -289,4 +290,3 @@ class ServerMemoryRevalidation(models.Model):
 
     def __str__(self):
         return f"{self.server.name}: {self.title}"
-

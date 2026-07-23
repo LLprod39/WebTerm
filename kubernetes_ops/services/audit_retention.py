@@ -14,7 +14,11 @@ MAX_AUDIT_RETENTION_DAYS = 3650
 
 
 def configured_audit_retention_days(value: int | str | None = None) -> int:
-    raw_value = value if value is not None else getattr(settings, "KUBERNETES_OPS_AUDIT_RETENTION_DAYS", DEFAULT_AUDIT_RETENTION_DAYS)
+    raw_value = (
+        value
+        if value is not None
+        else getattr(settings, "KUBERNETES_OPS_AUDIT_RETENTION_DAYS", DEFAULT_AUDIT_RETENTION_DAYS)
+    )
     try:
         parsed = int(raw_value)
     except (TypeError, ValueError):

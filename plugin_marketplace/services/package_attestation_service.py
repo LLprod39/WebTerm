@@ -46,7 +46,7 @@ def _append_attestation(
     attestations = list(package.attestations or [])
     attestations.append(attestation)
     limit = int(getattr(settings, "PLUGIN_MARKETPLACE_ATTESTATION_RETENTION_LIMIT", 20) or 20)
-    package.attestations = attestations[-max(limit, 1):]
+    package.attestations = attestations[-max(limit, 1) :]
     package.save(update_fields=["attestations", "updated_at"])
     from plugin_marketplace.services.install_service import record_event
 
@@ -90,7 +90,9 @@ def attest_package_security(package_id: int, *, actor=None, request=None) -> Plu
     scan = scan_manifest(
         parsed,
         allow_sandboxed_code=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)),
-        allow_dynamic_frontend_bundles=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)),
+        allow_dynamic_frontend_bundles=bool(
+            getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)
+        ),
     )
     signature_status = package_signature_status(package)
     checks.append({"name": "static_no_code_scan", "ok": scan.passed, "findings": scan.to_dict()["findings"]})
@@ -204,7 +206,7 @@ def replay_remote_package_provenance(package_id: int, *, actor=None, request=Non
             "ok": actual_sha256.lower() == expected_sha256.lower(),
             "expected_sha256": expected_sha256.lower(),
             "actual_sha256": actual_sha256.lower(),
-        }
+        },
     ]
     if checks[0]["ok"]:
         try:
@@ -221,7 +223,13 @@ def replay_remote_package_provenance(package_id: int, *, actor=None, request=Non
                     "file_count": validated["file_count"],
                 }
             )
-            checks.append({"name": "static_no_code_scan", "ok": validated["static_scan"]["passed"], "findings": validated["static_scan"]["findings"]})
+            checks.append(
+                {
+                    "name": "static_no_code_scan",
+                    "ok": validated["static_scan"]["passed"],
+                    "findings": validated["static_scan"]["findings"],
+                }
+            )
             checks.append(
                 {
                     "name": "dependency_scan",

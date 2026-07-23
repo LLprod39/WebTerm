@@ -38,7 +38,13 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
             "apiVersion": "apps/v1",
             "kind": "Deployment",
             "metadata": {"name": "payments-api", "namespace": "payments"},
-            "spec": {"replicas": replicas, "template": {"metadata": {"labels": {"app": "payments-api"}}, "spec": {"containers": [{"name": "api", "image": "registry.example.test/payments:1"}]}}},
+            "spec": {
+                "replicas": replicas,
+                "template": {
+                    "metadata": {"labels": {"app": "payments-api"}},
+                    "spec": {"containers": [{"name": "api", "image": "registry.example.test/payments:1"}]},
+                },
+            },
         }
 
     def write_session(self, user: User) -> K8sAdminSession:
@@ -73,7 +79,13 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
             verb=K8sAdminAction.VERB_DRY_RUN_APPLY,
             status=K8sAdminAction.STATUS_DRY_RUN,
             request_payload_sanitized={
-                "target": {"api_version": "apps/v1", "kind": "Deployment", "resource": "deployments", "namespace": "payments", "name": "payments-api"},
+                "target": {
+                    "api_version": "apps/v1",
+                    "kind": "Deployment",
+                    "resource": "deployments",
+                    "namespace": "payments",
+                    "name": "payments-api",
+                },
                 "manifest_fingerprint": manifest_fingerprint(manifest),
                 "submitted_top_level_fields": sorted(manifest.keys()),
                 "redacted": False,
@@ -138,7 +150,9 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
         self.assertEqual(response.json()["code"], "dry_run_proof_owner_mismatch")
         self.assertFalse(K8sActionRequest.objects.exists())
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True
+    )
     def test_execute_approved_apply_requires_manifest_at_execution_time(self):
         staff = self.create_user("k8s-action-admin-apply-no-manifest", is_staff=True)
         session = self.write_session(staff)
@@ -149,7 +163,13 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
             action=K8sActionRequest.ACTION_K8S_RESOURCE_APPLY,
             status=K8sActionRequest.STATUS_APPROVED_EXTERNAL,
             cluster=self.cluster,
-            target={"cluster_id": f"cluster_{self.cluster.id}", "namespace": "payments", "kind": "Deployment", "name": "payments-api", "dry_run_action_id": str(proof.action_id)},
+            target={
+                "cluster_id": f"cluster_{self.cluster.id}",
+                "namespace": "payments",
+                "kind": "Deployment",
+                "name": "payments-api",
+                "dry_run_action_id": str(proof.action_id),
+            },
             preview={"blast_radius": "single_resource_apply"},
             approval_ref="CHG-ACTION-APPLY",
             execution_policy={"native_execution_enabled": False, "external_approval_recorded": True},
@@ -168,7 +188,9 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
         self.assertEqual(response.json()["code"], "manifest_required")
         self.assertFalse(K8sAdminAction.objects.filter(verb=K8sAdminAction.VERB_APPLY).exists())
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True
+    )
     def test_execute_approved_apply_uses_admin_write_session_and_matching_dry_run_proof(self):
         staff = self.create_user("k8s-action-admin-apply", is_staff=True)
         session = self.write_session(staff)
@@ -201,7 +223,13 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
             client_cls.return_value.request.return_value = manifest
             response = self.client.post(
                 reverse("api_kubernetes_action_execute_approved"),
-                data=json.dumps({"request_id": str(action_request.request_id), "session_id": str(session.session_id), "manifest": manifest}),
+                data=json.dumps(
+                    {
+                        "request_id": str(action_request.request_id),
+                        "session_id": str(session.session_id),
+                        "manifest": manifest,
+                    }
+                ),
                 content_type="application/json",
             )
             method, path = client_cls.return_value.request.call_args.args[:2]
@@ -222,7 +250,10 @@ class KubernetesOpsActionRequestApplyTests(TestCase):
         self.assertFalse(verification_plan["payload_stored"])
         self.assertNotIn("registry.example.test/payments:1", str(verification_plan))
         self.assertEqual(method, "PATCH")
-        self.assertEqual(path, "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api?fieldManager=webterm-admin-mode")
+        self.assertEqual(
+            path,
+            "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments/payments-api?fieldManager=webterm-admin-mode",
+        )
         self.assertEqual(body, manifest)
         admin_action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_APPLY)
         self.assertEqual(payload["request"]["report"]["admin_action_id"], str(admin_action.action_id))

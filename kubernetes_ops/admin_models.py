@@ -49,8 +49,12 @@ class K8sAdminSession(models.Model):
         related_name="kubernetes_admin_sessions",
     )
     username_snapshot = models.CharField(max_length=150, blank=True, default="")
-    provider = models.ForeignKey(K8sProvider, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_sessions")
-    cluster = models.ForeignKey(K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_sessions")
+    provider = models.ForeignKey(
+        K8sProvider, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_sessions"
+    )
+    cluster = models.ForeignKey(
+        K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_sessions"
+    )
     namespace = models.CharField(max_length=120, blank=True, default="")
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=MODE_READ)
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_PENDING_APPROVAL)
@@ -150,7 +154,9 @@ class K8sAdminAction(models.Model):
         related_name="kubernetes_admin_actions",
     )
     username_snapshot = models.CharField(max_length=150, blank=True, default="")
-    cluster = models.ForeignKey(K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_actions")
+    cluster = models.ForeignKey(
+        K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_actions"
+    )
     namespace = models.CharField(max_length=120, blank=True, default="")
     resource_api_version = models.CharField(max_length=80, blank=True, default="")
     resource_kind = models.CharField(max_length=80, blank=True, default="")
@@ -216,7 +222,9 @@ class K8sAdminRecording(models.Model):
         related_name="kubernetes_admin_recordings",
     )
     username_snapshot = models.CharField(max_length=150, blank=True, default="")
-    cluster = models.ForeignKey(K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_recordings")
+    cluster = models.ForeignKey(
+        K8sCluster, null=True, blank=True, on_delete=models.SET_NULL, related_name="admin_recordings"
+    )
     namespace = models.CharField(max_length=120, blank=True, default="")
     resource_kind = models.CharField(max_length=80, blank=True, default="")
     resource_name = models.CharField(max_length=180, blank=True, default="")

@@ -227,9 +227,7 @@ def metadata_can_promote_to_canonical(metadata: dict[str, Any] | None) -> bool:
     verification = str(metadata.get("verification_status") or VERIFICATION_UNVERIFIED)
     if trust in CANONICAL_TRUST_LEVELS:
         return True
-    if trust == TRUST_HUMAN_OBSERVED and verification in {VERIFICATION_VERIFIED, VERIFICATION_MEASURED}:
-        return True
-    return False
+    return bool(trust == TRUST_HUMAN_OBSERVED and verification in {VERIFICATION_VERIFIED, VERIFICATION_MEASURED})
 
 
 def prompt_provenance_label(
@@ -241,7 +239,9 @@ def prompt_provenance_label(
     source_ref: str = "",
 ) -> str:
     metadata = metadata or {}
-    trust = str(metadata.get("trust_level") or (TRUST_SYSTEM_MEASURED if source_kind == "monitoring" else TRUST_UNVERIFIED))
+    trust = str(
+        metadata.get("trust_level") or (TRUST_SYSTEM_MEASURED if source_kind == "monitoring" else TRUST_UNVERIFIED)
+    )
     verification = str(metadata.get("verification_status") or VERIFICATION_UNVERIFIED)
     pieces = [trust, verification]
     if confidence is not None:

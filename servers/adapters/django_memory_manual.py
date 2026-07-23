@@ -19,9 +19,15 @@ def preferred_memory_key_for_note(*, title: str, category: str | None, content: 
         return "risks"
     if any(term in normalized_title for term in ("доступ", "access", "network", "ssh", "vpn", "порт")):
         return "access"
-    if any(term in normalized_title for term in ("runbook", "playbook", "инструк", "workflow", "skill", "checklist", "чеклист")):
+    if any(
+        term in normalized_title
+        for term in ("runbook", "playbook", "инструк", "workflow", "skill", "checklist", "чеклист")
+    ):
         return "runbook"
-    if any(term in normalized_title for term in ("изменен", "change", "deploy", "release", "migration", "rollout", "обновл")):
+    if any(
+        term in normalized_title
+        for term in ("изменен", "change", "deploy", "release", "migration", "rollout", "обновл")
+    ):
         return "recent_changes"
 
     if normalized_category in {"issues", "performance", "storage"}:

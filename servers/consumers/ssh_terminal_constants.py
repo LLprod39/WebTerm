@@ -1,4 +1,5 @@
 """Shared constants for terminal WebSocket consumer modules."""
+
 from __future__ import annotations
 
 import asyncio

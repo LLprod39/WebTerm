@@ -70,9 +70,7 @@ def test_build_server_context_contains_metrics_and_is_stable():
     assert "81.0%" in context1
     assert fp1 == fp2  # coarse fingerprint is deterministic
 
-    ServerAlert.objects.create(
-        server=server, alert_type="disk", severity="warning", title="Disk 81%"
-    )
+    ServerAlert.objects.create(server=server, alert_type="disk", severity="warning", title="Disk 81%")
     _, fp3 = build_server_context(server, now=now)
     assert fp3 != fp1  # a new alert changes the signature
 
@@ -104,8 +102,12 @@ def test_run_server_insight_reuses_unchanged_context(fake_llm):
 def test_fleet_pass_dedupes_endpoints_and_builds_digest(fake_llm):
     owner_a = User.objects.create_user(username="ai-fleet-a", password="x")
     owner_b = User.objects.create_user(username="ai-fleet-b", password="x")
-    Server.objects.create(user=owner_a, name="fleet-a", host="10.0.9.5", username="root", server_type="ssh", is_active=True)
-    Server.objects.create(user=owner_b, name="fleet-b", host="10.0.9.5", username="ubuntu", server_type="ssh", is_active=True)
+    Server.objects.create(
+        user=owner_a, name="fleet-a", host="10.0.9.5", username="root", server_type="ssh", is_active=True
+    )
+    Server.objects.create(
+        user=owner_b, name="fleet-b", host="10.0.9.5", username="ubuntu", server_type="ssh", is_active=True
+    )
 
     summary = run_ai_insights_for_servers()
     # One endpoint analysis + one fleet digest = two LLM calls total.

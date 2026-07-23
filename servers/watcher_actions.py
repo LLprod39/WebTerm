@@ -16,7 +16,9 @@ ROLE_TO_AGENT_TYPE = {
 def _build_goal(draft: ServerWatcherDraft) -> str:
     role_slug = str(draft.recommended_role or "custom").strip() or "custom"
     signals = "\n".join(f"- {item}" for item in list(draft.reasons or [])[:6]) or "- No signals recorded"
-    memory_items = "\n".join(f"- {item}" for item in list(draft.memory_excerpt or [])[:6]) or "- No memory context available"
+    memory_items = (
+        "\n".join(f"- {item}" for item in list(draft.memory_excerpt or [])[:6]) or "- No memory context available"
+    )
     return (
         f"[ROLE={role_slug}]\n"
         f"{draft.objective}\n\n"

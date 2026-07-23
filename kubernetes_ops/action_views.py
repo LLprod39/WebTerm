@@ -50,7 +50,9 @@ def _safe_json(handler):
 
 def _staff_required(request) -> JsonResponse | None:
     if not getattr(request.user, "is_staff", False):
-        return JsonResponse({"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403
+        )
     return None
 
 
@@ -61,14 +63,18 @@ def _can_read_action_request(user, action_request: K8sActionRequest) -> bool:
 
 
 def _action_request_not_found() -> JsonResponse:
-    return JsonResponse({"success": False, "error": "Action request not found.", "code": "request_not_found"}, status=404)
+    return JsonResponse(
+        {"success": False, "error": "Action request not found.", "code": "request_not_found"}, status=404
+    )
 
 
 def _action_error_status(error: ActionRequestValidationError) -> int:
     return 409 if error.code in {"action_request_not_pending", "action_request_not_approved"} else 400
 
 
-def _audit_action_request(request, action: str, *, action_request: K8sActionRequest | None = None, payload: dict[str, Any] | None = None) -> None:
+def _audit_action_request(
+    request, action: str, *, action_request: K8sActionRequest | None = None, payload: dict[str, Any] | None = None
+) -> None:
     K8sAuditEvent.objects.create(
         user=request.user,
         username_snapshot=getattr(request.user, "username", ""),
@@ -147,13 +153,10 @@ def _safe_action_text(value: Any, *, limit: int = ACTION_TEXT_LIMIT) -> str:
 
 
 def _action_request_timeline(action_request: K8sActionRequest) -> list[dict[str, Any]]:
-    events = (
-        K8sAuditEvent.objects.filter(
-            action__startswith="k8s.action_request.",
-            payload__request_id=str(action_request.request_id),
-        )
-        .order_by("created_at", "id")[:ACTION_TIMELINE_LIMIT]
-    )
+    events = K8sAuditEvent.objects.filter(
+        action__startswith="k8s.action_request.",
+        payload__request_id=str(action_request.request_id),
+    ).order_by("created_at", "id")[:ACTION_TIMELINE_LIMIT]
     return [_safe_action_request_timeline_event(event) for event in events]
 
 
@@ -178,7 +181,6 @@ def _action_request_report_payload(action_request: K8sActionRequest) -> dict[str
             "native_execution_enabled": bool((action_request.execution_policy or {}).get("native_execution_enabled")),
         },
     }
-
 
 
 @login_required
@@ -328,7 +330,9 @@ def api_kubernetes_action_approve_external(request, request_id):
         if action_request is None:
             return _action_request_not_found()
         try:
-            action_request = approve_external_action_request(action_request=action_request, user=request.user, data=data)
+            action_request = approve_external_action_request(
+                action_request=action_request, user=request.user, data=data
+            )
         except ActionRequestValidationError as exc:
             payload = sanitized_action_rejection_payload(exc)
             _audit_action_request(
@@ -337,7 +341,10 @@ def api_kubernetes_action_approve_external(request, request_id):
                 action_request=action_request,
                 payload={"request_id": str(action_request.request_id), "code": exc.code, "error": str(exc), **payload},
             )
-            return JsonResponse({"success": False, "error": str(exc), "code": exc.code, "payload": payload}, status=_action_error_status(exc))
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": exc.code, "payload": payload},
+                status=_action_error_status(exc),
+            )
         _audit_action_request(
             request,
             "k8s.action_request.approve_external",
@@ -367,12 +374,16 @@ def api_kubernetes_action_execute_approved(request):
             return error_response
         request_id = str(data.get("request_id") or "").strip()
         if not request_id:
-            return JsonResponse({"success": False, "error": "request_id is required.", "code": "request_id_required"}, status=400)
+            return JsonResponse(
+                {"success": False, "error": "request_id is required.", "code": "request_id_required"}, status=400
+            )
         action_request = K8sActionRequest.objects.filter(request_id=request_id).select_related("cluster").first()
         if action_request is None:
             return _action_request_not_found()
         try:
-            action_request = execute_approved_action_request(action_request=action_request, user=request.user, data=data)
+            action_request = execute_approved_action_request(
+                action_request=action_request, user=request.user, data=data
+            )
         except ActionRequestValidationError as exc:
             payload = sanitized_action_rejection_payload(exc)
             _audit_action_request(
@@ -381,7 +392,10 @@ def api_kubernetes_action_execute_approved(request):
                 action_request=action_request,
                 payload={"request_id": str(action_request.request_id), "code": exc.code, "error": str(exc), **payload},
             )
-            return JsonResponse({"success": False, "error": str(exc), "code": exc.code, "payload": payload}, status=_action_error_status(exc))
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": exc.code, "payload": payload},
+                status=_action_error_status(exc),
+            )
         if action_request.status == K8sActionRequest.STATUS_EXECUTED_NATIVE:
             _audit_action_request(
                 request,
@@ -461,7 +475,9 @@ def api_kubernetes_action_verify_external(request, request_id):
         if action_request is None:
             return _action_request_not_found()
         try:
-            action_request = record_external_action_verification(action_request=action_request, user=request.user, data=data)
+            action_request = record_external_action_verification(
+                action_request=action_request, user=request.user, data=data
+            )
         except ActionRequestValidationError as exc:
             payload = sanitized_action_rejection_payload(exc)
             _audit_action_request(
@@ -470,7 +486,10 @@ def api_kubernetes_action_verify_external(request, request_id):
                 action_request=action_request,
                 payload={"request_id": str(action_request.request_id), "code": exc.code, "error": str(exc), **payload},
             )
-            return JsonResponse({"success": False, "error": str(exc), "code": exc.code, "payload": payload}, status=_action_error_status(exc))
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": exc.code, "payload": payload},
+                status=_action_error_status(exc),
+            )
         audit_action = (
             "k8s.action_request.verify_native"
             if action_request.report.get("verification_mode") == "native_post_action"

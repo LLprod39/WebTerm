@@ -99,9 +99,9 @@ def build_typed_confirm_meta(
     blast["typed_confirm_token"] = token
     if token == "FANOUT":
         count = len(blast.get("server_ids") or []) or "several"
-        blast["typed_confirm_hint"] = f'Type FANOUT to confirm multi-host action ({count} hosts)'
+        blast["typed_confirm_hint"] = f"Type FANOUT to confirm multi-host action ({count} hosts)"
     else:
-        blast["typed_confirm_hint"] = f'Type the server name exactly: {token}'
+        blast["typed_confirm_hint"] = f"Type the server name exactly: {token}"
     cmd = _command_from_payload(input_payload)
     if cmd:
         risk_info = evaluate_command_safety(cmd)
@@ -139,10 +139,13 @@ def validate_typed_confirm(action: AssistantAction, typed_value: str | None) -> 
     blast = action.blast_radius if isinstance(action.blast_radius, dict) else {}
     expected = str(blast.get("typed_confirm_token") or "").strip()
     if not expected:
-        expected = _server_token_from_payload(
-            action.input_payload if isinstance(action.input_payload, dict) else {},
-            blast,
-        ) or "CONFIRM"
+        expected = (
+            _server_token_from_payload(
+                action.input_payload if isinstance(action.input_payload, dict) else {},
+                blast,
+            )
+            or "CONFIRM"
+        )
     provided = str(typed_value or "").strip()
     if not provided:
         return f'Typed confirmation required. Type "{expected}" to proceed.'

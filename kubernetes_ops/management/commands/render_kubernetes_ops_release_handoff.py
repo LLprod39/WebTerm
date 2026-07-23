@@ -36,7 +36,9 @@ class Command(BaseCommand):
         else:
             self.stdout.write(payload.rstrip())
 
-        backend_workstream = handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
+        backend_workstream = (
+            handoff.get("backend_workstream") if isinstance(handoff.get("backend_workstream"), dict) else {}
+        )
         blocker_summary = (
             backend_workstream.get("external_production_blocker_summary")
             if isinstance(backend_workstream.get("external_production_blocker_summary"), dict)

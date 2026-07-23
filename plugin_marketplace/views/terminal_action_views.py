@@ -35,5 +35,7 @@ def execute_terminal_action_view(request, plugin_id: str, action_id: str):
         }
     )
     if not result.get("success"):
-        return json_error(str(result.get("error") or "Terminal action blocked."), status=403, code="terminal_action_blocked")
+        return json_error(
+            str(result.get("error") or "Terminal action blocked."), status=403, code="terminal_action_blocked"
+        )
     return JsonResponse({"success": True, **result})

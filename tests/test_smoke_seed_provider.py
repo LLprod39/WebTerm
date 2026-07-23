@@ -33,9 +33,11 @@ def test_seed_multi_user_smoke_creates_domain_objects_through_providers():
     user = User.objects.get(username="provider-smoke-01")
     assert seeded_user["username"] == user.username
 
-    assert set(
-        UserAppPermission.objects.filter(user=user, allowed=True).values_list("feature", flat=True)
-    ) == {"servers", "studio", "agents"}
+    assert set(UserAppPermission.objects.filter(user=user, allowed=True).values_list("feature", flat=True)) == {
+        "servers",
+        "studio",
+        "agents",
+    }
 
     server = Server.objects.get(pk=seeded_user["server_id"])
     assert server.user_id == user.id

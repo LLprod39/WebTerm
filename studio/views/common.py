@@ -32,9 +32,13 @@ def _ok(data, status: int = 200) -> JsonResponse:
     return JsonResponse(data, safe=False, status=status)
 
 
-def _validation_err(errors: list[str], *, prefix: str = "Validation failed", issues: list[dict] | None = None) -> JsonResponse:
+def _validation_err(
+    errors: list[str], *, prefix: str = "Validation failed", issues: list[dict] | None = None
+) -> JsonResponse:
     message = f"{prefix}: {'; '.join(errors)}"
-    return JsonResponse({"error": message, "details": errors, "issues": issues or validation_issues(errors)}, status=400)
+    return JsonResponse(
+        {"error": message, "details": errors, "issues": issues or validation_issues(errors)}, status=400
+    )
 
 
 def _limit_err(limit_error: dict) -> JsonResponse:

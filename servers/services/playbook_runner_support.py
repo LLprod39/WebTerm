@@ -3,8 +3,10 @@
 Extracted from playbook_runner.py to keep modules under the size limit.
 Re-exported from servers.services.playbook_runner for backward compatibility.
 """
+
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 from collections.abc import Callable
@@ -45,9 +47,7 @@ def normalize_tasks(raw_tasks: Any) -> list[dict[str, Any]]:
                     "command": command,
                     "description": str(item.get("description") or ""),
                     "continue_on_error": bool(
-                        item.get("continue_on_error")
-                        if "continue_on_error" in item
-                        else item.get("continueOnError")
+                        item.get("continue_on_error") if "continue_on_error" in item else item.get("continueOnError")
                     ),
                     "skipped_module": True,
                 }
@@ -59,9 +59,7 @@ def normalize_tasks(raw_tasks: Any) -> list[dict[str, Any]]:
                 "command": command,
                 "description": str(item.get("description") or ""),
                 "continue_on_error": bool(
-                    item.get("continue_on_error")
-                    if "continue_on_error" in item
-                    else item.get("continueOnError")
+                    item.get("continue_on_error") if "continue_on_error" in item else item.get("continueOnError")
                 ),
                 "skipped_module": False,
             }
@@ -200,10 +198,8 @@ def _execute_on_server(
 
     def _log(text: str) -> None:
         if log_line:
-            try:
+            with contextlib.suppress(Exception):
                 log_line(text)
-            except Exception:
-                pass
 
     result = _empty_host_result(server, tasks)
     password = None
@@ -222,7 +218,7 @@ def _execute_on_server(
 
     if dry_run:
         result["status"] = "success"
-        for tr, task in zip(result["task_results"], tasks):
+        for tr, task in zip(result["task_results"], tasks, strict=False):
             if task.get("skipped_module"):
                 tr["status"] = "skipped"
                 tr["output"] = "Dry-run: unsupported/imported module (comment placeholder)"
@@ -311,10 +307,8 @@ def _execute_on_server(
             _notify()
     finally:
         if conn_id:
-            try:
+            with contextlib.suppress(Exception):
                 async_to_sync(ssh_manager.disconnect)(conn_id)
-            except Exception:
-                pass
 
     if any_error and any_success:
         result["status"] = "partial"

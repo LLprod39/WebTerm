@@ -66,9 +66,7 @@ async def execute_multi_agent_tool(
         return decision.reason
 
     prepared_args, _sudo_notes = (
-        prepare_sudo_command_args(args, active_permission_engine.sudo_policy)
-        if name == "ssh_execute"
-        else (args, ())
+        prepare_sudo_command_args(args, active_permission_engine.sudo_policy) if name == "ssh_execute" else (args, ())
     )
     args = prepared_args
 

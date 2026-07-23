@@ -35,7 +35,7 @@ DEMO_PLUGIN_MANIFEST = {
             "scope": "demo.connector.ping",
             "reason": "Allow the demo connector to emit a safe health ping audit event.",
             "risk_tier": "network_read",
-        }
+        },
     ],
     "secrets": [
         {
@@ -201,13 +201,11 @@ DEMO_PLUGIN_MANIFEST = {
             "risk_tier": "network_read",
             "audit_category": "plugin",
             "executor_ref": "plugin_marketplace.demo.connector_ping",
-        }
+        },
     ],
     "settings_schema": {
         "type": "object",
-        "properties": {
-            "display_label": {"type": "string", "default": "Plugin Runtime Status"}
-        },
+        "properties": {"display_label": {"type": "string", "default": "Plugin Runtime Status"}},
     },
     "support": {
         "docs_url": "",
@@ -242,10 +240,7 @@ def _installed_plugin_manifests() -> list[dict]:
 def project_plugin_catalog(enabled_plugin_ids: set[str] | None = None) -> list[dict]:
     ensure_builtin_plugins_registered()
     enabled = enabled_plugin_ids or set()
-    projected = [
-        manifest.to_dict(include_surfaces=manifest.id in enabled)
-        for manifest in plugin_registry.all()
-    ]
+    projected = [manifest.to_dict(include_surfaces=manifest.id in enabled) for manifest in plugin_registry.all()]
     seen = {str(item.get("id") or "") for item in projected}
     for raw_manifest in _installed_plugin_manifests():
         manifest = validate_plugin_manifest(raw_manifest)

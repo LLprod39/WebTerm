@@ -128,7 +128,10 @@ def _post_review_from_action(action: K8sAdminAction) -> dict[str, Any]:
 
 
 def _action_needs_post_review(action: K8sAdminAction) -> bool:
-    return action.session.mode == K8sAdminSession.MODE_BREAK_GLASS or action.verb in BREAK_GLASS_REVIEW_VERBS | WRITE_REVIEW_VERBS
+    return (
+        action.session.mode == K8sAdminSession.MODE_BREAK_GLASS
+        or action.verb in BREAK_GLASS_REVIEW_VERBS | WRITE_REVIEW_VERBS
+    )
 
 
 def _post_review_state(action: K8sAdminAction) -> dict[str, Any]:
@@ -178,7 +181,9 @@ def _review_summary(actions: list[K8sAdminAction]) -> dict[str, int]:
     return summary
 
 
-def _actions_with_review_filter(queryset, *, review_filter: str, limit: int, scan_limit: int) -> tuple[list[K8sAdminAction], int, bool]:
+def _actions_with_review_filter(
+    queryset, *, review_filter: str, limit: int, scan_limit: int
+) -> tuple[list[K8sAdminAction], int, bool]:
     actions: list[K8sAdminAction] = []
     scanned = 0
     truncated = False
@@ -269,7 +274,10 @@ def _action_timeline(action: K8sAdminAction) -> list[dict[str, Any]]:
     session_id = str(action.session.session_id)
     events = (
         K8sAuditEvent.objects.select_related("cluster")
-        .filter(Q(payload__action_id=action_id) | (Q(payload__session_id=session_id) & Q(action__startswith="k8s.admin_session.")))
+        .filter(
+            Q(payload__action_id=action_id)
+            | (Q(payload__session_id=session_id) & Q(action__startswith="k8s.admin_session."))
+        )
         .order_by("created_at", "id")[:50]
     )
     return [_safe_timeline_event(event) for event in events]
@@ -290,7 +298,9 @@ def _admin_action_report(action: K8sAdminAction) -> dict[str, Any]:
             "status": action.status,
             "recording_count": action.recordings.count(),
             "timeline_event_count": len(timeline),
-            "has_action_audit_event": any(str((event.get("payload") or {}).get("action_id") or "") == str(action.action_id) for event in timeline),
+            "has_action_audit_event": any(
+                str((event.get("payload") or {}).get("action_id") or "") == str(action.action_id) for event in timeline
+            ),
             "post_review_required": review_state["post_review_required"],
             "post_review_status": review_state["post_review_status"],
             "has_post_review": bool(review_state["post_review"]),
@@ -302,13 +312,19 @@ def _require_action_review_access(user, action: K8sAdminAction) -> None:
     if not getattr(user, "is_staff", False):
         raise AdminActionReviewError("Staff review is required.", code="staff_required", status=403)
     policy = kubernetes_permission_policy(user)
-    break_glass_review = action.session.mode == K8sAdminSession.MODE_BREAK_GLASS or action.verb in BREAK_GLASS_REVIEW_VERBS
+    break_glass_review = (
+        action.session.mode == K8sAdminSession.MODE_BREAK_GLASS or action.verb in BREAK_GLASS_REVIEW_VERBS
+    )
     if break_glass_review:
         if not policy.get("can_break_glass"):
-            raise AdminActionReviewError("Kubernetes break-glass access is required.", code="break_glass_required", status=403)
+            raise AdminActionReviewError(
+                "Kubernetes break-glass access is required.", code="break_glass_required", status=403
+            )
         return
     if action.verb in WRITE_REVIEW_VERBS and not policy.get("can_admin_write"):
-        raise AdminActionReviewError("Kubernetes admin write access is required.", code="admin_write_required", status=403)
+        raise AdminActionReviewError(
+            "Kubernetes admin write access is required.", code="admin_write_required", status=403
+        )
 
 
 def _build_post_review(user, data: dict[str, Any]) -> dict[str, Any]:
@@ -320,7 +336,9 @@ def _build_post_review(user, data: dict[str, Any]) -> dict[str, Any]:
         )
     summary = _clean_review_text(data.get("summary") or data.get("notes"), max_length=2000)
     if not summary:
-        raise AdminActionReviewError("summary is required for admin action post-review.", code="post_review_summary_required")
+        raise AdminActionReviewError(
+            "summary is required for admin action post-review.", code="post_review_summary_required"
+        )
     current_time = timezone.now()
     return sanitize_metadata(
         {
@@ -334,7 +352,9 @@ def _build_post_review(user, data: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _audit_action_review(request, action: K8sAdminAction, audit_action: str, payload: dict[str, Any] | None = None) -> None:
+def _audit_action_review(
+    request, action: K8sAdminAction, audit_action: str, payload: dict[str, Any] | None = None
+) -> None:
     K8sAuditEvent.objects.create(
         user=request.user,
         username_snapshot=getattr(request.user, "username", ""),
@@ -356,9 +376,15 @@ def _audit_action_review(request, action: K8sAdminAction, audit_action: str, pay
 def _review_admin_action(*, action: K8sAdminAction, user, data: dict[str, Any]) -> K8sAdminAction:
     _require_action_review_access(user, action)
     if not _action_needs_post_review(action):
-        raise AdminActionReviewError("Post-review is not required for this admin action.", code="post_review_not_required", status=409)
+        raise AdminActionReviewError(
+            "Post-review is not required for this admin action.", code="post_review_not_required", status=409
+        )
     if action.status not in FINAL_ACTION_STATUSES:
-        raise AdminActionReviewError("Admin action can be reviewed only after it reaches a final status.", code="post_review_not_ready", status=409)
+        raise AdminActionReviewError(
+            "Admin action can be reviewed only after it reaches a final status.",
+            code="post_review_not_ready",
+            status=409,
+        )
 
     post_review = _build_post_review(user, data)
     response_summary = sanitize_metadata(dict(_response_summary(action)))
@@ -390,7 +416,9 @@ def api_kubernetes_admin_actions(request):
             )
         if review_filter:
             scan_limit = _bounded_review_scan_limit(request.GET.get("review_scan_limit"))
-            actions, scanned_count, truncated = _actions_with_review_filter(queryset, review_filter=review_filter, limit=limit, scan_limit=scan_limit)
+            actions, scanned_count, truncated = _actions_with_review_filter(
+                queryset, review_filter=review_filter, limit=limit, scan_limit=scan_limit
+            )
         else:
             scan_limit = 0
             scanned_count = 0
@@ -424,7 +452,9 @@ def api_kubernetes_admin_action_detail(request, action_id):
     def handler():
         action = _action_for_user_or_none(request.user, action_id)
         if action is None:
-            return JsonResponse({"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404
+            )
         return JsonResponse({"success": True, "action": _safe_admin_action_payload(action)})
 
     return _safe_json(handler)
@@ -437,7 +467,9 @@ def api_kubernetes_admin_action_report(request, action_id):
     def handler():
         action = _action_for_user_or_none(request.user, action_id)
         if action is None:
-            return JsonResponse({"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404
+            )
         return JsonResponse({"success": True, "report": _admin_action_report(action)})
 
     return _safe_json(handler)
@@ -453,11 +485,15 @@ def api_kubernetes_admin_action_review(request, action_id):
             return error_response
         action = _action_for_user_or_none(request.user, action_id)
         if action is None:
-            return JsonResponse({"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin action not found.", "code": "admin_action_not_found"}, status=404
+            )
         try:
             action = _review_admin_action(action=action, user=request.user, data=data)
         except AdminActionReviewError as exc:
-            _audit_action_review(request, action, "k8s.admin_action.post_review_rejected", {"code": exc.code, "error": str(exc)})
+            _audit_action_review(
+                request, action, "k8s.admin_action.post_review_rejected", {"code": exc.code, "error": str(exc)}
+            )
             return _error_response(exc)
         post_review = _post_review_from_action(action)
         _audit_action_review(request, action, "k8s.admin_action.post_review", {"post_review": post_review})

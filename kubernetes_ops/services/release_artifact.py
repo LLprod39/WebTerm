@@ -20,12 +20,19 @@ def build_kubernetes_release_evidence_artifact_report(*, require_ready: bool) ->
             status="missing" if require_ready else "manual",
             path=path,
             max_age_seconds=max_age_seconds,
-            detail="Release evidence artifact is required before sidebar enablement." if require_ready else "Release evidence artifact is not required until sidebar enablement.",
+            detail="Release evidence artifact is required before sidebar enablement."
+            if require_ready
+            else "Release evidence artifact is not required until sidebar enablement.",
         )
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return _report(status="missing" if require_ready else "manual", path=path, max_age_seconds=max_age_seconds, detail=f"Release evidence artifact cannot be read: {exc}.")
+        return _report(
+            status="missing" if require_ready else "manual",
+            path=path,
+            max_age_seconds=max_age_seconds,
+            detail=f"Release evidence artifact cannot be read: {exc}.",
+        )
 
     generated_at = str(payload.get("generated_at") or "")
     generated_dt = parse_datetime(generated_at)

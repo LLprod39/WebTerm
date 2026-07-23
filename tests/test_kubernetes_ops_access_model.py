@@ -23,12 +23,16 @@ def test_kubernetes_access_model_report_documents_oidc_rbac_mapping():
     assert report["identity_provider"] == "Keycloak/OIDC"
     assert report["native_mutations_enabled"] is False
     assert report["exec_enabled"] is False
-    assert {row["keycloak_group"] for row in report["role_mappings"]} == {row["keycloak_group"] for row in ACCESS_ROLE_MAPPING}
+    assert {row["keycloak_group"] for row in report["role_mappings"]} == {
+        row["keycloak_group"] for row in ACCESS_ROLE_MAPPING
+    }
     assert "webterm-kubernetes-readers" in {row["keycloak_group"] for row in report["role_mappings"]}
     assert report["read_only_service_account"]["allowed_verbs"] == ["get", "list", "watch"]
     assert report["read_only_rbac_manifest"]["status"] == "ready"
     assert report["read_only_rbac_manifest"]["validation"]["errors"] == []
-    assert set(READ_ONLY_SERVICE_ACCOUNT["denied_subresources"]).issuperset({"pods/exec", "pods/attach", "pods/portforward"})
+    assert set(READ_ONLY_SERVICE_ACCOUNT["denied_subresources"]).issuperset(
+        {"pods/exec", "pods/attach", "pods/portforward"}
+    )
 
 
 def test_kubernetes_access_model_report_fails_closed_when_docs_are_missing(tmp_path):

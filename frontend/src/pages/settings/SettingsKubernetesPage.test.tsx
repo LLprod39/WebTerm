@@ -180,7 +180,7 @@ describe("SettingsKubernetesPage", () => {
     expect(screen.queryByText("Release gate checks ещё не пришли из backend readiness.")).not.toBeInTheDocument();
     expect(screen.getAllByText("Production OIDC/Keycloak runtime gate is not enforced until production.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Release scope is local; production approval is required.").length).toBeGreaterThan(0);
-    expect(screen.getByText(/KUBERNETES_OPS_READY_FOR_SIDEBAR=true/)).toBeInTheDocument();
+    expect(screen.getAllByText(/KUBERNETES_OPS_READY_FOR_SIDEBAR=true/).length).toBeGreaterThan(0);
     expect(await screen.findByRole("heading", { name: "Настройка провайдеров" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { level: 2, name: "Sync worker" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Readiness gate" })).toBeInTheDocument();

@@ -65,7 +65,13 @@ def list_cluster_nodes(
         "operation": "node_list",
         "cluster": _cluster_payload(cluster),
         "provider": _provider_payload(provider),
-        "target": {"api_version": ref.api_version, "kind": ref.kind, "resource": ref.resource, "namespace": "", "name": ""},
+        "target": {
+            "api_version": ref.api_version,
+            "kind": ref.kind,
+            "resource": ref.resource,
+            "namespace": "",
+            "name": "",
+        },
         "path": _public_path(path),
         "nodes": nodes,
         "summary": summary,
@@ -212,7 +218,11 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode node view.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode node view.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 

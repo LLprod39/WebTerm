@@ -33,7 +33,7 @@ export default function KubernetesFleetPage() {
     queryFn: fetchKubernetesFleetBundles,
     staleTime: 15_000,
   });
-  const bundles = bundlesQuery.data?.bundles || [];
+  const bundles = useMemo(() => bundlesQuery.data?.bundles || [], [bundlesQuery.data?.bundles]);
   const rolling = bundles.filter((b) => b.status === "rolling").length;
   const degraded = bundles.filter((b) => b.status === "degraded").length;
   const ready = bundles.filter((b) => b.status === "ready").length;

@@ -17,7 +17,10 @@ export function PluginConnectorsPanel() {
   const { toast } = useToast();
   const [selectedKey, setSelectedKey] = useState("");
   const surfacesQuery = useQuery({ queryKey: ["plugins", "surfaces", "connectors"], queryFn: fetchPluginSurfaces });
-  const connectors = surfacesQuery.data?.surfaces?.connectors ?? [];
+  const connectors = useMemo(
+    () => surfacesQuery.data?.surfaces?.connectors ?? [],
+    [surfacesQuery.data?.surfaces?.connectors],
+  );
   const selected = useMemo(
     () => connectors.find((item) => connectorId(item) === selectedKey) ?? connectors[0] ?? null,
     [connectors, selectedKey],

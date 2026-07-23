@@ -64,9 +64,7 @@ def test_web_search_returns_signed_result_ids(monkeypatch):
         "build_opener",
         lambda *args: _FakeOpener(_FakeResponse(json.dumps(payload).encode())),
     )
-    result = web_tools.web_search(
-        AssistantActionContext(user=None, input_payload={"query": "official release notes"})
-    )
+    result = web_tools.web_search(AssistantActionContext(user=None, input_payload={"query": "official release notes"}))
     assert result["ok"] is True
     assert result["count"] == 1
     assert result["results"][0]["result_id"]
@@ -119,9 +117,7 @@ def test_attach_web_sources_reads_wrapped_tool_result_and_deduplicates():
     web_tools.attach_web_sources(message.pk, wrapped)
 
     message.refresh_from_db()
-    assert message.metadata["web_sources"] == [
-        {"title": "Official docs", "url": "https://docs.example.com/page"}
-    ]
+    assert message.metadata["web_sources"] == [{"title": "Official docs", "url": "https://docs.example.com/page"}]
 
 
 @pytest.mark.django_db

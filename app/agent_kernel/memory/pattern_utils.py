@@ -277,7 +277,9 @@ def pattern_has_setup_step(pattern: OperationalPattern) -> bool:
 
 def automation_verification_hint(pattern: OperationalPattern) -> str:
     if pattern.pattern_kind == "sequence" and pattern.has_verification_step:
-        return "последний шаг workflow уже выступает как verification; нужно проверить его exit code и сигнал результата."
+        return (
+            "последний шаг workflow уже выступает как verification; нужно проверить его exit code и сигнал результата."
+        )
     if pattern.intent == "service":
         return "проверить `systemctl is-active <service>` и последние строки `journalctl`."
     if pattern.intent == "docker":
@@ -303,7 +305,9 @@ def automation_candidate_lines(pattern: OperationalPattern, *, enhancement: dict
         for index, command in enumerate(pattern.commands, start=1):
             lines.append(f"Шаг {index}: выполнить `{command}` и сохранить stdout/stderr + exit code.")
         lines.append(f"Шаг {len(pattern.commands) + 1}: {verification_step}")
-        lines.append(f"Шаг {len(pattern.commands) + 2}: записать краткую выжимку в recent_changes/runbook, если результат полезен.")
+        lines.append(
+            f"Шаг {len(pattern.commands) + 2}: записать краткую выжимку в recent_changes/runbook, если результат полезен."
+        )
     else:
         lines.extend(
             [
@@ -347,7 +351,9 @@ def skill_draft_lines(pattern: OperationalPattern, *, enhancement: dict[str, Any
         lines.append(f"- Workflow: {' -> '.join(pattern.commands)}")
     else:
         lines.append(f"- Primary command: {pattern.display_command}")
-    lines.append(f"- Verification: {compact_text(str(enhancement.get('verification') or verification_step), limit=180)}")
+    lines.append(
+        f"- Verification: {compact_text(str(enhancement.get('verification') or verification_step), limit=180)}"
+    )
     if enhancement.get("playbook_summary"):
         lines.append(f"- Playbook: {compact_text(str(enhancement['playbook_summary']), limit=180)}")
     if enhancement.get("prerequisites"):
@@ -380,7 +386,9 @@ def is_automation_candidate(pattern: OperationalPattern) -> bool:
     if float(pattern.success_rate or 0.0) < success_threshold:
         return False
     if pattern_has_destructive_step(pattern):
-        return pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
+        return pattern.pattern_kind == "sequence" and (
+            pattern.has_verification_step or pattern.verification_rate >= 0.5
+        )
     if pattern_has_mutating_step(pattern) and not (
         pattern.pattern_kind == "sequence" and (pattern.has_verification_step or pattern.verification_rate >= 0.5)
     ):
@@ -430,7 +438,11 @@ def derive_human_habits(patterns: list[OperationalPattern]) -> list[str]:
             continue
         if float(pattern.success_rate or 0.0) < 0.8:
             continue
-        if pattern_has_mutating_step(pattern) or pattern_has_destructive_step(pattern) or pattern_has_setup_step(pattern):
+        if (
+            pattern_has_mutating_step(pattern)
+            or pattern_has_destructive_step(pattern)
+            or pattern_has_setup_step(pattern)
+        ):
             continue
         if pattern.pattern_kind == "sequence":
             habit_lines.append(

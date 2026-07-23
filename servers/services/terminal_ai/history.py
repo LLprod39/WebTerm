@@ -14,6 +14,7 @@ The service enforces a rolling window so the ``terminal_ai_messages``
 table stays small: once a conversation exceeds ``max_entries`` rows the
 oldest entries are hard-deleted in a single follow-up query.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -61,9 +62,7 @@ def append_message_sync(
         total = qs.count()
         if total > max_entries:
             # ids of rows to keep (newest first)
-            keep_ids = list(
-                qs.order_by("-created_at").values_list("id", flat=True)[:max_entries]
-            )
+            keep_ids = list(qs.order_by("-created_at").values_list("id", flat=True)[:max_entries])
             deleted, _ = qs.exclude(id__in=keep_ids).delete()
             pruned = int(deleted or 0)
 
@@ -101,9 +100,7 @@ def clear_history_sync(*, user_id: int, server_id: int) -> int:
     """Wipe the entire terminal-AI chat history for (user, server)."""
     from servers.models import TerminalAiChatMessage
 
-    deleted, _ = TerminalAiChatMessage.objects.filter(
-        user_id=user_id, server_id=server_id
-    ).delete()
+    deleted, _ = TerminalAiChatMessage.objects.filter(user_id=user_id, server_id=server_id).delete()
     return int(deleted or 0)
 
 

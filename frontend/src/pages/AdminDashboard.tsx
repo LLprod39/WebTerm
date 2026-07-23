@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Maximize2, Minimize2, Radio } from "lucide-react";
 
-import { fetchAdminDashboard, fetchMonitoringDashboard } from "@/api";
+import { fetchAdminDashboard, fetchAuthSession, fetchMonitoringDashboard } from "@/api";
 import { fetchPluginSurfaces } from "@/api";
 import { Button } from "@/components/ui/button";
 import { CustomizableDashboard } from "@/components/dashboard/CustomizableDashboard";
@@ -33,6 +33,12 @@ export default function AdminDashboard() {
     queryFn: fetchAdminDashboard,
     refetchInterval: 30000,
   });
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
   const { data: monitoringResponse } = useQuery({
     queryKey: ["monitoring-dashboard"],
     queryFn: fetchMonitoringDashboard,
@@ -44,6 +50,7 @@ export default function AdminDashboard() {
   const { data: pluginSurfaces } = useQuery({
     queryKey: ["plugins", "surfaces", "dashboard", "admin"],
     queryFn: fetchPluginSurfaces,
+    enabled: Boolean(authData?.user?.features.plugins),
   });
 
   const liveServerIds = useMemo(

@@ -27,22 +27,42 @@ class TaskFamily:
 
 TASK_FAMILIES: tuple[TaskFamily, ...] = (
     TaskFamily(
-        slug="identity_access",
-        name="Identity and access administration",
-        description="Users, groups, roles, clients and access changes in services like Keycloak.",
-        keywords=("keycloak", "iam", "identity", "user", "users", "group", "groups", "role", "roles", "realm", "client"),
-        service_hints=("keycloak", "iam", "identity"),
-        preferred_nodes=("trigger/manual", "agent/mcp_call", "logic/human_approval", "agent/mcp_call", "output/report"),
-        required_capabilities=("mcp", "skill"),
-        pilot_prompt="Create a Keycloak workflow: preflight user/group/role lookup, approval, role/group change, verification, report.",
-    ),
-    TaskFamily(
         slug="runtime_ops",
         name="Runtime operations",
         description="Linux/systemd/Docker package, disk, backup, process, restart, log collection and health verification workflows.",
-        keywords=("linux", "systemd", "service", "docker", "container", "process", "logs", "restart", "health", "package", "packages", "apt", "yum", "dnf", "disk", "cleanup", "tmp", "backup", "restore"),
+        keywords=(
+            "linux",
+            "systemd",
+            "service",
+            "docker",
+            "container",
+            "process",
+            "logs",
+            "restart",
+            "health",
+            "package",
+            "packages",
+            "apt",
+            "yum",
+            "dnf",
+            "disk",
+            "cleanup",
+            "tmp",
+            "backup",
+            "restore",
+        ),
         service_hints=("linux", "docker", "systemd"),
-        preferred_nodes=("trigger/manual", "ops/server_snapshot", "logic/human_approval", "ops/service_action", "ops/package_action", "ops/disk_cleanup", "ops/backup_restore_check", "ops/http_check", "output/report"),
+        preferred_nodes=(
+            "trigger/manual",
+            "ops/server_snapshot",
+            "logic/human_approval",
+            "ops/service_action",
+            "ops/package_action",
+            "ops/disk_cleanup",
+            "ops/backup_restore_check",
+            "ops/http_check",
+            "output/report",
+        ),
         required_capabilities=("server", "node"),
         pilot_prompt="Create a safe Linux runtime workflow: snapshot, package/disk/backup/service action, approval when mutating, verification, report.",
     ),
@@ -52,7 +72,14 @@ TASK_FAMILIES: tuple[TaskFamily, ...] = (
         description="Kubernetes diagnostics and controlled workload actions through a Kubernetes MCP/skill pack.",
         keywords=("kubernetes", "k8s", "kubectl", "pod", "deployment", "namespace", "ingress", "helm"),
         service_hints=("kubernetes", "k8s", "kubectl", "helm"),
-        preferred_nodes=("trigger/manual", "agent/mcp_call", "agent/llm_query", "logic/human_approval", "agent/mcp_call", "output/report"),
+        preferred_nodes=(
+            "trigger/manual",
+            "agent/mcp_call",
+            "agent/llm_query",
+            "logic/human_approval",
+            "agent/mcp_call",
+            "output/report",
+        ),
         required_capabilities=("mcp", "skill"),
         pilot_prompt="Create a Kubernetes diagnosis workflow: inspect namespace, summarize risk, request approval for a safe action, verify.",
     ),
@@ -62,7 +89,14 @@ TASK_FAMILIES: tuple[TaskFamily, ...] = (
         description="Database checks, read-only diagnostics and approved maintenance through DB MCP/skills.",
         keywords=("postgres", "postgresql", "mysql", "database", "db", "sql", "query", "migration", "backup"),
         service_hints=("postgres", "postgresql", "mysql", "database", "sql"),
-        preferred_nodes=("trigger/manual", "agent/mcp_call", "agent/llm_query", "logic/human_approval", "agent/mcp_call", "output/report"),
+        preferred_nodes=(
+            "trigger/manual",
+            "agent/mcp_call",
+            "agent/llm_query",
+            "logic/human_approval",
+            "agent/mcp_call",
+            "output/report",
+        ),
         required_capabilities=("mcp", "skill"),
         pilot_prompt="Create a database triage workflow: read-only checks, summarize findings, approval before maintenance, verification.",
     ),
@@ -70,9 +104,27 @@ TASK_FAMILIES: tuple[TaskFamily, ...] = (
         slug="code_delivery",
         name="Code delivery and repository automation",
         description="Repository, CI/CD, pull request and deployment-support workflows through Git providers and skills.",
-        keywords=("github", "gitlab", "repo", "repository", "pull request", "merge request", "ci", "cd", "pipeline", "deploy"),
+        keywords=(
+            "github",
+            "gitlab",
+            "repo",
+            "repository",
+            "pull request",
+            "merge request",
+            "ci",
+            "cd",
+            "pipeline",
+            "deploy",
+        ),
         service_hints=("github", "gitlab", "git", "ci", "deploy"),
-        preferred_nodes=("trigger/webhook", "agent/mcp_call", "agent/llm_query", "logic/human_approval", "agent/mcp_call", "output/report"),
+        preferred_nodes=(
+            "trigger/webhook",
+            "agent/mcp_call",
+            "agent/llm_query",
+            "logic/human_approval",
+            "agent/mcp_call",
+            "output/report",
+        ),
         required_capabilities=("mcp", "skill"),
         pilot_prompt="Create a CI/CD support workflow: inspect failed run, summarize cause, propose fix path, report.",
     ),
@@ -81,8 +133,25 @@ TASK_FAMILIES: tuple[TaskFamily, ...] = (
         name="Incident response",
         description="Alert-triggered diagnosis, evidence collection, approval, incident/ticket update, verification and stakeholder notification.",
         keywords=("incident", "alert", "monitoring", "prometheus", "grafana", "sentry", "oncall", "outage"),
-        service_hints=("monitoring", "observability", "prometheus", "grafana", "loki", "sentry", "pagerduty", "jira", "alert"),
-        preferred_nodes=("trigger/monitoring", "agent/mcp_call", "agent/llm_query", "logic/human_approval", "agent/mcp_call", "output/report"),
+        service_hints=(
+            "monitoring",
+            "observability",
+            "prometheus",
+            "grafana",
+            "loki",
+            "sentry",
+            "pagerduty",
+            "jira",
+            "alert",
+        ),
+        preferred_nodes=(
+            "trigger/monitoring",
+            "agent/mcp_call",
+            "agent/llm_query",
+            "logic/human_approval",
+            "agent/mcp_call",
+            "output/report",
+        ),
         required_capabilities=("mcp", "skill"),
         pilot_prompt="Create an incident workflow: start from alert, collect observability evidence, propose action, approval, update incident ticket, verify and report.",
     ),
@@ -120,11 +189,7 @@ def _mcp_read_queryset_for_user(user):
 def _skill_access_map(slugs: list[str]) -> dict[str, StudioSkillAccess]:
     if not slugs:
         return {}
-    rows = (
-        StudioSkillAccess.objects.filter(slug__in=slugs)
-        .select_related("owner")
-        .prefetch_related("shared_with")
-    )
+    rows = StudioSkillAccess.objects.filter(slug__in=slugs).select_related("owner").prefetch_related("shared_with")
     return {row.slug.lower(): row for row in rows}
 
 
@@ -166,11 +231,7 @@ def _visible_skill_payloads(user) -> list[dict[str, Any]]:
         return []
     skills = list_skills()
     access_map = _skill_access_map([skill.slug for skill in skills])
-    return [
-        _skill_summary(skill)
-        for skill in skills
-        if _can_read_skill(user, access_map.get(skill.slug.lower()))
-    ]
+    return [_skill_summary(skill) for skill in skills if _can_read_skill(user, access_map.get(skill.slug.lower()))]
 
 
 def _family_readiness(
@@ -200,15 +261,23 @@ def build_studio_capability_registry(user, *, server_count: int | None = None) -
     node_manifests = node_manifest_payload(enabled_plugin_ids_for_user(user))
     capability_packs = list_pilot_capability_packs()
     mcp_blobs = [
-        (mcp, _search_blob(mcp, ("name", "description", "transport", "url", "command", "args")))
-        for mcp in mcp_servers
+        (mcp, _search_blob(mcp, ("name", "description", "transport", "url", "command", "args"))) for mcp in mcp_servers
     ]
     skill_blobs = [
         (
             skill,
             _search_blob(
                 skill,
-                ("slug", "name", "description", "service", "category", "tags", "recommended_tools", "guardrail_summary"),
+                (
+                    "slug",
+                    "name",
+                    "description",
+                    "service",
+                    "category",
+                    "tags",
+                    "recommended_tools",
+                    "guardrail_summary",
+                ),
             ),
         )
         for skill in skills
@@ -216,8 +285,12 @@ def build_studio_capability_registry(user, *, server_count: int | None = None) -
 
     task_families: list[dict[str, Any]] = []
     for family in TASK_FAMILIES:
-        mcp_matches = [mcp for mcp, blob in mcp_blobs if _matches_keywords(blob, family.keywords + family.service_hints)]
-        skill_matches = [skill for skill, blob in skill_blobs if _matches_keywords(blob, family.keywords + family.service_hints)]
+        mcp_matches = [
+            mcp for mcp, blob in mcp_blobs if _matches_keywords(blob, family.keywords + family.service_hints)
+        ]
+        skill_matches = [
+            skill for skill, blob in skill_blobs if _matches_keywords(blob, family.keywords + family.service_hints)
+        ]
         readiness = _family_readiness(
             family,
             mcp_matches=mcp_matches,

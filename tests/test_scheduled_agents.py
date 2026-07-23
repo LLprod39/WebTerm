@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from asgiref.sync import sync_to_async
@@ -61,11 +60,11 @@ def test_is_agent_due_respects_daily_schedule_config():
         is_enabled=True,
     )
 
-    assert is_agent_due(agent, datetime(2026, 6, 16, 7, 59, tzinfo=dt_timezone.utc)) is False
-    assert is_agent_due(agent, datetime(2026, 6, 16, 8, 1, tzinfo=dt_timezone.utc)) is True
+    assert is_agent_due(agent, datetime(2026, 6, 16, 7, 59, tzinfo=UTC)) is False
+    assert is_agent_due(agent, datetime(2026, 6, 16, 8, 1, tzinfo=UTC)) is True
 
-    agent.last_run_at = datetime(2026, 6, 16, 8, 0, tzinfo=dt_timezone.utc)
-    assert is_agent_due(agent, datetime(2026, 6, 16, 9, 0, tzinfo=dt_timezone.utc)) is False
+    agent.last_run_at = datetime(2026, 6, 16, 8, 0, tzinfo=UTC)
+    assert is_agent_due(agent, datetime(2026, 6, 16, 9, 0, tzinfo=UTC)) is False
 
 
 @pytest.mark.django_db
@@ -137,13 +136,15 @@ def test_dispatch_scheduled_agents_queues_mini_agent(monkeypatch):
     captured: dict[str, object] = {}
 
     def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
-        captured.update({
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "server_ids": server_ids,
-            "user_id": user_id,
-            "plan_only": plan_only,
-        })
+        captured.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+                "plan_only": plan_only,
+            }
+        )
 
     monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 

@@ -70,7 +70,9 @@ def api_agents(request):
         _set_owned_server_scope(
             agent,
             request.user,
-            _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
+            _normalise_related_ids(
+                data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")
+            ),
         )
         if _is_admin(request.user):
             agent.is_shared = bool(data.get("is_shared", agent.is_shared))
@@ -124,7 +126,9 @@ def api_agent_detail(request, agent_id: int):
             _set_owned_server_scope(
                 agent,
                 request.user,
-                _normalise_related_ids(data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")),
+                _normalise_related_ids(
+                    data.get("server_scope_ids") if "server_scope_ids" in data else data.get("server_scope")
+                ),
             )
         if _is_admin(request.user):
             if "is_shared" in data:

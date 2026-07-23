@@ -32,6 +32,7 @@ rather than to a single turn:
 - the running per-command ``active_cmd_id`` + streamed output buffer
 - the long-lived chat history (separate concern, F2-9)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

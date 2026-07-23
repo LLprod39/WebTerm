@@ -146,7 +146,9 @@ async def execute_mars_run(run_id: int) -> None:
                     run_dir=run_dir,
                     docker_runtime=docker_runtime,
                 )
-                run.codex_summary = "\n\n".join([run.codex_summary or "", f"## Repair round {repair_round}", repair_text]).strip()
+                run.codex_summary = "\n\n".join(
+                    [run.codex_summary or "", f"## Repair round {repair_round}", repair_text]
+                ).strip()
                 await _save_instance(run, ["codex_summary"])
                 if repair_exit != 0:
                     raise RuntimeError(f"Codex repair round {repair_round} exited with code {repair_exit}")
@@ -159,11 +161,18 @@ async def execute_mars_run(run_id: int) -> None:
                     test_command=test_command,
                     event_prefix=f"tests_repair_{repair_round}",
                 )
-                test_history.append(_test_history_entry(f"verification after repair {repair_round}", test_exit, test_output))
+                test_history.append(
+                    _test_history_entry(f"verification after repair {repair_round}", test_exit, test_output)
+                )
                 run.test_output = "\n\n".join(test_history)[-40000:]
                 await _save_instance(run, ["test_output"])
                 if test_exit == 0:
-                    await sync_to_async(record_event)(run, "orchestrator_repair_succeeded", "Codex repaired verification failure", {"repair_round": repair_round})
+                    await sync_to_async(record_event)(
+                        run,
+                        "orchestrator_repair_succeeded",
+                        "Codex repaired verification failure",
+                        {"repair_round": repair_round},
+                    )
                     break
 
         run.git_after = await sync_to_async(git_status)(str(policy.root))
@@ -180,7 +189,9 @@ async def execute_mars_run(run_id: int) -> None:
         run.gemini_review = gemini_output[-40000:]
         await _save_instance(run, ["gemini_review"])
         if gemini_exit != 0:
-            await sync_to_async(record_event)(run, "gemini_review_failed", "Gemini review failed", {"exit_code": gemini_exit})
+            await sync_to_async(record_event)(
+                run, "gemini_review_failed", "Gemini review failed", {"exit_code": gemini_exit}
+            )
 
         if gemini_exit == 0 and review_requests_changes(run.gemini_review):
             for repair_round in range(1, review_repair_rounds() + 1):
@@ -200,7 +211,9 @@ async def execute_mars_run(run_id: int) -> None:
                     run_dir=run_dir,
                     docker_runtime=docker_runtime,
                 )
-                run.codex_summary = "\n\n".join([run.codex_summary or "", f"## Review repair round {repair_round}", repair_text]).strip()
+                run.codex_summary = "\n\n".join(
+                    [run.codex_summary or "", f"## Review repair round {repair_round}", repair_text]
+                ).strip()
                 await _save_instance(run, ["codex_summary"])
                 if repair_exit != 0:
                     raise RuntimeError(f"Codex review repair round {repair_round} exited with code {repair_exit}")
@@ -214,7 +227,9 @@ async def execute_mars_run(run_id: int) -> None:
                         test_command=test_command,
                         event_prefix=f"tests_review_repair_{repair_round}",
                     )
-                    test_history.append(_test_history_entry(f"verification after review repair {repair_round}", test_exit, test_output))
+                    test_history.append(
+                        _test_history_entry(f"verification after review repair {repair_round}", test_exit, test_output)
+                    )
                     run.test_output = "\n\n".join(test_history)[-40000:]
                     await _save_instance(run, ["test_output"])
                 run.git_after = await sync_to_async(git_status)(str(policy.root))
@@ -230,7 +245,12 @@ async def execute_mars_run(run_id: int) -> None:
                 run.gemini_review = gemini_output[-40000:]
                 await _save_instance(run, ["gemini_review"])
                 if not review_requests_changes(run.gemini_review):
-                    await sync_to_async(record_event)(run, "orchestrator_review_repair_succeeded", "Codex addressed Gemini review blockers", {"repair_round": repair_round})
+                    await sync_to_async(record_event)(
+                        run,
+                        "orchestrator_review_repair_succeeded",
+                        "Codex addressed Gemini review blockers",
+                        {"repair_round": repair_round},
+                    )
                     break
 
         run.final_report = "\n\n".join(

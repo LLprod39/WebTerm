@@ -32,7 +32,9 @@ def build_resource_catalog(
         _merge(entries, item, source="api", cluster_available=True)
     for item in _items(crd_resources):
         _merge(entries, item, source="crd", cluster_available=True, custom=True)
-    catalog_items = sorted(entries.values(), key=lambda item: (item["api_version"], item["kind"], item["resource"]))[:limit]
+    catalog_items = sorted(entries.values(), key=lambda item: (item["api_version"], item["kind"], item["resource"]))[
+        :limit
+    ]
     groups = _catalog_groups(catalog_items)
     return {
         "status": _catalog_status(api_resources, crd_resources),
@@ -42,7 +44,9 @@ def build_resource_catalog(
         "counts": _catalog_counts(catalog_items),
         "groups": groups,
         "group_count": len(groups),
-        "truncated": len(entries) > limit or bool(api_resources.get("truncated")) or bool(crd_resources.get("truncated")),
+        "truncated": len(entries) > limit
+        or bool(api_resources.get("truncated"))
+        or bool(crd_resources.get("truncated")),
         "raw_payload_included": False,
     }
 
@@ -99,9 +103,13 @@ def _merge(
     entry["namespaced"] = bool(entry["namespaced"] or item.get("namespaced"))
     entry["scope"] = "Namespaced" if entry["namespaced"] else "Cluster"
     entry["verbs"] = _unique([*entry["verbs"], *_string_list(item.get("verbs"))])
-    entry["short_names"] = _unique([*entry["short_names"], *_string_list(item.get("short_names") or item.get("shortNames"))])
+    entry["short_names"] = _unique(
+        [*entry["short_names"], *_string_list(item.get("short_names") or item.get("shortNames"))]
+    )
     entry["categories"] = _unique([*entry["categories"], *_string_list(item.get("categories"))])
-    entry["ui_group"] = _resource_group(api_version=api_version, kind=kind, resource=resource, custom=bool(entry["custom"]))
+    entry["ui_group"] = _resource_group(
+        api_version=api_version, kind=kind, resource=resource, custom=bool(entry["custom"])
+    )
     entry["safe_read_actions"] = _safe_read_actions(entry["verbs"], kind=kind)
     entry["has_mutating_verbs"] = any(verb in MUTATING_VERBS for verb in entry["verbs"])
     if item.get("singular_name"):
@@ -180,7 +188,16 @@ def _resource_group(*, api_version: str, kind: str, resource: str, custom: bool)
     kind_lower = kind.lower()
     resource_lower = resource.lower()
     group = _group(api_version)
-    if kind_lower in {"pod", "deployment", "statefulset", "daemonset", "replicaset", "job", "cronjob", "horizontalpodautoscaler"}:
+    if kind_lower in {
+        "pod",
+        "deployment",
+        "statefulset",
+        "daemonset",
+        "replicaset",
+        "job",
+        "cronjob",
+        "horizontalpodautoscaler",
+    }:
         return "workloads"
     if kind_lower in {"service", "ingress", "endpoints", "endpointslice", "networkpolicy"}:
         return "network"
@@ -188,7 +205,10 @@ def _resource_group(*, api_version: str, kind: str, resource: str, custom: bool)
         return "config"
     if kind_lower in {"persistentvolumeclaim", "persistentvolume", "storageclass"}:
         return "storage"
-    if kind_lower in {"role", "rolebinding", "clusterrole", "clusterrolebinding"} or group == "rbac.authorization.k8s.io":
+    if (
+        kind_lower in {"role", "rolebinding", "clusterrole", "clusterrolebinding"}
+        or group == "rbac.authorization.k8s.io"
+    ):
         return "security"
     if kind_lower in {"poddisruptionbudget", "resourcequota", "limitrange"} or group == "policy":
         return "policy"

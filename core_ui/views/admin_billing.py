@@ -5,7 +5,7 @@ Provider billing helpers for the admin dashboard.
 import json
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
@@ -277,7 +277,7 @@ def _get_provider_billing_snapshot(now_utc: datetime, providers: dict) -> dict:
     ):
         return _PROVIDER_BILLING_CACHE["data"]
 
-    day_start = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=timezone.utc)
+    day_start = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=UTC)
     day_end = now_utc
     day_start_ts = int(day_start.timestamp())
     now_ts = int(day_end.timestamp())

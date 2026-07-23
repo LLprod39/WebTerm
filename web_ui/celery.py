@@ -11,6 +11,7 @@ Usage:
     # Start both in dev (not recommended for production):
     celery -A web_ui worker -B -l info
 """
+
 import os
 
 from celery import Celery

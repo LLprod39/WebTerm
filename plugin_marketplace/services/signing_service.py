@@ -185,12 +185,20 @@ def package_signature_status(package: PluginPackage) -> str:
         if payload != package_signing_payload(package):
             return PluginPackage.SIGNATURE_INVALID
         if provider == SIGNING_PROVIDER_EXTERNAL_KMS:
-            return PluginPackage.SIGNATURE_SIGNED if _external_signature_is_valid(signature_payload) else PluginPackage.SIGNATURE_INVALID
+            return (
+                PluginPackage.SIGNATURE_SIGNED
+                if _external_signature_is_valid(signature_payload)
+                else PluginPackage.SIGNATURE_INVALID
+            )
         try:
             expected = _signature_for_payload(payload, key_id=key_id)
         except ValueError:
             return PluginPackage.SIGNATURE_INVALID
-        return PluginPackage.SIGNATURE_SIGNED if hmac.compare_digest(signature, expected) else PluginPackage.SIGNATURE_INVALID
+        return (
+            PluginPackage.SIGNATURE_SIGNED
+            if hmac.compare_digest(signature, expected)
+            else PluginPackage.SIGNATURE_INVALID
+        )
     return signature_status_for_hash(package.package_hash, package.manifest or {})
 
 

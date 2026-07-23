@@ -43,7 +43,9 @@ def build_action_request_summary(
     needs_verification = queryset.filter(status=K8sActionRequest.STATUS_EXECUTED_NATIVE)
     pending_approval = queryset.filter(status=K8sActionRequest.STATUS_PENDING_APPROVAL)
     approved_external = queryset.filter(status=K8sActionRequest.STATUS_APPROVED_EXTERNAL)
-    blocked = queryset.filter(status__in=[K8sActionRequest.STATUS_EXECUTION_BLOCKED, K8sActionRequest.STATUS_VERIFICATION_FAILED])
+    blocked = queryset.filter(
+        status__in=[K8sActionRequest.STATUS_EXECUTION_BLOCKED, K8sActionRequest.STATUS_VERIFICATION_FAILED]
+    )
     attention = queryset.filter(status__in=sorted(ATTENTION_STATUSES))
     high_risk_attention = attention.filter(risk_tier=K8sActionRequest.RISK_HIGH)
     return {
@@ -134,14 +136,21 @@ def _bounded_queue_limit(value: int | str | None) -> int:
 
 
 def _queue_items(queryset: QuerySet[K8sActionRequest], *, limit: int) -> list[dict[str, Any]]:
-    return [_summary_item(action_request) for action_request in queryset.order_by("-updated_at", "-created_at", "-id")[:limit]]
+    return [
+        _summary_item(action_request)
+        for action_request in queryset.order_by("-updated_at", "-created_at", "-id")[:limit]
+    ]
 
 
 def _summary_item(action_request: K8sActionRequest) -> dict[str, Any]:
     target = action_request.target if isinstance(action_request.target, dict) else {}
     report = action_request.report if isinstance(action_request.report, dict) else {}
     execution_policy = action_request.execution_policy if isinstance(action_request.execution_policy, dict) else {}
-    rollback_plan = action_request.preview.get("rollback_plan") if isinstance(action_request.preview, dict) and isinstance(action_request.preview.get("rollback_plan"), dict) else {}
+    rollback_plan = (
+        action_request.preview.get("rollback_plan")
+        if isinstance(action_request.preview, dict) and isinstance(action_request.preview.get("rollback_plan"), dict)
+        else {}
+    )
     verification_plan = report.get("verification_plan") if isinstance(report.get("verification_plan"), dict) else {}
     return {
         "id": str(action_request.request_id),
@@ -149,15 +158,21 @@ def _summary_item(action_request: K8sActionRequest) -> dict[str, Any]:
         "status": action_request.status,
         "risk_tier": action_request.risk_tier,
         "requested_by": action_request.username_snapshot or getattr(action_request.requested_by, "username", ""),
-        "cluster_id": f"cluster_{action_request.cluster_id}" if action_request.cluster_id else reference_action_text(target.get("cluster_id") or "", limit=120),
-        "cluster_name": action_request.cluster.name if action_request.cluster_id else reference_action_text(target.get("cluster_name") or "", limit=160),
+        "cluster_id": f"cluster_{action_request.cluster_id}"
+        if action_request.cluster_id
+        else reference_action_text(target.get("cluster_id") or "", limit=120),
+        "cluster_name": action_request.cluster.name
+        if action_request.cluster_id
+        else reference_action_text(target.get("cluster_name") or "", limit=160),
         "target": _target_summary(target),
         "flags": {
             "needs_approval": action_request.status == K8sActionRequest.STATUS_PENDING_APPROVAL,
             "needs_external_execution": action_request.status == K8sActionRequest.STATUS_APPROVED_EXTERNAL,
             "needs_verification": action_request.status == K8sActionRequest.STATUS_EXECUTED_NATIVE,
-            "blocked": action_request.status in {K8sActionRequest.STATUS_EXECUTION_BLOCKED, K8sActionRequest.STATUS_VERIFICATION_FAILED},
-            "verified": action_request.status in {K8sActionRequest.STATUS_VERIFIED_EXTERNAL, K8sActionRequest.STATUS_VERIFIED_NATIVE},
+            "blocked": action_request.status
+            in {K8sActionRequest.STATUS_EXECUTION_BLOCKED, K8sActionRequest.STATUS_VERIFICATION_FAILED},
+            "verified": action_request.status
+            in {K8sActionRequest.STATUS_VERIFIED_EXTERNAL, K8sActionRequest.STATUS_VERIFIED_NATIVE},
             "native_execution_enabled": bool(execution_policy.get("native_execution_enabled")),
             "approval_ref_present": bool(action_request.approval_ref),
             "reason_present": bool(action_request.reason),
@@ -170,9 +185,13 @@ def _summary_item(action_request: K8sActionRequest) -> dict[str, Any]:
         },
         "verification": {
             "status": reference_action_text(verification_plan.get("status") or report.get("status") or "", limit=80),
-            "mode": reference_action_text(verification_plan.get("mode") or report.get("verification_mode") or "", limit=120),
+            "mode": reference_action_text(
+                verification_plan.get("mode") or report.get("verification_mode") or "", limit=120
+            ),
             "required": bool(verification_plan.get("required") or report.get("requires_verification")),
-            "check_ids": [reference_action_text(item, limit=120) for item in (verification_plan.get("check_ids") or [])[:10]],
+            "check_ids": [
+                reference_action_text(item, limit=120) for item in (verification_plan.get("check_ids") or [])[:10]
+            ],
             "payload_stored": bool(verification_plan.get("payload_stored")),
             "sensitive_values_stored": bool(verification_plan.get("sensitive_values_stored")),
         },
@@ -187,7 +206,9 @@ def _target_summary(target: dict[str, Any]) -> dict[str, Any]:
     return {
         "namespace": reference_action_text(safe.get("namespace") or "", limit=120),
         "kind": reference_action_text(safe.get("kind") or "", limit=80),
-        "name": reference_action_text(safe.get("name") or safe.get("resource") or safe.get("bundle_name") or "", limit=180),
+        "name": reference_action_text(
+            safe.get("name") or safe.get("resource") or safe.get("bundle_name") or "", limit=180
+        ),
         "workload_id": reference_action_text(safe.get("workload_id") or "", limit=120),
         "app_id": reference_action_text(safe.get("app_id") or "", limit=120),
         "bundle_id": reference_action_text(safe.get("bundle_id") or "", limit=120),

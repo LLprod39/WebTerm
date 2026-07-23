@@ -78,7 +78,9 @@ def build_kubernetes_release_provider_secret_lifecycle_evidence(enabled: bool = 
         "mode": "rollback",
         "storage_mode": "managed",
         "rotation_supported": bool(checks.get("rotation_value_resolved")),
-        "persistent_rows": not bool(checks.get("rollback_removed_provider") and checks.get("rollback_removed_managed_storage")),
+        "persistent_rows": not bool(
+            checks.get("rollback_removed_provider") and checks.get("rollback_removed_managed_storage")
+        ),
         "checks": checks,
     }
     checks["plaintext_not_serialized"] = initial_value not in str(payload) and rotated_value not in str(payload)
@@ -86,7 +88,9 @@ def build_kubernetes_release_provider_secret_lifecycle_evidence(enabled: bool = 
     payload["success"] = success
     payload["status"] = "ready" if success else "failed"
     payload["rotation_supported"] = bool(checks.get("rotation_value_resolved"))
-    payload["persistent_rows"] = not bool(checks.get("rollback_removed_provider") and checks.get("rollback_removed_managed_storage"))
+    payload["persistent_rows"] = not bool(
+        checks.get("rollback_removed_provider") and checks.get("rollback_removed_managed_storage")
+    )
     return payload
 
 

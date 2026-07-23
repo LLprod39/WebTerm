@@ -15,10 +15,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         target = options["path"]
         try:
-            if Path(target).is_dir():
-                result = validate_plugin_source_dir(target)
-            else:
-                result = validate_wtp_package(target)
+            result = validate_plugin_source_dir(target) if Path(target).is_dir() else validate_wtp_package(target)
         except PluginPackageValidationError as exc:
             raise CommandError(str(exc)) from exc
         if not result.ok:

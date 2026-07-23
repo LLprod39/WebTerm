@@ -17,7 +17,11 @@ def build_kubernetes_release_completion_audit(
     production_gate = production_gate or {}
     artifact_report = artifact_report or {"status": "ready"}
     core_proofs = _core_backend_proofs(artifact_summary)
-    readiness_missing = [str(item.get("id") or "") for item in readiness_checks if item.get("required", True) and item.get("status") != "ready"]
+    readiness_missing = [
+        str(item.get("id") or "")
+        for item in readiness_checks
+        if item.get("required", True) and item.get("status") != "ready"
+    ]
     runtime_missing = [item for item in readiness_missing if item not in PRODUCTION_SCOPE_READINESS_CHECK_IDS]
     production_scope_missing = [item for item in readiness_missing if item in PRODUCTION_SCOPE_READINESS_CHECK_IDS]
     production_checks = _production_evidence_checks(production_gate, artifact_report, artifact_summary)
@@ -51,7 +55,9 @@ def _core_backend_proofs(summary: dict[str, Any]) -> list[dict[str, Any]]:
         {
             "id": "definition_of_done",
             "status": str(summary.get("definition_of_done_status") or ""),
-            "complete": bool(dod_total and dod_ready == dod_total and summary.get("definition_of_done_status") == "ready"),
+            "complete": bool(
+                dod_total and dod_ready == dod_total and summary.get("definition_of_done_status") == "ready"
+            ),
         },
         {
             "id": "normal_user_surface",
@@ -124,5 +130,9 @@ def _production_evidence_checks(
 
 
 def _missing_refs(production_gate: dict[str, Any]) -> list[dict[str, str]]:
-    refs = production_gate.get("missing_required_references") if isinstance(production_gate.get("missing_required_references"), list) else []
+    refs = (
+        production_gate.get("missing_required_references")
+        if isinstance(production_gate.get("missing_required_references"), list)
+        else []
+    )
     return [item for item in refs if isinstance(item, dict)]

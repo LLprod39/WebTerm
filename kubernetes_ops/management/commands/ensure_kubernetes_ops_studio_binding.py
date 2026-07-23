@@ -17,7 +17,9 @@ class Command(BaseCommand):
         parser.add_argument("--username", help="Staff username that should own the Kubernetes MCP binding.")
         parser.add_argument("--url", help="MCP JSON-RPC endpoint. Defaults to KUBERNETES_OPS_MCP_URL or mcp-demo.")
         parser.add_argument("--name", default=DEFAULT_KUBERNETES_MCP_NAME, help="MCP server name.")
-        parser.add_argument("--skip-test", action="store_true", help="Create/update the binding without testing tools/list.")
+        parser.add_argument(
+            "--skip-test", action="store_true", help="Create/update the binding without testing tools/list."
+        )
 
     def handle(self, *args, **options):
         user = resolve_kubernetes_mcp_user(options.get("username"))

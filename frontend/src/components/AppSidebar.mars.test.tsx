@@ -77,11 +77,11 @@ describe("AppSidebar preview-gated nav", () => {
     vi.clearAllMocks();
   });
 
-  it("renders MARS when enabled, Chat stays gated, and staff gets Kubernetes without readiness gate", async () => {
+  it("renders enabled MARS and Chat, and staff gets Kubernetes without readiness gate", async () => {
     renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, settings: true });
 
     expect(await screen.findByText("MARS")).toBeInTheDocument();
-    expect(screen.queryByText("Чат")).not.toBeInTheDocument();
+    expect(screen.getByText("Чат")).toBeInTheDocument();
     // Staff mock always has is_staff=true → Kubernetes is open when feature is on.
     expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();

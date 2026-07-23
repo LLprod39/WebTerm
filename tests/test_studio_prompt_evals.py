@@ -146,36 +146,46 @@ def _assert_mutations_are_approved(nodes: dict[str, dict[str, Any]], edges: list
         if _edge_handle(edge) == "approved"
         and nodes.get(str(edge.get("source") or ""), {}).get("type") == "logic/human_approval"
     }
-    assert mutating_ids <= approved_targets, f"{case_id}: mutating nodes without approval edge: {mutating_ids - approved_targets}"
+    assert mutating_ids <= approved_targets, (
+        f"{case_id}: mutating nodes without approval edge: {mutating_ids - approved_targets}"
+    )
 
 
-def _assert_verification_and_report_paths(nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any]], case_id: str) -> None:
+def _assert_verification_and_report_paths(
+    nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any]], case_id: str
+) -> None:
     mutating_ids = {node_id for node_id, node in nodes.items() if _is_mutating_node(node)}
     if not mutating_ids:
-        assert any(_is_verification_node(node) for node in nodes.values()), f"{case_id}: read-only workflow has no verification node"
-        assert any(str(node.get("type") or "").startswith("output/") for node in nodes.values()), f"{case_id}: read-only workflow has no report"
+        assert any(_is_verification_node(node) for node in nodes.values()), (
+            f"{case_id}: read-only workflow has no verification node"
+        )
+        assert any(str(node.get("type") or "").startswith("output/") for node in nodes.values()), (
+            f"{case_id}: read-only workflow has no report"
+        )
         return
     for node_id in mutating_ids:
         assert _has_path(start=node_id, nodes=nodes, edges=edges, predicate=_is_verification_node), (
             f"{case_id}: mutating node '{node_id}' has no verification path"
         )
-        assert _has_path(start=node_id, nodes=nodes, edges=edges, predicate=lambda node: str(node.get("type") or "").startswith("output/")), (
-            f"{case_id}: mutating node '{node_id}' has no report/notification path"
-        )
+        assert _has_path(
+            start=node_id,
+            nodes=nodes,
+            edges=edges,
+            predicate=lambda node: str(node.get("type") or "").startswith("output/"),
+        ), f"{case_id}: mutating node '{node_id}' has no report/notification path"
 
 
 def test_ops_prompt_eval_fixture_covers_pilot_launch_distribution():
-    assert len(EVAL_CASES) == 35
+    assert len(EVAL_CASES) == 30
     expected_templates = {case["expected_template"] for case in EVAL_CASES}
     assert expected_templates == PILOT_TEMPLATE_SLUGS
 
     by_template = Counter(case["expected_template"] for case in EVAL_CASES)
-    assert by_template["pilot-keycloak-access-change"] >= 5
     assert by_template["pilot-observability-incident-response"] >= 5
     assert by_template["pilot-linux-package-maintenance"] >= 5
     assert by_template["pilot-linux-disk-cleanup"] >= 5
     assert by_template["pilot-backup-restore-check"] >= 5
-    assert sum(count for slug, count in by_template.items() if slug != "pilot-keycloak-access-change") >= 30
+    assert sum(by_template.values()) >= 30
 
 
 def test_ops_prompt_evals_select_valid_safe_pilot_skeletons():
@@ -235,20 +245,7 @@ def _build_bound_nodes(template_slug: str, prompt: str) -> tuple[dict[str, dict[
     )
 
 
-def test_pilot_template_binding_fills_clear_keycloak_and_kubernetes_arguments():
-    keycloak_nodes, keycloak_plan = _build_bound_nodes(
-        "pilot-keycloak-access-change",
-        "Keycloak realm master: добавить роль admin пользователю ivan.petrov в группу devops",
-    )
-    apply_args = keycloak_nodes["apply_change"]["data"]["arguments"]
-    assert apply_args["realm"] == "master"
-    assert apply_args["username"] == "ivan.petrov"
-    assert apply_args["role"] == "admin"
-    assert apply_args["group"] == "devops"
-    assert apply_args["operation"] == "add"
-    assert "Argument: realm" not in keycloak_plan["missing"]
-    assert "Argument: username" not in keycloak_plan["missing"]
-
+def test_pilot_template_binding_fills_clear_kubernetes_arguments():
     kubernetes_nodes, kubernetes_plan = _build_bound_nodes(
         "pilot-kubernetes-rollout",
         "K8s cluster prod namespace payments rollout restart deployment api-gateway",
@@ -315,18 +312,6 @@ def test_pilot_template_binding_handles_gitlab_service_and_missing_arguments():
     assert ticket_args["severity"] == "critical"
     assert "Argument: alert_id" not in incident_plan["missing"]
     assert "Argument: service_name" not in incident_plan["missing"]
-
-    incomplete_nodes, incomplete_plan = _build_bound_nodes(
-        "pilot-keycloak-access-change",
-        "Keycloak: add realm role finance-auditor to user ivan.petrov",
-    )
-    incomplete_args = incomplete_nodes["apply_change"]["data"]["arguments"]
-    assert incomplete_args["realm"] == "{realm}"
-    assert incomplete_args["role"] == "finance-auditor"
-    assert incomplete_args["username"] == "ivan.petrov"
-    assert "Argument: realm" in incomplete_plan["missing"]
-    assert "Argument: group" in incomplete_plan["missing"]
-
 
 def test_backend_risk_uses_mcp_capability_metadata_not_only_tool_name_regex():
     risk = pipeline_assistant_risk(

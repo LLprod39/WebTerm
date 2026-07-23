@@ -10,7 +10,13 @@ COMMON_RESOURCE_SPECS = (
     ("v1", "ConfigMap", "configmaps", True, ("cm", "configmap", "configmaps")),
     ("v1", "Secret", "secrets", True, ("secret", "secrets")),
     ("v1", "ServiceAccount", "serviceaccounts", True, ("sa", "serviceaccount", "serviceaccounts")),
-    ("v1", "PersistentVolumeClaim", "persistentvolumeclaims", True, ("pvc", "pvcs", "persistentvolumeclaim", "persistentvolumeclaims")),
+    (
+        "v1",
+        "PersistentVolumeClaim",
+        "persistentvolumeclaims",
+        True,
+        ("pvc", "pvcs", "persistentvolumeclaim", "persistentvolumeclaims"),
+    ),
     ("v1", "PersistentVolume", "persistentvolumes", False, ("pv", "pvs", "persistentvolume", "persistentvolumes")),
     ("v1", "Endpoints", "endpoints", True, ("ep", "endpoints")),
     ("v1", "LimitRange", "limitranges", True, ("limitrange", "limitranges")),
@@ -21,8 +27,20 @@ COMMON_RESOURCE_SPECS = (
     ("apps/v1", "ReplicaSet", "replicasets", True, ("rs", "replicaset", "replicasets")),
     ("batch/v1", "Job", "jobs", True, ("job", "jobs")),
     ("batch/v1", "CronJob", "cronjobs", True, ("cj", "cronjob", "cronjobs")),
-    ("autoscaling/v2", "HorizontalPodAutoscaler", "horizontalpodautoscalers", True, ("hpa", "hpas", "horizontalpodautoscaler", "horizontalpodautoscalers")),
-    ("policy/v1", "PodDisruptionBudget", "poddisruptionbudgets", True, ("pdb", "pdbs", "poddisruptionbudget", "poddisruptionbudgets")),
+    (
+        "autoscaling/v2",
+        "HorizontalPodAutoscaler",
+        "horizontalpodautoscalers",
+        True,
+        ("hpa", "hpas", "horizontalpodautoscaler", "horizontalpodautoscalers"),
+    ),
+    (
+        "policy/v1",
+        "PodDisruptionBudget",
+        "poddisruptionbudgets",
+        True,
+        ("pdb", "pdbs", "poddisruptionbudget", "poddisruptionbudgets"),
+    ),
     ("networking.k8s.io/v1", "Ingress", "ingresses", True, ("ing", "ingress", "ingresses")),
     ("networking.k8s.io/v1", "NetworkPolicy", "networkpolicies", True, ("netpol", "networkpolicy", "networkpolicies")),
     ("discovery.k8s.io/v1", "EndpointSlice", "endpointslices", True, ("endpointslice", "endpointslices")),
@@ -30,8 +48,20 @@ COMMON_RESOURCE_SPECS = (
     ("rbac.authorization.k8s.io/v1", "Role", "roles", True, ("role", "roles")),
     ("rbac.authorization.k8s.io/v1", "RoleBinding", "rolebindings", True, ("rolebinding", "rolebindings")),
     ("rbac.authorization.k8s.io/v1", "ClusterRole", "clusterroles", False, ("clusterrole", "clusterroles")),
-    ("rbac.authorization.k8s.io/v1", "ClusterRoleBinding", "clusterrolebindings", False, ("clusterrolebinding", "clusterrolebindings")),
-    ("apiextensions.k8s.io/v1", "CustomResourceDefinition", "customresourcedefinitions", False, ("crd", "crds", "customresourcedefinition", "customresourcedefinitions")),
+    (
+        "rbac.authorization.k8s.io/v1",
+        "ClusterRoleBinding",
+        "clusterrolebindings",
+        False,
+        ("clusterrolebinding", "clusterrolebindings"),
+    ),
+    (
+        "apiextensions.k8s.io/v1",
+        "CustomResourceDefinition",
+        "customresourcedefinitions",
+        False,
+        ("crd", "crds", "customresourcedefinition", "customresourcedefinitions"),
+    ),
 )
 
 COMMON_RESOURCES: dict[tuple[str, str], dict[str, Any]] = {
@@ -48,7 +78,12 @@ KIND_ALIASES: dict[str, str] = {
 
 def common_resource_payload() -> list[dict[str, Any]]:
     return [
-        {"api_version": api_version, "kind": kind, "resource": metadata["resource"], "namespaced": bool(metadata["namespaced"])}
+        {
+            "api_version": api_version,
+            "kind": kind,
+            "resource": metadata["resource"],
+            "namespaced": bool(metadata["namespaced"]),
+        }
         for (api_version, kind), metadata in sorted(COMMON_RESOURCES.items())
     ]
 

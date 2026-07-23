@@ -99,7 +99,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
             reverse("api_kubernetes_admin_actions"),
             {"session_id": str(session.session_id), "limit": "10"},
         )
-        detail_response = self.client.get(reverse("api_kubernetes_admin_action_detail", kwargs={"action_id": action.action_id}))
+        detail_response = self.client.get(
+            reverse("api_kubernetes_admin_action_detail", kwargs={"action_id": action.action_id})
+        )
 
         self.assertEqual(list_response.status_code, 200)
         payload = list_response.json()
@@ -122,9 +124,15 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
         other = self.create_user("k8s-action-private-other")
         self.client.force_login(other)
 
-        list_response = self.client.get(reverse("api_kubernetes_admin_actions"), {"session_id": str(session.session_id)})
-        detail_response = self.client.get(reverse("api_kubernetes_admin_action_detail", kwargs={"action_id": action.action_id}))
-        report_response = self.client.get(reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id}))
+        list_response = self.client.get(
+            reverse("api_kubernetes_admin_actions"), {"session_id": str(session.session_id)}
+        )
+        detail_response = self.client.get(
+            reverse("api_kubernetes_admin_action_detail", kwargs={"action_id": action.action_id})
+        )
+        report_response = self.client.get(
+            reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id})
+        )
 
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.json()["actions"], [])
@@ -183,7 +191,11 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
             action="k8s.admin_resource.dry_run_apply",
             provider="webterm",
             cluster=self.cluster,
-            payload={"session_id": str(session.session_id), "action_id": str(action.action_id), "authorization": "Bearer raw-token"},
+            payload={
+                "session_id": str(session.session_id),
+                "action_id": str(action.action_id),
+                "authorization": "Bearer raw-token",
+            },
         )
         K8sAuditEvent.objects.create(
             user=user,
@@ -195,7 +207,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
         )
         self.client.force_login(user)
 
-        response = self.client.get(reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id}))
+        response = self.client.get(
+            reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id})
+        )
 
         self.assertEqual(response.status_code, 200)
         report = response.json()["report"]
@@ -212,7 +226,10 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
         self.assertEqual(report["recordings"][0]["events"][0]["metadata"]["password"], "[redacted]")
         self.assertTrue(report["summary"]["has_action_audit_event"])
         self.assertEqual(report["summary"]["timeline_event_count"], 2)
-        self.assertEqual([item["action"] for item in report["timeline"]], ["k8s.admin_session.create", "k8s.admin_resource.dry_run_apply"])
+        self.assertEqual(
+            [item["action"] for item in report["timeline"]],
+            ["k8s.admin_session.create", "k8s.admin_resource.dry_run_apply"],
+        )
         self.assertEqual(report["timeline"][0]["payload"]["token"], "[redacted]")
         self.assertEqual(report["timeline"][1]["payload"]["authorization"], "[redacted]")
         encoded = json.dumps(report)
@@ -226,7 +243,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
     def test_staff_can_list_all_admin_actions_with_filters(self):
         owner = self.create_user("k8s-action-staff-owner")
         session = self.create_session(owner)
-        kept = self.create_action(owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED)
+        kept = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED
+        )
         self.create_action(owner, session, verb=K8sAdminAction.VERB_DRY_RUN_APPLY, status=K8sAdminAction.STATUS_DRY_RUN)
 
         staff = self.create_user("k8s-action-staff", is_staff=True)
@@ -253,7 +272,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
     def test_staff_can_filter_admin_actions_by_post_review_status(self):
         owner = self.create_user("k8s-action-review-filter-owner")
         session = self.create_session(owner)
-        pending = self.create_action(owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED)
+        pending = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED
+        )
         reviewed = self.create_action(
             owner,
             session,
@@ -264,15 +285,27 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
                 "post_review": {"outcome": "verified", "summary": "checked", "reviewed_by": "staff"},
             },
         )
-        not_ready = self.create_action(owner, session, verb=K8sAdminAction.VERB_PATCH, status=K8sAdminAction.STATUS_PLANNED)
-        no_review = self.create_action(owner, session, verb=K8sAdminAction.VERB_GET, status=K8sAdminAction.STATUS_COMPLETED)
+        not_ready = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_PATCH, status=K8sAdminAction.STATUS_PLANNED
+        )
+        no_review = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_GET, status=K8sAdminAction.STATUS_COMPLETED
+        )
         staff = self.create_user("k8s-action-review-filter-staff", is_staff=True)
         self.client.force_login(staff)
 
-        pending_response = self.client.get(reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "pending", "limit": "10"})
-        completed_response = self.client.get(reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "completed", "limit": "10"})
-        any_response = self.client.get(reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "any", "limit": "10"})
-        none_response = self.client.get(reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "none", "limit": "10"})
+        pending_response = self.client.get(
+            reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "pending", "limit": "10"}
+        )
+        completed_response = self.client.get(
+            reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "completed", "limit": "10"}
+        )
+        any_response = self.client.get(
+            reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "any", "limit": "10"}
+        )
+        none_response = self.client.get(
+            reverse("api_kubernetes_admin_actions"), {"all": "1", "post_review_status": "none", "limit": "10"}
+        )
 
         self.assertEqual(pending_response.status_code, 200)
         pending_payload = pending_response.json()
@@ -305,7 +338,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
     def test_staff_with_matching_grant_can_post_review_admin_action_with_sanitized_evidence(self):
         owner = self.create_user("k8s-action-review-owner", grant_admin_write=True)
         session = self.create_session(owner)
-        action = self.create_action(owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED)
+        action = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED
+        )
         reviewer = self.create_user("k8s-action-review-staff", is_staff=True, grant_admin_write=True)
         self.client.force_login(reviewer)
 
@@ -345,7 +380,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
         self.assertNotIn("raw-review-token", json.dumps(audit.payload))
         self.assertNotIn("raw-evidence-password", json.dumps(audit.payload))
 
-        report_response = self.client.get(reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id}))
+        report_response = self.client.get(
+            reverse("api_kubernetes_admin_action_report", kwargs={"action_id": action.action_id})
+        )
         self.assertEqual(report_response.status_code, 200)
         report = report_response.json()["report"]
         self.assertEqual(report["summary"]["post_review_status"], "completed")
@@ -354,7 +391,9 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
     def test_non_staff_owner_cannot_post_review_admin_action(self):
         owner = self.create_user("k8s-action-review-owner-denied", grant_admin_write=True)
         session = self.create_session(owner)
-        action = self.create_action(owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED)
+        action = self.create_action(
+            owner, session, verb=K8sAdminAction.VERB_APPLY, status=K8sAdminAction.STATUS_COMPLETED
+        )
         self.client.force_login(owner)
 
         response = self.client.post(
@@ -367,7 +406,11 @@ class KubernetesOpsAdminActionEvidenceTests(TestCase):
         self.assertEqual(response.json()["code"], "staff_required")
         action.refresh_from_db()
         self.assertNotIn("post_review", action.response_summary)
-        self.assertTrue(K8sAuditEvent.objects.filter(action="k8s.admin_action.post_review_rejected", payload__code="staff_required").exists())
+        self.assertTrue(
+            K8sAuditEvent.objects.filter(
+                action="k8s.admin_action.post_review_rejected", payload__code="staff_required"
+            ).exists()
+        )
 
     def test_break_glass_action_review_requires_break_glass_grant(self):
         owner = self.create_user("k8s-action-break-review-owner", grant_break_glass=True)

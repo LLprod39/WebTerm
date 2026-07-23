@@ -43,7 +43,7 @@ def build_memory_warmup_prompt(server_id: int, *, last_n: int = 3) -> str:
     recent_runs = list(
         AgentRun.objects.filter(server_id=server_id)
         .select_related("agent")
-        .order_by("-started_at")[:max(1, min(int(last_n), 6))]
+        .order_by("-started_at")[: max(1, min(int(last_n), 6))]
     )
     if not recent_runs:
         return ""

@@ -122,21 +122,21 @@ async def test_stream_openai_compatible_response_retries_and_logs_usage(monkeypa
     chunks = [
         chunk
         async for chunk in stream_openai_compatible_response(
-            provider="fair",
-            display_name="FAIR.Hyperion",
+            provider="custom",
+            display_name="Custom OpenAI-compatible API",
             request=OpenAICompatibleRequest(
                 endpoint_name="chat",
-                api_url="https://fair.example/chat/completions",
-                payload={"model": "fair-spark", "stream": True},
+                api_url="https://llm.example/chat/completions",
+                payload={"model": "custom-model", "stream": True},
             ),
             headers={"Authorization": "Bearer test"},
-            target_model="fair-spark",
+            target_model="custom-model",
             prompt="hello",
             purpose="chat",
             timeout_seconds=1,
             max_attempts=2,
             usage_logger=_usage_logger,
-            log_metadata={"base_url": "https://fair.example"},
+            log_metadata={"base_url": "https://llm.example"},
             trust_env=True,
         )
     ]
@@ -144,19 +144,19 @@ async def test_stream_openai_compatible_response_retries_and_logs_usage(monkeypa
     assert chunks == ["[Повтор попытки...]", "Hel", "lo"]
     assert [kwargs["trust_env"] for kwargs in session_kwargs] == [True, True]
     assert [call["url"] for call in calls] == [
-        "https://fair.example/chat/completions",
-        "https://fair.example/chat/completions",
+        "https://llm.example/chat/completions",
+        "https://llm.example/chat/completions",
     ]
     assert usage_calls == [
         {
-            "provider": "fair",
-            "model_name": "fair-spark",
+            "provider": "custom",
+            "model_name": "custom-model",
             "input_text": "hello",
             "output_text": "Hello",
             "duration_ms": usage_calls[0]["duration_ms"],
             "status": "success",
             "purpose": "chat",
-            "metadata": {"base_url": "https://fair.example"},
+            "metadata": {"base_url": "https://llm.example"},
         }
     ]
 

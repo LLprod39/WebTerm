@@ -31,7 +31,11 @@ def build_kubernetes_release_post_review_retention_evidence(user, enabled: bool)
     if not enabled:
         return {"success": False, "status": "skipped", "reason": "post-review and retention proof skipped"}
     if not user or not getattr(user, "is_staff", False):
-        return {"success": False, "status": "missing", "reason": "staff user is required for post-review and retention proof"}
+        return {
+            "success": False,
+            "status": "missing",
+            "reason": "staff user is required for post-review and retention proof",
+        }
     try:
         with transaction.atomic():
             _grant_features(user)
@@ -70,7 +74,11 @@ def _run_checks(*, user, cluster: K8sCluster, initial: dict[str, int]) -> dict[s
     pending_report = build_admin_action_post_review_report()
     pending_found = _pending_contains(pending_report, action)
     post_review = _post_review_payload(user)
-    action.response_summary = {**(action.response_summary or {}), "post_review_status": "completed", "post_review": post_review}
+    action.response_summary = {
+        **(action.response_summary or {}),
+        "post_review_status": "completed",
+        "post_review": post_review,
+    }
     action.save(update_fields=["response_summary", "updated_at"])
     completed_report = build_admin_action_post_review_report()
 
@@ -175,7 +183,9 @@ def _recording(*, user, session: K8sAdminSession, action: K8sAdminAction, now) -
     recording.transcript_stored = True
     recording.metadata_delete_after = now + timedelta(days=1)
     recording.transcript_delete_after = now - timedelta(seconds=1)
-    recording.save(update_fields=["transcript_stored", "metadata_delete_after", "transcript_delete_after", "updated_at"])
+    recording.save(
+        update_fields=["transcript_stored", "metadata_delete_after", "transcript_delete_after", "updated_at"]
+    )
     return recording
 
 
@@ -191,7 +201,9 @@ def _post_review_payload(user) -> dict[str, Any]:
 
 
 def _pending_contains(report: dict[str, Any], action: K8sAdminAction) -> bool:
-    return any(str(item.get("action_id") or "") == str(action.action_id) for item in report.get("pending_actions") or [])
+    return any(
+        str(item.get("action_id") or "") == str(action.action_id) for item in report.get("pending_actions") or []
+    )
 
 
 def _counts() -> dict[str, int]:

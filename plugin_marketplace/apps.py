@@ -10,6 +10,14 @@ class PluginMarketplaceConfig(AppConfig):
 
     def ready(self) -> None:
         import plugin_marketplace.checks  # noqa: F401
+        from plugin_marketplace.release_profile import plugin_marketplace_enabled
+
+        # In the v0.1 production profile, do not register installed manifests,
+        # execution providers, tools, hooks, or Studio nodes.  URL routing is
+        # independently excluded in web_ui.urls for defence in depth.
+        if not plugin_marketplace_enabled():
+            return
+
         from app.plugins.agent_tools import (
             register_enabled_plugin_ids_provider as register_agent_tool_enabled_provider,
         )

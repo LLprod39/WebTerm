@@ -2,6 +2,7 @@
 Context processors for core_ui: inject user_can_* flags for menu and guards.
 Also provides user_can_feature(user, feature) for use in views/decorators.
 """
+
 from core_ui.access import (
     access_feature_slugs,
     build_user_access_payload,
@@ -49,10 +50,10 @@ def _is_server_only_user(user, permissions_map=None, group_permissions_map=None)
             group_permission_sources=load_group_permission_sources(user),
         )["group_permissions"]
     )
-    if not _user_can_feature(user, 'servers', perms, group_perms):
+    if not _user_can_feature(user, "servers", perms, group_perms):
         return False
     for feature in FEATURE_SLUGS:
-        if feature == 'servers':
+        if feature == "servers":
             continue
         if _user_can_feature(user, feature, perms, group_perms):
             return False
@@ -66,22 +67,26 @@ def is_server_only_user(user):
 
 def default_home_url_name(user):
     """Default landing route name for current user."""
-    return 'servers:server_list'
+    return "servers:server_list"
 
 
 def app_permissions(request):
     """Add user_can_* flags and shell mode flags to template context."""
-    user = getattr(request, 'user', None)
+    user = getattr(request, "user", None)
     perms = load_user_explicit_permissions(user)
-    group_perms = build_user_access_payload(
-        user,
-        explicit_permissions=perms,
-        group_permission_sources=load_group_permission_sources(user),
-    )["group_permissions"] if user and getattr(user, "is_authenticated", False) else {}
+    group_perms = (
+        build_user_access_payload(
+            user,
+            explicit_permissions=perms,
+            group_permission_sources=load_group_permission_sources(user),
+        )["group_permissions"]
+        if user and getattr(user, "is_authenticated", False)
+        else {}
+    )
     out = {}
     for f in FEATURE_SLUGS:
-        out[f'user_can_{f}'] = _user_can_feature(user, f, perms, group_perms)
-    out['is_app_admin'] = bool(user and user.is_authenticated and user.is_staff)
-    out['is_server_only_mode'] = _is_server_only_user(user, perms, group_perms)
-    out['default_home_url_name'] = default_home_url_name(user)
+        out[f"user_can_{f}"] = _user_can_feature(user, f, perms, group_perms)
+    out["is_app_admin"] = bool(user and user.is_authenticated and user.is_staff)
+    out["is_server_only_mode"] = _is_server_only_user(user, perms, group_perms)
+    out["default_home_url_name"] = default_home_url_name(user)
     return out

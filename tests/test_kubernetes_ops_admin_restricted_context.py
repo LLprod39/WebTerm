@@ -137,7 +137,10 @@ class KubernetesOpsAdminRestrictedContextTests(TestCase):
             "role_name": context["role_name"],
             "manifests": [
                 {"kind": "ClusterRole", "metadata": {"name": "bad", "namespace": context["namespace"]}, "rules": []},
-                {"kind": "ServiceAccount", "metadata": {"name": context["service_account_name"], "namespace": context["namespace"]}},
+                {
+                    "kind": "ServiceAccount",
+                    "metadata": {"name": context["service_account_name"], "namespace": context["namespace"]},
+                },
                 {
                     "kind": "Role",
                     "metadata": {"name": context["role_name"], "namespace": context["namespace"]},
@@ -146,7 +149,13 @@ class KubernetesOpsAdminRestrictedContextTests(TestCase):
                 {
                     "kind": "RoleBinding",
                     "metadata": {"name": context["binding_name"], "namespace": context["namespace"]},
-                    "subjects": [{"kind": "ServiceAccount", "name": context["service_account_name"], "namespace": context["namespace"]}],
+                    "subjects": [
+                        {
+                            "kind": "ServiceAccount",
+                            "name": context["service_account_name"],
+                            "namespace": context["namespace"],
+                        }
+                    ],
                     "roleRef": {"kind": "Role", "name": context["role_name"]},
                 },
             ],

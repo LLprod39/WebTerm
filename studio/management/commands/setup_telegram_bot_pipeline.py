@@ -33,19 +33,15 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         user = self._resolve_user(options.get("username"))
         pipeline = ensure_telegram_bot_pipeline(user)
-        trigger = (
-            pipeline.triggers.filter(trigger_type="webhook", is_active=True)
-            .order_by("created_at", "id")
-            .first()
-        )
+        trigger = pipeline.triggers.filter(trigger_type="webhook", is_active=True).order_by("created_at", "id").first()
         if trigger is None:
             raise CommandError("Webhook trigger was not created for the pipeline.")
 
         webhook_path = f"/api/studio/triggers/{trigger.webhook_token}/receive/"
 
-        self.stdout.write(self.style.SUCCESS(
-            f'\nPipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.'
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(f'\nPipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.')
+        )
         self.stdout.write("")
         self.stdout.write("=" * 65)
         self.stdout.write("  SETUP — 3 steps to activate the Telegram bot")
@@ -66,12 +62,8 @@ class Command(BaseCommand):
         self.stdout.write("STEP 3 — Register the webhook with Telegram:")
         self.stdout.write("  Replace YOUR_DOMAIN and YOUR_BOT_TOKEN below, then run:")
         self.stdout.write("")
-        self.stdout.write(
-            "  curl -X POST https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook \\"
-        )
-        self.stdout.write(
-            f'    -d \'{{"url": "https://YOUR_DOMAIN{webhook_path}"}}\''
-        )
+        self.stdout.write("  curl -X POST https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook \\")
+        self.stdout.write(f'    -d \'{{"url": "https://YOUR_DOMAIN{webhook_path}"}}\'')
         self.stdout.write("")
         self.stdout.write("  Your webhook path:")
         self.stdout.write(f"    {webhook_path}")

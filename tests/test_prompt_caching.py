@@ -100,45 +100,22 @@ class TestStreamChatSystemPrompt:
     @pytest.mark.asyncio
     async def test_grok_uses_system_prompt(self):
         """Grok branch should put system_prompt into the system message."""
-        import json
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import MagicMock, patch
 
         from app.core.llm import LLMProvider
 
         provider = LLMProvider()
         provider.grok_api_key = "test-key"
 
-        captured_data: dict = {}
+        captured_call: dict = {}
 
-        # Mock aiohttp session
-        mock_response = AsyncMock()
-        mock_response.status = 200
-
-        async def fake_content():
-            line = json.dumps({"choices": [{"delta": {"content": "ok"}}]})
-            yield f"data: {line}\n".encode()
-            yield b"data: [DONE]\n"
-
-        mock_response.content = fake_content()
-        mock_response.text = AsyncMock(return_value="")
-
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        def capture_post(url, headers=None, json=None):
-            captured_data.update(json or {})
-            return mock_session_ctx
-
-        mock_session.post = capture_post
+        async def capture_stream(**kwargs):
+            captured_call.update(kwargs)
+            yield "ok"
 
         with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("app.core.model_config.model_manager") as mm,
+            patch("app.core.llm.stream_openai_compatible_response", new=capture_stream),
+            patch("app.core.llm.model_manager") as mm,
         ):
             mm.config = MagicMock()
             mm.config.grok_enabled = True
@@ -151,49 +128,34 @@ class TestStreamChatSystemPrompt:
             ):
                 chunks.append(chunk)
 
-        assert captured_data.get("messages", [{}])[0].get("content") == "Custom system instructions"
+        assert chunks == ["ok"]
+        request = captured_call["request"]
+        assert request.endpoint_name == "chat"
+        assert request.payload["messages"][0] == {
+            "role": "system",
+            "content": "Custom system instructions",
+        }
+        assert request.payload["messages"][1] == {"role": "user", "content": "user msg"}
 
     @pytest.mark.asyncio
     async def test_grok_default_system_when_none(self):
         """Without system_prompt, Grok uses the default 'helpful assistant' message."""
-        import json
-        from unittest.mock import AsyncMock, MagicMock, patch
+        from unittest.mock import MagicMock, patch
 
         from app.core.llm import LLMProvider
 
         provider = LLMProvider()
         provider.grok_api_key = "test-key"
 
-        captured_data: dict = {}
+        captured_call: dict = {}
 
-        mock_response = AsyncMock()
-        mock_response.status = 200
-
-        async def fake_content():
-            line = json.dumps({"choices": [{"delta": {"content": "ok"}}]})
-            yield f"data: {line}\n".encode()
-            yield b"data: [DONE]\n"
-
-        mock_response.content = fake_content()
-        mock_response.text = AsyncMock(return_value="")
-
-        mock_session_ctx = AsyncMock()
-        mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_response)
-        mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
-
-        mock_session = MagicMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=False)
-
-        def capture_post(url, headers=None, json=None):
-            captured_data.update(json or {})
-            return mock_session_ctx
-
-        mock_session.post = capture_post
+        async def capture_stream(**kwargs):
+            captured_call.update(kwargs)
+            yield "ok"
 
         with (
-            patch("aiohttp.ClientSession", return_value=mock_session),
-            patch("app.core.model_config.model_manager") as mm,
+            patch("app.core.llm.stream_openai_compatible_response", new=capture_stream),
+            patch("app.core.llm.model_manager") as mm,
         ):
             mm.config = MagicMock()
             mm.config.grok_enabled = True
@@ -201,7 +163,11 @@ class TestStreamChatSystemPrompt:
             async for _ in provider.stream_chat("user msg", model="grok"):
                 pass
 
-        assert captured_data["messages"][0]["content"] == "You are a helpful assistant."
+        request = captured_call["request"]
+        assert request.payload["messages"][0] == {
+            "role": "system",
+            "content": "You are a helpful assistant.",
+        }
 
     @pytest.mark.asyncio
     async def test_grok_43_defaults_reasoning_effort_to_none(self):

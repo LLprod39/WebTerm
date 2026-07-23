@@ -148,9 +148,7 @@ def build_entry_nodes(*, primary_server_ids: list[int]) -> list[dict]:
                 "label": "Approval Rejected",
                 "label_ru": "Подтверждение отклонено",
                 "template": (
-                    "# Smoke-запуск отклонен\n\n"
-                    "Оператор отклонил шаг подтверждения.\n\n"
-                    "{approval_gate_error}"
+                    "# Smoke-запуск отклонен\n\nОператор отклонил шаг подтверждения.\n\n{approval_gate_error}"
                 ),
                 "on_failure": "continue",
             },
@@ -229,19 +227,102 @@ def build_collector_nodes() -> list[dict]:
 
 def build_smoke_edges(*, standard_branch_targets: Iterable[str], telegram_input_target: str) -> list[dict]:
     edges = [
-        {"id": "e_manual_merge", "source": "manual_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
-        {"id": "e_webhook_merge", "source": "webhook_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
-        {"id": "e_schedule_merge", "source": "schedule_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
-        {"id": "e_monitoring_merge", "source": "monitoring_start", "target": "trigger_merge", "sourceHandle": "out", "animated": True},
-        {"id": "e_merge_entry", "source": "trigger_merge", "target": "entry_report", "sourceHandle": "out", "animated": True},
-        {"id": "e_entry_condition", "source": "entry_report", "target": "condition_gate", "sourceHandle": "success", "animated": True},
-        {"id": "e_condition_true", "source": "condition_gate", "target": "approval_gate", "sourceHandle": "true", "animated": True, "label": "true"},
-        {"id": "e_condition_false", "source": "condition_gate", "target": "bypass_report", "sourceHandle": "false", "animated": True, "label": "false"},
-        {"id": "e_approval_approved", "source": "approval_gate", "target": "post_condition_merge", "sourceHandle": "approved", "animated": True, "label": "approved"},
-        {"id": "e_approval_rejected", "source": "approval_gate", "target": "rejected_report", "sourceHandle": "rejected", "animated": True, "label": "rejected"},
-        {"id": "e_approval_timeout", "source": "approval_gate", "target": "timeout_report", "sourceHandle": "timeout", "animated": True, "label": "timeout"},
-        {"id": "e_gate_merge_wait", "source": "post_condition_merge", "target": "wait_short", "sourceHandle": "out", "animated": True},
-        {"id": "e_wait_parallel", "source": "wait_short", "target": "parallel_fanout", "sourceHandle": "done", "animated": True},
+        {
+            "id": "e_manual_merge",
+            "source": "manual_start",
+            "target": "trigger_merge",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_webhook_merge",
+            "source": "webhook_start",
+            "target": "trigger_merge",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_schedule_merge",
+            "source": "schedule_start",
+            "target": "trigger_merge",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_monitoring_merge",
+            "source": "monitoring_start",
+            "target": "trigger_merge",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_merge_entry",
+            "source": "trigger_merge",
+            "target": "entry_report",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_entry_condition",
+            "source": "entry_report",
+            "target": "condition_gate",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "e_condition_true",
+            "source": "condition_gate",
+            "target": "approval_gate",
+            "sourceHandle": "true",
+            "animated": True,
+            "label": "true",
+        },
+        {
+            "id": "e_condition_false",
+            "source": "condition_gate",
+            "target": "bypass_report",
+            "sourceHandle": "false",
+            "animated": True,
+            "label": "false",
+        },
+        {
+            "id": "e_approval_approved",
+            "source": "approval_gate",
+            "target": "post_condition_merge",
+            "sourceHandle": "approved",
+            "animated": True,
+            "label": "approved",
+        },
+        {
+            "id": "e_approval_rejected",
+            "source": "approval_gate",
+            "target": "rejected_report",
+            "sourceHandle": "rejected",
+            "animated": True,
+            "label": "rejected",
+        },
+        {
+            "id": "e_approval_timeout",
+            "source": "approval_gate",
+            "target": "timeout_report",
+            "sourceHandle": "timeout",
+            "animated": True,
+            "label": "timeout",
+        },
+        {
+            "id": "e_gate_merge_wait",
+            "source": "post_condition_merge",
+            "target": "wait_short",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "e_wait_parallel",
+            "source": "wait_short",
+            "target": "parallel_fanout",
+            "sourceHandle": "done",
+            "animated": True,
+        },
     ]
     for node_id in standard_branch_targets:
         edges.append(

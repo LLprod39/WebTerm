@@ -17,4 +17,3 @@ websocket_urlpatterns = [
     *mars_websocket_urlpatterns,
     *kubernetes_websocket_urlpatterns,
 ]
-

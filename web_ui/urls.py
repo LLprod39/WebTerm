@@ -14,11 +14,13 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+from plugin_marketplace.release_profile import plugin_marketplace_enabled
 from web_ui.views import settings_readiness_views
 
 admin.site.site_header = "WEU AI Admin"
@@ -26,15 +28,20 @@ admin.site.site_title = "WEU AI — Админка"
 admin.site.index_title = "Управление"
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/settings/readiness/', settings_readiness_views.api_settings_readiness, name='api_settings_readiness'),
-    path('', include('core_ui.urls')),
-    path('api/plugins/', include('plugin_marketplace.urls')),
-    path('servers/', include('servers.urls')),
-    path('api/studio/', include('studio.urls')),
-    path('api/mars/', include('mars.urls')),
-    path('api/kubernetes/', include('kubernetes_ops.urls')),
+    path("admin/", admin.site.urls),
+    path("api/settings/readiness/", settings_readiness_views.api_settings_readiness, name="api_settings_readiness"),
+    path("", include("core_ui.urls")),
+    path("servers/", include("servers.urls")),
+    path("api/studio/", include("studio.urls")),
+    path("api/mars/", include("mars.urls")),
+    path("api/kubernetes/", include("kubernetes_ops.urls")),
 ]
+
+# A disabled release profile has no plugin API surface at all.  This blocks
+# read and mutation endpoints even if an old database still contains enabled
+# PluginInstallation rows.
+if plugin_marketplace_enabled():
+    urlpatterns.append(path("api/plugins/", include("plugin_marketplace.urls")))
 
 # Serve media files in development
 if settings.DEBUG:

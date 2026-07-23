@@ -110,6 +110,8 @@ DEFAULT_DENIED_EXEC_COMMANDS = {
 SHELL_INLINE_FLAGS = {"-c", "-lc", "-ec", "-exc", "-o"}
 MAX_COMMAND_PARTS = 20
 MAX_COMMAND_PART_LENGTH = 300
+
+
 def prepare_kubernetes_exec_bridge(
     *,
     user,
@@ -160,7 +162,13 @@ def prepare_kubernetes_exec_bridge(
         status=K8sAdminRecording.STATUS_BLOCKED,
         summary=action.response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording_policy": recording_policy, "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {
+            **(action.response_summary or {}),
+            "recording_policy": recording_policy,
+            "recording": recording_public_payload(recording),
+        }
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_exec(
         user=user,
@@ -227,7 +235,9 @@ def _prepare_exec_context(
     stream_id: str,
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED", False)):
-        raise AdminResourceError("Native Kubernetes exec is disabled by policy.", code="native_exec_disabled", status=403)
+        raise AdminResourceError(
+            "Native Kubernetes exec is disabled by policy.", code="native_exec_disabled", status=403
+        )
     ref = build_resource_ref(api_version="v1", kind="Pod", namespace=namespace, name=pod_name, resource="pods")
     _validate_exec_target(ref)
     reason_value = _required_reason(reason)
@@ -240,7 +250,14 @@ def _prepare_exec_context(
     stream_ref = stream_id or str(uuid.uuid4())
     target = _target_payload(ref, container=container)
     path = _exec_path(provider, cluster, ref, container=container)
-    request_summary = {"target": target, "reason": reason_value, "command": command_summary, "tty": bool(tty), "stdin": bool(stdin), "stream_id": stream_ref}
+    request_summary = {
+        "target": target,
+        "reason": reason_value,
+        "command": command_summary,
+        "tty": bool(tty),
+        "stdin": bool(stdin),
+        "stream_id": stream_ref,
+    }
     return {
         "cluster": cluster,
         "provider": provider,
@@ -258,24 +275,40 @@ def _prepare_exec_context(
     }
 
 
-def _active_exec_session_for_user(user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef) -> K8sAdminSession:
+def _active_exec_session_for_user(
+    user, session_id: str, cluster: K8sCluster, *, ref: KubernetesResourceRef
+) -> K8sAdminSession:
     policy = kubernetes_permission_policy(user)
     if not policy.get("can_exec"):
         code = "native_exec_disabled" if policy.get("can_break_glass") else "break_glass_required"
         raise AdminResourceError("Kubernetes pod exec access is required.", code=code, status=403)
     try:
-        session = K8sAdminSession.objects.select_related("user", "provider", "cluster").filter(session_id=session_id, user=user).first()
+        session = (
+            K8sAdminSession.objects.select_related("user", "provider", "cluster")
+            .filter(session_id=session_id, user=user)
+            .first()
+        )
     except (TypeError, ValueError, ValidationError) as exc:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403) from exc
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        ) from exc
     if session is None:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_required", status=403
+        )
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403)
+        raise AdminResourceError(
+            "Break-glass admin session is not active.", code="admin_break_glass_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Pod exec requires a break-glass admin session.", code="break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Pod exec requires a break-glass admin session.", code="break_glass_session_required", status=403
+        )
     if session.cluster_id and session.cluster_id != cluster.id:
-        raise AdminResourceError("Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this cluster.", code="admin_session_cluster_mismatch", status=403
+        )
     if K8sAdminAction.VERB_EXEC not in set(session.allowed_verbs or []):
         raise AdminResourceError("Admin session does not allow exec.", code="admin_session_verb_denied", status=403)
     _check_session_scope(session, ref)
@@ -285,10 +318,14 @@ def _active_exec_session_for_user(user, session_id: str, cluster: K8sCluster, *,
 def _check_session_scope(session: K8sAdminSession, ref: KubernetesResourceRef) -> None:
     allowed_namespaces = set(session.allowed_namespaces or [])
     if "*" not in allowed_namespaces and ref.namespace not in allowed_namespaces:
-        raise AdminResourceError("Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this namespace.", code="admin_session_namespace_denied", status=403
+        )
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and ref.kind.lower() not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover this resource kind.", code="admin_session_kind_denied", status=403
+        )
 
 
 def _validate_exec_target(ref: KubernetesResourceRef) -> None:
@@ -297,7 +334,9 @@ def _validate_exec_target(ref: KubernetesResourceRef) -> None:
     if not ref.name:
         raise AdminResourceError("pod name is required for exec.", code="pod_name_required")
     if ref.namespace in _protected_namespaces():
-        raise AdminResourceError("Exec in protected namespaces is blocked by Admin Mode.", code="exec_namespace_protected", status=403)
+        raise AdminResourceError(
+            "Exec in protected namespaces is blocked by Admin Mode.", code="exec_namespace_protected", status=403
+        )
 
 
 def _clean_command(value: Any) -> list[str]:
@@ -331,15 +370,14 @@ def _validate_command_allowed(parts: list[str]) -> None:
     if command_name in {"sh", "bash"}:
         shell_flags = {part.lower() for part in parts[1:] if part.startswith("-")}
         if shell_flags & SHELL_INLINE_FLAGS:
-            raise AdminResourceError("Inline shell execution is blocked by policy.", code="exec_shell_inline_denied", status=403)
+            raise AdminResourceError(
+                "Inline shell execution is blocked by policy.", code="exec_shell_inline_denied", status=403
+            )
 
 
 def _configured_command_set(setting_name: str, default: set[str]) -> set[str]:
     configured = getattr(settings, setting_name, None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     cleaned = {str(item).strip().lower() for item in values if str(item).strip()}
     return cleaned or {item.lower() for item in default}
 
@@ -362,10 +400,7 @@ def _protected_namespaces() -> set[str]:
     configured = getattr(settings, "KUBERNETES_ADMIN_EXEC_PROTECTED_NAMESPACES", None)
     if configured is None:
         configured = getattr(settings, "KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES", None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     cleaned = {str(item).strip() for item in values if str(item).strip()}
     return cleaned or set(DEFAULT_PROTECTED_NAMESPACES)
 
@@ -387,7 +422,9 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode exec.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode exec.", code="rancher_provider_required", status=409
+        )
     return provider
 
 
@@ -417,7 +454,9 @@ def _record_exec_action(
     )
 
 
-def _audit_exec(*, user, session: K8sAdminSession, cluster: K8sCluster, action: str, stream_id: str, payload: dict[str, Any]) -> None:
+def _audit_exec(
+    *, user, session: K8sAdminSession, cluster: K8sCluster, action: str, stream_id: str, payload: dict[str, Any]
+) -> None:
     K8sAuditEvent.objects.create(
         user=user,
         username_snapshot=getattr(user, "username", ""),

@@ -9,6 +9,7 @@ from core_ui.models import DashboardLayout
 
 logger = logging.getLogger(__name__)
 
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def api_dashboard_layout(request, dashboard_type):

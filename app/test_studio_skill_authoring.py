@@ -17,6 +17,7 @@ def _make_workspace_temp_dir(settings, name: str) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     return root
 
+
 def test_scaffold_skill_creates_corporate_template(settings):
     temp_root = _make_workspace_temp_dir(settings, "scaffold")
     try:

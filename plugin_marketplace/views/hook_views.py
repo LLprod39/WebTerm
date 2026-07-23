@@ -24,7 +24,9 @@ def emit_hook_event_view(request):
     data = payload.get("payload")
     if data is not None and not isinstance(data, dict):
         return json_error("payload must be an object", status=400, code="invalid_payload")
-    results = emit_plugin_hook_event(event, data or {}, user=request.user, enabled_plugin_ids=enabled_plugin_ids_for_user(request.user))
+    results = emit_plugin_hook_event(
+        event, data or {}, user=request.user, enabled_plugin_ids=enabled_plugin_ids_for_user(request.user)
+    )
     if not results:
         return json_error("No enabled plugin hooks matched the event.", status=404, code="hook_not_found")
     if not any(result.get("success") for result in results):

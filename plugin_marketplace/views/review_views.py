@@ -27,7 +27,9 @@ def review_packages(request):
         return denied
     packages = list_review_packages()
     pending = sum(1 for item in packages if item["review_status"] == PluginPackage.REVIEW_PENDING)
-    return JsonResponse({"success": True, "packages": packages, "summary": {"pending": pending, "total": len(packages)}})
+    return JsonResponse(
+        {"success": True, "packages": packages, "summary": {"pending": pending, "total": len(packages)}}
+    )
 
 
 @login_required

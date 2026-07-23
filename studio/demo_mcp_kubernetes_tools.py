@@ -50,14 +50,18 @@ def kubernetes_describe_workload(arguments: dict[str, Any]) -> dict[str, Any]:
 
     target = {"cluster": cluster, "namespace": namespace, "kind": kind, "name": name}
     status = {"health": "healthy", "ready": 1, "desired": 1, "restarts_24h": 0, "last_rollout": "fixture"}
-    events = [
-        {
-            "severity": "info",
-            "reason": "ReadOnlyFixture",
-            "message": "Studio demo MCP returned a bounded read-only workload snapshot.",
-            "count": 1,
-        }
-    ] if bool(arguments.get("include_events", True)) else []
+    events = (
+        [
+            {
+                "severity": "info",
+                "reason": "ReadOnlyFixture",
+                "message": "Studio demo MCP returned a bounded read-only workload snapshot.",
+                "count": 1,
+            }
+        ]
+        if bool(arguments.get("include_events", True))
+        else []
+    )
     policy = {
         "permission_mode": "READ_ONLY",
         "mutates_state": False,

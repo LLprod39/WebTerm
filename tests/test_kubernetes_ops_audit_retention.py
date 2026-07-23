@@ -27,8 +27,12 @@ class KubernetesOpsAuditRetentionTests(TestCase):
     def test_audit_retention_inventory_reports_expired_by_action(self):
         user = User.objects.create_user(username="k8s-retention-inventory", password="x")
         cluster = K8sCluster.objects.create(name="stage-webterm-ops")
-        old = K8sAuditEvent.objects.create(user=user, username_snapshot=user.username, action="k8s.deeplink.open", cluster=cluster)
-        recent = K8sAuditEvent.objects.create(user=user, username_snapshot=user.username, action="k8s.provider.probe", cluster=cluster)
+        old = K8sAuditEvent.objects.create(
+            user=user, username_snapshot=user.username, action="k8s.deeplink.open", cluster=cluster
+        )
+        recent = K8sAuditEvent.objects.create(
+            user=user, username_snapshot=user.username, action="k8s.provider.probe", cluster=cluster
+        )
         K8sAuditEvent.objects.filter(id=old.id).update(created_at=timezone.now() - timedelta(days=45))
         K8sAuditEvent.objects.filter(id=recent.id).update(created_at=timezone.now() - timedelta(days=5))
 

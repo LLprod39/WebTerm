@@ -172,11 +172,56 @@ def _upsert_namespaces(cluster: K8sCluster, now) -> None:
 
 def _upsert_workloads(cluster: K8sCluster, now) -> None:
     rows = [
-        ("payments", "payments-api", K8sWorkloadRef.KIND_DEPLOYMENT, K8sCluster.HEALTH_HEALTHY, 3, 3, "payments", "2026.07.02-demo"),
-        ("payments", "broken-worker", K8sWorkloadRef.KIND_DEPLOYMENT, K8sCluster.HEALTH_DEGRADED, 0, 2, "payments", "2026.07.02-bad"),
-        ("platform", "demo-api", K8sWorkloadRef.KIND_DEPLOYMENT, K8sCluster.HEALTH_HEALTHY, 2, 2, "platform", "2026.07.02-demo"),
-        ("platform", "gitops-controller", K8sWorkloadRef.KIND_DEPLOYMENT, K8sCluster.HEALTH_HEALTHY, 1, 1, "platform", "v0.12-demo"),
-        ("observability", "otel-collector", K8sWorkloadRef.KIND_DAEMONSET, K8sCluster.HEALTH_HEALTHY, 3, 3, "sre", "0.101-demo"),
+        (
+            "payments",
+            "payments-api",
+            K8sWorkloadRef.KIND_DEPLOYMENT,
+            K8sCluster.HEALTH_HEALTHY,
+            3,
+            3,
+            "payments",
+            "2026.07.02-demo",
+        ),
+        (
+            "payments",
+            "broken-worker",
+            K8sWorkloadRef.KIND_DEPLOYMENT,
+            K8sCluster.HEALTH_DEGRADED,
+            0,
+            2,
+            "payments",
+            "2026.07.02-bad",
+        ),
+        (
+            "platform",
+            "demo-api",
+            K8sWorkloadRef.KIND_DEPLOYMENT,
+            K8sCluster.HEALTH_HEALTHY,
+            2,
+            2,
+            "platform",
+            "2026.07.02-demo",
+        ),
+        (
+            "platform",
+            "gitops-controller",
+            K8sWorkloadRef.KIND_DEPLOYMENT,
+            K8sCluster.HEALTH_HEALTHY,
+            1,
+            1,
+            "platform",
+            "v0.12-demo",
+        ),
+        (
+            "observability",
+            "otel-collector",
+            K8sWorkloadRef.KIND_DAEMONSET,
+            K8sCluster.HEALTH_HEALTHY,
+            3,
+            3,
+            "sre",
+            "0.101-demo",
+        ),
     ]
     for namespace, name, kind, health, ready, desired, team, version in rows:
         K8sWorkloadRef.objects.update_or_create(
@@ -230,10 +275,54 @@ def _upsert_apps(cluster: K8sCluster, now) -> None:
 
 def _upsert_pods(cluster: K8sCluster, now) -> None:
     rows = [
-        ("payments", "payments-api-7c76d8fdd9-4h2ks", K8sCluster.HEALTH_HEALTHY, "Running", "worker-1", "payments-api", 1, 1, 0, ["payments-api:1.18.0-demo"]),
-        ("payments", "payments-api-7c76d8fdd9-9n8pp", K8sCluster.HEALTH_HEALTHY, "Running", "worker-2", "payments-api", 1, 1, 0, ["payments-api:1.18.0-demo"]),
-        ("payments", "broken-worker-5dbb6df98c-jx2kf", K8sCluster.HEALTH_DEGRADED, "CrashLoopBackOff", "worker-3", "broken-worker", 0, 1, 8, ["broken-worker:1.18.0-demo"]),
-        ("platform", "demo-api-67b6f5d48c-qc82l", K8sCluster.HEALTH_HEALTHY, "Running", "worker-1", "demo-api", 1, 1, 0, ["demo-api:0.9.4-demo"]),
+        (
+            "payments",
+            "payments-api-7c76d8fdd9-4h2ks",
+            K8sCluster.HEALTH_HEALTHY,
+            "Running",
+            "worker-1",
+            "payments-api",
+            1,
+            1,
+            0,
+            ["payments-api:1.18.0-demo"],
+        ),
+        (
+            "payments",
+            "payments-api-7c76d8fdd9-9n8pp",
+            K8sCluster.HEALTH_HEALTHY,
+            "Running",
+            "worker-2",
+            "payments-api",
+            1,
+            1,
+            0,
+            ["payments-api:1.18.0-demo"],
+        ),
+        (
+            "payments",
+            "broken-worker-5dbb6df98c-jx2kf",
+            K8sCluster.HEALTH_DEGRADED,
+            "CrashLoopBackOff",
+            "worker-3",
+            "broken-worker",
+            0,
+            1,
+            8,
+            ["broken-worker:1.18.0-demo"],
+        ),
+        (
+            "platform",
+            "demo-api-67b6f5d48c-qc82l",
+            K8sCluster.HEALTH_HEALTHY,
+            "Running",
+            "worker-1",
+            "demo-api",
+            1,
+            1,
+            0,
+            ["demo-api:0.9.4-demo"],
+        ),
     ]
     for namespace, name, health, phase, node, owner_name, ready, total, restarts, images in rows:
         K8sPodRef.objects.update_or_create(
@@ -261,9 +350,36 @@ def _upsert_pods(cluster: K8sCluster, now) -> None:
 
 def _upsert_network_refs(cluster: K8sCluster, now) -> None:
     rows = [
-        ("payments", "payments-api", K8sNetworkRef.KIND_SERVICE, K8sCluster.HEALTH_HEALTHY, "ClusterIP", [{"port": 8080, "targetPort": 8080}], [], ["10.42.0.10:8080"]),
-        ("payments", "payments-api-ingress", K8sNetworkRef.KIND_INGRESS, K8sCluster.HEALTH_HEALTHY, "", [{"port": 443}], ["payments.demo.local"], []),
-        ("platform", "demo-api", K8sNetworkRef.KIND_SERVICE, K8sCluster.HEALTH_HEALTHY, "ClusterIP", [{"port": 9000, "targetPort": 9000}], [], ["10.42.1.10:9000"]),
+        (
+            "payments",
+            "payments-api",
+            K8sNetworkRef.KIND_SERVICE,
+            K8sCluster.HEALTH_HEALTHY,
+            "ClusterIP",
+            [{"port": 8080, "targetPort": 8080}],
+            [],
+            ["10.42.0.10:8080"],
+        ),
+        (
+            "payments",
+            "payments-api-ingress",
+            K8sNetworkRef.KIND_INGRESS,
+            K8sCluster.HEALTH_HEALTHY,
+            "",
+            [{"port": 443}],
+            ["payments.demo.local"],
+            [],
+        ),
+        (
+            "platform",
+            "demo-api",
+            K8sNetworkRef.KIND_SERVICE,
+            K8sCluster.HEALTH_HEALTHY,
+            "ClusterIP",
+            [{"port": 9000, "targetPort": 9000}],
+            [],
+            ["10.42.1.10:9000"],
+        ),
     ]
     for namespace, name, kind, health, service_type, ports, hosts, endpoints in rows:
         K8sNetworkRef.objects.update_or_create(
@@ -298,7 +414,9 @@ def _upsert_fleet_bundles(now) -> None:
                 "status": status,
                 "ready": ready,
                 "desired": desired,
-                "partitions": [{"name": f"{DEMO_CLUSTER_NAME}/{namespace}", "status": status, "ready": ready, "desired": desired}],
+                "partitions": [
+                    {"name": f"{DEMO_CLUSTER_NAME}/{namespace}", "status": status, "ready": ready, "desired": desired}
+                ],
                 "links": {"fleet": f"{DEMO_PROVIDER_BASE_URL}/dashboard/c/local/fleet/{name}"},
                 "labels": _demo_labels(),
                 "last_sync_at": now,
@@ -346,7 +464,14 @@ def _upsert_worker(now) -> None:
             "last_started_at": now - timedelta(minutes=5),
             "last_cycle_started_at": now - timedelta(minutes=1),
             "last_cycle_finished_at": now,
-            "last_summary": {"demo_fixture": True, "clusters": 1, "namespaces": 3, "workloads": 5, "apps": 3, "fleet_bundles": 2},
+            "last_summary": {
+                "demo_fixture": True,
+                "clusters": 1,
+                "namespaces": 3,
+                "workloads": 5,
+                "apps": 3,
+                "fleet_bundles": 2,
+            },
             "last_error": "",
         },
     )

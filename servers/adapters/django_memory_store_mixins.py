@@ -67,7 +67,9 @@ _OperationalPattern = OperationalPattern
 
 
 class DjangoMemoryStoreSnapshotMixin:
-    def _dream_server_memory_sync(self, server_id: int, *, deactivate_noise: bool = True, job_kind: str = "hybrid") -> dict:
+    def _dream_server_memory_sync(
+        self, server_id: int, *, deactivate_noise: bool = True, job_kind: str = "hybrid"
+    ) -> dict:
         return perform_dream_server_memory(self, server_id, deactivate_noise=deactivate_noise, job_kind=job_kind)
 
     def _build_snapshot_candidates(

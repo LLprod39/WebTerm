@@ -25,9 +25,7 @@ from core_ui.services.operator_security import (
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
-        UserAppPermission.objects.update_or_create(
-            user=user, feature=feature, defaults={"allowed": True}
-        )
+        UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
 
 
 @pytest.mark.django_db
@@ -130,6 +128,7 @@ def test_execute_action_is_idempotent_after_completion():
     from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
 
     if get_action_spec("operator.test_idempotent") is None:
+
         def handler(ctx):
             calls["count"] += 1
             return {"ok": True}

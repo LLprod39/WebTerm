@@ -3,6 +3,7 @@
 Extracted from ansible_engine.py to keep modules under the size limit.
 Re-exported from servers.services.ansible_engine for backward compatibility.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from servers.services.ansible_setup import _safe_host_name
+
 
 def shlex_quote(value: str) -> str:
     return "'" + value.replace("'", "'\"'\"'") + "'"
@@ -70,10 +72,7 @@ def parse_play_recap(text: str, *, servers: list[Any]) -> list[dict[str, Any]]:
         sid = int(server.id) if server is not None else 0
         if sid:
             found.add(sid)
-        output = (
-            f"PLAY RECAP {host_key}: ok={ok_n} changed={changed_n} "
-            f"unreachable={unreach_n} failed={failed_n}"
-        )
+        output = f"PLAY RECAP {host_key}: ok={ok_n} changed={changed_n} unreachable={unreach_n} failed={failed_n}"
         results.append(
             {
                 "server_id": sid,

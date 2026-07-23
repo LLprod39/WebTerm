@@ -2,7 +2,7 @@
 Health and readiness endpoints.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -12,7 +12,7 @@ from core_ui.views.runtime import get_cached_rag_service_status
 
 
 def _utc_timestamp_ms() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
 
 @require_GET

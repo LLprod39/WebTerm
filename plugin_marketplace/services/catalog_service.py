@@ -87,15 +87,10 @@ def _redact_source_url(source_url: str) -> str:
         netloc = f"***:***@{host}" if host else "***:***"
     query_pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
     redacted_query = urllib.parse.urlencode(
-        [
-            (key, "***" if key.lower() in SENSITIVE_SOURCE_QUERY_KEYS else value)
-            for key, value in query_pairs
-        ],
+        [(key, "***" if key.lower() in SENSITIVE_SOURCE_QUERY_KEYS else value) for key, value in query_pairs],
         safe="*",
     )
-    return urllib.parse.urlunparse(
-        (parsed.scheme, netloc, parsed.path, parsed.params, redacted_query, "")
-    )
+    return urllib.parse.urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, redacted_query, ""))
 
 
 def source_payload(source: MarketplaceSource) -> dict[str, Any]:

@@ -29,7 +29,11 @@ def mark_package_review(
     package = PluginPackage.objects.select_for_update().get(id=package_id)
     package.review_status = status
     package.save(update_fields=["review_status", "updated_at"])
-    if status == PluginPackage.REVIEW_VERIFIED and sign_when_verified and package.signature_status != PluginPackage.SIGNATURE_BUILTIN:
+    if (
+        status == PluginPackage.REVIEW_VERIFIED
+        and sign_when_verified
+        and package.signature_status != PluginPackage.SIGNATURE_BUILTIN
+    ):
         from plugin_marketplace.services.signing_service import sign_package
 
         package = sign_package(package.id, actor=actor, request=request)

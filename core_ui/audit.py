@@ -116,7 +116,11 @@ def infer_request_category(path: str) -> str:
     normalized = str(path or "").strip().lower()
     if normalized.startswith("/api/auth/") or normalized in {"/login/", "/logout/"}:
         return "auth"
-    if normalized.startswith("/api/settings/") or normalized.startswith("/api/access/") or normalized.startswith("/settings/"):
+    if (
+        normalized.startswith("/api/settings/")
+        or normalized.startswith("/api/access/")
+        or normalized.startswith("/settings/")
+    ):
         return "settings"
     if normalized.startswith("/api/studio/mcp/"):
         return "mcp"

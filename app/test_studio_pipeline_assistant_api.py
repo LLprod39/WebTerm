@@ -5,7 +5,6 @@ from django.contrib.auth.models import User
 from django.test import Client
 
 from core_ui.models import UserAppPermission
-from studio.keycloak_provisioning import ensure_keycloak_mcp_server
 from studio.models import MCPServerPool, Pipeline, PipelineDraftSession
 
 
@@ -16,6 +15,7 @@ def _grant_feature(user: User, *features: str) -> None:
             feature=feature,
             defaults={"allowed": True},
         )
+
 
 @pytest.mark.django_db
 def test_pipeline_assistant_returns_reply_and_patch(monkeypatch):
@@ -62,7 +62,12 @@ def test_pipeline_assistant_returns_reply_and_patch(monkeypatch):
             {
                 "pipeline_name": "Health Check",
                 "nodes": [
-                    {"id": "node_1", "type": "agent/ssh_cmd", "position": {"x": 0, "y": 0}, "data": {"label": "Check disk"}},
+                    {
+                        "id": "node_1",
+                        "type": "agent/ssh_cmd",
+                        "position": {"x": 0, "y": 0},
+                        "data": {"label": "Check disk"},
+                    },
                     {"id": "node_2", "type": "logic/condition", "position": {"x": 100, "y": 0}, "data": {}},
                 ],
                 "edges": [{"id": "e1", "source": "node_1", "target": "node_2"}],
@@ -255,53 +260,6 @@ def test_pipeline_assistant_draft_uses_local_fallback_when_provider_errors(monke
     assert len(revision["preview_nodes"]) == 3
     assert revision["preview_nodes"][0]["type"] == "trigger/webhook"
     assert len(revision["preview_edges"]) == 2
-
-
-@pytest.mark.django_db
-def test_pipeline_assistant_fallback_builds_keycloak_mcp_workflow(monkeypatch):
-    user = User.objects.create_user(username="pipeline-keycloak-fallback", password="x", is_staff=True)
-    other_user = User.objects.create_user(username="pipeline-keycloak-other", password="x")
-    ensure_keycloak_mcp_server(other_user)
-    _grant_feature(user, "studio_pipelines", "studio_mcp", "studio_skills")
-    server = ensure_keycloak_mcp_server(user)
-    client = Client()
-    client.force_login(user)
-
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat", **kwargs):
-        yield 'Error from Grok API: 403 - {"error":"Your team has used all available credits."}'
-
-    monkeypatch.setattr("app.core.llm.LLMProvider.stream_chat", fake_stream_chat, raising=False)
-
-    create_response = client.post(
-        "/api/studio/assistant/drafts/",
-        data=json.dumps(
-            {
-                "pipeline_name": "Keycloak tasks",
-                "nodes": [],
-                "edges": [],
-                "user_message": "Выполнение задач заявок киклока и отчетность в телеграм",
-                "intent": "create",
-            }
-        ),
-        content_type="application/json",
-    )
-
-    assert create_response.status_code == 201
-    draft_payload = create_response.json()
-    revision = draft_payload["latest_revision"]
-    response = revision["response"]
-    nodes = {node["id"]: node for node in revision["preview_nodes"]}
-
-    assert draft_payload["status"] == PipelineDraftSession.STATUS_READY
-    assert response["validation"]["ok"] is True
-    assert response["patch_summary"] == "Keycloak MCP ticket workflow with approval and Telegram reporting"
-    assert response["resource_plan"]["mcp_servers"][0]["id"] == server.id
-    assert any(item["slug"] == "keycloak-safety" for item in response["resource_plan"]["skills"])
-    assert nodes["environment_preflight"]["data"]["mcp_server_id"] == server.id
-    assert nodes["environment_preflight"]["data"]["tool_name"] == "keycloak_current_environment"
-    assert nodes["execute_keycloak_task"]["data"]["mcp_server_ids"] == [server.id]
-    assert "keycloak-safety" in nodes["execute_keycloak_task"]["data"]["skill_slugs"]
-    assert nodes["telegram_report"]["type"] == "output/telegram"
 
 
 @pytest.mark.django_db

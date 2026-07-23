@@ -392,8 +392,8 @@ def _build_log_source_command(source: str, lines: int, service: str) -> str:
     file_checks = " ".join(f"{shlex.quote(candidate)}" for candidate in path_candidates)
     return (
         f"for candidate in {file_checks}; do "
-        "if [ -f \"$candidate\" ]; then "
-        f"tail -n {lines} \"$candidate\" 2>&1; "
+        'if [ -f "$candidate" ]; then '
+        f'tail -n {lines} "$candidate" 2>&1; '
         "exit 0; "
         "fi; "
         "done; "

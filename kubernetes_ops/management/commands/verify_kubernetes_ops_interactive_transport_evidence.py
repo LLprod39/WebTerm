@@ -16,7 +16,9 @@ class Command(BaseCommand):
     help = "Write Kubernetes Ops interactive transport prerequisite evidence without opening live streams."
 
     def add_arguments(self, parser):
-        parser.add_argument("--output", default=INTERACTIVE_TRANSPORT_EVIDENCE_ARTIFACT, help="Output JSON evidence path.")
+        parser.add_argument(
+            "--output", default=INTERACTIVE_TRANSPORT_EVIDENCE_ARTIFACT, help="Output JSON evidence path."
+        )
         parser.add_argument("--no-fail", action="store_true", help="Return exit code 0 even when evidence is missing.")
 
     def handle(self, *args, **options):
@@ -24,6 +26,11 @@ class Command(BaseCommand):
         output_path = Path(options["output"]).resolve()
         write_kubernetes_interactive_transport_evidence(report, output_path)
         self.stdout.write(f"Wrote Kubernetes Ops interactive transport evidence: {output_path}")
-        self.stdout.write(json.dumps({"status": report["status"], "summary": report["summary"], "errors": report["errors"]}, ensure_ascii=False))
+        self.stdout.write(
+            json.dumps(
+                {"status": report["status"], "summary": report["summary"], "errors": report["errors"]},
+                ensure_ascii=False,
+            )
+        )
         if report["status"] != "ready" and not options["no_fail"]:
             raise CommandError("; ".join(str(item) for item in report["errors"][:8]))

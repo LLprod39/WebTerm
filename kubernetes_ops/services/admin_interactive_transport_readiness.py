@@ -24,7 +24,10 @@ TRANSPORTS = (
     },
     {
         "id": "port_forward_tunnel",
-        "enabled_settings": ("KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED", "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED"),
+        "enabled_settings": (
+            "KUBERNETES_ADMIN_NATIVE_PORT_FORWARD_ENABLED",
+            "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED",
+        ),
         "recording_setting": "KUBERNETES_ADMIN_PORT_FORWARD_RECORDING_ENABLED",
     },
     {
@@ -74,7 +77,11 @@ def _transport_report(item: dict[str, Any], *, production: bool, evidence_ref_pr
         blockers.append("recording_gate_required")
     if enabled and production and not evidence_ref_present:
         blockers.append("restricted_credential_evidence_required")
-    network_policy = _port_forward_network_policy_report(enabled=enabled, production=production) if item["id"] == "port_forward_tunnel" else None
+    network_policy = (
+        _port_forward_network_policy_report(enabled=enabled, production=production)
+        if item["id"] == "port_forward_tunnel"
+        else None
+    )
     if network_policy is not None:
         blockers.extend(network_policy["blockers"])
     provider_contract = _provider_contract_report(operation=item["id"], enabled=enabled)
@@ -137,21 +144,27 @@ def _list_setting(name: str, *, fallback: str = "") -> set[str]:
     configured = getattr(settings, name, None)
     if configured is None and fallback:
         configured = getattr(settings, fallback, None)
-    if isinstance(configured, (list, tuple, set)):
-        values = configured
-    else:
-        values = str(configured or "").split(",")
+    values = configured if isinstance(configured, (list, tuple, set)) else str(configured or "").split(",")
     return {str(item).strip().lower() for item in values if str(item).strip()}
 
 
 def _protected_namespaces() -> set[str]:
-    configured = _list_setting(PORT_FORWARD_PROTECTED_NAMESPACES_SETTING, fallback="KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES")
+    configured = _list_setting(
+        PORT_FORWARD_PROTECTED_NAMESPACES_SETTING, fallback="KUBERNETES_ADMIN_DELETE_PROTECTED_NAMESPACES"
+    )
     return configured or {item.lower() for item in DEFAULT_PROTECTED_NAMESPACES}
 
 
 def _port_forward_max_duration_seconds() -> int:
     try:
-        value = int(getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS", PORT_FORWARD_PRODUCTION_MAX_DURATION_SECONDS) or PORT_FORWARD_PRODUCTION_MAX_DURATION_SECONDS)
+        value = int(
+            getattr(
+                settings,
+                "KUBERNETES_ADMIN_PORT_FORWARD_MAX_DURATION_SECONDS",
+                PORT_FORWARD_PRODUCTION_MAX_DURATION_SECONDS,
+            )
+            or PORT_FORWARD_PRODUCTION_MAX_DURATION_SECONDS
+        )
     except (TypeError, ValueError):
         value = PORT_FORWARD_PRODUCTION_MAX_DURATION_SECONDS
     return max(60, min(value, 3600))
@@ -161,7 +174,9 @@ def _provider_contract_report(*, operation: str, enabled: bool) -> dict[str, Any
     contract = PROVIDER_CONTRACTS.get(operation)
     if contract is None:
         return None
-    providers = list(K8sProvider.objects.filter(kind=K8sProvider.KIND_RANCHER, enabled=True).only("id", "name", "labels"))
+    providers = list(
+        K8sProvider.objects.filter(kind=K8sProvider.KIND_RANCHER, enabled=True).only("id", "name", "labels")
+    )
     checked: list[dict[str, Any]] = []
     missing_count = 0
     invalid_count = 0
@@ -299,7 +314,9 @@ def build_admin_interactive_transport_report() -> dict[str, Any]:
     target_environment = _target_environment()
     production = target_environment in PRODUCTION_ENVIRONMENTS
     evidence_ref_present = bool(_evidence_ref())
-    transports = [_transport_report(item, production=production, evidence_ref_present=evidence_ref_present) for item in TRANSPORTS]
+    transports = [
+        _transport_report(item, production=production, evidence_ref_present=evidence_ref_present) for item in TRANSPORTS
+    ]
     blockers = [f"{transport['id']}:{blocker}" for transport in transports for blocker in transport["blockers"]]
     enabled_count = sum(1 for transport in transports if transport["enabled"])
     status = "ready" if not blockers else "missing"
@@ -338,7 +355,11 @@ def assert_interactive_transport_prerequisites(operation: str) -> None:
     matching = next((item for item in report["transports"] if item["id"] == operation), None)
     blockers = list(matching.get("blockers") or []) if matching else list(report["blockers"])
     if blockers:
-        payload = {"operation": operation, "blockers": blockers, "evidence_setting": RESTRICTED_CREDENTIAL_EVIDENCE_SETTING}
+        payload = {
+            "operation": operation,
+            "blockers": blockers,
+            "evidence_setting": RESTRICTED_CREDENTIAL_EVIDENCE_SETTING,
+        }
         if matching and matching.get("provider_contract") is not None:
             payload["provider_contract"] = matching["provider_contract"]
         if matching and matching.get("network_policy") is not None:

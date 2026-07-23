@@ -36,11 +36,7 @@ def list_user_accessible_servers_sync(*, user_id: int, server_ids: list[int]) ->
     """Return server metadata for ids the user can access."""
     from servers.models import Server, ServerShare
 
-    own_ids = set(
-        Server.objects.filter(user_id=user_id, id__in=server_ids).values_list(
-            "id", flat=True
-        )
-    )
+    own_ids = set(Server.objects.filter(user_id=user_id, id__in=server_ids).values_list("id", flat=True))
     shared_ids = set(
         ServerShare.objects.filter(
             user_id=user_id,
@@ -102,9 +98,7 @@ async def build_agent_extra_targets(
     from servers.services.terminal_ai.agent.tools import ServerTarget
 
     extras: dict[str, Any] = {}
-    ids = normalize_extra_target_server_ids(
-        (ai_settings or {}).get("extra_target_server_ids")
-    )
+    ids = normalize_extra_target_server_ids((ai_settings or {}).get("extra_target_server_ids"))
     if not ids or not user_id:
         return extras
 
@@ -142,9 +136,7 @@ async def build_agent_memory_context(server_ids: list[int]) -> str:
         from servers.adapters.memory_store import DjangoServerMemoryStore
 
         store = DjangoServerMemoryStore()
-        cards = await sync_to_async(
-            store._get_server_cards_batch_sync, thread_sensitive=True
-        )(ids)
+        cards = await sync_to_async(store._get_server_cards_batch_sync, thread_sensitive=True)(ids)
         cards_by_id = {int(getattr(card, "server_id", 0) or 0): card for card in cards}
         ordered = [cards_by_id[server_id] for server_id in ids if server_id in cards_by_id]
         if not ordered:

@@ -81,9 +81,7 @@ class TestShellTool:
     @pytest.mark.asyncio
     async def test_unknown_target_returns_error(self):
         ctx = tool_context()
-        result = await ShellTool().run(
-            ShellArgs(cmd="ls", target="nope"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="ls", target="nope"), ctx)
         assert result.ok is False
         assert "unknown target" in result.error.lower()
 
@@ -101,9 +99,7 @@ class TestShellTool:
         conn = FakeSSHConn()
         primary = primary_target(read_only=True, ssh_conn=conn)
         ctx = ToolContext(primary=primary)
-        result = await ShellTool().run(
-            ShellArgs(cmd="echo hi > /tmp/x"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="echo hi > /tmp/x"), ctx)
         assert result.ok is False
         assert "read-only" in result.error.lower()
         assert conn.calls == []
@@ -121,9 +117,7 @@ class TestShellTool:
             is_primary=False,
         )
         ctx = ToolContext(primary=primary, extras={"worker-1": extra})
-        result = await ShellTool().run(
-            ShellArgs(cmd="hostname", target="worker-1"), ctx
-        )
+        result = await ShellTool().run(ShellArgs(cmd="hostname", target="worker-1"), ctx)
         assert result.ok is True
         assert "E" in result.output
         assert extra_conn.calls == ["hostname"]
@@ -231,24 +225,16 @@ class TestEditFileTool:
         conn = FakeSSHConn(
             responses={"test -f": FakeRunResult(stdout="MISSING", exit_status=0)},
         )
-        ctx = ToolContext(
-            primary=primary_target(ssh_conn=conn), user_id=1
-        )
-        result = await EditFileTool().run(
-            EditFileArgs(path="/etc/new.conf", content="x=1"), ctx
-        )
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn), user_id=1)
+        result = await EditFileTool().run(EditFileArgs(path="/etc/new.conf", content="x=1"), ctx)
         assert result.ok is False
         assert "not found" in result.error.lower()
 
     @pytest.mark.asyncio
     async def test_readonly_target_refuses(self):
         conn = FakeSSHConn()
-        ctx = ToolContext(
-            primary=primary_target(read_only=True, ssh_conn=conn), user_id=1
-        )
-        result = await EditFileTool().run(
-            EditFileArgs(path="/etc/nginx.conf", content="x"), ctx
-        )
+        ctx = ToolContext(primary=primary_target(read_only=True, ssh_conn=conn), user_id=1)
+        result = await EditFileTool().run(EditFileArgs(path="/etc/nginx.conf", content="x"), ctx)
         assert result.ok is False
         assert "read-only" in result.error.lower()
         assert conn.calls == []  # no SSH touched
@@ -256,12 +242,8 @@ class TestEditFileTool:
     @pytest.mark.asyncio
     async def test_dry_run(self):
         conn = FakeSSHConn()
-        ctx = ToolContext(
-            primary=primary_target(ssh_conn=conn), user_id=1, dry_run=True
-        )
-        result = await EditFileTool().run(
-            EditFileArgs(path="/etc/hosts", content="x"), ctx
-        )
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn), user_id=1, dry_run=True)
+        result = await EditFileTool().run(EditFileArgs(path="/etc/hosts", content="x"), ctx)
         assert result.ok is True
         assert "DRY-RUN" in result.output
         assert conn.calls == []
@@ -304,9 +286,7 @@ class TestGrepTool:
         )
         conn = FakeSSHConn(default=FakeRunResult(stdout=out, exit_status=0))
         ctx = ToolContext(primary=primary_target(ssh_conn=conn))
-        result = await GrepTool().run(
-            GrepArgs(pattern="ssl", path="/etc/nginx"), ctx
-        )
+        result = await GrepTool().run(GrepArgs(pattern="ssl", path="/etc/nginx"), ctx)
         assert result.ok is True
         assert len(result.data["matches"]) == 2
         assert result.data["matches"][0]["line"] == 42
@@ -316,9 +296,7 @@ class TestGrepTool:
         # grep returns exit 1 when nothing matches — still ok=True for us
         conn = FakeSSHConn(default=FakeRunResult(stdout="", exit_status=1))
         ctx = ToolContext(primary=primary_target(ssh_conn=conn))
-        result = await GrepTool().run(
-            GrepArgs(pattern="nonexistent", path="/etc"), ctx
-        )
+        result = await GrepTool().run(GrepArgs(pattern="nonexistent", path="/etc"), ctx)
         assert result.ok is True
         assert result.data["matches"] == []
 
@@ -380,9 +358,7 @@ class TestAskUserTool:
             return "yes, proceed"
 
         ctx = ToolContext(primary=primary_target(), prompt_user=prompt)
-        result = await AskUserTool().run(
-            AskUserArgs(question="Proceed?"), ctx
-        )
+        result = await AskUserTool().run(AskUserArgs(question="Proceed?"), ctx)
         assert result.ok is True
         assert "yes, proceed" in result.output
         assert result.data["reply"] == "yes, proceed"
@@ -426,9 +402,7 @@ class TestAskUserTool:
             return None
 
         ctx = ToolContext(primary=primary_target(), prompt_user=prompt)
-        result = await AskUserTool().run(
-            AskUserArgs(question="Proceed?", timeout_seconds=5), ctx
-        )
+        result = await AskUserTool().run(AskUserArgs(question="Proceed?", timeout_seconds=5), ctx)
         assert result.ok is False
         assert "timeout" in result.error.lower()
 
@@ -437,9 +411,7 @@ class TestDoneTool:
     @pytest.mark.asyncio
     async def test_echoes_final_text(self):
         ctx = ToolContext(primary=primary_target())
-        result = await DoneTool().run(
-            DoneArgs(final_text="All good."), ctx
-        )
+        result = await DoneTool().run(DoneArgs(final_text="All good."), ctx)
         assert result.ok is True
         assert "All good." in result.output
 

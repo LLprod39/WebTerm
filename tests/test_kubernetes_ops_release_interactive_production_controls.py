@@ -35,8 +35,13 @@ def test_interactive_production_controls_ready_for_local_disabled_transports():
     controls = {item["id"]: item for item in report["controls"]}
     assert set(controls) == {item["id"] for item in CONTROL_CONTRACTS}
     assert controls["restricted_credentials"]["setting"] == "KUBERNETES_ADMIN_RESTRICTED_CREDENTIAL_EVIDENCE_REF"
-    assert controls["port_forward_network_policy"]["setting"] == "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF"
-    assert all(item["payload_stored"] is False and item["sensitive_values_stored"] is False for item in report["controls"])
+    assert (
+        controls["port_forward_network_policy"]["setting"]
+        == "KUBERNETES_ADMIN_PORT_FORWARD_NETWORK_POLICY_EVIDENCE_REF"
+    )
+    assert all(
+        item["payload_stored"] is False and item["sensitive_values_stored"] is False for item in report["controls"]
+    )
 
 
 @override_settings(

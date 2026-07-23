@@ -28,7 +28,9 @@ def server_secret_storage_check() -> dict[str, Any]:
         "managed_server_password_count": ManagedSecret.objects.filter(namespace=SERVER_AUTH_NAMESPACE).count(),
         "managed_server_sudo_password_count": ManagedSecret.objects.filter(namespace=SERVER_SUDO_NAMESPACE).count(),
         "managed_mcp_secret_count": ManagedSecret.objects.filter(namespace=MCP_ENV_NAMESPACE).count(),
-        "managed_notification_secret_count": ManagedSecret.objects.filter(namespace=NOTIFICATION_SECRET_NAMESPACE).count(),
+        "managed_notification_secret_count": ManagedSecret.objects.filter(
+            namespace=NOTIFICATION_SECRET_NAMESPACE
+        ).count(),
     }
     if legacy_password_count + legacy_sudo_count:
         return readiness_check(

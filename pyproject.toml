@@ -2,24 +2,26 @@
 name = "weu-ai-platform"
 version = "2.0.0"
 description = "WEU AI Agent Platform - DevOps/IT task automation"
-requires-python = ">=3.10"
+requires-python = ">=3.11,<3.13"
 license = { text = "Apache License 2.0" }
 classifiers = [
     "License :: OSI Approved :: Apache Software License",
 ]
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 exclude = [
     ".git",
     ".venv",
+    ".venv-wsl",
     "venv",
     "__pycache__",
     "migrations",
     "node_modules",
     ".eggs",
     "*.egg",
+    "graphify-out",
 ]
 
 [tool.ruff.lint]
@@ -60,6 +62,14 @@ source = ["app", "core_ui", "servers"]
 omit = ["*/migrations/*", "*/tests/*", "*/__pycache__/*"]
 
 [tool.coverage.report]
+# Backend coverage ratchet (F-06). Frozen baseline measured in the locked
+# runtime (Python 3.11.15 / Django 5.2.16) over the CI backend-unit cov set
+# (app, core_ui, servers, studio, kubernetes_ops, plugin_marketplace, mars,
+# web_ui): 71.95% on 2026-07-23 (54364/75557 lines, 2181 passed / 3 skipped).
+# ``fail_under`` sits just below that baseline so CI fails on any real
+# regression; raise it as coverage improves. Stage 1 exit target is >=80%.
+precision = 2
+fail_under = 71.5
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",

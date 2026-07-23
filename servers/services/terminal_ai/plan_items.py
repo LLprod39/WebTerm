@@ -25,8 +25,9 @@ def normalize_execution_mode(mode: Any) -> str:
         return "fast"
     if raw in ("agent", "nova", "react", "interactive"):
         return "agent"
-    # Pilot default when mode is missing/unknown: Nova (agent).
-    return "agent"
+    # Fail-safe default: an unknown client value must not silently enable the
+    # autonomous agent loop.  Known Nova aliases above still resolve to agent.
+    return "step"
 
 
 def resolve_auto_execution_mode(

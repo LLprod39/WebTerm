@@ -2,6 +2,7 @@
 Инструменты для работы с серверами из вкладки Servers.
 Используют серверы текущего пользователя (user_id из _context) и SSH.
 """
+
 import contextlib
 import os
 from typing import Any
@@ -87,7 +88,7 @@ class ServersListTool(BaseTool):
                 f"ВНИМАНИЕ: Для текущей задачи установлен целевой сервер!\n"
                 f"Используй ТОЛЬКО сервер «{target_server_name}» (id={target_server_id}).\n"
                 f"НЕ вызывай servers_list — целевой сервер уже определён.\n"
-                f"Для выполнения команд используй: server_execute с server_name_or_id=\"{target_server_name}\""
+                f'Для выполнения команд используй: server_execute с server_name_or_id="{target_server_name}"'
             )
 
         rows = list_servers_for_tool(user_id)
@@ -115,7 +116,11 @@ class ServerExecuteTool(BaseTool):
             description="Выполнить команду на сервере из раздела Servers. server_name_or_id — имя (например WEU SERVER) или числовой id. command — команда, например df -h.",
             category="ssh",
             parameters=[
-                ToolParameter(name="server_name_or_id", type="string", description="Имя сервера (например WEU SERVER) или его id из servers_list"),
+                ToolParameter(
+                    name="server_name_or_id",
+                    type="string",
+                    description="Имя сервера (например WEU SERVER) или его id из servers_list",
+                ),
                 ToolParameter(name="command", type="string", description="Команда для выполнения (например df -h)"),
                 ToolParameter(
                     name="allow_destructive",
@@ -145,7 +150,9 @@ class ServerExecuteTool(BaseTool):
             mode=str(ctx.get("permission_mode") or "DIRECT"),
             allowed=not command_risk.is_dangerous or allow_destructive,
             sandbox_profile="ops_mutation" if command_risk.is_dangerous and allow_destructive else "ops_read",
-            reason="dangerous_command_requires_allow_destructive" if command_risk.is_dangerous and not allow_destructive else "",
+            reason="dangerous_command_requires_allow_destructive"
+            if command_risk.is_dangerous and not allow_destructive
+            else "",
             requires_approval=command_risk.is_dangerous,
             risk_categories=command_risk.categories,
             matched_patterns=command_risk.matched_patterns,
@@ -168,7 +175,9 @@ class ServerExecuteTool(BaseTool):
                     "execution_policy": policy_metadata,
                 },
             )
-            return "Команда выглядит опасной. Нужен явный допуск allow_destructive=true после подтверждения пользователя."
+            return (
+                "Команда выглядит опасной. Нужен явный допуск allow_destructive=true после подтверждения пользователя."
+            )
 
         # Проверяем, есть ли ограничение на конкретный сервер (из workflow/task или env)
         target_server_id, target_server_name = _get_target_server(kwargs)
@@ -184,11 +193,13 @@ class ServerExecuteTool(BaseTool):
 
         # Если есть ограничение на целевой сервер — проверяем
         if target_server_id and server.id != target_server_id:
-            logger.warning(f"server_execute: попытка использовать сервер {server.name} (id={server.id}), но целевой сервер = {target_server_name} (id={target_server_id})")
+            logger.warning(
+                f"server_execute: попытка использовать сервер {server.name} (id={server.id}), но целевой сервер = {target_server_name} (id={target_server_id})"
+            )
             return (
                 f"ОШИБКА: Ты пытаешься выполнить команду на сервере «{server.name}», "
                 f"но для этой задачи установлен целевой сервер «{target_server_name}»!\n"
-                f"Используй ТОЛЬКО: server_execute с server_name_or_id=\"{target_server_name}\""
+                f'Используй ТОЛЬКО: server_execute с server_name_or_id="{target_server_name}"'
             )
         password = None
         sudo_password = ""

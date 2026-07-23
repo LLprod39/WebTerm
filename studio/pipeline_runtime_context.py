@@ -158,10 +158,7 @@ def validate_pipeline_entry_branch(nodes: Any, edges: Any, entry_node_id: str | 
         outgoing_edges=outgoing_edges,
         node_states={},
     )
-    if not any(
-        not str(id_to_node[node_id].get("type") or "").startswith("trigger/")
-        for node_id in reachable_ids
-    ):
+    if not any(not str(id_to_node[node_id].get("type") or "").startswith("trigger/") for node_id in reachable_ids):
         return [f"Selected trigger '{entry}' has no downstream executable nodes."]
     return []
 

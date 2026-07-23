@@ -4,7 +4,9 @@ from collections import defaultdict, deque
 from typing import Any
 
 
-def build_execution_graph(nodes: list[dict[str, Any]], edges: list[dict[str, Any]]) -> tuple[
+def build_execution_graph(
+    nodes: list[dict[str, Any]], edges: list[dict[str, Any]]
+) -> tuple[
     dict[str, dict[str, Any]],
     dict[str, list[dict[str, Any]]],
     dict[str, list[dict[str, Any]]],

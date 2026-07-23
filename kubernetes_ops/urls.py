@@ -38,7 +38,11 @@ urlpatterns = [
     path("capabilities/", capability_views.api_kubernetes_capabilities, name="api_kubernetes_capabilities"),
     path("release/summary/", release_views.api_kubernetes_release_summary, name="api_kubernetes_release_summary"),
     path("overview/", views.api_kubernetes_overview, name="api_kubernetes_overview"),
-    path("diagnostics/summary/", diagnostic_views.api_kubernetes_diagnostics_summary, name="api_kubernetes_diagnostics_summary"),
+    path(
+        "diagnostics/summary/",
+        diagnostic_views.api_kubernetes_diagnostics_summary,
+        name="api_kubernetes_diagnostics_summary",
+    ),
     path("actions/diagnose/", action_views.api_kubernetes_diagnose_action, name="api_kubernetes_diagnose_action"),
     path("actions/summary/", action_views.api_kubernetes_action_summary, name="api_kubernetes_action_summary"),
     path("actions/", action_views.api_kubernetes_action_requests, name="api_kubernetes_action_requests"),
@@ -109,7 +113,11 @@ urlpatterns = [
         admin_action_views.api_kubernetes_admin_action_review,
         name="api_kubernetes_admin_action_review",
     ),
-    path("admin/recordings/", admin_recording_views.api_kubernetes_admin_recordings, name="api_kubernetes_admin_recordings"),
+    path(
+        "admin/recordings/",
+        admin_recording_views.api_kubernetes_admin_recordings,
+        name="api_kubernetes_admin_recordings",
+    ),
     path(
         "admin/recordings/<uuid:recording_id>/",
         admin_recording_views.api_kubernetes_admin_recording_detail,
@@ -254,25 +262,65 @@ urlpatterns = [
     path("providers/", views.api_kubernetes_providers, name="api_kubernetes_providers"),
     path("providers/<int:provider_id>/", views.api_kubernetes_provider_detail, name="api_kubernetes_provider_detail"),
     path("providers/<int:provider_id>/sync/", views.api_kubernetes_provider_sync, name="api_kubernetes_provider_sync"),
-    path("providers/<int:provider_id>/probe/", probe_views.api_kubernetes_provider_probe, name="api_kubernetes_provider_probe"),
+    path(
+        "providers/<int:provider_id>/probe/",
+        probe_views.api_kubernetes_provider_probe,
+        name="api_kubernetes_provider_probe",
+    ),
     path("clusters/", views.api_kubernetes_clusters, name="api_kubernetes_clusters"),
-    path("workloads/<str:workload_id>/describe/", describe_views.api_kubernetes_workload_describe, name="api_kubernetes_workload_describe"),
-    path("workloads/<str:workload_id>/", workload_views.api_kubernetes_workload_detail, name="api_kubernetes_workload_detail"),
+    path(
+        "workloads/<str:workload_id>/describe/",
+        describe_views.api_kubernetes_workload_describe,
+        name="api_kubernetes_workload_describe",
+    ),
+    path(
+        "workloads/<str:workload_id>/",
+        workload_views.api_kubernetes_workload_detail,
+        name="api_kubernetes_workload_detail",
+    ),
     path("pods/<str:pod_id>/logs/", log_views.api_kubernetes_pod_logs, name="api_kubernetes_pod_logs"),
     path("pods/<str:pod_id>/", pod_views.api_kubernetes_pod_detail, name="api_kubernetes_pod_detail"),
-    path("network/<str:network_id>/", network_views.api_kubernetes_network_detail, name="api_kubernetes_network_detail"),
-    path("clusters/<str:cluster_id>/namespaces/", views.api_kubernetes_cluster_namespaces, name="api_kubernetes_cluster_namespaces"),
-    path("clusters/<str:cluster_id>/namespaces/<str:namespace_id>/", namespace_views.api_kubernetes_namespace_detail, name="api_kubernetes_namespace_detail"),
-    path("clusters/<str:cluster_id>/workloads/", views.api_kubernetes_cluster_workloads, name="api_kubernetes_cluster_workloads"),
+    path(
+        "network/<str:network_id>/", network_views.api_kubernetes_network_detail, name="api_kubernetes_network_detail"
+    ),
+    path(
+        "clusters/<str:cluster_id>/namespaces/",
+        views.api_kubernetes_cluster_namespaces,
+        name="api_kubernetes_cluster_namespaces",
+    ),
+    path(
+        "clusters/<str:cluster_id>/namespaces/<str:namespace_id>/",
+        namespace_views.api_kubernetes_namespace_detail,
+        name="api_kubernetes_namespace_detail",
+    ),
+    path(
+        "clusters/<str:cluster_id>/workloads/",
+        views.api_kubernetes_cluster_workloads,
+        name="api_kubernetes_cluster_workloads",
+    ),
     path("clusters/<str:cluster_id>/pods/", pod_views.api_kubernetes_cluster_pods, name="api_kubernetes_cluster_pods"),
-    path("clusters/<str:cluster_id>/network/", network_views.api_kubernetes_cluster_network, name="api_kubernetes_cluster_network"),
-    path("clusters/<str:cluster_id>/events/", views.api_kubernetes_cluster_events, name="api_kubernetes_cluster_events"),
+    path(
+        "clusters/<str:cluster_id>/network/",
+        network_views.api_kubernetes_cluster_network,
+        name="api_kubernetes_cluster_network",
+    ),
+    path(
+        "clusters/<str:cluster_id>/events/", views.api_kubernetes_cluster_events, name="api_kubernetes_cluster_events"
+    ),
     path("clusters/<str:cluster_id>/", views.api_kubernetes_cluster_detail, name="api_kubernetes_cluster_detail"),
     path("helm/releases/", helm_views.api_kubernetes_helm_releases, name="api_kubernetes_helm_releases"),
     path("fleet/bundles/", views.api_kubernetes_fleet_bundles, name="api_kubernetes_fleet_bundles"),
-    path("fleet/bundles/<str:bundle_id>/", fleet_views.api_kubernetes_fleet_bundle_detail, name="api_kubernetes_fleet_bundle_detail"),
+    path(
+        "fleet/bundles/<str:bundle_id>/",
+        fleet_views.api_kubernetes_fleet_bundle_detail,
+        name="api_kubernetes_fleet_bundle_detail",
+    ),
     path("devtron/apps/", views.api_kubernetes_devtron_apps, name="api_kubernetes_devtron_apps"),
-    path("devtron/apps/<str:app_id>/", devtron_views.api_kubernetes_devtron_app_detail, name="api_kubernetes_devtron_app_detail"),
+    path(
+        "devtron/apps/<str:app_id>/",
+        devtron_views.api_kubernetes_devtron_app_detail,
+        name="api_kubernetes_devtron_app_detail",
+    ),
     path("audit/deeplink/", audit_views.api_kubernetes_deeplink_audit, name="api_kubernetes_deeplink_audit"),
     path("audit/", audit_views.api_kubernetes_audit, name="api_kubernetes_audit"),
 ]

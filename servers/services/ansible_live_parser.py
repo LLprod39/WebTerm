@@ -3,8 +3,10 @@
 Extracted from ansible_engine.py to keep modules under the size limit.
 Re-exported from servers.services.ansible_engine for backward compatibility.
 """
+
 from __future__ import annotations
 
+import contextlib
 import logging
 import queue
 import re
@@ -19,6 +21,7 @@ from servers.services.ansible_setup import _safe_host_name
 logger = logging.getLogger(__name__)
 
 _STATUS_SEVERITY = {"pending": 0, "skipped": 1, "success": 2, "changed": 2, "error": 3}
+
 
 class AnsibleLiveParser:
     """Incremental parser for the default Ansible stdout callback.
@@ -204,17 +207,13 @@ class AnsibleLiveParser:
 
 
 def _terminate_process(proc: subprocess.Popen) -> None:
-    try:
+    with contextlib.suppress(Exception):
         proc.terminate()
-    except Exception:
-        pass
     try:
         proc.wait(timeout=5)
     except Exception:
-        try:
+        with contextlib.suppress(Exception):
             proc.kill()
-        except Exception:
-            pass
 
 
 def _stream_command(

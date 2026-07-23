@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import time
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -57,7 +57,12 @@ def collect_kubernetes_release_preflight(*, runner=None, cwd: Path | None = None
 def load_kubernetes_release_preflight_artifact(path: Path | None = None) -> dict[str, Any]:
     artifact_path = path or Path(settings.BASE_DIR) / PREFLIGHT_ARTIFACT
     if not artifact_path.exists():
-        return {"success": False, "status": "missing", "path": str(artifact_path), "errors": ["preflight artifact is missing"]}
+        return {
+            "success": False,
+            "status": "missing",
+            "path": str(artifact_path),
+            "errors": ["preflight artifact is missing"],
+        }
     try:
         payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -143,11 +148,25 @@ def _command_result(*, cwd: Path, item: dict[str, Any], runner) -> dict[str, Any
 def _readonly_rbac_live_result(*, cwd: Path, item: dict[str, Any]) -> dict[str, Any]:
     path = cwd / LIVE_RBAC_ARTIFACT
     if not path.exists():
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": "artifact missing"}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": "artifact missing",
+        }
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": str(exc)}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": str(exc),
+        }
     errors = payload.get("errors") if isinstance(payload.get("errors"), list) else []
     return {
         "id": item.get("id"),
@@ -165,11 +184,25 @@ def _readonly_rbac_live_result(*, cwd: Path, item: dict[str, Any]) -> dict[str, 
 def _local_platform_result(*, cwd: Path, item: dict[str, Any]) -> dict[str, Any]:
     path = cwd / LOCAL_PLATFORM_ARTIFACT
     if not path.exists():
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": "artifact missing"}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": "artifact missing",
+        }
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": str(exc)}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": str(exc),
+        }
     errors = payload.get("errors") if isinstance(payload.get("errors"), list) else []
     summary = payload.get("summary") if isinstance(payload.get("summary"), dict) else {}
     return {
@@ -189,11 +222,25 @@ def _local_platform_result(*, cwd: Path, item: dict[str, Any]) -> dict[str, Any]
 def _live_provider_smoke_result(*, cwd: Path, item: dict[str, Any]) -> dict[str, Any]:
     path = cwd / LIVE_PROVIDER_SMOKE_ARTIFACT
     if not path.exists():
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": "artifact missing"}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": "artifact missing",
+        }
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"id": item.get("id"), "command": item.get("command"), "mode": "existing_artifact", "success": False, "path": str(path), "error": str(exc)}
+        return {
+            "id": item.get("id"),
+            "command": item.get("command"),
+            "mode": "existing_artifact",
+            "success": False,
+            "path": str(path),
+            "error": str(exc),
+        }
     errors = payload.get("errors") if isinstance(payload.get("errors"), list) else []
     schema_version = str(payload.get("schema_version") or "")
     artifact_errors = list(errors)
@@ -214,7 +261,9 @@ def _live_provider_smoke_result(*, cwd: Path, item: dict[str, Any]) -> dict[str,
     }
 
 
-def _call_runner(runner, command: str, cwd: Path, *, timeout_seconds: int, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _call_runner(
+    runner, command: str, cwd: Path, *, timeout_seconds: int, env: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
     accepts_timeout = _runner_accepts(runner, "timeout_seconds")
     accepts_env = _runner_accepts(runner, "env")
     kwargs: dict[str, Any] = {}
@@ -237,7 +286,9 @@ def _runner_accepts(runner, parameter_name: str) -> bool:
     )
 
 
-def _run_command(command: str, cwd: Path, *, timeout_seconds: int = 600, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def _run_command(
+    command: str, cwd: Path, *, timeout_seconds: int = 600, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     process_env = os.environ.copy()
     if env:
         process_env.update({str(key): str(value) for key, value in env.items()})
@@ -282,7 +333,7 @@ def _preflight_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if generated_at is None:
         return None, "generated_at is invalid"
     if timezone.is_naive(generated_at):
-        generated_at = timezone.make_aware(generated_at, timezone=datetime_timezone.utc)
+        generated_at = timezone.make_aware(generated_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - generated_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:

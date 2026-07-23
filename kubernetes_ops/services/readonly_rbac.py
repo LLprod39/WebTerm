@@ -31,7 +31,11 @@ FORBIDDEN_SUBRESOURCES = set(READONLY_SERVICE_ACCOUNT_CONTRACT["denied_subresour
 READONLY_RULES: tuple[dict[str, Any], ...] = (
     {"apiGroups": [""], "resources": ["namespaces", "pods", "services", "events"], "verbs": sorted(READONLY_VERBS)},
     {"apiGroups": ["networking.k8s.io"], "resources": ["ingresses"], "verbs": sorted(READONLY_VERBS)},
-    {"apiGroups": ["apps"], "resources": ["deployments", "statefulsets", "daemonsets", "replicasets"], "verbs": sorted(READONLY_VERBS)},
+    {
+        "apiGroups": ["apps"],
+        "resources": ["deployments", "statefulsets", "daemonsets", "replicasets"],
+        "verbs": sorted(READONLY_VERBS),
+    },
 )
 
 
@@ -142,7 +146,10 @@ def render_kubernetes_readonly_rbac_yaml(bundle: dict[str, Any]) -> str:
 
 
 def render_kubernetes_readonly_rbac_json(bundle: dict[str, Any]) -> str:
-    return json.dumps({"apiVersion": "v1", "kind": "List", "items": bundle["manifests"]}, ensure_ascii=False, indent=2) + "\n"
+    return (
+        json.dumps({"apiVersion": "v1", "kind": "List", "items": bundle["manifests"]}, ensure_ascii=False, indent=2)
+        + "\n"
+    )
 
 
 def _validate_cluster_role_binding(bundle: dict[str, Any]) -> list[str]:
@@ -158,7 +165,9 @@ def _validate_cluster_role_binding(bundle: dict[str, Any]) -> list[str]:
         subjects = binding.get("subjects") or []
         role_ref = binding.get("roleRef") or {}
         if not any(
-            item.get("kind") == "ServiceAccount" and item.get("name") == service_account_name and item.get("namespace") == namespace
+            item.get("kind") == "ServiceAccount"
+            and item.get("name") == service_account_name
+            and item.get("namespace") == namespace
             for item in subjects
             if isinstance(item, dict)
         ):
@@ -173,7 +182,7 @@ def _to_yaml(value: Any, *, indent: int = 0) -> str:
     if isinstance(value, dict):
         lines: list[str] = []
         for key, item in value.items():
-            if isinstance(item, dict) or isinstance(item, list):
+            if isinstance(item, (dict, list)):
                 lines.append(f"{pad}{key}:")
                 lines.append(_to_yaml(item, indent=indent + 2))
             else:

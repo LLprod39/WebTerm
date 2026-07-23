@@ -31,8 +31,31 @@ MAX_TTL_MINUTES = {
 }
 MODE_ALLOWED_VERBS = {
     K8sAdminSession.MODE_READ: ["get", "list", "watch", "logs", "yaml"],
-    K8sAdminSession.MODE_WRITE: ["get", "list", "watch", "logs", "yaml", "dry_run_apply", "apply", "patch", "scale", "restart", "delete"],
-    K8sAdminSession.MODE_BREAK_GLASS: ["get", "list", "watch", "logs", "yaml", "exec", "port_forward", "cordon", "uncordon", "drain"],
+    K8sAdminSession.MODE_WRITE: [
+        "get",
+        "list",
+        "watch",
+        "logs",
+        "yaml",
+        "dry_run_apply",
+        "apply",
+        "patch",
+        "scale",
+        "restart",
+        "delete",
+    ],
+    K8sAdminSession.MODE_BREAK_GLASS: [
+        "get",
+        "list",
+        "watch",
+        "logs",
+        "yaml",
+        "exec",
+        "port_forward",
+        "cordon",
+        "uncordon",
+        "drain",
+    ],
 }
 MODE_ALLOWED_KINDS = {
     K8sAdminSession.MODE_READ: ["*"],
@@ -75,9 +98,12 @@ def _ttl_minutes_for_mode(mode: str, value: Any) -> int:
 
 def _allowed_verbs_for_mode(mode: str) -> list[str]:
     verbs = list(MODE_ALLOWED_VERBS[mode])
-    if mode == K8sAdminSession.MODE_BREAK_GLASS and bool(getattr(settings, "KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED", False)):
-        if "apply" not in verbs:
-            verbs.append("apply")
+    if (
+        mode == K8sAdminSession.MODE_BREAK_GLASS
+        and bool(getattr(settings, "KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED", False))
+        and "apply" not in verbs
+    ):
+        verbs.append("apply")
     return verbs
 
 
@@ -180,7 +206,9 @@ def create_admin_session(*, user, data: dict[str, Any]) -> K8sAdminSession:
         allowed_namespaces = [namespace] if namespace else ["*"]
     allowed_kinds = _clean_string_list(data.get("allowed_kinds"), max_length=80) or MODE_ALLOWED_KINDS[mode]
 
-    status = K8sAdminSession.STATUS_ACTIVE if mode == K8sAdminSession.MODE_READ else K8sAdminSession.STATUS_PENDING_APPROVAL
+    status = (
+        K8sAdminSession.STATUS_ACTIVE if mode == K8sAdminSession.MODE_READ else K8sAdminSession.STATUS_PENDING_APPROVAL
+    )
     risk_tier = {
         K8sAdminSession.MODE_READ: K8sAdminSession.RISK_LOW,
         K8sAdminSession.MODE_WRITE: K8sAdminSession.RISK_HIGH,
@@ -294,18 +322,28 @@ def close_admin_session(*, session: K8sAdminSession, user, reason: str = "") -> 
 def review_break_glass_session(*, session: K8sAdminSession, user, data: dict[str, Any]) -> K8sAdminSession:
     session = refresh_admin_session_state(session)
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminSessionValidationError("Post-review is only required for break-glass sessions.", code="post_review_not_required", status=409)
+        raise AdminSessionValidationError(
+            "Post-review is only required for break-glass sessions.", code="post_review_not_required", status=409
+        )
     if not getattr(user, "is_staff", False):
         raise AdminSessionValidationError("Staff review is required.", code="staff_required", status=403)
     _require_mode_access(user, K8sAdminSession.MODE_BREAK_GLASS)
     if session.status in {K8sAdminSession.STATUS_PENDING_APPROVAL, K8sAdminSession.STATUS_ACTIVE}:
-        raise AdminSessionValidationError("Break-glass session can be reviewed only after it is closed, revoked, or expired.", code="post_review_not_ready", status=409)
+        raise AdminSessionValidationError(
+            "Break-glass session can be reviewed only after it is closed, revoked, or expired.",
+            code="post_review_not_ready",
+            status=409,
+        )
     outcome = _clean_text(data.get("outcome"), max_length=80)
     if outcome not in {"accepted", "needs_followup", "incident_created"}:
-        raise AdminSessionValidationError("outcome must be accepted, needs_followup, or incident_created.", code="post_review_outcome_invalid")
+        raise AdminSessionValidationError(
+            "outcome must be accepted, needs_followup, or incident_created.", code="post_review_outcome_invalid"
+        )
     summary = _clean_text(data.get("summary") or data.get("notes"), max_length=2000)
     if not summary:
-        raise AdminSessionValidationError("summary is required for break-glass post-review.", code="post_review_summary_required")
+        raise AdminSessionValidationError(
+            "summary is required for break-glass post-review.", code="post_review_summary_required"
+        )
     current_time = timezone.now()
     metadata = dict(session.metadata or {})
     metadata["post_review_required"] = False

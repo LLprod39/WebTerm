@@ -4,6 +4,7 @@ Domain SSO auto-login middleware.
 When enabled, authenticates users based on a trusted upstream identity header
 and can auto-create local users with a restricted access profile.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -121,7 +122,9 @@ def _shared_secret() -> str:
 
 
 def _shared_secret_meta_key() -> str:
-    header = str(getattr(settings, "DOMAIN_AUTH_SHARED_SECRET_HEADER", "X-Domain-Auth-Secret") or "X-Domain-Auth-Secret")
+    header = str(
+        getattr(settings, "DOMAIN_AUTH_SHARED_SECRET_HEADER", "X-Domain-Auth-Secret") or "X-Domain-Auth-Secret"
+    )
     normalized = header.strip().upper().replace("-", "_")
     return normalized if normalized.startswith("HTTP_") else f"HTTP_{normalized}"
 
@@ -162,10 +165,7 @@ def _request_from_trusted_source(request) -> bool:
         if provided and hmac.compare_digest(provided, secret):
             return True
 
-    if networks and _remote_addr_trusted(request, networks):
-        return True
-
-    return False
+    return bool(networks and _remote_addr_trusted(request, networks))
 
 
 def _extract_principal(request) -> str:

@@ -166,6 +166,7 @@ def test_django_server_memory_store_creates_revalidation_note_on_conflict():
         memory_key="profile",
     ).exists()
 
+
 @pytest.mark.django_db(transaction=True)
 def test_django_server_memory_store_dream_consolidates_noisy_entries():
     owner = User.objects.create_user(username="ops-memory-dream-user", password="x")
@@ -209,6 +210,7 @@ def test_django_server_memory_store_dream_consolidates_noisy_entries():
     assert ServerMemorySnapshot.objects.filter(server=server, memory_key="runbook", is_active=True).exists()
     assert ServerMemorySnapshot.objects.filter(server=server, memory_key="human_habits", is_active=True).exists()
 
+
 @pytest.mark.django_db(transaction=True)
 def test_django_server_memory_store_repair_decays_stale_records():
     owner = User.objects.create_user(username="ops-memory-repair-user", password="x")
@@ -247,7 +249,9 @@ def test_django_server_memory_store_repair_decays_stale_records():
 @pytest.mark.django_db(transaction=True)
 def test_stale_revalidation_expires_unverified_without_resolution():
     owner = User.objects.create_user(username="ops-memory-revalidation-expiry-user", password="x")
-    server = Server.objects.create(user=owner, name="revalidation-expiry-node", host="10.0.0.16", port=22, username="root")
+    server = Server.objects.create(
+        user=owner, name="revalidation-expiry-node", host="10.0.0.16", port=22, username="root"
+    )
     item = ServerMemoryRevalidation.objects.create(
         server=server,
         memory_key="profile",
@@ -409,8 +413,6 @@ def test_server_memory_card_handles_non_manual_legacy_knowledge():
 
     card = build_server_memory_card(server, legacy_knowledge=[ai_item, manual_item])
 
-    combined = "\n".join(
-        [*card.operational_playbooks, *(record.content for record in card.records)]
-    )
+    combined = "\n".join([*card.operational_playbooks, *(record.content for record in card.records)])
     assert "journalctl" in combined
     assert "nginx" in combined

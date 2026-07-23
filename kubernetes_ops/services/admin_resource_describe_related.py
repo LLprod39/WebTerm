@@ -43,7 +43,15 @@ def build_live_describe_related_section(
     }
     if not requested:
         return base
-    pods = _related_pods(user=user, session_id=session_id, provider=provider, cluster=cluster, ref=ref, resource=resource, transport=transport)
+    pods = _related_pods(
+        user=user,
+        session_id=session_id,
+        provider=provider,
+        cluster=cluster,
+        ref=ref,
+        resource=resource,
+        transport=transport,
+    )
     controllers = _related_controllers(
         user=user,
         session_id=session_id,
@@ -56,7 +64,9 @@ def build_live_describe_related_section(
     return {
         "requested": True,
         "redacted": bool(pods.get("redacted")) or bool(controllers.get("redacted")),
-        "skipped_reasons": [section.get("skipped_reason") for section in (pods, controllers) if section.get("skipped_reason")],
+        "skipped_reasons": [
+            section.get("skipped_reason") for section in (pods, controllers) if section.get("skipped_reason")
+        ],
         "pods": pods,
         "controllers": controllers,
     }
@@ -79,7 +89,9 @@ def _related_pods(
         return {"available": False, "items": [], "item_count": 0, "skipped_reason": "selector_contains_sensitive_key"}
     pod_ref = build_resource_ref(api_version="v1", kind="Pod", namespace=ref.namespace)
     try:
-        active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind="Pod")
+        active_resource_session_for_user(
+            user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind="Pod"
+        )
         path = append_query(
             rancher_resource_path(provider, cluster, pod_ref),
             {"labelSelector": _label_selector(selector), "limit": str(MAX_RELATED_ITEMS)},
@@ -119,7 +131,9 @@ def _related_controllers(
         return {"available": False, "items": [], "item_count": 0, "skipped_reason": "selector_contains_sensitive_key"}
     replica_ref = build_resource_ref(api_version="apps/v1", kind="ReplicaSet", namespace=ref.namespace)
     try:
-        active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind="ReplicaSet")
+        active_resource_session_for_user(
+            user, session_id, cluster, verb=K8sAdminAction.VERB_LIST, namespace=ref.namespace, kind="ReplicaSet"
+        )
         path = append_query(
             rancher_resource_path(provider, cluster, replica_ref),
             {"labelSelector": _label_selector(selector), "limit": str(MAX_RELATED_ITEMS)},
@@ -152,7 +166,9 @@ def _pod_summary(pod: dict[str, Any]) -> dict[str, Any]:
             "namespace": _safe_text(metadata.get("namespace"), 120),
             "phase": _safe_text(status.get("phase"), 80),
             "ready": _pod_ready(status),
-            "restart_count": sum(_safe_int(item.get("restartCount")) for item in container_statuses if isinstance(item, dict)),
+            "restart_count": sum(
+                _safe_int(item.get("restartCount")) for item in container_statuses if isinstance(item, dict)
+            ),
             "node_name": _safe_text(spec.get("nodeName"), 180),
             "pod_ip": _safe_text(status.get("podIP"), 80),
             "resource_version": _safe_text(metadata.get("resourceVersion"), 120),
@@ -248,7 +264,7 @@ def _owner_references(value: Any) -> list[dict[str, Any]]:
 def _bounded_keys(value: Any) -> list[str]:
     if not isinstance(value, dict):
         return []
-    return sorted(_safe_text(key, 180) for key in value.keys())[:MAX_KEYS]
+    return sorted(_safe_text(key, 180) for key in value)[:MAX_KEYS]
 
 
 def _provider_get(provider: K8sProvider, path: str, *, transport: ProviderTransport | None) -> dict[str, Any]:
@@ -272,7 +288,10 @@ def _safe_int(value: object) -> int:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = str(key or "").replace("-", "_").lower()
-    return any(part in normalized for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey"))
+    return any(
+        part in normalized
+        for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
+    )
 
 
 def _public_path(path: str) -> str:

@@ -101,10 +101,18 @@ def workload_detail_audit_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 def _owner_apps(workload: K8sWorkloadRef) -> list[K8sAppRef]:
     values = _match_values(workload.name, workload.labels)
-    rows = K8sAppRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace).select_related("cluster").order_by("owner", "name")[:100]
+    rows = (
+        K8sAppRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace)
+        .select_related("cluster")
+        .order_by("owner", "name")[:100]
+    )
     matched: list[K8sAppRef] = []
     for app in rows:
-        if _name_matches(app.name, values) or _labels_match(app.labels, values) or workload.name.startswith(f"{app.name}-"):
+        if (
+            _name_matches(app.name, values)
+            or _labels_match(app.labels, values)
+            or workload.name.startswith(f"{app.name}-")
+        ):
             matched.append(app)
     return matched[:MAX_OWNER_APPS]
 
@@ -112,10 +120,18 @@ def _owner_apps(workload: K8sWorkloadRef) -> list[K8sAppRef]:
 def _related_pods(workload: K8sWorkloadRef, *, owner_apps: list[K8sAppRef]) -> list[K8sPodRef]:
     values = _match_values(workload.name, workload.labels)
     values.update(app.name for app in owner_apps)
-    rows = K8sPodRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace).select_related("cluster").order_by("name")[:250]
+    rows = (
+        K8sPodRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace)
+        .select_related("cluster")
+        .order_by("name")[:250]
+    )
     matched: list[K8sPodRef] = []
     for pod in rows:
-        if _name_matches(pod.owner_name, values) or _name_matches(pod.name, values) or _labels_match(pod.labels, values):
+        if (
+            _name_matches(pod.owner_name, values)
+            or _name_matches(pod.name, values)
+            or _labels_match(pod.labels, values)
+        ):
             matched.append(pod)
     return matched[:MAX_RELATED_PODS]
 
@@ -123,7 +139,11 @@ def _related_pods(workload: K8sWorkloadRef, *, owner_apps: list[K8sAppRef]) -> l
 def _related_network(workload: K8sWorkloadRef, *, owner_apps: list[K8sAppRef]) -> list[K8sNetworkRef]:
     values = _match_values(workload.name, workload.labels)
     values.update(app.name for app in owner_apps)
-    rows = K8sNetworkRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace).select_related("cluster").order_by("kind", "name")[:120]
+    rows = (
+        K8sNetworkRef.objects.filter(cluster=workload.cluster, namespace=workload.namespace)
+        .select_related("cluster")
+        .order_by("kind", "name")[:120]
+    )
     matched: list[K8sNetworkRef] = []
     for item in rows:
         if _name_matches(item.name, values) or _labels_match(item.labels, values):
@@ -164,7 +184,11 @@ def _summary(
     network_refs: list[K8sNetworkRef],
     events: list[K8sEvent | K8sAuditEvent],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     return {
         "health": workload.health,
         "namespace": workload.namespace,

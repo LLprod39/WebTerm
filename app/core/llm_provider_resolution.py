@@ -4,13 +4,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-RUNTIME_FALLBACK_ORDER = ("fair", "openai", "claude", "grok", "gemini", "ollama")
+RUNTIME_FALLBACK_ORDER = ("openai", "claude", "grok", "gemini", "ollama")
 RUNTIME_ENABLED_FIELDS = {
     "gemini": "gemini_enabled",
     "grok": "grok_enabled",
     "claude": "claude_enabled",
     "openai": "openai_enabled",
-    "fair": "fair_enabled",
 }
 
 
@@ -20,7 +19,6 @@ class RuntimeProviderKeys:
     grok: str = ""
     claude: str = ""
     openai: str = ""
-    fair: str = ""
 
     @classmethod
     def from_llm_provider(cls, provider: Any) -> RuntimeProviderKeys:
@@ -29,7 +27,6 @@ class RuntimeProviderKeys:
             grok=(getattr(provider, "grok_api_key", "") or "").strip(),
             claude=(getattr(provider, "anthropic_api_key", "") or "").strip(),
             openai=(getattr(provider, "openai_api_key", "") or "").strip(),
-            fair=(getattr(provider, "fair_api_key", "") or "").strip(),
         )
 
     def has_key(self, provider: str) -> bool:

@@ -103,7 +103,9 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
             reason="restart after config rollout",
         )
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True
+    )
     def test_execute_approved_restart_uses_admin_write_session_and_native_verification(self):
         staff = self.create_user("k8s-action-admin-native", is_staff=True)
         session = self.write_session(staff)
@@ -169,12 +171,21 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
         self.assertTrue(verified_payload["request"]["report"]["native_execution_performed_by_webterm"])
         self.assertFalse(verified_payload["request"]["report"]["external_execution"])
         self.assertEqual(verified_payload["request"]["report"]["admin_action_id"], str(admin_action.action_id))
-        self.assertEqual(verified_payload["request"]["report"]["summary"], "Native restart verified with token=[redacted]")
-        self.assertEqual(verified_payload["request"]["report"]["external_ref"], "https://rancher.example.test/result/native")
+        self.assertEqual(
+            verified_payload["request"]["report"]["summary"], "Native restart verified with token=[redacted]"
+        )
+        self.assertEqual(
+            verified_payload["request"]["report"]["external_ref"], "https://rancher.example.test/result/native"
+        )
         self.assertEqual(verified_payload["request"]["report"]["evidence"]["authorization"], "[redacted]")
         self.assertEqual(verified_payload["request"]["report"]["verification_plan"]["status"], "verified")
         self.assertEqual(verified_payload["request"]["report"]["verification_plan"]["recorded_check_count"], 2)
-        self.assertTrue(all(item["status"] == "recorded" for item in verified_payload["request"]["report"]["verification_plan"]["checks"]))
+        self.assertTrue(
+            all(
+                item["status"] == "recorded"
+                for item in verified_payload["request"]["report"]["verification_plan"]["checks"]
+            )
+        )
         self.assertNotIn("raw-native-verification-token", str(verified_payload))
         self.assertNotIn("raw-native-ref-token", str(verified_payload))
         self.assertNotIn("raw-native-evidence-token", str(verified_payload))
@@ -213,7 +224,9 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
         self.assertFalse(K8sAdminAction.objects.exists())
         self.assertTrue(K8sAuditEvent.objects.filter(action="k8s.action_request.execute_rejected").exists())
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True
+    )
     def test_auto_native_verification_closes_restart_after_fresh_readonly_inventory(self):
         staff = self.create_user("k8s-action-admin-auto-verify", is_staff=True)
         session = self.write_session(staff)
@@ -266,7 +279,9 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
         self.assertTrue(all(item["status"] == "passed" for item in updated.report["verification_plan"]["checks"]))
         self.assertFalse(updated.report["verification_plan"]["payload_stored"])
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_RESTART_ENABLED=True
+    )
     def test_auto_native_verification_keeps_restart_open_when_warning_events_exist(self):
         staff = self.create_user("k8s-action-admin-auto-review", is_staff=True)
         session = self.write_session(staff)
@@ -326,11 +341,17 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
         self.assertFalse(updated.report["verified"])
         self.assertEqual(updated.report["verification_plan"]["status"], "needs_review")
         self.assertFalse(updated.execution_policy["native_verification_auto_recorded"])
-        warning_check = [item for item in updated.report["verification_plan"]["checks"] if item["id"] == "recent_warning_events_checked"][0]
+        warning_check = [
+            item
+            for item in updated.report["verification_plan"]["checks"]
+            if item["id"] == "recent_warning_events_checked"
+        ][0]
         self.assertEqual(warning_check["status"], "needs_review")
         self.assertEqual(warning_check["evidence"]["warning_event_count"], 1)
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED=True
+    )
     def test_execute_approved_scale_uses_admin_write_session(self):
         staff = self.create_user("k8s-action-admin-scale", is_staff=True)
         session = self.write_session(staff)
@@ -369,7 +390,9 @@ class KubernetesOpsActionNativeExecutionTests(TestCase):
         self.assertEqual(payload["request"]["report"]["admin_action_id"], str(admin_action.action_id))
         self.assertEqual(admin_action.status, K8sAdminAction.STATUS_COMPLETED)
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED=True
+    )
     def test_execute_approved_patch_uses_admin_write_session(self):
         staff = self.create_user("k8s-action-admin-patch", is_staff=True)
         session = self.write_session(staff)

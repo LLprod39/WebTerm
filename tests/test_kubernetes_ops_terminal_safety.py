@@ -40,7 +40,9 @@ class KubernetesOpsTerminalSafetyTests(TestCase):
         self.assertEqual(report["interactive_transcript_retention_days"], 30)
         self.assertEqual(report["transcript_event_max_chars"], 2000)
         self.assertEqual(report["transcript_event_max_count"], 2000)
-        self.assertEqual(report["recording_cleanup_command"], "python manage.py cleanup_kubernetes_admin_recordings --apply")
+        self.assertEqual(
+            report["recording_cleanup_command"], "python manage.py cleanup_kubernetes_admin_recordings --apply"
+        )
         self.assertEqual(report["interactive_transport_prerequisites"]["status"], "ready")
         self.assertEqual(report["interactive_transport_prerequisites"]["enabled_transport_count"], 0)
         self.assertFalse(payload["access_policy"]["can_exec"])

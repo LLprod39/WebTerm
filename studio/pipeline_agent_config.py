@@ -1,4 +1,5 @@
 """Shared config helpers for pipeline agent nodes (tools mode, defaults, interaction)."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -56,9 +57,7 @@ def resolve_tools_config(
     Denylist: all tools True except denied names False.
     """
     cfg = config if isinstance(config, dict) else {}
-    tool_names = _normalize_tool_names(
-        allowed_tools if allowed_tools is not None else cfg.get("allowed_tools")
-    )
+    tool_names = _normalize_tool_names(allowed_tools if allowed_tools is not None else cfg.get("allowed_tools"))
 
     mode = normalize_tools_mode(cfg.get("tools_mode"))
     if not mode:
@@ -70,8 +69,7 @@ def resolve_tools_config(
     if mode == TOOLS_MODE_ALLOWLIST:
         if not tool_names:
             return {}, (
-                "tools_mode=allowlist requires a non-empty allowed_tools list. "
-                "Select tools or set tools_mode=all."
+                "tools_mode=allowlist requires a non-empty allowed_tools list. Select tools or set tools_mode=all."
             )
         return dict.fromkeys(tool_names, True), None
 

@@ -45,7 +45,11 @@ def prepare_kubernetes_port_forward_tunnel_context(
     stream_id: str = "",
 ) -> dict[str, Any]:
     if not bool(getattr(settings, "KUBERNETES_ADMIN_PORT_FORWARD_TUNNEL_ENABLED", False)):
-        raise AdminResourceError("Provider-native Kubernetes port-forward tunnel is disabled by policy.", code="port_forward_tunnel_disabled", status=403)
+        raise AdminResourceError(
+            "Provider-native Kubernetes port-forward tunnel is disabled by policy.",
+            code="port_forward_tunnel_disabled",
+            status=403,
+        )
     recording_policy = require_interactive_recording("port_forward")
     assert_interactive_transport_prerequisites("port_forward_tunnel")
     context = _prepare_port_forward_context(
@@ -70,7 +74,12 @@ def prepare_kubernetes_port_forward_tunnel_context(
         ref=context["ref"],
         status=K8sAdminAction.STATUS_PLANNED,
         request_summary=context["request_summary"],
-        response_summary={"source": "provider_port_forward_tunnel", "status": K8sAdminAction.STATUS_PLANNED, "tunnel_started": True, "recording_policy": recording_policy},
+        response_summary={
+            "source": "provider_port_forward_tunnel",
+            "status": K8sAdminAction.STATUS_PLANNED,
+            "tunnel_started": True,
+            "recording_policy": recording_policy,
+        },
     )
     recording = create_interactive_recording(
         user=user,
@@ -78,9 +87,15 @@ def prepare_kubernetes_port_forward_tunnel_context(
         action=action,
         operation="port_forward",
         policy=recording_policy,
-        summary={"source": "provider_port_forward_tunnel", "status": K8sAdminAction.STATUS_PLANNED, "tunnel_started": True},
+        summary={
+            "source": "provider_port_forward_tunnel",
+            "status": K8sAdminAction.STATUS_PLANNED,
+            "tunnel_started": True,
+        },
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_port_forward(
         user=user,
@@ -98,9 +113,16 @@ def prepare_kubernetes_port_forward_tunnel_context(
         },
     )
     envelope = _port_forward_envelope(context=context, action=action, status=K8sAdminAction.STATUS_PLANNED)
-    envelope["policy"].update({"provider_tunnel_enabled": True, "blocked_reason": "", "recording_policy": recording_policy})
+    envelope["policy"].update(
+        {"provider_tunnel_enabled": True, "blocked_reason": "", "recording_policy": recording_policy}
+    )
     envelope["recording"] = recording_public_payload(recording)
-    return {**envelope, "_provider": context["provider"], "_tunnel_path": context["path"], "_session_pk": context["session"].pk}
+    return {
+        **envelope,
+        "_provider": context["provider"],
+        "_tunnel_path": context["path"],
+        "_session_pk": context["session"].pk,
+    }
 
 
 def complete_kubernetes_port_forward_tunnel(
@@ -115,7 +137,12 @@ def complete_kubernetes_port_forward_tunnel(
 ) -> dict[str, Any]:
     action = K8sAdminAction.objects.select_related("cluster").get(action_id=action_id)
     action.status = K8sAdminAction.STATUS_COMPLETED
-    summary = _summary(status=action.status, bytes_from_client=bytes_from_client, bytes_to_client=bytes_to_client, close_reason=close_reason)
+    summary = _summary(
+        status=action.status,
+        bytes_from_client=bytes_from_client,
+        bytes_to_client=bytes_to_client,
+        close_reason=close_reason,
+    )
     action.response_summary = sanitize_metadata(summary)
     action.save(update_fields=["status", "response_summary", "updated_at"])
     recording = finish_interactive_recording_for_action(action=action, status="completed", summary=summary)
@@ -124,14 +151,35 @@ def complete_kubernetes_port_forward_tunnel(
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_port_forward(user=user, session=session, cluster=action.cluster, action="k8s.admin_stream.port_forward_stopped", stream_id=stream_id, payload=summary)
+    _audit_port_forward(
+        user=user,
+        session=session,
+        cluster=action.cluster,
+        action="k8s.admin_stream.port_forward_stopped",
+        stream_id=stream_id,
+        payload=summary,
+    )
     return summary
 
 
-def fail_kubernetes_port_forward_tunnel(*, user, action_id: str, session_pk: int, stream_id: str, error_code: str, bytes_from_client: int = 0, bytes_to_client: int = 0) -> dict[str, Any]:
+def fail_kubernetes_port_forward_tunnel(
+    *,
+    user,
+    action_id: str,
+    session_pk: int,
+    stream_id: str,
+    error_code: str,
+    bytes_from_client: int = 0,
+    bytes_to_client: int = 0,
+) -> dict[str, Any]:
     action = K8sAdminAction.objects.select_related("cluster").get(action_id=action_id)
     action.status = K8sAdminAction.STATUS_FAILED
-    summary = _summary(status=action.status, bytes_from_client=bytes_from_client, bytes_to_client=bytes_to_client, close_reason="failed")
+    summary = _summary(
+        status=action.status,
+        bytes_from_client=bytes_from_client,
+        bytes_to_client=bytes_to_client,
+        close_reason="failed",
+    )
     summary["error_code"] = str(error_code or "port_forward_tunnel_failed")
     action.response_summary = sanitize_metadata(summary)
     action.save(update_fields=["status", "response_summary", "updated_at"])
@@ -141,7 +189,14 @@ def fail_kubernetes_port_forward_tunnel(*, user, action_id: str, session_pk: int
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_port_forward(user=user, session=session, cluster=action.cluster, action="k8s.admin_stream.port_forward_failed", stream_id=stream_id, payload=summary)
+    _audit_port_forward(
+        user=user,
+        session=session,
+        cluster=action.cluster,
+        action="k8s.admin_stream.port_forward_failed",
+        stream_id=stream_id,
+        payload=summary,
+    )
     return summary
 
 

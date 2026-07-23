@@ -13,14 +13,14 @@ def test_script_material_adds_runtime_protocol():
     )
 
     assert "Script material runtime protocol" in prompt
-    assert "кандидат на выполнение" in prompt
-    assert "сопоставь его с целью/описанием задачи" in prompt
-    assert "mktemp -d" in prompt
-    assert "chmod" in prompt
-    assert "timeout" in prompt
-    assert "exit code" in prompt
-    assert "удали временный файл/директорию" in prompt
-    assert "не запускай его молча" in prompt
+    # Assert the safety contract, not a particular prose revision.
+    assert "run_script_material" in prompt
+    assert "dry_run=true" in prompt
+    assert "exit_code + stdout/stderr" in prompt
+    assert "проверяй side-effects" in prompt
+    assert "ask_user" in prompt
+    assert "не silent production blast" in prompt
+    assert "самодельный аналог" in prompt
     assert "```bash" in prompt
     assert "systemctl status nginx" in prompt
 

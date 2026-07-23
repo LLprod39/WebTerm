@@ -7,6 +7,7 @@ to PipelineRun.summary.
 
 Migrated from: studio/pipeline_executor.py:_execute_output_report()
 """
+
 from __future__ import annotations
 
 import re
@@ -40,8 +41,6 @@ class OutputReportNode(BaseNode):
     node_type = "output/report"
 
     async def execute(self, ctx: ExecutionContext) -> NodeResult:
-        from studio.models import PipelineRun
-
         template = str(self.node_data.get("template") or "")
         safe_context = _redacted_pipeline_context(ctx)
 
@@ -63,9 +62,11 @@ class OutputReportNode(BaseNode):
         report = _redact_pipeline_text(report)
 
         await sync_to_async(
-            lambda: __import__("studio.models", fromlist=["PipelineRun"])
-            .PipelineRun.objects.filter(pk=ctx.run_id)
-            .update(summary=report)
+            lambda: (
+                __import__("studio.models", fromlist=["PipelineRun"])
+                .PipelineRun.objects.filter(pk=ctx.run_id)
+                .update(summary=report)
+            )
         )()
 
         return NodeResult(output={"status": "completed", "output": report})

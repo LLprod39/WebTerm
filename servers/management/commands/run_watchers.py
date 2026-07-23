@@ -28,8 +28,14 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--interval", type=int, default=180, help="Watcher scan interval in seconds (default 180)")
         parser.add_argument("--limit", type=int, default=100, help="Maximum number of servers to scan per cycle")
-        parser.add_argument("--server-id", type=int, action="append", dest="server_ids", help="Only scan selected server id")
-        parser.add_argument("--daemon", action="store_true", help="Accepted for supervisor compatibility; watcher runs continuously by default")
+        parser.add_argument(
+            "--server-id", type=int, action="append", dest="server_ids", help="Only scan selected server id"
+        )
+        parser.add_argument(
+            "--daemon",
+            action="store_true",
+            help="Accepted for supervisor compatibility; watcher runs continuously by default",
+        )
         parser.add_argument("--once", action="store_true", help="Run a single scan and exit")
         parser.add_argument("--lease-seconds", type=int, default=180, help="Worker lease duration in seconds")
         parser.add_argument("--worker-key", type=str, default="default", help="Worker instance key")
@@ -55,13 +61,23 @@ class Command(BaseCommand):
         summary = {}
         try:
             if once:
-                summary = self._run_once(limit=limit, server_ids=server_ids, worker_key=worker_key, lease_seconds=lease_seconds)
+                summary = self._run_once(
+                    limit=limit, server_ids=server_ids, worker_key=worker_key, lease_seconds=lease_seconds
+                )
                 self.stdout.write(self.style.SUCCESS(self._format_summary(summary)))
                 return
 
             self.stdout.write(self.style.SUCCESS(f"Starting watcher daemon (interval={interval}s, limit={limit})"))
             try:
-                asyncio.run(self._run_loop(interval=interval, limit=limit, server_ids=server_ids, worker_key=worker_key, lease_seconds=lease_seconds))
+                asyncio.run(
+                    self._run_loop(
+                        interval=interval,
+                        limit=limit,
+                        server_ids=server_ids,
+                        worker_key=worker_key,
+                        lease_seconds=lease_seconds,
+                    )
+                )
             except KeyboardInterrupt:
                 self.stdout.write(self.style.WARNING("\nWatcher daemon stopped by user"))
         finally:
@@ -127,7 +143,7 @@ class Command(BaseCommand):
             try:
                 await asyncio.wait_for(stop.wait(), timeout=interval)
                 break
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
         logger.info("Watcher daemon shutdown complete")

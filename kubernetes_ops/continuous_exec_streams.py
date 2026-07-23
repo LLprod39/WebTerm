@@ -26,8 +26,12 @@ from kubernetes_ops.services.provider_exec_streams import MAX_PROVIDER_EXEC_STRE
 async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue: asyncio.Queue[str]) -> None:
     max_frames = bounded_stream_int(params.get("max_frames"), default=250, minimum=1, maximum=2000)
     idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=300.0, minimum=5.0, maximum=1800.0)
-    heartbeat_interval = bounded_stream_float(params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0)
-    empty_read_sleep = bounded_stream_float(params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0)
+    heartbeat_interval = bounded_stream_float(
+        params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0
+    )
+    empty_read_sleep = bounded_stream_float(
+        params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0
+    )
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="k8s-exec-stream")
     loop = asyncio.get_running_loop()
     stream_handle = None
@@ -51,7 +55,14 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
             stdin=_truthy(params.get("stdin")),
             timeout_seconds=params.get("stream_timeout_seconds", ""),
         )
-        await consumer.send_json({"type": "exec_started", "stream_id": context["stream_id"], "stream_type": "exec", "payload": _public_context(context)})
+        await consumer.send_json(
+            {
+                "type": "exec_started",
+                "stream_id": context["stream_id"],
+                "stream_type": "exec",
+                "payload": _public_context(context),
+            }
+        )
         stream_handle = await loop.run_in_executor(
             executor,
             lambda: open_provider_exec_stream(
@@ -69,13 +80,19 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
             if monotonic() - _started_monotonic(context) >= idle_timeout:
                 close_reason = "idle_timeout"
                 break
-            session_state = await database_sync_to_async(active_admin_stream_session_status)(session_pk=context["_session_pk"])
+            session_state = await database_sync_to_async(active_admin_stream_session_status)(
+                session_pk=context["_session_pk"]
+            )
             if not session_state.get("active"):
                 close_reason = str(session_state.get("code") or "admin_session_not_active")
                 break
-            await _drain_stdin(consumer, stream_handle, input_queue, loop, executor, context=context, sequence=frame_index)
+            await _drain_stdin(
+                consumer, stream_handle, input_queue, loop, executor, context=context, sequence=frame_index
+            )
             try:
-                event = await loop.run_in_executor(executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_EXEC_STREAM_BYTES))
+                event = await loop.run_in_executor(
+                    executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_EXEC_STREAM_BYTES)
+                )
             except KubernetesProviderError as exc:
                 finalized = True
                 summary = await database_sync_to_async(fail_kubernetes_exec_stream)(
@@ -87,12 +104,21 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
                     stdout_count=stdout_count,
                     stderr_count=stderr_count,
                 )
-                await consumer.send_json({"type": "exec_error", "code": "provider_exec_stream_error", "message": str(exc), "summary": summary})
+                await consumer.send_json(
+                    {
+                        "type": "exec_error",
+                        "code": "provider_exec_stream_error",
+                        "message": str(exc),
+                        "summary": summary,
+                    }
+                )
                 await consumer.close(code=4400)
                 return
             if event.stream == "heartbeat" and not event.eof:
                 if monotonic() - last_heartbeat >= heartbeat_interval:
-                    await consumer.send_json({"type": "exec_heartbeat", "stream_id": context["stream_id"], "frame_index": frame_index})
+                    await consumer.send_json(
+                        {"type": "exec_heartbeat", "stream_id": context["stream_id"], "frame_index": frame_index}
+                    )
                     last_heartbeat = monotonic()
                 await asyncio.sleep(empty_read_sleep)
                 continue
@@ -137,7 +163,9 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
         if stream_handle is not None:
             await loop.run_in_executor(executor, stream_handle.close)
             stream_handle = None
-        await consumer.send_json({"type": "exec_stopped", "stream_id": context["stream_id"], "stream_type": "exec", "summary": summary})
+        await consumer.send_json(
+            {"type": "exec_stopped", "stream_id": context["stream_id"], "stream_type": "exec", "summary": summary}
+        )
         await consumer.close(code=1000)
     except asyncio.CancelledError:
         if context and not finalized:
@@ -153,7 +181,9 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
             )
         raise
     except AdminResourceError as exc:
-        await consumer.send_json({"type": "exec_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload})
+        await consumer.send_json(
+            {"type": "exec_rejected", "code": exc.code, "message": str(exc), "payload": exc.payload}
+        )
         await consumer.close(code=4403 if exc.status == 403 else 4400)
     finally:
         if stream_handle is not None:
@@ -161,7 +191,9 @@ async def run_provider_exec_stream(consumer, params: dict[str, str], input_queue
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-async def _drain_stdin(consumer, stream_handle, input_queue: asyncio.Queue[str], loop, executor, *, context: dict, sequence: int) -> None:
+async def _drain_stdin(
+    consumer, stream_handle, input_queue: asyncio.Queue[str], loop, executor, *, context: dict, sequence: int
+) -> None:
     while True:
         try:
             data = input_queue.get_nowait()

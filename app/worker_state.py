@@ -196,10 +196,7 @@ def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "de
 
     now = timezone.now()
     lease_expires_at = state.lease_expires_at
-    is_stale = bool(
-        state.status == model.STATUS_RUNNING
-        and (lease_expires_at is None or lease_expires_at <= now)
-    )
+    is_stale = bool(state.status == model.STATUS_RUNNING and (lease_expires_at is None or lease_expires_at <= now))
     return {
         "worker_kind": state.worker_kind,
         "worker_key": state.worker_key,

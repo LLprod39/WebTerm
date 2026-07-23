@@ -111,7 +111,9 @@ async def get_linux_ui_disk(server: Server, *, secret: str = "") -> dict[str, An
         "summary": {
             "mounts": len(mounts),
             "critical_mounts": sum(1 for item in mounts if (item.get("percent") or 0) >= 90),
-            "top_directory_mb": max((item.get("size_mb") or 0) for item in top_directories) if top_directories else None,
+            "top_directory_mb": max((item.get("size_mb") or 0) for item in top_directories)
+            if top_directories
+            else None,
             "largest_log_mb": max((item.get("size_mb") or 0) for item in large_logs) if large_logs else None,
             "cleanup_candidates": len(cleanup_candidates),
         },
@@ -147,9 +149,7 @@ async def get_linux_ui_packages(server: Server, *, secret: str = "") -> dict[str
     else:
         package_names = " ".join(shlex.quote(item) for item in RPM_COMMON_PACKAGES)
         update_command = (
-            "dnf -q check-update 2>/dev/null"
-            if package_manager == "dnf"
-            else "yum -q check-update 2>/dev/null"
+            "dnf -q check-update 2>/dev/null" if package_manager == "dnf" else "yum -q check-update 2>/dev/null"
         )
         command = (
             "printf '__INSTALLED__\\n'\n"

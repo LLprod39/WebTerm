@@ -10,10 +10,20 @@ class Command(BaseCommand):
     help = "Decay stale server memory confidence and create revalidation notes."
 
     def add_arguments(self, parser):
-        parser.add_argument("--server-id", type=int, action="append", dest="server_ids", help="Repair memory only for selected server id")
+        parser.add_argument(
+            "--server-id",
+            type=int,
+            action="append",
+            dest="server_ids",
+            help="Repair memory only for selected server id",
+        )
         parser.add_argument("--limit", type=int, default=100, help="Maximum number of servers to scan")
-        parser.add_argument("--stale-days", type=int, default=30, help="Age threshold after which memory requires revalidation")
-        parser.add_argument("--no-notes", action="store_true", help="Do not create revalidation notes, only decay confidence")
+        parser.add_argument(
+            "--stale-days", type=int, default=30, help="Age threshold after which memory requires revalidation"
+        )
+        parser.add_argument(
+            "--no-notes", action="store_true", help="Do not create revalidation notes, only decay confidence"
+        )
 
     def handle(self, *args, **options):
         server_ids = options.get("server_ids") or []

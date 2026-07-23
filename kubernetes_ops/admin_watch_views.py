@@ -23,7 +23,9 @@ def _safe_json(handler):
 
 
 def _error_response(error: AdminResourceError) -> JsonResponse:
-    return JsonResponse({"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status)
+    return JsonResponse(
+        {"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status
+    )
 
 
 def _query(request, name: str, default: str = "") -> str:
@@ -71,7 +73,11 @@ def api_kubernetes_admin_resource_watch(request, cluster_id: str):
                 timeout_seconds=_query(request, "timeout_seconds", "10"),
             )
         except AdminResourceError as exc:
-            _audit(request, "k8s.admin_resource.watch_rejected", payload={"code": exc.code, "cluster_id": cluster_id, "kind": _query(request, "kind")})
+            _audit(
+                request,
+                "k8s.admin_resource.watch_rejected",
+                payload={"code": exc.code, "cluster_id": cluster_id, "kind": _query(request, "kind")},
+            )
             return _error_response(exc)
         _audit(
             request,

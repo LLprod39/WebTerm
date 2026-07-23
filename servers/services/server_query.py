@@ -9,6 +9,7 @@ Usage:
 
 studio/ and core_ui/ MUST use these functions instead of querying Server ORM directly.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -44,9 +45,8 @@ def get_servers_for_user(user) -> QuerySet[Server]:
     This is the canonical queryset used across the platform.
     """
     now = timezone.now()
-    share_q = (
-        Q(shares__user=user, shares__is_revoked=False)
-        & (Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now))
+    share_q = Q(shares__user=user, shares__is_revoked=False) & (
+        Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now)
     )
     return (
         Server.objects.select_related("group", "user")

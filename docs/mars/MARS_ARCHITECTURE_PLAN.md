@@ -55,7 +55,6 @@ Rules:
 
 | File/area | Why it matters |
 | --- | --- |
-| `key_mcp.py` | Large legacy MCP entry point; currently below its pinned baseline but should keep shrinking. |
 | `frontend/src/lib/api.ts` | Large compatibility API surface while domain modules exist. |
 | `frontend/src/pages/PipelineEditorPage.tsx` | Large route component with graph/editor/run orchestration. |
 | `frontend/src/components/terminal/LinuxUiPanel.tsx` | Large operational UI component. |

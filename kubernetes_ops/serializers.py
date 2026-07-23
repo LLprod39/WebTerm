@@ -218,7 +218,9 @@ def serialize_namespace(namespace: K8sNamespace, *, user=None) -> dict[str, Any]
         "apps": namespace.app_count,
         "workloads": namespace.workload_count,
         "owners": ["rancher"],
-        "teams": [str(namespace.labels.get("team"))] if isinstance(namespace.labels, dict) and namespace.labels.get("team") else [],
+        "teams": [str(namespace.labels.get("team"))]
+        if isinstance(namespace.labels, dict) and namespace.labels.get("team")
+        else [],
         "links": _external_links(namespace.links or {}, user),
         "external_links_policy": _external_links_policy(user),
         "labels": _safe_metadata(namespace.labels or {}),

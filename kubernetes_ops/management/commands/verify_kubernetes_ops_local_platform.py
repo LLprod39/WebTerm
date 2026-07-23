@@ -16,10 +16,18 @@ class Command(BaseCommand):
     help = "Verify the local kind Rancher/Fleet/Devtron platform and write a bounded evidence artifact."
 
     def add_arguments(self, parser):
-        parser.add_argument("--output", default="artifacts/kubernetes_ops_local_platform_evidence.json", help="Output JSON evidence path.")
+        parser.add_argument(
+            "--output",
+            default="artifacts/kubernetes_ops_local_platform_evidence.json",
+            help="Output JSON evidence path.",
+        )
         parser.add_argument("--context", default="kind-webterm-k8s", help="Expected kubectl context.")
         parser.add_argument("--kubectl", default="kubectl", help="kubectl executable path.")
-        parser.add_argument("--no-context-requirement", action="store_true", help="Do not fail when current context differs from --context.")
+        parser.add_argument(
+            "--no-context-requirement",
+            action="store_true",
+            help="Do not fail when current context differs from --context.",
+        )
         parser.add_argument("--no-fail", action="store_true", help="Return exit code 0 even when platform checks fail.")
 
     def handle(self, *args, **options):
@@ -33,6 +41,11 @@ class Command(BaseCommand):
         output_path = Path(options["output"]).resolve()
         write_local_platform_evidence(report, output_path)
         self.stdout.write(f"Wrote Kubernetes Ops local platform evidence: {output_path}")
-        self.stdout.write(json.dumps({"status": report["status"], "summary": report["summary"], "errors": report["errors"]}, ensure_ascii=False))
+        self.stdout.write(
+            json.dumps(
+                {"status": report["status"], "summary": report["summary"], "errors": report["errors"]},
+                ensure_ascii=False,
+            )
+        )
         if report["status"] != "ready" and not options["no_fail"]:
             raise CommandError("; ".join(report["errors"][:8]))

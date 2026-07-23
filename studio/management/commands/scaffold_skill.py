@@ -44,11 +44,19 @@ class Command(BaseCommand):
         parser.add_argument("--slug", type=str, default="", help="Optional folder slug. Defaults to a slugified name.")
         parser.add_argument("--service", type=str, default="", help="Service name for catalog grouping, e.g. keycloak.")
         parser.add_argument("--category", type=str, default="", help="Catalog category, e.g. Identity and Access.")
-        parser.add_argument("--safety-level", type=str, default="standard", help="low | standard | medium | high | critical")
-        parser.add_argument("--ui-hint", type=str, default="", help="Short admin-facing hint shown in the Studio catalog.")
+        parser.add_argument(
+            "--safety-level", type=str, default="standard", help="low | standard | medium | high | critical"
+        )
+        parser.add_argument(
+            "--ui-hint", type=str, default="", help="Short admin-facing hint shown in the Studio catalog."
+        )
         parser.add_argument("--tags", type=str, default="", help="Comma-separated tags.")
-        parser.add_argument("--recommended-tools", type=str, default="", help="Comma-separated recommended agent tools.")
-        parser.add_argument("--guardrail-summary", type=str, default="", help="Comma-separated guardrail summary bullets.")
+        parser.add_argument(
+            "--recommended-tools", type=str, default="", help="Comma-separated recommended agent tools."
+        )
+        parser.add_argument(
+            "--guardrail-summary", type=str, default="", help="Comma-separated guardrail summary bullets."
+        )
         parser.add_argument(
             "--runtime-policy",
             type=str,
@@ -138,7 +146,8 @@ class Command(BaseCommand):
             slug=slug,
             service=str(options.get("service") or defaults.get("service") or "").strip(),
             category=str(options.get("category") or defaults.get("category") or "").strip(),
-            safety_level=str(options.get("safety_level") or defaults.get("safety_level") or "standard").strip() or "standard",
+            safety_level=str(options.get("safety_level") or defaults.get("safety_level") or "standard").strip()
+            or "standard",
             ui_hint=str(options.get("ui_hint") or defaults.get("ui_hint") or "").strip(),
             tags=parse_csv_items(options.get("tags") or defaults.get("tags")),
             guardrail_summary=parse_csv_items(options.get("guardrail_summary") or defaults.get("guardrail_summary")),

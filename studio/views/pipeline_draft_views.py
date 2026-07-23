@@ -153,7 +153,9 @@ def api_pipeline_draft_revise(request, draft_id: int):
         "selected_node": meta["selected_node"],
     }
     draft.selected_node_id = meta["selected_node_id"]
-    draft.save(update_fields=["title", "user_goal", "intent", "current_graph_snapshot", "selected_node_id", "updated_at"])
+    draft.save(
+        update_fields=["title", "user_goal", "intent", "current_graph_snapshot", "selected_node_id", "updated_at"]
+    )
     revision_from_response(
         session=draft,
         user_message=raw_user_message or meta["user_message"],

@@ -15,24 +15,26 @@ from plugin_marketplace.services.package_service import install_local_package
 
 def _network_tool_manifest(*, plugin_id: str, slug: str, egress: list[dict] | None = None) -> dict:
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": plugin_id,
-        "name": "Sandbox Egress Tool",
-        "slug": slug,
-        "publisher": {"id": "acme", "name": "Acme"},
-        "egress": egress or [],
-        "surfaces": {
-            "agent_tools": [
-                {
-                    "id": "network-probe",
-                    "name": f"{slug.replace('-', '_')}_network_probe",
-                    "title": "Network probe",
-                    "executor_ref": "sandbox:backend/plugin.py:handle",
-                    "tool_spec": {"category": "general", "risk": "network", "runner": "plugin"},
-                }
-            ]
-        },
-    })
+    manifest.update(
+        {
+            "id": plugin_id,
+            "name": "Sandbox Egress Tool",
+            "slug": slug,
+            "publisher": {"id": "acme", "name": "Acme"},
+            "egress": egress or [],
+            "surfaces": {
+                "agent_tools": [
+                    {
+                        "id": "network-probe",
+                        "name": f"{slug.replace('-', '_')}_network_probe",
+                        "title": "Network probe",
+                        "executor_ref": "sandbox:backend/plugin.py:handle",
+                        "tool_spec": {"category": "general", "risk": "network", "runner": "plugin"},
+                    }
+                ]
+            },
+        }
+    )
     return manifest
 
 

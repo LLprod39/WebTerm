@@ -72,10 +72,7 @@ def _normalize_metadata(metadata: Any) -> dict[str, Any]:
     if metadata is None:
         return {}
     if isinstance(metadata, dict):
-        return {
-            str(key): _normalize_metadata_value(value, depth=1)
-            for key, value in list(metadata.items())[:200]
-        }
+        return {str(key): _normalize_metadata_value(value, depth=1) for key, value in list(metadata.items())[:200]}
     return {"value": _normalize_metadata_value(metadata, depth=1)}
 
 
@@ -106,9 +103,7 @@ def log_user_activity(
     try:
         audit_ctx = get_audit_context()
         normalized_metadata = _normalize_metadata(metadata)
-        request_id = str(
-            getattr(request, "request_id", "") or audit_ctx.get("request_id") or ""
-        ).strip()
+        request_id = str(getattr(request, "request_id", "") or audit_ctx.get("request_id") or "").strip()
         if request_id and "request_id" not in normalized_metadata:
             normalized_metadata["request_id"] = request_id
         if request and "path" not in normalized_metadata:
@@ -126,10 +121,7 @@ def log_user_activity(
 
         redaction_report: dict[str, int] = {}
         redacted_metadata, metadata_report, _metadata_hashes = redact_egress_payload(normalized_metadata)
-        if isinstance(redacted_metadata, dict):
-            normalized_metadata = redacted_metadata
-        else:
-            normalized_metadata = {"value": redacted_metadata}
+        normalized_metadata = redacted_metadata if isinstance(redacted_metadata, dict) else {"value": redacted_metadata}
         _merge_redaction_report(redaction_report, metadata_report)
 
         redacted_description = redact_egress_text(description)
@@ -166,7 +158,9 @@ def log_user_activity(
             username_snapshot=_normalize_text(resolved_username_snapshot, 150),
             category=_normalize_text(category, 40) or "other",
             action=_normalize_text(action, 80) or "unknown_action",
-            status=status if status in {UserActivityLog.STATUS_INFO, UserActivityLog.STATUS_SUCCESS, UserActivityLog.STATUS_ERROR} else UserActivityLog.STATUS_INFO,
+            status=status
+            if status in {UserActivityLog.STATUS_INFO, UserActivityLog.STATUS_SUCCESS, UserActivityLog.STATUS_ERROR}
+            else UserActivityLog.STATUS_INFO,
             description=safe_description,
             entity_type=_normalize_text(entity_type, 40),
             entity_id=_normalize_text(entity_id, 64),

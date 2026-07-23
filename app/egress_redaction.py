@@ -30,9 +30,7 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     (
         "connection_string",
-        re.compile(
-            r"(?i)\b(?:postgres(?:ql)?|mysql|redis|mongodb|amqp|kafka)://[^\s]+"
-        ),
+        re.compile(r"(?i)\b(?:postgres(?:ql)?|mysql|redis|mongodb|amqp|kafka)://[^\s]+"),
     ),
     # Cloud / service provider tokens — specific prefixes, must come before
     # secret_assignment so "token: glpat-..." is tagged as gitlab_pat, not generic.
@@ -58,7 +56,9 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ),
     (
         "azure_sas_token",
-        re.compile(r"(?i)\b(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]{10,}(?:&(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]+)+\b"),
+        re.compile(
+            r"(?i)\b(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]{10,}(?:&(?:sv|sig|se|sp|spr|st)=[A-Za-z0-9%+/=]+)+\b"
+        ),
     ),
     # Generic fallback — catches key=value style assignments not covered above.
     (
@@ -125,6 +125,7 @@ def redact_text(text: str | None) -> RedactionResult:
     hashes: list[str] = []
 
     for label, pattern in _TEXT_PATTERNS:
+
         def _replace(match: re.Match[str], *, _label: str = label) -> str:
             value = match.group(0)
             report[_label] = report.get(_label, 0) + 1
@@ -258,7 +259,9 @@ def redact_egress_payload(payload: Any) -> tuple[Any, dict[str, int], list[str]]
     return redact_payload(payload)
 
 
-def redact_for_storage(*, raw_text: str | None = None, payload: Any | None = None) -> tuple[str, Any, dict[str, int], list[str]]:
+def redact_for_storage(
+    *, raw_text: str | None = None, payload: Any | None = None
+) -> tuple[str, Any, dict[str, int], list[str]]:
     redacted_text = redact_text(raw_text)
     redacted_payload, payload_report, payload_hashes = redact_payload(payload if payload is not None else {})
     report = dict(redacted_text.report)

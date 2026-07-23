@@ -9,8 +9,7 @@ partially filled buckets.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import datetime, timedelta
-from datetime import timezone as dt_timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from django.conf import settings
@@ -65,7 +64,7 @@ def iter_sample_metrics(sample: ServerMetricSample) -> Iterator[tuple[str, float
 
 
 def bucket_start_for(moment: datetime, granularity: str) -> datetime:
-    moment = moment.astimezone(dt_timezone.utc) if timezone.is_aware(moment) else moment
+    moment = moment.astimezone(UTC) if timezone.is_aware(moment) else moment
     if granularity == ServerMetricRollup.GRANULARITY_DAY:
         return moment.replace(hour=0, minute=0, second=0, microsecond=0)
     return moment.replace(minute=0, second=0, microsecond=0)
@@ -178,9 +177,7 @@ def cleanup_metric_data(now: datetime | None = None) -> dict[str, int]:
     hour_days = int(getattr(settings, "METRICS_HOUR_ROLLUP_RETENTION_DAYS", 400) or 400)
     day_days = int(getattr(settings, "METRICS_DAY_ROLLUP_RETENTION_DAYS", 1100) or 1100)
 
-    deleted_samples, _ = ServerMetricSample.objects.filter(
-        collected_at__lt=now - timedelta(days=sample_days)
-    ).delete()
+    deleted_samples, _ = ServerMetricSample.objects.filter(collected_at__lt=now - timedelta(days=sample_days)).delete()
     deleted_hours, _ = ServerMetricRollup.objects.filter(
         granularity=ServerMetricRollup.GRANULARITY_HOUR,
         bucket_start__lt=now - timedelta(days=hour_days),
@@ -190,9 +187,7 @@ def cleanup_metric_data(now: datetime | None = None) -> dict[str, int]:
         bucket_start__lt=now - timedelta(days=day_days),
     ).delete()
     insight_days = int(getattr(settings, "AI_INSIGHTS_RETENTION_DAYS", 60) or 60)
-    deleted_insights, _ = ServerAiInsight.objects.filter(
-        created_at__lt=now - timedelta(days=insight_days)
-    ).delete()
+    deleted_insights, _ = ServerAiInsight.objects.filter(created_at__lt=now - timedelta(days=insight_days)).delete()
     return {
         "samples": deleted_samples,
         "hour_rollups": deleted_hours,
@@ -210,9 +205,7 @@ def fetch_metric_series(
     limit: int = 2000,
 ) -> list[dict[str, Any]]:
     """Series points for charts/forecasting, oldest first."""
-    qs = ServerMetricRollup.objects.filter(
-        server_id=server_id, metric_key=metric_key, granularity=granularity
-    )
+    qs = ServerMetricRollup.objects.filter(server_id=server_id, metric_key=metric_key, granularity=granularity)
     if since is not None:
         qs = qs.filter(bucket_start__gte=since)
     rows = list(qs.order_by("-bucket_start")[: max(1, limit)])

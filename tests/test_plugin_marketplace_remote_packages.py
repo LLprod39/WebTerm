@@ -20,13 +20,15 @@ from plugin_marketplace.services.remote_package_service import (
 
 def _remote_manifest() -> dict:
     manifest = copy.deepcopy(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.remote-alerts",
-        "name": "Remote Alerts",
-        "slug": "remote-alerts",
-        "version": "1.0.0",
-        "publisher": {"id": "acme", "name": "Acme Apps", "verified": True},
-    })
+    manifest.update(
+        {
+            "id": "acme.remote-alerts",
+            "name": "Remote Alerts",
+            "slug": "remote-alerts",
+            "version": "1.0.0",
+            "publisher": {"id": "acme", "name": "Acme Apps", "verified": True},
+        }
+    )
     return manifest
 
 
@@ -64,7 +66,9 @@ def test_remote_package_bytes_stage_disabled_with_provenance():
     assert retained_package_exists(package.provenance["retention"]) is True
     assert package.sbom["summary"]["file_count"] == 2
     assert package.dependency_scan["passed"] is True
-    assert PluginInstallEvent.objects.filter(plugin_id="acme.remote-alerts", event_type="plugin_remote_package_staged").exists()
+    assert PluginInstallEvent.objects.filter(
+        plugin_id="acme.remote-alerts", event_type="plugin_remote_package_staged"
+    ).exists()
 
 
 @override_settings(PLUGIN_MARKETPLACE_REMOTE_PACKAGE_ALLOWED_HOSTS=["packages.example"])

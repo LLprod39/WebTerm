@@ -345,8 +345,12 @@ class KubernetesOpsActionRequestTests(TestCase):
             approval_ref="https://rancher.example.test/change?token=raw-approval-token#tail",
         )
 
-        status_response = self.client.get(reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id}))
-        report_response = self.client.get(reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id}))
+        status_response = self.client.get(
+            reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id})
+        )
+        report_response = self.client.get(
+            reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id})
+        )
 
         self.assertEqual(status_response.status_code, 200)
         self.assertEqual(status_response.json()["request"]["id"], str(action_request.request_id))
@@ -473,8 +477,12 @@ class KubernetesOpsActionRequestTests(TestCase):
         )
         self.client.force_login(other_reader)
 
-        status_response = self.client.get(reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id}))
-        report_response = self.client.get(reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id}))
+        status_response = self.client.get(
+            reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id})
+        )
+        report_response = self.client.get(
+            reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id})
+        )
 
         self.assertEqual(status_response.status_code, 404)
         self.assertEqual(status_response.json()["code"], "request_not_found")
@@ -499,8 +507,12 @@ class KubernetesOpsActionRequestTests(TestCase):
         )
         self.client.force_login(staff)
 
-        status_response = self.client.get(reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id}))
-        report_response = self.client.get(reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id}))
+        status_response = self.client.get(
+            reverse("api_kubernetes_action_status", kwargs={"request_id": action_request.request_id})
+        )
+        report_response = self.client.get(
+            reverse("api_kubernetes_action_report", kwargs={"request_id": action_request.request_id})
+        )
 
         self.assertEqual(status_response.status_code, 200)
         self.assertEqual(status_response.json()["request"]["requested_by"], owner.username)

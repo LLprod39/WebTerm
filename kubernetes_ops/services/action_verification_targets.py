@@ -2,6 +2,7 @@
 
 Extracted from action_verification.py to keep modules under the size limit.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -17,6 +18,7 @@ from kubernetes_ops.models import (
     K8sPodRef,
     K8sWorkloadRef,
 )
+
 
 def _cluster_for_target(action_request: K8sActionRequest, target: dict[str, Any]) -> K8sCluster | None:
     if action_request.cluster_id:
@@ -96,7 +98,18 @@ def _workload_kind(value: Any) -> str:
 
 def _kind_key(value: Any) -> str:
     kind = str(value or "").strip().lower().replace(" ", "")
-    aliases = {"deploy": "deployment", "deployments": "deployment", "statefulsets": "statefulset", "daemonsets": "daemonset", "replicasets": "replicaset", "cronjobs": "cronjob", "jobs": "job", "pods": "pod", "services": "service", "ingresses": "ingress"}
+    aliases = {
+        "deploy": "deployment",
+        "deployments": "deployment",
+        "statefulsets": "statefulset",
+        "daemonsets": "daemonset",
+        "replicasets": "replicaset",
+        "cronjobs": "cronjob",
+        "jobs": "job",
+        "pods": "pod",
+        "services": "service",
+        "ingresses": "ingress",
+    }
     return aliases.get(kind, kind)
 
 

@@ -59,7 +59,7 @@ REMOTE_LOOP_TEMPLATE = (
     "cpu=$(head -n1 /proc/stat); "
     'load=$(cut -d" " -f1-3 /proc/loadavg); '
     "mem=$(awk '/^MemTotal:/{{t=$2}} /^MemAvailable:/{{a=$2}} END{{print t\" \"a}}' /proc/meminfo); "
-    "disk=$(df -P / 2>/dev/null | awk 'NR==2{{gsub(\"%\",\"\",$5); print $5}}'); "
+    'disk=$(df -P / 2>/dev/null | awk \'NR==2{{gsub("%","",$5); print $5}}\'); '
     'echo "LIVE|$cpu|$load|$mem|$disk"; '
     "sleep {interval}; "
     "done"
@@ -186,7 +186,7 @@ def store_live_samples(server_ids: list[int], payload: dict) -> None:
         pipe = client.pipeline()
         body = json.dumps(sample)
         for sid in server_ids:
-            pipe.setex(live_cache_key(sid), ttl, body)
+            pipe.set(live_cache_key(sid), body, ex=ttl)
         with contextlib.suppress(Exception):
             pipe.execute()
             return
@@ -211,16 +211,20 @@ def fetch_live_samples(server_ids: list[int]) -> dict[int, dict]:
         try:
             values = client.mget(keys)
         except Exception:
-            values = [None] * len(keys)
-        out: dict[int, dict] = {}
-        for sid, raw in zip(server_ids, values):
-            if not raw:
-                continue
-            with contextlib.suppress(TypeError, ValueError, json.JSONDecodeError):
-                value = json.loads(raw)
-                if isinstance(value, dict) and value.get("ts"):
-                    out[int(sid)] = value
-        return out
+            # The writer falls back to Django cache when Redis is configured
+            # but temporarily unavailable.  Readers must take the same path;
+            # returning here would make a successful fallback write invisible.
+            values = None
+        if values is not None:
+            out: dict[int, dict] = {}
+            for sid, raw in zip(server_ids, values, strict=False):
+                if not raw:
+                    continue
+                with contextlib.suppress(TypeError, ValueError, json.JSONDecodeError):
+                    value = json.loads(raw)
+                    if isinstance(value, dict) and value.get("ts"):
+                        out[int(sid)] = value
+            return out
 
     with contextlib.suppress(Exception):
         from django.core.cache import cache
@@ -399,7 +403,7 @@ class LiveMetricsManager:
             if not servers:
                 return None
             if preferred_ids:
-                preferred = {sid for sid in preferred_ids}
+                preferred = set(preferred_ids)
                 ordered = [s for s in servers if s.id in preferred] + [s for s in servers if s.id not in preferred]
                 return ordered
             return servers
@@ -473,7 +477,7 @@ class LiveMetricsManager:
             while not self._should_stop(entry, started_at):
                 try:
                     line = await asyncio.wait_for(process.stdout.readline(), timeout=interval * 5)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 if not line:
                     raise ConnectionError("live metrics stream ended")

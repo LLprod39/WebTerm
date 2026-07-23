@@ -76,9 +76,7 @@ def _resolve_syslog_socktype() -> int:
 def get_log_sink_status() -> dict[str, Any]:
     return {
         "request_id_header": "X-Request-ID",
-        "channel_layer_backend": str(
-            settings.CHANNEL_LAYERS.get("default", {}).get("BACKEND", "")
-        ),
+        "channel_layer_backend": str(settings.CHANNEL_LAYERS.get("default", {}).get("BACKEND", "")),
         "log_file_sink_enabled": bool(_resolve_log_file_path()),
         "log_syslog_sink_enabled": _env_bool("APP_LOG_SYSLOG_ENABLED", False),
         "log_level": (os.getenv("APP_LOG_LEVEL", "INFO") or "INFO").strip().upper(),

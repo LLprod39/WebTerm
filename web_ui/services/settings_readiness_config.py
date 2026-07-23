@@ -194,13 +194,13 @@ def _selected_provider_statuses() -> tuple[list[dict[str, Any]], list[dict[str, 
     config = model_manager.config
     registry = get_provider_registry()
     roles = {
-        "default": getattr(config, "default_provider", "") or "fair",
-        "internal": getattr(config, "internal_llm_provider", "") or getattr(config, "default_provider", "") or "fair",
-        "chat": getattr(config, "chat_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "fair",
-        "agent": getattr(config, "agent_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "fair",
+        "default": getattr(config, "default_provider", "") or "grok",
+        "internal": getattr(config, "internal_llm_provider", "") or getattr(config, "default_provider", "") or "grok",
+        "chat": getattr(config, "chat_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "grok",
+        "agent": getattr(config, "agent_llm_provider", "") or getattr(config, "internal_llm_provider", "") or "grok",
         "orchestrator": getattr(config, "orchestrator_llm_provider", "")
         or getattr(config, "internal_llm_provider", "")
-        or "fair",
+        or "grok",
     }
     available_any = bool(registry.get_available_providers())
     selected: list[dict[str, Any]] = []
@@ -278,7 +278,9 @@ def notification_check() -> dict[str, Any]:
     saved = _load_json_file(config_path)
     legacy_secret_keys = [key for key in ("telegram_bot_token", "smtp_password") if has_value(saved.get(key))]
     telegram_ready = has_value(cfg.get("telegram_bot_token")) and has_value(cfg.get("telegram_chat_id"))
-    email_ready = has_value(cfg.get("notify_email")) and has_value(cfg.get("smtp_host")) and has_value(cfg.get("smtp_user"))
+    email_ready = (
+        has_value(cfg.get("notify_email")) and has_value(cfg.get("smtp_host")) and has_value(cfg.get("smtp_user"))
+    )
     explicit_path = bool((os.getenv("NOTIFICATION_CONFIG_PATH") or "").strip())
     details = {
         "telegram_ready": telegram_ready,
@@ -323,7 +325,9 @@ def domain_auth_check() -> dict[str, Any]:
         if getattr(config, "domain_auth_enabled", None) is not None
         else bool(getattr(settings, "DOMAIN_AUTH_ENABLED", False))
     )
-    header = getattr(config, "domain_auth_header", None) or str(getattr(settings, "DOMAIN_AUTH_HEADER", "REMOTE_USER") or "REMOTE_USER")
+    header = getattr(config, "domain_auth_header", None) or str(
+        getattr(settings, "DOMAIN_AUTH_HEADER", "REMOTE_USER") or "REMOTE_USER"
+    )
     details = {
         "enabled": bool(enabled),
         "header": header,
@@ -373,7 +377,9 @@ def ldap_status_check() -> dict[str, Any]:
     server_uri = str(getattr(settings, "LDAP_SERVER", "") or getattr(settings, "AUTH_LDAP_SERVER_URI", "") or "")
     search_base = str(getattr(settings, "LDAP_SEARCH_BASE", "") or "")
     bind_dn = str(getattr(settings, "LDAP_BIND_DN", "") or getattr(settings, "AUTH_LDAP_BIND_DN", "") or "")
-    bind_password_set = bool(str(getattr(settings, "LDAP_BIND_PASSWORD", "") or getattr(settings, "AUTH_LDAP_BIND_PASSWORD", "") or ""))
+    bind_password_set = bool(
+        str(getattr(settings, "LDAP_BIND_PASSWORD", "") or getattr(settings, "AUTH_LDAP_BIND_PASSWORD", "") or "")
+    )
     missing = []
     if enabled and not server_uri:
         missing.append("LDAP_SERVER")
@@ -390,7 +396,9 @@ def ldap_status_check() -> dict[str, Any]:
         "bind_password_configured": bind_password_set,
         "start_tls": bool(getattr(settings, "LDAP_START_TLS", False)),
         "ignore_cert": bool(getattr(settings, "LDAP_IGNORE_CERT", False)),
-        "ca_cert_configured": bool(getattr(settings, "LDAP_CA_CERT_FILE", "") or getattr(settings, "LDAP_CA_CERT_DIR", "")),
+        "ca_cert_configured": bool(
+            getattr(settings, "LDAP_CA_CERT_FILE", "") or getattr(settings, "LDAP_CA_CERT_DIR", "")
+        ),
         "missing": missing,
     }
     if not enabled:

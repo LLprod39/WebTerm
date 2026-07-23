@@ -6,7 +6,9 @@ from kubernetes_ops.services.release_scope import build_kubernetes_release_scope
 
 
 def test_release_scope_blocks_local_kind_evidence_for_production():
-    with override_settings(KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"):
+    with override_settings(
+        KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"
+    ):
         report = build_kubernetes_release_scope_report(
             provider_probes=[
                 {
@@ -49,7 +51,9 @@ def test_release_scope_requires_production_approval_ref():
 
     assert report["success"] is False
     assert report["status"] == "missing_approval"
-    assert any(item["setting"] == "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF" for item in report["missing_required_references"])
+    assert any(
+        item["setting"] == "KUBERNETES_OPS_PRODUCTION_APPROVAL_REF" for item in report["missing_required_references"]
+    )
 
 
 def test_release_scope_allows_approved_nonlocal_production_evidence():
@@ -83,7 +87,9 @@ def test_release_scope_allows_approved_nonlocal_production_evidence():
 
 
 def test_release_scope_requires_core_evidence_refs_for_nonlocal_production():
-    with override_settings(KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"):
+    with override_settings(
+        KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"
+    ):
         report = build_kubernetes_release_scope_report(
             provider_probes=[{"provider_name": "rancher-prod", "status": "ready", "success": True}],
             sync_dry_run=[{"provider_name": "devtron-prod", "provider_kind": "devtron", "success": True}],
@@ -106,7 +112,9 @@ def test_release_scope_requires_core_evidence_refs_for_nonlocal_production():
 
 
 def test_release_scope_blocks_local_kubernetes_mcp_endpoint_for_production():
-    with override_settings(KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"):
+    with override_settings(
+        KUBERNETES_OPS_RELEASE_ENVIRONMENT="production", KUBERNETES_OPS_PRODUCTION_APPROVAL_REF="CHG-123"
+    ):
         report = build_kubernetes_release_scope_report(
             provider_probes=[{"provider_name": "rancher-prod", "status": "ready", "success": True}],
             sync_dry_run=[{"provider_name": "devtron-prod", "provider_kind": "devtron", "success": True}],

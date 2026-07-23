@@ -1,8 +1,7 @@
 """Pilot pipeline templates for access, rollout and CI/CD workflows."""
 
-
 PILOT_DELIVERY_TEMPLATES = [
-{
+    {
         "slug": "cert-expiry-check",
         "name": "Certificate Expiry Check",
         "description": "Checks SSL certificate expiry on configured domains, alerts if < 30 days.",
@@ -61,166 +60,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {"id": "e3-5", "source": "n3", "target": "n5", "sourceHandle": "false"},
         ],
     },
-{
-        "slug": "pilot-keycloak-access-change",
-        "name": "Pilot: Keycloak Access Change",
-        "description": "Preflight lookup, approval, Keycloak role/group change, verification and audit report through MCP.",
-        "icon": "IAM",
-        "category": "Pilot OPS",
-        "tags": ["pilot", "keycloak", "iam", "mcp", "approval"],
-        "nodes": [
-            {
-                "id": "manual",
-                "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
-                "data": {"label": "Start access request"},
-            },
-            {
-                "id": "preflight",
-                "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 220},
-                "data": {
-                    "label": "Read current Keycloak access",
-                    "mcp_server_id": "",
-                    "mcp_server_name": "Keycloak Admin",
-                    "tool_name": "keycloak_lookup_subject_access",
-                    "arguments": {
-                        "realm": "{realm}",
-                        "username": "{username}",
-                        "group": "{group}",
-                        "role": "{role}",
-                    },
-                    "permission_mode": "READ_ONLY",
-                    "skill_slugs": ["keycloak-safety"],
-                    "on_failure": "abort",
-                },
-            },
-            {
-                "id": "risk_review",
-                "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
-                "data": {
-                    "label": "Summarize access risk",
-                    "provider": "openai",
-                    "model": "gpt-5-mini",
-                    "system_prompt": "You are an IAM change reviewer. Do not approve changes yourself.",
-                    "prompt": (
-                        "Review the requested Keycloak access change and the current state.\n\n"
-                        "Requested target:\n"
-                        "- realm: {realm}\n"
-                        "- username: {username}\n"
-                        "- group: {group}\n"
-                        "- role: {role}\n\n"
-                        "Current access evidence:\n{preflight_output}\n\n"
-                        "Return: risk level, exact proposed MCP action, verification expectation and rollback note."
-                    ),
-                    "include_all_outputs": False,
-                },
-            },
-            {
-                "id": "approval",
-                "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
-                "data": {
-                    "label": "Approve IAM mutation",
-                    "manual_link_only": True,
-                    "timeout_minutes": 120,
-                    "message": (
-                        "Keycloak access change requires approval.\n\n"
-                        "Risk review:\n{risk_review_output}\n\n"
-                        "Approve: {approve_url}\nReject: {reject_url}"
-                    ),
-                },
-            },
-            {
-                "id": "apply_change",
-                "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 690},
-                "data": {
-                    "label": "Apply Keycloak access change",
-                    "mcp_server_id": "",
-                    "mcp_server_name": "Keycloak Admin",
-                    "tool_name": "keycloak_apply_access_change",
-                    "arguments": {
-                        "realm": "{realm}",
-                        "username": "{username}",
-                        "group": "{group}",
-                        "role": "{role}",
-                        "operation": "{operation}",
-                        "approval": "{approval_output}",
-                    },
-                    "permission_mode": "ASSISTED",
-                    "skill_slugs": ["keycloak-safety"],
-                    "on_failure": "abort",
-                },
-            },
-            {
-                "id": "verify_change",
-                "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 850},
-                "data": {
-                    "label": "Verify effective access",
-                    "mcp_server_id": "",
-                    "mcp_server_name": "Keycloak Admin",
-                    "tool_name": "keycloak_lookup_subject_access",
-                    "arguments": {
-                        "realm": "{realm}",
-                        "username": "{username}",
-                        "group": "{group}",
-                        "role": "{role}",
-                    },
-                    "permission_mode": "READ_ONLY",
-                    "skill_slugs": ["keycloak-safety"],
-                    "on_failure": "continue",
-                },
-            },
-            {
-                "id": "report",
-                "type": "output/report",
-                "position": {"x": 120, "y": 1010},
-                "data": {
-                    "label": "IAM audit report",
-                    "template": (
-                        "# Keycloak access change report\n\n"
-                        "## Preflight\n{preflight_output}\n\n"
-                        "## Risk review\n{risk_review_output}\n\n"
-                        "## Approval\n{approval_output}\n\n"
-                        "## Change result\n{apply_change_output}\n\n"
-                        "## Verification\n{verify_change_output}"
-                    ),
-                },
-            },
-            {
-                "id": "rejected",
-                "type": "output/report",
-                "position": {"x": 520, "y": 690},
-                "data": {
-                    "label": "Access change rejected",
-                    "template": "# Keycloak access change rejected\n\n{approval_error}\n\n## Proposed change\n{risk_review_output}",
-                },
-            },
-            {
-                "id": "timed_out",
-                "type": "output/report",
-                "position": {"x": 520, "y": 850},
-                "data": {
-                    "label": "Access change timed out",
-                    "template": "# Keycloak access change timed out\n\nNo approval was received.\n\n## Proposed change\n{risk_review_output}",
-                },
-            },
-        ],
-        "edges": [
-            {"id": "e-manual-preflight", "source": "manual", "target": "preflight", "sourceHandle": "out", "animated": True},
-            {"id": "e-preflight-risk", "source": "preflight", "target": "risk_review", "sourceHandle": "success", "animated": True},
-            {"id": "e-risk-approval", "source": "risk_review", "target": "approval", "sourceHandle": "success", "animated": True},
-            {"id": "e-approval-apply", "source": "approval", "target": "apply_change", "sourceHandle": "approved", "label": "approved"},
-            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
-            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
-            {"id": "e-apply-verify", "source": "apply_change", "target": "verify_change", "sourceHandle": "success", "animated": True},
-            {"id": "e-verify-report", "source": "verify_change", "target": "report", "sourceHandle": "out", "animated": True},
-        ],
-    },
-{
+    {
         "slug": "pilot-kubernetes-rollout",
         "name": "Pilot: Kubernetes Diagnose And Rollout",
         "description": "Read Kubernetes state through MCP, summarize risk, approve a rollout action, verify rollout status and report.",
@@ -228,7 +68,12 @@ PILOT_DELIVERY_TEMPLATES = [
         "category": "Pilot OPS",
         "tags": ["pilot", "kubernetes", "mcp", "rollout", "approval"],
         "nodes": [
-            {"id": "manual", "type": "trigger/manual", "position": {"x": 120, "y": 80}, "data": {"label": "Start Kubernetes workflow"}},
+            {
+                "id": "manual",
+                "type": "trigger/manual",
+                "position": {"x": 120, "y": 80},
+                "data": {"label": "Start Kubernetes workflow"},
+            },
             {
                 "id": "inspect",
                 "type": "agent/mcp_call",
@@ -238,7 +83,12 @@ PILOT_DELIVERY_TEMPLATES = [
                     "mcp_server_id": "",
                     "mcp_server_name": "Kubernetes MCP",
                     "tool_name": "kubernetes_describe_workload",
-                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}"},
+                    "arguments": {
+                        "cluster": "{cluster}",
+                        "namespace": "{namespace}",
+                        "kind": "{kind}",
+                        "name": "{workload_name}",
+                    },
                     "permission_mode": "READ_ONLY",
                     "on_failure": "abort",
                 },
@@ -280,7 +130,12 @@ PILOT_DELIVERY_TEMPLATES = [
                     "mcp_server_id": "",
                     "mcp_server_name": "Kubernetes MCP",
                     "tool_name": "kubernetes_rollout_restart",
-                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}"},
+                    "arguments": {
+                        "cluster": "{cluster}",
+                        "namespace": "{namespace}",
+                        "kind": "{kind}",
+                        "name": "{workload_name}",
+                    },
                     "permission_mode": "ASSISTED",
                     "on_failure": "abort",
                 },
@@ -294,7 +149,13 @@ PILOT_DELIVERY_TEMPLATES = [
                     "mcp_server_id": "",
                     "mcp_server_name": "Kubernetes MCP",
                     "tool_name": "kubernetes_rollout_status",
-                    "arguments": {"cluster": "{cluster}", "namespace": "{namespace}", "kind": "{kind}", "name": "{workload_name}", "timeout_seconds": 300},
+                    "arguments": {
+                        "cluster": "{cluster}",
+                        "namespace": "{namespace}",
+                        "kind": "{kind}",
+                        "name": "{workload_name}",
+                        "timeout_seconds": 300,
+                    },
                     "permission_mode": "READ_ONLY",
                     "on_failure": "continue",
                 },
@@ -308,21 +169,79 @@ PILOT_DELIVERY_TEMPLATES = [
                     "template": "# Kubernetes rollout report\n\n## Inspection\n{inspect_output}\n\n## Risk plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Rollout\n{rollout_output}\n\n## Verification\n{verify_output}",
                 },
             },
-            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "Rollout rejected", "template": "# Kubernetes rollout rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}"}},
-            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "Rollout approval timed out", "template": "# Kubernetes rollout timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}"}},
+            {
+                "id": "rejected",
+                "type": "output/report",
+                "position": {"x": 520, "y": 690},
+                "data": {
+                    "label": "Rollout rejected",
+                    "template": "# Kubernetes rollout rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}",
+                },
+            },
+            {
+                "id": "timed_out",
+                "type": "output/report",
+                "position": {"x": 520, "y": 850},
+                "data": {
+                    "label": "Rollout approval timed out",
+                    "template": "# Kubernetes rollout timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}",
+                },
+            },
         ],
         "edges": [
-            {"id": "e-manual-inspect", "source": "manual", "target": "inspect", "sourceHandle": "out", "animated": True},
-            {"id": "e-inspect-plan", "source": "inspect", "target": "plan", "sourceHandle": "success", "animated": True},
-            {"id": "e-plan-approval", "source": "plan", "target": "approval", "sourceHandle": "success", "animated": True},
-            {"id": "e-approval-rollout", "source": "approval", "target": "rollout", "sourceHandle": "approved", "label": "approved"},
-            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
-            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
-            {"id": "e-rollout-verify", "source": "rollout", "target": "verify", "sourceHandle": "success", "animated": True},
+            {
+                "id": "e-manual-inspect",
+                "source": "manual",
+                "target": "inspect",
+                "sourceHandle": "out",
+                "animated": True,
+            },
+            {
+                "id": "e-inspect-plan",
+                "source": "inspect",
+                "target": "plan",
+                "sourceHandle": "success",
+                "animated": True,
+            },
+            {
+                "id": "e-plan-approval",
+                "source": "plan",
+                "target": "approval",
+                "sourceHandle": "success",
+                "animated": True,
+            },
+            {
+                "id": "e-approval-rollout",
+                "source": "approval",
+                "target": "rollout",
+                "sourceHandle": "approved",
+                "label": "approved",
+            },
+            {
+                "id": "e-approval-rejected",
+                "source": "approval",
+                "target": "rejected",
+                "sourceHandle": "rejected",
+                "label": "rejected",
+            },
+            {
+                "id": "e-approval-timeout",
+                "source": "approval",
+                "target": "timed_out",
+                "sourceHandle": "timeout",
+                "label": "timeout",
+            },
+            {
+                "id": "e-rollout-verify",
+                "source": "rollout",
+                "target": "verify",
+                "sourceHandle": "success",
+                "animated": True,
+            },
             {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
         ],
     },
-{
+    {
         "slug": "pilot-gitlab-failed-pipeline-mr",
         "name": "Pilot: GitLab Failed Pipeline To MR",
         "description": "Webhook-driven failed pipeline triage, fix proposal, approval, MR creation and pipeline verification through MCP.",
@@ -353,7 +272,11 @@ PILOT_DELIVERY_TEMPLATES = [
                     "mcp_server_id": "",
                     "mcp_server_name": "GitLab MCP",
                     "tool_name": "gitlab_get_pipeline_failure",
-                    "arguments": {"project_id": "{project_id}", "pipeline_id": "{pipeline_id}", "commit_sha": "{commit_sha}"},
+                    "arguments": {
+                        "project_id": "{project_id}",
+                        "pipeline_id": "{pipeline_id}",
+                        "commit_sha": "{commit_sha}",
+                    },
                     "permission_mode": "READ_ONLY",
                     "on_failure": "abort",
                 },
@@ -429,17 +352,75 @@ PILOT_DELIVERY_TEMPLATES = [
                     "template": "# GitLab CI support report\n\n## Failure evidence\n{inspect_output}\n\n## Proposal\n{proposal_output}\n\n## Approval\n{approval_output}\n\n## MR result\n{create_mr_output}\n\n## Verification\n{verify_output}",
                 },
             },
-            {"id": "rejected", "type": "output/report", "position": {"x": 520, "y": 690}, "data": {"label": "MR rejected", "template": "# GitLab MR rejected\n\n{approval_error}\n\n## Proposal\n{proposal_output}"}},
-            {"id": "timed_out", "type": "output/report", "position": {"x": 520, "y": 850}, "data": {"label": "MR approval timed out", "template": "# GitLab MR approval timed out\n\nNo approval was received.\n\n## Proposal\n{proposal_output}"}},
+            {
+                "id": "rejected",
+                "type": "output/report",
+                "position": {"x": 520, "y": 690},
+                "data": {
+                    "label": "MR rejected",
+                    "template": "# GitLab MR rejected\n\n{approval_error}\n\n## Proposal\n{proposal_output}",
+                },
+            },
+            {
+                "id": "timed_out",
+                "type": "output/report",
+                "position": {"x": 520, "y": 850},
+                "data": {
+                    "label": "MR approval timed out",
+                    "template": "# GitLab MR approval timed out\n\nNo approval was received.\n\n## Proposal\n{proposal_output}",
+                },
+            },
         ],
         "edges": [
-            {"id": "e-webhook-inspect", "source": "webhook", "target": "inspect", "sourceHandle": "out", "animated": True},
-            {"id": "e-inspect-proposal", "source": "inspect", "target": "proposal", "sourceHandle": "success", "animated": True},
-            {"id": "e-proposal-approval", "source": "proposal", "target": "approval", "sourceHandle": "success", "animated": True},
-            {"id": "e-approval-mr", "source": "approval", "target": "create_mr", "sourceHandle": "approved", "label": "approved"},
-            {"id": "e-approval-rejected", "source": "approval", "target": "rejected", "sourceHandle": "rejected", "label": "rejected"},
-            {"id": "e-approval-timeout", "source": "approval", "target": "timed_out", "sourceHandle": "timeout", "label": "timeout"},
-            {"id": "e-mr-verify", "source": "create_mr", "target": "verify", "sourceHandle": "success", "animated": True},
+            {
+                "id": "e-webhook-inspect",
+                "source": "webhook",
+                "target": "inspect",
+                "sourceHandle": "out",
+                "animated": True,
+            },
+            {
+                "id": "e-inspect-proposal",
+                "source": "inspect",
+                "target": "proposal",
+                "sourceHandle": "success",
+                "animated": True,
+            },
+            {
+                "id": "e-proposal-approval",
+                "source": "proposal",
+                "target": "approval",
+                "sourceHandle": "success",
+                "animated": True,
+            },
+            {
+                "id": "e-approval-mr",
+                "source": "approval",
+                "target": "create_mr",
+                "sourceHandle": "approved",
+                "label": "approved",
+            },
+            {
+                "id": "e-approval-rejected",
+                "source": "approval",
+                "target": "rejected",
+                "sourceHandle": "rejected",
+                "label": "rejected",
+            },
+            {
+                "id": "e-approval-timeout",
+                "source": "approval",
+                "target": "timed_out",
+                "sourceHandle": "timeout",
+                "label": "timeout",
+            },
+            {
+                "id": "e-mr-verify",
+                "source": "create_mr",
+                "target": "verify",
+                "sourceHandle": "success",
+                "animated": True,
+            },
             {"id": "e-verify-report", "source": "verify", "target": "report", "sourceHandle": "out", "animated": True},
         ],
     },

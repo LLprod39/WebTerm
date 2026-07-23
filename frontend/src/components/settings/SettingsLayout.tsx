@@ -13,8 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   allSettingsNavItems,
   findSettingsNavItem,
-  settingsNavGroups,
-  type SettingsNavGroup,
+  visibleSettingsNavGroups,
   type SettingsNavItem,
 } from "./settings-nav-items";
 
@@ -36,15 +35,6 @@ export function SettingsIndexRedirect() {
   return <Navigate to={isAdmin ? "/settings/readiness" : firstNonAdminSettingsPath()} replace />;
 }
 
-function visibleSettingsGroups(isAdmin: boolean): SettingsNavGroup[] {
-  return settingsNavGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => !item.adminOnly || isAdmin),
-    }))
-    .filter((group) => group.items.length > 0);
-}
-
 function isActivePath(pathname: string, item: SettingsNavItem) {
   return pathname === item.path || pathname.startsWith(`${item.path}/`);
 }
@@ -59,7 +49,13 @@ function SettingsSideNav({
   className?: string;
 }) {
   const location = useLocation();
-  const groups = visibleSettingsGroups(isAdmin);
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const groups = visibleSettingsNavGroups(isAdmin, Boolean(authData?.user?.features.plugins));
 
   return (
     <nav className={cn("space-y-6", className)} aria-label="Разделы настроек">

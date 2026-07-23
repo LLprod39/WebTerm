@@ -96,7 +96,9 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         session = self.create_break_glass_session(user)
         self.client.force_login(user)
 
-        response = self.post_action("cordon", {"session_id": str(session.session_id), "node_name": "worker-1", "reason": "cordon node"})
+        response = self.post_action(
+            "cordon", {"session_id": str(session.session_id), "node_name": "worker-1", "reason": "cordon node"}
+        )
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["code"], "break_glass_required")
@@ -111,7 +113,9 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
 
         with patch("kubernetes_ops.services.admin_node_maintenance.ProviderJsonClient") as client_cls:
             client_cls.return_value.request.return_value = self.node_response(unschedulable=True)
-            response = self.post_action("cordon", {"session_id": str(session.session_id), "node_name": "worker-1", "reason": "cordon node"})
+            response = self.post_action(
+                "cordon", {"session_id": str(session.session_id), "node_name": "worker-1", "reason": "cordon node"}
+            )
             method, path = client_cls.return_value.request.call_args.args[:2]
             body = client_cls.return_value.request.call_args.kwargs["body"]
 
@@ -197,7 +201,11 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         pods_payload = {
             "items": [
                 {
-                    "metadata": {"name": "web-1", "namespace": "payments", "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}]},
+                    "metadata": {
+                        "name": "web-1",
+                        "namespace": "payments",
+                        "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}],
+                    },
                     "spec": {"nodeName": "worker-1"},
                     "status": {"phase": "Running"},
                 }
@@ -226,7 +234,10 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         self.assertEqual(payload["pods_considered"], 1)
         self.assertEqual(payload["evictable_pod_count"], 1)
         self.assertEqual(client.request.call_count, 1)
-        self.assertEqual(client.request.call_args.args[:2], ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"))
+        self.assertEqual(
+            client.request.call_args.args[:2],
+            ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"),
+        )
         action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_DRAIN)
         self.assertEqual(action.status, K8sAdminAction.STATUS_PLANNED)
         self.assertEqual(action.response_summary["source"], "provider_node_drain_preflight")
@@ -234,7 +245,9 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         self.assertFalse(action.response_summary["evictions_started"])
         self.assertNotIn("preview only", str(action.response_summary))
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True
+    )
     def test_drain_execution_cordons_node_and_uses_eviction_api(self):
         user = self.create_user("k8s-node-drain-execute", grant_break_glass=True)
         session = self.create_break_glass_session(user)
@@ -242,17 +255,32 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         pods_payload = {
             "items": [
                 {
-                    "metadata": {"name": "web-1", "namespace": "payments", "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}]},
-                    "spec": {"nodeName": "worker-1", "volumes": [{"name": "config", "configMap": {"name": "web-config"}}]},
+                    "metadata": {
+                        "name": "web-1",
+                        "namespace": "payments",
+                        "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}],
+                    },
+                    "spec": {
+                        "nodeName": "worker-1",
+                        "volumes": [{"name": "config", "configMap": {"name": "web-config"}}],
+                    },
                     "status": {"phase": "Running"},
                 },
                 {
-                    "metadata": {"name": "node-agent", "namespace": "kube-system", "ownerReferences": [{"kind": "DaemonSet", "name": "node-agent"}]},
+                    "metadata": {
+                        "name": "node-agent",
+                        "namespace": "kube-system",
+                        "ownerReferences": [{"kind": "DaemonSet", "name": "node-agent"}],
+                    },
                     "spec": {"nodeName": "worker-1"},
                     "status": {"phase": "Running"},
                 },
                 {
-                    "metadata": {"name": "done-job", "namespace": "batch", "ownerReferences": [{"kind": "Job", "name": "done-job"}]},
+                    "metadata": {
+                        "name": "done-job",
+                        "namespace": "batch",
+                        "ownerReferences": [{"kind": "Job", "name": "done-job"}],
+                    },
                     "spec": {"nodeName": "worker-1"},
                     "status": {"phase": "Succeeded"},
                 },
@@ -273,7 +301,12 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
                     "node_name": "worker-1",
                     "reason": "approved node replacement",
                     "confirmation": "drain Node worker-1",
-                    "options": {"ignore_daemonsets": True, "delete_emptydir_data": False, "force": False, "grace_period_seconds": 15},
+                    "options": {
+                        "ignore_daemonsets": True,
+                        "delete_emptydir_data": False,
+                        "force": False,
+                        "grace_period_seconds": 15,
+                    },
                 },
             )
 
@@ -284,30 +317,46 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         self.assertTrue(payload["cordoned"])
         self.assertTrue(payload["evictions_started"])
         self.assertEqual(payload["evictions_requested"], 1)
-        self.assertEqual(payload["evictions"], [{"namespace": "payments", "name": "web-1", "status": "eviction_requested"}])
+        self.assertEqual(
+            payload["evictions"], [{"namespace": "payments", "name": "web-1", "status": "eviction_requested"}]
+        )
         self.assertEqual(payload["pods_skipped"]["daemonset"], 1)
         self.assertEqual(payload["pods_skipped"]["terminal"], 1)
         calls = client.request.call_args_list
-        self.assertEqual(calls[0].args[:2], ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"))
+        self.assertEqual(
+            calls[0].args[:2],
+            ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"),
+        )
         self.assertEqual(calls[1].args[:2], ("PATCH", "/k8s/clusters/c-stage/api/v1/nodes/worker-1"))
         self.assertEqual(calls[1].kwargs["body"], {"spec": {"unschedulable": True}})
-        self.assertEqual(calls[2].args[:2], ("POST", "/k8s/clusters/c-stage/api/v1/namespaces/payments/pods/web-1/eviction"))
+        self.assertEqual(
+            calls[2].args[:2], ("POST", "/k8s/clusters/c-stage/api/v1/namespaces/payments/pods/web-1/eviction")
+        )
         self.assertEqual(calls[2].kwargs["body"]["kind"], "Eviction")
         self.assertEqual(calls[2].kwargs["body"]["apiVersion"], "policy/v1")
         action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_DRAIN)
         self.assertEqual(action.status, K8sAdminAction.STATUS_COMPLETED)
         self.assertEqual(action.response_summary["source"], "rancher_kubernetes_eviction_api")
         self.assertEqual(action.response_summary["evictions_requested"], 1)
-        self.assertNotIn("approved node replacement", str(K8sAuditEvent.objects.get(action="k8s.admin_node_maintenance.drain").payload))
+        self.assertNotIn(
+            "approved node replacement",
+            str(K8sAuditEvent.objects.get(action="k8s.admin_node_maintenance.drain").payload),
+        )
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True
+    )
     def test_drain_blocks_emptydir_pods_before_cordon_or_eviction(self):
         user = self.create_user("k8s-node-drain-emptydir", grant_break_glass=True)
         session = self.create_break_glass_session(user)
         pods_payload = {
             "items": [
                 {
-                    "metadata": {"name": "cache-1", "namespace": "payments", "ownerReferences": [{"kind": "ReplicaSet", "name": "cache-rs"}]},
+                    "metadata": {
+                        "name": "cache-1",
+                        "namespace": "payments",
+                        "ownerReferences": [{"kind": "ReplicaSet", "name": "cache-rs"}],
+                    },
                     "spec": {"nodeName": "worker-1", "volumes": [{"name": "cache", "emptyDir": {}}]},
                     "status": {"phase": "Running"},
                 }
@@ -332,13 +381,18 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
         self.assertFalse(payload["drain_started"])
         self.assertFalse(payload["evictions_started"])
         self.assertEqual(client.request.call_count, 1)
-        self.assertEqual(client.request.call_args.args[:2], ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"))
+        self.assertEqual(
+            client.request.call_args.args[:2],
+            ("GET", "/k8s/clusters/c-stage/api/v1/pods?fieldSelector=spec.nodeName%3Dworker-1&limit=51"),
+        )
         action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_DRAIN)
         self.assertEqual(action.status, K8sAdminAction.STATUS_EXECUTION_BLOCKED)
         self.assertEqual(action.response_summary["blocked_reason"], "emptydir_data_confirmation_required")
         self.assertEqual(action.response_summary["blockers"], {"emptydir": 1})
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True, KUBERNETES_ADMIN_NODE_DRAIN_EXECUTION_ENABLED=True
+    )
     def test_drain_blocks_truncated_pod_list_before_cordon_or_eviction(self):
         user = self.create_user("k8s-node-drain-truncated", grant_break_glass=True)
         session = self.create_break_glass_session(user)
@@ -346,7 +400,11 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
             "metadata": {"continue": "next-page-token"},
             "items": [
                 {
-                    "metadata": {"name": "web-1", "namespace": "payments", "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}]},
+                    "metadata": {
+                        "name": "web-1",
+                        "namespace": "payments",
+                        "ownerReferences": [{"kind": "ReplicaSet", "name": "web-rs"}],
+                    },
                     "spec": {"nodeName": "worker-1"},
                     "status": {"phase": "Running"},
                 }
@@ -414,7 +472,9 @@ class KubernetesOpsAdminNodeMaintenanceTests(TestCase):
     @override_settings(KUBERNETES_ADMIN_NATIVE_NODE_MAINTENANCE_ENABLED=True)
     def test_node_maintenance_respects_verb_and_node_scope(self):
         user = self.create_user("k8s-node-maint-scope", grant_break_glass=True)
-        session_without_verb = self.create_break_glass_session(user, allowed_verbs=["get", "list"], allowed_kinds=["node"])
+        session_without_verb = self.create_break_glass_session(
+            user, allowed_verbs=["get", "list"], allowed_kinds=["node"]
+        )
         session_without_kind = self.create_break_glass_session(user, allowed_verbs=["cordon"], allowed_kinds=["pod"])
 
         with self.assertRaises(AdminResourceError) as verb_denied:

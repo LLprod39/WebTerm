@@ -368,8 +368,7 @@ def ensure_verification_task(
         last["name"] = (str(last.get("name") or "Проверка")[:80] + " + verify")[:200]
         desc = str(last.get("description") or "")
         last["description"] = (
-            desc
-            + "\n\nОбязательно: post-change verification — status/health/smoke и отсутствие новых ошибок."
+            desc + "\n\nОбязательно: post-change verification — status/health/smoke и отсутствие новых ошибок."
         ).strip()[:500]
         prepared[-1] = last
         return prepared

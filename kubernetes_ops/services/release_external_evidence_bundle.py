@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,12 @@ def write_kubernetes_external_evidence_bundle(report: dict[str, Any], output_pat
 def load_kubernetes_external_evidence_bundle_artifact(path: Path | None = None) -> dict[str, Any]:
     artifact_path = path or Path(settings.BASE_DIR) / EXTERNAL_EVIDENCE_BUNDLE_ARTIFACT
     if not artifact_path.exists():
-        return {"success": False, "status": "missing", "path": str(artifact_path), "errors": ["external evidence bundle artifact is missing"]}
+        return {
+            "success": False,
+            "status": "missing",
+            "path": str(artifact_path),
+            "errors": ["external evidence bundle artifact is missing"],
+        }
     try:
         payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -136,7 +141,9 @@ def _artifact_checks() -> list[dict[str, Any]]:
             schema_version=LIVE_PROVIDER_SMOKE_SCHEMA_VERSION,
             checked_field="checked_at",
         ),
-        _json_artifact_check("readonly_rbac_live", READONLY_RBAC_ARTIFACT, schema_version="", checked_field="checked_at"),
+        _json_artifact_check(
+            "readonly_rbac_live", READONLY_RBAC_ARTIFACT, schema_version="", checked_field="checked_at"
+        ),
         _json_artifact_check(
             "interactive_transport_evidence",
             INTERACTIVE_TRANSPORT_EVIDENCE_ARTIFACT,
@@ -164,14 +171,30 @@ def _artifact_checks() -> list[dict[str, Any]]:
     ]
 
 
-def _json_artifact_check(check_id: str, relative_path: str, *, schema_version: str, checked_field: str) -> dict[str, Any]:
+def _json_artifact_check(
+    check_id: str, relative_path: str, *, schema_version: str, checked_field: str
+) -> dict[str, Any]:
     path = Path(settings.BASE_DIR) / relative_path
     if not path.exists():
-        return {"id": check_id, "path": str(path), "success": False, "status": "missing", "errors": ["artifact missing"], "local_indicators": []}
+        return {
+            "id": check_id,
+            "path": str(path),
+            "success": False,
+            "status": "missing",
+            "errors": ["artifact missing"],
+            "local_indicators": [],
+        }
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"id": check_id, "path": str(path), "success": False, "status": "error", "errors": [str(exc)], "local_indicators": []}
+        return {
+            "id": check_id,
+            "path": str(path),
+            "success": False,
+            "status": "error",
+            "errors": [str(exc)],
+            "local_indicators": [],
+        }
     errors: list[str] = []
     if schema_version and payload.get("schema_version") != schema_version:
         errors.append(f"schema_version is {payload.get('schema_version') or 'missing'}")
@@ -192,12 +215,19 @@ def _json_artifact_check(check_id: str, relative_path: str, *, schema_version: s
     }
 
 
-def _reference_checks(*, production: bool, transport: dict[str, Any], artifact_checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _reference_checks(
+    *, production: bool, transport: dict[str, Any], artifact_checks: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     interactive_live = next((item for item in artifact_checks if item["id"] == "interactive_live_smoke"), {})
-    live_smoke_required = bool((interactive_live.get("summary") or {}).get("live_smoke_required")) if isinstance(interactive_live.get("summary"), dict) else False
+    live_smoke_required = (
+        bool((interactive_live.get("summary") or {}).get("live_smoke_required"))
+        if isinstance(interactive_live.get("summary"), dict)
+        else False
+    )
     enabled_transports = int(transport.get("enabled_transport_count") or 0)
     port_forward_required = any(
-        item.get("id") == "port_forward_tunnel" and (item.get("network_policy") or {}).get("network_policy_evidence_required")
+        item.get("id") == "port_forward_tunnel"
+        and (item.get("network_policy") or {}).get("network_policy_evidence_required")
         for item in transport.get("transports") or []
         if isinstance(item, dict)
     )
@@ -230,7 +260,11 @@ def _bundle_errors(
     local_indicators: list[dict[str, str]],
 ) -> list[str]:
     errors: list[str] = []
-    errors.extend(f"reference:{item['id']}:{item['setting']}:missing" for item in references if item["required"] and not item["present"])
+    errors.extend(
+        f"reference:{item['id']}:{item['setting']}:missing"
+        for item in references
+        if item["required"] and not item["present"]
+    )
     errors.extend(f"artifact:{item['id']}:{item['status']}" for item in artifact_checks if not item["success"])
     if production and identity_runtime.get("status") != "ready":
         errors.append(f"identity_runtime:{identity_runtime.get('status') or 'missing'}")
@@ -279,11 +313,14 @@ def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if checked_at is None:
         return None, "checked_at is invalid"
     if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=datetime_timezone.utc)
+        checked_at = timezone.make_aware(checked_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:
-        return age_seconds, f"external evidence bundle artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}"
+        return (
+            age_seconds,
+            f"external evidence bundle artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
+        )
     return age_seconds, ""
 
 

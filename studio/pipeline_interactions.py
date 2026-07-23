@@ -309,7 +309,9 @@ async def execute_logic_human_approval(
             logger.info("human_approval node %s: REJECTED", node_id)
             return {
                 "status": "failed",
-                "error": f"ОТКЛОНЕНО оператором.\n\nПричина: {user_response}" if user_response else "ОТКЛОНЕНО оператором.",
+                "error": f"ОТКЛОНЕНО оператором.\n\nПричина: {user_response}"
+                if user_response
+                else "ОТКЛОНЕНО оператором.",
                 "approved": False,
                 "decision": "rejected",
             }
@@ -351,9 +353,17 @@ async def execute_logic_telegram_input(
     parse_mode = str(config.get("parse_mode") or "Markdown").strip() or "Markdown"
 
     if not bot_token:
-        return {"status": "failed", "error": "tg_bot_token not configured for telegram_input node.", "decision": "timeout"}
+        return {
+            "status": "failed",
+            "error": "tg_bot_token not configured for telegram_input node.",
+            "decision": "timeout",
+        }
     if not chat_id:
-        return {"status": "failed", "error": "tg_chat_id not configured for telegram_input node.", "decision": "timeout"}
+        return {
+            "status": "failed",
+            "error": "tg_chat_id not configured for telegram_input node.",
+            "decision": "timeout",
+        }
 
     all_outputs_text = _redacted_all_outputs_text(node_outputs, max_output_chars=2000)
     subs = _redacted_pipeline_context(context)

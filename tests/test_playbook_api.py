@@ -81,7 +81,12 @@ def test_playbook_crud_and_templates(auth_client, user):
     # update
     r = auth_client.post(
         f"/servers/api/playbooks/{created['id']}/update/",
-        data=json.dumps({"name": "Custom RB2", "tasks": [{"id": "t1", "command": "hostname", "description": "", "continue_on_error": False}]}),
+        data=json.dumps(
+            {
+                "name": "Custom RB2",
+                "tasks": [{"id": "t1", "command": "hostname", "description": "", "continue_on_error": False}],
+            }
+        ),
         content_type="application/json",
     )
     assert r.status_code == 200

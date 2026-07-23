@@ -26,9 +26,7 @@ def test_tools_mode_all_returns_empty_map():
 
 
 def test_tools_mode_allowlist_ok():
-    tools, err = resolve_tools_config(
-        {"tools_mode": "allowlist", "allowed_tools": ["ssh_execute", "read_console"]}
-    )
+    tools, err = resolve_tools_config({"tools_mode": "allowlist", "allowed_tools": ["ssh_execute", "read_console"]})
     assert err is None
     assert tools == {"ssh_execute": True, "read_console": True}
 
@@ -70,12 +68,8 @@ def test_model_preference_no_experimental_hardcode():
 
 def test_ask_user_allowlist_detection():
     assert agent_node_allows_ask_user({"tools_mode": "all"})
-    assert not agent_node_allows_ask_user(
-        {"tools_mode": "allowlist", "allowed_tools": ["ssh_execute"]}
-    )
-    assert agent_node_allows_ask_user(
-        {"tools_mode": "allowlist", "allowed_tools": ["ask_user"]}
-    )
+    assert not agent_node_allows_ask_user({"tools_mode": "allowlist", "allowed_tools": ["ssh_execute"]})
+    assert agent_node_allows_ask_user({"tools_mode": "allowlist", "allowed_tools": ["ask_user"]})
 
 
 def test_ops_kill_switch_pause_and_resume(tmp_path, monkeypatch):

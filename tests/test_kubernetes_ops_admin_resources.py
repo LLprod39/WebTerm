@@ -77,7 +77,12 @@ class KubernetesOpsAdminResourceTests(TestCase):
 
         response = self.client.get(
             reverse("api_kubernetes_admin_resource_list", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
-            {"session_id": str(session.session_id), "api_version": "apps/v1", "kind": "Deployment", "namespace": "payments"},
+            {
+                "session_id": str(session.session_id),
+                "api_version": "apps/v1",
+                "kind": "Deployment",
+                "namespace": "payments",
+            },
         )
 
         self.assertEqual(response.status_code, 403)
@@ -131,7 +136,9 @@ class KubernetesOpsAdminResourceTests(TestCase):
         self.assertTrue(payload["success"])
         self.assertEqual(payload["operation"], "resource_list")
         self.assertEqual(payload["path"], "/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments")
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments")
+        self.assertEqual(
+            seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/apis/apps/v1/namespaces/payments/deployments"
+        )
         self.assertEqual(payload["items"][0]["metadata"]["labels"]["token"], "[redacted]")
         self.assertEqual(payload["items"][0]["metadata"]["managedFields"], "[redacted]")
         self.assertEqual(payload["items"][0]["summary"]["name"], "payments-api")
@@ -167,7 +174,11 @@ class KubernetesOpsAdminResourceTests(TestCase):
                     {
                         "apiVersion": "v1",
                         "kind": "Secret",
-                        "metadata": {"name": "db-creds", "namespace": "payments", "annotations": {"token": "raw-annotation-token"}},
+                        "metadata": {
+                            "name": "db-creds",
+                            "namespace": "payments",
+                            "annotations": {"token": "raw-annotation-token"},
+                        },
                         "data": {"password": "cGFzc3dvcmQ=", "token": "cmF3"},
                         "stringData": {"dsn": "postgres://raw-secret"},
                     }
@@ -186,7 +197,9 @@ class KubernetesOpsAdminResourceTests(TestCase):
         )
 
         self.assertEqual(payload["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/secrets")
-        self.assertEqual(seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/api/v1/namespaces/payments/secrets")
+        self.assertEqual(
+            seen["url"], "https://rancher.example.test/k8s/clusters/c-prod/api/v1/namespaces/payments/secrets"
+        )
         self.assertTrue(payload["secret_values"]["requested"])
         self.assertFalse(payload["secret_values"]["visible"])
         self.assertEqual(payload["secret_values"]["mode"], "list_metadata_only")
@@ -249,7 +262,9 @@ class KubernetesOpsAdminResourceTests(TestCase):
         self.assertTrue(K8sAuditEvent.objects.filter(action="k8s.admin_resource.watch_rejected").exists())
 
     def test_admin_pod_logs_snapshot_is_session_gated_bounded_redacted_and_audited(self):
-        self.provider.labels = {"pod_logs_path_template": "/v3/pods/{namespace}:{pod_name}/logs?tail={tail}&cluster={cluster_id}"}
+        self.provider.labels = {
+            "pod_logs_path_template": "/v3/pods/{namespace}:{pod_name}/logs?tail={tail}&cluster={cluster_id}"
+        }
         self.provider.save(update_fields=["labels"])
         user = self.create_user("k8s-admin-logs", grant_admin_read=True)
         session = self.create_read_session(user)
@@ -280,7 +295,9 @@ class KubernetesOpsAdminResourceTests(TestCase):
         self.assertFalse(payload["policy"]["streaming"])
         self.assertIn("exec", payload["policy"]["blocked_actions"])
         self.assertEqual(payload["path"], "/v3/pods/payments:payments-api-abc123/logs")
-        self.assertEqual(seen["url"], "https://rancher.example.test/v3/pods/payments:payments-api-abc123/logs?tail=3&cluster=c-prod")
+        self.assertEqual(
+            seen["url"], "https://rancher.example.test/v3/pods/payments:payments-api-abc123/logs?tail=3&cluster=c-prod"
+        )
         self.assertEqual(payload["lines"][0], "password=[redacted]")
         self.assertEqual(payload["lines"][1], "Authorization: Bearer [redacted]")
         self.assertEqual(payload["lines"][2], "last line")
@@ -323,7 +340,11 @@ class KubernetesOpsAdminResourceTests(TestCase):
                         "object": {
                             "apiVersion": "v1",
                             "kind": "Pod",
-                            "metadata": {"name": "payments-api-abc123", "namespace": "payments", "resourceVersion": "11"},
+                            "metadata": {
+                                "name": "payments-api-abc123",
+                                "namespace": "payments",
+                                "resourceVersion": "11",
+                            },
                             "status": {"phase": "Running"},
                         },
                     },

@@ -17,7 +17,9 @@ def repair_server_memory(store, server_id: int, *, stale_after_days: int = 30, c
     now = timezone.now()
     updated = 0
     notes = 0
-    for snapshot in ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True).order_by("memory_key", "-updated_at"):
+    for snapshot in ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True).order_by(
+        "memory_key", "-updated_at"
+    ):
         should_revalidate = create_notes and needs_revalidation(
             snapshot.updated_at,
             snapshot.last_verified_at,
@@ -51,7 +53,9 @@ def repair_server_memory(store, server_id: int, *, stale_after_days: int = 30, c
             if created:
                 notes += 1
 
-    archived_records = store._archive_old_events_sync(server_id, now=now) + store._archive_old_episodes_sync(server_id, now=now)
+    archived_records = store._archive_old_events_sync(server_id, now=now) + store._archive_old_episodes_sync(
+        server_id, now=now
+    )
     return {
         "server_id": server_id,
         "updated_records": updated,

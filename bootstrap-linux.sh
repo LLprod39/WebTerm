@@ -4,8 +4,8 @@ set -euo pipefail
 # bootstrap-linux.sh
 # One-command setup for Linux hosts:
 # - create local config files from templates
-# - start Docker services (Postgres + MCP demo + MCP keycloak)
-# - create Python venv and install dependencies
+# - start Docker services (Postgres + MCP demo)
+# - create an OS-specific Python venv and install the locked dev environment
 # - run Django migrations
 # - optionally install frontend dependencies
 
@@ -18,17 +18,18 @@ NO_DOCKER=0
 FORCE_CONFIG=0
 COMPOSE_FILE="docker-compose.yml"
 PYTHON_BIN_OVERRIDE=""
+VENV_DIR="${WEBTERM_VENV_DIR:-.venv-wsl}"
 
 print_help() {
   cat <<'EOF'
 Usage: ./bootstrap-linux.sh [options]
 
 Options:
-  --full               Install requirements-full.txt (default: requirements-mini.txt)
+  --full               Compatibility flag; current full profile equals the locked mini runtime
   --skip-frontend      Skip npm install in frontend
   --no-docker          Do not run docker compose
   --compose-file FILE  Compose file to use (default: docker-compose.yml)
-  --python-bin BIN     Python interpreter to use (must be >= 3.10)
+  --python-bin BIN     Python interpreter to use (must be 3.11 or 3.12)
   --force-config       Overwrite existing .env/.notification_config.json from templates
   -h, --help           Show this help
 
@@ -97,7 +98,7 @@ python_version_ok() {
   local py_bin="$1"
   "$py_bin" - <<'PY' >/dev/null 2>&1
 import sys
-sys.exit(0 if sys.version_info >= (3, 10) else 1)
+sys.exit(0 if (3, 11) <= sys.version_info[:2] < (3, 13) else 1)
 PY
 }
 
@@ -116,14 +117,14 @@ select_python_bin() {
       exit 1
     fi
     if ! python_version_ok "$PYTHON_BIN_OVERRIDE"; then
-      echo "Error: $PYTHON_BIN_OVERRIDE is $(python_version_text "$PYTHON_BIN_OVERRIDE"), but Python >= 3.10 is required." >&2
+      echo "Error: $PYTHON_BIN_OVERRIDE is $(python_version_text "$PYTHON_BIN_OVERRIDE"), but Python 3.11 or 3.12 is required." >&2
       exit 1
     fi
     echo "$PYTHON_BIN_OVERRIDE"
     return 0
   fi
 
-  local candidates=(python3.12 python3.11 python3.10 python3 python)
+  local candidates=(python3.11 python3.12 python3 python)
   local candidate
   for candidate in "${candidates[@]}"; do
     if command -v "$candidate" >/dev/null 2>&1 && python_version_ok "$candidate"; then
@@ -132,8 +133,8 @@ select_python_bin() {
     fi
   done
 
-  echo "Error: Python >= 3.10 not found." >&2
-  echo "Install Python 3.10+ and rerun, or pass --python-bin /path/to/python3.11" >&2
+  echo "Error: Python 3.11/3.12 not found." >&2
+  echo "Install Python 3.11 and rerun, or pass --python-bin /path/to/python3.11" >&2
   echo "Example (Ubuntu): sudo apt-get update && sudo apt-get install -y python3.11 python3.11-venv" >&2
   exit 1
 }
@@ -191,17 +192,13 @@ echo "==> Preparing Python environment"
 PYTHON_BIN="$(select_python_bin)"
 echo "[ok] using Python: $PYTHON_BIN ($(python_version_text "$PYTHON_BIN"))"
 
-"$PYTHON_BIN" -m venv --clear .venv
-VENV_PYTHON="$ROOT_DIR/.venv/bin/python"
-VENV_PIP="$ROOT_DIR/.venv/bin/pip"
+"$PYTHON_BIN" -m venv --clear "$VENV_DIR"
+VENV_PYTHON="$ROOT_DIR/$VENV_DIR/bin/python"
 
-"$VENV_PYTHON" -m pip install --upgrade pip setuptools wheel
+"$VENV_PYTHON" -m pip install --require-hashes -r requirements-dev.lock
+echo "[ok] installed requirements-dev.lock into $VENV_DIR"
 if [[ "$USE_FULL_REQUIREMENTS" -eq 1 ]]; then
-  "$VENV_PIP" install -r requirements-full.txt
-  echo "[ok] installed requirements-full.txt"
-else
-  "$VENV_PIP" install -r requirements-mini.txt
-  echo "[ok] installed requirements-mini.txt"
+  echo "[note] --full currently adds no packages; requirements-full.txt equals the mini runtime."
 fi
 
 if [[ "$NO_DOCKER" -eq 0 ]]; then
@@ -212,11 +209,10 @@ if [[ "$NO_DOCKER" -eq 0 ]]; then
     echo "Install Docker Compose v2 (docker compose) and rerun." >&2
     exit 1
   fi
-  docker compose -f "$COMPOSE_FILE" up -d --build postgres mcp-demo mcp-keycloak
+  docker compose -f "$COMPOSE_FILE" up -d --build postgres mcp-demo
 
   wait_for_container_health "mini-prod-postgres" 180
   wait_for_container_health "mini-prod-mcp-demo" 180
-  wait_for_container_health "mini-prod-mcp-keycloak" 180
 fi
 
 echo "==> Running Django migrations"
@@ -225,17 +221,17 @@ echo "==> Running Django migrations"
 if [[ "$SKIP_FRONTEND" -eq 0 ]]; then
   echo "==> Installing frontend dependencies"
   require_cmd npm
-  (cd frontend && npm install)
+  (cd frontend && npm ci)
 fi
 
-cat <<'EOF'
+cat <<EOF
 
 [done] Bootstrap complete.
 
 Next steps:
   1) Fill real secrets in .env and .notification_config.json
   2) Start backend:
-       source .venv/bin/activate
+       source "$VENV_DIR/bin/activate"
        python manage.py runserver
   3) Start frontend (in another shell):
        cd frontend
@@ -243,5 +239,5 @@ Next steps:
 
 Notes:
   - Do NOT commit .env or .notification_config.json with real secrets.
-  - If you need the full AI/RAG stack, rerun with --full.
+  - Release evidence requires the pinned runtime from this script.
 EOF

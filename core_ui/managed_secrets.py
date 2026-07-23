@@ -25,7 +25,6 @@ LLM_API_KEY_PROVIDERS = {
     "openai": "OPENAI_API_KEY",
     "claude": "ANTHROPIC_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
-    "fair": "FAIR_HYPERION_API_KEY",
     "ollama": "OLLAMA_API_KEY",
 }
 
@@ -44,17 +43,11 @@ def allow_secret_key_fallback() -> bool:
 
 
 def uses_dedicated_managed_secret_key() -> bool:
-    return bool(
-        (os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip()
-    )
+    return bool((os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip())
 
 
 def _build_fernet() -> Fernet:
-    seed = (
-        os.getenv("MANAGED_SECRET_KEY")
-        or os.getenv("APP_SECRET_ENCRYPTION_KEY")
-        or settings.SECRET_KEY
-    )
+    seed = os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or settings.SECRET_KEY
     digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode()).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
@@ -104,7 +97,9 @@ def list_undecryptable_secrets(limit: int = 500) -> list[str]:
     return broken
 
 
-def _upsert(namespace: str, object_id: int, payload: Any, *, key: str = "default", metadata: dict | None = None) -> ManagedSecret:
+def _upsert(
+    namespace: str, object_id: int, payload: Any, *, key: str = "default", metadata: dict | None = None
+) -> ManagedSecret:
     secret, _ = ManagedSecret.objects.update_or_create(
         namespace=namespace,
         object_id=int(object_id),

@@ -1,6 +1,7 @@
 """
 Base Tool Interface for WEU Agent System
 """
+
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 
 class ToolParameter(BaseModel):
     """Parameter definition for a tool"""
+
     name: str
     type: str  # "string", "number", "boolean", "array", "object"
     description: str
@@ -18,6 +20,7 @@ class ToolParameter(BaseModel):
 
 class ToolMetadata(BaseModel):
     """Metadata describing a tool"""
+
     name: str
     description: str
     parameters: list[ToolParameter] = Field(default_factory=list)
@@ -52,8 +55,8 @@ class BaseTool(ABC):
                     "type": p.type,
                     "description": p.description,
                     "required": p.required,
-                    "default": p.default
+                    "default": p.default,
                 }
                 for p in self._metadata.parameters
-            ]
+            ],
         }

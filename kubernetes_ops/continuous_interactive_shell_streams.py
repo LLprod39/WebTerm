@@ -32,7 +32,9 @@ from kubernetes_ops.services.provider_interactive_shell_streams import (
 )
 
 
-async def run_provider_cluster_terminal_stream(consumer, params: dict[str, str], input_queue: asyncio.Queue[str]) -> None:
+async def run_provider_cluster_terminal_stream(
+    consumer, params: dict[str, str], input_queue: asyncio.Queue[str]
+) -> None:
     await _run_provider_interactive_shell_stream(consumer, params, input_queue, operation="cluster_terminal")
 
 
@@ -40,11 +42,17 @@ async def run_provider_node_debug_stream(consumer, params: dict[str, str], input
     await _run_provider_interactive_shell_stream(consumer, params, input_queue, operation="node_debug")
 
 
-async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str], input_queue: asyncio.Queue[str], *, operation: str) -> None:
+async def _run_provider_interactive_shell_stream(
+    consumer, params: dict[str, str], input_queue: asyncio.Queue[str], *, operation: str
+) -> None:
     max_frames = bounded_stream_int(params.get("max_frames"), default=250, minimum=1, maximum=2000)
     idle_timeout = bounded_stream_float(params.get("idle_timeout_seconds"), default=300.0, minimum=5.0, maximum=1800.0)
-    heartbeat_interval = bounded_stream_float(params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0)
-    empty_read_sleep = bounded_stream_float(params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0)
+    heartbeat_interval = bounded_stream_float(
+        params.get("heartbeat_interval_seconds"), default=10.0, minimum=1.0, maximum=60.0
+    )
+    empty_read_sleep = bounded_stream_float(
+        params.get("empty_read_sleep_seconds"), default=0.25, minimum=0.05, maximum=5.0
+    )
     executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"k8s-{operation}-stream")
     loop = asyncio.get_running_loop()
     stream_handle = None
@@ -88,7 +96,14 @@ async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str
             fail_fn = fail_node_debug_stream
             path_key = "_node_debug_path"
             target = context.get("target", {})
-        await consumer.send_json({"type": started_type, "stream_id": context["stream_id"], "stream_type": operation, "payload": _public_context(context)})
+        await consumer.send_json(
+            {
+                "type": started_type,
+                "stream_id": context["stream_id"],
+                "stream_type": operation,
+                "payload": _public_context(context),
+            }
+        )
         stream_handle = await loop.run_in_executor(
             executor,
             lambda: open_provider_interactive_shell_stream(
@@ -106,13 +121,26 @@ async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str
             if monotonic() - _started_monotonic(context) >= idle_timeout:
                 close_reason = "idle_timeout"
                 break
-            session_state = await database_sync_to_async(active_admin_stream_session_status)(session_pk=context["_session_pk"])
+            session_state = await database_sync_to_async(active_admin_stream_session_status)(
+                session_pk=context["_session_pk"]
+            )
             if not session_state.get("active"):
                 close_reason = str(session_state.get("code") or "admin_session_not_active")
                 break
-            await _drain_stdin(consumer, stream_handle, input_queue, loop, executor, context=context, sequence=frame_index, operation=operation)
+            await _drain_stdin(
+                consumer,
+                stream_handle,
+                input_queue,
+                loop,
+                executor,
+                context=context,
+                sequence=frame_index,
+                operation=operation,
+            )
             try:
-                event = await loop.run_in_executor(executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_INTERACTIVE_SHELL_BYTES))
+                event = await loop.run_in_executor(
+                    executor, lambda: stream_handle.read_event(max_bytes=MAX_PROVIDER_INTERACTIVE_SHELL_BYTES)
+                )
             except KubernetesProviderError as exc:
                 finalized = True
                 summary = await database_sync_to_async(fail_fn)(
@@ -124,12 +152,25 @@ async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str
                     stdout_count=stdout_count,
                     stderr_count=stderr_count,
                 )
-                await consumer.send_json({"type": error_type, "code": f"provider_{operation}_stream_error", "message": str(exc), "summary": summary})
+                await consumer.send_json(
+                    {
+                        "type": error_type,
+                        "code": f"provider_{operation}_stream_error",
+                        "message": str(exc),
+                        "summary": summary,
+                    }
+                )
                 await consumer.close(code=4400)
                 return
             if event.stream == "heartbeat" and not event.eof:
                 if monotonic() - last_heartbeat >= heartbeat_interval:
-                    await consumer.send_json({"type": f"{operation}_heartbeat", "stream_id": context["stream_id"], "frame_index": frame_index})
+                    await consumer.send_json(
+                        {
+                            "type": f"{operation}_heartbeat",
+                            "stream_id": context["stream_id"],
+                            "frame_index": frame_index,
+                        }
+                    )
                     last_heartbeat = monotonic()
                 await asyncio.sleep(empty_read_sleep)
                 continue
@@ -173,11 +214,15 @@ async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str
         if stream_handle is not None:
             await loop.run_in_executor(executor, stream_handle.close)
             stream_handle = None
-        await consumer.send_json({"type": stopped_type, "stream_id": context["stream_id"], "stream_type": operation, "summary": summary})
+        await consumer.send_json(
+            {"type": stopped_type, "stream_id": context["stream_id"], "stream_type": operation, "summary": summary}
+        )
         await consumer.close(code=1000)
     except asyncio.CancelledError:
         if context and not finalized:
-            complete_fn = complete_cluster_terminal_stream if operation == "cluster_terminal" else complete_node_debug_stream
+            complete_fn = (
+                complete_cluster_terminal_stream if operation == "cluster_terminal" else complete_node_debug_stream
+            )
             await database_sync_to_async(complete_fn)(
                 user=consumer.scope["user"],
                 action_id=context["action"]["id"],
@@ -199,7 +244,17 @@ async def _run_provider_interactive_shell_stream(consumer, params: dict[str, str
         executor.shutdown(wait=False, cancel_futures=True)
 
 
-async def _drain_stdin(consumer, stream_handle, input_queue: asyncio.Queue[str], loop, executor, *, context: dict, sequence: int, operation: str) -> None:
+async def _drain_stdin(
+    consumer,
+    stream_handle,
+    input_queue: asyncio.Queue[str],
+    loop,
+    executor,
+    *,
+    context: dict,
+    sequence: int,
+    operation: str,
+) -> None:
     while True:
         try:
             data = input_queue.get_nowait()

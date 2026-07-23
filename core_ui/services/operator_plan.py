@@ -26,9 +26,7 @@ def normalize_plan(raw: dict[str, Any] | None) -> dict[str, Any] | None:
                 }
             )
         else:
-            steps.append(
-                {"id": i + 1, "text": str(step)[:400], "tool": "", "input": {}, "status": "pending"}
-            )
+            steps.append({"id": i + 1, "text": str(step)[:400], "tool": "", "input": {}, "status": "pending"})
     if not steps:
         return None
     return {
@@ -134,7 +132,9 @@ def advance_plan_on_action(
         return plan
     target["status"] = "done" if ok else "failed"
     if all(s.get("status") in {"done", "completed", "failed", "skipped"} for s in steps):
-        plan["status"] = "completed" if all(s.get("status") in {"done", "completed", "skipped"} for s in steps) else "partial"
+        plan["status"] = (
+            "completed" if all(s.get("status") in {"done", "completed", "skipped"} for s in steps) else "partial"
+        )
     else:
         plan["status"] = "running"
     return plan

@@ -29,7 +29,9 @@ def api_kubernetes_workload_detail(request, workload_id: str):
     def handler():
         workload = workload_for_value(workload_id)
         if workload is None:
-            return JsonResponse({"success": False, "error": "Workload not found.", "code": "workload_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Workload not found.", "code": "workload_not_found"}, status=404
+            )
         payload = build_workload_detail(workload, user=request.user)
         K8sAuditEvent.objects.create(
             user=request.user,

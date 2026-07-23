@@ -120,9 +120,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     list_snapshots = client.get(f"/servers/api/{server.id}/memory/snapshots/")
     assert list_snapshots.status_code == 200
     assert list_snapshots.json()["success"] is True
-    snapshot_payload = next(
-        item for item in list_snapshots.json()["items"] if item["id"] == user_snapshot.id
-    )
+    snapshot_payload = next(item for item in list_snapshots.json()["items"] if item["id"] == user_snapshot.id)
     assert snapshot_payload["title"] == "Server profile"
     assert snapshot_payload["kind"] == "canonical"
     assert isinstance(snapshot_payload["freshness"], float)
@@ -143,9 +141,7 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     )
     list_snapshots = client.get(f"/servers/api/{server.id}/memory/snapshots/")
     assert list_snapshots.status_code == 200
-    ai_note_payload = next(
-        item for item in list_snapshots.json()["items"] if item["id"] == ai_note_snapshot.id
-    )
+    ai_note_payload = next(item for item in list_snapshots.json()["items"] if item["id"] == ai_note_snapshot.id)
     assert ai_note_payload["kind"] == "ai_note"
 
     update_snapshot = client.post(

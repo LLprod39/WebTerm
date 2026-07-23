@@ -175,12 +175,7 @@ def test_build_metrics_v2_requires_core_sections():
 
 
 def test_build_metrics_v2_ntp_key_value_form():
-    raw = (
-        "==WT2:BEGIN==\n"
-        "==WT2:LOAD==\n0.10 0.10 0.10 1/50 100\n"
-        "==WT2:NTP==\nNTPSynchronized=yes\n"
-        "==WT2:END==\n"
-    )
+    raw = "==WT2:BEGIN==\n==WT2:LOAD==\n0.10 0.10 0.10 1/50 100\n==WT2:NTP==\nNTPSynchronized=yes\n==WT2:END==\n"
     metrics = build_metrics_v2(raw)
     assert metrics is not None
     assert metrics["ntp_synchronized"] is True

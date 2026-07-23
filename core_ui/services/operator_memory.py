@@ -11,9 +11,9 @@ from loguru import logger
 def memory_hints_for_server(server_id: int, *, limit: int = 5) -> list[str]:
     """Return short human-readable memory lines for a server (best-effort)."""
     try:
-        from servers.services.memory_service import get_memory_overview
+        from app.agent_kernel import operator_provider_registry
 
-        overview = get_memory_overview(int(server_id))
+        overview = operator_provider_registry.memory_overview(int(server_id))
     except Exception as exc:  # noqa: BLE001
         logger.debug("operator memory overview skipped for %s: %s", server_id, exc)
         return []
@@ -85,37 +85,17 @@ def _ingest_lesson_to_server(
     importance: float = 0.85,
     run_dream: bool = False,
 ) -> dict[str, Any]:
-    from servers.adapters.memory_store import DjangoServerMemoryStore
+    from app.agent_kernel import operator_provider_registry
 
-    store = DjangoServerMemoryStore()
-    raw_text = f"{title.strip()}\n\n{body.strip()}".strip()
-    event_id = store._ingest_event_sync(
-        int(server_id),
-        source_kind="operator_chat",
-        actor_kind="operator",
-        source_ref=f"operator-chat:{chat_id or 'adhoc'}:{title[:40]}",
-        session_id=f"operator-chat:{chat_id}" if chat_id else "",
-        event_type="operator_lesson",
-        raw_text=raw_text[:8000],
-        structured_payload={
-            "title": title[:200],
-            "lesson": body[:4000],
-            "chat_id": chat_id,
-            "source": "operator_chat",
-        },
-        importance_hint=max(0.5, min(float(importance or 0.85), 1.0)),
+    return operator_provider_registry.ingest_operator_lesson(
+        server_id=int(server_id),
+        title=title,
+        body=body,
         actor_user_id=actor_user_id,
-        force_compact=True,
+        chat_id=chat_id,
+        importance=importance,
+        run_dream=run_dream,
     )
-    dream_result = None
-    if run_dream:
-        with contextlib.suppress(Exception):
-            dream_result = store._run_dream_cycle_sync(int(server_id), job_kind="nearline", force=True)
-    return {
-        "server_id": int(server_id),
-        "event_id": event_id,
-        "dream": dream_result,
-    }
 
 
 def save_lesson_from_operator(
@@ -135,11 +115,13 @@ def save_lesson_from_operator(
     if not server_ids:
         raise ValueError("server_ids is required (at least one server)")
 
-    from servers.views.server_helpers import _accessible_servers_queryset
+    from app.agent_kernel import operator_provider_registry
 
     accessible = {
         int(sid)
-        for sid in _accessible_servers_queryset(user).filter(pk__in=server_ids).values_list("id", flat=True)
+        for sid in operator_provider_registry.accessible_servers_queryset(user)
+        .filter(pk__in=server_ids)
+        .values_list("id", flat=True)
     }
     denied = [sid for sid in server_ids if int(sid) not in accessible]
     if denied:
@@ -188,8 +170,7 @@ def promote_chat_to_memory(
         raise LookupError("Chat not found")
 
     messages = list(
-        ChatMessage.objects.filter(session=session)
-        .order_by("-id")[: max(5, min(int(max_messages or 40), 80))]
+        ChatMessage.objects.filter(session=session).order_by("-id")[: max(5, min(int(max_messages or 40), 80))]
     )
     messages.reverse()
 
@@ -210,9 +191,7 @@ def promote_chat_to_memory(
     resolved_ids = list(dict.fromkeys(resolved_ids))[:20]
 
     if not resolved_ids:
-        raise ValueError(
-            "server_ids required — pin servers in chat or pass server_ids for memory binding"
-        )
+        raise ValueError("server_ids required — pin servers in chat or pass server_ids for memory binding")
 
     lesson_text = str(lesson or "").strip()
     if not lesson_text:

@@ -64,12 +64,6 @@ __all__ = [
 ]
 
 
-
-
-
-
-
-
 async def get_linux_ui_settings(server: Server, *, secret: str = "") -> dict[str, Any]:
     raw = await _run_command(server, secret=secret, command=SETTINGS_COMMAND)
     sections = _parse_marked_sections(raw)

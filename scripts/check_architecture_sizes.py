@@ -16,9 +16,7 @@ from architecture_guard_size import DefaultSizeValidator
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Check architecture fitness: file-size limits and import boundaries."
-    )
+    parser = argparse.ArgumentParser(description="Check architecture fitness: file-size limits and import boundaries.")
     parser.add_argument(
         "--config",
         default="pyproject.toml",

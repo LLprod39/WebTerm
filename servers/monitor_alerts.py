@@ -3,6 +3,7 @@
 Extracted from monitor.py to keep modules under the size limit.
 Re-exported from servers.monitor for backward compatibility (tests import it there).
 """
+
 from __future__ import annotations
 
 from asgiref.sync import sync_to_async as _s2a
@@ -59,6 +60,7 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
 
         existing = await _find_existing(alert_type, fingerprint)
         if existing is not None:
+
             def _update() -> None:
                 existing.severity = severity
                 existing.title = title
@@ -107,19 +109,43 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
     disk = metrics.get("disk_percent", 0)
 
     if cpu >= CPU_CRIT:
-        await _create(ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_CRITICAL, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}")
+        await _create(
+            ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_CRITICAL, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}"
+        )
     elif cpu >= CPU_WARN:
-        await _create(ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_WARNING, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}")
+        await _create(
+            ServerAlert.TYPE_CPU, ServerAlert.SEVERITY_WARNING, f"CPU {cpu}%", f"Load: {metrics.get('load_1m', '?')}"
+        )
 
     if mem >= MEM_CRIT:
-        await _create(ServerAlert.TYPE_MEMORY, ServerAlert.SEVERITY_CRITICAL, f"RAM {mem}%", f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB")
+        await _create(
+            ServerAlert.TYPE_MEMORY,
+            ServerAlert.SEVERITY_CRITICAL,
+            f"RAM {mem}%",
+            f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB",
+        )
     elif mem >= MEM_WARN:
-        await _create(ServerAlert.TYPE_MEMORY, ServerAlert.SEVERITY_WARNING, f"RAM {mem}%", f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB")
+        await _create(
+            ServerAlert.TYPE_MEMORY,
+            ServerAlert.SEVERITY_WARNING,
+            f"RAM {mem}%",
+            f"{metrics.get('memory_used_mb', '?')}MB / {metrics.get('memory_total_mb', '?')}MB",
+        )
 
     if disk >= DISK_CRIT:
-        await _create(ServerAlert.TYPE_DISK, ServerAlert.SEVERITY_CRITICAL, f"Disk {disk}%", f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB")
+        await _create(
+            ServerAlert.TYPE_DISK,
+            ServerAlert.SEVERITY_CRITICAL,
+            f"Disk {disk}%",
+            f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB",
+        )
     elif disk >= DISK_WARN:
-        await _create(ServerAlert.TYPE_DISK, ServerAlert.SEVERITY_WARNING, f"Disk {disk}%", f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB")
+        await _create(
+            ServerAlert.TYPE_DISK,
+            ServerAlert.SEVERITY_WARNING,
+            f"Disk {disk}%",
+            f"{metrics.get('disk_used_gb', '?')}GB / {metrics.get('disk_total_gb', '?')}GB",
+        )
 
     if deep_data:
         failed = deep_data.get("failed_services", [])
@@ -153,7 +179,11 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
         problem_containers = docker_data.get("problem_containers", []) if isinstance(docker_data, dict) else []
         active_docker_fingerprints: set[str] = set()
         if problem_containers:
-            container_names = [str(item.get("name") or "").strip() for item in problem_containers if str(item.get("name") or "").strip()]
+            container_names = [
+                str(item.get("name") or "").strip()
+                for item in problem_containers
+                if str(item.get("name") or "").strip()
+            ]
             fingerprint = "docker-down:" + ",".join(sorted(container_names))
             active_docker_fingerprints.add(fingerprint)
             await _create(
@@ -161,8 +191,7 @@ async def _create_alerts(server: Server, metrics: dict, deep_data: dict | None =
                 ServerAlert.SEVERITY_CRITICAL,
                 f"Docker-контейнер недоступен: {', '.join(container_names[:3])}",
                 "\n".join(
-                    f"{item.get('name')}: {item.get('status') or item.get('state')}"
-                    for item in problem_containers[:10]
+                    f"{item.get('name')}: {item.get('status') or item.get('state')}" for item in problem_containers[:10]
                 ),
                 {
                     "service_kind": "docker_container",

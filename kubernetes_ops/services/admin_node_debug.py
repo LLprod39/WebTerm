@@ -51,7 +51,9 @@ def prepare_node_debug_start(*, user, session: K8sAdminSession, node_name: str, 
         "payload_stored": False,
         "transport_contract": transport_contract,
     }
-    action = _record_node_debug_action(user=user, session=session, node_name=node, request_summary=request_summary, response_summary=response_summary)
+    action = _record_node_debug_action(
+        user=user, session=session, node_name=node, request_summary=request_summary, response_summary=response_summary
+    )
     recording = create_interactive_recording(
         user=user,
         session=session,
@@ -61,7 +63,9 @@ def prepare_node_debug_start(*, user, session: K8sAdminSession, node_name: str, 
         status=K8sAdminRecording.STATUS_BLOCKED,
         summary=response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_node_debug(
         user=user,
@@ -92,7 +96,9 @@ def prepare_node_debug_start(*, user, session: K8sAdminSession, node_name: str, 
         "action": {"id": str(action.action_id), "status": action.status},
         "policy": {
             "node_debug_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DEBUG_ENABLED", False)),
-            "session_recording_enabled": bool(getattr(settings, "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED", False)),
+            "session_recording_enabled": bool(
+                getattr(settings, "KUBERNETES_ADMIN_NODE_DEBUG_RECORDING_ENABLED", False)
+            ),
             "requires_break_glass_session": True,
             "requires_approval": True,
             "requires_node_scope": True,
@@ -156,7 +162,9 @@ def prepare_node_debug_stream_context(
         policy=recording_policy,
         summary=response_summary,
     )
-    action.response_summary = sanitize_metadata({**(action.response_summary or {}), "recording": recording_public_payload(recording)})
+    action.response_summary = sanitize_metadata(
+        {**(action.response_summary or {}), "recording": recording_public_payload(recording)}
+    )
     action.save(update_fields=["response_summary", "updated_at"])
     _audit_node_debug(
         user=user,
@@ -246,11 +254,25 @@ def complete_node_debug_stream(
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_node_debug(user=user, session=session, action="k8s.admin_node_debug.stream_stopped", payload={"stream_id": stream_id, **summary})
+    _audit_node_debug(
+        user=user,
+        session=session,
+        action="k8s.admin_node_debug.stream_stopped",
+        payload={"stream_id": stream_id, **summary},
+    )
     return summary
 
 
-def fail_node_debug_stream(*, user, action_id: str, session_pk: int, stream_id: str, error_code: str, stdout_count: int = 0, stderr_count: int = 0) -> dict[str, Any]:
+def fail_node_debug_stream(
+    *,
+    user,
+    action_id: str,
+    session_pk: int,
+    stream_id: str,
+    error_code: str,
+    stdout_count: int = 0,
+    stderr_count: int = 0,
+) -> dict[str, Any]:
     action = K8sAdminAction.objects.select_related("session", "cluster").get(action_id=action_id)
     action.status = K8sAdminAction.STATUS_FAILED
     summary = {
@@ -272,7 +294,12 @@ def fail_node_debug_stream(*, user, action_id: str, session_pk: int, stream_id: 
         action.response_summary = sanitize_metadata(summary)
         action.save(update_fields=["response_summary", "updated_at"])
     session = K8sAdminSession.objects.select_related("cluster").get(pk=session_pk)
-    _audit_node_debug(user=user, session=session, action="k8s.admin_node_debug.stream_failed", payload={"stream_id": stream_id, **summary})
+    _audit_node_debug(
+        user=user,
+        session=session,
+        action="k8s.admin_node_debug.stream_failed",
+        payload={"stream_id": stream_id, **summary},
+    )
     return summary
 
 
@@ -282,7 +309,11 @@ def reject_node_debug_stop(*, user, session: K8sAdminSession, action_id: str = "
         user=user,
         session=session,
         action="k8s.admin_node_debug.stop_rejected",
-        payload={"action_id": str(action_id or ""), "reason": str(reason or "")[:1000], "code": "node_debug_not_running"},
+        payload={
+            "action_id": str(action_id or ""),
+            "reason": str(reason or "")[:1000],
+            "code": "node_debug_not_running",
+        },
     )
     raise AdminResourceError("Node debug is not running.", code="node_debug_not_running", status=409)
 
@@ -293,14 +324,20 @@ def _validate_node_debug_session(*, user, session: K8sAdminSession) -> K8sAdminS
         raise AdminResourceError("Kubernetes break-glass access is required.", code="break_glass_required", status=403)
     session = refresh_admin_session_state(session)
     if session.status != K8sAdminSession.STATUS_ACTIVE:
-        raise AdminResourceError("Active break-glass admin session is required.", code="admin_break_glass_session_not_active", status=403)
+        raise AdminResourceError(
+            "Active break-glass admin session is required.", code="admin_break_glass_session_not_active", status=403
+        )
     if session.mode != K8sAdminSession.MODE_BREAK_GLASS:
-        raise AdminResourceError("Node debug requires a break-glass admin session.", code="break_glass_session_required", status=403)
+        raise AdminResourceError(
+            "Node debug requires a break-glass admin session.", code="break_glass_session_required", status=403
+        )
     if session.user_id != getattr(user, "id", None):
         raise AdminResourceError("Admin session not found.", code="admin_session_not_found", status=404)
     allowed_kinds = {str(item).lower() for item in session.allowed_kinds or []}
     if "*" not in allowed_kinds and "node" not in allowed_kinds:
-        raise AdminResourceError("Admin session does not cover node debug.", code="admin_session_kind_denied", status=403)
+        raise AdminResourceError(
+            "Admin session does not cover node debug.", code="admin_session_kind_denied", status=403
+        )
     assert_admin_session_approved(session=session, action=NODE_DEBUG_VERB)
     return session
 

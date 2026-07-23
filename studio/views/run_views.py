@@ -61,9 +61,7 @@ def _resolve_run_node_id(node_states: dict, requested_node_id: str) -> str | Non
         return None
 
     matches = [
-        str(node_id)
-        for node_id in node_states
-        if _normalize_node_lookup_key(str(node_id)) == normalized_requested
+        str(node_id) for node_id in node_states if _normalize_node_lookup_key(str(node_id)) == normalized_requested
     ]
     if len(matches) == 1:
         return matches[0]

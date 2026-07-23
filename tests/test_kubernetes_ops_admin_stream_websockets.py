@@ -60,7 +60,9 @@ def _expire_stream_session_after_log_start(*args, **kwargs) -> dict:
 
 def _close_stream_session_after_watch_start(*args, **kwargs) -> dict:
     stream = real_start_admin_watch_stream(*args, **kwargs)
-    K8sAdminSession.objects.filter(pk=stream["session_pk"]).update(status=K8sAdminSession.STATUS_CLOSED, closed_at=timezone.now())
+    K8sAdminSession.objects.filter(pk=stream["session_pk"]).update(
+        status=K8sAdminSession.STATUS_CLOSED, closed_at=timezone.now()
+    )
     return stream
 
 
@@ -81,19 +83,23 @@ async def test_log_follow_websocket_stops_when_session_expires_before_next_batch
         f"?follow=1&cluster_id={cluster_id}&namespace=payments&pod=payments-api-abc123&max_batches=2"
     )
 
-    with patch("kubernetes_ops.consumers.start_admin_log_stream", side_effect=_expire_stream_session_after_log_start):
-        with patch("kubernetes_ops.consumers.get_admin_pod_log_snapshot") as snapshot:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch("kubernetes_ops.consumers.start_admin_log_stream", side_effect=_expire_stream_session_after_log_start),
+        patch("kubernetes_ops.consumers.get_admin_pod_log_snapshot") as snapshot,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert stopped["type"] == "stream_stopped"
     assert stopped["summary"]["close_reason"] == "admin_session_expired"
     assert stopped["summary"]["session_status"] == K8sAdminSession.STATUS_EXPIRED
     snapshot.assert_not_called()
-    stopped_events = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.logs_stopped").count)()
+    stopped_events = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_stream.logs_stopped").count
+    )()
     assert stopped_events == 1
 
 
@@ -106,19 +112,23 @@ async def test_watch_follow_websocket_stops_when_session_is_closed_before_next_b
         f"?follow=1&cluster_id={cluster_id}&api_version=apps/v1&kind=Deployment&namespace=payments&max_batches=2"
     )
 
-    with patch("kubernetes_ops.consumers.start_admin_watch_stream", side_effect=_close_stream_session_after_watch_start):
-        with patch("kubernetes_ops.consumers.get_admin_resource_watch_preview") as snapshot:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch("kubernetes_ops.consumers.start_admin_watch_stream", side_effect=_close_stream_session_after_watch_start),
+        patch("kubernetes_ops.consumers.get_admin_resource_watch_preview") as snapshot,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert stopped["type"] == "stream_stopped"
     assert stopped["summary"]["close_reason"] == "admin_session_not_active"
     assert stopped["summary"]["session_status"] == K8sAdminSession.STATUS_CLOSED
     snapshot.assert_not_called()
-    stopped_events = await database_sync_to_async(K8sAuditEvent.objects.filter(action="k8s.admin_stream.watch_stopped").count)()
+    stopped_events = await database_sync_to_async(
+        K8sAuditEvent.objects.filter(action="k8s.admin_stream.watch_stopped").count
+    )()
     assert stopped_events == 1
 
 
@@ -145,7 +155,9 @@ async def test_watch_follow_websocket_advances_resource_version_between_batches(
             "target": {"api_version": "apps/v1", "kind": "Deployment", "namespace": "payments", "name": ""},
             "source": "provider_watch_preview",
             "available": True,
-            "events": [{"type": "MODIFIED", "resource_version": "43", "object": {"metadata": {"resourceVersion": "43"}}}],
+            "events": [
+                {"type": "MODIFIED", "resource_version": "43", "object": {"metadata": {"resourceVersion": "43"}}}
+            ],
             "event_count": 1,
             "truncated": False,
             "latest_resource_version": "43",
@@ -253,13 +265,15 @@ async def test_log_follow_websocket_can_use_provider_stream_batch_reader():
         "truncated": False,
     }
 
-    with patch("kubernetes_ops.consumers.get_admin_pod_log_stream_batch", return_value=payload) as stream_batch:
-        with patch("kubernetes_ops.consumers.get_admin_pod_log_snapshot") as snapshot:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            batch = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch("kubernetes_ops.consumers.get_admin_pod_log_stream_batch", return_value=payload) as stream_batch,
+        patch("kubernetes_ops.consumers.get_admin_pod_log_snapshot") as snapshot,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        batch = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert batch["type"] == "log_batch"
@@ -308,13 +322,19 @@ class _FakeContinuousWatchStream:
                         "object": {
                             "apiVersion": "apps/v1",
                             "kind": "Deployment",
-                            "metadata": {"name": "payments-api", "resourceVersion": "42", "annotations": {"password": "raw-secret"}},
+                            "metadata": {
+                                "name": "payments-api",
+                                "resourceVersion": "42",
+                                "annotations": {"password": "raw-secret"},
+                            },
                         },
                     }
                 ],
                 eof=False,
             ),
-            ProviderWatchStreamBatch(events=[{"type": "BOOKMARK", "object": {"metadata": {"resourceVersion": "43"}}}], eof=True),
+            ProviderWatchStreamBatch(
+                events=[{"type": "BOOKMARK", "object": {"metadata": {"resourceVersion": "43"}}}], eof=True
+            ),
         ]
 
     def read_batch(self, *, max_events: int, max_bytes: int):
@@ -347,14 +367,19 @@ async def test_log_follow_websocket_can_use_provider_continuous_stream():
     )
     fake_stream = _FakeContinuousLogStream()
 
-    with patch("kubernetes_ops.continuous_log_streams.open_provider_log_line_stream", return_value=fake_stream) as open_stream:
-        with patch("kubernetes_ops.consumers.get_admin_pod_log_stream_batch") as stream_batch:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            first_batch = await communicator.receive_json_from(timeout=1)
-            second_batch = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch(
+            "kubernetes_ops.continuous_log_streams.open_provider_log_line_stream",
+            return_value=fake_stream,
+        ) as open_stream,
+        patch("kubernetes_ops.consumers.get_admin_pod_log_stream_batch") as stream_batch,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        first_batch = await communicator.receive_json_from(timeout=1)
+        second_batch = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert first_batch["payload"]["source"] == "provider_stream_continuous"
@@ -380,14 +405,19 @@ async def test_watch_follow_websocket_can_use_provider_continuous_stream():
     )
     fake_stream = _FakeContinuousWatchStream()
 
-    with patch("kubernetes_ops.continuous_watch_streams.open_provider_watch_event_stream", return_value=fake_stream) as open_stream:
-        with patch("kubernetes_ops.consumers.get_admin_resource_watch_stream_batch") as stream_batch:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            first_batch = await communicator.receive_json_from(timeout=1)
-            second_batch = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch(
+            "kubernetes_ops.continuous_watch_streams.open_provider_watch_event_stream",
+            return_value=fake_stream,
+        ) as open_stream,
+        patch("kubernetes_ops.consumers.get_admin_resource_watch_stream_batch") as stream_batch,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        first_batch = await communicator.receive_json_from(timeout=1)
+        second_batch = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert first_batch["type"] == "watch_batch"
@@ -474,13 +504,15 @@ async def test_watch_follow_websocket_can_use_provider_stream_batch_reader():
         "policy": {"streaming": True},
     }
 
-    with patch("kubernetes_ops.consumers.get_admin_resource_watch_stream_batch", return_value=payload) as stream_batch:
-        with patch("kubernetes_ops.consumers.get_admin_resource_watch_preview") as preview:
-            communicator = await _connect(path, user)
-            started = await communicator.receive_json_from(timeout=1)
-            batch = await communicator.receive_json_from(timeout=1)
-            stopped = await communicator.receive_json_from(timeout=1)
-            await communicator.disconnect()
+    with (
+        patch("kubernetes_ops.consumers.get_admin_resource_watch_stream_batch", return_value=payload) as stream_batch,
+        patch("kubernetes_ops.consumers.get_admin_resource_watch_preview") as preview,
+    ):
+        communicator = await _connect(path, user)
+        started = await communicator.receive_json_from(timeout=1)
+        batch = await communicator.receive_json_from(timeout=1)
+        stopped = await communicator.receive_json_from(timeout=1)
+        await communicator.disconnect()
 
     assert started["type"] == "stream_started"
     assert batch["type"] == "watch_batch"

@@ -86,8 +86,7 @@ def production_write_restricted_credential_gate_report(
 ) -> dict[str, object]:
     environment = _release_environment(target_environment)
     required = bool(
-        environment in PRODUCTION_ENVIRONMENTS
-        and production_approval_required(cluster=cluster, namespace=namespace)
+        environment in PRODUCTION_ENVIRONMENTS and production_approval_required(cluster=cluster, namespace=namespace)
     )
     present = bool(_restricted_credential_evidence_ref(evidence_ref))
     ready = bool(not required or present)
@@ -123,4 +122,10 @@ def _namespace_requires_approval(namespace: str) -> bool:
     value = str(namespace or "").strip().lower()
     if not value:
         return False
-    return value in DEFAULT_PRODUCTION_NAMESPACES or value.startswith("prod-") or value.endswith("-prod") or value.startswith("production-") or value.endswith("-production")
+    return (
+        value in DEFAULT_PRODUCTION_NAMESPACES
+        or value.startswith("prod-")
+        or value.endswith("-prod")
+        or value.startswith("production-")
+        or value.endswith("-production")
+    )

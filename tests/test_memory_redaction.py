@@ -1,4 +1,5 @@
 """Tests for app.agent_kernel.memory.redaction — secret redaction layer."""
+
 from __future__ import annotations
 
 from app.agent_kernel.memory.redaction import redact_for_storage, redact_text
@@ -69,11 +70,7 @@ class TestRedactText:
         assert sum(result.report.values()) == 0
 
     def test_multiple_secrets_in_one_text(self):
-        text = (
-            "DB: postgres://root:pass@host/db\n"
-            "Token: Bearer eyJhbGci.payload.sig\n"
-            "AWS: AKIAIOSFODNN7EXAMPLE\n"
-        )
+        text = "DB: postgres://root:pass@host/db\nToken: Bearer eyJhbGci.payload.sig\nAWS: AKIAIOSFODNN7EXAMPLE\n"
         result = redact_text(text)
         assert "root:pass" not in result.text
         assert "eyJhbGci" not in result.text
@@ -98,9 +95,7 @@ class TestRedactForStorage:
             "password": "s3cret",
             "nested": {"api_key": "abc123"},
         }
-        redacted_text, redacted_payload, report, hashes = redact_for_storage(
-            raw_text=text, payload=payload
-        )
+        redacted_text, redacted_payload, report, hashes = redact_for_storage(raw_text=text, payload=payload)
         # Sensitive payload keys should be masked
         assert redacted_payload.get("password") != "s3cret"
         assert redacted_payload.get("nested", {}).get("api_key") != "abc123"
@@ -108,9 +103,7 @@ class TestRedactForStorage:
         assert redacted_payload.get("command") == "echo hello"
 
     def test_empty_inputs(self):
-        redacted_text, redacted_payload, report, hashes = redact_for_storage(
-            raw_text="", payload={}
-        )
+        redacted_text, redacted_payload, report, hashes = redact_for_storage(raw_text="", payload={})
         assert redacted_text == ""
         assert redacted_payload == {}
         assert report == {}

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import timezone as datetime_timezone
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -174,7 +174,9 @@ def _control_contracts(*, transport: dict[str, Any], production: bool) -> list[d
     controls: list[dict[str, Any]] = []
     for spec in CONTROL_CONTRACTS:
         control_id = str(spec["id"])
-        required = _control_required(control_id, production=production, enabled_count=enabled_count, port_forward_required=port_forward_required)
+        required = _control_required(
+            control_id, production=production, enabled_count=enabled_count, port_forward_required=port_forward_required
+        )
         setting = str(spec.get("setting") or "")
         present = _control_present(control_id, transport=transport, restricted_ref_present=restricted_ref_present)
         controls.append(
@@ -230,7 +232,9 @@ def _coverage_summary(controls: list[dict[str, Any]]) -> dict[str, Any]:
     control_ids = [str(item.get("id") or "") for item in controls]
     expected_ids = [str(item["id"]) for item in CONTROL_CONTRACTS]
     complete = control_ids == expected_ids and all(
-        bool(item.get("required_items")) and item.get("payload_stored") is False and item.get("sensitive_values_stored") is False
+        bool(item.get("required_items"))
+        and item.get("payload_stored") is False
+        and item.get("sensitive_values_stored") is False
         for item in controls
     )
     return {
@@ -273,7 +277,9 @@ def _provider_contract_required_transport_count(transports: list[dict[str, Any]]
 
 
 def _provider_contract_ready(transport: dict[str, Any]) -> bool:
-    provider_contract = transport.get("provider_contract") if isinstance(transport.get("provider_contract"), dict) else None
+    provider_contract = (
+        transport.get("provider_contract") if isinstance(transport.get("provider_contract"), dict) else None
+    )
     return provider_contract is None or not provider_contract.get("blockers")
 
 
@@ -313,11 +319,14 @@ def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
     if checked_at is None:
         return None, "checked_at is invalid"
     if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=datetime_timezone.utc)
+        checked_at = timezone.make_aware(checked_at, timezone=UTC)
     age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
     max_age_seconds = _max_age_seconds()
     if age_seconds > max_age_seconds:
-        return age_seconds, f"interactive production controls artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}"
+        return (
+            age_seconds,
+            f"interactive production controls artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
+        )
     return age_seconds, ""
 
 

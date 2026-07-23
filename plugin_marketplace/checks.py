@@ -3,6 +3,11 @@ from __future__ import annotations
 from django.conf import settings
 from django.core.checks import Error, Tags, register
 
+from plugin_marketplace.release_profile import (
+    PLUGIN_MARKETPLACE_MODE_DISABLED,
+    PLUGIN_MARKETPLACE_RELEASE_MODES,
+    plugin_marketplace_release_mode,
+)
 from plugin_marketplace.services.backend_sandbox_runner_service import (
     BACKEND_SANDBOX_PROVIDER_EXTERNAL,
     BACKEND_SANDBOX_PROVIDERS,
@@ -16,6 +21,7 @@ from plugin_marketplace.services.package_attestation_policy_service import inval
 @register(Tags.security, deploy=True)
 def plugin_marketplace_deploy_check(app_configs, **kwargs):
     errors = []
+    release_mode = plugin_marketplace_release_mode()
     signing_provider = str(getattr(settings, "PLUGIN_MARKETPLACE_SIGNING_PROVIDER", "local_hmac") or "").strip()
     signing_keys = getattr(settings, "PLUGIN_MARKETPLACE_SIGNING_KEYS", {}) or {}
     require_keys = bool(getattr(settings, "PLUGIN_MARKETPLACE_REQUIRE_CONFIGURED_SIGNING_KEYS", not settings.DEBUG))
@@ -25,9 +31,13 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
     default_key_id = str(getattr(settings, "PLUGIN_MARKETPLACE_DEFAULT_SIGNING_KEY_ID", "") or "").strip()
     external_sign_endpoint = str(getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_SIGNING_ENDPOINT", "") or "").strip()
     external_verify_endpoint = str(getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_VERIFY_ENDPOINT", "") or "").strip()
-    security_scan_provider = str(getattr(settings, "PLUGIN_MARKETPLACE_SECURITY_SCAN_PROVIDER", "local_static") or "").strip()
+    security_scan_provider = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_SECURITY_SCAN_PROVIDER", "local_static") or ""
+    ).strip()
     require_external_scanner = bool(getattr(settings, "PLUGIN_MARKETPLACE_REQUIRE_EXTERNAL_SECURITY_SCANNER", False))
-    external_scanner_endpoint = str(getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_SECURITY_SCAN_ENDPOINT", "") or "").strip()
+    external_scanner_endpoint = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_SECURITY_SCAN_ENDPOINT", "") or ""
+    ).strip()
     allow_sandboxed_code = bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False))
     backend_sandbox = bool(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_ENABLED", False))
     frontend_sandbox = bool(getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED", False))
@@ -42,8 +52,12 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
         getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_FRONTEND_BUNDLE_ENDPOINT", "") or ""
     ).strip()
     frontend_bundle_hosts = getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_BUNDLE_ALLOWED_HOSTS", []) or []
-    backend_sandbox_provider = str(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", "local_subprocess") or "").strip()
-    external_backend_sandbox_endpoint = str(getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT", "") or "").strip()
+    backend_sandbox_provider = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", "local_subprocess") or ""
+    ).strip()
+    external_backend_sandbox_endpoint = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT", "") or ""
+    ).strip()
     compatibility_isolation_mode = str(
         getattr(settings, "PLUGIN_MARKETPLACE_COMPATIBILITY_JOB_ISOLATION_MODE", "in_process_no_code") or ""
     ).strip()
@@ -54,6 +68,39 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
     valid_signing_providers = {"local_hmac", "external_kms"}
     valid_security_scan_providers = {"local_static", "external"}
     valid_frontend_bundle_providers = {"manifest_url", "external_artifact_host"}
+
+    if release_mode not in PLUGIN_MARKETPLACE_RELEASE_MODES:
+        errors.append(
+            Error(
+                "Plugin Marketplace release mode is unknown.",
+                hint="Set PLUGIN_MARKETPLACE_RELEASE_MODE to disabled or enabled.",
+                id="plugin_marketplace.E030",
+            )
+        )
+        return errors
+
+    if release_mode == PLUGIN_MARKETPLACE_MODE_DISABLED:
+        active_runtime_flags = [
+            name
+            for name, active in (
+                ("PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", allow_sandboxed_code),
+                ("PLUGIN_MARKETPLACE_BACKEND_SANDBOX_ENABLED", backend_sandbox),
+                ("PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED", frontend_sandbox),
+                ("PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", allow_dynamic_frontend_bundles),
+            )
+            if active
+        ]
+        if active_runtime_flags:
+            errors.append(
+                Error(
+                    "Plugin Marketplace is disabled but executable runtime flags are enabled.",
+                    hint="Disable: " + ", ".join(active_runtime_flags),
+                    id="plugin_marketplace.E031",
+                )
+            )
+        # No plugin routes/providers are registered in this mode, so external
+        # signing, scanner and allowlist requirements are outside release scope.
+        return errors
 
     if signing_provider not in valid_signing_providers:
         errors.append(
@@ -166,11 +213,7 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
                 id="plugin_marketplace.E026",
             )
         )
-    if (
-        not settings.DEBUG
-        and allow_dynamic_frontend_bundles
-        and frontend_bundle_provider != "external_artifact_host"
-    ):
+    if not settings.DEBUG and allow_dynamic_frontend_bundles and frontend_bundle_provider != "external_artifact_host":
         errors.append(
             Error(
                 "Plugin Marketplace production dynamic frontend bundle distribution must use an external artifact host.",
@@ -181,7 +224,9 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
                 id="plugin_marketplace.E027",
             )
         )
-    if frontend_bundle_provider == "external_artifact_host" and not external_frontend_bundle_endpoint.startswith("https://"):
+    if frontend_bundle_provider == "external_artifact_host" and not external_frontend_bundle_endpoint.startswith(
+        "https://"
+    ):
         errors.append(
             Error(
                 "Plugin Marketplace external frontend bundle artifact host endpoint must be HTTPS.",
@@ -209,7 +254,10 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
                 id="plugin_marketplace.E021",
             )
         )
-    if backend_sandbox_provider == BACKEND_SANDBOX_PROVIDER_EXTERNAL and not external_backend_sandbox_endpoint.startswith("https://"):
+    if (
+        backend_sandbox_provider == BACKEND_SANDBOX_PROVIDER_EXTERNAL
+        and not external_backend_sandbox_endpoint.startswith("https://")
+    ):
         errors.append(
             Error(
                 "Plugin Marketplace external backend sandbox endpoint must be HTTPS.",

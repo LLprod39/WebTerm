@@ -16,9 +16,7 @@ from typing import Any
 
 from servers.metrics_script import SECTION_PREFIX, SECTION_SUFFIX
 
-_MARKER_RE = re.compile(
-    re.escape(SECTION_PREFIX) + r"([A-Z0-9]+)" + re.escape(SECTION_SUFFIX)
-)
+_MARKER_RE = re.compile(re.escape(SECTION_PREFIX) + r"([A-Z0-9]+)" + re.escape(SECTION_SUFFIX))
 
 _SKIP_FILESYSTEMS = {"tmpfs", "devtmpfs", "overlay", "squashfs", "udev", "none", "efivarfs"}
 _SKIP_MOUNT_PREFIXES = ("/dev", "/sys", "/proc", "/run", "/snap", "/mnt/wsl")
@@ -268,9 +266,7 @@ def compute_tcp_stats(lines0: list[str], lines1: list[str]) -> dict[str, Any]:
     if "CurrEstab" in tcp1:
         result["tcp_established"] = tcp1["CurrEstab"]
     if tcp0 and "RetransSegs" in tcp0 and "RetransSegs" in tcp1:
-        result["tcp_retrans_per_sec"] = max(
-            0.0, (tcp1["RetransSegs"] - tcp0["RetransSegs"]) / SAMPLE_INTERVAL_SECONDS
-        )
+        result["tcp_retrans_per_sec"] = max(0.0, (tcp1["RetransSegs"] - tcp0["RetransSegs"]) / SAMPLE_INTERVAL_SECONDS)
     return result
 
 

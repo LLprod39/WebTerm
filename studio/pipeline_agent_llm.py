@@ -170,7 +170,14 @@ async def execute_agent_llm_query(node: dict, context: dict, node_outputs: dict[
             output_chunks.append(chunk)
         output_text = compact_text("".join(output_chunks), limit=6000)
         elapsed = int((time.time() - t0) * 1000)
-        logger.info("llm_query node %s: %s/%s %.1fs, %d chars", node.get("id"), provider, specific_model, elapsed / 1000, len(output_text))
+        logger.info(
+            "llm_query node %s: %s/%s %.1fs, %d chars",
+            node.get("id"),
+            provider,
+            specific_model,
+            elapsed / 1000,
+            len(output_text),
+        )
 
         if output_text.strip().startswith("Error:"):
             return {"status": "failed", "error": output_text.strip(), "output": output_text}

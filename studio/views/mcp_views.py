@@ -3,7 +3,6 @@ Studio MCP pool endpoints.
 """
 
 import asyncio
-import os
 import subprocess
 import sys
 
@@ -17,12 +16,16 @@ from django.views.decorators.http import require_http_methods
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from studio.mcp_client import MCPClientError, inspect_mcp_server
-from studio.mcp_security import validate_mcp_runtime_policy, validate_stdio_mcp_policy
+from studio.mcp_runner_client import _mcp_runner_url
+from studio.mcp_security import (
+    build_mcp_subprocess_env,
+    validate_mcp_runtime_policy,
+    validate_sse_mcp_policy,
+    validate_stdio_mcp_policy,
+)
 from studio.models import MCPServerPool
 
 STUDIO_FEATURE_MCP = "studio_mcp"
-
-KEYCLOAK_TEMPLATE_URL = os.getenv("STUDIO_KEYCLOAK_MCP_URL", "http://127.0.0.1:8766/mcp")
 
 MCP_TEMPLATES = [
     {
@@ -94,17 +97,6 @@ MCP_TEMPLATES = [
         "args": ["path/to/your_mcp_server.py"],
         "env": {},
         "icon": "🐍",
-    },
-    {
-        "slug": "keycloak_admin",
-        "name": "Keycloak Admin",
-        "description": "Manage Keycloak users, roles, clients, and groups via the project's Docker-friendly HTTP MCP",
-        "transport": "sse",
-        "command": "",
-        "args": [],
-        "env": {},
-        "url": KEYCLOAK_TEMPLATE_URL,
-        "icon": "🔐",
     },
 ]
 
@@ -194,6 +186,7 @@ def _mcp_to_dict(mcp: MCPServerPool, viewer) -> dict:
         "env": mcp.env if can_edit else {},
         "secret_env_keys": get_mcp_secret_env_keys(mcp.id) if can_edit else [],
         "url": mcp.url,
+        "headers": mcp.headers if can_edit else {},
         "is_shared": bool(mcp.is_shared or shared_users),
         "shared_user_ids": [item["id"] for item in shared_users],
         "shared_users": shared_users,
@@ -221,10 +214,14 @@ def _normalize_sse_url(url: str) -> str:
 
 def _validate_mcp_payload_policy(data: dict, user, *, existing: MCPServerPool | None = None, action: str = "create"):
     transport = data.get("transport", existing.transport if existing else MCPServerPool.TRANSPORT_STDIO)
-    if transport != MCPServerPool.TRANSPORT_STDIO:
-        return None
-    command = data.get("command", existing.command if existing else "")
-    policy = validate_stdio_mcp_policy(str(command or ""), user=user, action=action)
+    if transport == MCPServerPool.TRANSPORT_STDIO:
+        command = data.get("command", existing.command if existing else "")
+        raw_args = data.get("args", existing.args if existing else [])
+        args = raw_args if isinstance(raw_args, list) else None
+        policy = validate_stdio_mcp_policy(str(command or ""), args, user=user, action=action)
+    else:
+        url = data.get("url", existing.url if existing else "")
+        policy = validate_sse_mcp_policy(str(url or ""), user=user, action=action)
     if not policy.allowed:
         return _err(policy.error, 403)
     return None
@@ -236,8 +233,16 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
         url = _normalize_sse_url(mcp.url or "")
         if not url:
             return False, "SSE URL is required"
+        headers = {str(k): str(v) for k, v in (mcp.headers or {}).items() if str(k).strip()}
+        secret_env = get_mcp_secret_env(mcp.id) if mcp.id else {}
+        token = str(secret_env.get("MCP_BEARER_TOKEN") or "").strip()
+        if token and "Authorization" not in headers:
+            headers["Authorization"] = f"Bearer {token}"
+        raw_auth = str(secret_env.get("MCP_AUTHORIZATION") or "").strip()
+        if raw_auth:
+            headers["Authorization"] = raw_auth
         try:
-            response = httpx.get(url, timeout=10)
+            response = httpx.get(url, timeout=10, headers=headers or None)
             response.raise_for_status()
             content_type = (response.headers.get("content-type") or "").lower()
             if "text/html" in content_type:
@@ -251,8 +256,18 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
     policy = validate_mcp_runtime_policy(mcp, action="test")
     if not policy.allowed:
         return False, policy.error
+    # With the Runner active, stdio MCP never runs on the backend host — probe it
+    # end-to-end through the Runner (spawn + initialize + tools/list) instead.
+    if _mcp_runner_url():
+        try:
+            asyncio.run(_inspect_mcp_server(mcp))
+            return True, None
+        except MCPClientError as exc:
+            return False, str(exc)
+        except Exception as exc:
+            return False, str(exc)
     try:
-        env = {**os.environ, **mcp.env, **get_mcp_secret_env(mcp.id)}
+        env = build_mcp_subprocess_env(mcp.env, get_mcp_secret_env(mcp.id))
         proc = subprocess.Popen(
             [mcp.command] + (mcp.args or []),
             stdout=subprocess.PIPE,
@@ -311,6 +326,7 @@ def api_mcp_list(request):
             args=data.get("args", []),
             env=data.get("env", {}),
             url=url,
+            headers=data.get("headers") if isinstance(data.get("headers"), dict) else {},
             owner=request.user,
         )
         if _is_admin(request.user):
@@ -341,11 +357,13 @@ def api_mcp_detail(request, mcp_id: int):
         policy_error = _validate_mcp_payload_policy(data, request.user, existing=mcp, action="edit")
         if policy_error is not None:
             return policy_error
-        for field in ("name", "description", "transport", "command", "args", "env", "url"):
+        for field in ("name", "description", "transport", "command", "args", "env", "url", "headers"):
             if field in data:
                 val = data[field]
                 if field == "url" and (mcp.transport or data.get("transport")) == MCPServerPool.TRANSPORT_SSE and val:
                     val = _normalize_sse_url((val or "").strip())
+                if field == "headers" and not isinstance(val, dict):
+                    val = {}
                 setattr(mcp, field, val)
         mcp.save()
         if _is_admin(request.user):

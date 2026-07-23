@@ -62,11 +62,7 @@ def _create_completed_report_run(username: str, *, chat_id: str = "123456789") -
         user=user,
         status=AgentRun.STATUS_COMPLETED,
         final_report=(
-            "# Отчёт\n\n"
-            "## Что произошло\n"
-            "- Агент завершил проверку.\n\n"
-            "## Рекомендации\n"
-            "- Посмотреть детали в UI.\n"
+            "# Отчёт\n\n## Что произошло\n- Агент завершил проверку.\n\n## Рекомендации\n- Посмотреть детали в UI.\n"
         ),
     )
 
@@ -82,7 +78,9 @@ def test_telegram_delivery_skipped_refreshes_report_payload(monkeypatch):
     async_to_sync(deliver_agent_report_async)(run)
 
     run.refresh_from_db()
-    delivery_events = [event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_skipped"]
+    delivery_events = [
+        event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_skipped"
+    ]
     assert delivery_events
     event = delivery_events[-1]
     assert event["title"] == "Доставка отчёта пропущена"
@@ -130,7 +128,9 @@ def test_telegram_delivery_sent_refreshes_payload_and_masks_chat_id(monkeypatch)
     async_to_sync(deliver_agent_report_async)(run)
 
     run.refresh_from_db()
-    delivery_events = [event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_sent"]
+    delivery_events = [
+        event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_sent"
+    ]
     assert delivery_events
     event = delivery_events[-1]
     assert event["title"] == "Отчёт доставлен"
@@ -175,7 +175,9 @@ def test_telegram_delivery_failure_refreshes_report_payload(monkeypatch):
     async_to_sync(deliver_agent_report_async)(run)
 
     run.refresh_from_db()
-    delivery_events = [event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_failed"]
+    delivery_events = [
+        event for event in run.report_payload["events"] if event["event_type"] == "agent_report_delivery_failed"
+    ]
     assert delivery_events
     event = delivery_events[-1]
     assert event["title"] == "Доставка отчёта не удалась"

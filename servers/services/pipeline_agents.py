@@ -38,7 +38,9 @@ def _snapshot_from_agent_run(agent_run) -> AgentRunSnapshot:
     if not failed_task_count and plan_summary:
         failed_task_count = int(plan_summary.get("failed") or 0)
 
-    policy_blocked_count = int(details.get("policy_blocked_count") or getattr(agent_run, "_policy_blocked_count", 0) or 0)
+    policy_blocked_count = int(
+        details.get("policy_blocked_count") or getattr(agent_run, "_policy_blocked_count", 0) or 0
+    )
     disconnected = list(details.get("disconnected_servers") or getattr(agent_run, "_disconnected_servers", []) or [])
 
     return AgentRunSnapshot(

@@ -47,7 +47,11 @@ class KubernetesOpsActionRequestWorkloadActionTests(TestCase):
                 {
                     "action": K8sActionRequest.ACTION_K8S_WORKLOAD_SCALE,
                     "reason": "scale payments workers for traffic",
-                    "target": {"workload_id": f"workload_{self.workload.id}", "replicas": 4, "token": "super-secret-token"},
+                    "target": {
+                        "workload_id": f"workload_{self.workload.id}",
+                        "replicas": 4,
+                        "token": "super-secret-token",
+                    },
                 }
             ),
             content_type="application/json",

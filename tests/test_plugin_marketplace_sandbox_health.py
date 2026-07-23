@@ -87,11 +87,14 @@ def test_backend_sandbox_failures_update_health_and_auto_quarantine(tmp_path):
     assert stored.status == PluginInstallation.STATUS_QUARANTINED
     assert stored.enabled_at is None
     assert stored.quarantined_at is not None
-    assert PluginInstallEvent.objects.filter(
-        plugin_id=plugin_id,
-        event_type="plugin_backend_sandbox_executed",
-        status=UserActivityLog.STATUS_ERROR,
-    ).count() == 3
+    assert (
+        PluginInstallEvent.objects.filter(
+            plugin_id=plugin_id,
+            event_type="plugin_backend_sandbox_executed",
+            status=UserActivityLog.STATUS_ERROR,
+        ).count()
+        == 3
+    )
     assert PluginInstallEvent.objects.filter(
         plugin_id=plugin_id,
         event_type="plugin_backend_sandbox_auto_quarantined",

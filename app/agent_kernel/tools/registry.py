@@ -9,7 +9,9 @@ from app.agent_kernel.domain.specs import ToolSpec
 logger = logging.getLogger(__name__)
 
 
-def _infer_tool_spec(name: str, description: str, params: dict, *, runner: str = "agent", is_mcp: bool = False) -> ToolSpec:
+def _infer_tool_spec(
+    name: str, description: str, params: dict, *, runner: str = "agent", is_mcp: bool = False
+) -> ToolSpec:
     category = "general"
     risk = "read"
     mutates_state = False
@@ -106,7 +108,9 @@ class ToolRegistry:
                 logger.warning("Plugin agent tool %s is missing explicit tool_spec metadata; skipping.", name)
                 continue
             logger.warning("Agent tool %s is missing explicit tool_spec metadata; using compatibility inference.", name)
-            specs[name] = _infer_tool_spec(name, meta.get("description") or "", meta.get("params") or {}, runner="agent")
+            specs[name] = _infer_tool_spec(
+                name, meta.get("description") or "", meta.get("params") or {}, runner="agent"
+            )
         for name, binding in (mcp_tools or {}).items():
             specs[name] = _infer_tool_spec(
                 name,

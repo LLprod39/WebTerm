@@ -1,4 +1,5 @@
 """Terminal AI agent context, reports, memory, and policy helpers."""
+
 from __future__ import annotations
 
 import asyncio
@@ -265,4 +266,3 @@ class SSHTerminalAgentSupportMixin:
         )
 
     _matches_patterns = staticmethod(match_patterns)
-

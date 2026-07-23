@@ -404,19 +404,30 @@ const App = () => (
                   <Route path="audit" element={<SettingsAuditPage />} />
                   <Route path="notifications" element={<NotificationsSettingsPage showStudioNav={false} />} />
                   <Route path="kubernetes" element={<SettingsKubernetesPage />} />
-                  <Route path="plugins" element={<SettingsPluginsPage />} />
+                  <Route
+                    path="plugins"
+                    element={(
+                      <FeatureGate feature="plugins" staffOnly>
+                        <SettingsPluginsPage />
+                      </FeatureGate>
+                    )}
+                  />
                 </Route>
                 <Route
                   path="/plugins/:pluginId/:pageId"
                   element={(
-                    <FeatureGate feature="settings">
+                    <FeatureGate feature="plugins" staffOnly>
                       <PluginPageHost />
                     </FeatureGate>
                   )}
                 />
                 <Route
                   path="/marketplace"
-                  element={<Navigate to="/settings/plugins" replace />}
+                  element={(
+                    <FeatureGate feature="plugins" staffOnly>
+                      <Navigate to="/settings/plugins" replace />
+                    </FeatureGate>
+                  )}
                 />
               </Route>
               <Route path="*" element={<NotFound />} />

@@ -63,7 +63,8 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
   const navigate = useNavigate();
   const { lang, setLang } = useI18n();
   const { style, setStyle } = useUiStyle();
-  const [recentTick, setRecentTick] = useState(0);
+  const [recentServers, setRecentServers] = useState(() => getRecentServers());
+  const [recentRuns, setRecentRuns] = useState(() => getRecentRuns());
 
   const serversQuery = useQuery({
     queryKey: ["frontend", "bootstrap"],
@@ -80,13 +81,14 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
   });
 
   useEffect(() => {
-    if (open) setRecentTick((n) => n + 1);
+    if (open) {
+      setRecentServers(getRecentServers());
+      setRecentRuns(getRecentRuns());
+    }
   }, [open]);
 
   const servers = serversQuery.data?.servers ?? [];
   const agents = agentsQuery.data?.agents ?? [];
-  const recentServers = useMemo(() => getRecentServers(), [recentTick]);
-  const recentRuns = useMemo(() => getRecentRuns(), [recentTick]);
 
   const run = useCallback(
     (fn: () => void) => {

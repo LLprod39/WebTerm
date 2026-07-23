@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from copy import deepcopy
 
 import pytest
 
@@ -141,7 +140,4 @@ async def test_execute_plan_runs_read_only_batch_concurrently():
     assert fake.max_concurrent >= 2
     assert set(fake.run_order[:2]) == {1, 2}
     assert 3 in fake.run_order
-    assert any(
-        event == "agent_pipeline_phase" and payload.get("parallel") is True
-        for event, payload in fake.events
-    )
+    assert any(event == "agent_pipeline_phase" and payload.get("parallel") is True for event, payload in fake.events)

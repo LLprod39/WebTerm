@@ -145,9 +145,8 @@ def map_to_os_kind(
             if _match_token(os_id, token) or _match_token(id_like, token) or _match_token(combined, token):
                 kind = mapped
                 break
-        if kind == "unknown" and os_id:
-            if os_id in VALID_OS_KINDS:
-                kind = os_id
+        if kind == "unknown" and os_id and os_id in VALID_OS_KINDS:
+            kind = os_id
 
     if kind not in VALID_OS_KINDS:
         kind = "unknown"
@@ -206,9 +205,7 @@ def _save_detection(server: Server, kind: str, meta: dict[str, Any]) -> None:
     server.detected_os = kind
     server.detected_os_meta = meta
     server.detected_os_attempted_at = timezone.now()
-    server.save(
-        update_fields=["detected_os", "detected_os_meta", "detected_os_attempted_at", "updated_at"]
-    )
+    server.save(update_fields=["detected_os", "detected_os_meta", "detected_os_attempted_at", "updated_at"])
 
 
 def detection_is_stale(server: Server, *, max_age_days: int = 7) -> bool:

@@ -103,7 +103,9 @@ def build_task_subagent(
     local_registry = tool_registry.subset(allowed_names=spec.tool_names)
     return {
         "role_spec": role_spec,
-        "permission_engine": PermissionEngine(mode=spec.permission_mode, sudo_policy=parent_permission_engine.sudo_policy),
+        "permission_engine": PermissionEngine(
+            mode=spec.permission_mode, sudo_policy=parent_permission_engine.sudo_policy
+        ),
         "tool_registry": local_registry,
         "tool_names": list(spec.tool_names),
         "max_iterations": spec.max_iterations,

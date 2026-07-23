@@ -35,7 +35,9 @@ def test_resource_ref_accepts_common_kubectl_aliases():
     hpa = build_resource_ref(api_version="autoscaling/v2", kind="hpa", namespace="payments", name="payments-api")
     pdb = build_resource_ref(api_version="policy/v1", kind="pdb", namespace="payments", name="payments-api")
     service_account = build_resource_ref(api_version="v1", kind="sa", namespace="payments", name="payments-api")
-    network_policy = build_resource_ref(api_version="networking.k8s.io/v1", kind="netpol", namespace="payments", name="deny-all")
+    network_policy = build_resource_ref(
+        api_version="networking.k8s.io/v1", kind="netpol", namespace="payments", name="deny-all"
+    )
 
     assert (pvc.kind, pvc.resource) == ("PersistentVolumeClaim", "persistentvolumeclaims")
     assert (hpa.kind, hpa.resource) == ("HorizontalPodAutoscaler", "horizontalpodautoscalers")
@@ -51,9 +53,23 @@ def test_rancher_resource_path_handles_new_namespaced_and_cluster_scoped_resourc
     pvc = build_resource_ref(api_version="v1", kind="pvc", namespace="payments", name="data-db")
     hpa = build_resource_ref(api_version="autoscaling/v2", kind="hpa", namespace="payments", name="payments-api")
     storage_class = build_resource_ref(api_version="storage.k8s.io/v1", kind="sc", name="fast")
-    cluster_role_binding = build_resource_ref(api_version="rbac.authorization.k8s.io/v1", kind="clusterrolebinding", name="readers")
+    cluster_role_binding = build_resource_ref(
+        api_version="rbac.authorization.k8s.io/v1", kind="clusterrolebinding", name="readers"
+    )
 
-    assert rancher_resource_path(provider, cluster, pvc) == "/k8s/clusters/c-prod/api/v1/namespaces/payments/persistentvolumeclaims/data-db"
-    assert rancher_resource_path(provider, cluster, hpa) == "/k8s/clusters/c-prod/apis/autoscaling/v2/namespaces/payments/horizontalpodautoscalers/payments-api"
-    assert rancher_resource_path(provider, cluster, storage_class) == "/k8s/clusters/c-prod/apis/storage.k8s.io/v1/storageclasses/fast"
-    assert rancher_resource_path(provider, cluster, cluster_role_binding) == "/k8s/clusters/c-prod/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/readers"
+    assert (
+        rancher_resource_path(provider, cluster, pvc)
+        == "/k8s/clusters/c-prod/api/v1/namespaces/payments/persistentvolumeclaims/data-db"
+    )
+    assert (
+        rancher_resource_path(provider, cluster, hpa)
+        == "/k8s/clusters/c-prod/apis/autoscaling/v2/namespaces/payments/horizontalpodautoscalers/payments-api"
+    )
+    assert (
+        rancher_resource_path(provider, cluster, storage_class)
+        == "/k8s/clusters/c-prod/apis/storage.k8s.io/v1/storageclasses/fast"
+    )
+    assert (
+        rancher_resource_path(provider, cluster, cluster_role_binding)
+        == "/k8s/clusters/c-prod/apis/rbac.authorization.k8s.io/v1/clusterrolebindings/readers"
+    )

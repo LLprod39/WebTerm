@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-
 from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 from kubernetes_ops.services.release_artifact import build_kubernetes_release_evidence_artifact_report
 from kubernetes_ops.services.release_backend_workstream import (
@@ -204,7 +203,9 @@ def _safe_release_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "provider_lifecycle_status": str(summary.get("provider_lifecycle_status") or ""),
         "audit_redaction_status": str(summary.get("audit_redaction_status") or ""),
         "production_action_evidence_status": str(summary.get("production_action_evidence_status") or ""),
-        "production_action_blocked_action_class_count": int(summary.get("production_action_blocked_action_class_count") or 0),
+        "production_action_blocked_action_class_count": int(
+            summary.get("production_action_blocked_action_class_count") or 0
+        ),
     }
 
 
@@ -266,7 +267,9 @@ def _progress_payload(
     dod_ready = int(artifact_summary.get("definition_of_done_ready") or 0)
     dod_total = int(artifact_summary.get("definition_of_done_total") or 0)
     remaining_categories = [str(group.get("id") or "") for group in blocker_groups if group.get("count")]
-    runtime_blocker_count = sum(int(group.get("count") or 0) for group in blocker_groups if group.get("id") == "runtime_readiness")
+    runtime_blocker_count = sum(
+        int(group.get("count") or 0) for group in blocker_groups if group.get("id") == "runtime_readiness"
+    )
     stage = _progress_stage(
         can_enable_sidebar=can_enable_sidebar,
         dod_ready=dod_ready,

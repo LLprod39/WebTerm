@@ -124,7 +124,12 @@ def test_provider_log_line_stream_reads_batches_from_one_response(monkeypatch):
         return response
 
     monkeypatch.setattr("kubernetes_ops.services.provider_log_streams.urllib.request.urlopen", fake_urlopen)
-    provider = K8sProvider(name="rancher-stream", kind=K8sProvider.KIND_RANCHER, base_url="https://rancher.example.test", auth_mode=K8sProvider.AUTH_NONE)
+    provider = K8sProvider(
+        name="rancher-stream",
+        kind=K8sProvider.KIND_RANCHER,
+        base_url="https://rancher.example.test",
+        auth_mode=K8sProvider.AUTH_NONE,
+    )
 
     stream = open_provider_log_line_stream(provider, "/log?follow=1", timeout=5)
     first = stream.read_batch(max_lines=2, max_bytes=100)
@@ -159,7 +164,12 @@ def test_provider_watch_event_stream_reads_sse_batches_from_one_response(monkeyp
         return response
 
     monkeypatch.setattr("kubernetes_ops.services.provider_watch_streams.urllib.request.urlopen", fake_urlopen)
-    provider = K8sProvider(name="rancher-watch-stream", kind=K8sProvider.KIND_RANCHER, base_url="https://rancher.example.test", auth_mode=K8sProvider.AUTH_NONE)
+    provider = K8sProvider(
+        name="rancher-watch-stream",
+        kind=K8sProvider.KIND_RANCHER,
+        base_url="https://rancher.example.test",
+        auth_mode=K8sProvider.AUTH_NONE,
+    )
 
     stream = open_provider_watch_event_stream(provider, "/watch?watch=1", timeout=5)
     first = stream.read_batch(max_events=2, max_bytes=1000)
@@ -193,9 +203,16 @@ def test_provider_exec_stream_posts_command_and_reads_json_events(monkeypatch):
         return response
 
     monkeypatch.setattr("kubernetes_ops.services.provider_exec_streams.urllib.request.urlopen", fake_urlopen)
-    provider = K8sProvider(name="rancher-exec-stream", kind=K8sProvider.KIND_RANCHER, base_url="https://rancher.example.test", auth_mode=K8sProvider.AUTH_NONE)
+    provider = K8sProvider(
+        name="rancher-exec-stream",
+        kind=K8sProvider.KIND_RANCHER,
+        base_url="https://rancher.example.test",
+        auth_mode=K8sProvider.AUTH_NONE,
+    )
 
-    stream = open_provider_exec_stream(provider, "/exec", timeout=5, command=["env"], container="api", tty=False, stdin=False)
+    stream = open_provider_exec_stream(
+        provider, "/exec", timeout=5, command=["env"], container="api", tty=False, stdin=False
+    )
     first = stream.read_event(max_bytes=1000)
     second = stream.read_event(max_bytes=1000)
     third = stream.read_event(max_bytes=1000)
@@ -228,7 +245,12 @@ def test_provider_port_forward_tunnel_posts_target_and_reads_base64_chunks(monke
         return response
 
     monkeypatch.setattr("kubernetes_ops.services.provider_port_forward_tunnels.urllib.request.urlopen", fake_urlopen)
-    provider = K8sProvider(name="rancher-port-forward", kind=K8sProvider.KIND_RANCHER, base_url="https://rancher.example.test", auth_mode=K8sProvider.AUTH_NONE)
+    provider = K8sProvider(
+        name="rancher-port-forward",
+        kind=K8sProvider.KIND_RANCHER,
+        base_url="https://rancher.example.test",
+        auth_mode=K8sProvider.AUTH_NONE,
+    )
 
     stream = open_provider_port_forward_tunnel(
         provider,

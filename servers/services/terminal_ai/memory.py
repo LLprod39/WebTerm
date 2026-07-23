@@ -16,6 +16,7 @@ The LLM prompt + pydantic parsing for extraction itself live in
 :mod:`servers.services.terminal_ai.prompts.build_memory_extraction_prompt`
 and :mod:`servers.services.terminal_ai.schemas.MemoryExtraction`.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -90,26 +91,79 @@ def select_memory_candidate_commands(commands_with_output: list[dict[str, Any]])
 
 _DURABLE_COMMAND_HINTS = (
     # Package management
-    "apt", "apt-get", "apt-cache", "dpkg", "yum", "dnf", "zypper", "apk",
-    "pip", "pip3", "npm", "yarn", "pnpm", "brew",
+    "apt",
+    "apt-get",
+    "apt-cache",
+    "dpkg",
+    "yum",
+    "dnf",
+    "zypper",
+    "apk",
+    "pip",
+    "pip3",
+    "npm",
+    "yarn",
+    "pnpm",
+    "brew",
     # Service / daemon control
-    "systemctl", "service", "rc-service",
+    "systemctl",
+    "service",
+    "rc-service",
     # User / permissions
-    "useradd", "usermod", "userdel", "groupadd", "passwd", "chown", "chmod", "chgrp",
+    "useradd",
+    "usermod",
+    "userdel",
+    "groupadd",
+    "passwd",
+    "chown",
+    "chmod",
+    "chgrp",
     # Config writes / edits
-    "sed", "tee", "install",
+    "sed",
+    "tee",
+    "install",
     # Container / orchestration
-    "docker", "podman", "kubectl", "helm", "docker-compose",
+    "docker",
+    "podman",
+    "kubectl",
+    "helm",
+    "docker-compose",
     # Firewall / networking state-changers
-    "iptables", "nft", "ufw", "firewall-cmd",
+    "iptables",
+    "nft",
+    "ufw",
+    "firewall-cmd",
     # Filesystem layout
-    "mkfs", "mount", "umount", "fdisk", "parted",
+    "mkfs",
+    "mount",
+    "umount",
+    "fdisk",
+    "parted",
 )
 
 _NOISE_COMMAND_HINTS = (
-    "ls", "pwd", "whoami", "id", "date", "uptime", "hostname", "uname",
-    "echo", "cat", "head", "tail", "clear", "history", "which", "type",
-    "df", "du", "free", "ps", "top", "htop",
+    "ls",
+    "pwd",
+    "whoami",
+    "id",
+    "date",
+    "uptime",
+    "hostname",
+    "uname",
+    "echo",
+    "cat",
+    "head",
+    "tail",
+    "clear",
+    "history",
+    "which",
+    "type",
+    "df",
+    "du",
+    "free",
+    "ps",
+    "top",
+    "htop",
 )
 
 
@@ -180,10 +234,7 @@ def should_extract_memory(done_items: list[dict[str, Any]] | None) -> bool:
         return True
 
     # Otherwise, if EVERY root is noise, skip.
-    all_noise = all(
-        _cmd_root(str(it.get("cmd", ""))) in _NOISE_COMMAND_HINTS
-        for it in items
-    )
+    all_noise = all(_cmd_root(str(it.get("cmd", ""))) in _NOISE_COMMAND_HINTS for it in items)
     # Mixed case: no durable hint, some non-noise — keep extraction (safer).
     return not all_noise
 

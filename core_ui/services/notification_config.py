@@ -43,9 +43,7 @@ def _base_notification_config() -> dict[str, Any]:
         "telegram_bot_token": os.getenv("TELEGRAM_BOT_TOKEN", "")
         or getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
         or "",
-        "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", "")
-        or getattr(django_settings, "TELEGRAM_CHAT_ID", "")
-        or "",
+        "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", "") or getattr(django_settings, "TELEGRAM_CHAT_ID", "") or "",
         "notify_email": (
             os.getenv("PIPELINE_NOTIFY_EMAIL", "")
             or getattr(django_settings, "PIPELINE_NOTIFY_EMAIL", "")

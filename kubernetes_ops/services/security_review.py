@@ -50,7 +50,10 @@ def build_kubernetes_security_review() -> dict[str, Any]:
             "ready"
             if debug
             or test_settings
-            or (bool(getattr(settings, "SESSION_COOKIE_SECURE", False)) and bool(getattr(settings, "CSRF_COOKIE_SECURE", False)))
+            or (
+                bool(getattr(settings, "SESSION_COOKIE_SECURE", False))
+                and bool(getattr(settings, "CSRF_COOKIE_SECURE", False))
+            )
             else "missing",
             "Production sessions and CSRF cookies must be Secure; local DEBUG/test settings are allowed to use HTTP.",
         ),

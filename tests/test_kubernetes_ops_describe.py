@@ -26,7 +26,10 @@ class KubernetesOpsDescribeTests(TestCase):
             health=K8sCluster.HEALTH_WARNING,
             ready=1,
             desired=2,
-            links={"logs": "https://devtron.example.test/apps/1/logs?token=raw-url-token#tail", "secret_link": "https://secret.example.test"},
+            links={
+                "logs": "https://devtron.example.test/apps/1/logs?token=raw-url-token#tail",
+                "secret_link": "https://secret.example.test",
+            },
             labels={"app": "payments-api", "token": "raw-token", "nested": {"password": "raw-password"}},
         )
         K8sEvent.objects.create(
@@ -41,7 +44,9 @@ class KubernetesOpsDescribeTests(TestCase):
             count=2,
         )
 
-        response = self.client.get(reverse("api_kubernetes_workload_describe", kwargs={"workload_id": f"workload_{workload.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_workload_describe", kwargs={"workload_id": f"workload_{workload.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -69,10 +74,15 @@ class KubernetesOpsDescribeTests(TestCase):
             cluster=cluster,
             namespace="payments",
             kind=K8sWorkloadRef.KIND_DEPLOYMENT,
-            links={"logs": "https://devtron.example.test/apps/1/logs?token=raw-url-token#tail", "secret_link": "https://secret.example.test"},
+            links={
+                "logs": "https://devtron.example.test/apps/1/logs?token=raw-url-token#tail",
+                "secret_link": "https://secret.example.test",
+            },
         )
 
-        response = self.client.get(reverse("api_kubernetes_workload_describe", kwargs={"workload_id": f"workload_{workload.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_workload_describe", kwargs={"workload_id": f"workload_{workload.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

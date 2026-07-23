@@ -1,40 +1,5 @@
 [
   {
-    "id": "iam_keycloak_assign_role",
-    "pipeline_name": "Keycloak access request",
-    "prompt": "Keycloak: add realm role finance-auditor to user ivan.petrov, verify effective access and create an audit report.",
-    "expected_template": "pilot-keycloak-access-change",
-    "must_have_node_types": ["trigger/manual", "agent/mcp_call", "logic/human_approval", "output/report"]
-  },
-  {
-    "id": "iam_keycloak_group_membership",
-    "pipeline_name": "IAM group request",
-    "prompt": "Создай группу в Keycloak, добавь туда пользователя и проверь роли перед отчетом.",
-    "expected_template": "pilot-keycloak-access-change",
-    "must_have_node_types": ["agent/mcp_call", "agent/llm_query", "logic/human_approval"]
-  },
-  {
-    "id": "iam_keycloak_revoke_access",
-    "pipeline_name": "Keycloak revoke access",
-    "prompt": "Убери роль admin у пользователя в кейклоке после preflight и approval, затем проверь что доступа нет.",
-    "expected_template": "pilot-keycloak-access-change",
-    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
-  },
-  {
-    "id": "iam_keycloak_client_role",
-    "pipeline_name": "Client role access",
-    "prompt": "IAM request: assign client role billing-reader in Keycloak for service account svc-reporting and produce approval evidence.",
-    "expected_template": "pilot-keycloak-access-change",
-    "must_have_node_types": ["agent/mcp_call", "logic/human_approval", "output/report"]
-  },
-  {
-    "id": "iam_keycloak_access_review",
-    "pipeline_name": "Access review",
-    "prompt": "Проверь текущие Keycloak группы пользователя, предложи изменение доступа, выполни только после подтверждения и сделай audit report.",
-    "expected_template": "pilot-keycloak-access-change",
-    "must_have_node_types": ["agent/mcp_call", "agent/llm_query", "logic/human_approval"]
-  },
-  {
     "id": "k8s_rollout_restart",
     "pipeline_name": "Kubernetes rollout",
     "prompt": "Kubernetes rollout restart deployment keycloak in namespace auth after reading pods/events and approval, then verify rollout status.",

@@ -28,7 +28,9 @@ def sandbox_settings() -> dict[str, bool]:
     return {
         "backend_sandbox_enabled": bool(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_ENABLED", False)),
         "frontend_sandbox_enabled": bool(getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED", False)),
-        "allow_sandboxed_code_packages": bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)),
+        "allow_sandboxed_code_packages": bool(
+            getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)
+        ),
     }
 
 
@@ -76,10 +78,26 @@ def _classify_surfaces(surfaces: dict[str, list[dict[str, Any]]]) -> tuple[list[
         for index, item in enumerate(items):
             renderer = str(item.get("renderer") or "").lower()
             if renderer in DYNAMIC_RENDERERS:
-                requirements.append({"kind": "frontend_dynamic_renderer", "surface": kind, "index": index, "renderer": renderer, "supported": True})
+                requirements.append(
+                    {
+                        "kind": "frontend_dynamic_renderer",
+                        "surface": kind,
+                        "index": index,
+                        "renderer": renderer,
+                        "supported": True,
+                    }
+                )
             executor_ref = str(item.get("executor_ref") or item.get("executor") or "").strip()
             if executor_ref and not executor_ref.startswith("plugin_marketplace.demo."):
-                requirements.append({"kind": "backend_executor", "surface": kind, "index": index, "executor_ref": executor_ref, "supported": True})
+                requirements.append(
+                    {
+                        "kind": "backend_executor",
+                        "surface": kind,
+                        "index": index,
+                        "executor_ref": executor_ref,
+                        "supported": True,
+                    }
+                )
     return requirements, blockers
 
 
@@ -95,7 +113,9 @@ def sandbox_policy_for_package(package: PluginPackage) -> dict[str, Any]:
     frontend_bundle_policy = frontend_bundle_policy_for_package(package)
     blockers.extend(f"Frontend bundle policy: {item}" for item in frontend_bundle_policy["blockers"])
     requires_backend = any(str(item.get("kind", "")).startswith("backend") for item in requirements)
-    requires_frontend = any(str(item.get("kind", "")).startswith("frontend") for item in requirements) or bool(frontend_bundle_policy["required"])
+    requires_frontend = any(str(item.get("kind", "")).startswith("frontend") for item in requirements) or bool(
+        frontend_bundle_policy["required"]
+    )
     if (requires_backend or requires_frontend) and not current["allow_sandboxed_code_packages"]:
         blockers.append("Sandboxed code packages are not allowed by policy.")
     if requires_backend and not current["backend_sandbox_enabled"]:

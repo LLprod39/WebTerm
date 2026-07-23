@@ -1,4 +1,5 @@
 """Pure helpers for terminal-AI command outcomes."""
+
 from __future__ import annotations
 
 

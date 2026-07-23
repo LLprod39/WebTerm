@@ -39,14 +39,25 @@ def get_admin_resource_watch_preview(
 ) -> dict[str, Any]:
     cluster = _required_cluster(cluster_id)
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
-    session = active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_WATCH, namespace=ref.namespace, kind=ref.kind)
+    session = active_resource_session_for_user(
+        user, session_id, cluster, verb=K8sAdminAction.VERB_WATCH, namespace=ref.namespace, kind=ref.kind
+    )
     provider = _required_rancher_provider(cluster)
     event_limit = _bounded_int(limit, default=20, minimum=1, maximum=MAX_WATCH_EVENTS)
     timeout = _bounded_int(timeout_seconds, default=10, minimum=1, maximum=MAX_TIMEOUT_SECONDS)
     resource_version_value = str(resource_version or "").strip()[:120]
     base_path = rancher_resource_path(provider, cluster, ref)
     path = _watch_path(base_path, resource_version=resource_version_value, timeout_seconds=timeout)
-    payload = _base_response(cluster, provider, ref, path=path, limit=event_limit, timeout_seconds=timeout, resource_version=resource_version_value, streaming=streaming)
+    payload = _base_response(
+        cluster,
+        provider,
+        ref,
+        path=path,
+        limit=event_limit,
+        timeout_seconds=timeout,
+        resource_version=resource_version_value,
+        streaming=streaming,
+    )
 
     try:
         raw = ProviderJsonClient(provider, transport=transport, timeout=timeout + 5).get(path)
@@ -121,16 +132,35 @@ def prepare_admin_resource_watch_continuous_stream(
 ) -> dict[str, Any]:
     cluster = _required_cluster(cluster_id)
     ref = build_resource_ref(api_version=api_version, kind=kind, namespace=namespace, name=name, resource=resource)
-    active_resource_session_for_user(user, session_id, cluster, verb=K8sAdminAction.VERB_WATCH, namespace=ref.namespace, kind=ref.kind)
+    active_resource_session_for_user(
+        user, session_id, cluster, verb=K8sAdminAction.VERB_WATCH, namespace=ref.namespace, kind=ref.kind
+    )
     provider = _required_rancher_provider(cluster)
     event_limit = _bounded_int(limit, default=20, minimum=1, maximum=MAX_WATCH_EVENTS)
     timeout = _bounded_int(timeout_seconds, default=10, minimum=1, maximum=MAX_TIMEOUT_SECONDS)
     resource_version_value = str(resource_version or "").strip()[:120]
-    path = _watch_path(rancher_resource_path(provider, cluster, ref), resource_version=resource_version_value, timeout_seconds=timeout)
-    payload = _base_response(cluster, provider, ref, path=path, limit=event_limit, timeout_seconds=timeout, resource_version=resource_version_value, streaming=True)
+    path = _watch_path(
+        rancher_resource_path(provider, cluster, ref), resource_version=resource_version_value, timeout_seconds=timeout
+    )
+    payload = _base_response(
+        cluster,
+        provider,
+        ref,
+        path=path,
+        limit=event_limit,
+        timeout_seconds=timeout,
+        resource_version=resource_version_value,
+        streaming=True,
+    )
     payload.update({"operation": "resource_watch_stream_continuous", "source": "provider_watch_stream_continuous"})
     payload["policy"].update({"stream_transport": "provider_native_continuous"})
-    return {"provider": provider, "path": path, "timeout_seconds": timeout, "event_limit": event_limit, "payload": payload}
+    return {
+        "provider": provider,
+        "path": path,
+        "timeout_seconds": timeout,
+        "event_limit": event_limit,
+        "payload": payload,
+    }
 
 
 def build_admin_resource_watch_continuous_payload(
@@ -228,7 +258,11 @@ def _base_response(
         "success": True,
         "mode": "admin_read_only",
         "operation": "resource_watch_stream_batch" if streaming else "resource_watch_preview",
-        "cluster": {"id": f"cluster_{cluster.id}", "name": cluster.name, "rancher_cluster_id": cluster.rancher_cluster_id},
+        "cluster": {
+            "id": f"cluster_{cluster.id}",
+            "name": cluster.name,
+            "rancher_cluster_id": cluster.rancher_cluster_id,
+        },
         "provider": {"id": provider.id, "name": provider.name, "kind": provider.kind},
         "target": {
             "api_version": ref.api_version,
@@ -258,7 +292,9 @@ def _base_response(
     }
 
 
-def _record_watch_action(*, user, session, cluster: K8sCluster, ref: KubernetesResourceRef, payload: dict[str, Any]) -> None:
+def _record_watch_action(
+    *, user, session, cluster: K8sCluster, ref: KubernetesResourceRef, payload: dict[str, Any]
+) -> None:
     record_admin_resource_action(
         user=user,
         session=session,
@@ -309,7 +345,11 @@ def _required_cluster(cluster_id: str) -> K8sCluster:
 def _required_rancher_provider(cluster: K8sCluster) -> K8sProvider:
     provider = cluster.rancher_provider
     if provider is None or not provider.enabled:
-        raise AdminResourceError("Enabled Rancher provider is required for Admin Mode resource watch.", code="rancher_provider_required", status=409)
+        raise AdminResourceError(
+            "Enabled Rancher provider is required for Admin Mode resource watch.",
+            code="rancher_provider_required",
+            status=409,
+        )
     return provider
 
 

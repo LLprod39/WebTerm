@@ -56,7 +56,9 @@ def compatibility_checks_for_item(item: MarketplaceCatalogItem) -> dict[str, Any
     scan = scan_manifest(
         parsed,
         allow_sandboxed_code=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)),
-        allow_dynamic_frontend_bundles=bool(getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)),
+        allow_dynamic_frontend_bundles=bool(
+            getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_DYNAMIC_FRONTEND_BUNDLES", False)
+        ),
     )
     checks.append({"name": "static_no_code_scan", "ok": scan.passed, "findings": scan.to_dict()["findings"]})
     catalog_report = compatibility_report(item)
@@ -149,7 +151,11 @@ def run_compatibility_job(
     *,
     isolation_mode: str | None = None,
 ) -> PluginCompatibilityJob:
-    mode = normalize_compatibility_isolation_mode(isolation_mode) if isolation_mode is not None else _compatibility_isolation_mode()
+    mode = (
+        normalize_compatibility_isolation_mode(isolation_mode)
+        if isolation_mode is not None
+        else _compatibility_isolation_mode()
+    )
     job = PluginCompatibilityJob.objects.create(
         catalog_item=item,
         plugin_id=item.plugin_id,
@@ -168,7 +174,9 @@ def run_compatibility_job(
         return job
     job.report = report
     job.checks = report.get("checks") if isinstance(report.get("checks"), list) else []
-    job.status = PluginCompatibilityJob.STATUS_PASSED if report.get("compatible") else PluginCompatibilityJob.STATUS_FAILED
+    job.status = (
+        PluginCompatibilityJob.STATUS_PASSED if report.get("compatible") else PluginCompatibilityJob.STATUS_FAILED
+    )
     job.completed_at = timezone.now()
     job.save(update_fields=["status", "checks", "report", "completed_at", "updated_at"])
     compatibility = item.compatibility if isinstance(item.compatibility, dict) else {}
@@ -182,7 +190,9 @@ def run_compatibility_job(
 @transaction.atomic
 def run_compatibility_matrix_update() -> list[dict[str, Any]]:
     results = []
-    for item in MarketplaceCatalogItem.objects.select_for_update().select_related("source").order_by("plugin_id", "-updated_at"):
+    for item in (
+        MarketplaceCatalogItem.objects.select_for_update().select_related("source").order_by("plugin_id", "-updated_at")
+    ):
         job = run_compatibility_job(item)
         result = dict(job.report or compatibility_checks_for_item(item))
         result["job"] = compatibility_job_payload(job)

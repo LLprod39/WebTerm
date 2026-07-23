@@ -13,7 +13,9 @@ class Command(BaseCommand):
     help = "Run layered server memory dreams: nearline compaction, nightly distillation, or weekly archive/repair."
 
     def add_arguments(self, parser):
-        parser.add_argument("--server-id", type=int, action="append", dest="server_ids", help="Process only selected server id")
+        parser.add_argument(
+            "--server-id", type=int, action="append", dest="server_ids", help="Process only selected server id"
+        )
         parser.add_argument("--limit", type=int, default=100, help="Maximum number of servers to inspect per cycle")
         parser.add_argument("--interval", type=int, default=300, help="Daemon poll interval in seconds")
         parser.add_argument("--daemon", action="store_true", help="Run continuously until interrupted")
@@ -45,7 +47,9 @@ class Command(BaseCommand):
             lease_seconds=lease_seconds,
         )
         if state is None:
-            self.stdout.write(self.style.WARNING(f"Memory dreams worker {worker_key!r} is already leased by another process"))
+            self.stdout.write(
+                self.style.WARNING(f"Memory dreams worker {worker_key!r} is already leased by another process")
+            )
             return
 
         summary = {
@@ -59,12 +63,24 @@ class Command(BaseCommand):
         self.stdout.write("Starting server memory dreams...")
         try:
             if once or not daemon:
-                summary = self._tick(limit=limit, server_ids=server_ids, job_kind=job_kind, worker_key=worker_key, lease_seconds=lease_seconds)
+                summary = self._tick(
+                    limit=limit,
+                    server_ids=server_ids,
+                    job_kind=job_kind,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                )
                 self.stdout.write(self.style.SUCCESS(self._format_summary(summary)))
                 return
 
             while True:
-                summary = self._tick(limit=limit, server_ids=server_ids, job_kind=job_kind, worker_key=worker_key, lease_seconds=lease_seconds)
+                summary = self._tick(
+                    limit=limit,
+                    server_ids=server_ids,
+                    job_kind=job_kind,
+                    worker_key=worker_key,
+                    lease_seconds=lease_seconds,
+                )
                 self.stdout.write(self.style.SUCCESS(self._format_summary(summary)))
                 self.stdout.write(f"Next memory dream cycle in {interval}s...")
                 time.sleep(interval)

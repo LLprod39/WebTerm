@@ -255,7 +255,9 @@ def test_launch_monitoring_triggers_skips_trigger_without_downstream_nodes(monke
         edges=[],
     )
     pipeline.sync_triggers_from_nodes()
-    monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("empty monitoring launched"))
+    monkeypatch.setattr(
+        "studio.trigger_dispatch.launch_pipeline_run_async", lambda _run: pytest.fail("empty monitoring launched")
+    )
 
     alert = ServerAlert.objects.create(
         server=server,

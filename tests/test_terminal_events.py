@@ -59,15 +59,18 @@ def test_remaining_event_builders_shape_payloads():
     assert ai_report(report="r", status="ok")["type"] == "ai_report"
     assert ai_explanation(item_id=1, command="df", explanation="disk")["type"] == "ai_explanation"
     assert ai_direct_output(item_id=1, command="true", output="", exit_code=0)["type"] == "ai_direct_output"
-    assert ai_recovery(
-        original_cmd="netstat",
-        new_cmd="ss",
-        new_id=2,
-        why="missing",
-        requires_confirm=False,
-        reason="",
-        streaming=False,
-    )["type"] == "ai_recovery"
+    assert (
+        ai_recovery(
+            original_cmd="netstat",
+            new_cmd="ss",
+            new_id=2,
+            why="missing",
+            requires_confirm=False,
+            reason="",
+            streaming=False,
+        )["type"]
+        == "ai_recovery"
+    )
     assert ai_question(q_id="q1", question="continue?", command="cmd", exit_code=1)["type"] == "ai_question"
     assert ai_install_progress(command="apt install nginx", elapsed=12, output_tail="Installing") == {
         "type": "ai_install_progress",

@@ -118,7 +118,9 @@ class KubernetesOpsNetworkDetailTests(TestCase):
             last_seen_at=timezone.now(),
         )
 
-        response = self.client.get(reverse("api_kubernetes_network_detail", kwargs={"network_id": f"network_{service.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_network_detail", kwargs={"network_id": f"network_{service.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -169,11 +171,15 @@ class KubernetesOpsNetworkDetailTests(TestCase):
             links={"rancher": "https://rancher.example.test/ingress/ingress-nginx?token=raw-link-token#rules"},
         )
 
-        response = self.client.get(reverse("api_kubernetes_network_detail", kwargs={"network_id": f"network_{ingress.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_network_detail", kwargs={"network_id": f"network_{ingress.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["network_ref"]["links"]["rancher"], "https://rancher.example.test/ingress/ingress-nginx")
+        self.assertEqual(
+            payload["network_ref"]["links"]["rancher"], "https://rancher.example.test/ingress/ingress-nginx"
+        )
         self.assertNotIn("raw-link-token", str(payload))
         self.assertNotIn("#rules", str(payload))
 

@@ -47,8 +47,7 @@ def build_content_nodes() -> list[dict]:
                 "label": "AI Creative Brief",
                 "label_ru": "AI creative brief",
                 "system_prompt": (
-                    "Ты опытный контент-стратег. Делаешь короткий творческий бриф "
-                    "с 3 ключевыми углами подачи темы."
+                    "Ты опытный контент-стратег. Делаешь короткий творческий бриф с 3 ключевыми углами подачи темы."
                 ),
                 "prompt": (
                     f"Тема: {{topic}} (если пусто — используй '{CONTENT_DEFAULT_TOPIC}').\n"
@@ -171,16 +170,58 @@ def build_content_nodes() -> list[dict]:
 
 def build_content_edges() -> list[dict]:
     return [
-        {"id": "c_e1", "source": "content_manual", "target": "content_merge_in", "sourceHandle": "out", "animated": True},
-        {"id": "c_e2", "source": "content_webhook", "target": "content_merge_in", "sourceHandle": "out", "animated": True},
+        {
+            "id": "c_e1",
+            "source": "content_manual",
+            "target": "content_merge_in",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "c_e2",
+            "source": "content_webhook",
+            "target": "content_merge_in",
+            "sourceHandle": "out",
+            "animated": True,
+        },
         {"id": "c_e3", "source": "content_merge_in", "target": "brief", "sourceHandle": "out", "animated": True},
         {"id": "c_e4", "source": "brief", "target": "content_parallel", "sourceHandle": "success", "animated": True},
-        {"id": "c_e5", "source": "content_parallel", "target": "writer_twitter", "sourceHandle": "out", "animated": True},
-        {"id": "c_e6", "source": "content_parallel", "target": "writer_linkedin", "sourceHandle": "out", "animated": True},
+        {
+            "id": "c_e5",
+            "source": "content_parallel",
+            "target": "writer_twitter",
+            "sourceHandle": "out",
+            "animated": True,
+        },
+        {
+            "id": "c_e6",
+            "source": "content_parallel",
+            "target": "writer_linkedin",
+            "sourceHandle": "out",
+            "animated": True,
+        },
         {"id": "c_e7", "source": "content_parallel", "target": "writer_blog", "sourceHandle": "out", "animated": True},
-        {"id": "c_e8", "source": "writer_twitter", "target": "content_merge_out", "sourceHandle": "success", "animated": True},
-        {"id": "c_e9", "source": "writer_linkedin", "target": "content_merge_out", "sourceHandle": "success", "animated": True},
-        {"id": "c_e10", "source": "writer_blog", "target": "content_merge_out", "sourceHandle": "success", "animated": True},
+        {
+            "id": "c_e8",
+            "source": "writer_twitter",
+            "target": "content_merge_out",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "c_e9",
+            "source": "writer_linkedin",
+            "target": "content_merge_out",
+            "sourceHandle": "success",
+            "animated": True,
+        },
+        {
+            "id": "c_e10",
+            "source": "writer_blog",
+            "target": "content_merge_out",
+            "sourceHandle": "success",
+            "animated": True,
+        },
         {"id": "c_e11", "source": "content_merge_out", "target": "editor", "sourceHandle": "out", "animated": True},
         {"id": "c_e12", "source": "editor", "target": "content_report", "sourceHandle": "success", "animated": True},
     ]

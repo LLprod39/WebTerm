@@ -61,8 +61,12 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
     async def get_server_card(self, server_id: int) -> ServerMemoryCard:
         return await database_sync_to_async(self._get_server_card_sync, thread_sensitive=True)(server_id)
 
-    async def search_runbooks(self, query: str, *, server_id: int | None = None, group_id: int | None = None) -> list[dict]:
-        return await database_sync_to_async(self._search_runbooks_sync, thread_sensitive=True)(query, server_id=server_id, group_id=group_id)
+    async def search_runbooks(
+        self, query: str, *, server_id: int | None = None, group_id: int | None = None
+    ) -> list[dict]:
+        return await database_sync_to_async(self._search_runbooks_sync, thread_sensitive=True)(
+            query, server_id=server_id, group_id=group_id
+        )
 
     async def build_operational_recipes_prompt(
         self,
@@ -94,14 +98,18 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
     async def detect_conflicts(self, server_id: int, new_facts: list[dict]) -> list[dict]:
         return await database_sync_to_async(self._detect_conflicts_sync, thread_sensitive=True)(server_id, new_facts)
 
-    async def repair_server_memory(self, server_id: int, *, stale_after_days: int = 30, create_notes: bool = True) -> dict:
+    async def repair_server_memory(
+        self, server_id: int, *, stale_after_days: int = 30, create_notes: bool = True
+    ) -> dict:
         return await database_sync_to_async(self._repair_server_memory_sync, thread_sensitive=True)(
             server_id,
             stale_after_days=stale_after_days,
             create_notes=create_notes,
         )
 
-    async def dream_server_memory(self, server_id: int, *, deactivate_noise: bool = True, job_kind: str = "hybrid") -> dict:
+    async def dream_server_memory(
+        self, server_id: int, *, deactivate_noise: bool = True, job_kind: str = "hybrid"
+    ) -> dict:
         return await database_sync_to_async(self._dream_server_memory_sync, thread_sensitive=True)(
             server_id,
             deactivate_noise=deactivate_noise,
@@ -130,19 +138,27 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
         )
 
     async def sync_manual_knowledge_snapshot(self, knowledge_id: int) -> str:
-        return await database_sync_to_async(self._sync_manual_knowledge_snapshot_sync, thread_sensitive=True)(knowledge_id)
+        return await database_sync_to_async(self._sync_manual_knowledge_snapshot_sync, thread_sensitive=True)(
+            knowledge_id
+        )
 
     async def archive_manual_knowledge_snapshot(self, knowledge_id: int) -> int:
-        return await database_sync_to_async(self._archive_manual_knowledge_snapshot_sync, thread_sensitive=True)(knowledge_id)
+        return await database_sync_to_async(self._archive_manual_knowledge_snapshot_sync, thread_sensitive=True)(
+            knowledge_id
+        )
 
-    async def archive_snapshot(self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]:
+    async def archive_snapshot(
+        self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None
+    ) -> dict[str, Any]:
         return await database_sync_to_async(self._archive_snapshot_sync, thread_sensitive=True)(
             server_id,
             snapshot_id,
             actor_user_id=actor_user_id,
         )
 
-    async def hard_delete_snapshot(self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None) -> dict[str, Any]:
+    async def hard_delete_snapshot(
+        self, server_id: int, snapshot_id: int, *, actor_user_id: int | None = None
+    ) -> dict[str, Any]:
         return await database_sync_to_async(self._hard_delete_snapshot_sync, thread_sensitive=True)(
             server_id,
             snapshot_id,
@@ -199,7 +215,9 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
     def _get_server_cards_batch_sync(self, server_ids: list[int]) -> list[ServerMemoryCard]:
         return perform_get_server_cards_batch(server_ids)
 
-    def _search_runbooks_sync(self, query: str, *, server_id: int | None = None, group_id: int | None = None) -> list[dict]:
+    def _search_runbooks_sync(
+        self, query: str, *, server_id: int | None = None, group_id: int | None = None
+    ) -> list[dict]:
         return search_runbooks(query, server_id=server_id, group_id=group_id)
 
     def _build_operational_recipes_prompt_sync(
@@ -248,8 +266,12 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
     def _detect_conflicts_sync(self, server_id: int, new_facts: list[dict]) -> list[dict]:
         return perform_detect_conflicts(server_id, new_facts)
 
-    def _repair_server_memory_sync(self, server_id: int, *, stale_after_days: int = 30, create_notes: bool = True) -> dict:
-        return perform_repair_server_memory(self, server_id, stale_after_days=stale_after_days, create_notes=create_notes)
+    def _repair_server_memory_sync(
+        self, server_id: int, *, stale_after_days: int = 30, create_notes: bool = True
+    ) -> dict:
+        return perform_repair_server_memory(
+            self, server_id, stale_after_days=stale_after_days, create_notes=create_notes
+        )
 
     def _ingest_event_sync(
         self,

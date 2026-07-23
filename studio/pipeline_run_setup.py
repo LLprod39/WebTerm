@@ -117,8 +117,7 @@ async def prepare_pipeline_run_start(run: PipelineRun, context: dict | None) -> 
         node_states={},
     )
     if not any(
-        not str(id_to_node[node_id].get("type") or "").startswith("trigger/")
-        for node_id in reachable_from_entry
+        not str(id_to_node[node_id].get("type") or "").startswith("trigger/") for node_id in reachable_from_entry
     ):
         await update_run_status(
             run,

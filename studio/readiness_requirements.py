@@ -12,7 +12,6 @@ from studio.pipeline_notifications import _load_notif_cfg
 _LLM_PROVIDER_KEYS = {
     "gemini": ("GEMINI_API_KEY",),
     "openai": ("OPENAI_API_KEY", "CODEX_API_KEY"),
-    "fair": ("FAIR_HYPERION_API_KEY", "FAIR_API_KEY"),
     "grok": ("GROK_API_KEY",),
     "claude": ("ANTHROPIC_API_KEY",),
     "ollama": ("OLLAMA_API_KEY",),
@@ -50,7 +49,7 @@ def _managed_llm_key(provider: str) -> bool:
 
 def _llm_provider_ready(provider: str) -> bool:
     if provider == "auto":
-        return any(_llm_provider_ready(item) for item in ("fair", "gemini", "openai", "grok", "claude", "ollama"))
+        return any(_llm_provider_ready(item) for item in ("gemini", "openai", "grok", "claude", "ollama"))
     if provider == "ollama":
         return (
             _has_value(os.getenv("OLLAMA_BASE_URL"))
@@ -63,7 +62,9 @@ def _llm_provider_ready(provider: str) -> bool:
 
 
 def _email_backend_needs_smtp() -> bool:
-    return "smtp" in str(getattr(settings, "EMAIL_BACKEND", "") or "").lower() or not getattr(settings, "EMAIL_BACKEND", "")
+    return "smtp" in str(getattr(settings, "EMAIL_BACKEND", "") or "").lower() or not getattr(
+        settings, "EMAIL_BACKEND", ""
+    )
 
 
 def _upsert_requirement(
@@ -98,8 +99,12 @@ def _upsert_requirement(
 
 def _telegram_requirement(requirements: dict[str, dict[str, Any]], node_id: str, data: dict[str, Any]) -> None:
     cfg = _load_notif_cfg()
-    token = _first_nonblank(data.get("bot_token"), data.get("tg_bot_token"), data.get("telegram_bot_token"), cfg.get("telegram_bot_token"))
-    chat = _first_nonblank(data.get("chat_id"), data.get("tg_chat_id"), data.get("telegram_chat_id"), cfg.get("telegram_chat_id"))
+    token = _first_nonblank(
+        data.get("bot_token"), data.get("tg_bot_token"), data.get("telegram_bot_token"), cfg.get("telegram_bot_token")
+    )
+    chat = _first_nonblank(
+        data.get("chat_id"), data.get("tg_chat_id"), data.get("telegram_chat_id"), cfg.get("telegram_chat_id")
+    )
     _upsert_requirement(
         requirements,
         "telegram:bot-token",
@@ -108,7 +113,9 @@ def _telegram_requirement(requirements: dict[str, dict[str, Any]], node_id: str,
         node_id=node_id,
         status="ready" if _has_value(token) else "missing",
         severity="ready" if _has_value(token) else "error",
-        message="Telegram bot token is configured." if _has_value(token) else "Set TELEGRAM_BOT_TOKEN or a node-level bot_token.",
+        message="Telegram bot token is configured."
+        if _has_value(token)
+        else "Set TELEGRAM_BOT_TOKEN or a node-level bot_token.",
     )
     _upsert_requirement(
         requirements,
@@ -138,7 +145,9 @@ def _email_requirement(requirements: dict[str, dict[str, Any]], node_id: str, da
         node_id=node_id,
         status="ready" if _has_value(recipient) else "missing",
         severity="ready" if _has_value(recipient) else "error",
-        message="Email recipient is configured." if _has_value(recipient) else "Set PIPELINE_NOTIFY_EMAIL or node to_email.",
+        message="Email recipient is configured."
+        if _has_value(recipient)
+        else "Set PIPELINE_NOTIFY_EMAIL or node to_email.",
     )
     if _email_backend_needs_smtp() and not _has_value(smtp_host):
         _upsert_requirement(
@@ -164,7 +173,9 @@ def _llm_requirement(requirements: dict[str, dict[str, Any]], node_id: str, data
         node_id=node_id,
         status="ready" if ready else "missing",
         severity="ready" if ready else "error",
-        message=f"LLM provider {provider} is configured." if ready else f"Configure credentials/runtime for LLM provider {provider}.",
+        message=f"LLM provider {provider} is configured."
+        if ready
+        else f"Configure credentials/runtime for LLM provider {provider}.",
     )
 
 

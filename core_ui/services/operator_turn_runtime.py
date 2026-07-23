@@ -73,10 +73,7 @@ async def operator_health(*, timeout: float = 3.0) -> dict[str, Any]:
             checks["channel_layer"] = f"ok ({cname})"
         except Exception as exc:  # noqa: BLE001
             checks["channel_layer"] = f"error ({cname})"
-            issues.append(
-                f"Channel layer ({cname}) недоступен: {str(exc)[:120]}. "
-                "События чата не дойдут до браузера."
-            )
+            issues.append(f"Channel layer ({cname}) недоступен: {str(exc)[:120]}. События чата не дойдут до браузера.")
 
     try:
         from app.core.llm import get_provider
@@ -106,9 +103,7 @@ async def operator_health(*, timeout: float = 3.0) -> dict[str, Any]:
                     detail = f"{base_url}: {str(exc)[:80]}"
             checks["llm"] = f"ok ({detail})" if reachable else f"unreachable ({detail})"
             if not reachable:
-                issues.append(
-                    f"LLM (Ollama) недоступен: {detail}. Ходы будут висеть на «думает»."
-                )
+                issues.append(f"LLM (Ollama) недоступен: {detail}. Ходы будут висеть на «думает».")
         else:
             checks["llm"] = "ok (cloud provider)"
     except Exception as exc:  # noqa: BLE001
@@ -194,7 +189,7 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
         cancelled_task = True
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=5)
-        except (asyncio.CancelledError, asyncio.TimeoutError):
+        except (TimeoutError, asyncio.CancelledError):
             pass
         except Exception:  # noqa: BLE001 — task failure still counts as stopped
             pass
@@ -239,10 +234,29 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
 # NB: think must never be fully "off" here — Ollama's qwen3 tool grammar 500s
 # without thinking, so the fast tier is "low", not disabled.
 _COMPLEX_THINKING_HINTS = (
-    "почему", "разбер", "диагност", "инцидент", "проанализир", "анализ",
-    "сравни", "сравнен", "план ", "спланир", "стратег", "оптимизир",
-    "рекоменд", "объясни", "root cause", "почему-то", "расследуй",
-    "troubleshoot", "investigate", "analyze", "compare", "plan ", "why ",
+    "почему",
+    "разбер",
+    "диагност",
+    "инцидент",
+    "проанализир",
+    "анализ",
+    "сравни",
+    "сравнен",
+    "план ",
+    "спланир",
+    "стратег",
+    "оптимизир",
+    "рекоменд",
+    "объясни",
+    "root cause",
+    "почему-то",
+    "расследуй",
+    "troubleshoot",
+    "investigate",
+    "analyze",
+    "compare",
+    "plan ",
+    "why ",
 )
 
 
@@ -294,6 +308,7 @@ async def _run_message_turn(
     work_task: asyncio.Task[OperatorTurnResult] | None = None
     heartbeat_task: asyncio.Task[Any] | None = None
     try:
+
         async def on_event(event: dict[str, Any]) -> None:
             await broadcast_operator_event(chat_id, event)
 
@@ -329,7 +344,7 @@ async def _run_message_turn(
                 "actions": [serialize_action(a) for a in result.actions if a],
             },
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await sync_to_async(
             lambda: ChatTurnState.objects.filter(
                 session_id=chat_id,
@@ -372,13 +387,12 @@ async def _run_action_turn(
 ) -> None:
     token = operator_thinking_mode.set(thinking)
     try:
+
         async def on_event(event: dict[str, Any]) -> None:
             await broadcast_operator_event(chat_id, event)
 
         if confirm:
-            action = await sync_to_async(execute_action)(
-                action, confirmed=True, typed_confirm=typed_confirm
-            )
+            action = await sync_to_async(execute_action)(action, confirmed=True, typed_confirm=typed_confirm)
         else:
             action = await sync_to_async(cancel_action)(action)
 

@@ -1,6 +1,7 @@
 """
 WebSocket consumers for interactive SSH terminal sessions.
 """
+
 from __future__ import annotations
 
 import asyncio

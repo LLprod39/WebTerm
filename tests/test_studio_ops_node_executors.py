@@ -343,7 +343,11 @@ def test_ops_disk_cleanup_runs_tmp_cleanup_and_verifies(monkeypatch):
 
     async def fake_run_command_result(_server, *, secret="", command=""):
         captured["command"] = command
-        return {"stdout": "__PLAN__\n/tmp/old\n__ACTION__\nremoved=/tmp/old\n__ACTION_EXIT__=0\n", "stderr": "", "exit_code": 0}
+        return {
+            "stdout": "__PLAN__\n/tmp/old\n__ACTION__\nremoved=/tmp/old\n__ACTION_EXIT__=0\n",
+            "stderr": "",
+            "exit_code": 0,
+        }
 
     monkeypatch.setattr("studio.executor.nodes.ops._server_secret", fake_secret)
     monkeypatch.setattr("studio.executor.nodes.ops.get_linux_ui_disk", fake_disk)
@@ -353,7 +357,13 @@ def test_ops_disk_cleanup_runs_tmp_cleanup_and_verifies(monkeypatch):
         {
             "id": "disk_cleanup",
             "type": "ops/disk_cleanup",
-            "data": {"server_id": server.id, "action": "tmp_cleanup", "min_age_days": 10, "max_entries": 25, "dry_run": False},
+            "data": {
+                "server_id": server.id,
+                "action": "tmp_cleanup",
+                "min_age_days": 10,
+                "max_entries": 25,
+                "dry_run": False,
+            },
         },
         {},
         {},
@@ -460,7 +470,12 @@ def test_ops_http_check_node_passes_expected_status(monkeypatch):
         {
             "id": "http_check",
             "type": "ops/http_check",
-            "data": {"url": "https://example.test/health", "method": "GET", "expected_status": [204], "body_contains": "healthy"},
+            "data": {
+                "url": "https://example.test/health",
+                "method": "GET",
+                "expected_status": [204],
+                "body_contains": "healthy",
+            },
         },
         {},
         {},
@@ -484,7 +499,11 @@ def test_ops_alert_update_resolves_owned_alert():
     )
 
     result = async_to_sync(_execute_registry_node)(
-        {"id": "resolve_alert", "type": "ops/alert_update", "data": {"alert_id_context_key": "alert_id", "action": "resolve"}},
+        {
+            "id": "resolve_alert",
+            "type": "ops/alert_update",
+            "data": {"alert_id_context_key": "alert_id", "action": "resolve"},
+        },
         {"alert_id": alert.id},
         {},
         run,

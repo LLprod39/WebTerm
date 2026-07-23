@@ -1,4 +1,4 @@
-import { Bot, Cpu, Globe, Key, MessageSquare, RefreshCw, Save, Workflow } from "lucide-react";
+import { Bot, Cpu, Key, MessageSquare, RefreshCw, Save, Workflow } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -209,28 +209,6 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
         </div>
       </SectionCard>
 
-      <SectionCard title="Подключение FAIR.Hyperion" icon={Globe} description="OpenAI-compatible endpoint и каталог моделей">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase">BaseURL</label>
-            <Input
-              value={form.fairBaseUrl}
-              onChange={(event) => form.setFairBaseUrl(event.target.value)}
-              placeholder="https://fair-hyperion.dev.k8s.erg.kz/api/hyperion/openai/v1"
-              className="h-9 font-mono text-xs"
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => form.onRefreshPurpose("fair")} disabled={form.refreshingPurpose === "fair"}>
-              <RefreshCw className={cn("h-3.5 w-3.5", form.refreshingPurpose === "fair" && "animate-spin")} /> Обновить модели
-            </Button>
-            <Button size="sm" className="gap-1.5" onClick={form.onSaveOllama} disabled={form.saving}>
-              <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить"}
-            </Button>
-          </div>
-        </div>
-      </SectionCard>
-
       <OllamaRuntimeSettings
         ollamaRoutingActive={form.ollamaRoutingActive}
         openAiRoutingActive={form.openAiRoutingActive}
@@ -264,9 +242,8 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                 providerItem.value === "gemini" ? config.gemini_enabled
                   : providerItem.value === "grok" ? config.grok_enabled
                     : providerItem.value === "openai" ? config.openai_enabled
-                      : providerItem.value === "fair" ? config.fair_enabled
-                        : providerItem.value === "claude" ? config.claude_enabled
-                          : config.ollama_enabled && form.ollamaCloudEnabled;
+                      : providerItem.value === "claude" ? config.claude_enabled
+                        : config.ollama_enabled && form.ollamaCloudEnabled;
               const connected = Boolean(apiKeys[providerItem.statusKey]);
               const draft = form.apiKeyDrafts[providerItem.value] || "";
               const saving = form.savingApiKey === providerItem.value;

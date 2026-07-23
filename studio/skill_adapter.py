@@ -9,6 +9,7 @@ Usage in servers/views/server_agents.py (or agent dispatch):
     from studio.skill_adapter import StudioSkillProvider
     engine = AgentEngine(..., skill_provider=StudioSkillProvider())
 """
+
 from __future__ import annotations
 
 from typing import Any

@@ -26,7 +26,11 @@ def sanitize_kubernetes_resource(
         for raw_key, raw_value in value.items():
             key = str(raw_key)
             if is_secret and key in {"data", "binaryData", "stringData"} and isinstance(raw_value, dict):
-                sanitized[key] = _visible_secret_values(raw_value) if allow_secret_values else {str(item_key): "[redacted]" for item_key in raw_value.keys()}
+                sanitized[key] = (
+                    _visible_secret_values(raw_value)
+                    if allow_secret_values
+                    else {str(item_key): "[redacted]" for item_key in raw_value}
+                )
             elif _is_sensitive_key(key) or key == "managedFields" and not include_managed_fields:
                 sanitized[key] = "[redacted]"
             else:
@@ -76,4 +80,7 @@ def _visible_secret_values(values: dict[str, Any]) -> dict[str, Any]:
 
 def _is_sensitive_key(key: str) -> bool:
     normalized = key.replace("-", "_").lower()
-    return any(part in normalized for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey"))
+    return any(
+        part in normalized
+        for part in ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
+    )

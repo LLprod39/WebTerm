@@ -201,7 +201,10 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
         self.assertEqual(overview["clusters"][0]["links"]["rancher"], "https://rancher.example.test/c/c-prod")
         self.assertEqual(overview["apps"][0]["links"]["devtron_app"], "https://devtron.example.test/app/payments")
         self.assertEqual(overview["workloads"][0]["links"]["rancher"], "https://rancher.example.test/workload/payments")
-        self.assertEqual(overview["fleet_rollouts"][0]["links"]["rancher_fleet"], "https://rancher.example.test/fleet/bundles/ingress-nginx")
+        self.assertEqual(
+            overview["fleet_rollouts"][0]["links"]["rancher_fleet"],
+            "https://rancher.example.test/fleet/bundles/ingress-nginx",
+        )
         self.assertTrue(overview["clusters"][0]["external_links_policy"]["visible"])
         self.assertNotIn("cluster-token", json.dumps(overview))
         self.assertNotIn("app-token", json.dumps(overview))
@@ -364,7 +367,16 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
         self.assertTrue(policy["has_kubernetes_admin_read_feature"])
         self.assertTrue(policy["has_kubernetes_admin_write_feature"])
         self.assertTrue(policy["has_kubernetes_break_glass_feature"])
-        for key in ("can_admin_read", "can_live_resource_get", "can_admin_write", "can_dry_run_apply", "can_break_glass", "can_apply_yaml", "can_exec", "can_mutate_cluster_state"):
+        for key in (
+            "can_admin_read",
+            "can_live_resource_get",
+            "can_admin_write",
+            "can_dry_run_apply",
+            "can_break_glass",
+            "can_apply_yaml",
+            "can_exec",
+            "can_mutate_cluster_state",
+        ):
             self.assertFalse(policy[key], key)
         for key in ("admin_read_capabilities", "admin_write_request_capabilities", "break_glass_request_capabilities"):
             self.assertEqual(policy[key], [], key)
@@ -410,7 +422,9 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
         self.assertNotIn("apply_yaml", policy["blocked_capabilities"])
         self.assertIn("scale", policy["blocked_capabilities"])
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True, KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED=True, KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED=True
+    )
     def test_break_glass_apply_policy_requires_separate_runtime_flag(self):
         user = self.create_user("k8s-break-glass-apply-policy", grant_break_glass=True)
         self.client.force_login(user)

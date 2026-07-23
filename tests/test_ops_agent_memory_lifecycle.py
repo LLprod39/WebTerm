@@ -1,4 +1,3 @@
-
 import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
@@ -129,6 +128,7 @@ def test_django_server_memory_store_skips_event_ingest_when_ai_memory_disabled()
     assert not ServerMemoryEvent.objects.filter(server=server).exists()
     assert not ServerMemoryEpisode.objects.filter(server=server).exists()
 
+
 @pytest.mark.django_db(transaction=True)
 def test_django_server_memory_store_nightly_llm_enhances_sequence_playbooks(monkeypatch):
     owner = User.objects.create_user(username="ops-memory-llm-sequence-user", password="x")
@@ -190,12 +190,16 @@ def test_django_server_memory_store_nightly_llm_enhances_sequence_playbooks(monk
     assert result["skipped"] is False
     automation_snapshots = [
         item
-        for item in ServerMemorySnapshot.objects.filter(server=server, memory_key__startswith="automation_candidate:", is_active=True)
+        for item in ServerMemorySnapshot.objects.filter(
+            server=server, memory_key__startswith="automation_candidate:", is_active=True
+        )
         if item.metadata.get("pattern_kind") == "sequence"
     ]
     skill_snapshots = [
         item
-        for item in ServerMemorySnapshot.objects.filter(server=server, memory_key__startswith="skill_draft:", is_active=True)
+        for item in ServerMemorySnapshot.objects.filter(
+            server=server, memory_key__startswith="skill_draft:", is_active=True
+        )
         if item.metadata.get("pattern_kind") == "sequence"
     ]
     assert any(item.metadata.get("llm_enhanced") is True for item in automation_snapshots)
@@ -275,7 +279,9 @@ def test_manual_knowledge_sync_creates_versioned_snapshots():
     second_snapshot_id = store._sync_manual_knowledge_snapshot_sync(note.id)
 
     assert first_snapshot_id != second_snapshot_id
-    snapshots = list(ServerMemorySnapshot.objects.filter(server=server, memory_key=f"manual_note:{note.id}").order_by("version"))
+    snapshots = list(
+        ServerMemorySnapshot.objects.filter(server=server, memory_key=f"manual_note:{note.id}").order_by("version")
+    )
     assert len(snapshots) == 2
     assert snapshots[0].is_active is False
     assert snapshots[1].is_active is True

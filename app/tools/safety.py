@@ -86,7 +86,11 @@ _DANGEROUS_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     ("curl_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bcurl\s+[^|]*\|\s*(?:sh|bash|zsh|ash|dash|ksh)\b")),
     ("wget_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bwget\s+[^|]*\|\s*(?:sh|bash|zsh|ash|dash|ksh)\b")),
     ("fetch_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\bfetch\s+[^|]*\|\s*(?:sh|bash)\b")),
-    ("generic_pipe_shell", CATEGORY_REMOTE_EXEC, _P(r"\|\s*(?:sudo\s+)?(?:/usr/bin/|/bin/)?(?:sh|bash|zsh|ash|dash|ksh)\b")),
+    (
+        "generic_pipe_shell",
+        CATEGORY_REMOTE_EXEC,
+        _P(r"\|\s*(?:sudo\s+)?(?:/usr/bin/|/bin/)?(?:sh|bash|zsh|ash|dash|ksh)\b"),
+    ),
     ("eval_subshell", CATEGORY_REMOTE_EXEC, _P(r"\beval\s+[\"'$`(]")),
     (
         "command_substitution_shell",
@@ -98,7 +102,9 @@ _DANGEROUS_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
     (
         "base64_exec_inline",
         CATEGORY_REMOTE_EXEC,
-        _P(r"\b(?:python3?|perl|ruby|node)\s+-[ce]\b(?=[\s\S]*(?:base64|Buffer\.from))(?=[\s\S]*(?:exec|eval|system|spawn|popen)\s*\()"),
+        _P(
+            r"\b(?:python3?|perl|ruby|node)\s+-[ce]\b(?=[\s\S]*(?:base64|Buffer\.from))(?=[\s\S]*(?:exec|eval|system|spawn|popen)\s*\()"
+        ),
     ),
     # ── privilege escalation / credential changes ─────────────────────────
     ("userdel", CATEGORY_PRIVILEGE_ESCALATION, _P(r"\buserdel\b")),

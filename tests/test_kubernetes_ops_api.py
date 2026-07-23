@@ -247,12 +247,16 @@ class KubernetesOpsApiTests(TestCase):
             self.assertEqual(response.status_code, 200, route_name)
             self.assertTrue(response.json()["success"])
 
-        namespaces = self.client.get(reverse("api_kubernetes_cluster_namespaces", kwargs={"cluster_id": f"cluster_{cluster.id}"})).json()["namespaces"]
+        namespaces = self.client.get(
+            reverse("api_kubernetes_cluster_namespaces", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        ).json()["namespaces"]
         self.assertEqual(namespaces[0]["name"], "payments")
         self.assertEqual(namespaces[0]["apps"], 1)
         self.assertEqual(namespaces[0]["warning"], 1)
         self.assertEqual(namespaces[0]["owners"], [K8sAppRef.OWNER_DEVTRON])
-        events = self.client.get(reverse("api_kubernetes_cluster_events", kwargs={"cluster_id": f"cluster_{cluster.id}"})).json()["events"]
+        events = self.client.get(
+            reverse("api_kubernetes_cluster_events", kwargs={"cluster_id": f"cluster_{cluster.id}"})
+        ).json()["events"]
         self.assertEqual(events[0]["source"], "webterm_audit")
         self.assertEqual(events[0]["reason"], "k8s.cluster.view")
 
@@ -377,10 +381,14 @@ class KubernetesOpsApiTests(TestCase):
         self.assertEqual(get_kubernetes_provider_token(provider.id), "rotated-devtron-token")
         self.assertNotIn("rotated-devtron-token", str(update_response.json()))
 
-        delete_response = self.client.delete(reverse("api_kubernetes_provider_detail", kwargs={"provider_id": provider.id}))
+        delete_response = self.client.delete(
+            reverse("api_kubernetes_provider_detail", kwargs={"provider_id": provider.id})
+        )
 
         self.assertEqual(delete_response.status_code, 200)
-        self.assertFalse(ManagedSecret.objects.filter(namespace=KUBERNETES_PROVIDER_TOKEN_NAMESPACE, object_id=provider.id).exists())
+        self.assertFalse(
+            ManagedSecret.objects.filter(namespace=KUBERNETES_PROVIDER_TOKEN_NAMESPACE, object_id=provider.id).exists()
+        )
 
     def test_staff_can_update_and_delete_provider_config(self):
         user = self.create_user("k8s-admin-update", is_staff=True)
@@ -404,7 +412,9 @@ class KubernetesOpsApiTests(TestCase):
         self.assertFalse(provider.enabled)
         self.assertEqual(provider.secret_ref, "env:RANCHER_TOKEN")
 
-        delete_response = self.client.delete(reverse("api_kubernetes_provider_detail", kwargs={"provider_id": provider.id}))
+        delete_response = self.client.delete(
+            reverse("api_kubernetes_provider_detail", kwargs={"provider_id": provider.id})
+        )
 
         self.assertEqual(delete_response.status_code, 200)
         self.assertFalse(K8sProvider.objects.exists())

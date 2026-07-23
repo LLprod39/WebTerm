@@ -52,7 +52,10 @@ class KubernetesOpsAdminResourceDiscoveryTests(TestCase):
         def transport(url: str, headers: dict[str, str], timeout: int):
             seen_urls.append(url)
             if url.endswith("/api/v1"):
-                return {"kind": "APIResourceList", "resources": [{"name": "pods", "kind": "Pod", "namespaced": True, "verbs": ["get", "list"]}]}
+                return {
+                    "kind": "APIResourceList",
+                    "resources": [{"name": "pods", "kind": "Pod", "namespaced": True, "verbs": ["get", "list"]}],
+                }
             if url.endswith("/apis"):
                 return {"groups": [{"name": "example.com", "versions": [{"version": "v1"}]}]}
             if url.endswith("/apis/example.com/v1"):
@@ -162,7 +165,9 @@ class KubernetesOpsAdminResourceDiscoveryTests(TestCase):
         self.assertEqual(catalog["example.com/v1:widgets"]["verbs"], ["get", "list", "watch"])
         self.assertEqual(catalog["example.com/v1:widgets"]["short_names"], ["wdg"])
         self.assertEqual(catalog["example.com/v1:widgets"]["crd_name"], "widgets.example.com")
-        self.assertEqual(payload["paths"]["crds"], "/k8s/clusters/c-prod/apis/apiextensions.k8s.io/v1/customresourcedefinitions")
+        self.assertEqual(
+            payload["paths"]["crds"], "/k8s/clusters/c-prod/apis/apiextensions.k8s.io/v1/customresourcedefinitions"
+        )
         self.assertEqual(payload["crd_resources"]["status"], "ready")
         self.assertFalse(payload["crd_resources"]["schema_included"])
         self.assertEqual(
@@ -183,7 +188,10 @@ class KubernetesOpsAdminResourceDiscoveryTests(TestCase):
                 }
             ],
         )
-        self.assertIn("https://rancher.example.test/k8s/clusters/c-prod/apis/apiextensions.k8s.io/v1/customresourcedefinitions", seen_urls)
+        self.assertIn(
+            "https://rancher.example.test/k8s/clusters/c-prod/apis/apiextensions.k8s.io/v1/customresourcedefinitions",
+            seen_urls,
+        )
         self.assertIn("https://rancher.example.test/k8s/clusters/c-prod/apis/example.com/v1", seen_urls)
         self.assertNotIn("raw-token", str(payload))
         self.assertNotIn("raw-api-token", str(payload))

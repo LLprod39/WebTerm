@@ -33,7 +33,17 @@ MAX_RELATED_NETWORK = 100
 MAX_RELATED_EVENTS = 80
 MAX_TEXT_LENGTH = 1_000
 SENSITIVE_KEY_PARTS = ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
-BLOCKED_ACTIONS = ("exec", "port_forward", "terminal", "node_debug", "delete", "scale", "rollout_restart", "patch", "apply_yaml")
+BLOCKED_ACTIONS = (
+    "exec",
+    "port_forward",
+    "terminal",
+    "node_debug",
+    "delete",
+    "scale",
+    "rollout_restart",
+    "patch",
+    "apply_yaml",
+)
 REQUESTABLE_ACTIONS = ("diagnosis.create_draft", "gitops.create_merge_request", "approval.request")
 
 
@@ -80,7 +90,9 @@ def build_namespace_detail(cluster: K8sCluster, namespace_id: str, *, user=None)
         "operation": "namespace_detail",
         "source": "normalized_inventory",
         "cluster": _safe_payload(serialize_cluster(cluster, user=user)),
-        "namespace": _namespace_payload(cluster, namespace_name, namespace=namespace, user=user, apps=apps, workloads=workloads),
+        "namespace": _namespace_payload(
+            cluster, namespace_name, namespace=namespace, user=user, apps=apps, workloads=workloads
+        ),
         "apps": [_safe_payload(serialize_app(app, user=user)) for app in apps],
         "workloads": [_safe_payload(serialize_workload(workload, user=user)) for workload in workloads],
         "pods": [_safe_payload(serialize_pod_ref(pod, user=user)) for pod in pods],
@@ -147,7 +159,9 @@ def _namespace_payload(
 ) -> dict[str, Any]:
     if namespace is not None:
         return _safe_payload(serialize_namespace(namespace, user=user))
-    owners = sorted({item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item})
+    owners = sorted(
+        {item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item}
+    )
     teams = sorted({item for item in [*(app.team for app in apps), *(workload.team for workload in workloads)] if item})
     health = _aggregate_health([*(app.health for app in apps), *(workload.health for workload in workloads)])
     external_links_visible = bool(getattr(user, "is_staff", False))
@@ -167,7 +181,9 @@ def _namespace_payload(
         "external_links_policy": {
             "visible": external_links_visible,
             "mode": "staff_admin_fallback" if external_links_visible else "webterm_native_only",
-            "reason": "" if external_links_visible else "External Rancher/Fleet/Devtron UI links are staff/admin fallback only.",
+            "reason": ""
+            if external_links_visible
+            else "External Rancher/Fleet/Devtron UI links are staff/admin fallback only.",
         },
         "labels": {},
     }
@@ -175,8 +191,9 @@ def _namespace_payload(
 
 def _related_events(cluster: K8sCluster, namespace_name: str) -> list[K8sEvent | K8sAuditEvent]:
     native_events = list(
-        K8sEvent.objects.filter(cluster=cluster, namespace=namespace_name)
-        .order_by("-last_seen_at", "-id")[:MAX_RELATED_EVENTS]
+        K8sEvent.objects.filter(cluster=cluster, namespace=namespace_name).order_by("-last_seen_at", "-id")[
+            :MAX_RELATED_EVENTS
+        ]
     )
     if native_events:
         return native_events
@@ -203,10 +220,16 @@ def _summary(
     network: list[K8sNetworkRef],
     events: list[K8sEvent | K8sAuditEvent],
 ) -> dict[str, Any]:
-    warning_events = [event for event in events if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}]
+    warning_events = [
+        event
+        for event in events
+        if isinstance(event, K8sEvent) and event.severity in {K8sEvent.SEVERITY_WARNING, K8sEvent.SEVERITY_ERROR}
+    ]
     return {
         "namespace": namespace_name,
-        "health": _aggregate_health([*(app.health for app in apps), *(workload.health for workload in workloads), *(pod.health for pod in pods)]),
+        "health": _aggregate_health(
+            [*(app.health for app in apps), *(workload.health for workload in workloads), *(pod.health for pod in pods)]
+        ),
         "app_count": len(apps),
         "workload_count": len(workloads),
         "pod_count": len(pods),
@@ -221,8 +244,12 @@ def _summary(
         "ready_containers": sum(pod.ready_containers for pod in pods),
         "total_containers": sum(pod.total_containers for pod in pods),
         "restart_count": sum(pod.restart_count for pod in pods),
-        "owners": sorted({item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item}),
-        "teams": sorted({item for item in [*(app.team for app in apps), *(workload.team for workload in workloads)] if item}),
+        "owners": sorted(
+            {item for item in [*(app.owner for app in apps), *(workload.owner for workload in workloads)] if item}
+        ),
+        "teams": sorted(
+            {item for item in [*(app.team for app in apps), *(workload.team for workload in workloads)] if item}
+        ),
         "workload_kinds": _counts_by(workloads, "kind"),
         "network_kinds": _counts_by(network, "kind"),
     }

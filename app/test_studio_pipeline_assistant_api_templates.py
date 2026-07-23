@@ -6,7 +6,7 @@ from django.test import Client
 
 from core_ui.models import UserAppPermission
 from servers.models import Server
-from studio.models import MCPServerPool, Pipeline, PipelineDraftSession
+from studio.models import Pipeline, PipelineDraftSession
 
 
 def _grant_feature(user: User, *features: str) -> None:
@@ -16,84 +16,6 @@ def _grant_feature(user: User, *features: str) -> None:
             feature=feature,
             defaults={"allowed": True},
         )
-
-
-@pytest.mark.django_db
-def test_pipeline_assistant_draft_questions_and_answers_preserve_original_goal(monkeypatch):
-    user = User.objects.create_user(username="pipeline-template-interview", password="x", is_staff=True)
-    _grant_feature(user, "studio_pipelines", "studio_mcp", "studio_skills")
-    MCPServerPool.objects.create(
-        owner=user,
-        name="Keycloak Admin",
-        description="Keycloak IAM users groups roles realms and clients",
-        transport=MCPServerPool.TRANSPORT_STDIO,
-    )
-    client = Client()
-    client.force_login(user)
-
-    create_response = client.post(
-        "/api/studio/assistant/drafts/",
-        data=json.dumps(
-            {
-                "pipeline_name": "Keycloak access interview",
-                "nodes": [],
-                "edges": [],
-                "user_message": "Keycloak: add role admin to user ivan.petrov and verify access",
-                "intent": "create",
-                "compiler_mode": "deterministic",
-            }
-        ),
-        content_type="application/json",
-    )
-
-    assert create_response.status_code == 201
-    draft_payload = create_response.json()
-    response = draft_payload["latest_revision"]["response"]
-    assert draft_payload["status"] == PipelineDraftSession.STATUS_NEEDS_INPUT
-    assert any("realm" in question.lower() for question in response["questions"])
-
-    captured_prompt = ""
-
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat", **kwargs):
-        nonlocal captured_prompt
-        captured_prompt = prompt
-        yield json.dumps(
-            {
-                "reply": "Заполнил ответы оператора в draft.",
-                "requirements": ["Keycloak access change with answered parameters"],
-                "assumptions": [],
-                "questions": [],
-                "resource_plan": {"servers": [], "mcp_servers": [], "skills": [], "missing": [], "notes": []},
-                "target_node_id": None,
-                "node_patch": {},
-                "graph_patch": {
-                    "anchor_node_id": None,
-                    "nodes": [],
-                    "edges": [],
-                    "update_nodes": [],
-                    "remove_node_ids": [],
-                    "remove_edge_ids": [],
-                },
-                "warnings": [],
-                "patch_summary": "Answered missing Keycloak parameters",
-            }
-        )
-
-    monkeypatch.setattr("app.core.llm.LLMProvider.stream_chat", fake_stream_chat, raising=False)
-
-    revise_response = client.post(
-        f"/api/studio/assistant/drafts/{draft_payload['id']}/revise/",
-        data=json.dumps({"user_message": "realm prod, operation add, group devops"}),
-        content_type="application/json",
-    )
-
-    assert revise_response.status_code == 200
-    revised = revise_response.json()
-    assert revised["latest_revision"]["user_message"] == "realm prod, operation add, group devops"
-    assert "Keycloak: add role admin to user ivan.petrov" in captured_prompt
-    assert "Открытые вопросы" in captured_prompt
-    assert "realm prod, operation add, group devops" in captured_prompt
-    assert "Ответы оператора: realm prod, operation add, group devops" in revised["user_goal"]
 
 
 @pytest.mark.django_db
@@ -113,7 +35,12 @@ def test_pipeline_assistant_draft_can_switch_to_pilot_template(monkeypatch):
                 "graph_patch": {
                     "anchor_node_id": None,
                     "nodes": [
-                        {"ref": "manual_start", "type": "trigger/manual", "label": "Manual Start", "data": {"is_active": True}},
+                        {
+                            "ref": "manual_start",
+                            "type": "trigger/manual",
+                            "label": "Manual Start",
+                            "data": {"is_active": True},
+                        },
                         {"ref": "report", "type": "output/report", "label": "Report", "data": {"template": "OK"}},
                     ],
                     "edges": [{"source": "manual_start", "target": "report", "source_handle": "out"}],
@@ -132,8 +59,7 @@ def test_pipeline_assistant_draft_can_switch_to_pilot_template(monkeypatch):
                 "nodes": [],
                 "edges": [],
                 "user_message": (
-                    "Проверить конфиг nginx на web-prod-01, перезапустить сервис "
-                    "и проверить https://web-prod-01/health"
+                    "Проверить конфиг nginx на web-prod-01, перезапустить сервис и проверить https://web-prod-01/health"
                 ),
                 "intent": "create",
             }

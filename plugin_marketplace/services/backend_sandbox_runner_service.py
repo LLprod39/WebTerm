@@ -19,7 +19,9 @@ BACKEND_SANDBOX_PROVIDERS = frozenset({BACKEND_SANDBOX_PROVIDER_LOCAL, BACKEND_S
 
 
 def backend_sandbox_provider() -> str:
-    provider = str(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", BACKEND_SANDBOX_PROVIDER_LOCAL) or "").strip()
+    provider = str(
+        getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", BACKEND_SANDBOX_PROVIDER_LOCAL) or ""
+    ).strip()
     return provider or BACKEND_SANDBOX_PROVIDER_LOCAL
 
 
@@ -82,13 +84,20 @@ def _local_worker(
         except subprocess.TimeoutExpired:
             return {"success": False, "error": "Backend sandbox execution timed out."}
         if completed.returncode != 0:
-            return {"success": False, "error": completed.stderr.strip() or completed.stdout.strip() or "Backend sandbox worker failed."}
+            return {
+                "success": False,
+                "error": completed.stderr.strip() or completed.stdout.strip() or "Backend sandbox worker failed.",
+            }
         if not output_path.exists():
             return {"success": False, "error": "Backend sandbox worker did not produce output."}
         if output_path.stat().st_size > output_limit_bytes:
             return {"success": False, "error": "Backend sandbox output exceeded the size limit."}
         parsed = json.loads(output_path.read_text(encoding="utf-8"))
-        return parsed if isinstance(parsed, dict) else {"success": False, "error": "Backend sandbox output was not an object."}
+        return (
+            parsed
+            if isinstance(parsed, dict)
+            else {"success": False, "error": "Backend sandbox output was not an object."}
+        )
 
 
 def _external_auth_headers() -> dict[str, str]:

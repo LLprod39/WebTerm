@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import secrets
 from pathlib import Path
@@ -63,21 +64,15 @@ def store_uploaded_private_key(server, raw_value: str, *, passphrase: str = "") 
 
     target = _managed_key_path(server.user_id, server.id)
     target.parent.mkdir(parents=True, exist_ok=True)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(target.parent, 0o700)
-    except OSError:
-        pass
 
     tmp_target = target.with_suffix(".tmp")
     tmp_target.write_text(key_text, encoding="utf-8", newline="\n")
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(tmp_target, 0o600)
-    except OSError:
-        pass
     tmp_target.replace(target)
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(target, 0o600)
-    except OSError:
-        pass
 
     return str(target)

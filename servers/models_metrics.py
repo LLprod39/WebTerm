@@ -181,9 +181,7 @@ class ServerAiInsight(models.Model):
     ]
 
     kind = models.CharField(max_length=10, choices=KIND_CHOICES, default=KIND_SERVER)
-    server = models.ForeignKey(
-        Server, on_delete=models.CASCADE, related_name="ai_insights", null=True, blank=True
-    )
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="ai_insights", null=True, blank=True)
     endpoint_key = models.CharField(max_length=270, blank=True, db_index=True)
 
     verdict = models.CharField(max_length=10, choices=VERDICT_CHOICES, default=VERDICT_UNKNOWN)
@@ -249,4 +247,8 @@ class ServerCertificate(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.server.name}:{self.port} exp {self.not_after:%Y-%m-%d}" if self.not_after else f"{self.server.name}:{self.port}"
+        return (
+            f"{self.server.name}:{self.port} exp {self.not_after:%Y-%m-%d}"
+            if self.not_after
+            else f"{self.server.name}:{self.port}"
+        )

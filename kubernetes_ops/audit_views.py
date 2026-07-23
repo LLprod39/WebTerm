@@ -44,7 +44,9 @@ def _cluster_or_none(cluster_id: str) -> K8sCluster | None:
 
 def _staff_required(request) -> JsonResponse | None:
     if not getattr(request.user, "is_staff", False):
-        return JsonResponse({"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403)
+        return JsonResponse(
+            {"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403
+        )
     return None
 
 
@@ -79,7 +81,9 @@ def _cluster_for_deeplink(data: dict[str, Any]) -> K8sCluster | None:
 @require_GET
 def api_kubernetes_audit(request):
     events = K8sAuditEvent.objects.select_related("cluster", "user").all()[:100]
-    return _safe_json(lambda: JsonResponse({"success": True, "events": [serialize_audit_event(event) for event in events]}))
+    return _safe_json(
+        lambda: JsonResponse({"success": True, "events": [serialize_audit_event(event) for event in events]})
+    )
 
 
 @login_required

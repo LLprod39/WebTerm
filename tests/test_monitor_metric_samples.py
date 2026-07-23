@@ -18,12 +18,22 @@ def test_check_all_servers_mirrors_metric_samples_to_siblings(monkeypatch):
     user_a = User.objects.create_user(username="ms-a", password="x")
     user_b = User.objects.create_user(username="ms-b", password="x")
     server_a = Server.objects.create(
-        user=user_a, name="shared-a", host="10.0.0.77", port=22,
-        username="root", server_type="ssh", is_active=True,
+        user=user_a,
+        name="shared-a",
+        host="10.0.0.77",
+        port=22,
+        username="root",
+        server_type="ssh",
+        is_active=True,
     )
     server_b = Server.objects.create(
-        user=user_b, name="shared-b", host="10.0.0.77", port=22,
-        username="ubuntu", server_type="ssh", is_active=True,
+        user=user_b,
+        name="shared-b",
+        host="10.0.0.77",
+        port=22,
+        username="ubuntu",
+        server_type="ssh",
+        is_active=True,
     )
 
     async def fake_check_server(server, deep=False):

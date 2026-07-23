@@ -123,7 +123,9 @@ class ServerWatcherDraft(models.Model):
 
     server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="watcher_drafts")
     fingerprint = models.CharField(max_length=64)
-    severity = models.CharField(max_length=20, choices=ServerAlert.SEVERITY_CHOICES, default=ServerAlert.SEVERITY_WARNING)
+    severity = models.CharField(
+        max_length=20, choices=ServerAlert.SEVERITY_CHOICES, default=ServerAlert.SEVERITY_WARNING
+    )
     recommended_role = models.CharField(max_length=50, default="infra_scout")
     objective = models.TextField()
     reasons = models.JSONField(default=list, blank=True)
@@ -152,6 +154,7 @@ class ServerWatcherDraft(models.Model):
 
     def __str__(self):
         return f"{self.server.name}: {self.objective[:80]}"
+
 
 class BackgroundWorkerState(models.Model):
     """Lease and heartbeat state for long-running background workers."""
@@ -205,4 +208,3 @@ class BackgroundWorkerState(models.Model):
 
     def __str__(self):
         return f"{self.worker_kind}:{self.worker_key} ({self.status})"
-

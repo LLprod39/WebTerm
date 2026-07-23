@@ -21,7 +21,9 @@ if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
 
 
-def _resolve_telegram_target(config: dict[str, Any], *, token_keys: tuple[str, ...], chat_keys: tuple[str, ...]) -> tuple[str, str]:
+def _resolve_telegram_target(
+    config: dict[str, Any], *, token_keys: tuple[str, ...], chat_keys: tuple[str, ...]
+) -> tuple[str, str]:
     global_token, global_chat = _global_tg_defaults()
 
     def _first_non_empty(keys: tuple[str, ...], fallback: str) -> str:
@@ -60,9 +62,13 @@ class OutputTelegramNode(BaseNode):
                 out = _redact_pipeline_text((state.get("output") or "").strip())
                 if out:
                     lines.append(f"[{node_id}]\n{out[:800]}")
-            message_template = "\n\n".join(lines) or f"Pipeline {getattr(ctx.pipeline, 'name', '') or ctx.run_id} status update."
+            message_template = (
+                "\n\n".join(lines) or f"Pipeline {getattr(ctx.pipeline, 'name', '') or ctx.run_id} status update."
+            )
 
-        preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
+        preserve_context_keys = {
+            str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")
+        }
         subs = _redacted_context(ctx, preserve_keys=preserve_context_keys)
         runtime = ctx.extra.get("runtime") if isinstance(ctx.extra.get("runtime"), dict) else {}
         subs["pipeline_name"] = str(getattr(ctx.pipeline, "name", "") or "")

@@ -54,9 +54,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"MCP server ready: {mcp_server.name} (ID={mcp_server.id})"))
         self.stdout.write(f"Tools: {tool_names}")
         self.stdout.write(
-            self.style.SUCCESS(
-                f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.'
-            )
+            self.style.SUCCESS(f'Pipeline "{pipeline.name}" ready (ID={pipeline.id}) for user {user.username}.')
         )
         self.stdout.write(f"Plan artifact: {DEMO_ARTIFACT_PLAN}")
         self.stdout.write(f"Manifest artifact: {DEMO_ARTIFACT_MANIFEST}")

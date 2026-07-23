@@ -1,4 +1,5 @@
 """Tests for terminal-AI asyncio lifecycle state."""
+
 from __future__ import annotations
 
 import asyncio

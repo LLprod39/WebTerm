@@ -10,7 +10,12 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
-import { fetchSettingsReadiness, type SettingsReadinessCheck, type SettingsReadinessSeverity } from "@/api";
+import {
+  fetchAuthSession,
+  fetchSettingsReadiness,
+  type SettingsReadinessCheck,
+  type SettingsReadinessSeverity,
+} from "@/api";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { settingsNavGroups } from "@/components/settings/settings-nav-items";
 import { Button } from "@/components/ui/button";
@@ -106,6 +111,12 @@ const SETUP_PATH = [
 
 export default function SettingsReadinessPage() {
   const queryClient = useQueryClient();
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
   const { data, isLoading, error } = useQuery({
     queryKey: ["settings", "readiness"],
     queryFn: fetchSettingsReadiness,
@@ -142,6 +153,9 @@ export default function SettingsReadinessPage() {
   );
 
   const launchItems = settingsNavGroups.find((g) => g.id === "launch")?.items || [];
+  const setupPath = authData?.user?.features.plugins
+    ? SETUP_PATH
+    : SETUP_PATH.filter((step) => step.path !== "/settings/plugins");
 
   return (
     <div className="space-y-5 pb-10">
@@ -176,7 +190,7 @@ export default function SettingsReadinessPage() {
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {SETUP_PATH.map((step) => (
+          {setupPath.map((step) => (
             <Link
               key={step.path}
               to={step.path}

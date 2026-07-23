@@ -184,7 +184,10 @@ def _pod_health(phase: str, restart_count: int, container_statuses: list[Any]) -
         for status in container_statuses
         if isinstance(status, dict)
     ]
-    if any(reason in {"crashloopbackoff", "imagepullbackoff", "errimagepull", "createcontainerconfigerror"} for reason in waiting_reasons):
+    if any(
+        reason in {"crashloopbackoff", "imagepullbackoff", "errimagepull", "createcontainerconfigerror"}
+        for reason in waiting_reasons
+    ):
         return K8sCluster.HEALTH_DEGRADED
     if any(reason in {"containercreating", "podinitializing"} for reason in waiting_reasons):
         return K8sCluster.HEALTH_WARNING
@@ -199,7 +202,9 @@ def normalize_rancher_cluster(provider: K8sProvider, item: dict[str, Any]) -> di
     name = str(first_value(item, "name", "metadata.name", default=cluster_id)).strip()
     state = first_value(item, "state", "status", "health", "status.phase", "status.state")
     total = as_int(first_value(item, "nodeCount", "nodes_total", "status.nodeCount", "status.nodesTotal"))
-    ready = as_int(first_value(item, "readyNodes", "nodes_ready", "nodeReadyCount", "status.readyNodes", "status.nodesReady"))
+    ready = as_int(
+        first_value(item, "readyNodes", "nodes_ready", "nodeReadyCount", "status.readyNodes", "status.nodesReady")
+    )
     health = normalize_health(state)
     if health == K8sCluster.HEALTH_HEALTHY and total and not ready:
         ready = total
@@ -262,10 +267,16 @@ def normalize_rancher_workload(item: dict[str, Any]) -> dict[str, Any]:
     name = str(first_value(item, "name", "metadata.name", default="")).strip()
     if (not name or name == raw_id) and id_parts:
         name = id_parts[-1]
-    kind = normalize_workload_kind(first_value(item, "workloadType", "kind", "type", default=id_parts[0] if id_parts else ""))
+    kind = normalize_workload_kind(
+        first_value(item, "workloadType", "kind", "type", default=id_parts[0] if id_parts else "")
+    )
     cluster_name = str(first_value(item, "clusterName", "cluster_name", "cluster.name", default=cluster_id)).strip()
     desired = as_int(first_value(item, "scale", "replicas", "desired", "spec.replicas", "status.replicas"))
-    ready = as_int(first_value(item, "readyReplicas", "availableReplicas", "ready", "status.readyReplicas", "status.availableReplicas"))
+    ready = as_int(
+        first_value(
+            item, "readyReplicas", "availableReplicas", "ready", "status.readyReplicas", "status.availableReplicas"
+        )
+    )
     health = normalize_health(first_value(item, "state", "status.phase", "status.state", "status"))
     if health == K8sCluster.HEALTH_UNKNOWN and desired:
         health = K8sCluster.HEALTH_HEALTHY if ready >= desired else K8sCluster.HEALTH_DEGRADED
@@ -275,7 +286,9 @@ def normalize_rancher_workload(item: dict[str, Any]) -> dict[str, Any]:
         "namespace": namespace or "default",
         "name": name or raw_id,
         "kind": kind,
-        "environment": infer_environment(namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))),
+        "environment": infer_environment(
+            namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))
+        ),
         "owner": str(labels.get("app.kubernetes.io/managed-by") or labels.get("owner") or "rancher"),
         "team": str(labels.get("webterm.io/team") or labels.get("team") or ""),
         "health": health,
@@ -322,7 +335,9 @@ def normalize_rancher_pod(item: dict[str, Any]) -> dict[str, Any]:
         "cluster_name": cluster_name or cluster_id or "rancher",
         "namespace": namespace or "default",
         "name": name or raw_id,
-        "environment": infer_environment(namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))),
+        "environment": infer_environment(
+            namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))
+        ),
         "health": _pod_health(phase, restart_count, container_statuses),
         "phase": phase,
         "node_name": str(first_value(item, "nodeName", "spec.nodeName", default="")).strip(),
@@ -374,7 +389,9 @@ def normalize_rancher_service(item: dict[str, Any]) -> dict[str, Any]:
         "namespace": namespace,
         "name": name,
         "kind": K8sNetworkRef.KIND_SERVICE,
-        "environment": infer_environment(namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))),
+        "environment": infer_environment(
+            namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))
+        ),
         "health": health,
         "service_type": str(first_value(item, "serviceType", "type", "spec.type", default="")).strip(),
         "ports": as_list(ports),
@@ -402,7 +419,9 @@ def normalize_rancher_ingress(item: dict[str, Any]) -> dict[str, Any]:
         "namespace": namespace,
         "name": name,
         "kind": K8sNetworkRef.KIND_INGRESS,
-        "environment": infer_environment(namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))),
+        "environment": infer_environment(
+            namespace or name or raw_id, labels, str(first_value(item, "environment", "env"))
+        ),
         "health": health,
         "service_type": str(first_value(item, "ingressClassName", "spec.ingressClassName", default="")).strip(),
         "ports": as_list(first_value(item, "ports", default=[])),
@@ -431,16 +450,26 @@ def normalize_rancher_event(item: dict[str, Any]) -> dict[str, Any]:
     return {
         "cluster_rancher_id": cluster_id,
         "cluster_name": cluster_name or cluster_id or "rancher",
-        "event_uid": event_uid or f"{cluster_id}:{namespace}:{reason}:{first_value(item, 'lastTimestamp', 'eventTime', 'created')}",
-        "source": bounded_text(first_value(item, "source.component", "reportingComponent", "source", default="rancher"), 80) or "rancher",
+        "event_uid": event_uid
+        or f"{cluster_id}:{namespace}:{reason}:{first_value(item, 'lastTimestamp', 'eventTime', 'created')}",
+        "source": bounded_text(
+            first_value(item, "source.component", "reportingComponent", "source", default="rancher"), 80
+        )
+        or "rancher",
         "severity": normalize_event_severity(event_type or reason),
         "reason": reason or str(first_value(item, "name", "metadata.name", default="")).strip(),
         "message": str(first_value(item, "message", "note", "description", default="")).strip(),
         "namespace": namespace,
-        "involved_kind": bounded_text(involved.get("kind") if isinstance(involved, dict) else first_value(item, "involvedKind", default=""), 80),
-        "involved_name": bounded_text(involved.get("name") if isinstance(involved, dict) else first_value(item, "involvedName", default=""), 180),
+        "involved_kind": bounded_text(
+            involved.get("kind") if isinstance(involved, dict) else first_value(item, "involvedKind", default=""), 80
+        ),
+        "involved_name": bounded_text(
+            involved.get("name") if isinstance(involved, dict) else first_value(item, "involvedName", default=""), 180
+        ),
         "count": as_int(first_value(item, "count", "series.count", default=1), default=1) or 1,
-        "first_seen_at": parse_event_time(first_value(item, "firstTimestamp", "eventTime", "metadata.creationTimestamp")),
+        "first_seen_at": parse_event_time(
+            first_value(item, "firstTimestamp", "eventTime", "metadata.creationTimestamp")
+        ),
         "last_seen_at": parse_event_time(first_value(item, "lastTimestamp", "eventTime", "metadata.creationTimestamp")),
         "labels": labels,
     }
@@ -452,7 +481,9 @@ def normalize_fleet_bundle(provider: K8sProvider, item: dict[str, Any]) -> dict[
     name = f"{namespace}/{metadata_name}" if namespace and "/" not in metadata_name else metadata_name
     summary = nested(item, "status", "summary") or {}
     ready = as_int(first_value(item, "ready", "status.ready", "status.summary.ready", "status.summary.desiredReady"))
-    desired = as_int(first_value(item, "desired", "status.desired", "status.summary.desired", "status.summary.desiredReady"))
+    desired = as_int(
+        first_value(item, "desired", "status.desired", "status.summary.desired", "status.summary.desiredReady")
+    )
     not_ready = as_int(summary.get("notReady") if isinstance(summary, dict) else 0)
     if not desired and ready:
         desired = ready + not_ready
@@ -473,20 +504,46 @@ def normalize_fleet_bundle(provider: K8sProvider, item: dict[str, Any]) -> dict[
 
 
 def normalize_devtron_app(item: dict[str, Any]) -> dict[str, Any]:
-    cluster_name = str(first_value(item, "cluster_name", "clusterName", "environment.clusterName", "environmentDetail.clusterName", default="devtron")).strip()
+    cluster_name = str(
+        first_value(
+            item,
+            "cluster_name",
+            "clusterName",
+            "environment.clusterName",
+            "environmentDetail.clusterName",
+            default="devtron",
+        )
+    ).strip()
     app_name = str(first_value(item, "appName", "name", "applicationName", default="")).strip()
-    namespace = str(first_value(item, "namespace", "namespaceName", "environment.namespace", "environmentDetail.namespace", default="default")).strip()
+    namespace = str(
+        first_value(
+            item,
+            "namespace",
+            "namespaceName",
+            "environment.namespace",
+            "environmentDetail.namespace",
+            default="default",
+        )
+    ).strip()
     env = str(first_value(item, "environment", "environmentName", "envName", "env", default="")).strip()
     return {
         "cluster_name": cluster_name or "devtron",
-        "devtron_cluster_id": str(first_value(item, "clusterId", "cluster_id", "environment.clusterId", "environmentDetail.clusterId", default="")).strip(),
+        "devtron_cluster_id": str(
+            first_value(
+                item, "clusterId", "cluster_id", "environment.clusterId", "environmentDetail.clusterId", default=""
+            )
+        ).strip(),
         "name": app_name,
         "namespace": namespace or "default",
         "environment": infer_environment(cluster_name, labels_for(item), env),
         "owner": K8sAppRef.OWNER_DEVTRON,
         "team": str(first_value(item, "team", "teamName", "projectName", default="")).strip(),
-        "health": normalize_health(first_value(item, "health", "status", "appStatus", "resourceTree.status", default="")),
-        "version": str(first_value(item, "version", "releaseVersion", "deployedVersion", "imageTag", "chartName", default="")).strip(),
+        "health": normalize_health(
+            first_value(item, "health", "status", "appStatus", "resourceTree.status", default="")
+        ),
+        "version": str(
+            first_value(item, "version", "releaseVersion", "deployedVersion", "imageTag", "chartName", default="")
+        ).strip(),
         "links": {
             "devtron_app": str(first_value(item, "url", "links.self", default="")),
             "logs": str(first_value(item, "logsUrl", "logs_url", "links.logs", default="")),

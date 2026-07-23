@@ -183,7 +183,9 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
         input_schema=_schema(
             {
                 **SERVER_ID_FIELDS,
-                "service": _str(description="systemd service name. Falls back to service_name runtime context when empty."),
+                "service": _str(
+                    description="systemd service name. Falls back to service_name runtime context when empty."
+                ),
                 "action": _str(enum=("start", "stop", "restart", "reload"), default="restart"),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,

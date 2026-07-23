@@ -60,10 +60,19 @@ class KubernetesOpsActionProductionTemplateTests(TestCase):
         self.assertTrue(template["verification"]["required"])
         self.assertTrue(template["report"]["required"])
         self.assertEqual(template["rollback"]["strategy"], "rollout_recovery")
-        self.assertEqual([item["id"] for item in template["lifecycle"]], ["request", "approve", "execute", "verify", "report"])
-        self.assertEqual(template["verification"]["check_ids"], ["rollout_status_observed", "pod_readiness_observed", "recent_warning_events_checked"])
+        self.assertEqual(
+            [item["id"] for item in template["lifecycle"]], ["request", "approve", "execute", "verify", "report"]
+        )
+        self.assertEqual(
+            template["verification"]["check_ids"],
+            ["rollout_status_observed", "pod_readiness_observed", "recent_warning_events_checked"],
+        )
         self.assertTrue(production_rollout_restart_template_is_safe(template))
         self.assertNotIn("raw-secret-token", str(payload))
 
     def test_production_restart_template_safety_rejects_payload_storage(self):
-        self.assertFalse(production_rollout_restart_template_is_safe({"status": "ready", "direct_execution": False, "payload_stored": True}))
+        self.assertFalse(
+            production_rollout_restart_template_is_safe(
+                {"status": "ready", "direct_execution": False, "payload_stored": True}
+            )
+        )

@@ -1,16 +1,12 @@
 import json
-from concurrent.futures import Future
 from datetime import timedelta
-from types import SimpleNamespace
 
 import pytest
-from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from servers.agent_engine import AgentEngine
 from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
 
 
@@ -114,7 +110,9 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
                         ],
                     }
                 ],
-                "report_delivery": {"telegram": {"enabled": True, "chat_id": "12345", "format": "brief", "include_link": True}},
+                "report_delivery": {
+                    "telegram": {"enabled": True, "chat_id": "12345", "format": "brief", "include_link": True}
+                },
             }
         ),
         content_type="application/json",
@@ -154,13 +152,15 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     captured_launch: dict[str, object] = {}
 
     def fake_launch(run_id: int, agent_id: int, server_ids: list[int], user_id: int, *, plan_only: bool = False):
-        captured_launch.update({
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "server_ids": server_ids,
-            "user_id": user_id,
-            "plan_only": plan_only,
-        })
+        captured_launch.update(
+            {
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "server_ids": server_ids,
+                "user_id": user_id,
+                "plan_only": plan_only,
+            }
+        )
 
     monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
 
@@ -370,7 +370,9 @@ def test_agent_runtime_cleanup_stale_runs_is_user_scoped(settings):
 
     stale_at = timezone.now() - timedelta(minutes=5)
     run = AgentRun.objects.create(agent=agent, server=server, user=user, status=AgentRun.STATUS_PENDING)
-    other_run = AgentRun.objects.create(agent=other_agent, server=other_server, user=other, status=AgentRun.STATUS_PENDING)
+    other_run = AgentRun.objects.create(
+        agent=other_agent, server=other_server, user=other, status=AgentRun.STATUS_PENDING
+    )
     AgentRun.objects.filter(pk__in=[run.pk, other_run.pk]).update(started_at=stale_at)
     run.refresh_from_db()
     other_run.refresh_from_db()

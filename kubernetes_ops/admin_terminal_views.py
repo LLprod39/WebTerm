@@ -33,11 +33,17 @@ def _safe_json(handler):
 
 
 def _error_response(error: AdminResourceError) -> JsonResponse:
-    return JsonResponse({"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status)
+    return JsonResponse(
+        {"success": False, "error": str(error), "code": error.code, "payload": error.payload}, status=error.status
+    )
 
 
 def _session_for_user(user, session_id) -> K8sAdminSession | None:
-    return K8sAdminSession.objects.select_related("user", "approved_by", "provider", "cluster").filter(session_id=session_id, user=user).first()
+    return (
+        K8sAdminSession.objects.select_related("user", "approved_by", "provider", "cluster")
+        .filter(session_id=session_id, user=user)
+        .first()
+    )
 
 
 @login_required
@@ -50,13 +56,16 @@ def api_kubernetes_admin_terminal_start(request, session_id):
             return error_response
         session = _session_for_user(request.user, session_id)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             envelope = prepare_cluster_terminal_start(
                 user=request.user,
                 session=session,
                 reason=str(data.get("reason") or ""),
-                include_restricted_context=str(data.get("include_restricted_context") or "").lower() in {"1", "true", "yes"},
+                include_restricted_context=str(data.get("include_restricted_context") or "").lower()
+                in {"1", "true", "yes"},
             )
         except AdminResourceError as exc:
             return _error_response(exc)
@@ -75,7 +84,9 @@ def api_kubernetes_admin_terminal_stop(request, session_id):
             return error_response
         session = _session_for_user(request.user, session_id)
         if session is None:
-            return JsonResponse({"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404)
+            return JsonResponse(
+                {"success": False, "error": "Admin session not found.", "code": "admin_session_not_found"}, status=404
+            )
         try:
             reject_cluster_terminal_stop(
                 user=request.user,

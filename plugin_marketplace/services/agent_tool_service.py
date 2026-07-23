@@ -10,10 +10,14 @@ from plugin_marketplace.services.health_service import PluginConnectorError, pin
 
 
 def _enabled(plugin_id: str, user=None) -> bool:
-    installation = PluginInstallation.objects.prefetch_related("scoped_groups").filter(
-        plugin_id=plugin_id,
-        status=PluginInstallation.STATUS_ENABLED,
-    ).first()
+    installation = (
+        PluginInstallation.objects.prefetch_related("scoped_groups")
+        .filter(
+            plugin_id=plugin_id,
+            status=PluginInstallation.STATUS_ENABLED,
+        )
+        .first()
+    )
     return bool(installation and installation_allowed_for_user(installation, user))
 
 
@@ -48,7 +52,9 @@ def agent_tool_execution_provider(payload: dict[str, Any]) -> dict[str, Any]:
         )
         return {
             "success": bool(result.get("success")),
-            "result": result.get("result") if result.get("success") else str(result.get("error") or "Sandbox execution failed."),
+            "result": result.get("result")
+            if result.get("success")
+            else str(result.get("error") or "Sandbox execution failed."),
             "data": {"plugin_id": plugin_id, "sandbox": True, "raw": result},
         }
     if executor_ref == "plugin_marketplace.demo.agent_connector_ping":

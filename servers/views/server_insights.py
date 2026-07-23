@@ -53,9 +53,7 @@ def _latest_samples_by_server_id(server_ids: list[int]) -> dict[int, ServerMetri
     if not server_ids:
         return {}
     latest_rows = (
-        ServerMetricSample.objects.filter(server_id__in=server_ids)
-        .values("server_id")
-        .annotate(last_id=Max("id"))
+        ServerMetricSample.objects.filter(server_id__in=server_ids).values("server_id").annotate(last_id=Max("id"))
     )
     latest_ids = [row["last_id"] for row in latest_rows if row.get("last_id")]
     if not latest_ids:
@@ -120,8 +118,7 @@ def _health_score(
         score -= 10
 
     prediction_penalty = sum(
-        15 if item["severity"] == "critical" else 7 if item["severity"] == "warning" else 0
-        for item in predictions
+        15 if item["severity"] == "critical" else 7 if item["severity"] == "warning" else 0 for item in predictions
     )
     score -= min(prediction_penalty, 30)
 
@@ -225,9 +222,7 @@ def _serialize_certificate(cert: ServerCertificate, now) -> dict[str, Any]:
 
 def _build_insights_payload() -> dict[str, Any]:
     now = timezone.now()
-    servers = list(
-        Server.objects.filter(is_active=True).select_related("user").order_by("name")
-    )
+    servers = list(Server.objects.filter(is_active=True).select_related("user").order_by("name"))
     server_ids = [server.id for server in servers]
 
     health_by_id = _latest_health_checks_by_server_id(server_ids)
@@ -318,9 +313,7 @@ def _build_insights_payload() -> dict[str, Any]:
     fleet_health_score = int(round(sum(scores) / len(scores))) if scores else 100
     fleet_health_worst = min(scores) if scores else 100
 
-    expiring_30d = sum(
-        1 for cert in certificates if cert["days_left"] is not None and cert["days_left"] <= 30
-    )
+    expiring_30d = sum(1 for cert in certificates if cert["days_left"] is not None and cert["days_left"] <= 30)
     changed_7d = sum(
         1
         for cert in cert_rows
@@ -333,9 +326,7 @@ def _build_insights_payload() -> dict[str, Any]:
         "enabled": ai_insights_enabled(),
         "running": bool(cache.get(_AI_RUN_LOCK_KEY)),
         "fleet": serialize_insight(latest_fleet_insight()),
-        "by_endpoint": {
-            key: serialize_insight(row) for key, row in insights_by_endpoint.items()
-        },
+        "by_endpoint": {key: serialize_insight(row) for key, row in insights_by_endpoint.items()},
     }
 
     return {

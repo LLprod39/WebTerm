@@ -40,7 +40,9 @@ class ServersOpsRuntimeProvider:
     async def get_linux_ui_docker_logs(self, server, *, secret: str = "", container: str = "", lines: int = 80):
         return await linux_ui.get_linux_ui_docker_logs(server, secret=secret, container=container, lines=lines)
 
-    async def get_linux_ui_logs(self, server, *, secret: str = "", source: str = "journal", lines: int = 120, service: str = ""):
+    async def get_linux_ui_logs(
+        self, server, *, secret: str = "", source: str = "journal", lines: int = 120, service: str = ""
+    ):
         return await linux_ui.get_linux_ui_logs(server, secret=secret, source=source, lines=lines, service=service)
 
     async def get_linux_ui_network(self, server, *, secret: str = ""):

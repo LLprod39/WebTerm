@@ -50,7 +50,9 @@ class OutputEmailNode(BaseNode):
         subject_template = str(config.get("subject") or f"Pipeline Report: {pipeline_name}")
         body_template = str(config.get("body") or "")
         preserve_values = [str(item) for item in config.get("_redaction_preserve_values", []) if str(item or "")]
-        preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
+        preserve_context_keys = {
+            str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")
+        }
         subs = _redacted_context(ctx, preserve_keys=preserve_context_keys)
 
         try:
@@ -75,10 +77,14 @@ class OutputEmailNode(BaseNode):
             body = "\n".join(lines)
         body = _redact_pipeline_text(body, preserve_values=preserve_values)
 
-        smtp_host = str(config.get("smtp_host") or "").strip() or g_host or getattr(settings, "EMAIL_HOST", "smtp.gmail.com")
+        smtp_host = (
+            str(config.get("smtp_host") or "").strip() or g_host or getattr(settings, "EMAIL_HOST", "smtp.gmail.com")
+        )
         smtp_port = _coerce_smtp_port(config.get("smtp_port"))
         smtp_user = str(config.get("smtp_user") or "").strip() or g_user or getattr(settings, "EMAIL_HOST_USER", "")
-        smtp_password = str(config.get("smtp_password") or "").strip() or g_pass or getattr(settings, "EMAIL_HOST_PASSWORD", "")
+        smtp_password = (
+            str(config.get("smtp_password") or "").strip() or g_pass or getattr(settings, "EMAIL_HOST_PASSWORD", "")
+        )
         from_email = str(config.get("from_email") or "").strip() or g_from or smtp_user or "pipeline@noreply.local"
         from_email = _resolve_from_email(from_email, smtp_user, smtp_host)
         use_tls = smtp_port in (587, 465)
@@ -114,6 +120,8 @@ class OutputEmailNode(BaseNode):
 
         try:
             await asyncio.get_event_loop().run_in_executor(None, _send_sync)
-            return NodeResult(output={"status": "completed", "output": f"Email sent to {to_email} | Subject: {subject}"})
+            return NodeResult(
+                output={"status": "completed", "output": f"Email sent to {to_email} | Subject: {subject}"}
+            )
         except Exception as exc:
             return NodeResult(error=f"SMTP error: {_redact_pipeline_text(str(exc))}")

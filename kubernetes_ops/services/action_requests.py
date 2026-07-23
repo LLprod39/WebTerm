@@ -184,21 +184,27 @@ def block_kubernetes_action_execution(*, action_request: K8sActionRequest, user)
     return action_request
 
 
-def approve_external_action_request(*, action_request: K8sActionRequest, user, data: dict[str, Any]) -> K8sActionRequest:
+def approve_external_action_request(
+    *, action_request: K8sActionRequest, user, data: dict[str, Any]
+) -> K8sActionRequest:
     _ensure_action_request_status(
         action_request,
         allowed={K8sActionRequest.STATUS_PENDING_APPROVAL},
         transition="approve_external",
         code="action_request_not_pending",
     )
-    approval_ref = _reference_text(data.get("approval_ref") or data.get("change_request_url") or action_request.approval_ref or "", limit=160)
+    approval_ref = _reference_text(
+        data.get("approval_ref") or data.get("change_request_url") or action_request.approval_ref or "", limit=160
+    )
     if not approval_ref:
         raise ActionRequestValidationError(
             "approval_ref is required for external approval.",
             code="approval_ref_required",
             payload={"request_id": str(action_request.request_id)},
         )
-    summary = _bounded_text(data.get("summary") or data.get("reason") or "Approved for external execution.", limit=MAX_TEXT)
+    summary = _bounded_text(
+        data.get("summary") or data.get("reason") or "Approved for external execution.", limit=MAX_TEXT
+    )
     now = timezone.now().isoformat()
     previous_report = action_request.report if isinstance(action_request.report, dict) else {}
     previous_policy = action_request.execution_policy if isinstance(action_request.execution_policy, dict) else {}
@@ -226,7 +232,9 @@ def approve_external_action_request(*, action_request: K8sActionRequest, user, d
     return action_request
 
 
-def record_external_action_verification(*, action_request: K8sActionRequest, user, data: dict[str, Any]) -> K8sActionRequest:
+def record_external_action_verification(
+    *, action_request: K8sActionRequest, user, data: dict[str, Any]
+) -> K8sActionRequest:
     _ensure_action_request_status(
         action_request,
         allowed=VERIFYABLE_STATUSES,
@@ -253,15 +261,25 @@ def record_external_action_verification(*, action_request: K8sActionRequest, use
             payload={"request_id": str(action_request.request_id)},
         )
 
-    external_ref = _reference_text(data.get("external_ref") or data.get("change_request_url") or data.get("approval_ref") or "", limit=240)
+    external_ref = _reference_text(
+        data.get("external_ref") or data.get("change_request_url") or data.get("approval_ref") or "", limit=240
+    )
     checks = _sanitize_value(data.get("checks") if isinstance(data.get("checks"), list) else [])
     evidence = _sanitize_value(data.get("evidence") if isinstance(data.get("evidence"), dict) else {})
     now = timezone.now().isoformat()
     previous_report = action_request.report if isinstance(action_request.report, dict) else {}
     previous_policy = action_request.execution_policy if isinstance(action_request.execution_policy, dict) else {}
     native_execution = action_request.status == K8sActionRequest.STATUS_EXECUTED_NATIVE
-    verified_status = K8sActionRequest.STATUS_VERIFIED_NATIVE if native_execution else K8sActionRequest.STATUS_VERIFIED_EXTERNAL
-    verification_plan = mark_native_verification_plan_recorded(report=previous_report, verified=verified, recorded_at=timezone.now(), checks=checks) if native_execution else {}
+    verified_status = (
+        K8sActionRequest.STATUS_VERIFIED_NATIVE if native_execution else K8sActionRequest.STATUS_VERIFIED_EXTERNAL
+    )
+    verification_plan = (
+        mark_native_verification_plan_recorded(
+            report=previous_report, verified=verified, recorded_at=timezone.now(), checks=checks
+        )
+        if native_execution
+        else {}
+    )
 
     action_request.status = verified_status if verified else K8sActionRequest.STATUS_VERIFICATION_FAILED
     action_request.report = {
@@ -282,7 +300,9 @@ def record_external_action_verification(*, action_request: K8sActionRequest, use
         action_request.report["verification_plan"] = verification_plan
     action_request.execution_policy = {
         **previous_policy,
-        "native_execution_enabled": bool(previous_policy.get("native_execution_enabled")) if native_execution else False,
+        "native_execution_enabled": bool(previous_policy.get("native_execution_enabled"))
+        if native_execution
+        else False,
         "external_verification_recorded": not native_execution,
         "native_verification_recorded": native_execution,
         "verification_recorded_at": now,
@@ -374,7 +394,9 @@ def _target_from_data(data: dict[str, Any]) -> dict[str, Any]:
     return target
 
 
-def _preflight_preview(action: str, target: dict[str, Any], *, user) -> tuple[K8sCluster | None, dict[str, Any], dict[str, Any]]:
+def _preflight_preview(
+    action: str, target: dict[str, Any], *, user
+) -> tuple[K8sCluster | None, dict[str, Any], dict[str, Any]]:
     if action == K8sActionRequest.ACTION_K8S_ROLLOUT_RESTART:
         return workload_restart_preview(target, summary=ACTION_METADATA[action]["summary"])
     if action == K8sActionRequest.ACTION_K8S_WORKLOAD_SCALE:
@@ -402,30 +424,46 @@ def _preflight_preview(action: str, target: dict[str, Any], *, user) -> tuple[K8
     )
 
 
-def _fleet_rollout_preview(action: str, target: dict[str, Any]) -> tuple[K8sCluster | None, dict[str, Any], dict[str, Any]]:
+def _fleet_rollout_preview(
+    action: str, target: dict[str, Any]
+) -> tuple[K8sCluster | None, dict[str, Any], dict[str, Any]]:
     bundle = _fleet_bundle_from_target(target)
-    bundle_name = _bounded_text(target.get("bundle_name") or target.get("name") or (bundle.name if bundle else ""), limit=180)
+    bundle_name = _bounded_text(
+        target.get("bundle_name") or target.get("name") or (bundle.name if bundle else ""), limit=180
+    )
     if not bundle_name:
-        raise ActionRequestValidationError("Fleet rollout action requires bundle_name.", code="bundle_required", payload={"target": target})
+        raise ActionRequestValidationError(
+            "Fleet rollout action requires bundle_name.", code="bundle_required", payload={"target": target}
+        )
     normalized = {"bundle_name": bundle_name}
     if bundle:
         normalized["bundle_id"] = f"fleet_{bundle.id}"
-    return None, normalized, {
-        "summary": ACTION_METADATA[action]["summary"],
-        "blast_radius": "fleet_bundle",
-        "inventory_match": bool(bundle),
-        "current_status": bundle.status if bundle else "unknown",
-        "ready": bundle.ready if bundle else None,
-        "desired": bundle.desired if bundle else None,
-        "affected": [normalized],
-        "expected_verification": ["Fleet bundle status", "target cluster readiness", "GitRepo reconciliation status"],
-    }
+    return (
+        None,
+        normalized,
+        {
+            "summary": ACTION_METADATA[action]["summary"],
+            "blast_radius": "fleet_bundle",
+            "inventory_match": bool(bundle),
+            "current_status": bundle.status if bundle else "unknown",
+            "ready": bundle.ready if bundle else None,
+            "desired": bundle.desired if bundle else None,
+            "affected": [normalized],
+            "expected_verification": [
+                "Fleet bundle status",
+                "target cluster readiness",
+                "GitRepo reconciliation status",
+            ],
+        },
+    )
 
 
 def _devtron_rollback_preview(target: dict[str, Any]) -> tuple[K8sCluster | None, dict[str, Any], dict[str, Any]]:
     app = _app_from_target(target)
     if app is None:
-        raise ActionRequestValidationError("Devtron rollback request requires a known app_id.", code="app_required", payload={"target": target})
+        raise ActionRequestValidationError(
+            "Devtron rollback request requires a known app_id.", code="app_required", payload={"target": target}
+        )
     normalized = {
         "app_id": f"app_{app.id}",
         "app_name": app.name,
@@ -434,16 +472,20 @@ def _devtron_rollback_preview(target: dict[str, Any]) -> tuple[K8sCluster | None
         "namespace": app.namespace,
         "owner": app.owner,
     }
-    return app.cluster, normalized, {
-        "summary": ACTION_METADATA[K8sActionRequest.ACTION_DEVTRON_OPEN_ROLLBACK]["summary"],
-        "blast_radius": "single_devtron_app",
-        "inventory_match": True,
-        "current_health": app.health,
-        "version": app.version,
-        "links": _sanitize_public_links(app.links or {}),
-        "affected": [normalized],
-        "expected_verification": ["Devtron deployment history", "application health", "pod readiness"],
-    }
+    return (
+        app.cluster,
+        normalized,
+        {
+            "summary": ACTION_METADATA[K8sActionRequest.ACTION_DEVTRON_OPEN_ROLLBACK]["summary"],
+            "blast_radius": "single_devtron_app",
+            "inventory_match": True,
+            "current_health": app.health,
+            "version": app.version,
+            "links": _sanitize_public_links(app.links or {}),
+            "affected": [normalized],
+            "expected_verification": ["Devtron deployment history", "application health", "pod readiness"],
+        },
+    )
 
 
 def _cluster_or_none(cluster_id: str) -> K8sCluster | None:

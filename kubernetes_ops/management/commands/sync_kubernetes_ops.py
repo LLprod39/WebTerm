@@ -28,7 +28,9 @@ class Command(BaseCommand):
                 dry_run=bool(options.get("dry_run")),
             )
         except (OperationalError, ProgrammingError) as exc:
-            raise CommandError("Kubernetes Ops tables are not ready. Run `python manage.py migrate kubernetes_ops`.") from exc
+            raise CommandError(
+                "Kubernetes Ops tables are not ready. Run `python manage.py migrate kubernetes_ops`."
+            ) from exc
         if not results:
             self.stdout.write(self.style.WARNING("No enabled Kubernetes providers matched the sync filters."))
             return

@@ -21,30 +21,6 @@ DEFAULT_OPENAI_MODELS = [
     "gpt-5-nano",
 ]
 
-DEFAULT_FAIR_MODELS = [
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3-flash-preview",
-    "google/gemini-3-pro-preview",
-    "google/gemini-embedding-001",
-    "google/gemini-2.5-pro",
-    "google/gemini-2.5-flash",
-    "qwen3-embedding:0.6b",
-    "mxbai-embed-large:latest",
-    "qwen3:14b",
-    "xai/grok-4-fast-reasoning",
-    "xai/grok-4-fast-non-reasoning",
-    "xai/grok-code-fast-1",
-    "anthropic/claude-opus-4-6",
-    "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-sonnet-4-5",
-    "openai/gpt-5.2-codex",
-    "openai/gpt-5.2",
-    "fair-spark-vllm",
-    "BAAI/bge-reranker-v2-m3",
-    "fair-spark-thinking",
-    "fair-spark",
-]
-
 DEFAULT_OLLAMA_MODELS: list[str] = []
 
 DEFAULT_CLAUDE_MODELS = [
@@ -99,14 +75,6 @@ PROVIDER_MODEL_SPECS: dict[str, ProviderModelSpec] = {
         available_models_attr="available_openai_models",
         default_models=tuple(DEFAULT_OPENAI_MODELS),
         enabled_field="openai_enabled",
-    ),
-    "fair": ProviderModelSpec(
-        provider="fair",
-        chat_model_field="chat_model_fair",
-        agent_model_fields=("agent_model_fair",),
-        available_models_attr="available_fair_models",
-        default_models=tuple(DEFAULT_FAIR_MODELS),
-        enabled_field="fair_enabled",
     ),
     "claude": ProviderModelSpec(
         provider="claude",

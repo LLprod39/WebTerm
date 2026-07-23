@@ -67,7 +67,7 @@ async def run_process_capture(
             process.communicate(stdin_text.encode("utf-8")),
             timeout=timeout_seconds,
         )
-    except asyncio.TimeoutError as exc:
+    except TimeoutError as exc:
         process.kill()
         await process.wait()
         raise subprocess.TimeoutExpired(command, timeout_seconds) from exc

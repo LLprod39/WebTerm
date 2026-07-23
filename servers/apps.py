@@ -7,7 +7,7 @@ class ServersConfig(AppConfig):
 
     def ready(self):
         from app.admin_metrics_provider import register_admin_server_metrics_provider
-        from app.agent_kernel import ops_runtime_registry
+        from app.agent_kernel import operator_provider_registry, ops_runtime_registry
         from app.agent_tool_catalog import register_agent_tool_catalog_provider
         from app.chat_server_provider import register_chat_server_provider
         from app.command_history_provider import register_command_history_provider
@@ -29,6 +29,7 @@ class ServersConfig(AppConfig):
         from servers.assistant_actions import register_assistant_actions
         from servers.chat_server_provider import DjangoChatServerProvider
         from servers.command_history_provider import DjangoCommandHistoryProvider
+        from servers.operator_provider import ServersOperatorProvider
         from servers.ops_runtime_adapter import ServersOpsRuntimeProvider
         from servers.pipeline_agent_provider import DjangoPipelineAgentProvider
         from servers.pipeline_memory_provider import DjangoPipelineMemoryProvider
@@ -42,6 +43,7 @@ class ServersConfig(AppConfig):
         from servers.tool_gateway import DjangoServerToolGateway
 
         ops_runtime_registry.register(ServersOpsRuntimeProvider())
+        operator_provider_registry.register(ServersOperatorProvider())
         register_admin_server_metrics_provider(DjangoAdminServerMetricsProvider())
         register_agent_tool_catalog_provider(DjangoAgentToolCatalogProvider())
         register_agent_run_limit_provider(DjangoAgentRunLimitProvider())
@@ -63,8 +65,8 @@ class ServersConfig(AppConfig):
             parse_host_port_value=parse_host_port_value,
         )
         register_assistant_actions()
-        from servers.operator_tools import register_operator_tools
         from servers.operator_mutate_tools import register_operator_mutate_tools
+        from servers.operator_tools import register_operator_tools
 
         register_operator_tools()
         register_operator_mutate_tools()

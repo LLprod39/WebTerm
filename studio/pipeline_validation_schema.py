@@ -134,4 +134,6 @@ def validate_mcp_arguments_schema(
         else:
             allowed_types = []
         if allowed_types and not any(_schema_type_matches(value, item) for item in allowed_types):
-            errors.append(f"Node '{node_id}' MCP argument '{field_name}' must match schema type: {' or '.join(allowed_types)}.")
+            errors.append(
+                f"Node '{node_id}' MCP argument '{field_name}' must match schema type: {' or '.join(allowed_types)}."
+            )

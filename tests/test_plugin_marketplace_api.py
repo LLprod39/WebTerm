@@ -146,25 +146,31 @@ def test_private_catalog_sync_and_install_disabled():
     source_id = source.json()["source"]["id"]
 
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.slack-alerts",
-        "name": "Slack Alerts",
-        "slug": "slack-alerts",
-        "version": "0.1.0",
-        "api_version": "plugins.v1",
-        "publisher": {"id": "acme", "name": "Acme Automation", "verified": True},
-    })
+    manifest.update(
+        {
+            "id": "acme.slack-alerts",
+            "name": "Slack Alerts",
+            "slug": "slack-alerts",
+            "version": "0.1.0",
+            "api_version": "plugins.v1",
+            "publisher": {"id": "acme", "name": "Acme Automation", "verified": True},
+        }
+    )
     sync = client.post(
         f"/api/plugins/marketplace/sources/{source_id}/sync/",
-        data=_json({
-            "plugins": [{
-                "manifest": manifest,
-                "package_url": "local://packages/acme.slack-alerts.wtp",
-                "compatibility": {"api_versions": ["plugins.v1"]},
-                "review_status": "verified",
-                "signature_status": "signed",
-            }],
-        }),
+        data=_json(
+            {
+                "plugins": [
+                    {
+                        "manifest": manifest,
+                        "package_url": "local://packages/acme.slack-alerts.wtp",
+                        "compatibility": {"api_versions": ["plugins.v1"]},
+                        "review_status": "verified",
+                        "signature_status": "signed",
+                    }
+                ],
+            }
+        ),
         content_type="application/json",
     )
     assert sync.status_code == 200, sync.content
@@ -182,7 +188,9 @@ def test_private_catalog_sync_and_install_disabled():
     package = PluginPackage.objects.get(plugin_id="acme.slack-alerts")
     assert installation.status == PluginInstallation.STATUS_DISABLED
     assert package.source == PluginPackage.SOURCE_CATALOG
-    assert PluginInstallEvent.objects.filter(plugin_id="acme.slack-alerts", event_type="plugin_catalog_installed").exists()
+    assert PluginInstallEvent.objects.filter(
+        plugin_id="acme.slack-alerts", event_type="plugin_catalog_installed"
+    ).exists()
 
 
 @pytest.mark.django_db
@@ -198,24 +206,30 @@ def test_private_catalog_blocks_incompatible_plugin_install():
     ).json()["source"]["id"]
 
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.future-plugin",
-        "name": "Future Plugin",
-        "slug": "future-plugin",
-        "version": "1.0.0",
-        "api_version": "plugins.v9",
-        "publisher": {"id": "acme", "name": "Acme Automation"},
-    })
+    manifest.update(
+        {
+            "id": "acme.future-plugin",
+            "name": "Future Plugin",
+            "slug": "future-plugin",
+            "version": "1.0.0",
+            "api_version": "plugins.v9",
+            "publisher": {"id": "acme", "name": "Acme Automation"},
+        }
+    )
     sync = client.post(
         f"/api/plugins/marketplace/sources/{source_id}/sync/",
-        data=_json({
-            "plugins": [{
-                "manifest": manifest,
-                "compatibility": {"api_versions": ["plugins.v9"]},
-                "review_status": "verified",
-                "signature_status": "signed",
-            }],
-        }),
+        data=_json(
+            {
+                "plugins": [
+                    {
+                        "manifest": manifest,
+                        "compatibility": {"api_versions": ["plugins.v9"]},
+                        "review_status": "verified",
+                        "signature_status": "signed",
+                    }
+                ],
+            }
+        ),
         content_type="application/json",
     )
     assert sync.status_code == 200, sync.content
@@ -236,18 +250,20 @@ def test_plugin_settings_and_secret_binding_are_validated_and_masked():
     client = Client()
     client.force_login(user)
     manifest = dict(DEMO_PLUGIN_MANIFEST)
-    manifest.update({
-        "id": "acme.configurable",
-        "name": "Configurable Plugin",
-        "slug": "configurable",
-        "publisher": {"id": "acme", "name": "Acme"},
-        "settings_schema": {
-            "type": "object",
-            "required": ["display_label"],
-            "properties": {"display_label": {"type": "string"}},
-        },
-        "secrets": [{"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True}],
-    })
+    manifest.update(
+        {
+            "id": "acme.configurable",
+            "name": "Configurable Plugin",
+            "slug": "configurable",
+            "publisher": {"id": "acme", "name": "Acme"},
+            "settings_schema": {
+                "type": "object",
+                "required": ["display_label"],
+                "properties": {"display_label": {"type": "string"}},
+            },
+            "secrets": [{"id": "api_token", "label": "API token", "kind": "bearer_token", "required": True}],
+        }
+    )
     package = PluginPackage.objects.create(
         plugin_id="acme.configurable",
         version="0.1.0",
@@ -286,7 +302,10 @@ def test_plugin_settings_and_secret_binding_are_validated_and_masked():
     assert secret.status_code == 200, secret.content
     assert "managed-secret-token-123456" not in secret.content.decode("utf-8")
     assert secret.json()["secrets"][0]["secret_ref"] == "...3456"
-    assert PluginSecretBinding.objects.get(installation=installation, key="api_token").secret_ref == "managed-secret-token-123456"
+    assert (
+        PluginSecretBinding.objects.get(installation=installation, key="api_token").secret_ref
+        == "managed-secret-token-123456"
+    )
 
 
 @pytest.mark.django_db
@@ -368,11 +387,14 @@ def test_studio_plugin_node_execution_requires_secret_and_permission():
     client.force_login(user)
     installation = client.get("/api/plugins/installed/").json()["installations"][0]
     assert client.post(f"/api/plugins/installed/{installation['id']}/enable/").status_code == 200
-    assert client.post(
-        f"/api/plugins/installed/{installation['id']}/secrets/bind/",
-        data=_json({"key": "demo_api_token", "secret_ref": "managed-demo-token-1111"}),
-        content_type="application/json",
-    ).status_code == 200
+    assert (
+        client.post(
+            f"/api/plugins/installed/{installation['id']}/secrets/bind/",
+            data=_json({"key": "demo_api_token", "secret_ref": "managed-demo-token-1111"}),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
 
     node = {
         "id": "plugin_ping",
@@ -409,7 +431,6 @@ def test_studio_plugin_node_execution_requires_secret_and_permission():
     assert executed["status"] == "completed"
     assert executed["connector_id"] == "demo-connector"
     assert PluginInstallEvent.objects.filter(plugin_id=DEMO_PLUGIN_ID, event_type="plugin_connector_ping").exists()
-
 
 
 @pytest.mark.django_db

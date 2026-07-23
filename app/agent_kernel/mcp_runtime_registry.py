@@ -4,6 +4,7 @@ Global registry for MCPRuntimeProvider implementations.
 Feature apps register concrete MCP runtime adapters here so server agents can
 load and execute MCP tools through an app-level port.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

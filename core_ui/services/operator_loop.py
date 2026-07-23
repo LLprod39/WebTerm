@@ -142,8 +142,7 @@ def build_operator_system_prompt(session: ChatSession | None = None) -> str:
                 names.append(label)
         if names:
             context_lines.append(
-                "Pinned servers (default targets when the user does not name a host): "
-                + ", ".join(names[:8])
+                "Pinned servers (default targets when the user does not name a host): " + ", ".join(names[:8])
             )
     parts.append("# Context\n" + "\n".join(f"- {line}" for line in context_lines))
     return "\n\n".join(parts) + "\n"
@@ -239,7 +238,7 @@ def _server_ids_from_user_text(user, text: str) -> list[int]:
     """Resolve @name mentions and 'ids: N' fragments from compose chips."""
     import re
 
-    from servers.views.server_helpers import _accessible_servers_queryset
+    from app.agent_kernel import operator_provider_registry
 
     blob = text or ""
     ids: list[int] = []
@@ -248,7 +247,7 @@ def _server_ids_from_user_text(user, text: str) -> list[int]:
             ids.append(int(m.group(1)))
     mentions = re.findall(r"@([A-Za-z0-9._-]{1,64})", blob)
     if mentions:
-        qs = _accessible_servers_queryset(user)
+        qs = operator_provider_registry.accessible_servers_queryset(user)
         for name in mentions:
             row = qs.filter(name__iexact=name).only("id").first()
             if row:
@@ -335,20 +334,20 @@ def _create_pending_action(
             blast = {"server_ids": [arguments.get("server_id")]}
             # Best-effort server name for typed confirm
             try:
-                from servers.models import Server
+                from app.agent_kernel import operator_provider_registry
 
-                srv = Server.objects.filter(pk=int(arguments["server_id"])).only("name").first()
-                if srv:
-                    blast["server_names"] = [srv.name]
+                names = operator_provider_registry.server_names_for_ids([int(arguments["server_id"])])
+                if names:
+                    blast["server_names"] = names
             except Exception:  # noqa: BLE001
                 pass
         elif isinstance(arguments.get("server_ids"), list):
             ids = list(arguments.get("server_ids") or [])
             blast = {"server_ids": ids}
             try:
-                from servers.models import Server
+                from app.agent_kernel import operator_provider_registry
 
-                names = list(Server.objects.filter(pk__in=ids).values_list("name", flat=True)[:40])
+                names = operator_provider_registry.server_names_for_ids(ids)
                 if names:
                     blast["server_names"] = names
             except Exception:  # noqa: BLE001
@@ -408,7 +407,9 @@ def _save_turn(turn: ChatTurnState, **fields: Any) -> ChatTurnState:
 
 @sync_to_async
 def _refresh_turn(turn_id: int) -> ChatTurnState:
-    return ChatTurnState.objects.select_related("session", "assistant_message", "user_message", "pending_action").get(pk=turn_id)
+    return ChatTurnState.objects.select_related("session", "assistant_message", "user_message", "pending_action").get(
+        pk=turn_id
+    )
 
 
 @sync_to_async
@@ -652,9 +653,7 @@ async def run_operator_loop(
             else:
                 text_acc = "Не удалось корректно вызвать инструмент. Повтори запрос короче."
                 if assistant_message:
-                    await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(
-                        content=text_acc
-                    )
+                    await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(content=text_acc)
 
         if not tool_calls:
             # Dud generation guard: the model called no tool and produced no visible
@@ -678,9 +677,7 @@ async def run_operator_loop(
                     "Модель вернула пустой ответ — не смогла обработать запрос. "
                     "Повтори попытку или переформулируй короче."
                 )
-                await sync_to_async(
-                    ChatMessage.objects.filter(pk=assistant_message.pk).update
-                )(content=honest)
+                await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(content=honest)
                 await _set_assistant_metadata(
                     assistant_message.pk,
                     {
@@ -741,18 +738,19 @@ async def run_operator_loop(
             # - metrics/connect on a named host → rewrite list_servers → resolve_server
             #   (do NOT stick a Cyrillic filter on list_servers — that looped the model)
             if action_type in {"operator.list_servers", "list_servers"}:
-                from servers.operator_tools import (
-                    prefer_resolve_server_for_message,
-                    prepare_list_servers_arguments,
-                )
+                from app.agent_kernel import operator_provider_registry
 
-                resolve_args = prefer_resolve_server_for_message(arguments, user_message=user_message)
+                resolve_args = operator_provider_registry.prefer_resolve_server_for_message(
+                    arguments, user_message=user_message
+                )
                 if resolve_args is not None:
                     action_type = "operator.resolve_server"
                     arguments = resolve_args
                     tool_name = "operator_resolve_server"
                 else:
-                    arguments = prepare_list_servers_arguments(arguments, user_message=user_message)
+                    arguments = operator_provider_registry.prepare_list_servers_arguments(
+                        arguments, user_message=user_message
+                    )
             # Inject pinned / @-context servers into agent.create when model forgets server_ids
             if action_type in {"agent.create", "agent_create"}:
                 arguments = _enrich_agent_create_arguments(session, user, arguments, user_message)
@@ -777,16 +775,18 @@ async def run_operator_loop(
                         arguments["server_ids"] = pinned_ids[:20]
 
             if not is_read_tool(action_type):
-                arguments = await sync_to_async(freeze_mutating_targets)(
-                    user, action_type, arguments
-                )
+                arguments = await sync_to_async(freeze_mutating_targets)(user, action_type, arguments)
 
             # Notify chat UI that an SSH-ish tool is about to run (opens session dock)
-            if action_type in {
-                "operator.run_command",
-                "operator.run_fanout",
-                "server.diagnostics.overview",
-            } or "run_command" in action_type:
+            if (
+                action_type
+                in {
+                    "operator.run_command",
+                    "operator.run_fanout",
+                    "server.diagnostics.overview",
+                }
+                or "run_command" in action_type
+            ):
                 await _emit(
                     on_event,
                     {
@@ -843,9 +843,7 @@ async def run_operator_loop(
 
                         await sync_to_async(attach_web_sources)(assistant_message.pk, result)
                 content = truncate_tool_result(result, max_chars=TOOL_RESULT_PREVIEW_CHARS)
-                tool_result_blocks.append(
-                    {"type": "tool_result", "tool_use_id": tool_id, "content": content}
-                )
+                tool_result_blocks.append({"type": "tool_result", "tool_use_id": tool_id, "content": content})
                 # Side-console payload for chat UI (SSH dock)
                 result_payload = result.get("result") if isinstance(result.get("result"), dict) else result
                 if not isinstance(result_payload, dict):
@@ -882,12 +880,8 @@ async def run_operator_loop(
                         raw_step.get("tool") or ""
                     )
                     step_input = raw_step.get("input") if isinstance(raw_step.get("input"), dict) else {}
-                    step_input = await sync_to_async(normalize_tool_arguments)(
-                        user, step_tool, step_input
-                    )
-                    step_input = await sync_to_async(freeze_mutating_targets)(
-                        user, step_tool, step_input
-                    )
+                    step_input = await sync_to_async(normalize_tool_arguments)(user, step_tool, step_input)
+                    step_input = await sync_to_async(freeze_mutating_targets)(user, step_tool, step_input)
                     frozen_steps.append(
                         {
                             "text": str(raw_step.get("text") or raw_step.get("description") or "")[:300],
@@ -987,11 +981,7 @@ async def run_operator_loop(
             )
             from core_ui.services.operator_security import action_requires_typed_confirm
 
-            plan_for_auto = (
-                await sync_to_async(get_plan_from_message)(assistant_message)
-                if assistant_message
-                else None
-            )
+            plan_for_auto = await sync_to_async(get_plan_from_message)(assistant_message) if assistant_message else None
             if approved_plan_step_matches(
                 plan_for_auto,
                 action_type=action_type,
@@ -999,9 +989,7 @@ async def run_operator_loop(
             ):
                 needs_typed = await sync_to_async(action_requires_typed_confirm)(action)
                 if not needs_typed:
-                    action = await sync_to_async(execute_action)(
-                        action, confirmed=True, request=request
-                    )
+                    action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
                     ok = action.status == AssistantAction.STATUS_COMPLETED
                     await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
                     updated_plan = await sync_to_async(apply_plan_progress)(
@@ -1040,9 +1028,7 @@ async def run_operator_loop(
                         {
                             "type": "tool_result",
                             "tool_use_id": tool_id,
-                            "content": truncate_tool_result(
-                                result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS
-                            ),
+                            "content": truncate_tool_result(result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS),
                         }
                     )
                     continue
@@ -1082,9 +1068,7 @@ async def run_operator_loop(
                 am = await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).first)()
                 if am and not (am.content or "").strip():
                     fallback = f"Нужно подтверждение: {action.title or action.action_type}"
-                    await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(
-                        content=fallback
-                    )
+                    await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(content=fallback)
                 await _set_assistant_metadata(
                     assistant_message.pk,
                     {

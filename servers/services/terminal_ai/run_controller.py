@@ -1,4 +1,5 @@
 """Async lifecycle controller for one terminal-AI run."""
+
 from __future__ import annotations
 
 import asyncio

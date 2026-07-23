@@ -1,0 +1,22 @@
+{
+  "repository": "LLprod39/WebTerm",
+  "minimumPushCapableCollaborators": 2,
+  "branches": {
+    "test": {
+      "requiredChecks": [
+        "Runtime Contract",
+        "Documentation Contract",
+        "Frontend Lock",
+        "Architecture No Regression"
+      ]
+    },
+    "main": {
+      "requiredChecks": [
+        "Runtime Contract",
+        "Documentation Contract",
+        "Frontend Lock",
+        "Architecture No Regression"
+      ]
+    }
+  }
+}

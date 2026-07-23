@@ -22,7 +22,9 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         retention_days = configured_audit_retention_days(
-            options.get("days") if options.get("days") is not None else getattr(settings, "KUBERNETES_OPS_AUDIT_RETENTION_DAYS", None)
+            options.get("days")
+            if options.get("days") is not None
+            else getattr(settings, "KUBERNETES_OPS_AUDIT_RETENTION_DAYS", None)
         )
         try:
             result = cleanup_kubernetes_audit_events(
@@ -31,7 +33,9 @@ class Command(BaseCommand):
                 batch_size=int(options.get("batch_size") or 1000),
             )
         except (OperationalError, ProgrammingError) as exc:
-            raise CommandError("Kubernetes Ops tables are not ready. Run `python manage.py migrate kubernetes_ops`.") from exc
+            raise CommandError(
+                "Kubernetes Ops tables are not ready. Run `python manage.py migrate kubernetes_ops`."
+            ) from exc
 
         self.stdout.write(
             "Kubernetes audit retention "
@@ -44,6 +48,8 @@ class Command(BaseCommand):
         for row in result["expired_by_action"]:
             self.stdout.write(f"  expired action={row['action']} count={row['count']}")
         if result["dry_run"] and result["expired_count"]:
-            self.stdout.write(self.style.WARNING("Dry run only. Re-run with --apply to delete expired Kubernetes audit events."))
+            self.stdout.write(
+                self.style.WARNING("Dry run only. Re-run with --apply to delete expired Kubernetes audit events.")
+            )
         elif not result["dry_run"]:
             self.stdout.write(self.style.SUCCESS("Kubernetes audit retention cleanup applied."))

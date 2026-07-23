@@ -65,61 +65,70 @@ def gitops_merge_request_preview(
             }
         )
 
-    return cluster, normalized, {
-        "summary": summary,
-        "blast_radius": "gitops_merge_request",
-        "inventory_match": cluster is not None,
-        "affected": [
-            {
-                "repository": repository,
-                "source_branch": source_branch,
-                "target_branch": target_branch,
-                "path": path,
-            }
-        ],
-        "change_count": len(changes),
-        "changes": changes,
-        "git_provider": repository_ref["provider"],
-        "gitops_write_performed": False,
-        "cluster_mutation_performed": False,
-        "merge_request_template": {
-            "provider": repository_ref["provider"],
-            "project_path": repository_ref["path"],
-            "title": title,
-            "description": _gitops_merge_request_description(normalized),
-            "labels": ["webterm", "kubernetes-ops", "gitops"],
-            "source_branch": source_branch,
-            "target_branch": target_branch,
-            "draft": True,
-            "remove_source_branch": True,
-            "squash": False,
-            "commit_message": _gitops_commit_message(title),
-            "file_changes": changes,
-            "api_payload": {
-                "source_branch": source_branch,
-                "target_branch": target_branch,
-                "title": f"Draft: {title}" if not title.lower().startswith("draft") else title,
+    return (
+        cluster,
+        normalized,
+        {
+            "summary": summary,
+            "blast_radius": "gitops_merge_request",
+            "inventory_match": cluster is not None,
+            "affected": [
+                {
+                    "repository": repository,
+                    "source_branch": source_branch,
+                    "target_branch": target_branch,
+                    "path": path,
+                }
+            ],
+            "change_count": len(changes),
+            "changes": changes,
+            "git_provider": repository_ref["provider"],
+            "gitops_write_performed": False,
+            "cluster_mutation_performed": False,
+            "merge_request_template": {
+                "provider": repository_ref["provider"],
+                "project_path": repository_ref["path"],
+                "title": title,
                 "description": _gitops_merge_request_description(normalized),
                 "labels": ["webterm", "kubernetes-ops", "gitops"],
+                "source_branch": source_branch,
+                "target_branch": target_branch,
+                "draft": True,
                 "remove_source_branch": True,
                 "squash": False,
+                "commit_message": _gitops_commit_message(title),
+                "file_changes": changes,
+                "api_payload": {
+                    "source_branch": source_branch,
+                    "target_branch": target_branch,
+                    "title": f"Draft: {title}" if not title.lower().startswith("draft") else title,
+                    "description": _gitops_merge_request_description(normalized),
+                    "labels": ["webterm", "kubernetes-ops", "gitops"],
+                    "remove_source_branch": True,
+                    "squash": False,
+                },
+                "checklist": [
+                    "CI pipeline passed",
+                    "GitOps controller reconciled the target environment",
+                    "Rancher/Fleet/Devtron inventory is healthy after sync",
+                    "Rollback path is documented in the action report",
+                ],
+                "verification_plan": [
+                    "merge_request_reviewed",
+                    "ci_pipeline_passed",
+                    "fleet_bundle_reconciled",
+                    "webterm_inventory_healthy",
+                ],
+                "rollback_hint": "Revert or supersede this merge request through GitOps; do not patch the live cluster directly.",
             },
-            "checklist": [
-                "CI pipeline passed",
-                "GitOps controller reconciled the target environment",
-                "Rancher/Fleet/Devtron inventory is healthy after sync",
-                "Rollback path is documented in the action report",
+            "expected_verification": [
+                "merge request review",
+                "CI status",
+                "GitOps reconciliation status",
+                "post-sync WebTerm inventory health",
             ],
-            "verification_plan": [
-                "merge_request_reviewed",
-                "ci_pipeline_passed",
-                "fleet_bundle_reconciled",
-                "webterm_inventory_healthy",
-            ],
-            "rollback_hint": "Revert or supersede this merge request through GitOps; do not patch the live cluster directly.",
         },
-        "expected_verification": ["merge request review", "CI status", "GitOps reconciliation status", "post-sync WebTerm inventory health"],
-    }
+    )
 
 
 def _safe_repository_url(value: Any) -> str:
@@ -162,7 +171,9 @@ def _repository_ref(repository: str) -> dict[str, str]:
     if parsed.scheme in {"https", "http"} and parsed.netloc:
         path = parsed.path.strip("/").removesuffix(".git")
         return {"provider": _provider_from_host(parsed.hostname or ""), "host": parsed.hostname or "", "path": path}
-    match = re.match(r"^(?P<user>[A-Za-z0-9._-]+)@(?P<host>[A-Za-z0-9._-]+):(?P<path>[A-Za-z0-9._/-]+?)(?:\.git)?$", repository)
+    match = re.match(
+        r"^(?P<user>[A-Za-z0-9._-]+)@(?P<host>[A-Za-z0-9._-]+):(?P<path>[A-Za-z0-9._/-]+?)(?:\.git)?$", repository
+    )
     if match:
         host = match.group("host")
         return {"provider": _provider_from_host(host), "host": host, "path": match.group("path").strip("/")}
@@ -193,7 +204,9 @@ def _gitops_changes(target: dict[str, Any], *, default_path: str) -> list[dict[s
         for item in raw_changes[:10]:
             if isinstance(item, dict):
                 item_path = _safe_repo_path(item.get("path") or item.get("file") or default_path)
-                summary = _bounded_text(item.get("summary") or item.get("description") or item.get("value") or "", limit=240)
+                summary = _bounded_text(
+                    item.get("summary") or item.get("description") or item.get("value") or "", limit=240
+                )
                 operation = _bounded_text(item.get("operation") or "update", limit=40).lower() or "update"
             else:
                 item_path = default_path
@@ -219,12 +232,18 @@ def _safe_repo_path(value: Any) -> str:
     if not path:
         return ""
     if path.startswith("/") or "\\" in path or "\x00" in path:
-        raise ActionRequestValidationError("GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": path})
+        raise ActionRequestValidationError(
+            "GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": path}
+        )
     parts = [part for part in path.split("/") if part]
     if any(part in {".", ".."} for part in parts) or ".." in path:
-        raise ActionRequestValidationError("GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": "[redacted]"})
+        raise ActionRequestValidationError(
+            "GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": "[redacted]"}
+        )
     if not GITOPS_ALLOWED_PATH_RE.match(path):
-        raise ActionRequestValidationError("GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": path})
+        raise ActionRequestValidationError(
+            "GitOps repository path is invalid.", code="gitops_path_invalid", payload={"path": path}
+        )
     return path
 
 
@@ -233,7 +252,9 @@ def _gitops_commit_message(title: str) -> str:
 
 
 def _gitops_merge_request_description(normalized: dict[str, Any]) -> str:
-    change_lines = "\n".join(f"- {item['operation']} `{item['path']}`: {item['summary']}" for item in normalized["changes"])
+    change_lines = "\n".join(
+        f"- {item['operation']} `{item['path']}`: {item['summary']}" for item in normalized["changes"]
+    )
     return (
         "Requested by WebTerm Kubernetes Ops.\n\n"
         f"Repository: {normalized['repository']}\n"

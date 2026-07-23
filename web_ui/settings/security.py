@@ -29,17 +29,9 @@ def _secret_key_settings(*, debug: bool) -> str:
     if not secret_key:
         if debug:
             return _DEV_SECRET_KEY_FALLBACK
-        raise ImproperlyConfigured(
-            "DJANGO_SECRET_KEY or SECRET_KEY must be set when DJANGO_DEBUG=false."
-        )
-    if not debug and (
-        secret_key.startswith("django-insecure-")
-        or len(secret_key) < 50
-        or len(set(secret_key)) < 5
-    ):
-        raise ImproperlyConfigured(
-            "Set a long random DJANGO_SECRET_KEY for production."
-        )
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY or SECRET_KEY must be set when DJANGO_DEBUG=false.")
+    if not debug and (secret_key.startswith("django-insecure-") or len(secret_key) < 50 or len(set(secret_key)) < 5):
+        raise ImproperlyConfigured("Set a long random DJANGO_SECRET_KEY for production.")
     return secret_key
 
 
@@ -61,24 +53,25 @@ def build_security_settings(
     debug = env_bool("DJANGO_DEBUG", env_bool("DEBUG", _default_debug()))
     secret_key = _secret_key_settings(debug=debug)
     site_url = (
-        os.getenv("SITE_URL")
-        or render_external_url
-        or ("http://localhost:9000" if debug else "")
-    ).strip().rstrip("/")
+        (os.getenv("SITE_URL") or render_external_url or ("http://localhost:9000" if debug else "")).strip().rstrip("/")
+    )
     frontend_app_url = (
-        os.getenv(
-            "FRONTEND_APP_URL",
-            "http://127.0.0.1:8080" if debug and not render_external_url else "",
+        (
+            os.getenv(
+                "FRONTEND_APP_URL",
+                "http://127.0.0.1:8080" if debug and not render_external_url else "",
+            )
+            or ""
         )
-        or ""
-    ).strip().rstrip("/")
+        .strip()
+        .rstrip("/")
+    )
 
     site_origin = origin_from_url(site_url)
     frontend_origin = origin_from_url(frontend_app_url)
     render_origin = origin_from_url(render_external_url)
     production_https = (not debug) and any(
-        origin.startswith("https://")
-        for origin in (site_origin, frontend_origin, render_origin)
+        origin.startswith("https://") for origin in (site_origin, frontend_origin, render_origin)
     )
 
     allowed_hosts = env_list("ALLOWED_HOSTS")
@@ -163,9 +156,7 @@ def build_security_settings(
         "SERVE_STATIC_FILES": env_bool("SERVE_STATIC_FILES", not debug),
         "USE_X_FORWARDED_HOST": env_bool("USE_X_FORWARDED_HOST", False),
         "SECURE_PROXY_SSL_HEADER": (
-            ("HTTP_X_FORWARDED_PROTO", "https")
-            if env_bool("TRUST_X_FORWARDED_PROTO", False)
-            else None
+            ("HTTP_X_FORWARDED_PROTO", "https") if env_bool("TRUST_X_FORWARDED_PROTO", False) else None
         ),
         "SECURE_SSL_REDIRECT": secure_ssl_redirect,
         "SECURE_HSTS_SECONDS": secure_hsts_seconds,
@@ -173,12 +164,10 @@ def build_security_settings(
         "SECURE_HSTS_PRELOAD": secure_hsts_preload,
         "SECURE_CONTENT_TYPE_NOSNIFF": env_bool("SECURE_CONTENT_TYPE_NOSNIFF", True),
         "SECURE_REFERRER_POLICY": (
-            os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin")
-            or "strict-origin-when-cross-origin"
+            os.getenv("SECURE_REFERRER_POLICY", "strict-origin-when-cross-origin") or "strict-origin-when-cross-origin"
         ).strip(),
         "SECURE_CROSS_ORIGIN_OPENER_POLICY": (
-            os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin")
-            or "same-origin"
+            os.getenv("SECURE_CROSS_ORIGIN_OPENER_POLICY", "same-origin") or "same-origin"
         ).strip(),
         "SESSION_COOKIE_SAMESITE": session_cookie_samesite,
         "CSRF_COOKIE_SAMESITE": csrf_cookie_samesite,

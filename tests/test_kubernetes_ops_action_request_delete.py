@@ -141,7 +141,9 @@ class KubernetesOpsActionRequestDeleteTests(TestCase):
         self.assertEqual(response.json()["code"], "delete_namespace_protected")
         self.assertFalse(K8sActionRequest.objects.exists())
 
-    @override_settings(KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ACTION_REQUEST_NATIVE_EXECUTION_ENABLED=True, KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED=True
+    )
     def test_execute_approved_delete_uses_admin_write_session(self):
         staff = self.create_user("k8s-action-admin-delete", is_staff=True)
         session = self.write_session(staff)

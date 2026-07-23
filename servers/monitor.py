@@ -46,15 +46,15 @@ QUICK_COMMANDS = (
     "s1=$(head -n1 /proc/stat 2>/dev/null); "
     "sleep 1; "
     "s2=$(head -n1 /proc/stat 2>/dev/null); "
-    "echo \"CPUSTAT1=$s1\"; "
-    "echo \"CPUSTAT2=$s2\"; "
-    "echo \"NPROC=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)\"; "
+    'echo "CPUSTAT1=$s1"; '
+    'echo "CPUSTAT2=$s2"; '
+    'echo "NPROC=$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"; '
     "cat /proc/loadavg;"
     "free -m | grep Mem;"
     "df -h / | tail -1;"
     "cat /proc/uptime;"
     "ps aux --no-headers 2>/dev/null | wc -l;"
-    "cat /proc/net/dev 2>/dev/null | awk 'NR>2 {rx+=$2; tx+=$10} END {print \"NET_RX_BYTES=\" rx; print \"NET_TX_BYTES=\" tx}' || true"
+    'cat /proc/net/dev 2>/dev/null | awk \'NR>2 {rx+=$2; tx+=$10} END {print "NET_RX_BYTES=" rx; print "NET_TX_BYTES=" tx}\' || true'
 )
 
 DEEP_COMMANDS = (
@@ -230,9 +230,7 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     if metrics.get("collector_version") == 2:
         try:
-            sample = await sync_to_async(create_metric_sample)(
-                server, metrics, source="deep" if deep else "quick"
-            )
+            sample = await sync_to_async(create_metric_sample)(server, metrics, source="deep" if deep else "quick")
             health._metric_sample = sample
         except Exception as exc:
             logger.debug("Monitor: failed to persist metric sample for {}: {}", server.name, exc)
@@ -250,9 +248,12 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     logger.info(
         "Monitor: {} -> {} (cpu={}, mem={}, disk={}, {}ms)",
-        server.name, status,
-        metrics.get("cpu_percent", "?"), metrics.get("memory_percent", "?"),
-        metrics.get("disk_percent", "?"), elapsed,
+        server.name,
+        status,
+        metrics.get("cpu_percent", "?"),
+        metrics.get("memory_percent", "?"),
+        metrics.get("disk_percent", "?"),
+        elapsed,
     )
     return health
 
@@ -465,9 +466,7 @@ def schedule_health_check_for_server_ids(server_ids: list[int], *, deep: bool = 
 async def cleanup_old_data(days: int = 7) -> None:
     """Remove health checks, resolved alerts, and expired metric series data."""
     cutoff = timezone.now() - timedelta(days=days)
-    deleted_hc = await sync_to_async(
-        lambda: ServerHealthCheck.objects.filter(checked_at__lt=cutoff).delete()
-    )()
+    deleted_hc = await sync_to_async(lambda: ServerHealthCheck.objects.filter(checked_at__lt=cutoff).delete())()
     deleted_alerts = await sync_to_async(
         lambda: ServerAlert.objects.filter(is_resolved=True, created_at__lt=cutoff).delete()
     )()

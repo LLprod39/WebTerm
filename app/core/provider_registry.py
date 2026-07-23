@@ -1,6 +1,7 @@
 """
 Provider Registry - централизованное управление всеми AI провайдерами
 """
+
 import os
 import shutil
 from pathlib import Path
@@ -19,10 +20,7 @@ class ProviderRegistry:
     """
 
     DEFAULT_ADAPTERS = build_provider_adapters()
-    PROVIDERS = {
-        provider_id: adapter.spec.compatibility_payload()
-        for provider_id, adapter in DEFAULT_ADAPTERS.items()
-    }
+    PROVIDERS = {provider_id: adapter.spec.compatibility_payload() for provider_id, adapter in DEFAULT_ADAPTERS.items()}
 
     def __init__(self, adapters: dict[str, ProviderAdapter] | None = None):
         self._cache = {}
@@ -102,13 +100,15 @@ class ProviderRegistry:
             configured = self.is_configured(provider_id)
 
             if enabled and configured:
-                available.append({
-                    "id": provider_id,
-                    "name": spec.name,
-                    "type": spec.provider_type,
-                    "enabled": enabled,
-                    "configured": configured
-                })
+                available.append(
+                    {
+                        "id": provider_id,
+                        "name": spec.name,
+                        "type": spec.provider_type,
+                        "enabled": enabled,
+                        "configured": configured,
+                    }
+                )
 
         return available
 
@@ -121,21 +121,21 @@ class ProviderRegistry:
             enabled = self.is_enabled(provider_id)
             configured = self.is_configured(provider_id)
 
-            status = "ready" if (enabled and configured) else \
-                    "disabled" if not enabled else \
-                    "not_configured"
+            status = "ready" if (enabled and configured) else "disabled" if not enabled else "not_configured"
 
-            providers.append({
-                "id": provider_id,
-                "name": spec.name,
-                "type": spec.provider_type,
-                "status": status,
-                "enabled": enabled,
-                "configured": configured,
-                "requires_key": spec.requires_key,
-                "requires_binary": spec.requires_binary,
-                "optional": spec.optional,
-            })
+            providers.append(
+                {
+                    "id": provider_id,
+                    "name": spec.name,
+                    "type": spec.provider_type,
+                    "status": status,
+                    "enabled": enabled,
+                    "configured": configured,
+                    "requires_key": spec.requires_key,
+                    "requires_binary": spec.requires_binary,
+                    "optional": spec.optional,
+                }
+            )
 
         return providers
 
@@ -154,7 +154,7 @@ class ProviderRegistry:
             "type": adapter.spec.provider_type,
             "enabled": enabled,
             "configured": configured,
-            "status": "ready" if (enabled and configured) else "not_ready"
+            "status": "ready" if (enabled and configured) else "not_ready",
         }
 
         result.update(adapter.status_details(model_manager.config, self._get_api_key, self.is_binary_available))

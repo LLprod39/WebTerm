@@ -26,19 +26,25 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
 
     store._compact_open_groups_sync(server_id, force=True)
 
-    episodes = list(ServerMemoryEpisode.objects.filter(server_id=server_id, is_active=True).order_by("-last_event_at", "-updated_at")[:18])
+    episodes = list(
+        ServerMemoryEpisode.objects.filter(server_id=server_id, is_active=True).order_by(
+            "-last_event_at", "-updated_at"
+        )[:18]
+    )
     snapshots = list(
-        ServerMemorySnapshot.objects.filter(server_id=server_id, is_active=True, layer=ServerMemorySnapshot.LAYER_CANONICAL)
-        .order_by("memory_key", "-version", "-updated_at")
+        ServerMemorySnapshot.objects.filter(
+            server_id=server_id, is_active=True, layer=ServerMemorySnapshot.LAYER_CANONICAL
+        ).order_by("memory_key", "-version", "-updated_at")
     )
     latest_health = ServerHealthCheck.objects.filter(server_id=server_id).order_by("-checked_at").first()
     active_alerts = list(ServerAlert.objects.filter(server_id=server_id, is_resolved=False).order_by("-created_at")[:8])
     revalidation_items = list(
-        ServerMemoryRevalidation.objects.filter(server_id=server_id, status=ServerMemoryRevalidation.STATUS_OPEN).order_by("-updated_at")[:6]
+        ServerMemoryRevalidation.objects.filter(
+            server_id=server_id, status=ServerMemoryRevalidation.STATUS_OPEN
+        ).order_by("-updated_at")[:6]
     )
     recent_events = list(
-        ServerMemoryEvent.objects.filter(server_id=server_id, is_archived=False)
-        .order_by("-created_at")[:24]
+        ServerMemoryEvent.objects.filter(server_id=server_id, is_archived=False).order_by("-created_at")[:24]
     )
     policy = store._get_or_create_policy_sync(user_id=server.user_id)
     patterns = store._derive_operational_patterns(server.id)
@@ -61,7 +67,9 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
         and policy.dream_mode in {policy.DREAM_HYBRID, policy.DREAM_NIGHTLY_LLM}
         and store._should_distill_with_llm(candidates, snapshots)
     ):
-        llm_sections = store._distill_with_llm_sync(server=server, candidates=candidates, model_alias=policy.nightly_model_alias)
+        llm_sections = store._distill_with_llm_sync(
+            server=server, candidates=candidates, model_alias=policy.nightly_model_alias
+        )
 
     updated = 0
     created_versions = 0
@@ -163,9 +171,11 @@ def server_recently_busy(server_id: int, *, minutes: int = 20) -> bool:
     from servers.models import ServerMemoryEvent
 
     cutoff = timezone.now() - timedelta(minutes=max(int(minutes), 1))
-    return ServerMemoryEvent.objects.filter(server_id=server_id, created_at__gte=cutoff, is_archived=False).exclude(
-        source_kind="manual_knowledge"
-    ).exists()
+    return (
+        ServerMemoryEvent.objects.filter(server_id=server_id, created_at__gte=cutoff, is_archived=False)
+        .exclude(source_kind="manual_knowledge")
+        .exists()
+    )
 
 
 def should_skip_scheduled_dream(store: Any, server_id: int, *, policy: Any, job_kind: str) -> str:
@@ -215,8 +225,12 @@ def run_dream_cycle(
                 "repair": {"updated_records": 0, "created_notes": 0, "archived_records": 0},
             }
     compacted = store._compact_open_groups_sync(server_id, force=job_kind in {"nearline", "nightly", "hybrid"})
-    dream = store._dream_server_memory_sync(server_id, deactivate_noise=job_kind in {"weekly", "hybrid", "nightly"}, job_kind=job_kind)
-    repair = store._repair_server_memory_sync(server_id, stale_after_days=30, create_notes=job_kind in {"weekly", "hybrid", "nightly"})
+    dream = store._dream_server_memory_sync(
+        server_id, deactivate_noise=job_kind in {"weekly", "hybrid", "nightly"}, job_kind=job_kind
+    )
+    repair = store._repair_server_memory_sync(
+        server_id, stale_after_days=30, create_notes=job_kind in {"weekly", "hybrid", "nightly"}
+    )
     return {
         "server_id": server_id,
         "skipped": False,

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import asyncio
-import base64
-
 import pytest
 
 from servers.agent_inputs import (
@@ -18,7 +15,6 @@ from servers.agent_tools import (
     tool_run_script_material,
     tool_update_material_task,
 )
-
 
 SAMPLE_MATERIALS = [
     {
@@ -76,7 +72,9 @@ async def test_list_read_update_and_run_script_tools():
         available_materials=SAMPLE_MATERIALS,
     )
     # Pretend connected
-    session.connections[1] = type("S", (), {"server_id": 1, "server_name": "web-1", "proc": object(), "conn": object()})()
+    session.connections[1] = type(
+        "S", (), {"server_id": 1, "server_name": "web-1", "proc": object(), "conn": object()}
+    )()
     session._name_to_id["web-1"] = 1
     session._name_to_id["1"] = 1
 

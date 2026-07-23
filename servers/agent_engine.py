@@ -56,6 +56,7 @@ from servers.models import AgentRun, Server, ServerAgent
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
+
 SESSION_TIMEOUT_DEFAULT = FULL_DEFAULT_SESSION_TIMEOUT_SEC
 MAX_ITERATIONS_CAP = FULL_MAX_ITERATIONS_CAP
 DEFAULT_COMMAND_TIMEOUT = FULL_DEFAULT_COMMAND_TIMEOUT_SEC
@@ -114,7 +115,9 @@ class AgentEngine:
             or self.tools_config.get("command_timeout_seconds")
             or DEFAULT_COMMAND_TIMEOUT
         )
-        self.allowed_tool_names = {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
+        self.allowed_tool_names = (
+            {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
+        )
         self.enabled_tools = get_enabled_tools(self.tools_config)
 
         self._stop_requested = False
@@ -150,7 +153,9 @@ class AgentEngine:
             default_provider="auto",
         )
         self.role_spec = get_role_spec(agent.agent_type, agent.goal or agent.ai_prompt)
-        self.permission_engine = PermissionEngine(mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy)
+        self.permission_engine = PermissionEngine(
+            mode=self.role_spec.default_permission_mode, sudo_policy=agent.sudo_policy
+        )
         self.sandbox_manager = SandboxManager()
         self.hook_manager = HookManager()
         self.memory_store = DjangoServerMemoryStore()
@@ -356,7 +361,7 @@ class AgentEngine:
         return (
             "FORMAT ERROR: ты описал следующий шаг, но не вызвал инструмент. "
             "Продолжай работу и верни ответ строго в формате:\n"
-            'THOUGHT: <коротко зачем нужен следующий шаг>\n'
+            "THOUGHT: <коротко зачем нужен следующий шаг>\n"
             'ACTION: tool_name {"param1": "value"}\n'
             f"Доступные инструменты: {available}. "
             "Не заверши задачу, пока не соберёшь факты через инструменты."
@@ -436,9 +441,9 @@ class AgentEngine:
         warmup = ""
         if server_ids:
             try:
-                warmup = await sync_to_async(
-                    self.memory_store._build_memory_warmup_prompt, thread_sensitive=False
-                )(server_ids[0], last_n=3)
+                warmup = await sync_to_async(self.memory_store._build_memory_warmup_prompt, thread_sensitive=False)(
+                    server_ids[0], last_n=3
+                )
             except Exception:
                 warmup = ""
 

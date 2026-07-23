@@ -211,7 +211,6 @@ Done when:
 
 Targets:
 
-- `key_mcp.py`
 - `servers/consumers/ssh_terminal.py`
 - `servers/multi_agent_engine.py`
 - `servers/models.py`

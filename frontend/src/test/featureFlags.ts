@@ -13,6 +13,7 @@ const FEATURE_FLAGS: FeatureFlag[] = [
   "studio_notifications",
   "kubernetes",
   "mars",
+  "plugins",
   "settings",
   "orchestrator",
   "knowledge_base",

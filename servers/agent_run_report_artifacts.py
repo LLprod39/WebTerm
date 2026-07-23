@@ -50,13 +50,17 @@ def _build_artifact_state_for_artifacts(
             "total_size_bytes": total_size,
             "total_size_label": _bytes_label(total_size),
             "manifest_ready": any(item.get("id") == ARTIFACT_MANIFEST_KEY for item in artifacts),
-            "manifest_name": "artifact-manifest.json" if any(item.get("id") == ARTIFACT_MANIFEST_KEY for item in artifacts) else "",
+            "manifest_name": "artifact-manifest.json"
+            if any(item.get("id") == ARTIFACT_MANIFEST_KEY for item in artifacts)
+            else "",
         }
     )
     return artifact_state
 
 
-def _artifact(id_: str, name: str, type_: str, description: str, content: str, created_at: str | None) -> dict[str, Any]:
+def _artifact(
+    id_: str, name: str, type_: str, description: str, content: str, created_at: str | None
+) -> dict[str, Any]:
     original_size = len(content.encode("utf-8", errors="replace"))
     safe_content = content
     truncated = False
@@ -139,7 +143,9 @@ def _build_artifacts(
     steps: list[dict[str, Any]],
     report: dict[str, Any],
 ) -> list[dict[str, Any]]:
-    created_at = run.completed_at.isoformat() if run.completed_at else run.started_at.isoformat() if run.started_at else None
+    created_at = (
+        run.completed_at.isoformat() if run.completed_at else run.started_at.isoformat() if run.started_at else None
+    )
     context = {
         "run": _serialize_run(run),
         "report": {key: value for key, value in report.items() if key not in {"markdown"}},

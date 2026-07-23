@@ -101,7 +101,9 @@ def _compact_available_resources(assistant_context: dict[str, Any]) -> dict[str,
             assistant_context.get("available_mcp_servers"),
             ("id", "name", "transport", "description", "last_test_ok", "owner_id"),
         ),
-        "skills": _pick(assistant_context.get("available_skills"), ("slug", "name", "service", "category", "safety_level")),
+        "skills": _pick(
+            assistant_context.get("available_skills"), ("slug", "name", "service", "category", "safety_level")
+        ),
         "task_families": task_families,
         "capability_packs": capability_packs,
     }

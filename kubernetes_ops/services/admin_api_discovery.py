@@ -38,7 +38,9 @@ def api_resource_catalog_payload(
     }
 
 
-def _append_api_resources(items: list[dict[str, Any]], payload: dict[str, Any], *, api_version: str, source: str, limit: int) -> None:
+def _append_api_resources(
+    items: list[dict[str, Any]], payload: dict[str, Any], *, api_version: str, source: str, limit: int
+) -> None:
     for resource in payload.get("resources") if isinstance(payload.get("resources"), list) else []:
         if len(items) >= limit:
             return

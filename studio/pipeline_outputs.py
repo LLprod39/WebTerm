@@ -72,7 +72,9 @@ async def execute_output_email(node: dict, context: dict, node_outputs: dict[str
     subject_template = config.get("subject", f"Pipeline Report: {run.pipeline.name}")
     body_template = config.get("body", "")
     preserve_values = [str(item) for item in config.get("_redaction_preserve_values", []) if str(item or "")]
-    preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
+    preserve_context_keys = {
+        str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")
+    }
     subs = redacted_mapping_context(context, preserve_keys=preserve_context_keys)
 
     try:
@@ -103,7 +105,9 @@ async def execute_output_email(node: dict, context: dict, node_outputs: dict[str
     smtp_host = (config.get("smtp_host") or "").strip() or g_host or getattr(settings, "EMAIL_HOST", "smtp.gmail.com")
     smtp_port = int((config.get("smtp_port") or getattr(settings, "EMAIL_PORT", 587)) or 587)
     smtp_user = (config.get("smtp_user") or "").strip() or g_user or getattr(settings, "EMAIL_HOST_USER", "")
-    smtp_password = (config.get("smtp_password") or "").strip() or g_pass or getattr(settings, "EMAIL_HOST_PASSWORD", "")
+    smtp_password = (
+        (config.get("smtp_password") or "").strip() or g_pass or getattr(settings, "EMAIL_HOST_PASSWORD", "")
+    )
     from_email = (config.get("from_email") or "").strip() or g_from or smtp_user or "pipeline@noreply.local"
     from_email = _resolve_from_email(from_email, smtp_user, smtp_host)
     use_tls = smtp_port in (587, 465)
@@ -225,9 +229,15 @@ async def execute_output_telegram(node: dict, context: dict, node_outputs: dict[
         chat_id = str(context.get("tg_chat_id") or context.get("chat_id") or "").strip()
 
     if not bot_token:
-        return {"status": "failed", "error": "bot_token not configured. Set TELEGRAM_BOT_TOKEN in .env or fill in the node."}
+        return {
+            "status": "failed",
+            "error": "bot_token not configured. Set TELEGRAM_BOT_TOKEN in .env or fill in the node.",
+        }
     if not chat_id:
-        return {"status": "failed", "error": "chat_id not configured. Set TELEGRAM_CHAT_ID in .env or fill in the node."}
+        return {
+            "status": "failed",
+            "error": "chat_id not configured. Set TELEGRAM_CHAT_ID in .env or fill in the node.",
+        }
 
     message_template = config.get("message", "")
     if not message_template:
@@ -238,7 +248,9 @@ async def execute_output_telegram(node: dict, context: dict, node_outputs: dict[
                 lines.append(f"*[{node_id}]*\n{out[:800]}")
         message_template = "\n\n".join(lines) or f"Pipeline {run.pipeline.name} status update."
 
-    preserve_context_keys = {str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")}
+    preserve_context_keys = {
+        str(item) for item in config.get("_redaction_preserve_context_keys", []) if str(item or "")
+    }
     subs = redacted_mapping_context(context, preserve_keys=preserve_context_keys)
     subs["pipeline_name"] = run.pipeline.name
     subs["run_id"] = str(run.pk)

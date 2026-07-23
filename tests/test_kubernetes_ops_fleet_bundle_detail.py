@@ -61,7 +61,9 @@ class KubernetesOpsFleetBundleDetailTests(TestCase):
             involved_name="payments-api",
             last_seen_at=timezone.now(),
         )
-        other_cluster = K8sCluster.objects.create(name="other-prod", environment="prod", health=K8sCluster.HEALTH_HEALTHY)
+        other_cluster = K8sCluster.objects.create(
+            name="other-prod", environment="prod", health=K8sCluster.HEALTH_HEALTHY
+        )
         K8sEvent.objects.create(
             cluster=other_cluster,
             event_uid="evt-fleet-payments-other",
@@ -74,7 +76,9 @@ class KubernetesOpsFleetBundleDetailTests(TestCase):
             last_seen_at=timezone.now(),
         )
 
-        response = self.client.get(reverse("api_kubernetes_fleet_bundle_detail", kwargs={"bundle_id": f"fleet_{bundle.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_fleet_bundle_detail", kwargs={"bundle_id": f"fleet_{bundle.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -125,11 +129,15 @@ class KubernetesOpsFleetBundleDetailTests(TestCase):
             labels={"app.kubernetes.io/managed-by": "fleet"},
         )
 
-        response = self.client.get(reverse("api_kubernetes_fleet_bundle_detail", kwargs={"bundle_id": f"fleet_{bundle.id}"}))
+        response = self.client.get(
+            reverse("api_kubernetes_fleet_bundle_detail", kwargs={"bundle_id": f"fleet_{bundle.id}"})
+        )
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload["bundle"]["links"]["rancher_fleet"], "https://rancher.example.test/fleet/ingress-nginx")
+        self.assertEqual(
+            payload["bundle"]["links"]["rancher_fleet"], "https://rancher.example.test/fleet/ingress-nginx"
+        )
         self.assertEqual(payload["summary"]["workload_count"], 1)
         self.assertEqual(payload["summary"]["namespaces"], ["ingress-nginx"])
         self.assertNotIn("raw-link-token", str(payload))

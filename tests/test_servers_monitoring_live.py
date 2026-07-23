@@ -51,10 +51,28 @@ def test_compute_cpu_percent_from_tick_deltas():
 
 
 @pytest.mark.django_db
-def test_live_sample_cache_roundtrip():
-    from servers.monitoring_live import fetch_live_samples, store_live_samples
+def test_live_sample_cache_roundtrip(monkeypatch):
+    from django.core.cache import cache
 
-    store_live_samples(
+    from servers import monitoring_live
+
+    class ConfiguredButUnavailableRedis:
+        def pipeline(self):
+            return self
+
+        def set(self, *_args, **_kwargs):
+            return self
+
+        def execute(self):
+            raise ConnectionError("test Redis unavailable")
+
+        def mget(self, _keys):
+            raise ConnectionError("test Redis unavailable")
+
+    monkeypatch.setattr(monitoring_live, "_live_redis_client", lambda: ConfiguredButUnavailableRedis())
+    cache.delete(monitoring_live.live_cache_key(4242))
+
+    monitoring_live.store_live_samples(
         [4242],
         {
             "cpu_percent": 11.0,
@@ -64,11 +82,12 @@ def test_live_sample_cache_roundtrip():
             "ts": time.time(),
         },
     )
-    cached = fetch_live_samples([4242, 9999])
+    cached = monitoring_live.fetch_live_samples([4242, 9999])
     assert 4242 in cached
     assert cached[4242]["cpu_percent"] == 11.0
     assert cached[4242]["memory_percent"] == 33.0
     assert 9999 not in cached
+    cache.delete(monitoring_live.live_cache_key(4242))
 
 
 @pytest.mark.django_db

@@ -148,9 +148,15 @@ class KubernetesOpsAdminExecTests(TestCase):
         self.assertFalse(K8sAdminAction.objects.exists())
         self.assertFalse(K8sAuditEvent.objects.exists())
 
-    @override_settings(KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True, KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True, KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True)
+    @override_settings(
+        KUBERNETES_ADMIN_NATIVE_EXEC_ENABLED=True,
+        KUBERNETES_ADMIN_EXEC_STREAMING_ENABLED=True,
+        KUBERNETES_ADMIN_EXEC_RECORDING_ENABLED=True,
+    )
     def test_exec_stream_context_records_started_metadata_only_action(self):
-        self.provider.labels = {"pod_exec_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/exec"}
+        self.provider.labels = {
+            "pod_exec_stream_path_template": "/k8s/clusters/{cluster_id}/api/v1/namespaces/{namespace}/pods/{pod_name}/exec"
+        }
         self.provider.save(update_fields=["labels"])
         user = self.create_user("k8s-exec-stream-context")
         session = self.create_break_glass_session(user)
@@ -172,7 +178,9 @@ class KubernetesOpsAdminExecTests(TestCase):
         self.assertTrue(envelope["policy"]["provider_streaming_enabled"])
         self.assertFalse(envelope["policy"]["records_transcript"])
         self.assertTrue(envelope["policy"]["recording_policy"]["enabled"])
-        self.assertEqual(envelope["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/pods/payments-api-abc123/exec")
+        self.assertEqual(
+            envelope["path"], "/k8s/clusters/c-prod/api/v1/namespaces/payments/pods/payments-api-abc123/exec"
+        )
         self.assertEqual(envelope["_timeout_seconds"], 4)
         action = K8sAdminAction.objects.get(verb=K8sAdminAction.VERB_EXEC)
         self.assertEqual(action.status, K8sAdminAction.STATUS_PLANNED)
