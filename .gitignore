@@ -153,7 +153,7 @@ graphify-out/
 /PRODUCTION_READINESS_PLAN.md
 /SECURITY_QA_FOR_IS_REVIEW.md
 /AI_MEMORY_PRESENTATION.md
-docs/local/
+docs/
 
 .gemini/
 gha-creds-*.json
