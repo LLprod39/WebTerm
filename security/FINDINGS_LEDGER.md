@@ -34,11 +34,13 @@ Unresolved **Critical/High in release scope** block release. Out-of-scope High r
 ### Scan commands
 
 ```bash
+# Authoritative: project env after hashed lock install (not global site-packages)
+python -m pip install --require-hashes -r requirements-dev.lock
 python -m pip_audit --local
 cd frontend && npm ci && npm audit --audit-level=high
 ```
 
-### Record — 2026-07-23
+### Record — 2026-07-23 (re-verified 2026-07-24)
 
 | ID | Source | Finding | Severity | Status | Owner | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -50,10 +52,11 @@ cd frontend && npm ci && npm audit --audit-level=high
 
 **Post-remediation verification**
 
-| Command | Result |
-| --- | --- |
-| `cd frontend && npm audit --audit-level=high` | 0 high/critical (2 moderate react-router — DEP-NPM-004) |
-| CI `python -m pip_audit --local` after lock install | No known vulnerabilities found (authoritative path) |
+| Command | Result | When |
+| --- | --- | --- |
+| `cd frontend && npm audit --audit-level=high` | 0 high/critical (2 moderate react-router — DEP-NPM-004) | 2026-07-24 |
+| `.venv` / CI `python -m pip_audit --local` after lock install | No known vulnerabilities found (authoritative path) | 2026-07-24 |
+| Global `python -m pip_audit --local` (user site-packages) | **Not release evidence** — may report hundreds of unrelated findings | 2026-07-24 |
 
 > Note: `pip-audit -r requirements-dev.lock` may fail in `--require-hashes` dry-run mode when transitive extras are incomplete. CI uses `pip install --require-hashes` then `pip-audit --local` (or equivalent installed-set audit) for a deterministic signal.
 

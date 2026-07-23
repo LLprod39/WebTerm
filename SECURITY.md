@@ -90,19 +90,27 @@ We will credit reporters who want credit, unless anonymity is requested.
 ## Verification commands
 
 ```bash
-# Python dependency audit (CI security job uses the same idea)
+# Python dependency audit — authoritative path is the *project* env after hashed lock install.
+# Global/user site-packages are NOT release evidence (they mix unrelated packages).
+python -m pip install --require-hashes -r requirements-dev.lock
 python -m pip install pip-audit
 python -m pip_audit --local
+# Local shortcut when .venv is already bootstrapped from the lock:
+#   .venv/Scripts/python.exe -m pip_audit --local   # Windows
+#   .venv/bin/python -m pip_audit --local           # Unix
 
-# Frontend dependency audit
+# Frontend dependency audit (Stage 1 gate is high+; medium may remain open in ledger)
 cd frontend && npm ci && npm audit --audit-level=high
 
 # SBOM + checksums + provenance (local = unsigned scaffold)
 python scripts/generate_sbom.py --output-dir .ci-artifacts/sbom
-# Optional image-layer SBOM when Syft/Trivy is installed:
+# Optional image-layer SBOM when Syft/Trivy is installed (SUPPLY-002):
 # python scripts/generate_sbom.py --output-dir .ci-artifacts/sbom --image ghcr.io/org/app@sha256:…
 python scripts/generate_release_checksums.py --input-dir .ci-artifacts/sbom --output .ci-artifacts/checksums/SHA256SUMS.txt
 python scripts/generate_provenance.py --artifacts-dir .ci-artifacts/sbom --checksums .ci-artifacts/checksums --output .ci-artifacts/provenance/provenance.intoto.json
+
+# Security unit contracts
+python -m pytest tests/test_security_secrets_never.py tests/test_security_mutation_matrix.py tests/test_egress_redaction.py
 ```
 
 CI (`.github/workflows/security.yml`) additionally signs SBOM/checksum/provenance subjects with **GitHub artifact attestations** (Sigstore). After a green run:
