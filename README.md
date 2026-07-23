@@ -42,6 +42,13 @@ private plugin extensions in one controlled product.
 - Automation integrations: MCP services, LLM providers, Telegram/email
   notifications, optional Keycloak integration.
 
+## Security
+
+- Public process: [`SECURITY.md`](SECURITY.md) (supported versions, disclosure, SLA).
+- Third-party notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+- Threat model and findings ledger: [`security/`](security/).
+- CI: `.github/workflows/security.yml` (pip-audit, npm audit, SBOM, checksums, GitHub-signed provenance attestations).
+
 ## Repository Layout
 
 ```text
