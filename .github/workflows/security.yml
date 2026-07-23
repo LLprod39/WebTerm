@@ -36,11 +36,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
       - name: Install locked development dependencies
         run: python -m pip install --require-hashes -r requirements-dev.lock
-      - name: Install pip-audit
-        run: python -m pip install pip-audit
+      - name: Install pip-audit and patch base packaging tools
+        # setuptools is not in requirements-dev.lock (pip bootstrap), but
+        # GitHub-hosted runners may ship a vulnerable setuptools that
+        # pip-audit --local will flag (e.g. PYSEC-2026-3447 / 79.x).
+        run: |
+          python -m pip install --upgrade "setuptools>=83.0.0" "wheel"
+          python -m pip install pip-audit
       - name: Audit installed environment
         # Prefer --local after a hashed install. Auditing the lock file with
         # --require-hashes dry-run can fail on incomplete transitive extras.
+        # Base image tooling (setuptools/wheel) is patched in the previous step.
         run: python -m pip_audit --local --progress-spinner=off
       - name: Record audit evidence
         if: always()

@@ -47,7 +47,8 @@ cd frontend && npm ci && npm audit --audit-level=high
 | DEP-NPM-001 | npm audit | `brace-expansion` GHSA-3jxr-9vmj-r5cp (DoS) | High | **fixed** | platform | Fixed via `npm audit fix` → brace-expansion 1.1.16 / 2.1.2 |
 | DEP-NPM-002 | npm audit | `form-data` GHSA-hmw2-7cc7-3qxx (CRLF injection) | High | **fixed** | platform | Fixed via form-data 4.0.6 (jsdom transitive) |
 | DEP-NPM-003 | npm audit | `js-yaml` GHSA-52cp-r559-cp3m (ReDoS-ish CPU) | High | **fixed** | platform | Fixed via js-yaml 4.3.0 (eslint transitive) |
-| DEP-PY-001 | pip-audit --local | (none at F-10 baseline after hashed install) | — | **fixed** / clean | platform | CI installs `requirements-dev.lock` then `pip-audit --local`; global/user site-packages are not release evidence |
+| DEP-PY-001 | pip-audit --local | (none at F-10 baseline after hashed install of app lock) | — | **fixed** / clean | platform | CI installs `requirements-dev.lock` then `pip-audit --local`; global/user site-packages are not release evidence |
+| DEP-PY-002 | pip-audit --local (CI runner) | `setuptools` 79.0.1 PYSEC-2026-3447 (runner bootstrap, not app lock) | High | **fixed** | platform | Not in `requirements-dev.lock`. CI `security.yml` upgrades `setuptools>=83.0.0` before audit |
 | DEP-NPM-004 | npm audit | `react-router` / `react-router-dom` GHSA-wrjc-x8rr-h8h6, GHSA-337j-9hxr-rhxg | Medium | **open** | platform | Fixed only in 7.18.x major line; staying on `^6.30.1` until deliberate RR v7 migration. CI gate is `--audit-level=high` (does not fail Stage 1) |
 
 **Post-remediation verification**
