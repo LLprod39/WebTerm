@@ -4,7 +4,33 @@ import type { PlatformFixtureContext } from "../platformFixtureState";
 
 /** Settings, models, and monitoring config fixtures. */
 export function handleSettingsFixture(req: any, ctx: PlatformFixtureContext) {
-  const { settingsConfig, servers } = ctx;
+  const { options, settingsConfig, servers } = ctx;
+  if (req.path === "/api/settings/readiness/" && req.method === "GET") {
+    const status = options.settingsReadiness ?? "ready";
+    const severity = status;
+    return json({
+      success: true,
+      status,
+      summary: {
+        ready: status === "ready" ? 1 : 0,
+        warning: status === "warning" ? 1 : 0,
+        error: status === "error" ? 1 : 0,
+        total: 1,
+      },
+      checks: [
+        {
+          key: "fixture_readiness",
+          title: "Fixture readiness",
+          status,
+          severity,
+          message: status === "ready" ? "Ready" : "Configuration requires attention",
+          action_path: "/settings/ai",
+          action_label: "Configure",
+        },
+      ],
+    });
+  }
+
       if (req.path === "/api/settings/" && req.method === "GET") {
         return json({ success: true, config: settingsConfig });
       }

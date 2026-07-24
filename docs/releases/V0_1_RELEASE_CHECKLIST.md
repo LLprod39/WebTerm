@@ -25,7 +25,7 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Frontend unit tests | `cd frontend && npm run test:coverage` | JUnit and coverage artifact | 112 tests green on `test` commit `389c6ac`; Stage 1 coverage target pending |
 | Frontend build | `cd frontend && npm run build:budget` | build log, budget artifact and `dist` manifest/hash | Green on `test` commit `389c6ac`, RC proof pending |
 | Browser E2E | `cd frontend && npm run test:e2e` | Playwright HTML report, traces on failure | Smoke gate green on `test` commit `389c6ac`; full primary flow pending F-13a |
-| Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report | Pending F-11 |
+| Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report with zero serious/critical WCAG 2 A/AA violations | Seven critical flows pass locally in F-12; CI proof pending |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
 | Backup/restore | command set frozen in F-13b | restore log plus integrity checks | Pending F-13b |

@@ -44,6 +44,9 @@ jobs:
       - name: Run smoke e2e
         run: npm run test:e2e:smoke
 
+      - name: Enforce critical-flow WCAG checks
+        run: npm run test:e2e:a11y
+
       - name: Upload Playwright evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -22,6 +22,8 @@ import { Button } from "@/components/ui/button";
 import { MetricCard, MetricGrid, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
 import { canUseDemoMode, isDemoMode } from "@/lib/demo";
 import { cn } from "@/lib/utils";
+import { markFirstRunReadinessSeen, safeFirstRunNextPath } from "@/lib/first-run-readiness";
+import { localize, useI18n } from "@/lib/i18n";
 
 function severityTone(severity: SettingsReadinessSeverity): "success" | "warning" | "danger" {
   if (severity === "ready") return "success";
@@ -111,6 +113,9 @@ const SETUP_PATH = [
 
 export default function SettingsReadinessPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { lang } = useI18n();
   const { data: authData } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -156,9 +161,48 @@ export default function SettingsReadinessPage() {
   const setupPath = authData?.user?.features.plugins
     ? SETUP_PATH
     : SETUP_PATH.filter((step) => step.path !== "/settings/plugins");
+  const firstRun = searchParams.get("firstRun") === "1";
+  const degradedFirstRun = searchParams.get("degraded") === "1";
+  const continuePath = safeFirstRunNextPath(searchParams.get("next"));
+
+  const continueToWorkspace = () => {
+    if (authData?.user?.id) markFirstRunReadinessSeen(authData.user.id);
+    navigate(continuePath, { replace: true });
+  };
 
   return (
     <div className="space-y-5 pb-10">
+      {firstRun ? (
+        <section className="rounded-sm border border-primary/40 bg-primary/8 p-4 shadow-elev-1 sm:p-5" aria-labelledby="first-run-readiness-title">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-primary">
+                {localize(lang, "Первый запуск", "First run")}
+              </p>
+              <h1 id="first-run-readiness-title" className="mt-2 font-display text-xl font-bold tracking-tight text-foreground">
+                {localize(lang, "Подготовьте WebTerm к работе", "Prepare WebTerm for operations")}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                {localize(
+                  lang,
+                  "Проверьте обязательные настройки, затем добавьте первый сервер. Мастер использует фактический readiness backend и не скрывает ошибки.",
+                  "Review the required settings, then add your first server. This wizard uses live backend readiness and does not hide failures.",
+                )}
+              </p>
+              {degradedFirstRun ? (
+                <p className="mt-3 rounded-sm border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning-foreground" role="alert">
+                  {localize(lang, "Readiness API недоступен. Исправьте соединение или продолжите в ограниченном режиме.", "The readiness API is unavailable. Restore connectivity or continue in degraded mode.")}
+                </p>
+              ) : null}
+            </div>
+            <Button variant="outline" className="shrink-0" onClick={continueToWorkspace}>
+              {localize(lang, "Продолжить в рабочую область", "Continue to workspace")}
+              <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </section>
+      ) : null}
+
       <SettingsPageHeader
         icon={Gauge}
         title="Готовность платформы"

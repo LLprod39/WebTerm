@@ -19,8 +19,20 @@ import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
 import { NavIcons } from "@/lib/app-icons";
 import { prefetchRouteForPath } from "@/lib/route-prefetch";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
 const CHAT_NAV_READY = true;
+type NavSectionId = "dashboard" | "infrastructure" | "automation" | "extensions" | "administration";
+
+interface PrimaryNavItem {
+  titleKey: string;
+  url: string;
+  icon: LucideIcon;
+  feature: string;
+  section: NavSectionId;
+  ready?: boolean;
+  staffOnly?: boolean;
+}
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
@@ -48,16 +60,18 @@ export function AppSidebar() {
   // Operators: keep production/pilot sidebar gate (ready_for_sidebar).
   const kubernetesNavReady = isStaff || Boolean(kubernetesReadiness?.ready_for_sidebar);
 
-  const navItems = [
-    { titleKey: "nav.dashboard", url: "/dashboard", icon: NavIcons.dashboard, feature: "dashboard" },
-    { titleKey: "nav.servers", url: "/servers", icon: NavIcons.servers, feature: "servers" },
-    { titleKey: "nav.agents", url: "/agents", icon: NavIcons.agents, feature: "agents" },
-    { titleKey: "nav.chat", url: "/chat", icon: NavIcons.chat, feature: "orchestrator", ready: CHAT_NAV_READY },
-    { titleKey: "nav.studio", url: "/studio", icon: NavIcons.studio, feature: "studio" },
-    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: NavIcons.kubernetes, feature: "kubernetes", ready: kubernetesNavReady },
-    { titleKey: "nav.mars", url: "/mars", icon: NavIcons.mars, feature: "mars" },
-    { titleKey: "nav.insights", url: "/monitoring/insights", icon: NavIcons.insights, feature: "dashboard", staffOnly: true },
-    { titleKey: "nav.settings", url: "/settings", icon: NavIcons.settings, feature: "settings" },
+  const navItems: PrimaryNavItem[] = [
+    { titleKey: "nav.dashboard", url: "/dashboard", icon: NavIcons.dashboard, feature: "dashboard", section: "dashboard" },
+    { titleKey: "nav.servers", url: "/servers", icon: NavIcons.servers, feature: "servers", section: "infrastructure" },
+    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: NavIcons.kubernetes, feature: "kubernetes", section: "infrastructure", ready: kubernetesNavReady },
+    { titleKey: "nav.agents", url: "/agents", icon: NavIcons.agents, feature: "agents", section: "automation" },
+    { titleKey: "nav.playbooks", url: "/automation", icon: NavIcons.playbooks, feature: "servers", section: "automation" },
+    { titleKey: "nav.chat", url: "/chat", icon: NavIcons.chat, feature: "orchestrator", section: "automation", ready: CHAT_NAV_READY },
+    { titleKey: "nav.studio", url: "/studio", icon: NavIcons.studio, feature: "studio", section: "automation" },
+    { titleKey: "nav.mars", url: "/mars", icon: NavIcons.mars, feature: "mars", section: "automation" },
+    { titleKey: "nav.plugins", url: "/settings/plugins", icon: NavIcons.plugins, feature: "plugins", section: "extensions", staffOnly: true },
+    { titleKey: "nav.insights", url: "/monitoring/insights", icon: NavIcons.insights, feature: "dashboard", section: "administration", staffOnly: true },
+    { titleKey: "nav.settings", url: "/settings", icon: NavIcons.settings, feature: "settings", section: "administration" },
   ];
 
   const allowedItems = navItems.filter((item) => {
@@ -72,18 +86,12 @@ export function AppSidebar() {
 
   const roleLabel = data?.user?.is_staff ? t("nav.admin") : t("nav.operator");
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
-  const controlKeys = ["nav.insights", "nav.settings"];
-  const navSections = [
-    {
-      id: "workspace",
-      label: t("nav.workspace_label"),
-      items: allowedItems.filter((item) => !controlKeys.includes(item.titleKey)),
-    },
-    {
-      id: "control",
-      label: localize(lang, "Управление", "Control"),
-      items: allowedItems.filter((item) => controlKeys.includes(item.titleKey)),
-    },
+  const navSections: Array<{ id: NavSectionId; label: string; items: PrimaryNavItem[] }> = [
+    { id: "dashboard", label: t("nav.section_dashboard"), items: allowedItems.filter((item) => item.section === "dashboard") },
+    { id: "infrastructure", label: t("nav.section_infrastructure"), items: allowedItems.filter((item) => item.section === "infrastructure") },
+    { id: "automation", label: t("nav.section_automation"), items: allowedItems.filter((item) => item.section === "automation") },
+    { id: "extensions", label: t("nav.section_extensions"), items: allowedItems.filter((item) => item.section === "extensions") },
+    { id: "administration", label: t("nav.section_administration"), items: allowedItems.filter((item) => item.section === "administration") },
   ].filter((section) => section.items.length > 0);
 
   const handleLogout = async () => {
@@ -114,7 +122,7 @@ export function AppSidebar() {
             <div className="truncate text-[13px] font-semibold tracking-tight text-sidebar-foreground">
               WebTerm
             </div>
-            <div className="truncate text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/45">
+            <div className="truncate text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/75">
               {t("nav.ops_workspace")}
             </div>
           </div>
@@ -124,9 +132,9 @@ export function AppSidebar() {
       {/* Navigation — same language as Settings sidebar: icon tile + label row */}
       <SidebarContent className="px-2 py-3">
         {navSections.map((section) => (
-          <SidebarGroup key={section.id} className={collapsed ? "mb-2" : "mb-3.5"}>
+          <SidebarGroup key={section.id} data-testid={`nav-section-${section.id}`} className={collapsed ? "mb-2" : "mb-3.5"}>
             {!collapsed ? (
-              <div className="mb-1.5 px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/45">
+              <div className="mb-1.5 px-2 text-[10px] font-medium uppercase tracking-[0.14em] text-sidebar-foreground/75">
                 {section.label}
               </div>
             ) : null}
@@ -142,7 +150,7 @@ export function AppSidebar() {
                         onFocus={() => prefetchRouteForPath(item.url)}
                         className={cn(
                           "group flex min-h-10 items-center gap-2.5 rounded-sm border border-transparent px-2 py-1.5 text-[13px] transition-colors",
-                          "text-sidebar-foreground/60",
+                          "text-sidebar-foreground/85",
                           // quiet hover — text only, no fill/border flash
                           "hover:text-sidebar-foreground",
                           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
@@ -157,7 +165,7 @@ export function AppSidebar() {
                         <span
                           className={cn(
                             "nav-icon-tile flex h-7 w-7 shrink-0 items-center justify-center rounded-sm border",
-                            "border-sidebar-border/80 bg-sidebar-accent/30 text-sidebar-foreground/65",
+                            "border-sidebar-border/80 bg-sidebar-accent/30 text-sidebar-foreground/80",
                           )}
                         >
                           <item.icon className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden />
@@ -188,7 +196,7 @@ export function AppSidebar() {
                 "min-h-7 flex-1 rounded px-2 py-1 transition-colors",
                 lang === "en"
                   ? "bg-sidebar-accent text-sidebar-foreground shadow-sm"
-                  : "text-sidebar-foreground/45 hover:text-sidebar-foreground",
+                  : "text-sidebar-foreground/75 hover:text-sidebar-foreground",
               )}
               aria-pressed={lang === "en"}
             >
@@ -201,7 +209,7 @@ export function AppSidebar() {
                 "min-h-7 flex-1 rounded px-2 py-1 transition-colors",
                 lang === "ru"
                   ? "bg-sidebar-accent text-sidebar-foreground shadow-sm"
-                  : "text-sidebar-foreground/45 hover:text-sidebar-foreground",
+                  : "text-sidebar-foreground/75 hover:text-sidebar-foreground",
               )}
               aria-pressed={lang === "ru"}
             >
@@ -212,7 +220,7 @@ export function AppSidebar() {
           <button
             type="button"
             onClick={() => setLang(lang === "ru" ? "en" : "ru")}
-            className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/55 transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+            className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
             aria-label={localize(lang, "Переключить язык", "Switch language")}
             title={localize(lang, "Переключить язык", "Switch language")}
           >
@@ -229,7 +237,7 @@ export function AppSidebar() {
               <p className="truncate text-[12px] font-medium tracking-tight text-sidebar-foreground">
                 {data?.user?.username || "user"}
               </p>
-              <p className="mt-0.5 flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] text-sidebar-foreground/40">
+              <p className="mt-0.5 flex items-center gap-1 text-[10px] uppercase tracking-[0.12em] text-sidebar-foreground/75">
                 <ShieldCheck className="h-2.5 w-2.5" strokeWidth={1.5} />
                 {roleLabel}
               </p>
@@ -238,7 +246,7 @@ export function AppSidebar() {
           {!collapsed && (
             <button
               type="button"
-              className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/70 hover:text-destructive"
+              className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/70 hover:text-destructive"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
               title={t("nav.signout")}
@@ -249,7 +257,7 @@ export function AppSidebar() {
           {collapsed && (
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent/70 hover:text-destructive"
+              className="flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent/70 hover:text-destructive"
               aria-label={t("nav.signout")}
               onClick={handleLogout}
               title={t("nav.signout")}

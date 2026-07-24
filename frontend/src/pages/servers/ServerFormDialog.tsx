@@ -166,7 +166,7 @@ export function ServerFormDialog({
                   aria-describedby={showFieldErrors && formValidation.errors.name ? "server-name-error" : undefined}
                 />
                 {showFieldErrors && formValidation.errors.name ? (
-                  <p id="server-name-error" className="text-xs text-destructive">{formValidation.errors.name}</p>
+                  <p id="server-name-error" className="text-xs font-medium text-foreground" role="alert">{formValidation.errors.name}</p>
                 ) : null}
               </div>
               <div className="space-y-2">
@@ -180,7 +180,7 @@ export function ServerFormDialog({
                   aria-describedby={showFieldErrors && formValidation.errors.host ? "server-host-error" : undefined}
                 />
                 {showFieldErrors && formValidation.errors.host ? (
-                  <p id="server-host-error" className="text-xs text-destructive">{formValidation.errors.host}</p>
+                  <p id="server-host-error" className="text-xs font-medium text-foreground" role="alert">{formValidation.errors.host}</p>
                 ) : null}
               </div>
               <div className="space-y-2">

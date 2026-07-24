@@ -1,4 +1,4 @@
-import { Bot, Cpu, Key, MessageSquare, RefreshCw, Save, Workflow } from "lucide-react";
+import { Bot, Cpu, Globe, Key, MessageSquare, RefreshCw, Save, Workflow } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

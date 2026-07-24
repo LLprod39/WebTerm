@@ -89,7 +89,6 @@ export function ConnectionStatusDot({ className }: { className?: string }) {
     <span
       className={cn("inline-flex items-center gap-1.5", className)}
       title={label}
-      aria-label={label}
     >
       <span className="relative flex h-2 w-2">
         {tone === "online" || tone === "unknown" ? (
@@ -97,6 +96,7 @@ export function ConnectionStatusDot({ className }: { className?: string }) {
         ) : null}
         <span className={cn("relative inline-flex h-2 w-2 rounded-full", color)} />
       </span>
+      <span className="sr-only">{label}</span>
     </span>
   );
 }

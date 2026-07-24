@@ -175,9 +175,9 @@ export function StatStripItem({
 
   return (
     <div className={cn("bg-card px-4 py-3 sm:px-5", className)}>
-      <div className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground/70">{label}</div>
+      <div className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
       <div className={cn("mt-1 font-display text-xl font-bold tabular-nums tracking-tight leading-none", valueTone)}>{value}</div>
-      {hint ? <div className="mt-1 text-xs leading-4 text-muted-foreground/70">{hint}</div> : null}
+      {hint ? <div className="mt-1 text-xs leading-4 text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }
@@ -221,9 +221,9 @@ export function MetricCard({
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="type-label text-muted-foreground/70">{label}</p>
+            <p className="type-label text-muted-foreground">{label}</p>
             <div className="mt-2 type-display tabular-nums text-foreground">{value}</div>
-            <div className="mt-1.5 type-body-sm text-muted-foreground/80">{description}</div>
+            <div className="mt-1.5 type-body-sm text-muted-foreground">{description}</div>
           </div>
           {icon ? (
             <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border/60 transition-colors", toneStyles.icon)}>
@@ -322,7 +322,7 @@ export function EmptyState({
   return (
     <div className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
       {icon ? (
-        <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground/70">
+        <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
           {icon}
         </div>
       ) : null}
@@ -331,7 +331,7 @@ export function EmptyState({
         <div className="max-w-sm text-xs leading-5 text-muted-foreground">{description}</div>
       </div>
       {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
-      {hint ? <div className="max-w-xs text-2xs text-muted-foreground/70">{hint}</div> : null}
+      {hint ? <div className="max-w-xs text-2xs text-muted-foreground">{hint}</div> : null}
     </div>
   );
 }

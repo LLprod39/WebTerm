@@ -13,9 +13,7 @@ test.describe("Accessibility", () => {
     await expect(page.getByRole("heading", { name: /WebTerm/ })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
-    expectViolationsWithinBudget(violations, {
-      "color-contrast": { impact: "serious", maxNodes: 2 },
-    });
+    expectViolationsWithinBudget(violations, {});
   });
 
   test("servers page accessibility budget", async ({ page }) => {
@@ -25,11 +23,7 @@ test.describe("Accessibility", () => {
     await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
-    expectViolationsWithinBudget(violations, {
-      "button-name": { impact: "critical", maxNodes: 4 },
-      "color-contrast": { impact: "serious", maxNodes: 3 },
-      "link-name": { impact: "serious", maxNodes: 1 },
-    });
+    expectViolationsWithinBudget(violations, {});
   });
 
   test("studio notifications page accessibility budget", async ({ page }) => {
@@ -39,12 +33,7 @@ test.describe("Accessibility", () => {
     await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
-    expectViolationsWithinBudget(violations, {
-      "button-name": { impact: "critical", maxNodes: 2 },
-      "color-contrast": { impact: "serious", maxNodes: 4 },
-      "link-in-text-block": { impact: "serious", maxNodes: 1 },
-      "link-name": { impact: "serious", maxNodes: 1 },
-    });
+    expectViolationsWithinBudget(violations, {});
   });
 
   test("server create sheet accessibility budget", async ({ page }) => {

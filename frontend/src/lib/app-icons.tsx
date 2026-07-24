@@ -87,12 +87,14 @@ import {
 export const NavIcons = {
   dashboard: Gauge,
   servers: HardDrive,
+  playbooks: ScrollText,
   agents: Radar,
   chat: MessageSquareText,
   studio: GitBranch,
   kubernetes: Container,
   mars: Compass,
   insights: Activity,
+  plugins: Blocks,
   settings: Settings2,
 } as const satisfies Record<string, LucideIcon>;
 

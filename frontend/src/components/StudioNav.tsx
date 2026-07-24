@@ -59,7 +59,7 @@ export function StudioNav() {
               "group relative flex min-h-10 shrink-0 items-center gap-2 rounded-lg px-3.5 text-xs font-medium transition-all duration-150",
               active
                 ? "bg-secondary text-foreground shadow-sm"
-                : "text-muted-foreground/70 hover:bg-secondary/60 hover:text-foreground"
+                : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
             )}
           >
             <Icon

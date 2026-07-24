@@ -74,7 +74,7 @@ export function FlowTopbar() {
           <span className="flex-1 truncate text-left">
             {localize(lang, "Поиск…", "Search for something…")}
           </span>
-          <kbd className="rounded border border-border bg-surface-1 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/80">
+          <kbd className="rounded border border-border bg-surface-1 px-1.5 py-0.5 font-mono text-[10px] text-foreground">
             {isMac ? "⌘K" : "Ctrl K"}
           </kbd>
         </button>

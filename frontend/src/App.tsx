@@ -8,6 +8,7 @@ import { UiStyleProvider } from "./lib/ui-style";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
 import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
+import { FirstRunReadinessGate } from "./components/FirstRunReadinessGate";
 
 const queryClient = new QueryClient();
 const Index = lazy(() => import("./pages/Index"));
@@ -175,7 +176,9 @@ const App = () => (
               <Route
                 element={
                   <AuthGate>
-                    <AppLayout />
+                    <FirstRunReadinessGate>
+                      <AppLayout />
+                    </FirstRunReadinessGate>
                   </AuthGate>
                 }
               >

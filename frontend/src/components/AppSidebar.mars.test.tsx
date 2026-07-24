@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -85,6 +85,25 @@ describe("AppSidebar preview-gated nav", () => {
     // Staff mock always has is_staff=true → Kubernetes is open when feature is on.
     expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
+  });
+
+  it("uses the five target navigation groups and exposes playbooks", async () => {
+    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, plugins: true, settings: true });
+
+    const dashboard = await screen.findByTestId("nav-section-dashboard");
+    const infrastructure = screen.getByTestId("nav-section-infrastructure");
+    const automation = screen.getByTestId("nav-section-automation");
+    const extensions = screen.getByTestId("nav-section-extensions");
+    const administration = screen.getByTestId("nav-section-administration");
+
+    expect(within(dashboard).getAllByText("Панель")).toHaveLength(2);
+    expect(within(infrastructure).getByText("Серверы")).toBeInTheDocument();
+    expect(within(infrastructure).getByText("Кубернетес")).toBeInTheDocument();
+    expect(within(automation).getByText("Агенты")).toBeInTheDocument();
+    expect(within(automation).getByText("Плейбуки")).toBeInTheDocument();
+    expect(within(automation).getByText("Студия")).toBeInTheDocument();
+    expect(within(extensions).getByText("Плагины")).toBeInTheDocument();
+    expect(within(administration).getByText("Настройки")).toBeInTheDocument();
   });
 
   it("renders Kubernetes for staff when feature is enabled (no ready_for_sidebar required)", async () => {

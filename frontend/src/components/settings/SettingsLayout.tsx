@@ -64,7 +64,7 @@ function SettingsSideNav({
           <div className="mb-2 px-2">
             <div className="type-label text-muted-foreground">{group.label}</div>
             {group.description ? (
-              <p className="mt-1 text-2xs leading-4 text-muted-foreground/80">{group.description}</p>
+              <p className="mt-1 text-2xs leading-4 text-muted-foreground">{group.description}</p>
             ) : null}
           </div>
           <ul className="space-y-0.5">

@@ -44,7 +44,7 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
                   ? "font-semibold text-foreground after:absolute after:inset-x-1 after:bottom-0 after:h-0.5 after:bg-primary"
                   : complete
                     ? "text-muted-foreground hover:text-foreground"
-                    : "text-muted-foreground/45",
+                    : "text-muted-foreground",
               )}
             >
               <span
@@ -54,7 +54,7 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
                     ? "bg-primary text-primary-foreground shadow-elev-1"
                     : complete
                       ? "border border-success/40 bg-success/15 text-success"
-                      : "border border-border bg-surface-2 text-muted-foreground/70",
+                      : "border border-border bg-surface-2 text-muted-foreground",
                 )}
                 aria-hidden
               >

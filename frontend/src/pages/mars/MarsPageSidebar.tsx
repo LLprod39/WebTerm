@@ -72,7 +72,7 @@ export function MarsWizardNav({ activeStep, steps, onStepChange }: WizardNavProp
                   <span className="font-mono text-xs text-primary">{stepIndexLabel(index)}</span>
                   <span className="truncate">{step.label}</span>
                 </span>
-                <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">{step.description}</span>
+                <span className={cn("mt-1 block line-clamp-2 text-xs leading-5", active ? "text-foreground" : "text-muted-foreground")}>{step.description}</span>
               </span>
             </button>
           );

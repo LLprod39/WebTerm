@@ -124,7 +124,7 @@ export function AgentWizardTemplateStep({
                 {localize(lang, "Вручную", "Custom")}
               </span>
             </div>
-            <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+            <p className="line-clamp-2 text-xs leading-5 text-foreground">
               {localize(
                 lang,
                 "По умолчанию · создать агента без шаблона",
@@ -154,7 +154,7 @@ export function AgentWizardTemplateStep({
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-foreground">{tpl.name}</span>
                 </div>
-                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                <p className="line-clamp-2 text-xs leading-5 text-foreground">
                   {tpl.mode === "full" || tpl.mode === "multi"
                     ? (tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task"))
                     : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}

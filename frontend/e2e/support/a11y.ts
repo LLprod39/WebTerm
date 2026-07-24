@@ -41,6 +41,9 @@ export async function collectSeriousAndCriticalViolations(page: Page): Promise<A
 }
 
 export function expectViolationsWithinBudget(violations: readonly A11yViolationSummary[], budget: A11yBudget): void {
+  const critical = violations.filter((violation) => violation.impact === "critical");
+  expect(critical, `Critical accessibility violations are never budgeted: ${formatSummaries(critical)}`).toEqual([]);
+
   const byId = new Map(violations.map((violation) => [violation.id, violation]));
   const unexpected = violations.filter((violation) => !Object.prototype.hasOwnProperty.call(budget, violation.id));
 
