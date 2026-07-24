@@ -8,6 +8,7 @@ SMOKE_COMPOSE_FILE="$ROOT_DIR/docker-compose.production.smoke.yml"
 ARTIFACT_DIR="${F13A_ARTIFACT_DIR:-$ROOT_DIR/.ci-artifacts/production-install-smoke}"
 PROJECT_NAME="${F13A_PROJECT_NAME:-webterm-f13a-smoke}"
 KEEP_UP="${F13A_KEEP_UP:-0}"
+RELEASE_IMAGES="${F13A_RELEASE_IMAGES:-0}"
 HTTPS_PORT="${F13A_HTTPS_PORT:-18443}"
 ADMIN_USERNAME="f13a-admin"
 ADMIN_PASSWORD="F13aSmokePass123!"
@@ -347,14 +348,19 @@ write_environment
 
 echo "==> Running the production installer on a fresh Linux host"
 STARTED=1
-bash "$ROOT_DIR/docker/install-production.sh" \
-  --env-file "$ENV_FILE" \
-  --compose-file "$COMPOSE_FILE" \
-  --project-name "$PROJECT_NAME" \
-  --create-superuser \
-  --superuser-username "$ADMIN_USERNAME" \
-  --superuser-email "f13a-admin@example.test" \
+install_args=(
+  --env-file "$ENV_FILE"
+  --compose-file "$COMPOSE_FILE"
+  --project-name "$PROJECT_NAME"
+  --create-superuser
+  --superuser-username "$ADMIN_USERNAME"
+  --superuser-email "f13a-admin@example.test"
   --superuser-password "$ADMIN_PASSWORD"
+)
+if [[ "$RELEASE_IMAGES" == "1" ]]; then
+  install_args+=(--pull --no-build)
+fi
+bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
 
 echo "==> Verifying migration drift and the strict production profile"
 compose exec -T backend python manage.py makemigrations --check --dry-run \

@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  images:
+    name: Publish ${{ matrix.name }} image
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: docker/backend.Dockerfile
+          - name: frontend
+            dockerfile: docker/frontend.Dockerfile
+          - name: ansible
+            dockerfile: docker/ansible-runner/Dockerfile
+          - name: mcp-demo
+            dockerfile: docker/demo-mcp.Dockerfile
+          - name: mcp-runner
+            dockerfile: docker/mcp-runner.Dockerfile
+          - name: mars-agent
+            dockerfile: docker/mars-agent.Dockerfile
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build and publish immutable image
+        id: publish
+        env:
+          IMAGE: ghcr.io/llprod39/webterm-${{ matrix.name }}
+          VERSION_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          revision_tag="sha-${GITHUB_SHA::12}"
+          docker build \
+            --file "${{ matrix.dockerfile }}" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            --label "org.opencontainers.image.version=${VERSION_TAG}" \
+            --tag "${IMAGE}:${VERSION_TAG}" \
+            --tag "${IMAGE}:${revision_tag}" \
+            .
+          docker push "${IMAGE}:${VERSION_TAG}"
+          docker push "${IMAGE}:${revision_tag}"
+          reference="$(docker image inspect "${IMAGE}:${VERSION_TAG}" --format '{{index .RepoDigests 0}}')"
+          digest="${reference#*@}"
+          test -n "$digest"
+          printf '%s@%s\n' "$IMAGE" "$digest" | tee "release-image-${{ matrix.name }}.txt"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Attest published image
+        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v2.2.3
+        with:
+          subject-name: ${{ steps.publish.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+      - name: Upload immutable image reference
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-image-${{ matrix.name }}
+          path: release-image-${{ matrix.name }}.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  published-image-smoke:
+    name: Published digest production and Playwright smoke
+    needs: images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - name: Download immutable image references
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-image-*
+          path: .ci-artifacts/release-images
+          merge-multiple: true
+      - name: Export published digest references
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          mapping = {
+              "backend": "WEBTERM_BACKEND_IMAGE",
+              "frontend": "WEBTERM_FRONTEND_IMAGE",
+              "ansible": "WEBTERM_ANSIBLE_IMAGE",
+              "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
+              "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
+              "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
+          }
+          lines = []
+          for name, env_name in mapping.items():
+              ref = Path(f".ci-artifacts/release-images/release-image-{name}.txt").read_text().strip()
+              if "@sha256:" not in ref:
+                  raise SystemExit(f"invalid immutable reference for {name}: {ref}")
+              lines.append(f"{env_name}={ref}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+              stream.write("\n".join(lines) + "\n")
+          PY
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Run production smoke on published digests
+        env:
+          F13A_RELEASE_IMAGES: "1"
+          F13A_KEEP_UP: "1"
+        run: bash docker/production-install-smoke.sh
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.23.1"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Run Playwright against published digests
+        working-directory: frontend
+        env:
+          WEBTERM_RELEASE_BASE_URL: https://127.0.0.1:18443
+          WEBTERM_RELEASE_ADMIN_USERNAME: f13a-admin
+          WEBTERM_RELEASE_ADMIN_PASSWORD: F13aSmokePass123!
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npx playwright test e2e/release-published.spec.ts --config playwright.release.config.ts
+      - name: Upload published-image evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: published-image-smoke-${{ github.sha }}
+          path: |
+            .ci-artifacts/production-install-smoke
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  release:
+    name: Publish signed release assets
+    needs: [images, published-image-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout exact tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+      - name: Download immutable image references
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: release-image-*
+          path: .ci-artifacts/release-images
+          merge-multiple: true
+      - name: Install verified Syft
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/syft.tar.gz" \
+            https://github.com/anchore/syft/releases/download/v1.49.0/syft_1.49.0_linux_amd64.tar.gz
+          echo "7aa2f03ee92739cf643279ba3990548b9925d4e22cae13f46831ee62821147fe  $RUNNER_TEMP/syft.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/syft.tar.gz" -C "$RUNNER_TEMP" syft
+          chmod +x "$RUNNER_TEMP/syft"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Authenticate to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Build manifest, install bundle and image SBOMs
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets/install/webterm-${GITHUB_REF_NAME} release-assets/manifest release-assets/sbom
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          names = ["backend", "frontend", "ansible", "mcp-demo", "mcp-runner", "mars-agent"]
+          images = {}
+          for name in names:
+              images[name] = Path(f".ci-artifacts/release-images/release-image-{name}.txt").read_text().strip()
+          manifest = {
+              "schema_version": 1,
+              "release": "${{ github.ref_name }}",
+              "commit": "${{ github.sha }}",
+              "images": images,
+          }
+          Path("release-assets/manifest/release-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          env_names = {
+              "backend": "WEBTERM_BACKEND_IMAGE",
+              "frontend": "WEBTERM_FRONTEND_IMAGE",
+              "ansible": "WEBTERM_ANSIBLE_IMAGE",
+              "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
+              "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
+              "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
+          }
+          env_text = "\n".join(f"{env_names[name]}={images[name]}" for name in names) + "\n"
+          Path("release-assets/manifest/release-images.env").write_text(env_text, encoding="utf-8")
+          PY
+          bundle="release-assets/install/webterm-${GITHUB_REF_NAME}"
+          cp docker-compose.production.yml .env.production.example VERSION "$bundle/"
+          cp -R docker "$bundle/docker"
+          cp -R docs/releases "$bundle/docs-releases"
+          cp release-assets/manifest/release-images.env "$bundle/"
+          cp release-assets/manifest/release-manifest.json "$bundle/"
+          tar -czf "release-assets/webterm-${GITHUB_REF_NAME}-install.tar.gz" -C release-assets/install "webterm-${GITHUB_REF_NAME}"
+          (cd release-assets/install && zip -qr "../webterm-${GITHUB_REF_NAME}-install.zip" "webterm-${GITHUB_REF_NAME}")
+          mapfile -t refs < <(cat .ci-artifacts/release-images/release-image-*.txt)
+          args=()
+          for ref in "${refs[@]}"; do args+=(--image "$ref"); done
+          python scripts/generate_sbom.py --output-dir release-assets/sbom "${args[@]}"
+      - name: Generate checksums and provenance
+        run: |
+          mkdir -p release-assets/upload
+          cp release-assets/manifest/* release-assets/upload/
+          cp release-assets/sbom/* release-assets/upload/
+          cp "release-assets/webterm-${GITHUB_REF_NAME}-install.tar.gz" release-assets/upload/
+          cp "release-assets/webterm-${GITHUB_REF_NAME}-install.zip" release-assets/upload/
+          python scripts/generate_release_checksums.py \
+            --repo-root release-assets/upload \
+            --input-dir . \
+            --output SHA256SUMS.txt
+          python scripts/generate_provenance.py \
+            --repo-root release-assets/upload \
+            --artifacts-dir . \
+            --checksums SHA256SUMS.txt \
+            --output provenance.intoto.json \
+            --invocation-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --builder-id "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --signature-status github_attestation_pending
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@c074443f1aee8d4aeeae555aebba3282517141b2 # v2.2.3
+        with:
+          subject-path: release-assets/upload/*
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "WebTerm $GITHUB_REF_NAME" \
+            --notes-file docs/releases/V0_1_0_RELEASE_NOTES.md \
+            --verify-tag \
+            --latest \
+            release-assets/upload/*

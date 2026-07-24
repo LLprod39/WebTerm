@@ -34,6 +34,7 @@ x-backend-build: &backend-build
     NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
 
 x-backend-worker: &backend-worker
+  image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
   build: *backend-build
   env_file:
     - .env.production
@@ -127,6 +128,7 @@ services:
     logging: *json-logging
 
   backend:
+    image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
     build: *backend-build
     container_name: mini-prod-backend
     command: ["sh", "-lc", "./docker/render-backend-start.sh"]
@@ -404,6 +406,7 @@ services:
     command: ["node", "--version"]
 
   frontend:
+    image: ${WEBTERM_FRONTEND_IMAGE:-webterm-frontend:latest}
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
@@ -464,6 +467,7 @@ services:
     logging: *json-logging
 
   mcp-demo:
+    image: ${WEBTERM_MCP_DEMO_IMAGE:-webterm-mcp-demo:latest}
     build:
       context: .
       dockerfile: docker/demo-mcp.Dockerfile
@@ -494,6 +498,7 @@ services:
     logging: *json-logging
 
   mcp-runner:
+    image: ${WEBTERM_MCP_RUNNER_IMAGE:-webterm-mcp-runner:latest}
     build:
       context: .
       dockerfile: docker/mcp-runner.Dockerfile

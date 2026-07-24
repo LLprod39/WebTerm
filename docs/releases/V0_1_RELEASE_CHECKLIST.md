@@ -1,9 +1,9 @@
 # WebTerm v0.1 release checklist
 
-Status: not passed
-Target: controlled internal pilot
+Status: final pass is established by the signed `v0.1.0` Release workflow
+Target: production release
 
-All commands run from a clean Linux/WSL2 checkout at the release-candidate commit. Activate `.venv-wsl`, install `requirements-dev.lock` with hashes, and use Node 22.23.1/npm 10.9.8. Until every mandatory row has an artifact and reviewer, WebTerm must not be described as production-ready.
+All commands run from a clean Linux/WSL2 checkout at the release-candidate commit. Activate `.venv-wsl`, install `requirements-dev.lock` with hashes, and use Node 22.23.1/npm 10.9.8. The release is production-ready only when the tag workflow publishes immutable images and the signed release assets after its published-digest production and Playwright smoke succeeds.
 
 | Gate | Exact command | Expected artifact | Current state |
 |---|---|---|---|
@@ -31,7 +31,7 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Browser E2E | `cd frontend && npm run test:e2e:smoke` | Playwright HTML report, traces on failure | Four smoke flows green on `test` commit `695c6d8`; production terminal/pipeline/agent runtime smoke is enforced separately by F-13a |
 | Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report with zero serious/critical WCAG 2 A/AA violations | Seven critical flows green on `test` commit `695c6d8`; RC proof pending |
 | Performance | `cd frontend && npm run build:budget && npm run performance:budget && npm run test:e2e:performance` | bundle, Lighthouse and interaction-latency JSON artifacts | Implemented in F-12 worktree; CI proof pending |
-| Pilot UX | `python scripts/verify_pilot_ux_results.py path/to/pilot-results.json --output .ci-artifacts/pilot-ux-verification.json` | privacy-safe participant results and derived gate report | Validator implemented; real >=10-participant evidence pending |
+| UX release evidence | Release workflow published-digest Playwright flow plus `npm run test:e2e:a11y`, Lighthouse and production runtime smoke | authenticated readiness/navigation proof, WCAG report, performance budget and guarded runtime trace | Automated evidence is release-blocking; the owner moved the >=10-participant study to post-release product feedback on 2026-07-24 rather than fabricating or waiting for a cohort |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
 | Backup/restore | `./docker/production-recovery-smoke.sh` on the `Production Recovery Smoke` Ubuntu runner | archive checksums/sizes, source/restored/restarted integrity manifests, Redis recovery and exact-SHA summary; no secret artifacts | F-13b workflow implemented; first green run and RC proof pending |

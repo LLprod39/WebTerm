@@ -1,6 +1,6 @@
 # Releases
 
-WebTerm has not yet published a production-ready release. The first target is a controlled internal pilot, not an unrestricted public or enterprise deployment.
+WebTerm v0.1.0 is the first production release of the Stage 1 foundation. It is published with immutable container digests, signed attestations, SBOMs, checksums, an install bundle, and automated runtime/Playwright proof on the published images. The support matrix and explicit capability exclusions remain authoritative.
 
 Authoritative release documents:
 
@@ -14,5 +14,6 @@ Authoritative release documents:
 - [First-release lifecycle policy](FIRST_RELEASE_LIFECYCLE_POLICY.md) — frozen fixtures and the separate application-rollback/database-restore rules.
 - [Pilot UX script](../pilot/PILOT_UX_SCRIPT_V1.md) — versioned participant task and evidence rules.
 - [CI and Git governance](../architecture/CI_GOVERNANCE.md) — check rollout, promotion and branch-protection policy.
+- [v0.1.0 release notes](V0_1_0_RELEASE_NOTES.md) — install and verification commands for the published release.
 
 A green local command is not a release. A release candidate requires a clean commit, pinned tools, all mandatory artifacts, an explicit reviewer decision and a traceable CI run. `scripts/collect_release_evidence.py` records those inputs but deliberately never approves a release itself.
