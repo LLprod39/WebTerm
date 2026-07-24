@@ -36,3 +36,10 @@ def test_production_installer_does_not_ignore_deploy_check_failure() -> None:
 
     assert "compose exec -T backend python manage.py check --deploy" in installer
     assert "check --deploy || true" not in installer
+
+
+def test_https_runtime_smoke_matches_browser_csrf_and_websocket_origin() -> None:
+    harness = (ROOT / "docker/multi_user_load_smoke.py").read_text(encoding="utf-8")
+
+    assert "self.csrf_token = self.csrf_cookie" in harness
+    assert 'origin=self.base_url.rstrip("/")' in harness

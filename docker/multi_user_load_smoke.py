@@ -162,6 +162,9 @@ class SmokeUserSession:
                 payload = {"raw_text": await response.text()}
             if response.cookies.get("sessionid"):
                 self.session_cookie = str(response.cookies["sessionid"].value)
+            if response.cookies.get("csrftoken"):
+                self.csrf_cookie = str(response.cookies["csrftoken"].value)
+                self.csrf_token = self.csrf_cookie
             if response.status != 200 or not payload.get("success"):
                 raise SmokeFailure(f"login failed for {self.seed['username']}: HTTP {response.status} {payload}")
 
@@ -195,7 +198,11 @@ class SmokeUserSession:
         started = time.perf_counter()
         ws_url = f"{self.ws_base}/ws/servers/{int(self.seed['server_id'])}/terminal/?ws_token={self.ws_token}"
         marker = f"TERM_OK_{self.seed['username']}_{session_index}"
-        async with self.session.ws_connect(ws_url, heartbeat=20) as ws:
+        async with self.session.ws_connect(
+            ws_url,
+            heartbeat=20,
+            origin=self.base_url.rstrip("/"),
+        ) as ws:
             await _expect_json(ws, predicate=lambda p: p.get("type") == "ready")
             await ws.send_json(
                 {
