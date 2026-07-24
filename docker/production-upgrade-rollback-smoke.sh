@@ -39,6 +39,10 @@ cleanup() {
   local exit_code=$?
   trap - EXIT
   set +e
+  if docker inspect "$ROLLBACK_CONTAINER" >/dev/null 2>&1; then
+    docker inspect "$ROLLBACK_CONTAINER" >"$ARTIFACT_DIR/application-rollback-container.json" 2>&1
+    docker logs "$ROLLBACK_CONTAINER" >"$ARTIFACT_DIR/application-rollback-container.log" 2>&1
+  fi
   docker rm -f "$ROLLBACK_CONTAINER" >/dev/null 2>&1
   if [[ "$COMPOSE_STARTED" -eq 1 ]]; then
     compose ps --format json >"$ARTIFACT_DIR/compose-ps.json" 2>&1
@@ -269,7 +273,7 @@ docker run -d \
   -e DJANGO_SETTINGS_MODULE=web_ui.settings.production \
   --publish 127.0.0.1:39090:9000 \
   "$FIXTURE_IMAGE" \
-  python -m gunicorn web_ui.wsgi:application --bind 0.0.0.0:9000 --workers 1 --timeout 60 \
+  daphne -b 0.0.0.0 -p 9000 web_ui.asgi:application \
   >/dev/null
 for _attempt in $(seq 1 60); do
   if curl --fail --silent --show-error \
@@ -277,6 +281,12 @@ for _attempt in $(seq 1 60); do
     --header 'Host: 127.0.0.1' \
     http://127.0.0.1:39090/api/health/ >"$ARTIFACT_DIR/application-rollback-health.json"; then
     break
+  fi
+  rollback_status="$(docker inspect --format '{{.State.Status}}' "$ROLLBACK_CONTAINER" 2>/dev/null || true)"
+  if [[ "$rollback_status" == "exited" || "$rollback_status" == "dead" ]]; then
+    echo "Fixture application rollback container exited before becoming healthy" >&2
+    docker logs "$ROLLBACK_CONTAINER" >&2 || true
+    exit 1
   fi
   sleep 2
 done

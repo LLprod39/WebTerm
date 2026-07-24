@@ -31,6 +31,14 @@ def test_f13c_smoke_separates_application_rollback_from_database_restore() -> No
         assert contract in script
 
 
+def test_f13c_application_rollback_uses_the_fixture_server_runtime() -> None:
+    script = (ROOT / "docker/production-upgrade-rollback-smoke.sh").read_text(encoding="utf-8")
+
+    assert "daphne -b 0.0.0.0 -p 9000 web_ui.asgi:application" in script
+    assert "python -m gunicorn" not in script
+    assert "application-rollback-container.log" in script
+
+
 def test_f13c_lifecycle_probe_uses_only_cross_fixture_business_contracts() -> None:
     probe = (ROOT / "scripts/release_lifecycle_probe.py").read_text(encoding="utf-8")
 
