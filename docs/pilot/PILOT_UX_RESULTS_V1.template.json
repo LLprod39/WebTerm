@@ -1,0 +1,9 @@
+{
+  "schema_version": "webterm.pilot-ux-results/v1",
+  "script_version": "PILOT_UX_SCRIPT_V1",
+  "tested_commit": "REPLACE_WITH_LOWERCASE_40_CHARACTER_GIT_SHA",
+  "owner": "REPLACE_WITH_NAMED_PILOT_OWNER",
+  "environment": "REPLACE_WITH_RESET_FIXTURE_VERSION",
+  "ci_run_url": "REPLACE_WITH_GREEN_CI_RUN_URL",
+  "attempts": []
+}

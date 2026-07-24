@@ -27,6 +27,7 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Browser E2E | `cd frontend && npm run test:e2e:smoke` | Playwright HTML report, traces on failure | Four smoke flows green on `test` commit `695c6d8`; full primary flow pending F-13a |
 | Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report with zero serious/critical WCAG 2 A/AA violations | Seven critical flows green on `test` commit `695c6d8`; RC proof pending |
 | Performance | `cd frontend && npm run build:budget && npm run performance:budget && npm run test:e2e:performance` | bundle, Lighthouse and interaction-latency JSON artifacts | Implemented in F-12 worktree; CI proof pending |
+| Pilot UX | `python scripts/verify_pilot_ux_results.py path/to/pilot-results.json --output .ci-artifacts/pilot-ux-verification.json` | privacy-safe participant results and derived gate report | Validator implemented; real >=10-participant evidence pending |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
 | Backup/restore | command set frozen in F-13b | restore log plus integrity checks | Pending F-13b |

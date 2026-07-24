@@ -20,6 +20,7 @@ AUTHORITATIVE_DOCS = (
     "docs/architecture/adr/0001-primary-runtime-and-toolchain.md",
     "docs/architecture/adr/0002-public-version-reset.md",
     "docs/pilot/PILOT_UX_SCRIPT_V1.md",
+    "docs/pilot/PILOT_UX_RESULTS_V1.template.json",
     "docs/releases/README.md",
     "docs/releases/BRAND_COMPATIBILITY.md",
     "docs/releases/OPERATIONS_RUNBOOK.md",
@@ -95,6 +96,7 @@ def verify(root: Path = ROOT) -> list[str]:
             "npm run test:e2e",
             "npm run performance:budget",
             "npm run test:e2e:performance",
+            "python scripts/verify_pilot_ux_results.py",
             "python scripts/collect_release_evidence.py",
         ):
             if command not in checklist:

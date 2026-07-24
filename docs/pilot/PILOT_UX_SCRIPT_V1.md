@@ -29,6 +29,15 @@ An attempt passes only when all five primary tasks complete without a hint and t
 
 ## Evidence format
 
-Store a versioned, privacy-safe results table with participant code, commit SHA, environment, timestamps, each task result, hints, total pass/fail and observation notes. Attach screenshots or recordings only with consent. Report unsuccessful attempts; never replace or exclude them to improve the rate.
+Copy [the v1 JSON template](PILOT_UX_RESULTS_V1.template.json) and store a privacy-safe participant code, commit SHA, environment, timestamps, each task result, hints, total pass/fail and classified environment/product errors for every attempt. Attach screenshots or recordings only with consent. Report unsuccessful attempts; never replace or exclude them to improve the rate.
+
+Validate the completed file and save the machine-readable decision:
+
+```bash
+python scripts/verify_pilot_ux_results.py path/to/pilot-results.json \
+  --output .ci-artifacts/pilot-ux-verification.json
+```
+
+The validator derives the denominator from every recorded attempt, rejects duplicate participants and inconsistent pass claims, and requires both task success and understanding within 60 seconds to reach 90% across at least 10 independent participants.
 
 The F-12 issue remains open until real results satisfy the gate and the tested commit is traceable to CI evidence.
