@@ -1,5 +1,5 @@
 import { CalendarDays, CheckCircle2, Search, Server } from "lucide-react";
-import { InlineAlert } from "@/components/system/inlineAlert";
+import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 import type { AgentScheduleConfig, AgentScheduleMode, FrontendServer } from "@/lib/api";
 import { localize } from "@/lib/i18n";
