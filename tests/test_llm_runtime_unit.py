@@ -96,8 +96,8 @@ async def test_gemini_stream_chat_returns_timeout_message(monkeypatch):
 
     monkeypatch.setattr(model_manager.config, "gemini_enabled", True)
     monkeypatch.setattr(model_manager, "get_chat_model", lambda _provider: "gemini-test")
-    monkeypatch.setattr("app.core.llm._log_llm_usage", lambda *args, **kwargs: None)
-    monkeypatch.setattr("app.core.llm._provider_timeout_seconds", lambda provider_name, **kwargs: 1)
+    monkeypatch.setattr("app.core.llm_provider_stream._log_llm_usage", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.core.llm_provider_stream._provider_timeout_seconds", lambda provider_name, **kwargs: 1)
 
     async def _raise_timeout(awaitable, timeout=None):
         if asyncio.iscoroutine(awaitable):
@@ -118,7 +118,8 @@ async def test_ollama_stream_chat_yields_local_response(monkeypatch):
     monkeypatch.setattr(model_manager.config, "ollama_enabled", True)
     monkeypatch.setattr(model_manager.config, "ollama_base_url", "http://127.0.0.1:11434")
     monkeypatch.setattr(model_manager, "get_chat_model", lambda _provider: "llama3.2:latest")
-    monkeypatch.setattr("app.core.llm._log_llm_usage", lambda *args, **kwargs: None)
+    monkeypatch.setattr(model_manager, "_get_ollama_base_urls", lambda: ["http://127.0.0.1:11434"])
+    monkeypatch.setattr("app.core.llm_provider_stream._log_llm_usage", lambda *args, **kwargs: None)
 
     class FakeContent:
         async def iter_any(self):
@@ -181,7 +182,8 @@ async def test_ollama_stream_chat_falls_back_to_next_base_url(monkeypatch):
             "http://10.255.255.254:11434",
         ],
     )
-    monkeypatch.setattr("app.core.llm._log_llm_usage", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.core.llm_provider_stream._log_llm_usage", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.core.ollama_config.remember_ollama_url", lambda _url: None)
 
     calls = []
 
@@ -351,7 +353,7 @@ async def test_ollama_stream_chat_cloud_uses_api_key_and_disables_thinking(monke
     monkeypatch.setattr(model_manager.config, "ollama_think_mode", "off")
     monkeypatch.setenv("OLLAMA_API_KEY", "cloud-key")
     monkeypatch.setattr(model_manager, "get_chat_model", lambda _provider: "gpt-oss:120b (cloud)")
-    monkeypatch.setattr("app.core.llm._log_llm_usage", lambda *args, **kwargs: None)
+    monkeypatch.setattr("app.core.llm_provider_stream._log_llm_usage", lambda *args, **kwargs: None)
 
     class FakeContent:
         async def iter_any(self):

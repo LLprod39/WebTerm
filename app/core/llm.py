@@ -1,3 +1,10 @@
+"""LLM provider facade: keys, clients, and stream entrypoints.
+
+F-08a: stream orchestration lives in ``llm_provider_stream`` and
+``llm_provider_tools_stream``. This module keeps provider lifecycle and
+thin ``stream_chat`` / ``stream_chat_tools`` wrappers.
+"""
+
 import asyncio as asyncio
 import contextlib
 import os
@@ -7,28 +14,11 @@ from typing import Any
 from google import genai
 from loguru import logger
 
-from app.core.llm_anthropic import ClaudeStreamRequest, stream_claude_response
-from app.core.llm_budget import BudgetExceededError, get_current_llm_budget_status
-from app.core.llm_gemini import GeminiStreamRequest, stream_gemini_response
 from app.core.llm_ollama import (
-    OllamaStreamRequest,
     build_ollama_request_targets,
     get_ollama_think_value,
-    stream_ollama_response,
-)
-from app.core.llm_openai_compatible import (
-    build_chat_completions_request,
-    build_openai_request,
-    stream_openai_compatible_response,
 )
 from app.core.llm_provider_keys import apply_managed_llm_keys, load_managed_llm_keys
-from app.core.llm_provider_resolution import RuntimeProviderKeys, resolve_stream_provider
-from app.core.llm_runtime import (
-    _grok_reasoning_effort,
-    _is_ollama_connect_error,
-    _provider_timeout_seconds,
-    _retry_attempts,
-)
 from app.core.llm_runtime import (
     _is_retryable_error as _is_retryable_error,
 )
@@ -36,18 +26,13 @@ from app.core.llm_runtime import (
     _is_timeout_error as _is_timeout_error,
 )
 from app.core.llm_runtime import (
+    _provider_timeout_seconds as _provider_timeout_seconds,
+)
+from app.core.llm_runtime import (
     with_retry as with_retry,
 )
-from app.core.llm_tools import (
-    ollama_model_supports_tools,
-    stream_anthropic_tools,
-    stream_json_tools_fallback,
-    stream_ollama_tools,
-    stream_openai_tools,
-)
-from app.core.llm_usage import log_llm_usage as _log_llm_usage
+from app.core.llm_usage import log_llm_usage as _log_llm_usage  # noqa: F401 — public re-export for tests
 from app.core.model_config import model_manager
-from app.core.redacted_logging import redacted_log_text
 
 _provider_instance: "LLMProvider | None" = None
 
@@ -194,227 +179,21 @@ class LLMProvider:
         system_prompt: str | None = None,
         json_mode: bool = False,
     ) -> AsyncGenerator[str, None]:
-        """
-        Stream chat response from the selected model.
+        """Stream chat response from the selected model (see llm_provider_stream)."""
+        from app.core.llm_provider_stream import stream_provider_chat
 
-        Args:
-            prompt: The prompt to send (user message when system_prompt is given)
-            model: Provider name (auto/gemini/grok/openai/claude/ollama). «auto» resolves via purpose.
-            specific_model: Specific model version to use (overrides config)
-            purpose: One of 'chat', 'agent', 'orchestrator' — used when model=='auto'
-            system_prompt: Optional system-level instructions. When provided,
-                replaces the default generic system message and enables
-                provider-level prompt caching (Anthropic cache_control,
-                OpenAI automatic prefix caching, Gemini system_instruction).
-            json_mode: When True, activates provider-native JSON output mode
-                (3.1) so the LLM is constrained to produce valid JSON.
-        """
-
-        await self._load_managed_api_keys()
-
-        if model == "auto" or not model:
-            model, specific_model = resolve_stream_provider(
-                requested_provider=model,
-                requested_specific_model=specific_model,
-                purpose=purpose,
-                model_manager=model_manager,
-                keys=RuntimeProviderKeys.from_llm_provider(self),
-                ollama_base_url=self._get_ollama_base_url(),
-                warn=logger.warning,
-            )
-            logger.info(f"[{purpose}] using provider: {model}, model: {specific_model or '(default)'}")
-        logger.info("Streaming chat from {} with prompt: {}...", model, redacted_log_text(prompt, limit=50))
-
-        # B2: per-user daily token budget pre-flight. Best-effort — never let
-        # a budget-service failure break a real LLM call.
-        try:
-            _budget = get_current_llm_budget_status()
-            if _budget.exceeded:
-                raise BudgetExceededError(
-                    f"Daily LLM token budget exceeded: used {_budget.used_tokens} "
-                    f"of {_budget.limit_tokens} tokens in the last 24 h."
-                )
-        except BudgetExceededError:
-            raise
-        except Exception as _budget_err:  # noqa: BLE001 — budget check must never block on infra issues
-            logger.debug("budget pre-flight skipped: %s", _budget_err)
-
-        if model == "gemini":
-            # Check if Gemini is enabled
-            if not model_manager.config.gemini_enabled:
-                yield "Error: Gemini API disabled. Enable in settings or use CLI agent (ralph/cursor/claude)."
-                return
-
-            if not self.gemini_client:
-                yield "Error: Gemini API Key not configured."
-                return
-
-            target_model = specific_model or model_manager.get_chat_model("gemini")
-            logger.info(f"Using Gemini model: {target_model}")
-            async for chunk in stream_gemini_response(
-                client=self.gemini_client,
-                request=GeminiStreamRequest(
-                    target_model=target_model,
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    json_mode=json_mode,
-                ),
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds("gemini")),
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-            ):
+        stream = stream_provider_chat(
+            self,
+            prompt=prompt,
+            model=model,
+            specific_model=specific_model,
+            purpose=purpose,
+            system_prompt=system_prompt,
+            json_mode=json_mode,
+        )
+        async with contextlib.aclosing(stream):
+            async for chunk in stream:
                 yield chunk
-            return
-
-        elif model == "grok":
-            # Check if Grok is enabled
-            if not model_manager.config.grok_enabled:
-                yield "Error: Grok API disabled. Enable in settings or use CLI agent (ralph/cursor/claude)."
-                return
-
-            if not self.grok_api_key:
-                yield "Error: Grok API Key not configured."
-                return
-
-            headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.grok_api_key}"}
-            grok_model = specific_model or model_manager.get_chat_model("grok")
-            request = build_chat_completions_request(
-                api_url="https://api.x.ai/v1/chat/completions",
-                target_model=grok_model,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                json_mode=json_mode,
-                temperature=0.7,
-            )
-            reasoning_effort = _grok_reasoning_effort(grok_model, purpose=purpose)
-            if reasoning_effort:
-                request.payload["reasoning_effort"] = reasoning_effort
-
-            async for chunk in stream_openai_compatible_response(
-                provider="grok",
-                display_name="Grok",
-                request=request,
-                headers=headers,
-                target_model=grok_model,
-                prompt=prompt,
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds("grok")),
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-                trust_env=True,
-            ):
-                yield chunk
-            return
-
-        elif model == "claude":
-            if not model_manager.config.claude_enabled:
-                yield "Error: Claude API disabled. Enable in settings."
-                return
-
-            client = self._get_anthropic_client()
-            if not client:
-                yield "Error: Anthropic API Key not configured."
-                return
-
-            target_model = specific_model or model_manager.get_chat_model("claude")
-            logger.info(f"Using Claude model: {target_model}")
-            async for chunk in stream_claude_response(
-                client=client,
-                request=ClaudeStreamRequest(
-                    target_model=target_model,
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                ),
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds("claude")),
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-            ):
-                yield chunk
-            return
-
-        elif model == "openai":
-            if not model_manager.config.openai_enabled:
-                logger.warning("OpenAI: openai_enabled=False, but proceeding because key is present")
-
-            if not self.openai_api_key:
-                logger.error("OpenAI: API key not configured (OPENAI_API_KEY / CODEX_API_KEY not set)")
-                yield "Error: OpenAI API Key not configured."
-                return
-
-            target_model = specific_model or model_manager.get_chat_model("openai")
-            request = build_openai_request(
-                target_model=target_model,
-                prompt=prompt,
-                system_prompt=system_prompt,
-                json_mode=json_mode,
-                reasoning_effort=(model_manager.config.openai_reasoning_effort or "").strip(),
-            )
-            logger.info(f"OpenAI: model={target_model}, endpoint={request.endpoint_name}, api_key=configured")
-
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.openai_api_key}",
-            }
-            _timeout_sec = float(_provider_timeout_seconds("openai", endpoint_name=request.endpoint_name))
-            logger.debug(f"OpenAI: timeout={_timeout_sec}s")
-            async for chunk in stream_openai_compatible_response(
-                provider="openai",
-                display_name="OpenAI",
-                request=request,
-                headers=headers,
-                target_model=target_model,
-                prompt=prompt,
-                purpose=purpose,
-                timeout_seconds=_timeout_sec,
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-            ):
-                yield chunk
-            return
-
-        elif model == "ollama":
-            if not model_manager.config.ollama_enabled:
-                yield "Error: Ollama is disabled in settings."
-                return
-
-            target_model = specific_model or model_manager.get_chat_model("ollama")
-            if not target_model:
-                yield "Error: Ollama model is not configured."
-                return
-
-            request_targets = self._build_ollama_request_targets(target_model)
-            if not request_targets:
-                if model_manager._is_ollama_cloud_model(target_model) or self._get_ollama_runtime_mode() == "cloud":
-                    yield "Error: Ollama Cloud requires `OLLAMA_API_KEY` and cloud mode enabled in settings."
-                else:
-                    yield "Error: Ollama runtime is not configured."
-                return
-
-            async for chunk in stream_ollama_response(
-                request=OllamaStreamRequest(
-                    prompt=prompt,
-                    system_prompt=system_prompt,
-                    json_mode=json_mode,
-                    request_targets=request_targets,
-                    think_value=self._get_ollama_think_value(),
-                ),
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds("ollama")),
-                max_attempts=_retry_attempts(),
-                usage_logger=_log_llm_usage,
-                get_configured_base_url=lambda: model_manager.config.ollama_base_url,
-                set_configured_base_url=lambda base_url: setattr(model_manager.config, "ollama_base_url", base_url),
-                is_connect_error=_is_ollama_connect_error,
-            ):
-                # Keep «THINK» markers in the stream. Consumers (operator JSON tools path)
-                # convert them to thinking_delta for the UI; plain chat callers may ignore.
-                yield chunk
-            return
-
-        else:
-            yield f"Unknown model: {model}"
 
     async def stream_chat_tools(
         self,
@@ -426,149 +205,21 @@ class LLMProvider:
         purpose: str = "orchestrator",
         system_prompt: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
-        """Stream chat with native tool-calling (Anthropic → OpenAI → JSON fallback).
+        """Stream chat with native tool-calling (see llm_provider_tools_stream)."""
+        from app.core.llm_provider_tools_stream import stream_provider_chat_tools
 
-        Event shapes:
-          {"type":"text_delta","text":str}
-          {"type":"tool_call","id":str,"name":str,"arguments":dict}
-          {"type":"done","usage":dict,"stop_reason":str}
-          {"type":"error","message":str}
-        """
-        await self._load_managed_api_keys()
-
-        if model == "auto" or not model:
-            model, specific_model = resolve_stream_provider(
-                requested_provider=model,
-                requested_specific_model=specific_model,
-                purpose=purpose,
-                model_manager=model_manager,
-                keys=RuntimeProviderKeys.from_llm_provider(self),
-                ollama_base_url=self._get_ollama_base_url(),
-                warn=logger.warning,
-            )
-            logger.info(f"[{purpose}/tools] using provider: {model}, model: {specific_model or '(default)'}")
-
-        try:
-            _budget = get_current_llm_budget_status()
-            if _budget.exceeded:
-                raise BudgetExceededError(
-                    f"Daily LLM token budget exceeded: used {_budget.used_tokens} "
-                    f"of {_budget.limit_tokens} tokens in the last 24 h."
-                )
-        except BudgetExceededError:
-            yield {"type": "error", "message": "Daily LLM token budget exceeded"}
-            return
-        except Exception as _budget_err:  # noqa: BLE001
-            logger.debug("budget pre-flight skipped: %s", _budget_err)
-
-        prompt_for_usage = ""
-        if messages:
-            last = messages[-1]
-            content = last.get("content")
-            prompt_for_usage = content[:2000] if isinstance(content, str) else json_safe_preview(messages)[:2000]
-
-        if model == "claude":
-            if not model_manager.config.claude_enabled:
-                yield {"type": "error", "message": "Claude API disabled"}
-                return
-            client = self._get_anthropic_client()
-            if not client:
-                yield {"type": "error", "message": "Anthropic API Key not configured"}
-                return
-            target_model = specific_model or model_manager.get_chat_model("claude")
-            async for event in stream_anthropic_tools(
-                client=client,
-                model=target_model,
-                messages=messages,
-                tools=tools,
-                system_prompt=system_prompt,
-                purpose=purpose,
-                usage_logger=_log_llm_usage,
-                prompt_for_usage=prompt_for_usage,
-            ):
-                yield event
-            return
-
-        if model in {"openai", "grok"}:
-            if model == "openai":
-                if not self.openai_api_key:
-                    yield {"type": "error", "message": "OpenAI API Key not configured"}
-                    return
-                api_key = self.openai_api_key
-                api_url = "https://api.openai.com/v1/chat/completions"
-                target_model = specific_model or model_manager.get_chat_model("openai")
-                provider = "openai"
-            else:
-                if not self.grok_api_key:
-                    yield {"type": "error", "message": "Grok API Key not configured"}
-                    return
-                api_key = self.grok_api_key
-                api_url = "https://api.x.ai/v1/chat/completions"
-                target_model = specific_model or model_manager.get_chat_model("grok")
-                provider = "grok"
-            async for event in stream_openai_tools(
-                api_url=api_url,
-                api_key=api_key,
-                model=target_model,
-                messages=messages,
-                tools=tools,
-                system_prompt=system_prompt,
-                purpose=purpose,
-                timeout_seconds=float(_provider_timeout_seconds(provider)),
-                usage_logger=_log_llm_usage,
-                prompt_for_usage=prompt_for_usage,
-                provider=provider,
-            ):
-                yield event
-            return
-
-        # Ollama: prefer native tool-calling when the model exposes the "tools"
-        # capability; only fall back to the brittle JSON-in-prompt path otherwise.
-        if model == "ollama" and model_manager.config.ollama_enabled:
-            target_model = specific_model or model_manager.get_chat_model("ollama")
-            request_targets = self._build_ollama_request_targets(target_model) if target_model else []
-            if request_targets:
-                first = request_targets[0]
-                supports_tools = await ollama_model_supports_tools(first["base_url"], first["model"], first["headers"])
-                if supports_tools:
-                    async for event in stream_ollama_tools(
-                        request_targets=request_targets,
-                        messages=messages,
-                        tools=tools,
-                        system_prompt=system_prompt,
-                        think_value=self._get_ollama_think_value(),
-                        timeout_seconds=float(_provider_timeout_seconds("ollama")),
-                        purpose=purpose,
-                        usage_logger=_log_llm_usage,
-                        prompt_for_usage=prompt_for_usage,
-                        set_configured_base_url=lambda base_url: setattr(
-                            model_manager.config, "ollama_base_url", base_url
-                        ),
-                        is_connect_error=_is_ollama_connect_error,
-                    ):
-                        yield event
-                    return
-
-        # Gemini / Ollama-without-tools / others: JSON tool-call fallback
-        async def _text_stream(*, prompt: str, system_prompt: str | None, purpose: str, json_mode: bool):
-            async for chunk in self.stream_chat(
-                prompt=prompt,
-                model=model,
-                specific_model=specific_model,
-                purpose=purpose,
-                system_prompt=system_prompt,
-                json_mode=json_mode,
-            ):
-                yield chunk
-
-        async for event in stream_json_tools_fallback(
-            stream_text=_text_stream,
+        stream = stream_provider_chat_tools(
+            self,
             messages=messages,
             tools=tools,
-            system_prompt=system_prompt,
+            model=model,
+            specific_model=specific_model,
             purpose=purpose,
-        ):
-            yield event
+            system_prompt=system_prompt,
+        )
+        async with contextlib.aclosing(stream):
+            async for event in stream:
+                yield event
 
 
 def json_safe_preview(value: Any, limit: int = 2000) -> str:

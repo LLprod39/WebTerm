@@ -120,7 +120,7 @@ def test_agent_create_api_omitted_budgets_use_full_defaults():
 def test_create_agent_dialog_seeds_complex_defaults():
     from pathlib import Path
 
-    src = Path("frontend/src/pages/agents-page/CreateAgentDialog.tsx").read_text(encoding="utf-8")
+    src = Path("frontend/src/pages/agents-page/useCreateAgentDialogState.ts").read_text(encoding="utf-8")
     assert "useState(40)" in src
     assert "useState(1200)" in src
     assert "max_iterations || 40" in src or "max_iterations || 40)" in src

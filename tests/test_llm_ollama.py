@@ -275,6 +275,7 @@ async def test_stream_ollama_response_falls_back_to_next_local_base_url(monkeypa
         "app.core.llm_ollama.aiohttp.ClientSession",
         lambda **kwargs: _FakeSession(responses, calls, **kwargs),
     )
+    monkeypatch.setattr("app.core.ollama_config.remember_ollama_url", lambda _url: None)
 
     chunks = [
         chunk

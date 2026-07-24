@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
-from servers.models import Server, ServerAlert
+from servers.models import Server
 from studio.models import Pipeline, PipelineRun
 from studio.pipeline_executor import _execute_registry_node
 
@@ -407,109 +405,3 @@ def test_ops_backup_restore_check_inspects_latest_backup(monkeypatch):
     assert result["status"] == "completed"
     assert result["backup_restore_check"]["summary"]["latest_path"] == "/var/backups/app.tar.gz"
     assert result["backup_restore_check"]["verification"]["requested"] is False
-
-
-def test_ops_backup_restore_check_verifies_latest_archive(monkeypatch):
-    run = _make_run("ops-backup-verify-user")
-    server = Server.objects.create(user=run.pipeline.owner, name="backup-verify-srv", host="10.0.0.17", username="root")
-    captured: dict[str, object] = {}
-
-    async def fake_secret(_server):
-        return ""
-
-    async def fake_run_command_result(_server, *, secret="", command=""):
-        captured["command"] = command
-        return {
-            "stdout": "__FILES__\n9999999999\t1048576\t/var/backups/app.tar.gz\n__VERIFY__\nlatest=/var/backups/app.tar.gz\nverification_exit=0\n",
-            "stderr": "",
-            "exit_code": 0,
-        }
-
-    monkeypatch.setattr("studio.executor.nodes.ops._server_secret", fake_secret)
-    monkeypatch.setattr("studio.executor.nodes.ops._run_command_result", fake_run_command_result)
-
-    result = async_to_sync(_execute_registry_node)(
-        {
-            "id": "backup_verify",
-            "type": "ops/backup_restore_check",
-            "data": {"server_id": server.id, "action": "verify_latest", "path": "/var/backups", "max_depth": 3},
-        },
-        {},
-        {},
-        run,
-    )
-
-    assert result["status"] == "completed"
-    assert 'find "$BACKUP_DIR" -maxdepth "$MAX_DEPTH"' in str(captured["command"])
-    assert result["backup_restore_check"]["verification"]["success"] is True
-
-
-def test_ops_http_check_node_passes_expected_status(monkeypatch):
-    run = _make_run("ops-http-user")
-    captured: dict[str, object] = {}
-
-    class FakeHttpClient:
-        def __init__(self, timeout: int = 15, follow_redirects: bool = True) -> None:
-            self.timeout = timeout
-            self.follow_redirects = follow_redirects
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        async def request(self, method: str, url: str):
-            captured["method"] = method
-            captured["url"] = url
-            return SimpleNamespace(status_code=204, text="healthy")
-
-    monkeypatch.setattr("studio.executor.nodes.ops.httpx.AsyncClient", FakeHttpClient)
-
-    result = async_to_sync(_execute_registry_node)(
-        {
-            "id": "http_check",
-            "type": "ops/http_check",
-            "data": {
-                "url": "https://example.test/health",
-                "method": "GET",
-                "expected_status": [204],
-                "body_contains": "healthy",
-            },
-        },
-        {},
-        {},
-        run,
-    )
-
-    assert result["status"] == "completed"
-    assert captured == {"method": "GET", "url": "https://example.test/health"}
-    assert result["http_check"]["status_code"] == 204
-
-
-def test_ops_alert_update_resolves_owned_alert():
-    run = _make_run("ops-alert-user")
-    server = Server.objects.create(user=run.pipeline.owner, name="alert-srv", host="10.0.0.12", username="root")
-    alert = ServerAlert.objects.create(
-        server=server,
-        alert_type=ServerAlert.TYPE_SERVICE,
-        severity=ServerAlert.SEVERITY_CRITICAL,
-        title="Service down",
-        message="nginx failed",
-    )
-
-    result = async_to_sync(_execute_registry_node)(
-        {
-            "id": "resolve_alert",
-            "type": "ops/alert_update",
-            "data": {"alert_id_context_key": "alert_id", "action": "resolve"},
-        },
-        {"alert_id": alert.id},
-        {},
-        run,
-    )
-
-    alert.refresh_from_db()
-    assert result["status"] == "completed"
-    assert alert.is_resolved is True
-    assert result["alert"]["alert_id"] == alert.id

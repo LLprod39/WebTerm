@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Q
 from django.utils import timezone
 
-from kubernetes_ops.models import K8sActionRequest, K8sAppRef, K8sCluster, K8sFleetBundle
+from kubernetes_ops.models import K8sActionRequest, K8sCluster
 from kubernetes_ops.services.action_errors import ActionRequestValidationError
 from kubernetes_ops.services.action_gitops import gitops_merge_request_preview
 from kubernetes_ops.services.action_production_templates import rollout_restart_production_template
+from kubernetes_ops.services.action_requests_helpers import (
+    _app_from_target,
+    _cluster_or_none,
+    _fleet_bundle_from_target,
+)
 from kubernetes_ops.services.action_resources import (
     resource_apply_preview,
     resource_delete_preview,
@@ -486,31 +490,3 @@ def _devtron_rollback_preview(target: dict[str, Any]) -> tuple[K8sCluster | None
             "expected_verification": ["Devtron deployment history", "application health", "pod readiness"],
         },
     )
-
-
-def _cluster_or_none(cluster_id: str) -> K8sCluster | None:
-    value = str(cluster_id or "").strip()
-    numeric = value.removeprefix("cluster_")
-    query = Q(name=value) | Q(rancher_cluster_id=value) | Q(devtron_cluster_id=value)
-    if numeric.isdigit():
-        query |= Q(id=int(numeric))
-    return K8sCluster.objects.filter(query).first()
-
-
-def _app_from_target(target: dict[str, Any]) -> K8sAppRef | None:
-    app_id = str(target.get("app_id") or "").strip()
-    numeric = app_id.removeprefix("app_")
-    if numeric.isdigit():
-        return K8sAppRef.objects.filter(id=int(numeric)).select_related("cluster").first()
-    return None
-
-
-def _fleet_bundle_from_target(target: dict[str, Any]) -> K8sFleetBundle | None:
-    bundle_id = str(target.get("bundle_id") or "").strip()
-    numeric = bundle_id.removeprefix("fleet_")
-    if numeric.isdigit():
-        return K8sFleetBundle.objects.filter(id=int(numeric)).first()
-    bundle_name = str(target.get("bundle_name") or target.get("name") or "").strip()
-    if bundle_name:
-        return K8sFleetBundle.objects.filter(name=bundle_name).first()
-    return None

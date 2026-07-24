@@ -11,15 +11,6 @@ from kubernetes_ops.services.readonly_rbac import (
 )
 
 ACCESS_MODEL_DOC_MARKERS = {
-    "report": (
-        "docs/WebTerm_Kubernetes_Ops_Rancher_Fleet_Devtron_Report.md",
-        (
-            "# 7. SSO, RBAC и модель доступа",
-            "## 7.3. Проверяемый MVP access model",
-            "Keycloak group -> WebTerm feature -> Rancher/Devtron role",
-            "render_kubernetes_ops_readonly_rbac",
-        ),
-    ),
     "runbook": (
         "docs/architecture/KUBERNETES_OPS_OPERATIONS.md",
         (

@@ -4,12 +4,13 @@ SFTP file management endpoints.
 These views keep the HTTP/API layer for remote file operations separate from
 the larger legacy server view module. The SSH auth/access helpers are still
 shared with Linux UI endpoints until that slice is extracted too.
+
+F-08a.10: error/upload helpers live in ``server_files_helpers``.
 """
 
 import contextlib
 import json
 import os
-import tempfile
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
@@ -20,7 +21,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from servers.elevated_files import ElevatedFileError, read_text_file_elevated, write_text_file_elevated
+from servers.elevated_files import read_text_file_elevated, write_text_file_elevated
 from servers.sftp import (
     change_owner,
     change_permissions,
@@ -33,6 +34,12 @@ from servers.sftp import (
     upload_local_file,
     write_text_file,
 )
+from servers.views.server_files_helpers import (
+    _materialize_uploaded_file,
+    _missing_capability_response,
+    _parse_bool,
+    _sftp_error_response,
+)
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,
@@ -40,61 +47,22 @@ from servers.views.server_helpers import (
     _server_has_capability,
 )
 
-
-def _parse_bool(value) -> bool:
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _materialize_uploaded_file(uploaded_file) -> tuple[str, bool]:
-    try:
-        return uploaded_file.temporary_file_path(), False
-    except Exception:
-        pass
-
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        for chunk in uploaded_file.chunks():
-            tmp.write(chunk)
-        return tmp.name, True
-
-
-def _sftp_error_response(exc: Exception) -> JsonResponse:
-    import asyncssh as _asyncssh
-
-    if isinstance(exc, ElevatedFileError):
-        return JsonResponse(
-            {"success": False, "error": str(exc) or "Elevated file operation failed", "code": exc.code},
-            status=exc.status,
-        )
-    if isinstance(exc, (FileNotFoundError, _asyncssh.SFTPNoSuchFile, _asyncssh.SFTPNoSuchPath)):
-        return JsonResponse({"success": False, "error": "Файл или папка не найдены", "code": "not_found"}, status=404)
-    if isinstance(exc, (FileExistsError, _asyncssh.SFTPFileAlreadyExists)):
-        return JsonResponse({"success": False, "error": "Файл уже существует", "code": "already_exists"}, status=409)
-    if isinstance(exc, NotADirectoryError):
-        return JsonResponse(
-            {"success": False, "error": "Указанный путь не является папкой", "code": "not_a_directory"}, status=400
-        )
-    if isinstance(exc, IsADirectoryError):
-        return JsonResponse(
-            {"success": False, "error": "Операция требует файл, а не папку", "code": "is_directory"}, status=400
-        )
-    if isinstance(exc, (PermissionError, _asyncssh.SFTPPermissionDenied)):
-        return JsonResponse(
-            {
-                "success": False,
-                "error": "Недостаточно прав для выполнения операции",
-                "code": "permission_denied",
-            },
-            status=403,
-        )
-    if isinstance(exc, ValueError):
-        return JsonResponse({"success": False, "error": str(exc), "code": "invalid_request"}, status=400)
-    return JsonResponse(
-        {"success": False, "error": str(exc) or "SFTP operation failed", "code": "sftp_error"}, status=500
-    )
-
-
-def _missing_capability_response(capability: str) -> JsonResponse:
-    return JsonResponse({"success": False, "error": f"Missing server capability: {capability}"}, status=403)
+__all__ = [
+    "_parse_bool",
+    "_materialize_uploaded_file",
+    "_sftp_error_response",
+    "_missing_capability_response",
+    "server_file_list",
+    "server_file_read_text",
+    "server_file_write_text",
+    "server_file_chmod",
+    "server_file_chown",
+    "server_file_upload",
+    "server_file_download",
+    "server_file_rename",
+    "server_file_delete",
+    "server_file_mkdir",
+]
 
 
 @login_required

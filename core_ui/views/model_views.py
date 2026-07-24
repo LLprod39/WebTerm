@@ -107,9 +107,7 @@ def api_models_refresh(request):
 
     provider = (data.get("provider") or "").strip().lower()
     if provider not in {"gemini", "grok", "openai", "claude", "ollama"}:
-        return JsonResponse(
-            {"error": "provider must be one of: gemini, grok, openai, claude, ollama"}, status=400
-        )
+        return JsonResponse({"error": "provider must be one of: gemini, grok, openai, claude, ollama"}, status=400)
 
     if provider == "gemini" and not _has_llm_api_key("gemini", "GEMINI_API_KEY"):
         return JsonResponse({"error": "GEMINI_API_KEY is not configured"}, status=400)

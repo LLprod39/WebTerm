@@ -17,11 +17,9 @@ from kubernetes_ops.models import (
     K8sPodRef,
     K8sWorkloadRef,
 )
-from kubernetes_ops.services.action_errors import ActionRequestValidationError
 from kubernetes_ops.services.action_production_templates import production_rollout_restart_template_is_safe
 from kubernetes_ops.services.action_requests import (
     approve_external_action_request,
-    block_kubernetes_action_execution,
     create_kubernetes_action_request,
     record_external_action_verification,
 )
@@ -32,6 +30,11 @@ from kubernetes_ops.services.action_verification import (
 )
 from kubernetes_ops.services.admin_dry_run import manifest_fingerprint
 from kubernetes_ops.services.admin_write_approval import production_write_restricted_credential_gate_report
+from kubernetes_ops.services.release_action_controls_helpers import (
+    _blocked_execution_request,
+    _terminal_execute_rejected,
+    _terminal_verify_rejected,
+)
 
 
 def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> dict[str, Any]:
@@ -468,43 +471,3 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
             return proof
     except Exception as exc:
         return {"success": False, "status": "error", "error": str(exc)}
-
-
-def _terminal_execute_rejected(action_request: K8sActionRequest, user) -> bool:
-    try:
-        block_kubernetes_action_execution(action_request=action_request, user=user)
-    except ActionRequestValidationError as exc:
-        return exc.code == "action_request_not_pending"
-    return False
-
-
-def _blocked_execution_request(user, workload: K8sWorkloadRef) -> K8sActionRequest:
-    request = create_kubernetes_action_request(
-        user=user,
-        data={
-            "action": K8sActionRequest.ACTION_K8S_ROLLOUT_RESTART,
-            "reason": "release evidence execution block smoke",
-            "target": {"workload_id": f"workload_{workload.id}"},
-        },
-    )
-    request = approve_external_action_request(
-        action_request=request,
-        user=user,
-        data={
-            "approval_ref": "CHG-RELEASE-EVIDENCE-BLOCK",
-            "summary": "release evidence blocked execution approval smoke",
-        },
-    )
-    return block_kubernetes_action_execution(action_request=request, user=user)
-
-
-def _terminal_verify_rejected(action_request: K8sActionRequest, user) -> bool:
-    try:
-        record_external_action_verification(
-            action_request=action_request,
-            user=user,
-            data={"outcome": "succeeded", "summary": "terminal rewrite smoke"},
-        )
-    except ActionRequestValidationError as exc:
-        return exc.code == "action_request_not_pending"
-    return False

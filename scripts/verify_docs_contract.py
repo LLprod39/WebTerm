@@ -10,14 +10,14 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 AUTHORITATIVE_DOCS = (
     "README.md",
-    "docs/architecture/README.md",
-    "docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md",
+    "docs/architecture/ARCHITECTURE_CONTRACT.md",
+    "docs/architecture/CI_GOVERNANCE.md",
+    "docs/architecture/KUBERNETES_OPS_OPERATIONS.md",
     "docs/architecture/adr/0001-primary-runtime-and-toolchain.md",
     "docs/releases/README.md",
     "docs/releases/SUPPORT_MATRIX.md",
     "docs/releases/V0_1_RELEASE_SCOPE.md",
     "docs/releases/V0_1_RELEASE_CHECKLIST.md",
-    "docs/reports/COMPETITIVE_BASELINE_2026-07-22.md",
 )
 REQUIRED_DOMAINS = {
     "Servers inventory and access",

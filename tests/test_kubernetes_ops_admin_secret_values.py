@@ -127,7 +127,7 @@ class KubernetesOpsAdminSecretValueTests(TestCase):
         session = self.create_read_session(user)
         self.client.force_login(user)
 
-        with patch("kubernetes_ops.services.admin_resources.ProviderJsonClient") as client_cls:
+        with patch("kubernetes_ops.services.admin_resources_helpers.ProviderJsonClient") as client_cls:
             client_cls.return_value.get.return_value = {
                 "apiVersion": "v1",
                 "kind": "Secret",

@@ -138,7 +138,7 @@ def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blan
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
 
-    monkeypatch.setattr("studio.pipeline_interactions._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_notifications._global_tg_defaults", lambda: ("global-bot", "global-chat"))
     monkeypatch.setattr("studio.pipeline_interactions._global_email_defaults", lambda: ("", "", "", "", ""))
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
@@ -253,9 +253,9 @@ def test_telegram_input_node_returns_operator_reply(monkeypatch):
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -303,10 +303,10 @@ def test_telegram_input_node_uses_global_telegram_defaults_when_node_fields_blan
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_interactions._global_tg_defaults", lambda: ("global-bot", "global-chat"))
-    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_notifications._global_tg_defaults", lambda: ("global-bot", "global-chat"))
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -359,9 +359,9 @@ def test_telegram_input_node_prefers_operator_reply_over_stale_stopped_status(mo
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,
@@ -409,9 +409,9 @@ def test_telegram_input_node_stops_only_on_runtime_stop_request(monkeypatch):
     async def fake_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_reply_message", fake_poll_reply)
-    monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
+    monkeypatch.setattr("studio.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         node,

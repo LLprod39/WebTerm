@@ -2,20 +2,27 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC
 from pathlib import Path
 from typing import Any
 
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 
 from kubernetes_ops.models import K8sProvider
 from kubernetes_ops.services.admin_interactive_transport_readiness import build_admin_interactive_transport_report
 from kubernetes_ops.services.provider_exec_streams import open_provider_exec_stream
 from kubernetes_ops.services.provider_interactive_shell_streams import open_provider_interactive_shell_stream
 from kubernetes_ops.services.provider_port_forward_tunnels import open_provider_port_forward_tunnel
+from kubernetes_ops.services.release_interactive_live_smoke_helpers import (
+    _artifact_age,
+    _capture_transport,
+    _live_smoke_required,
+    _max_age_seconds,
+    _request_safe,
+    _request_summary,
+    _setting_ref,
+)
 
 INTERACTIVE_LIVE_SMOKE_SCHEMA_VERSION = "kubernetes_ops.interactive_live_smoke.v1"
 INTERACTIVE_LIVE_SMOKE_ARTIFACT = "artifacts/kubernetes_ops_interactive_live_smoke.json"
@@ -436,66 +443,3 @@ def _interactive_shell_check(
         "stdin_supported": stdin_ok,
         "event_stream_ok": event.stream == "stdout",
     }
-
-
-def _capture_transport(payload: Any) -> dict[str, Any]:
-    captured: dict[str, Any] = {}
-
-    def transport(url, _headers, _timeout, *, method="GET", body=None):
-        captured.update({"url": str(url), "method": str(method).upper(), "body": dict(body or {})})
-        return payload
-
-    return {"transport": transport, "captured": captured}
-
-
-def _request_summary(captured: dict[str, Any], *, operation: str) -> dict[str, Any]:
-    raw = captured.get("captured") if isinstance(captured.get("captured"), dict) else {}
-    body = raw.get("body") if isinstance(raw.get("body"), dict) else {}
-    target = body.get("target") if isinstance(body.get("target"), dict) else {}
-    return {
-        "operation": str(body.get("operation") or operation),
-        "method": str(raw.get("method") or ""),
-        "body_keys": sorted(body.keys()),
-        "target_keys": sorted(target.keys()),
-        "stdin": bool(body.get("stdin")),
-        "tty": bool(body.get("tty")),
-        "duration_seconds": int(body.get("duration_seconds") or 0),
-    }
-
-
-def _request_safe(request: dict[str, Any]) -> bool:
-    serialized = str(request)
-    forbidden = ("smoke-secret", "stdin-secret", "Authorization:", "Bearer ")
-    return not any(item in serialized for item in forbidden)
-
-
-def _live_smoke_required(*, production: bool, enabled_count: int) -> bool:
-    configured = bool(getattr(settings, INTERACTIVE_LIVE_SMOKE_REQUIRED_SETTING, False))
-    return configured or bool(production and enabled_count > 0)
-
-
-def _setting_ref(name: str) -> str:
-    return str(getattr(settings, name, "") or "").strip()
-
-
-def _artifact_age(payload: dict[str, Any]) -> tuple[int | None, str]:
-    raw = str(payload.get("checked_at") or "").strip()
-    if not raw:
-        return None, "checked_at is missing"
-    checked_at = parse_datetime(raw)
-    if checked_at is None:
-        return None, "checked_at is invalid"
-    if timezone.is_naive(checked_at):
-        checked_at = timezone.make_aware(checked_at, timezone=UTC)
-    age_seconds = max(0, int((timezone.now() - checked_at).total_seconds()))
-    max_age_seconds = _max_age_seconds()
-    if age_seconds > max_age_seconds:
-        return (
-            age_seconds,
-            f"interactive live-smoke artifact is stale: age_seconds={age_seconds} max_age_seconds={max_age_seconds}",
-        )
-    return age_seconds, ""
-
-
-def _max_age_seconds() -> int:
-    return int(getattr(settings, "KUBERNETES_OPS_RELEASE_EVIDENCE_MAX_AGE_SECONDS", 86400) or 86400)

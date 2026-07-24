@@ -16,6 +16,7 @@ from .model_serializers import (
 )
 from .pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
 from .pipeline_model_services import instantiate_template_for_user, sync_pipeline_triggers_from_nodes
+from .skill_access_models import StudioSkillAccess  # noqa: F401
 
 CURRENT_PIPELINE_GRAPH_VERSION = 2
 
@@ -475,32 +476,3 @@ class PipelineTemplate(models.Model):
     def instantiate_for_user(self, user: User) -> "Pipeline":
         """Create a new Pipeline for the given user from this template."""
         return instantiate_template_for_user(self, user)
-
-
-class StudioSkillAccess(models.Model):
-    """Ownership and sharing metadata for filesystem-backed Studio skills."""
-
-    slug = models.SlugField(max_length=100, unique=True)
-    owner = models.ForeignKey(
-        User,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="owned_studio_skills",
-    )
-    is_shared = models.BooleanField(default=False, help_text="Visible to all users with skill access")
-    shared_with = models.ManyToManyField(
-        User,
-        blank=True,
-        related_name="shared_studio_skills",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["slug"]
-        verbose_name = "Studio Skill Access"
-        verbose_name_plural = "Studio Skill Access"
-
-    def __str__(self):
-        return self.slug

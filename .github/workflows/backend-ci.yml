@@ -148,6 +148,7 @@ jobs:
       CHANNEL_REDIS_URL: redis://127.0.0.1:6379/1
       CELERY_BROKER_URL: redis://127.0.0.1:6379/0
       WEBTERM_REQUIRE_EXTERNAL_TEST_SERVICES: "1"
+      DJANGO_SECRET_KEY: ci-only-integration-secret-key-please-replace-0123456789
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -207,6 +208,8 @@ jobs:
         run: echo "MANAGED_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
       - name: Django production deploy check
         run: python manage.py check --deploy --settings=web_ui.settings.production
+      - name: Prepare the example production environment for Compose parsing
+        run: cp .env.production.example .env.production
       - name: Validate production Compose model
         run: docker compose -f docker-compose.production.yml config --quiet
 

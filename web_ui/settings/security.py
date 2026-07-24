@@ -42,7 +42,8 @@ def _default_debug() -> bool:
     deploy script) fails safe to DEBUG=False unless DJANGO_DEBUG=true is set.
     """
     module = (os.getenv("DJANGO_SETTINGS_MODULE") or "").strip()
-    return module.endswith(".development") or module.endswith(".test")
+    settings_name = module.rsplit(".", 1)[-1]
+    return settings_name == "development" or settings_name == "test" or settings_name.startswith("test_")
 
 
 def build_security_settings(

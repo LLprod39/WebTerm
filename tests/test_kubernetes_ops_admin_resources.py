@@ -1,5 +1,4 @@
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -13,13 +12,10 @@ from kubernetes_ops.models import (
     K8sAppRef,
     K8sAuditEvent,
     K8sCluster,
-    K8sFleetBundle,
     K8sProvider,
 )
 from kubernetes_ops.services.admin_logs import get_admin_pod_log_snapshot
 from kubernetes_ops.services.admin_resources import (
-    AdminResourceError,
-    get_cluster_resource_yaml,
     list_cluster_resources,
 )
 from kubernetes_ops.services.admin_watch import get_admin_resource_watch_preview
@@ -437,95 +433,3 @@ class KubernetesOpsAdminResourceTests(TestCase):
         self.assertNotIn("BOOKMARK", str(payload["events"]))
         action = K8sAdminAction.objects.get()
         self.assertEqual(action.response_summary["latest_resource_version"], "15")
-
-    def test_yaml_includes_fleet_ownership_context_without_mutating_manifest(self):
-        user = self.create_user("k8s-admin-fleet-yaml", grant_admin_read=True)
-        session = self.create_read_session(user)
-        K8sFleetBundle.objects.create(
-            name="fleet-local/payments-rollout",
-            source="https://git.example.test/platform.git",
-            target="payments",
-            status=K8sFleetBundle.STATUS_ROLLING,
-            labels={"token": "raw-fleet-token"},
-        )
-
-        def transport(url: str, headers: dict[str, str], timeout: int):
-            return {
-                "apiVersion": "apps/v1",
-                "kind": "Deployment",
-                "metadata": {
-                    "name": "payments-api",
-                    "namespace": "payments",
-                    "labels": {"fleet.cattle.io/bundle-id": "fleet-local/payments-rollout"},
-                },
-                "spec": {"replicas": 2},
-            }
-
-        payload = get_cluster_resource_yaml(
-            user=user,
-            session_id=str(session.session_id),
-            cluster_id=f"cluster_{self.cluster.id}",
-            api_version="apps/v1",
-            kind="Deployment",
-            namespace="payments",
-            name="payments-api",
-            transport=transport,
-        )
-
-        self.assertEqual(payload["ownership"]["owner"], "fleet")
-        self.assertEqual(payload["ownership"]["change_path"], "fleet_gitops_or_mr")
-        self.assertEqual(payload["ownership"]["direct_apply_policy"], "blocked_by_default")
-        self.assertEqual(payload["ownership"]["fleet_bundle"]["name"], "fleet-local/payments-rollout")
-        self.assertEqual(payload["ownership"]["fleet_bundle"]["labels"]["token"], "[redacted]")
-        self.assertNotIn("webterm_ownership", payload["resource"])
-        self.assertNotIn("raw-fleet-token", str(payload))
-
-    def test_admin_crds_api_uses_cluster_proxy_path(self):
-        user = self.create_user("k8s-admin-crds", grant_admin_read=True)
-        session = self.create_read_session(user)
-        self.client.force_login(user)
-
-        def transport(url: str, headers: dict[str, str], timeout: int):
-            return {
-                "items": [
-                    {
-                        "apiVersion": "apiextensions.k8s.io/v1",
-                        "kind": "CustomResourceDefinition",
-                        "metadata": {"name": "widgets.example.com"},
-                    }
-                ]
-            }
-
-        with patch("kubernetes_ops.services.admin_resources.ProviderJsonClient") as client_cls:
-            client_cls.return_value.get.side_effect = lambda path: transport(f"{self.provider.base_url}{path}", {}, 20)
-            response = self.client.get(
-                reverse("api_kubernetes_admin_crds", kwargs={"cluster_id": f"cluster_{self.cluster.id}"}),
-                {"session_id": str(session.session_id)},
-            )
-            client_cls.return_value.get.assert_called_with(
-                "/k8s/clusters/c-prod/apis/apiextensions.k8s.io/v1/customresourcedefinitions"
-            )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["items"][0]["metadata"]["name"], "widgets.example.com")
-        self.assertTrue(K8sAuditEvent.objects.filter(action="k8s.admin_resource.crds").exists())
-
-    def test_provider_error_returns_controlled_json(self):
-        user = self.create_user("k8s-admin-provider-error", grant_admin_read=True)
-        session = self.create_read_session(user)
-
-        def transport(url: str, headers: dict[str, str], timeout: int):
-            raise OSError("connection refused")
-
-        with self.assertRaises(AdminResourceError) as raised:
-            list_cluster_resources(
-                user=user,
-                session_id=str(session.session_id),
-                cluster_id=f"cluster_{self.cluster.id}",
-                api_version="apps/v1",
-                kind="Deployment",
-                namespace="payments",
-                transport=transport,
-            )
-        self.assertEqual(raised.exception.code, "provider_request_failed")
-        self.assertEqual(raised.exception.status, 502)

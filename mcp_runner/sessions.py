@@ -261,9 +261,7 @@ class SessionManager:
         reaped = 0
         async with self._registry_lock:
             stale_keys = [
-                key
-                for key, session in self._sessions.items()
-                if not session.alive or (now - session.last_used) > ttl
+                key for key, session in self._sessions.items() if not session.alive or (now - session.last_used) > ttl
             ]
             victims = [self._sessions.pop(key) for key in stale_keys]
         for victim in victims:

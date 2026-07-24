@@ -114,8 +114,8 @@ class TestStreamChatSystemPrompt:
             yield "ok"
 
         with (
-            patch("app.core.llm.stream_openai_compatible_response", new=capture_stream),
-            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.stream_openai_compatible_response", new=capture_stream),
+            patch("app.core.llm_provider_stream.model_manager") as mm,
         ):
             mm.config = MagicMock()
             mm.config.grok_enabled = True
@@ -154,8 +154,8 @@ class TestStreamChatSystemPrompt:
             yield "ok"
 
         with (
-            patch("app.core.llm.stream_openai_compatible_response", new=capture_stream),
-            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.stream_openai_compatible_response", new=capture_stream),
+            patch("app.core.llm_provider_stream.model_manager") as mm,
         ):
             mm.config = MagicMock()
             mm.config.grok_enabled = True
@@ -212,7 +212,7 @@ class TestStreamChatSystemPrompt:
         with (
             override_settings(LLM_GROK_REASONING_EFFORT="none"),
             patch("aiohttp.ClientSession", return_value=mock_session) as client_session,
-            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.model_manager") as mm,
         ):
             mm.config = MagicMock()
             mm.config.grok_enabled = True

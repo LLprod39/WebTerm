@@ -60,7 +60,12 @@ class TestGeminiJsonMode:
         fake_client.aio.models.generate_content_stream = mock_stream
         llm._gemini_client = fake_client
 
-        with patch("app.core.llm.model_manager") as mm:
+        # Stream orchestration lives in llm_provider_stream; client enablement still
+        # reads model_manager from app.core.llm — patch both to the same mock.
+        with (
+            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.model_manager", new=mm),
+        ):
             mm.config.gemini_enabled = True
             mm.get_chat_model.return_value = "gemini-2.0-flash"
             mm.resolve_purpose.return_value = ("gemini", "gemini-2.0-flash")
@@ -79,7 +84,10 @@ class TestGeminiJsonMode:
         fake_client.aio.models.generate_content_stream = mock_stream
         llm._gemini_client = fake_client
 
-        with patch("app.core.llm.model_manager") as mm:
+        with (
+            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.model_manager", new=mm),
+        ):
             mm.config.gemini_enabled = True
             mm.get_chat_model.return_value = "gemini-2.0-flash"
             mm.resolve_purpose.return_value = ("gemini", "gemini-2.0-flash")
@@ -115,7 +123,7 @@ class TestOpenAIJsonMode:
         fake_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.model_manager") as mm,
             patch("aiohttp.ClientSession", return_value=fake_session),
         ):
             mm.config.openai_enabled = True
@@ -128,9 +136,9 @@ class TestOpenAIJsonMode:
 
         # Extract the json= argument from the post() call
         call_args = fake_session.post.call_args
-        if call_args:
-            payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
-            assert payload.get("response_format") == {"type": "json_object"}
+        assert call_args is not None, "OpenAI chat-completions request was not sent"
+        payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
+        assert payload.get("response_format") == {"type": "json_object"}
 
     @pytest.mark.asyncio
     async def test_responses_api_json_mode_adds_input_json_hint(self, llm):
@@ -152,7 +160,7 @@ class TestOpenAIJsonMode:
         fake_session.post.return_value.__aexit__ = AsyncMock(return_value=False)
 
         with (
-            patch("app.core.llm.model_manager") as mm,
+            patch("app.core.llm_provider_stream.model_manager") as mm,
             patch("aiohttp.ClientSession", return_value=fake_session),
         ):
             mm.config.openai_enabled = True
@@ -164,10 +172,10 @@ class TestOpenAIJsonMode:
                 pass
 
         call_args = fake_session.post.call_args
-        if call_args:
-            payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
-            assert payload.get("text") == {"format": {"type": "json_object"}}
-            assert "json" in str(payload.get("input", "")).lower()
+        assert call_args is not None, "OpenAI Responses API request was not sent"
+        payload = call_args.kwargs.get("json") or (call_args.args[1] if len(call_args.args) > 1 else {})
+        assert payload.get("text") == {"format": {"type": "json_object"}}
+        assert "json" in str(payload.get("input", "")).lower()
 
 
 class TestProviderJsonModeSignature:
@@ -182,3 +190,48 @@ class TestProviderJsonModeSignature:
         param = sig.parameters.get("json_mode")
         assert param is not None, "json_mode parameter missing from stream_chat"
         assert param.default is False, "json_mode should default to False"
+
+
+class TestProviderStreamDelegation:
+    """Facade wrappers close delegated streams when a consumer stops early."""
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_closes_delegated_stream(self, llm):
+        closed = False
+
+        async def fake_stream(*args, **kwargs):
+            nonlocal closed
+            try:
+                yield "first"
+                yield "second"
+            finally:
+                closed = True
+
+        with patch("app.core.llm_provider_stream.stream_provider_chat", new=fake_stream):
+            stream = llm.stream_chat("test prompt")
+            assert await anext(stream) == "first"
+            await stream.aclose()
+
+        assert closed
+
+    @pytest.mark.asyncio
+    async def test_stream_chat_tools_closes_delegated_stream(self, llm):
+        closed = False
+
+        async def fake_stream(*args, **kwargs):
+            nonlocal closed
+            try:
+                yield {"type": "text_delta", "text": "first"}
+                yield {"type": "done"}
+            finally:
+                closed = True
+
+        with patch(
+            "app.core.llm_provider_tools_stream.stream_provider_chat_tools",
+            new=fake_stream,
+        ):
+            stream = llm.stream_chat_tools([], [])
+            assert await anext(stream) == {"type": "text_delta", "text": "first"}
+            await stream.aclose()
+
+        assert closed

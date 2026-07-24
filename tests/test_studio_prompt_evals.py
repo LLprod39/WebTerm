@@ -313,6 +313,7 @@ def test_pilot_template_binding_handles_gitlab_service_and_missing_arguments():
     assert "Argument: alert_id" not in incident_plan["missing"]
     assert "Argument: service_name" not in incident_plan["missing"]
 
+
 def test_backend_risk_uses_mcp_capability_metadata_not_only_tool_name_regex():
     risk = pipeline_assistant_risk(
         [

@@ -24,6 +24,7 @@ def test_provider_adapters_keep_api_key_aliases_and_status_details():
         "api_key_name": "OPENAI_API_KEY/CODEX_API_KEY",
     }
 
+
 def test_provider_adapters_keep_cli_binary_policy():
     adapters = build_provider_adapters()
     config = SimpleNamespace()

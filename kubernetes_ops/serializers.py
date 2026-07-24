@@ -13,7 +13,6 @@ from kubernetes_ops.models import (
     K8sAppRef,
     K8sAuditEvent,
     K8sCluster,
-    K8sEvent,
     K8sFleetBundle,
     K8sNamespace,
     K8sNetworkRef,
@@ -21,8 +20,30 @@ from kubernetes_ops.models import (
     K8sProvider,
     K8sWorkloadRef,
 )
+from kubernetes_ops.serializers_events import serialize_cluster_event, serialize_kubernetes_event
 from kubernetes_ops.services.audit_sanitizers import safe_audit_payload
 from kubernetes_ops.services.freshness import sync_freshness
+
+__all__ = [
+    "iso_or_none",
+    "provider_secret_storage",
+    "serialize_action_request",
+    "serialize_admin_action",
+    "serialize_admin_recording",
+    "serialize_admin_recording_event",
+    "serialize_admin_session",
+    "serialize_app",
+    "serialize_audit_event",
+    "serialize_cluster",
+    "serialize_cluster_event",
+    "serialize_fleet_bundle",
+    "serialize_kubernetes_event",
+    "serialize_namespace",
+    "serialize_network_ref",
+    "serialize_pod_ref",
+    "serialize_provider",
+    "serialize_workload",
+]
 
 SENSITIVE_KEY_PARTS = ("token", "secret", "password", "credential", "kubeconfig", "authorization", "api_key", "apikey")
 SENSITIVE_VALUE_PATTERNS = (
@@ -461,42 +482,4 @@ def serialize_admin_recording_event(event: K8sAdminRecordingEvent) -> dict[str, 
         "truncated": event.truncated,
         "metadata": event.metadata or {},
         "created_at": iso_or_none(event.created_at),
-    }
-
-
-def serialize_cluster_event(event: K8sAuditEvent) -> dict[str, Any]:
-    return {
-        "id": f"audit_{event.id}",
-        "source": "webterm_audit",
-        "severity": "info",
-        "reason": event.action,
-        "message": event.action.replace("_", " "),
-        "username": event.username_snapshot,
-        "payload": safe_audit_payload(event.payload or {}),
-        "created_at": iso_or_none(event.created_at),
-    }
-
-
-def serialize_kubernetes_event(event: K8sEvent) -> dict[str, Any]:
-    target = " ".join(part for part in [event.involved_kind, event.involved_name] if part)
-    message = event.message or target or event.reason
-    return {
-        "id": f"event_{event.id}",
-        "source": event.source,
-        "severity": event.severity,
-        "reason": event.reason,
-        "message": message,
-        "username": "system",
-        "namespace": event.namespace,
-        "involved_kind": event.involved_kind,
-        "involved_name": event.involved_name,
-        "count": event.count,
-        "payload": {
-            "event_uid": event.event_uid,
-            "namespace": event.namespace,
-            "involved_kind": event.involved_kind,
-            "involved_name": event.involved_name,
-            "count": event.count,
-        },
-        "created_at": iso_or_none(event.last_seen_at or event.last_sync_at),
     }

@@ -196,11 +196,11 @@ npm run test:e2e:smoke
 
 ## Documentation
 
-- [Architecture index](docs/architecture/README.md)
+- [Architecture contract](docs/architecture/ARCHITECTURE_CONTRACT.md)
 - [Project structure](docs/PROJECT_STRUCTURE.md)
 - [Plugin author guide](docs/architecture/PLUGIN_AUTHOR_GUIDE.md)
-- [Plugin extension plan](docs/architecture/PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md)
 - [Platform development rules](docs/architecture/PLATFORM_DEVELOPMENT_RULES.md)
+- [Release support and scope](docs/releases/README.md)
 
 ## License
 

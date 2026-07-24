@@ -1,0 +1,156 @@
+import { BookOpen } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import type { AgentInputArtifact, StudioSkill } from "@/lib/api";
+import { localize } from "@/lib/i18n";
+import { FULL_AGENT_TOOL_OPTIONS, type AgentTaskDraft, buildDefaultToolsConfig } from "./agentPageUtils";
+import { AgentMaterialsSection } from "./AgentMaterialsSection";
+import type { AgentMode, StateSetter } from "./agentWizardStepTypes";
+
+type AgentWizardCapabilitiesStepProps = {
+  lang: string;
+  mode: AgentMode;
+  enabledToolCount: number;
+  toolsConfig: Record<string, boolean>;
+  setToolsConfig: StateSetter<Record<string, boolean>>;
+  toolsExpanded: boolean;
+  setToolsExpanded: StateSetter<boolean>;
+  stopConditionsText: string;
+  setStopConditionsText: StateSetter<string>;
+  selectedSkillSlugs: string[];
+  availableSkills: StudioSkill[];
+  visibleSkills: StudioSkill[];
+  toggleSkill: (slug: string) => void;
+  skillsExpanded: boolean;
+  setSkillsExpanded: StateSetter<boolean>;
+  inputArtifacts: AgentInputArtifact[];
+  activeArtifact: AgentInputArtifact | null;
+  activeArtifactIndex: number | null;
+  setActiveArtifactIndex: StateSetter<number | null>;
+  addArtifact: (kind: AgentInputArtifact["kind"]) => void;
+  removeArtifact: (index: number) => void;
+  updateArtifact: (index: number, patch: Partial<AgentInputArtifact>) => void;
+  updateArtifactTask: (artifactIndex: number, taskIndex: number, patch: Partial<AgentTaskDraft>) => void;
+  addArtifactTask: (artifactIndex: number) => void;
+  removeArtifactTask: (artifactIndex: number, taskIndex: number) => void;
+  onMaterialFiles: (files: FileList | null) => void | Promise<void>;
+  telegramEnabled: boolean;
+  setTelegramEnabled: StateSetter<boolean>;
+  telegramChatId: string;
+  setTelegramChatId: StateSetter<string>;
+};
+
+export function AgentWizardCapabilitiesStep({
+  lang,
+  mode,
+  enabledToolCount,
+  toolsConfig,
+  setToolsConfig,
+  toolsExpanded,
+  setToolsExpanded,
+  stopConditionsText,
+  setStopConditionsText,
+  selectedSkillSlugs,
+  availableSkills,
+  visibleSkills,
+  toggleSkill,
+  skillsExpanded,
+  setSkillsExpanded,
+  inputArtifacts,
+  activeArtifact,
+  activeArtifactIndex,
+  setActiveArtifactIndex,
+  addArtifact,
+  removeArtifact,
+  updateArtifact,
+  updateArtifactTask,
+  addArtifactTask,
+  removeArtifactTask,
+  onMaterialFiles,
+  telegramEnabled,
+  setTelegramEnabled,
+  telegramChatId,
+  setTelegramChatId,
+}: AgentWizardCapabilitiesStepProps) {
+  return (
+    <section className="space-y-4">
+      <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
+      {(mode === "full" || mode === "multi") && (
+        <div className="space-y-3 border-t border-border/50 pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h4 className="text-sm font-semibold text-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</h4>
+              <p className="mt-1 text-xs leading-4 text-muted-foreground">
+                {localize(lang, `${enabledToolCount} из ${FULL_AGENT_TOOL_OPTIONS.length} включено`, `${enabledToolCount} of ${FULL_AGENT_TOOL_OPTIONS.length} enabled`)}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Включить все", "Enable all")}</button>
+              <button type="button" className="min-h-8 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setToolsExpanded((current) => !current)}>
+                {toolsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Развернуть", "Expand")}
+              </button>
+            </div>
+          </div>
+          {toolsExpanded && (
+            <>
+              <div className="grid gap-2 md:grid-cols-2">
+                {FULL_AGENT_TOOL_OPTIONS.map((tool) => (
+                  <label key={tool.key} className="flex min-h-10 items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 text-xs text-muted-foreground">
+                    <input type="checkbox" checked={Boolean(toolsConfig[tool.key])} onChange={(event) => setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }))} />
+                    {tool.label}
+                  </label>
+                ))}
+              </div>
+              <Textarea value={stopConditionsText} onChange={(e) => setStopConditionsText(e.target.value)} rows={3} className="bg-background/60 text-xs" placeholder={localize(lang, "Условия остановки", "Stop conditions")} />
+            </>
+          )}
+        </div>
+      )}
+      <div className="space-y-3 border-t border-border/50 pt-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}</h4>
+            <p className="mt-1 text-xs leading-4 text-muted-foreground">
+              {localize(lang, `${selectedSkillSlugs.length} выбрано · ${availableSkills.length} доступно`, `${selectedSkillSlugs.length} selected · ${availableSkills.length} available`)}
+            </p>
+          </div>
+          {availableSkills.length > 4 && (
+            <button type="button" className="min-h-8 shrink-0 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setSkillsExpanded((current) => !current)}>
+              {skillsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Показать все", "Show all")}
+            </button>
+          )}
+        </div>
+        {availableSkills.length ? (
+          <div className="grid gap-2 md:grid-cols-2">
+            {visibleSkills.map((skill) => {
+              const active = selectedSkillSlugs.includes(skill.slug);
+              return (
+                <button key={skill.slug} type="button" aria-pressed={active} onClick={() => toggleSkill(skill.slug)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>
+                  <span className="block truncate text-xs font-semibold">{skill.name}</span>
+                  <span className="mt-0.5 block truncate text-xs leading-4 text-muted-foreground">{skill.service || skill.category || skill.slug}</span>
+                </button>
+              );
+            })}
+          </div>
+        ) : <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">{localize(lang, "Доступных скиллов пока нет.", "No available skills yet.")}</div>}
+      </div>
+      <AgentMaterialsSection
+        lang={lang}
+        inputArtifacts={inputArtifacts}
+        activeArtifact={activeArtifact}
+        activeArtifactIndex={activeArtifactIndex}
+        setActiveArtifactIndex={setActiveArtifactIndex}
+        addArtifact={addArtifact}
+        removeArtifact={removeArtifact}
+        updateArtifact={updateArtifact}
+        updateArtifactTask={updateArtifactTask}
+        addArtifactTask={addArtifactTask}
+        removeArtifactTask={removeArtifactTask}
+        onMaterialFiles={onMaterialFiles}
+        telegramEnabled={telegramEnabled}
+        setTelegramEnabled={setTelegramEnabled}
+        telegramChatId={telegramChatId}
+        setTelegramChatId={setTelegramChatId}
+      />
+    </section>
+  );
+}

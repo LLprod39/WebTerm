@@ -23,7 +23,7 @@ test.describe("Smoke scenarios", () => {
     await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
 
     await page.getByRole("link", { name: "Dashboard" }).first().click();
-    await expect(page.getByRole("heading", { name: "Мой воркспейс" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My workspace" })).toBeVisible();
 
     await page.getByRole("link", { name: "Studio" }).first().click();
     await expect(page.getByRole("heading", { name: "Pipelines", exact: true })).toBeVisible();

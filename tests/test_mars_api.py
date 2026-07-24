@@ -373,7 +373,9 @@ def test_mars_workspace_session_run_stop_and_events_flow(tmp_path):
         orchestration = MarsRun.objects.get(pk=run_id).runtime_control["orchestration"]
         assert orchestration["visibility"] == "internal"
         assert orchestration["skill_catalog"]["hidden_from_user"] is True
-        assert orchestration["skill_catalog"]["available_count"] > 4
+        # Clean CI may have only the four built-in fallback skills. Installed
+        # Codex/plugin skills are optional and must not affect this contract.
+        assert orchestration["skill_catalog"]["available_count"] >= 4
         assert orchestration["skill_routing"]["architect"]
         assert orchestration["skill_routing"]["executor"]
 

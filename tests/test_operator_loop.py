@@ -16,6 +16,22 @@ from core_ui.services.operator_loop import handle_operator_message, resume_after
 from core_ui.services.operator_tools import specs_to_tools
 
 
+def test_operator_loop_facade_exports_lazy_session_entrypoints():
+    """F-08a: the facade advertises and resolves every lazy session wrapper."""
+    from core_ui.services import operator_loop, operator_session
+
+    entrypoints = {
+        "handle_operator_message",
+        "handle_operator_message_sync",
+        "resume_after_action",
+        "start_operator_turn",
+    }
+
+    assert entrypoints <= set(operator_loop.__all__)
+    for name in entrypoints:
+        assert getattr(operator_loop, name) is getattr(operator_session, name)
+
+
 def _grant(user: User, *features: str) -> None:
     for feature in features:
         UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})

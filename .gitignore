@@ -36,6 +36,7 @@ env/
 .cursor/
 .claude/
 .playwright-mcp/
+.linear-agent-runs/
 node_modules/
 frontend/node_modules/
 agent_projects/
@@ -144,7 +145,9 @@ graphify-out/
 !create_pipeline.sql
 !create_mega_pipeline.py
 
-# Internal docs kept local-only (not published to GitHub)
+# Internal planning/review docs stay local-only. Public runtime, release and
+# operator contracts are explicitly re-included below because CI and clean
+# installations depend on them.
 /AGENTS.md
 /CONTRIBUTING.md
 /DEVELOPMENT_RULES.md
@@ -153,12 +156,31 @@ graphify-out/
 /PRODUCTION_READINESS_PLAN.md
 /SECURITY_QA_FOR_IS_REVIEW.md
 /AI_MEMORY_PRESENTATION.md
-# Internal docs tree (local-only). Re-include only the public F-11 CI governance contract.
-docs/**
+docs/
+!docs/
+docs/*
+!docs/PIPELINE_NODES_SPEC.md
+!docs/PROJECT_STRUCTURE.md
+!docs/WebTerm_Kubernetes_Ops_Rancher_Fleet_Devtron_Report.md
 !docs/architecture/
-docs/architecture/**
+docs/architecture/*
+!docs/architecture/ARCHITECTURE_CONTRACT.md
 !docs/architecture/CI_GOVERNANCE.md
-
+!docs/architecture/KUBERNETES_OPS_OPERATIONS.md
+!docs/architecture/PLATFORM_DEVELOPMENT_RULES.md
+!docs/architecture/PLUGIN_AUTHOR_GUIDE.md
+!docs/architecture/PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md
+!docs/architecture/README.md
+!docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md
+!docs/architecture/adr/
+docs/architecture/adr/*
+!docs/architecture/adr/0001-primary-runtime-and-toolchain.md
+!docs/releases/
+docs/releases/*
+!docs/releases/*.md
+!docs/reports/
+docs/reports/*
+!docs/reports/COMPETITIVE_BASELINE_2026-07-22.md
 
 .gemini/
 gha-creds-*.json

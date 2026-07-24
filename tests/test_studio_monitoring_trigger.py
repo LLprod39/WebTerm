@@ -208,6 +208,10 @@ def test_launch_monitoring_triggers_creates_run_with_entry_node(monkeypatch):
         launched_run_ids.append(run.id)
 
     monkeypatch.setattr("studio.trigger_dispatch.launch_pipeline_run_async", fake_launch)
+    monkeypatch.setattr(
+        "studio.trigger_dispatch.pipeline_integration_diagnostics",
+        lambda _pipeline, *, entry_node_id=None: {"errors": [], "warnings": []},
+    )
 
     alert = ServerAlert.objects.create(
         server=server,
