@@ -30,6 +30,10 @@ def test_f13c_smoke_separates_application_rollback_from_database_restore() -> No
     ):
         assert contract in script
 
+    restore = (ROOT / "scripts/restore_postgres.sh").read_text(encoding="utf-8")
+    assert "dropdb --force --if-exists" in restore
+    assert "createdb" in restore
+
 
 def test_f13c_application_rollback_uses_the_fixture_server_runtime() -> None:
     script = (ROOT / "docker/production-upgrade-rollback-smoke.sh").read_text(encoding="utf-8")

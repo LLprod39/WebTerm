@@ -60,7 +60,20 @@ if [[ "$CONFIRMATION" != "RESTORE_WEBTERM" ]]; then
   exit 1
 fi
 
+echo "Recreating the confirmed target database before restore"
+compose exec -T "$SERVICE" sh -ec '
+  dropdb --force --if-exists \
+    --username="$POSTGRES_USER" \
+    --maintenance-db=postgres \
+    "$POSTGRES_DB"
+  createdb \
+    --username="$POSTGRES_USER" \
+    --maintenance-db=postgres \
+    --owner="$POSTGRES_USER" \
+    "$POSTGRES_DB"
+'
+
 echo "Restoring the archive into PostgreSQL service $SERVICE"
 cat "$DUMP_PATH" | compose exec -T "$SERVICE" sh -ec \
-  'exec pg_restore --clean --if-exists --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
+  'exec pg_restore --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
 echo "Restore finished"

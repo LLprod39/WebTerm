@@ -46,7 +46,11 @@ def test_postgres_scripts_target_the_real_production_service_and_require_confirm
     assert "pg_restore --list" in backup
     assert "POSTGRES_SERVICE:-postgres" in restore
     assert "RESTORE_CONFIRM=RESTORE_WEBTERM" in restore
-    assert "--clean --if-exists --exit-on-error" in restore
+    assert "dropdb --force --if-exists" in restore
+    assert "createdb" in restore
+    assert "--maintenance-db=postgres" in restore
+    assert "pg_restore --exit-on-error" in restore
+    assert "pg_restore --clean" not in restore
 
 
 def test_recovery_manifest_checks_auth_secrets_domain_rows_and_persistent_volumes() -> None:
