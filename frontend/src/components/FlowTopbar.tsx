@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 const SECTION_TITLE_KEY: Record<string, string> = {
   dashboard: "nav.dashboard",
   servers: "nav.servers",
+  automation: "nav.playbooks",
   agents: "nav.agents",
   chat: "nav.chat",
   studio: "nav.studio",

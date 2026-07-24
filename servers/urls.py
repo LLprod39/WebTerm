@@ -2,6 +2,12 @@ from django.urls import path
 
 from .views import (
     command_history,
+    playbook_binding_views,
+    playbook_bundle_views,
+    playbook_draft_views,
+    playbook_revision_views,
+    playbook_share_views,
+    playbook_validation_views,
     server_agent_dashboard,
     server_agent_runs,
     server_agents,
@@ -288,6 +294,16 @@ urlpatterns = [
     path("api/playbooks/", server_playbooks.playbook_list, name="playbook_list"),
     path("api/playbooks/create/", server_playbooks.playbook_create, name="playbook_create"),
     path("api/playbooks/import/", server_playbooks.playbook_import, name="playbook_import"),
+    path(
+        "api/playbooks/import/preview/",
+        playbook_bundle_views.playbook_bundle_preview,
+        name="playbook_bundle_preview",
+    ),
+    path(
+        "api/playbooks/import/commit/",
+        playbook_bundle_views.playbook_bundle_commit,
+        name="playbook_bundle_commit",
+    ),
     path("api/playbooks/ansible/status/", server_playbooks.playbook_ansible_status, name="playbook_ansible_status"),
     path("api/playbooks/guided/", server_playbooks.playbook_guided_recipes, name="playbook_guided_recipes"),
     path("api/playbooks/guided/generate/", server_playbooks.playbook_guided_generate, name="playbook_guided_generate"),
@@ -313,6 +329,7 @@ urlpatterns = [
     path("api/playbooks/<int:playbook_id>/", server_playbooks.playbook_detail, name="playbook_detail"),
     path("api/playbooks/<int:playbook_id>/update/", server_playbooks.playbook_update, name="playbook_update"),
     path("api/playbooks/<int:playbook_id>/delete/", server_playbooks.playbook_delete, name="playbook_delete"),
+    path("api/playbooks/<int:playbook_id>/restore/", server_playbooks.playbook_restore, name="playbook_restore"),
     path("api/playbooks/<int:playbook_id>/duplicate/", server_playbooks.playbook_duplicate, name="playbook_duplicate"),
     path(
         "api/playbooks/<int:playbook_id>/compatibility/analyze/",
@@ -335,4 +352,59 @@ urlpatterns = [
         name="playbook_compatibility_revisions",
     ),
     path("api/playbooks/<int:playbook_id>/run/", server_playbooks.playbook_run, name="playbook_run"),
+    path(
+        "api/playbooks/<int:playbook_id>/draft/",
+        playbook_draft_views.playbook_draft,
+        name="playbook_draft",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/",
+        playbook_revision_views.playbook_revisions,
+        name="playbook_revisions",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/<int:revision_id>/",
+        playbook_revision_views.playbook_revision_detail,
+        name="playbook_revision_detail",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/<int:revision_id>/publish/",
+        playbook_revision_views.playbook_revision_publish,
+        name="playbook_revision_publish",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/<int:revision_id>/validate/",
+        playbook_validation_views.playbook_revision_validate,
+        name="playbook_revision_validate",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/<int:revision_id>/export/",
+        playbook_bundle_views.playbook_revision_bundle_export,
+        name="playbook_revision_bundle_export",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/revisions/<int:revision_id>/rollback/",
+        playbook_revision_views.playbook_revision_rollback,
+        name="playbook_revision_rollback",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/bindings/",
+        playbook_binding_views.playbook_bindings,
+        name="playbook_bindings",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/bindings/<int:binding_id>/",
+        playbook_binding_views.playbook_binding_detail,
+        name="playbook_binding_detail",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/shares/",
+        playbook_share_views.playbook_shares,
+        name="playbook_shares",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/shares/<int:share_id>/",
+        playbook_share_views.playbook_share_detail,
+        name="playbook_share_detail",
+    ),
 ]

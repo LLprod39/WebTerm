@@ -7,7 +7,7 @@ import {
   type ServerGroupRole,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
 import { SkeletonList, SkeletonMetrics } from "@/components/ui/list-state";
@@ -24,8 +24,23 @@ import { useServersListController } from "./servers/useServersListController";
 import { useServerSharesController } from "./servers/useServerSharesController";
 
 export default function Servers() {
-  const { t, lang } = useI18n();
   const location = useLocation();
+  const requestedTab = (location.state as { mainTab?: string } | null)?.mainTab;
+
+  if (requestedTab === "playbook") {
+    return <Navigate to="/automation" replace />;
+  }
+
+  const supportedTab: MainTab | undefined =
+    requestedTab === "groups" || requestedTab === "rules" || requestedTab === "servers"
+      ? requestedTab
+      : undefined;
+
+  return <ServersWorkspace requestedTab={supportedTab} />;
+}
+
+function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
+  const { t, lang } = useI18n();
   const tr = useCallback((key: string, vars?: Record<string, string | number>) => {
     let text = t(key);
     if (!vars) return text;
@@ -42,19 +57,13 @@ export default function Servers() {
     await queryClient.invalidateQueries({ queryKey: ["settings", "activity"] });
   }, [queryClient]);
   const [advancedTab, setAdvancedTab] = useState<AdvancedTab>("access");
-  const initialTab = (location.state as { mainTab?: MainTab } | null)?.mainTab;
-  const [mainTab, setMainTab] = useState<MainTab>(
-    initialTab === "playbook" || initialTab === "groups" || initialTab === "rules" || initialTab === "servers"
-      ? initialTab
-      : "servers",
-  );
+  const [mainTab, setMainTab] = useState<MainTab>(requestedTab ?? "servers");
 
   useEffect(() => {
-    const tab = (location.state as { mainTab?: MainTab } | null)?.mainTab;
-    if (tab === "playbook" || tab === "groups" || tab === "rules" || tab === "servers") {
-      setMainTab(tab);
+    if (requestedTab) {
+      setMainTab(requestedTab);
     }
-  }, [location.state]);
+  }, [requestedTab]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advancedServer, setAdvancedServer] = useState<FrontendServer | null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(false);
@@ -212,7 +221,6 @@ export default function Servers() {
       mainTab={mainTab}
       setMainTab={setMainTab}
       servers={servers}
-      groups={groups}
       manageableGroups={manageableGroups}
       groupCount={groupCount}
       sharedCount={sharedCount}

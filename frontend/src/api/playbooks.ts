@@ -1,5 +1,8 @@
 import { apiFetch } from "@/lib/api";
 
+export * from "./playbook-workspace";
+export * from "./playbook-bundles";
+
 export type PlaybookKind = "runbook" | "ansible";
 export type PlaybookCategory = "deploy" | "patch" | "diagnose" | "security" | "maintenance" | "custom";
 export type PlaybookVisibility = "private" | "shared";
@@ -80,6 +83,11 @@ export interface PlaybookSummary {
   created_at: string | null;
   updated_at: string | null;
   owner_id: number;
+  origin_revision_id?: number | null;
+  published_revision_id?: number | null;
+  published_revision_number?: number | null;
+  published_content_hash?: string;
+  capabilities?: import("./playbook-workspace").PlaybookCapabilities;
 }
 
 export interface PlaybookDetail extends PlaybookSummary {
@@ -252,6 +260,8 @@ export interface AnsibleStatus {
   message: string;
   image?: string;
   image_ready?: boolean;
+  validation_available?: boolean;
+  worker_ready?: boolean;
 }
 
 export async function fetchAnsibleStatus() {

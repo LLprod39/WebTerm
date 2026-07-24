@@ -53,12 +53,25 @@ x-backend-worker: &backend-worker
     # stdio MCP through the shared runner instead of spawning on the host.
     STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
     STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+    WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
+    WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
+    WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
+    WEBTERM_ANSIBLE_RUNTIME_TTL_SECONDS: ${WEBTERM_ANSIBLE_RUNTIME_TTL_SECONDS:-7200}
+    WEBTERM_ANSIBLE_DOCKER_RUNTIME_VOLUME: ${PLAYBOOK_RUNTIME_VOLUME_NAME:-mini_prod_playbook_runtime}
+    WEBTERM_ANSIBLE_DOCKER_NETWORK: ${WEBTERM_ANSIBLE_DOCKER_NETWORK:-bridge}
+    WEBTERM_ANSIBLE_DOCKER_CPUS: ${WEBTERM_ANSIBLE_DOCKER_CPUS:-1.0}
+    WEBTERM_ANSIBLE_DOCKER_MEMORY: ${WEBTERM_ANSIBLE_DOCKER_MEMORY:-512m}
+    WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
+    # Keep this fixed to the private named-volume target. Do not accept an
+    # env_file override that could silently send a worker to ephemeral storage.
+    PLAYBOOK_BUNDLE_STORAGE_ROOT: /workspace/private/playbook_bundles
   volumes:
     - mini_prod_media:/workspace/media
     - mini_prod_staticfiles:/workspace/staticfiles
     - mini_prod_config:/workspace/config_runtime
     - mini_prod_logs:/workspace/logs
     - ./docker/ldap:/etc/webtrerm/ldap:ro
+    - playbook_validator_socket:/run/playbook-validator
   depends_on:
     backend:
       condition: service_healthy
@@ -212,14 +225,22 @@ services:
       # to a strong shared secret so only the backend can reach the runner.
       STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
       STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+      # Production HTTP processes intentionally have no Docker socket. Runtime
+      # execution is owned by the durable playbook worker below.
+      WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
+      WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
+      WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
+      PLAYBOOK_BUNDLE_STORAGE_ROOT: /workspace/private/playbook_bundles
     ports:
       - "${DJANGO_BIND_HOST:-127.0.0.1}:${DJANGO_HOST_PORT:-9000}:9000"
     volumes:
       - mini_prod_media:/workspace/media
+      - playbook_bundles:/workspace/private/playbook_bundles
       - mini_prod_staticfiles:/workspace/staticfiles
       - mini_prod_config:/workspace/config_runtime
       - mini_prod_logs:/workspace/logs
       - ./docker/ldap:/etc/webtrerm/ldap:ro
+      - playbook_validator_socket:/run/playbook-validator
     depends_on:
       postgres:
         condition: service_healthy
@@ -228,6 +249,8 @@ services:
       mcp-demo:
         condition: service_healthy
       mcp-runner:
+        condition: service_healthy
+      playbook-validator:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
@@ -263,6 +286,65 @@ services:
         "-lc",
         "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
       ]
+
+  playbook-execution-worker:
+    <<: *backend-worker
+    stop_grace_period: 4m
+    volumes:
+      - mini_prod_media:/workspace/media
+      - playbook_bundles:/workspace/private/playbook_bundles
+      - mini_prod_staticfiles:/workspace/staticfiles
+      - mini_prod_config:/workspace/config_runtime
+      - mini_prod_logs:/workspace/logs
+      - ./docker/ldap:/etc/webtrerm/ldap:ro
+      - playbook_runtime:/playbook-runtime
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec python manage.py run_playbook_execution_plane --interval ${PLAYBOOK_EXECUTION_INTERVAL_SECONDS:-5} --lease-seconds ${PLAYBOOK_EXECUTION_LEASE_SECONDS:-180} --global-concurrency ${PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY:-4} --per-user-concurrency ${PLAYBOOK_EXECUTION_PER_USER_CONCURRENCY:-2} --worker-key \"$${HOSTNAME:-production}\"",
+      ]
+
+  ansible-runner:
+    profiles: ["ansible"]
+    image: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
+    build:
+      context: .
+      dockerfile: docker/ansible-runner/Dockerfile
+    entrypoint: ["ansible-playbook"]
+    command: ["--version"]
+    restart: "no"
+
+  playbook-validator:
+    image: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
+    build:
+      context: .
+      dockerfile: docker/ansible-runner/Dockerfile
+    user: "0:0"
+    entrypoint: ["python", "/opt/webterm/validator.py"]
+    command: []
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: ${WEBTERM_ANSIBLE_DOCKER_MEMORY:-512m}
+    cpus: ${WEBTERM_ANSIBLE_DOCKER_CPUS:-1.0}
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    environment:
+      ANSIBLE_VALIDATOR_MAX_CONCURRENCY: ${ANSIBLE_VALIDATOR_MAX_CONCURRENCY:-4}
+      ANSIBLE_VALIDATOR_READ_TIMEOUT_SECONDS: ${ANSIBLE_VALIDATOR_READ_TIMEOUT_SECONDS:-10}
+    volumes:
+      - playbook_validator_socket:/run/playbook-validator
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "/opt/webterm/validator.py", "--healthcheck"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
 
   monitor:
     <<: *backend-worker
@@ -456,3 +538,7 @@ volumes:
   mini_prod_staticfiles:
   mini_prod_config:
   mini_prod_logs:
+  playbook_bundles:
+  playbook_runtime:
+    name: ${PLAYBOOK_RUNTIME_VOLUME_NAME:-mini_prod_playbook_runtime}
+  playbook_validator_socket:

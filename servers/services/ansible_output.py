@@ -11,7 +11,10 @@ import re
 from pathlib import Path
 from typing import Any
 
-from servers.services.ansible_setup import _safe_host_name
+from servers.services.playbook_inventory_identity import (
+    inventory_host_alias,
+    legacy_inventory_host_alias,
+)
 
 
 def shlex_quote(value: str) -> str:
@@ -49,7 +52,11 @@ def parse_play_recap(text: str, *, servers: list[Any]) -> list[dict[str, Any]]:
         r"failed=(?P<failed>\d+)",
         re.MULTILINE,
     )
-    by_alias = {_safe_host_name(s.name, s.id): s for s in servers}
+    by_alias = {
+        alias: server
+        for server in servers
+        for alias in (legacy_inventory_host_alias(server.name, server.id), inventory_host_alias(server.name, server.id))
+    }
     by_host = {str(s.host): s for s in servers}
     results: list[dict[str, Any]] = []
     found: set[int] = set()
@@ -156,7 +163,8 @@ def parse_ansible_json_output(stdout: str, *, servers: list[Any]) -> list[dict[s
     by_alias: dict[str, Any] = {}
     by_host: dict[str, Any] = {}
     for s in servers:
-        by_alias[_safe_host_name(s.name, s.id)] = s
+        by_alias[legacy_inventory_host_alias(s.name, s.id)] = s
+        by_alias[inventory_host_alias(s.name, s.id)] = s
         by_host[str(s.host)] = s
 
     # Collect per-host tasks

@@ -210,7 +210,7 @@ const App = () => (
                   )}
                 />
                 <Route
-                  path="/automation"
+                  path="/automation/*"
                   element={(
                     <FeatureGate feature="servers">
                       <AutomationPage />

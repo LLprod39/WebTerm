@@ -18,6 +18,12 @@ from servers.services.playbook_compatibility_analysis import analyze_playbook_co
 from servers.services.playbook_compatibility_inventory import normalize_inventory_bindings
 from servers.services.playbook_compatibility_validation import validate_playbook_syntax
 from servers.services.playbook_runner import resolve_target_servers
+from servers.services.playbooks.access import capabilities_for, playbooks_visible_to
+from servers.services.playbooks.revisions import (
+    create_compatibility_adaptation_revision,
+    ensure_playbook_workspace,
+)
+from servers.services.playbooks.serialization import serialize_revision
 from servers.views.server_playbook_serializers import _playbooks_for_user, _serialize_playbook
 
 
@@ -65,7 +71,10 @@ def _compatibility_failure_message(guard: dict[str, Any], report: dict[str, Any]
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_compatibility_analyze(request, playbook_id: int):
-    playbook = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
+    playbook = get_object_or_404(playbooks_visible_to(request.user), id=playbook_id)
+    capabilities = capabilities_for(playbook, request.user)
+    if not capabilities.can_validate:
+        return JsonResponse({"success": False, "error": "Playbook validation capability required"}, status=403)
     data = _json_body(request)
     bindings, _resolved, binding_servers = _binding_context(request.user, data.get("inventory_bindings"))
     explicit_servers = resolve_target_servers(
@@ -74,14 +83,21 @@ def playbook_compatibility_analyze(request, playbook_id: int):
         group_ids=[int(item) for item in data.get("group_ids") or [] if str(item).isdigit()],
     )
     target_servers = list({server.id: server for server in [*binding_servers, *explicit_servers]}.values())
-    source = str(data.get("source_yaml") or playbook.source_yaml or "").strip()
+    published_source = (
+        playbook.published_revision.source_yaml if playbook.published_revision_id else playbook.source_yaml
+    )
+    source = str(
+        data.get("source_yaml") if capabilities.can_edit and "source_yaml" in data else published_source or ""
+    ).strip()
     if not source:
         return JsonResponse({"success": False, "error": "Playbook has no imported Ansible YAML"}, status=400)
+    if len(source) > 200_000:
+        return JsonResponse({"success": False, "error": "Playbook YAML is too large"}, status=413)
     report = analyze_playbook_compatibility(source, bindings=bindings, target_servers=target_servers)
     if bool(data.get("syntax_check", True)) and not any(
         item.get("severity") == "error" for item in report.get("issues") or []
     ):
-        report["syntax_check"] = validate_playbook_syntax(source)
+        report["syntax_check"] = validate_playbook_syntax(source, allow_dependency_setup=False)
     if playbook.user_id == request.user.id and source == (playbook.source_yaml or "").strip():
         Playbook.objects.filter(pk=playbook.pk).update(compatibility=report)
     return JsonResponse({"success": True, "report": report})
@@ -114,6 +130,10 @@ def playbook_compatibility_adapt(request, playbook_id: int):
 @require_http_methods(["POST"])
 def playbook_compatibility_apply(request, playbook_id: int):
     playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
+    # Establish the legacy source as the published origin before activating a
+    # newly accepted compatibility record. Otherwise lazy workspace migration
+    # could mistake this new proposal for historical published state.
+    ensure_playbook_workspace(playbook, actor=request.user)
     data = _json_body(request)
     source = (playbook.source_yaml or "").strip()
     adapted_yaml = str(data.get("adapted_yaml") or "").strip()
@@ -125,7 +145,7 @@ def playbook_compatibility_apply(request, playbook_id: int):
     guard = compare_semantics(source, adapted_yaml)
     report = analyze_playbook_compatibility(adapted_yaml, bindings=bindings, target_servers=target_servers)
     if guard["passed"] and not any(item.get("severity") == "error" for item in report.get("issues") or []):
-        report["syntax_check"] = validate_playbook_syntax(adapted_yaml)
+        report["syntax_check"] = validate_playbook_syntax(adapted_yaml, allow_dependency_setup=False)
         if report["syntax_check"].get("passed") is False:
             report.setdefault("issues", []).append(
                 {
@@ -152,10 +172,12 @@ def playbook_compatibility_apply(request, playbook_id: int):
         change_summary=[str(item) for item in data.get("changes") or []][:20],
         status=status,
     )
+    result_revision = None
     if status == PlaybookCompatibilityRevision.STATUS_VALIDATED:
         playbook.active_compatibility_revision = revision
         playbook.compatibility = report
         playbook.save(update_fields=["active_compatibility_revision", "compatibility", "updated_at"])
+        result_revision = create_compatibility_adaptation_revision(playbook, revision, actor=request.user)
     payload = {
         "id": revision.id,
         "status": revision.status,
@@ -170,7 +192,15 @@ def playbook_compatibility_apply(request, playbook_id: int):
             status=400,
         )
     playbook.refresh_from_db()
-    return JsonResponse({"success": True, "revision": payload, "playbook": _serialize_playbook(playbook)})
+    return JsonResponse(
+        {
+            "success": True,
+            "revision": payload,
+            "result_revision_id": result_revision.id,
+            "content_revision": serialize_revision(result_revision, include_content=True),
+            "playbook": _serialize_playbook(playbook, viewer=request.user),
+        }
+    )
 
 
 @login_required

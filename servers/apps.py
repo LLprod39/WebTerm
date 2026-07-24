@@ -71,4 +71,7 @@ class ServersConfig(AppConfig):
         register_operator_tools()
         register_operator_mutate_tools()
 
-        from . import signals  # noqa: F401
+        from . import (
+            checks,  # noqa: F401
+            signals,  # noqa: F401
+        )

@@ -173,3 +173,18 @@ def test_ansible_cfg_has_no_json_callback():
         content = cfg.read_text(encoding="utf-8")
         assert "stdout_callback = default" in content
         assert "stdout_callback = json" not in content
+
+
+def test_runtime_output_redacts_nested_jit_variable_values():
+    mod = _load()
+    values = mod._runtime_secret_values(
+        {"deploy_token": "token-never-log", "nested": {"password": "password-never-log"}}
+    )
+    output = mod._redact_runtime_output(
+        "debug token-never-log and password-never-log",
+        values,
+    )
+
+    assert "token-never-log" not in output
+    assert "password-never-log" not in output
+    assert output.count("[REDACTED]") == 2

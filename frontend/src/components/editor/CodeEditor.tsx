@@ -9,7 +9,16 @@ import { useEffect, useRef } from "react";
 import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection, highlightSpecialChars } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import { defaultKeymap, indentWithTab, history, historyKeymap } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentOnInput, HighlightStyle } from "@codemirror/language";
+import {
+  syntaxHighlighting,
+  defaultHighlightStyle,
+  bracketMatching,
+  foldGutter,
+  indentOnInput,
+  HighlightStyle,
+  syntaxTree,
+} from "@codemirror/language";
+import { linter, lintGutter, type Diagnostic } from "@codemirror/lint";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { tags } from "@lezer/highlight";
 
@@ -93,24 +102,47 @@ const darkHighlight = HighlightStyle.define([
   { tag: tags.regexp, color: "#7ee787" },
 ]);
 
+export interface CodeEditorDiagnostic {
+  from: number;
+  to: number;
+  line: number;
+  column: number;
+  severity: Diagnostic["severity"];
+  message: string;
+}
+
 interface CodeEditorProps {
   content: string;
   filename: string;
   readOnly?: boolean;
   onChange?: (value: string) => void;
   onSave?: () => void;
+  onDiagnosticsChange?: (diagnostics: CodeEditorDiagnostic[]) => void;
+  ariaLabel?: string;
   className?: string;
 }
 
-export function CodeEditor({ content, filename, readOnly = false, onChange, onSave, className }: CodeEditorProps) {
+export function CodeEditor({
+  content,
+  filename,
+  readOnly = false,
+  onChange,
+  onSave,
+  onDiagnosticsChange,
+  ariaLabel,
+  className,
+}: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const contentRef = useRef(content);
   const onChangeRef = useRef(onChange);
   const onSaveRef = useRef(onSave);
+  const onDiagnosticsChangeRef = useRef(onDiagnosticsChange);
+  const diagnosticsEnabled = Boolean(onDiagnosticsChange);
   contentRef.current = content;
   onChangeRef.current = onChange;
   onSaveRef.current = onSave;
+  onDiagnosticsChangeRef.current = onDiagnosticsChange;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -127,6 +159,7 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
       highlightSelectionMatches(),
       history(),
       darkTheme,
+      EditorView.contentAttributes.of({ "aria-label": ariaLabel || filename }),
       syntaxHighlighting(darkHighlight),
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       keymap.of([
@@ -146,6 +179,39 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
       }),
     ];
     if (langExt) extensions.push(langExt);
+    if (langExt && diagnosticsEnabled) {
+      extensions.push(
+        lintGutter(),
+        linter(
+          (view) => {
+            const diagnostics: Diagnostic[] = [];
+            syntaxTree(view.state).iterate({
+              enter(node) {
+                if (!node.type.isError) return;
+                diagnostics.push({
+                  from: node.from,
+                  to: node.to,
+                  severity: "error",
+                  message: "Syntax error",
+                });
+              },
+            });
+            onDiagnosticsChangeRef.current?.(
+              diagnostics.map((diagnostic) => {
+                const line = view.state.doc.lineAt(Math.min(diagnostic.from, view.state.doc.length));
+                return {
+                  ...diagnostic,
+                  line: line.number,
+                  column: diagnostic.from - line.from + 1,
+                };
+              }),
+            );
+            return diagnostics;
+          },
+          { delay: 150 },
+        ),
+      );
+    }
     if (readOnly) extensions.push(EditorState.readOnly.of(true));
 
     const state = EditorState.create({ doc: contentRef.current, extensions });
@@ -156,7 +222,7 @@ export function CodeEditor({ content, filename, readOnly = false, onChange, onSa
       view.destroy();
       viewRef.current = null;
     };
-  }, [filename, readOnly]); // recreate on file/lang change
+  }, [ariaLabel, diagnosticsEnabled, filename, readOnly]); // recreate when editor capabilities change
 
   // Sync external content changes (e.g., reload)
   useEffect(() => {

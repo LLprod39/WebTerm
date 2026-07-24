@@ -19,6 +19,9 @@ LLM_API_KEY_OBJECT_ID = 1
 NOTIFICATION_SECRET_NAMESPACE = "notification_secret"
 NOTIFICATION_SECRET_OBJECT_ID = 1
 KUBERNETES_PROVIDER_TOKEN_NAMESPACE = "kubernetes_provider_token"
+PLAYBOOK_BINDING_VARIABLES_NAMESPACE = "playbook_binding_variables"
+PLAYBOOK_RUN_VARIABLES_NAMESPACE = "playbook_run_variables"
+PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE = "playbook_run_master_password"
 LLM_API_KEY_PROVIDERS = {
     "gemini": "GEMINI_API_KEY",
     "grok": "GROK_API_KEY",
@@ -125,6 +128,80 @@ def _has(namespace: str, object_id: int, *, key: str = "default") -> bool:
 
 def _delete(namespace: str, object_id: int, *, key: str = "default") -> None:
     ManagedSecret.objects.filter(namespace=namespace, object_id=int(object_id), key=key).delete()
+
+
+def set_playbook_binding_secret_values(binding_profile_id: int, values: dict[str, str]) -> None:
+    """Store a binding profile's secret variables as one encrypted envelope."""
+    clean = {str(key): str(value) for key, value in (values or {}).items() if str(key).strip() and value is not None}
+    if not clean:
+        _delete(PLAYBOOK_BINDING_VARIABLES_NAMESPACE, binding_profile_id)
+        return
+    _upsert(
+        PLAYBOOK_BINDING_VARIABLES_NAMESPACE,
+        binding_profile_id,
+        {"values": clean},
+        metadata={"kind": "playbook_binding_variables", "variable_names": sorted(clean)},
+    )
+
+
+def get_playbook_binding_secret_values(binding_profile_id: int) -> dict[str, str]:
+    payload = _get(PLAYBOOK_BINDING_VARIABLES_NAMESPACE, binding_profile_id, default={})
+    values = payload.get("values") if isinstance(payload, dict) else {}
+    if not isinstance(values, dict):
+        return {}
+    return {str(key): str(value) for key, value in values.items()}
+
+
+def delete_playbook_binding_secret_values(binding_profile_id: int) -> None:
+    _delete(PLAYBOOK_BINDING_VARIABLES_NAMESPACE, binding_profile_id)
+
+
+def set_playbook_run_variables(run_id: int, values: dict[str, Any]) -> None:
+    """Persist execution variables encrypted until the worker consumes them."""
+    if not values:
+        _delete(PLAYBOOK_RUN_VARIABLES_NAMESPACE, run_id)
+        return
+    _upsert(
+        PLAYBOOK_RUN_VARIABLES_NAMESPACE,
+        run_id,
+        {"values": values},
+        metadata={"kind": "playbook_run_variables", "variable_names": sorted(str(key) for key in values)},
+    )
+
+
+def get_playbook_run_variables(run_id: int) -> dict[str, Any]:
+    payload = _get(PLAYBOOK_RUN_VARIABLES_NAMESPACE, run_id, default={})
+    values = payload.get("values") if isinstance(payload, dict) else {}
+    return values if isinstance(values, dict) else {}
+
+
+def delete_playbook_run_variables(run_id: int) -> None:
+    _delete(PLAYBOOK_RUN_VARIABLES_NAMESPACE, run_id)
+
+
+def set_playbook_run_master_password(run_id: int, master_password: str) -> None:
+    """Persist the per-run unlock password outside dispatch/run JSON fields."""
+    value = str(master_password or "")
+    if not value:
+        _delete(PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE, run_id)
+        return
+    _upsert(
+        PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE,
+        run_id,
+        {"master_password": value},
+        metadata={"kind": "playbook_run_master_password"},
+    )
+
+
+def get_playbook_run_master_password(run_id: int) -> str:
+    payload = _get(PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE, run_id, default={})
+    if isinstance(payload, dict):
+        return str(payload.get("master_password") or "")
+    return ""
+
+
+def delete_playbook_run_master_password(run_id: int) -> None:
+    _delete(PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE, run_id)
 
 
 def set_server_auth_secret(server_id: int, secret_value: str) -> None:

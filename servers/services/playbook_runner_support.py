@@ -10,15 +10,21 @@ import contextlib
 import logging
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from asgiref.sync import async_to_sync
-from django.db import close_old_connections
+from django.db import close_old_connections, transaction
+from django.utils import timezone
 
 from app.tools.ssh_tools import SSHExecuteTool, ssh_manager
-from servers.models import PlaybookRun, Server
+from servers.models import PlaybookRun, PlaybookRunDispatch, Server
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 from servers.services.playbook_parser import build_inventory_ini
+from servers.services.playbook_run_state import (
+    TERMINAL_PLAYBOOK_RUN_STATUSES,
+    transition_playbook_run,
+)
 from servers.services.server_query import get_servers_for_user, user_has_server_capability
 
 logger = logging.getLogger(__name__)
@@ -27,6 +33,13 @@ DEFAULT_CONCURRENCY = 4
 MAX_CONCURRENCY = 12
 COMMAND_TIMEOUT_HINT = 300
 _db_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class PlaybookRunExecutionFence:
+    dispatch_id: int
+    claimed_by: str
+    attempt_count: int
 
 
 def normalize_tasks(raw_tasks: Any) -> list[dict[str, Any]]:
@@ -167,10 +180,54 @@ def _summarize(host_results: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _persist_run(run_id: int, **fields: Any) -> None:
+def playbook_run_fence_is_owned(fence: PlaybookRunExecutionFence) -> bool:
+    close_old_connections()
+    return PlaybookRunDispatch.objects.filter(
+        pk=fence.dispatch_id,
+        status=PlaybookRunDispatch.STATUS_CLAIMED,
+        claimed_by=fence.claimed_by,
+        attempt_count=fence.attempt_count,
+        lease_expires_at__gt=timezone.now(),
+    ).exists()
+
+
+def _write_run_fields(run_id: int, fields: dict[str, Any], *, fenced: bool) -> bool:
+    status = fields.pop("status", None)
+    if status in TERMINAL_PLAYBOOK_RUN_STATUSES:
+        return transition_playbook_run(run_id, status, **fields).transitioned
+    if status is not None:
+        fields["status"] = status
+    queryset = PlaybookRun.objects.filter(pk=run_id)
+    if fenced:
+        queryset = queryset.exclude(status__in=TERMINAL_PLAYBOOK_RUN_STATUSES)
+    return bool(queryset.update(**fields))
+
+
+def _persist_run(
+    run_id: int,
+    *,
+    execution_fence: PlaybookRunExecutionFence | None = None,
+    **fields: Any,
+) -> bool:
     close_old_connections()
     with _db_lock:
-        PlaybookRun.objects.filter(pk=run_id).update(**fields)
+        if execution_fence is None:
+            return _write_run_fields(run_id, fields, fenced=False)
+        with transaction.atomic():
+            owns_claim = (
+                PlaybookRunDispatch.objects.select_for_update()
+                .filter(
+                    pk=execution_fence.dispatch_id,
+                    status=PlaybookRunDispatch.STATUS_CLAIMED,
+                    claimed_by=execution_fence.claimed_by,
+                    attempt_count=execution_fence.attempt_count,
+                    lease_expires_at__gt=timezone.now(),
+                )
+                .exists()
+            )
+            if not owns_claim:
+                return False
+            return _write_run_fields(run_id, fields, fenced=True)
 
 
 def _is_cancelled(run_id: int) -> bool:

@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client
+from django.utils import timezone
 
-from servers.models import Playbook, PlaybookRun, Server
+from servers.models import BackgroundWorkerState, Playbook, PlaybookRun, Server
+from servers.services.playbooks.target_identity import target_connection_identity_hashes
 
 
 @pytest.fixture
@@ -112,6 +115,84 @@ def test_playbook_crud_and_templates(auth_client, user):
 
 
 @pytest.mark.django_db
+def test_playbook_create_accepts_ansible_source_without_command_tasks(auth_client, user):
+    source_yaml = """- name: Source-only playbook
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Show a message
+      ansible.builtin.debug:
+        msg: hello
+"""
+
+    response = auth_client.post(
+        "/servers/api/playbooks/create/",
+        data=json.dumps(
+            {
+                "name": "Source only",
+                "kind": "ansible",
+                "category": "custom",
+                "source_yaml": source_yaml,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    payload = response.json()["playbook"]
+    assert payload["kind"] == "ansible"
+    assert payload["source_yaml"] == source_yaml
+    assert payload["tasks"] == []
+    stored = Playbook.objects.get(id=payload["id"], user=user)
+    assert stored.source_yaml == source_yaml
+    assert stored.tasks == []
+
+
+@pytest.mark.django_db
+def test_playbook_update_accepts_source_only_and_keeps_yaml_as_execution_source(auth_client, user):
+    playbook = Playbook.objects.create(
+        user=user,
+        name="Editable YAML",
+        kind=Playbook.KIND_ANSIBLE,
+        category=Playbook.CATEGORY_CUSTOM,
+        tasks=[],
+        source_yaml="- hosts: all\n  tasks: []\n",
+    )
+    next_source = """- name: Edited
+  hosts: all
+  tasks:
+    - ansible.builtin.command: hostname
+"""
+
+    response = auth_client.post(
+        f"/servers/api/playbooks/{playbook.id}/update/",
+        data=json.dumps({"name": "Edited YAML", "source_yaml": next_source}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200, response.content
+    payload = response.json()["playbook"]
+    assert payload["kind"] == "ansible"
+    assert payload["source_yaml"] == next_source
+    assert payload["tasks"] == []
+    playbook.refresh_from_db()
+    assert playbook.source_yaml == next_source
+    assert playbook.tasks == []
+
+
+@pytest.mark.django_db
+def test_playbook_create_still_rejects_empty_executable_content(auth_client):
+    response = auth_client.post(
+        "/servers/api/playbooks/create/",
+        data=json.dumps({"name": "Empty", "kind": "ansible", "tasks": [], "source_yaml": "  "}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert "YAML" in response.json()["error"]
+
+
+@pytest.mark.django_db
 def test_playbook_run_dry_run(auth_client, user, server, monkeypatch):
     pb = Playbook.objects.create(
         user=user,
@@ -204,6 +285,7 @@ def test_playbook_run_shell_live_progress(auth_client, user, server, monkeypatch
             "name": pb.name,
             "tasks": pb.tasks,
             "source_yaml": "",
+            "target_connection_identities": target_connection_identity_hashes([server]),
         },
         target_server_ids=[server.id],
         options={"engine": "shell", "concurrency": 1},
@@ -239,3 +321,23 @@ def test_inventory_preview(auth_client, server):
     body = r.json()
     assert body["count"] == 1
     assert "ansible_host" in body["inventory"]
+
+
+@pytest.mark.django_db
+def test_ansible_status_uses_isolated_control_plane(auth_client, monkeypatch):
+    monkeypatch.setenv("WEBTERM_ANSIBLE_VALIDATOR_SOCKET", "/run/playbook-validator/validator.sock")
+    monkeypatch.setattr("servers.views.server_playbooks.validator_runtime_available", lambda: True)
+    BackgroundWorkerState.objects.create(
+        worker_kind="playbook_execution",
+        worker_key="test-worker",
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        lease_expires_at=timezone.now() + timedelta(minutes=1),
+    )
+
+    response = auth_client.get("/servers/api/playbooks/ansible/status/")
+
+    assert response.status_code == 200
+    status = response.json()["ansible"]
+    assert status["available"] is True
+    assert status["method"] == "isolated-worker"
+    assert status["worker_ready"] is True

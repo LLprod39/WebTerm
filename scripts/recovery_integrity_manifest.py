@@ -130,6 +130,7 @@ def build_manifest(*, auth_username: str, auth_password: str) -> dict[str, Any]:
         "volumes": {
             "config": _volume_digest(Path("/workspace/config_runtime")),
             "media": _volume_digest(Path("/workspace/media")),
+            "playbook_bundles": _volume_digest(Path("/workspace/private/playbook_bundles")),
         },
     }
 

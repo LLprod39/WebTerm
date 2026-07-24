@@ -4,8 +4,16 @@ from .models import (
     AgentRun,
     AgentRunArtifact,
     Playbook,
+    PlaybookAssetBundle,
+    PlaybookAuditEvent,
+    PlaybookBindingProfile,
     PlaybookCompatibilityRevision,
+    PlaybookDraft,
+    PlaybookGrant,
+    PlaybookRevision,
     PlaybookRun,
+    PlaybookRunDispatch,
+    PlaybookValidation,
     Server,
     ServerAgent,
     ServerAlert,
@@ -155,3 +163,71 @@ class PlaybookCompatibilityRevisionAdmin(admin.ModelAdmin):
     list_filter = ["status", "created_at"]
     readonly_fields = ["created_at"]
     search_fields = ["playbook__name", "user__username", "source_hash"]
+
+
+@admin.register(PlaybookRevision)
+class PlaybookRevisionAdmin(admin.ModelAdmin):
+    list_display = ["playbook", "revision_number", "content_format", "origin_type", "author", "created_at"]
+    list_filter = ["content_format", "origin_type", "created_at"]
+    search_fields = ["playbook__name", "content_hash", "author__username"]
+    readonly_fields = [field.name for field in PlaybookRevision._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PlaybookDraft)
+class PlaybookDraftAdmin(admin.ModelAdmin):
+    list_display = ["playbook", "base_revision", "version", "last_editor", "updated_at"]
+    search_fields = ["playbook__name", "last_editor__username", "content_hash"]
+    readonly_fields = [field.name for field in PlaybookDraft._meta.fields]
+
+
+@admin.register(PlaybookValidation)
+class PlaybookValidationAdmin(admin.ModelAdmin):
+    list_display = ["revision", "status", "binding_profile", "requested_by", "started_at", "finished_at"]
+    list_filter = ["status", "started_at"]
+    search_fields = ["revision__playbook__name", "runtime_fingerprint_hash", "target_signature"]
+    readonly_fields = [field.name for field in PlaybookValidation._meta.fields]
+
+
+@admin.register(PlaybookBindingProfile)
+class PlaybookBindingProfileAdmin(admin.ModelAdmin):
+    list_display = ["name", "playbook", "user", "is_default", "version", "updated_at"]
+    search_fields = ["name", "playbook__name", "user__username"]
+    readonly_fields = ["content_hash", "version", "created_at", "updated_at"]
+
+
+@admin.register(PlaybookGrant)
+class PlaybookGrantAdmin(admin.ModelAdmin):
+    list_display = ["playbook", "principal_label", "role", "is_legacy", "expires_at", "revoked_at"]
+    list_filter = ["role", "workspace_shared", "is_legacy", "revoked_at"]
+    search_fields = ["playbook__name", "user__username", "group__name"]
+    readonly_fields = ["created_at", "updated_at"]
+
+
+@admin.register(PlaybookAssetBundle)
+class PlaybookAssetBundleAdmin(admin.ModelAdmin):
+    list_display = ["id", "content_hash", "file_count", "size_bytes", "scan_status", "created_by", "created_at"]
+    list_filter = ["scan_status", "created_at"]
+    search_fields = ["content_hash", "storage_key"]
+    readonly_fields = [field.name for field in PlaybookAssetBundle._meta.fields]
+
+
+@admin.register(PlaybookRunDispatch)
+class PlaybookRunDispatchAdmin(admin.ModelAdmin):
+    list_display = ["run", "status", "claimed_by", "attempt_count", "queued_at", "lease_expires_at"]
+    list_filter = ["status", "queued_at"]
+    search_fields = ["run__playbook__name", "claimed_by", "error"]
+    readonly_fields = [field.name for field in PlaybookRunDispatch._meta.fields]
+
+
+@admin.register(PlaybookAuditEvent)
+class PlaybookAuditEventAdmin(admin.ModelAdmin):
+    list_display = ["playbook", "event_type", "actor", "entity_type", "entity_id", "created_at"]
+    list_filter = ["event_type", "created_at"]
+    search_fields = ["playbook__name", "actor__username", "entity_id"]
+    readonly_fields = [field.name for field in PlaybookAuditEvent._meta.fields]

@@ -9,7 +9,6 @@ from servers.memory_heuristics import should_capture_command_history_memory
 from servers.models import (
     AgentRun,
     AgentRunEvent,
-    PlaybookRun,
     ServerAlert,
     ServerCommandHistory,
     ServerHealthCheck,
@@ -202,20 +201,6 @@ def operator_resume_on_agent_run(sender, instance: AgentRun, **kwargs):
     from core_ui.services.operator_async import schedule_async_resume_on_commit
 
     schedule_async_resume_on_commit(kind="agent_run", run_id=instance.pk)
-
-
-@receiver(post_save, sender=PlaybookRun)
-def operator_resume_on_playbook_run(sender, instance: PlaybookRun, **kwargs):
-    if instance.status not in {
-        PlaybookRun.STATUS_COMPLETED,
-        PlaybookRun.STATUS_FAILED,
-        PlaybookRun.STATUS_PARTIAL,
-        PlaybookRun.STATUS_CANCELLED,
-    }:
-        return
-    from core_ui.services.operator_async import schedule_async_resume_on_commit
-
-    schedule_async_resume_on_commit(kind="playbook_run", run_id=instance.pk)
 
 
 @receiver(post_save, sender=ServerWatcherDraft)

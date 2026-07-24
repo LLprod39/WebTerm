@@ -145,6 +145,8 @@ async function parseErrorMessage(res: Response): Promise<string> {
   try {
     const data = await res.json();
     if (typeof data?.error === "string" && data.error) return data.error;
+    if (typeof data?.error?.message === "string" && data.error.message) return data.error.message;
+    if (typeof data?.error_message === "string" && data.error_message) return data.error_message;
     if (typeof data?.message === "string" && data.message) return data.message;
   } catch {
     // noop

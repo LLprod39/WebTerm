@@ -1,10 +1,14 @@
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { GuidedBuilder } from "./GuidedBuilder";
 import { PlaybookEditor } from "./PlaybookEditor";
 import { RunResultsView } from "./RunResultsView";
 import { RunWizard } from "./RunWizard";
 import { detailToPlaybookEditor } from "./playbookEditorState";
 import { PlaybooksCatalogPanel } from "./playbooks/PlaybooksCatalogPanel";
+import { PlaybookBindingsPanel } from "./playbooks/PlaybookBindingsPanel";
+import { PlaybookRevisionPanel } from "./playbooks/PlaybookRevisionPanel";
+import { PlaybookSharingPanel } from "./playbooks/PlaybookSharingPanel";
 import type { PlaybooksWorkspaceProps } from "./playbooks/types";
 import { usePlaybooksWorkspace } from "./playbooks/usePlaybooksWorkspace";
 
@@ -25,11 +29,18 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     setCategoryFilter,
     editor,
     setEditor,
+    openedPlaybook,
+    setOpenedPlaybook,
+    updateEditor,
+    editorDirty,
     saving,
+    saveError,
     running,
     cancelling,
     activeRun,
     setActiveRun,
+    runLoadError,
+    retryRunLoad,
     deleteTarget,
     setDeleteTarget,
     showHistory,
@@ -43,6 +54,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     ansibleAvailable,
     openNew,
     openEdit,
+    leaveEditor,
     onSave,
     onDelete,
     onDuplicate,
@@ -53,8 +65,15 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     onConfirmRun,
     onCancelRun,
     onRerunFailed,
+    onCompatibilityApplied,
     groupsWithId,
+    workspace,
   } = ctrl;
+  const routePlaybookId =
+    view.mode === "edit" || view.mode === "run-wizard" ? view.playbookId : null;
+  const playbookSurfaceLoading = Boolean(
+    routePlaybookId && openedPlaybook?.id !== routePlaybookId,
+  );
 
   return (
     <div className="space-y-3">
@@ -78,6 +97,14 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           templates={templates}
           recentRuns={recentRuns}
           playbooksLoading={playbooksQuery.isLoading}
+          playbooksError={
+            playbooksQuery.error instanceof Error
+              ? playbooksQuery.error.message
+              : playbooksQuery.error
+                ? String(playbooksQuery.error)
+                : ""
+          }
+          onRetryPlaybooks={() => void playbooksQuery.refetch()}
           search={search}
           setSearch={setSearch}
           categoryFilter={categoryFilter}
@@ -111,31 +138,53 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           onBack={() => setView({ mode: "catalog" })}
           onCreated={(pb) => {
             setEditor(detailToPlaybookEditor(pb));
+            setOpenedPlaybook(pb);
             setView({ mode: "edit", playbookId: pb.id });
             void queryClient.invalidateQueries({ queryKey: ["playbooks"] });
           }}
         />
       ) : null}
 
-      {view.mode === "edit" ? (
+      {playbookSurfaceLoading ? (
+        <div className="py-12 text-center text-sm text-muted-foreground" role="status">
+          {tr("Загрузка playbook…", "Loading playbook…")}
+        </div>
+      ) : null}
+
+      {view.mode === "edit" && !playbookSurfaceLoading ? (
         <PlaybookEditor
           lang={lang}
           state={editor}
           saving={saving}
-          onChange={(patch) => setEditor((prev) => ({ ...prev, ...patch }))}
+          dirty={editorDirty}
+          saveError={saveError}
+          readOnly={Boolean(view.playbookId) && (!workspace.capabilityReady || !workspace.canEditContent)}
+          metadataReadOnly={Boolean(view.playbookId) && !workspace.capabilities.is_owner}
+          canRun={!view.playbookId || (workspace.capabilityReady && workspace.capabilities.can_run)}
+          canValidate={!view.playbookId || workspace.capabilities.can_validate}
+          canAdapt={!view.playbookId || workspace.capabilities.is_owner}
+          onChange={updateEditor}
           onSave={() => void onSave()}
-          onBack={() => setView({ mode: "catalog" })}
+          onBack={leaveEditor}
           onRun={() => {
             if (view.playbookId) setView({ mode: "run-wizard", playbookId: view.playbookId });
             else void ensureSavedThenWizard();
           }}
           title={view.playbookId ? tr("Редактирование", "Edit playbook") : tr("Новый playbook", "New playbook")}
           playbookId={view.playbookId}
-          onCompatibilityApplied={(playbook) => setEditor(detailToPlaybookEditor(playbook))}
+          onCompatibilityApplied={onCompatibilityApplied}
         />
       ) : null}
 
-      {view.mode === "run-wizard" ? (
+      {view.mode === "edit" && view.playbookId && !playbookSurfaceLoading ? (
+        <div className="space-y-4">
+          <PlaybookRevisionPanel lang={lang} playbookId={view.playbookId} workspace={workspace} />
+          <PlaybookBindingsPanel lang={lang} workspace={workspace} />
+          <PlaybookSharingPanel lang={lang} workspace={workspace} />
+        </div>
+      ) : null}
+
+      {view.mode === "run-wizard" && !playbookSurfaceLoading ? (
         <RunWizard
           lang={lang}
           playbookName={editor.name || "Playbook"}
@@ -145,24 +194,61 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           ansibleAvailable={ansibleAvailable}
           playbookId={view.playbookId}
           compatibility={editor.activeCompatibilityRevision?.report || editor.compatibility}
+          revisions={workspace.revisions}
+          publishedRevisionId={workspace.publishedRevisionId}
+          revisionsLoading={workspace.revisionsLoading}
+          bindingProfiles={workspace.bindings}
+          capabilities={workspace.capabilities}
+          workerReady={Boolean(ansible?.worker_ready)}
           onBack={() => setView({ mode: "edit", playbookId: view.playbookId })}
           onConfirm={(opts) => void onConfirmRun(opts)}
         />
       ) : null}
 
-      {view.mode === "run-results" && activeRun ? (
-        <RunResultsView
-          lang={lang}
-          run={activeRun}
-          onBack={() => setView({ mode: "catalog" })}
-          onCancel={() => void onCancelRun()}
-          onRerunFailed={() => void onRerunFailed()}
-          cancelling={cancelling}
-        />
+      {view.mode === "run-results" && activeRun?.id === view.runId ? (
+        <div className="space-y-3">
+          {runLoadError ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-destructive/30 bg-destructive/5 px-3 py-2" role="alert">
+              <p className="text-xs text-destructive">
+                {tr("Обновление статуса остановлено:", "Status refresh stopped:")} {runLoadError}
+              </p>
+              <Button size="sm" variant="outline" onClick={retryRunLoad}>
+                {tr("Повторить", "Retry")}
+              </Button>
+            </div>
+          ) : null}
+          <RunResultsView
+            lang={lang}
+            run={activeRun}
+            onBack={() => setView({ mode: "catalog" })}
+            onCancel={() => void onCancelRun()}
+            onRerunFailed={() => void onRerunFailed()}
+            cancelling={cancelling}
+          />
+        </div>
       ) : null}
 
-      {view.mode === "run-results" && !activeRun ? (
-        <div className="py-12 text-center text-sm text-muted-foreground">{tr("Загрузка run…", "Loading run…")}</div>
+      {view.mode === "run-results" && activeRun?.id !== view.runId && runLoadError ? (
+        <div className="rounded-sm border border-destructive/30 bg-destructive/5 px-4 py-8 text-center" role="alert">
+          <p className="text-sm font-medium text-destructive">
+            {tr("Не удалось загрузить запуск", "Failed to load run")}
+          </p>
+          <p className="mx-auto mt-1 max-w-xl text-xs text-muted-foreground">{runLoadError}</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setView({ mode: "catalog" })}>
+              {tr("В каталог", "Back to catalog")}
+            </Button>
+            <Button size="sm" onClick={retryRunLoad}>
+              {tr("Повторить", "Retry")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {view.mode === "run-results" && activeRun?.id !== view.runId && !runLoadError ? (
+        <div className="py-12 text-center text-sm text-muted-foreground" role="status">
+          {tr("Загрузка run…", "Loading run…")}
+        </div>
       ) : null}
 
       <DeleteDialog

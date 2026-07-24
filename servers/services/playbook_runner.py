@@ -5,17 +5,19 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from django.db import close_old_connections
 from django.utils import timezone
 
-from servers.models import Playbook, PlaybookRun, Server
+from core_ui.managed_secrets import get_playbook_run_variables
+from servers.models import PlaybookRun, Server
 from servers.services.playbook_runner_support import (
     DEFAULT_CONCURRENCY,
     MAX_CONCURRENCY,
-    _db_lock,
+    PlaybookRunExecutionFence,
     _empty_host_result,
     _execute_on_server,
     _is_cancelled,
@@ -25,6 +27,7 @@ from servers.services.playbook_runner_support import (
     normalize_tasks,
     resolve_target_servers,
 )
+from servers.services.playbooks.target_identity import target_connection_identities_match
 
 logger = logging.getLogger(__name__)
 
@@ -37,15 +40,33 @@ __all__ = [
 ]
 
 
-def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
-    """Execute a PlaybookRun in-process (call from background thread)."""
+def execute_playbook_run(
+    run_id: int,
+    *,
+    master_password: str = "",
+    execution_fence: PlaybookRunExecutionFence | None = None,
+    lease_check: Callable[[], bool] | None = None,
+) -> None:
+    """Execute a PlaybookRun, optionally fenced to one durable claim attempt."""
     try:
-        run = PlaybookRun.objects.select_related("user", "playbook").get(pk=run_id)
+        run = PlaybookRun.objects.select_related("user", "playbook", "revision__asset_bundle").get(pk=run_id)
     except PlaybookRun.DoesNotExist:
         return
 
+    def _lease_owned() -> bool:
+        return lease_check is None or bool(lease_check())
+
+    def _should_cancel() -> bool:
+        return _is_cancelled(run_id) or not _lease_owned()
+
+    def _save_run(**fields: Any) -> bool:
+        if not _lease_owned():
+            return False
+        return _persist_run(run_id, execution_fence=execution_fence, **fields)
+
     snapshot = run.playbook_snapshot if isinstance(run.playbook_snapshot, dict) else {}
     tasks = normalize_tasks(snapshot.get("tasks") or [])
+    has_ansible_source = bool(str(snapshot.get("source_yaml") or "").strip())
     options = run.options if isinstance(run.options, dict) else {}
     dry_run = bool(options.get("dry_run"))
     concurrency = int(options.get("concurrency") or DEFAULT_CONCURRENCY)
@@ -55,18 +76,45 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
     if become is None:
         become = True
 
+    if has_ansible_source and engine not in {"ansible", "auto"}:
+        _save_run(
+            status=PlaybookRun.STATUS_FAILED,
+            error_message="Ansible YAML cannot be executed by the shell engine",
+            finished_at=timezone.now(),
+            summary={"engine": "ansible", "hosts_total": 0},
+        )
+        return
+
+    target_ids = {int(x) for x in (run.target_server_ids or [])}
     servers = resolve_target_servers(
         run.user,
-        server_ids=[int(x) for x in (run.target_server_ids or [])],
-        group_ids=[int(x) for x in (run.target_group_ids or [])],
+        server_ids=sorted(target_ids),
+        # Groups are audit metadata only after preparation. Re-resolving them
+        # here could add hosts that joined a group after validation/snapshot.
+        group_ids=[],
     )
-    if not servers:
-        _persist_run(
-            run_id,
+    if not target_ids:
+        _save_run(
             status=PlaybookRun.STATUS_FAILED,
             error_message="No accessible target servers",
             finished_at=timezone.now(),
             summary={"hosts_total": 0, "hosts_failed": 0, "hosts_ok": 0},
+        )
+        return
+    if {server.id for server in servers} != target_ids or not target_connection_identities_match(
+        snapshot.get("target_connection_identities"),
+        servers,
+    ):
+        _save_run(
+            status=PlaybookRun.STATUS_FAILED,
+            error_message="Target authorization or connection identity changed after preflight",
+            finished_at=timezone.now(),
+            summary={
+                "hosts_total": 0,
+                "hosts_failed": 0,
+                "hosts_ok": 0,
+                "target_identity_changed": True,
+            },
         )
         return
 
@@ -81,24 +129,49 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
             estimate_total_tasks,
             run_ansible_playbook,
         )
+        from servers.services.playbook_execution_runtime import prepare_claim_runtime
 
         detection = detect_ansible()
-        if detection.get("available") or engine == "ansible":
-            if not detection.get("available") and engine == "ansible":
-                _persist_run(
-                    run_id,
+        if detection.get("available") or engine == "ansible" or has_ansible_source:
+            if not detection.get("available") and (engine == "ansible" or has_ansible_source):
+                _save_run(
                     status=PlaybookRun.STATUS_FAILED,
                     error_message=detection.get("message") or "Ansible is not available on this host",
                     finished_at=timezone.now(),
                     summary={"engine": "ansible", "hosts_total": len(servers)},
                 )
                 return
+            runtime_identity, runtime_ready = prepare_claim_runtime(
+                run, detection, execution_fence, len(servers), _save_run
+            )
+            if not runtime_ready:
+                return
+            runtime_bundle = None
+            if snapshot.get("asset_bundle_id"):
+                try:
+                    from servers.services.playbooks.bundle_runtime import (
+                        BundleRuntimeError,
+                        load_revision_runtime_bundle,
+                    )
+
+                    if run.revision is None or run.revision_id != snapshot.get("revision_id"):
+                        raise BundleRuntimeError("The run revision no longer matches its immutable snapshot")
+                    runtime_bundle = load_revision_runtime_bundle(run.revision)
+                    if runtime_bundle is None or runtime_bundle.content_hash != snapshot.get("bundle_hash"):
+                        raise BundleRuntimeError("The run bundle no longer matches its immutable snapshot")
+                except BundleRuntimeError as exc:
+                    _save_run(
+                        status=PlaybookRun.STATUS_FAILED,
+                        error_message=str(exc),
+                        finished_at=timezone.now(),
+                        summary={"engine": "ansible", "hosts_total": len(servers)},
+                    )
+                    return
             try:
                 playbook_yaml = ensure_playbook_yaml(snapshot, become=bool(become))
             except Exception as exc:
-                if engine == "ansible":
-                    _persist_run(
-                        run_id,
+                if engine == "ansible" or has_ansible_source:
+                    _save_run(
                         status=PlaybookRun.STATUS_FAILED,
                         error_message=f"Cannot build Ansible YAML: {exc}",
                         finished_at=timezone.now(),
@@ -112,8 +185,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     "tasks_total": estimate_total_tasks(playbook_yaml) or None,
                     "hosts_total": len(servers),
                 }
-                _persist_run(
-                    run_id,
+                _save_run(
                     status=PlaybookRun.STATUS_RUNNING,
                     started_at=timezone.now(),
                     host_results=[
@@ -154,7 +226,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                         live_hosts = event.get("host_results")
                         if live_hosts:
                             fields["host_results"] = live_hosts
-                    _persist_run(run_id, **fields)
+                    _save_run(**fields)
 
                 result = run_ansible_playbook(
                     playbook_yaml=playbook_yaml,
@@ -162,23 +234,27 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     dry_run=dry_run,
                     become=bool(become),
                     tags=str(options.get("tags") or ""),
+                    skip_tags=str(options.get("skip_tags") or ""),
                     limit=str(options.get("limit") or ""),
-                    extra_vars=options.get("extra_vars") if isinstance(options.get("extra_vars"), dict) else None,
+                    extra_vars=get_playbook_run_variables(run_id),
                     master_password=master_password,
                     forks=concurrency,
-                    cancel_check=lambda: _is_cancelled(run_id),
+                    cancel_check=_should_cancel,
                     progress_callback=_on_ansible_progress,
                     inventory_binding_groups=(
                         options.get("inventory_binding_groups")
                         if isinstance(options.get("inventory_binding_groups"), dict)
                         else None
                     ),
+                    project_files=runtime_bundle.files if runtime_bundle else None,
+                    project_entrypoint=runtime_bundle.entrypoint if runtime_bundle else "playbook.yml",
+                    runtime_identity=runtime_identity,
                 )
                 host_results = result.get("host_results") or []
                 summary = result.get("summary") or _summarize(host_results)
                 summary["engine"] = "ansible"
                 summary["ansible_method"] = result.get("method")
-                if result.get("cancelled") or _is_cancelled(run_id):
+                if result.get("cancelled") or _should_cancel():
                     status = PlaybookRun.STATUS_CANCELLED
                 elif result.get("ok"):
                     status = PlaybookRun.STATUS_COMPLETED
@@ -187,8 +263,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 else:
                     status = PlaybookRun.STATUS_FAILED
                 final_log = "\n".join(log_lines) or str(result.get("raw_stdout") or "")
-                _persist_run(
-                    run_id,
+                _save_run(
                     status=status,
                     host_results=host_results,
                     summary=summary,
@@ -198,20 +273,21 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     live_log=final_log[-160_000:],
                     progress={**progress_holder, "finished": True},
                 )
-                if run.playbook_id:
-                    close_old_connections()
-                    with _db_lock:
-                        Playbook.objects.filter(pk=run.playbook_id).update(
-                            last_run_at=timezone.now(),
-                            last_run_status=status,
-                        )
                 return
-        # auto mode falls through to shell if ansible missing
+        # Auto mode may fall through only for native command runbooks. Imported
+        # Ansible source is never executed through its lossy shell projection.
+        if has_ansible_source:
+            _save_run(
+                status=PlaybookRun.STATUS_FAILED,
+                error_message="Ansible source requires an available Ansible runtime",
+                finished_at=timezone.now(),
+                summary={"engine": "ansible", "hosts_total": len(servers)},
+            )
+            return
 
     inventory = build_inventory_for_servers(servers)
     if not tasks:
-        _persist_run(
-            run_id,
+        _save_run(
             status=PlaybookRun.STATUS_FAILED,
             error_message="No runnable shell tasks and Ansible engine did not run",
             finished_at=timezone.now(),
@@ -219,8 +295,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
         return
     host_results = [_empty_host_result(s, tasks) for s in servers]
     shell_tasks_total = len(tasks) * len(servers)
-    _persist_run(
-        run_id,
+    _save_run(
         status=PlaybookRun.STATUS_RUNNING,
         started_at=timezone.now(),
         host_results=host_results,
@@ -275,12 +350,12 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
             results_by_id[int(hr["server_id"])] = hr
             fields = _shell_progress()
         if fields:
-            _persist_run(run_id, **fields)
+            _save_run(**fields)
 
     def _run_one(server: Server) -> dict[str, Any]:
         close_old_connections()
         try:
-            if _is_cancelled(run_id):
+            if _should_cancel():
                 hr = _empty_host_result(server, tasks)
                 hr["status"] = "cancelled"
                 for tr in hr["task_results"]:
@@ -292,7 +367,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 tasks=tasks,
                 dry_run=dry_run,
                 master_password=master_password,
-                cancel_check=lambda: _is_cancelled(run_id),
+                cancel_check=_should_cancel,
                 on_task_progress=_on_task_progress,
                 log_line=_log_line,
             )
@@ -304,7 +379,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
             results_by_id[int(hr["server_id"])] = hr
             fields = _shell_progress(force=True)
         if fields:
-            _persist_run(run_id, **fields)
+            _save_run(**fields)
 
     try:
         # Sequential when single host or concurrency=1 (avoids sqlite lock issues in tests/dev)
@@ -333,7 +408,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                     _store_host_result(hr)
         else:
             for s in servers:
-                if _is_cancelled(run_id):
+                if _should_cancel():
                     hr = _empty_host_result(s, tasks)
                     hr["status"] = "cancelled"
                     for tr in hr["task_results"]:
@@ -353,7 +428,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 _store_host_result(hr)
 
         ordered = [results_by_id[s.id] for s in servers if s.id in results_by_id]
-        if _is_cancelled(run_id):
+        if _should_cancel():
             for hr in ordered:
                 if hr.get("status") == "pending":
                     hr["status"] = "cancelled"
@@ -368,8 +443,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 for t in hr.get("task_results") or []
                 if t.get("status") in ("success", "error", "skipped")
             )
-            _persist_run(
-                run_id,
+            _save_run(
                 status=PlaybookRun.STATUS_CANCELLED,
                 host_results=ordered,
                 summary=summary,
@@ -392,8 +466,7 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 status = PlaybookRun.STATUS_FAILED
             else:
                 status = PlaybookRun.STATUS_PARTIAL
-            _persist_run(
-                run_id,
+            _save_run(
                 status=status,
                 host_results=ordered,
                 summary=summary,
@@ -408,19 +481,9 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
                 },
             )
 
-        # Update playbook last run meta
-        close_old_connections()
-        with _db_lock:
-            run.refresh_from_db()
-            if run.playbook_id:
-                Playbook.objects.filter(pk=run.playbook_id).update(
-                    last_run_at=timezone.now(),
-                    last_run_status=run.status,
-                )
     except Exception as exc:
         logger.exception("Playbook run failed run=%s", run_id)
-        _persist_run(
-            run_id,
+        _save_run(
             status=PlaybookRun.STATUS_FAILED,
             error_message=str(exc)[:2000],
             finished_at=timezone.now(),
@@ -430,10 +493,8 @@ def execute_playbook_run(run_id: int, *, master_password: str = "") -> None:
 
 
 def start_playbook_run_async(run_id: int, *, master_password: str = "") -> None:
-    thread = threading.Thread(
-        target=execute_playbook_run,
-        kwargs={"run_id": run_id, "master_password": master_password},
-        name=f"playbook-run-{run_id}",
-        daemon=True,
-    )
-    thread.start()
+    """Compatibility facade: enqueue for the durable execution plane."""
+    from servers.playbook_dispatch import enqueue_playbook_run_dispatch
+
+    run = PlaybookRun.objects.get(pk=run_id)
+    enqueue_playbook_run_dispatch(run=run, master_password=master_password)

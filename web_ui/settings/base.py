@@ -182,6 +182,13 @@ STATICFILES_DIRS = [
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 UPLOADED_FILES_DIR = MEDIA_ROOT / "uploads"
+# Playbook project archives are authorization-protected source artifacts, not
+# public media. Keep the default outside MEDIA_ROOT so neither Django's DEBUG
+# media route nor the production nginx media alias can serve the raw bundle.
+_PLAYBOOK_BUNDLE_STORAGE_ROOT = (os.getenv("PLAYBOOK_BUNDLE_STORAGE_ROOT", "") or "").strip()
+PLAYBOOK_BUNDLE_STORAGE_ROOT = (
+    Path(_PLAYBOOK_BUNDLE_STORAGE_ROOT) if _PLAYBOOK_BUNDLE_STORAGE_ROOT else BASE_DIR / "private" / "playbook_bundles"
+)
 SSH_PRIVATE_KEYS_DIR = BASE_DIR / "data" / "ssh_keys"
 
 # Create upload directory if it doesn't exist

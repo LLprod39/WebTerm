@@ -1,17 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Layers, Play, Server, Shield } from "lucide-react";
-import type { FrontendGroup, FrontendServer } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Loader2, Play } from "lucide-react";
+
 import {
-  previewPlaybookInventory,
-  type PlaybookCompatibilityReport,
-  type PlaybookInventoryBindings,
+  validatePlaybookRevision,
+  type PlaybookRunRequest,
+  type PlaybookRunValidation,
+} from "@/api/playbook-preflight";
+import type {
+  PlaybookBindingProfile,
+  PlaybookCapabilities,
+  PlaybookCompatibilityReport,
+  PlaybookRevision,
 } from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { StatusIndicator } from "@/components/StatusIndicator";
-import { ServerOsBadge } from "@/components/servers/ServerOsBadge";
-import { resolveServerOs } from "@/lib/server-os";
+import type { FrontendGroup, FrontendServer } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { ReviewValidationStep } from "./run-preflight/ReviewValidationStep";
+import { RevisionRuntimeStep } from "./run-preflight/RevisionRuntimeStep";
+import { TargetsBindingStep } from "./run-preflight/TargetsBindingStep";
+import { VariablesPolicyStep } from "./run-preflight/VariablesPolicyStep";
+import {
+  bindingsComplete,
+  buildAdhocBindings,
+  buildRunRequest,
+  buildRunTargetContext,
+  buildValidationPayload,
+  parseExtraVarsJson,
+  pruneAdhocBindingChoices,
+  type ExtraVarsParseError,
+  type RunPolicyOptions,
+} from "./runPreflightState";
+
+type RunWizardStep = 1 | 2 | 3 | 4;
 
 interface RunWizardProps {
   lang: string;
@@ -20,18 +40,26 @@ interface RunWizardProps {
   groups: FrontendGroup[];
   running: boolean;
   onBack: () => void;
-  onConfirm: (opts: {
-    server_ids: number[];
-    group_ids: number[];
-    concurrency: number;
-    dry_run: boolean;
-    become: boolean;
-    inventory_bindings: PlaybookInventoryBindings;
-  }) => void;
+  onConfirm: (payload: PlaybookRunRequest) => void;
   ansibleAvailable?: boolean;
+  workerReady?: boolean;
   playbookId: number;
   compatibility?: PlaybookCompatibilityReport;
+  revisions: PlaybookRevision[];
+  publishedRevisionId: number | null;
+  revisionsLoading: boolean;
+  bindingProfiles: PlaybookBindingProfile[];
+  capabilities: PlaybookCapabilities;
 }
+
+const initialPolicy: RunPolicyOptions = {
+  concurrency: 4,
+  dryRun: false,
+  become: true,
+  tags: "",
+  skipTags: "",
+  limit: "",
+};
 
 export function RunWizard({
   lang,
@@ -42,97 +70,198 @@ export function RunWizard({
   onBack,
   onConfirm,
   ansibleAvailable = false,
+  workerReady = false,
   playbookId,
   compatibility,
+  revisions,
+  publishedRevisionId,
+  revisionsLoading,
+  bindingProfiles,
+  capabilities,
 }: RunWizardProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const validationSequence = useRef(0);
+  const profileInitialized = useRef(false);
+  const fingerprintRef = useRef("");
+  const [step, setStep] = useState<RunWizardStep>(1);
+  const [selectedRevisionId, setSelectedRevisionId] = useState<number | null>(null);
+  const [selectedBindingProfileId, setSelectedBindingProfileId] = useState<number | null>(null);
   const [serverIds, setServerIds] = useState<Set<number>>(new Set());
   const [groupIds, setGroupIds] = useState<Set<number>>(new Set());
-  const [concurrency, setConcurrency] = useState(4);
-  const [dryRun, setDryRun] = useState(false);
-  const [become, setBecome] = useState(true);
-  const [inventory, setInventory] = useState("");
-  const [resolvedCount, setResolvedCount] = useState(0);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [bindingChoices, setBindingChoices] = useState<Record<string, string>>({});
-  const [previewCompatibility, setPreviewCompatibility] = useState<PlaybookCompatibilityReport>({});
-  const hostSelectors = useMemo(() => compatibility?.host_selectors || [], [compatibility]);
+  const [extraVarsText, setExtraVarsText] = useState("{}\n");
+  const [extraVars, setExtraVars] = useState<Record<string, unknown>>({});
+  const [extraVarsError, setExtraVarsError] = useState<ExtraVarsParseError>(null);
+  const [policy, setPolicy] = useState<RunPolicyOptions>(initialPolicy);
+  const [validation, setValidation] = useState<PlaybookRunValidation | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [validationError, setValidationError] = useState("");
 
+  const visibleRevisions = useMemo(
+    () => capabilities.can_edit
+      ? revisions
+      : revisions.filter((revision) => revision.id === publishedRevisionId),
+    [capabilities.can_edit, publishedRevisionId, revisions],
+  );
+  const selectedRevision = visibleRevisions.find((revision) => revision.id === selectedRevisionId) || null;
+  const selectedProfile = bindingProfiles.find((profile) => profile.id === selectedBindingProfileId) || null;
+  const revisionCompatibility = selectedRevision?.compatibility ?? compatibility;
+  const hostSelectors = useMemo(
+    () => revisionCompatibility?.host_selectors || [],
+    [revisionCompatibility?.host_selectors],
+  );
+  const requiredVariableNames = useMemo(
+    () => revisionCompatibility?.required_variables || [],
+    [revisionCompatibility?.required_variables],
+  );
+  const runtimeReady = selectedRevision?.content_format === "runbook_json" ? workerReady : ansibleAvailable;
   const onlineIds = useMemo(
-    () => new Set(servers.filter((s) => s.status === "online").map((s) => s.id)),
+    () => new Set(servers.filter((server) => server.status === "online").map((server) => server.id)),
     [servers],
   );
-
-  const toggleServer = (id: number) => {
-    setServerIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleGroup = (id: number) => {
-    setGroupIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const bindingChoice = useCallback(
-    (selector: string) => bindingChoices[selector] || (hostSelectors.length === 1 ? "selected" : ""),
-    [bindingChoices, hostSelectors.length],
+  const inventoryBindings = useMemo(
+    () => buildAdhocBindings(hostSelectors, bindingChoices, serverIds, groupIds),
+    [bindingChoices, groupIds, hostSelectors, serverIds],
   );
-
-  const buildBindings = useCallback((): PlaybookInventoryBindings => {
-    const result: PlaybookInventoryBindings = {};
-    hostSelectors.forEach((selector) => {
-      const choice = bindingChoice(selector);
-      if (choice === "selected") {
-        result[selector] = { server_ids: Array.from(serverIds), group_ids: Array.from(groupIds) };
-      } else if (choice.startsWith("group:")) {
-        result[selector] = { server_ids: [], group_ids: [Number(choice.slice(6))] };
-      } else if (choice.startsWith("server:")) {
-        result[selector] = { server_ids: [Number(choice.slice(7))], group_ids: [] };
-      }
-    });
-    return result;
-  }, [bindingChoice, groupIds, hostSelectors, serverIds]);
+  const targetContext = useMemo(
+    () => buildRunTargetContext({
+      bindingProfile: selectedProfile,
+      serverIds,
+      groupIds,
+      inventoryBindings,
+      extraVars,
+    }),
+    [extraVars, groupIds, inventoryBindings, selectedProfile, serverIds],
+  );
+  const targetReady = Boolean(
+    (targetContext.serverIds.length || targetContext.groupIds.length) &&
+      bindingsComplete(hostSelectors, targetContext.inventoryBindings),
+  );
+  const canValidateContext = capabilities.can_validate || capabilities.can_run;
 
   useEffect(() => {
-    if (step !== 3) return;
-    let cancelled = false;
-    setPreviewLoading(true);
-    void previewPlaybookInventory({
-      server_ids: Array.from(serverIds),
-      group_ids: Array.from(groupIds),
-      playbook_id: playbookId,
-      inventory_bindings: buildBindings(),
-    })
-      .then((res) => {
-        if (cancelled) return;
-        setInventory(res.inventory || "");
-        setResolvedCount(res.count || 0);
-        setPreviewCompatibility(res.compatibility || {});
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setInventory("");
-        setResolvedCount(0);
-      })
-      .finally(() => {
-        if (!cancelled) setPreviewLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [step, serverIds, groupIds, playbookId, buildBindings]);
+    if (!visibleRevisions.length) {
+      setSelectedRevisionId(null);
+      return;
+    }
+    setSelectedRevisionId((current) => {
+      if (current && visibleRevisions.some((revision) => revision.id === current)) return current;
+      if (publishedRevisionId && visibleRevisions.some((revision) => revision.id === publishedRevisionId)) {
+        return publishedRevisionId;
+      }
+      return visibleRevisions[0].id;
+    });
+  }, [publishedRevisionId, visibleRevisions]);
 
-  const hasTargets = serverIds.size > 0 || groupIds.size > 0;
-  const bindingsComplete = hostSelectors.every((selector) => Boolean(bindingChoice(selector)));
+  useEffect(() => {
+    if (profileInitialized.current || !bindingProfiles.length) return;
+    profileInitialized.current = true;
+    const defaultProfile = bindingProfiles.find((profile) => profile.is_default);
+    if (!defaultProfile) return;
+    setSelectedBindingProfileId(defaultProfile.id);
+    setPolicy(policyFromProfile(defaultProfile));
+  }, [bindingProfiles]);
+
+  useEffect(() => {
+    setBindingChoices((current) => pruneAdhocBindingChoices(current, serverIds, groupIds));
+  }, [groupIds, serverIds]);
+
+  const contextFingerprint = useMemo(
+    () => JSON.stringify({
+      selectedRevisionId,
+      targetContext,
+      extraVarsText,
+      extraVars,
+      policy,
+    }),
+    [extraVars, extraVarsText, policy, selectedRevisionId, targetContext],
+  );
+
+  useEffect(() => {
+    if (!fingerprintRef.current) {
+      fingerprintRef.current = contextFingerprint;
+      return;
+    }
+    if (fingerprintRef.current === contextFingerprint) return;
+    fingerprintRef.current = contextFingerprint;
+    validationSequence.current += 1;
+    setValidation(null);
+    setValidationError("");
+    setValidating(false);
+  }, [contextFingerprint]);
+
+  const selectBindingProfile = (profileId: number | null) => {
+    setSelectedBindingProfileId(profileId);
+    const profile = bindingProfiles.find((item) => item.id === profileId);
+    if (profile) setPolicy(policyFromProfile(profile));
+  };
+
+  const toggleServer = (serverId: number) => setServerIds((previous) => toggledSet(previous, serverId));
+  const toggleGroup = (groupId: number) => setGroupIds((previous) => toggledSet(previous, groupId));
+
+  const updateExtraVars = (source: string) => {
+    setExtraVarsText(source);
+    const parsed = parseExtraVarsJson(source);
+    setExtraVarsError(parsed.error);
+    if (parsed.value) setExtraVars(parsed.value);
+  };
+
+  const runValidation = useCallback(async () => {
+    if (!selectedRevisionId || extraVarsError) return null;
+    if (!canValidateContext) {
+      setValidationError(
+        lang === "ru"
+          ? "Нет права проверять или запускать этот playbook."
+          : "You do not have permission to validate or run this playbook.",
+      );
+      return null;
+    }
+    const sequence = validationSequence.current + 1;
+    validationSequence.current = sequence;
+    setValidating(true);
+    setValidation(null);
+    setValidationError("");
+    try {
+      const response = await validatePlaybookRevision(
+        playbookId,
+        selectedRevisionId,
+        buildValidationPayload(targetContext),
+      );
+      if (validationSequence.current !== sequence) return null;
+      setValidation(response.validation);
+      return response.validation;
+    } catch (error) {
+      if (validationSequence.current !== sequence) return null;
+      setValidationError(error instanceof Error ? error.message : String(error));
+      return null;
+    } finally {
+      if (validationSequence.current === sequence) setValidating(false);
+    }
+  }, [canValidateContext, extraVarsError, lang, playbookId, selectedRevisionId, targetContext]);
+
+  const openReview = () => {
+    if (extraVarsError) return;
+    setStep(4);
+    void runValidation();
+  };
+
+  const confirmRun = () => {
+    if (!capabilities.can_run || !selectedRevisionId || validation?.status !== "ready") return;
+    onConfirm(buildRunRequest({
+      revisionId: selectedRevisionId,
+      validationId: validation.id,
+      context: targetContext,
+      extraVars,
+      policy,
+    }));
+  };
+
+  const stepLabels = [
+    tr("Ревизия", "Revision"),
+    tr("Цели", "Targets"),
+    tr("Переменные", "Variables"),
+    "Review",
+  ];
 
   return (
     <section className="space-y-4">
@@ -142,260 +271,95 @@ export function RunWizard({
             ← {tr("Назад", "Back")}
           </button>
           <h2 className="mt-1 font-display text-lg font-semibold text-foreground">
-            {tr("Запуск", "Run")}: {playbookName}
+            {tr("Run preflight", "Run preflight")}: {playbookName}
           </h2>
         </div>
-        <div className="flex items-center gap-1.5">
-          {[1, 2, 3].map((n) => (
-            <div
-              key={n}
-              className={cn(
-                "flex h-8 min-w-8 items-center justify-center rounded-sm border px-2 text-2xs font-mono uppercase tracking-wider",
-                step === n
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : step > n
-                    ? "border-primary/40 bg-primary/10 text-primary"
-                    : "border-border bg-card text-muted-foreground",
-              )}
-            >
-              {n === 1 ? tr("Цели", "Targets") : n === 2 ? tr("Опции", "Options") : tr("OK", "OK")}
-            </div>
-          ))}
-        </div>
+        <ol className="flex flex-wrap items-center gap-1.5" aria-label={tr("Шаги preflight", "Preflight steps")}>
+          {stepLabels.map((label, index) => {
+            const number = (index + 1) as RunWizardStep;
+            return (
+              <li
+                key={label}
+                aria-current={step === number ? "step" : undefined}
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-sm border px-2.5 text-2xs font-medium",
+                  step === number
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : step > number
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "border-border bg-card text-muted-foreground",
+                )}
+              >
+                {number}. {label}
+              </li>
+            );
+          })}
+        </ol>
       </div>
 
       {step === 1 ? (
-        <div className="space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Server className="h-4 w-4 text-primary" />
-                {tr("Серверы", "Servers")} ({serverIds.size})
-              </h3>
-              <div className="flex gap-1">
-                <Button
-                  size="xs"
-                  variant="outline"
-                  className="h-7"
-                  onClick={() => setServerIds(new Set(onlineIds))}
-                >
-                  {tr("Онлайн", "Online")}
-                </Button>
-                <Button size="xs" variant="outline" className="h-7" onClick={() => setServerIds(new Set())}>
-                  {tr("Сброс", "Clear")}
-                </Button>
-              </div>
-            </div>
-            <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
-              {servers.map((server) => (
-                <button
-                  key={server.id}
-                  type="button"
-                  onClick={() => toggleServer(server.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-sm border px-3 py-2.5 text-left text-xs transition-colors",
-                    serverIds.has(server.id)
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-surface-0/50 text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <ServerOsBadge kind={resolveServerOs(server)} size="sm" />
-                  <StatusIndicator status={server.status} showLabel={false} />
-                  <span className="min-w-0 flex-1 truncate font-medium">{server.name}</span>
-                  <span className="font-mono opacity-60">{server.host}</span>
-                </button>
-              ))}
-              {servers.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">{tr("Нет серверов", "No servers")}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
-            <h3 className="flex items-center gap-2 text-sm font-medium text-foreground">
-              <Layers className="h-4 w-4 text-primary" />
-              {tr("Группы", "Groups")} ({groupIds.size})
-            </h3>
-            <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
-              {groups.map((group) => (
-                <button
-                  key={group.id}
-                  type="button"
-                  onClick={() => { if (group.id != null) toggleGroup(group.id); }}
-                  className={cn(
-                    "flex w-full items-center gap-2.5 rounded-sm border px-3 py-2.5 text-left text-xs transition-colors",
-                    group.id != null && groupIds.has(group.id)
-                      ? "border-primary bg-primary/10 text-foreground"
-                      : "border-border bg-surface-0/50 text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ background: group.color || "hsl(var(--primary))" }}
-                  />
-                  <span className="min-w-0 flex-1 truncate font-medium">{group.name}</span>
-                  <span className="font-mono opacity-60">{group.server_count ?? "—"}</span>
-                </button>
-              ))}
-              {groups.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">{tr("Нет групп", "No groups")}</p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-        {hostSelectors.length > 0 ? (
-          <div className="rounded-sm border border-primary/25 bg-primary/5 p-4 shadow-elev-1 space-y-3">
-            <div>
-              <h3 className="text-sm font-medium text-foreground">{tr("Привязка hosts", "Host bindings")}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {tr(
-                  "Исходный YAML не меняется. Для каждого селектора создаётся временная группа inventory.",
-                  "The source YAML remains unchanged. A temporary inventory group is created for each selector.",
-                )}
-              </p>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              {hostSelectors.map((selector) => (
-                <label key={selector} className="space-y-1.5 rounded-sm border border-border bg-card p-3">
-                  <span className="font-mono text-xs font-medium text-foreground">hosts: {selector}</span>
-                  <select
-                    value={bindingChoice(selector)}
-                    onChange={(event) => setBindingChoices((previous) => ({ ...previous, [selector]: event.target.value }))}
-                    className="flex h-9 w-full rounded-sm border border-border bg-surface-0 px-2 text-xs text-foreground"
-                  >
-                    <option value="">{tr("Выберите цель", "Choose target")}</option>
-                    <option value="selected">{tr("Все выбранные выше", "All selected above")}</option>
-                    {groups
-                      .filter((group) => group.id != null && groupIds.has(group.id))
-                      .map((group) => (
-                        <option key={`group-${group.id}`} value={`group:${group.id}`}>
-                          {tr("Группа", "Group")}: {group.name}
-                        </option>
-                      ))}
-                    {servers
-                      .filter((server) => serverIds.has(server.id))
-                      .map((server) => (
-                        <option key={`server-${server.id}`} value={`server:${server.id}`}>
-                          {tr("Сервер", "Server")}: {server.name}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ))}
-            </div>
-            {!bindingsComplete ? (
-              <p className="text-xs text-amber-400">{tr("Привяжите каждый hosts-селектор.", "Bind every hosts selector.")}</p>
-            ) : null}
-          </div>
-        ) : null}
-        </div>
+        <RevisionRuntimeStep
+          lang={lang}
+          revisions={visibleRevisions}
+          selectedRevisionId={selectedRevisionId}
+          publishedRevisionId={publishedRevisionId}
+          capabilities={capabilities}
+          ansibleAvailable={ansibleAvailable}
+          workerReady={workerReady}
+          loading={revisionsLoading}
+          onRevisionChange={setSelectedRevisionId}
+        />
       ) : null}
 
       {step === 2 ? (
-        <div className="rounded-sm border border-border bg-card p-5 shadow-elev-1 space-y-5 max-w-xl">
-          {!ansibleAvailable ? (
-            <div className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-              {tr(
-                "Ansible не найден на backend — установите ansible-core или Docker, чтобы запускать playbook.",
-                "Ansible not found on backend — install ansible-core or Docker to run playbooks.",
-              )}
-            </div>
-          ) : null}
-          <div className="space-y-2">
-            <Label className="text-2xs uppercase tracking-wider text-muted-foreground">
-              {tr("Параллельность (forks)", "Concurrency (forks)")}
-            </Label>
-            <input
-              type="range"
-              min={1}
-              max={12}
-              value={concurrency}
-              onChange={(e) => setConcurrency(Number(e.target.value))}
-              className="w-full accent-[hsl(var(--primary))]"
-            />
-            <p className="font-mono text-sm text-foreground">{concurrency}</p>
-          </div>
-          <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-surface-0 p-3">
-            <input type="checkbox" checked={become} onChange={(e) => setBecome(e.target.checked)} className="mt-1" />
-            <div>
-              <div className="text-sm font-medium text-foreground">become (sudo)</div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {tr("Запускать задачи с привилегиями (ansible --become).", "Run with elevated privileges (ansible --become).")}
-              </p>
-            </div>
-          </label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-surface-0 p-3">
-            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} className="mt-1" />
-            <div>
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <Shield className="h-4 w-4 text-primary" />
-                {tr("Check mode / dry-run", "Check mode / dry-run")}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {tr(
-                  "ansible-playbook --check --diff: показывает изменения, ничего не меняя.",
-                  "ansible-playbook --check --diff: shows changes without applying them.",
-                )}
-              </p>
-            </div>
-          </label>
-        </div>
+        <TargetsBindingStep
+          lang={lang}
+          servers={servers}
+          groups={groups}
+          bindingProfiles={bindingProfiles}
+          selectedBindingProfileId={selectedBindingProfileId}
+          selectedServerIds={serverIds}
+          selectedGroupIds={groupIds}
+          hostSelectors={hostSelectors}
+          inventoryBindings={targetContext.inventoryBindings}
+          bindingChoices={bindingChoices}
+          onBindingProfileChange={selectBindingProfile}
+          onToggleServer={toggleServer}
+          onToggleGroup={toggleGroup}
+          onSelectOnline={() => setServerIds(new Set(onlineIds))}
+          onClearTargets={() => { setServerIds(new Set()); setGroupIds(new Set()); }}
+          onBindingChoiceChange={(selector, choice) => setBindingChoices((current) => ({ ...current, [selector]: choice }))}
+        />
       ) : null}
 
       {step === 3 ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-3">
-            <h3 className="text-sm font-medium text-foreground">{tr("Подтверждение", "Confirm")}</h3>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">{tr("Playbook", "Playbook")}</dt>
-                <dd className="font-medium text-foreground">{playbookName}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">{tr("Серверы / группы", "Servers / groups")}</dt>
-                <dd className="font-mono text-foreground">
-                  {serverIds.size} / {groupIds.size}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">{tr("Хостов после resolve", "Resolved hosts")}</dt>
-                <dd className="font-mono text-foreground">{previewLoading ? "…" : resolvedCount}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">{tr("Параллельность (forks)", "Forks")}</dt>
-                <dd className="font-mono text-foreground">{concurrency}</dd>
-              </div>
-              <div className="flex justify-between gap-4 border-b border-border/60 py-1.5">
-                <dt className="text-muted-foreground">become</dt>
-                <dd className="font-mono text-foreground">{become ? "yes" : "no"}</dd>
-              </div>
-              <div className="flex justify-between gap-4 py-1.5">
-                <dt className="text-muted-foreground">Check / dry-run</dt>
-                <dd className="font-mono text-foreground">{dryRun ? "yes" : "no"}</dd>
-              </div>
-              {hostSelectors.length > 0 ? (
-                <div className="flex justify-between gap-4 py-1.5">
-                  <dt className="text-muted-foreground">{tr("Привязки hosts", "Host bindings")}</dt>
-                  <dd className="font-mono text-foreground">{Object.keys(buildBindings()).length}/{hostSelectors.length}</dd>
-                </div>
-              ) : null}
-            </dl>
-            {(previewCompatibility.issues || []).some((issue) => issue.severity === "error") ? (
-              <p className="text-xs text-destructive">
-                {(previewCompatibility.issues || []).find((issue) => issue.severity === "error")?.message}
-              </p>
-            ) : null}
-          </div>
-          <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-2">
-            <h3 className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              Inventory preview
-            </h3>
-            <pre className="max-h-64 overflow-auto rounded-sm border border-border bg-surface-0 p-3 font-mono text-2xs text-muted-foreground whitespace-pre-wrap">
-              {previewLoading ? tr("Загрузка…", "Loading…") : inventory || tr("Пусто", "Empty")}
-            </pre>
-          </div>
-        </div>
+        <VariablesPolicyStep
+          lang={lang}
+          bindingProfile={selectedProfile}
+          extraVarsText={extraVarsText}
+          extraVarsError={extraVarsError}
+          availableVariableNames={targetContext.variableNames}
+          requiredVariableNames={requiredVariableNames}
+          policy={policy}
+          onExtraVarsChange={updateExtraVars}
+          onPolicyChange={(patch) => setPolicy((current) => ({ ...current, ...patch }))}
+        />
+      ) : null}
+
+      {step === 4 ? (
+        <ReviewValidationStep
+          lang={lang}
+          playbookName={playbookName}
+          revision={selectedRevision}
+          bindingProfile={selectedProfile}
+          context={targetContext}
+          extraVars={extraVars}
+          policy={policy}
+          validation={validation}
+          validating={validating}
+          validationError={validationError}
+          onRetry={() => void runValidation()}
+        />
       ) : null}
 
       <div className="flex items-center justify-between gap-2">
@@ -403,19 +367,27 @@ export function RunWizard({
           size="sm"
           variant="outline"
           className="h-9"
-          disabled={step === 1 || running}
-          onClick={() => setStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))}
+          disabled={step === 1 || running || validating}
+          onClick={() => setStep((current) => (current > 1 ? (current - 1) as RunWizardStep : current))}
         >
           {tr("Назад", "Back")}
         </Button>
-        {step < 3 ? (
+
+        {step < 4 ? (
           <Button
             size="sm"
             className="h-9 shadow-elev-1"
-            disabled={step === 1 && (!hasTargets || !bindingsComplete)}
-            onClick={() => setStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s))}
+            disabled={
+              (step === 1 && (!selectedRevisionId || revisionsLoading || !canValidateContext)) ||
+              (step === 2 && !targetReady) ||
+              (step === 3 && Boolean(extraVarsError))
+            }
+            onClick={() => {
+              if (step === 3) openReview();
+              else setStep((current) => (current + 1) as RunWizardStep);
+            }}
           >
-            {tr("Далее", "Next")}
+            {step === 3 ? tr("Review и validation", "Review & validate") : tr("Далее", "Next")}
           </Button>
         ) : (
           <Button
@@ -423,31 +395,40 @@ export function RunWizard({
             className="h-9 gap-1.5 px-5 shadow-elev-1"
             disabled={
               running ||
-              resolvedCount === 0 ||
-              !ansibleAvailable ||
-              !bindingsComplete ||
-              (previewCompatibility.issues || []).some((issue) => issue.severity === "error")
+              validating ||
+              validation?.status !== "ready" ||
+              !runtimeReady ||
+              !capabilities.can_run
             }
-            onClick={() =>
-              onConfirm({
-                server_ids: Array.from(serverIds),
-                group_ids: Array.from(groupIds),
-                concurrency,
-                dry_run: dryRun,
-                become,
-                inventory_bindings: buildBindings(),
-              })
-            }
+            onClick={confirmRun}
           >
-            <Play className="h-3.5 w-3.5" />
+            {running || validating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             {running
               ? tr("Запуск…", "Starting…")
-              : dryRun
-                ? tr("Dry-run", "Dry-run")
-                : tr(`Запустить на ${resolvedCount || "…"}`, `Run on ${resolvedCount || "…"}`)}
+              : policy.dryRun
+                ? tr("Запустить dry-run", "Start dry-run")
+                : tr("Запустить validated revision", "Run validated revision")}
           </Button>
         )}
       </div>
     </section>
   );
+}
+
+function toggledSet(previous: Set<number>, value: number): Set<number> {
+  const next = new Set(previous);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
+}
+
+function policyFromProfile(profile: PlaybookBindingProfile): RunPolicyOptions {
+  return {
+    concurrency: Math.max(1, Math.min(Number(profile.options.concurrency) || 4, 12)),
+    dryRun: Boolean(profile.options.dry_run),
+    become: profile.options.become ?? true,
+    tags: profile.options.tags || "",
+    skipTags: profile.options.skip_tags || "",
+    limit: profile.options.limit || "",
+  };
 }

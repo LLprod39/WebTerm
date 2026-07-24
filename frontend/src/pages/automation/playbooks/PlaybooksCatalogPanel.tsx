@@ -1,4 +1,7 @@
+import { useState } from "react";
 import {
+  AlertTriangle,
+  Archive,
   BookOpen,
   History,
   Plus,
@@ -7,12 +10,14 @@ import {
   Wand2,
 } from "lucide-react";
 
+import { isSupportedPlaybookBundleFile } from "@/api/playbook-bundles";
 import type { PlaybookCategory, PlaybookRun, PlaybookSummary, PlaybookTemplate } from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn, relativeTime } from "@/lib/utils";
 import { PlaybookCard } from "../PlaybookCard";
 import { CATEGORIES, CATEGORY_META, RUN_STATUS_META } from "../constants";
+import { PlaybookBundleImportDialog } from "./PlaybookBundleImportDialog";
 
 export interface PlaybooksCatalogPanelProps {
   lang: string;
@@ -21,6 +26,7 @@ export interface PlaybooksCatalogPanelProps {
   templates: PlaybookTemplate[];
   recentRuns: PlaybookRun[];
   playbooksLoading: boolean;
+  playbooksError: string;
   search: string;
   setSearch: (v: string) => void;
   categoryFilter: PlaybookCategory | "all";
@@ -30,6 +36,7 @@ export interface PlaybooksCatalogPanelProps {
   ansible: { available?: boolean; method?: string; version?: string; message?: string } | undefined;
   ansibleAvailable: boolean;
   onRefreshRuns: () => void;
+  onRetryPlaybooks: () => void;
   onImportClick: () => void;
   onImportFile: (file: File) => void;
   onOpenNew: () => void;
@@ -49,6 +56,7 @@ export function PlaybooksCatalogPanel({
   templates,
   recentRuns,
   playbooksLoading,
+  playbooksError,
   search,
   setSearch,
   categoryFilter,
@@ -58,6 +66,7 @@ export function PlaybooksCatalogPanel({
   ansible,
   ansibleAvailable,
   onRefreshRuns,
+  onRetryPlaybooks,
   onImportClick,
   onImportFile,
   onOpenNew,
@@ -69,8 +78,30 @@ export function PlaybooksCatalogPanel({
   onDelete,
   onOpenRun,
 }: PlaybooksCatalogPanelProps) {
+  const [bundleImportOpen, setBundleImportOpen] = useState(false);
+  const [bundleImportFile, setBundleImportFile] = useState<File | null>(null);
+  const importDroppedFile = (file: File) => {
+    if (isSupportedPlaybookBundleFile(file)) {
+      setBundleImportFile(file);
+      setBundleImportOpen(true);
+      return;
+    }
+    onImportFile(file);
+  };
+
   return (
     <>
+      <PlaybookBundleImportDialog
+        open={bundleImportOpen}
+        onOpenChange={(open) => {
+          setBundleImportOpen(open);
+          if (!open) setBundleImportFile(null);
+        }}
+        lang={lang}
+        initialFile={bundleImportFile}
+        onOpenPlaybook={onOpenEdit}
+      />
+
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -123,7 +154,19 @@ export function PlaybooksCatalogPanel({
             onClick={onImportClick}
           >
             <Upload className="h-3.5 w-3.5" />
-            {tr("Импорт", "Import")}
+            {tr("YAML", "YAML")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setBundleImportFile(null);
+              setBundleImportOpen(true);
+            }}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            {tr("Импорт проекта", "Import project")}
           </Button>
           <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
           <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onOpenGuided}>
@@ -257,7 +300,18 @@ export function PlaybooksCatalogPanel({
       ) : null}
 
       {/* Drop zone + list */}
-      {playbooksLoading ? (
+      {playbooksError ? (
+        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-6 py-8 text-center" role="alert">
+          <AlertTriangle className="mx-auto h-7 w-7 text-destructive" />
+          <p className="mt-3 text-sm font-semibold text-foreground">
+            {tr("Не удалось загрузить playbooks", "Failed to load playbooks")}
+          </p>
+          <p className="mx-auto mt-1 max-w-xl text-xs text-muted-foreground">{playbooksError}</p>
+          <Button size="sm" variant="outline" className="mt-4" onClick={onRetryPlaybooks}>
+            {tr("Повторить", "Retry")}
+          </Button>
+        </div>
+      ) : playbooksLoading ? (
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
           {[0, 1, 2].map((i) => (
             <div key={i} className="h-40 animate-pulse rounded-md border border-border/60 bg-card/60" />
@@ -270,7 +324,7 @@ export function PlaybooksCatalogPanel({
           onDrop={(e) => {
             e.preventDefault();
             const file = e.dataTransfer.files[0];
-            if (file) void onImportFile(file);
+            if (file) importDroppedFile(file);
           }}
         >
           {search.trim() || categoryFilter !== "all" ? (
@@ -319,6 +373,18 @@ export function PlaybooksCatalogPanel({
                   <Upload className="h-3.5 w-3.5" />
                   {tr("Импорт YAML", "Import YAML")}
                 </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1"
+                  onClick={() => {
+                    setBundleImportFile(null);
+                    setBundleImportOpen(true);
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  {tr("Импорт проекта", "Import project")}
+                </Button>
               </div>
             </>
           )}
@@ -330,7 +396,7 @@ export function PlaybooksCatalogPanel({
           onDrop={(e) => {
             e.preventDefault();
             const file = e.dataTransfer.files[0];
-            if (file) void onImportFile(file);
+            if (file) importDroppedFile(file);
           }}
         >
           {playbooks.map((pb) => (

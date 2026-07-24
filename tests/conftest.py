@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest_plugins = ("tests.playbook_workspace_support",)
+
 _RELEASE_EVIDENCE_TEST_MODULES = frozenset(
     {
         "test_kubernetes_ops_release_evidence.py",

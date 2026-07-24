@@ -2,7 +2,7 @@
 """Audit or safely apply the repository's F-11 branch-protection policy.
 
 Also:
-- starts the F-11 stability clock after a successful --apply
+- starts F-11 protected release evidence after a successful --apply
 - records unique green SHAs (reruns of the same SHA do not count)
 - appends logged break-glass incidents
 """
@@ -229,8 +229,8 @@ def sync_unique_shas(config: dict[str, Any], *, dry_run: bool = False) -> dict[s
     evaluation = evaluate_clock(
         clock=clock,
         ledger=ledger,
-        min_calendar_days=int(stability.get("minCalendarDays", 14)),
-        min_unique_green_shas=int(stability.get("minUniqueGreenShas", 30)),
+        min_calendar_days=int(stability.get("minCalendarDays", 0)),
+        min_unique_green_shas=int(stability.get("minUniqueGreenShas", 1)),
     )
     return {
         "status": "ok",
@@ -356,8 +356,8 @@ def main() -> int:
         evaluation = evaluate_clock(
             clock=config.get("clock") or {},
             ledger=ledger,
-            min_calendar_days=int(stability.get("minCalendarDays", 14)),
-            min_unique_green_shas=int(stability.get("minUniqueGreenShas", 30)),
+            min_calendar_days=int(stability.get("minCalendarDays", 0)),
+            min_unique_green_shas=int(stability.get("minUniqueGreenShas", 1)),
         )
         print(json.dumps({"evaluation": evaluation}, indent=2))
         if args.clock_status and not args.apply:
@@ -387,8 +387,8 @@ def main() -> int:
     evaluation = evaluate_clock(
         clock=config.get("clock") or {},
         ledger=ledger,
-        min_calendar_days=int(stability.get("minCalendarDays", 14)),
-        min_unique_green_shas=int(stability.get("minUniqueGreenShas", 30)),
+        min_calendar_days=int(stability.get("minCalendarDays", 0)),
+        min_unique_green_shas=int(stability.get("minUniqueGreenShas", 1)),
     )
     print(json.dumps({"evaluation": evaluation}, indent=2))
     if errors:

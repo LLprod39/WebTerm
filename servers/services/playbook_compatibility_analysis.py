@@ -7,6 +7,8 @@ import json
 import re
 from typing import Any
 
+from servers.services.playbooks.controller_policy import analyze_playbook_controller_policy
+
 _TASK_META_KEYS = {
     "name",
     "when",
@@ -39,7 +41,7 @@ _TASK_META_KEYS = {
     "listen",
     "collections",
 }
-_PROTECTED_TASK_META = tuple(sorted(_TASK_META_KEYS - {"name", "vars", "environment", "no_log"}))
+_PROTECTED_TASK_META = tuple(sorted(_TASK_META_KEYS - {"name"}))
 _PLAY_CONTROL_KEYS = (
     "any_errors_fatal",
     "become",
@@ -50,6 +52,14 @@ _PLAY_CONTROL_KEYS = (
     "order",
     "serial",
     "strategy",
+)
+_PLAY_CONTEXT_KEYS = (
+    "collections",
+    "environment",
+    "module_defaults",
+    "no_log",
+    "vars",
+    "vars_files",
 )
 _HOST_TOKEN_RE = re.compile(r"[A-Za-z0-9_.-]+")
 _JINJA_VAR_RE = re.compile(r"{{\s*([A-Za-z_][A-Za-z0-9_.]*)")
@@ -72,7 +82,7 @@ _BUILTIN_VARS = {
     "query",
     "role_path",
 }
-COMPATIBILITY_ANALYZER_VERSION = 2
+COMPATIBILITY_ANALYZER_VERSION = 3
 
 
 def _load_yaml(source_yaml: str) -> list[dict[str, Any]]:
@@ -146,6 +156,7 @@ def build_semantic_manifest(source_yaml: str) -> dict[str, Any]:
     for play in plays:
         protected: dict[str, Any] = {
             "controls": {key: _canonical(play[key]) for key in _PLAY_CONTROL_KEYS if key in play},
+            "context": {key: _canonical(play[key]) for key in _PLAY_CONTEXT_KEYS if key in play},
             "roles": _canonical(play.get("roles") or []),
         }
         for section in ("pre_tasks", "tasks", "post_tasks", "handlers"):
@@ -270,6 +281,7 @@ def analyze_playbook_compatibility(
                 secret_path,
             )
         )
+    issues.extend(analyze_playbook_controller_policy(plays))
 
     for play in plays:
         play_selectors, pattern = _host_tokens(play.get("hosts"))

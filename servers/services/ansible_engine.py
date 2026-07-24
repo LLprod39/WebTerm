@@ -1,12 +1,4 @@
-"""Real Ansible execution engine for WebTerm playbooks.
-
-Uses ansible-playbook via:
-1) native binary on PATH
-2) WSL (Windows)
-3) Docker image (fallback)
-
-Inventory and credentials are written to a temporary workdir and cleaned up after run.
-"""
+"""Execute WebTerm playbooks through the detected native, WSL, or isolated Docker runtime."""
 
 from __future__ import annotations
 
@@ -17,10 +9,17 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
-from collections.abc import Callable
-from pathlib import Path
+from collections.abc import Callable, Mapping
 from typing import Any
+
+from app.core.redacted_logging import redacted_log_text
+from servers.services.ansible_docker_runtime import (
+    AnsibleIsolationError,
+    AnsibleRuntimeIdentity,
+    build_isolated_docker_command,
+    cleanup_ansible_runtime_job,
+    create_ansible_workdir,
+)
 
 # ansible_engine.py is the public facade. Helpers live in sibling modules
 # (split out to keep each under the architecture size limit) and are re-exported
@@ -34,6 +33,7 @@ from servers.services.ansible_output import (
     parse_play_recap,
     shlex_quote,
 )
+from servers.services.ansible_project import materialize_ansible_project
 from servers.services.ansible_recipes import GUIDED_RECIPES, generate_from_recipe, list_guided_recipes
 from servers.services.ansible_setup import (
     FALLBACK_ANSIBLE_IMAGE,
@@ -75,6 +75,25 @@ ANSIBLE_TIMEOUT_SEC = int(os.environ.get("WEBTERM_ANSIBLE_TIMEOUT", "1800"))
 # We use the default callback + PLAY RECAP parsing (always available).
 
 
+def _runtime_secret_values(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        return [item for nested in value.values() for item in _runtime_secret_values(nested)]
+    if isinstance(value, (list, tuple, set)):
+        return [item for nested in value for item in _runtime_secret_values(nested)]
+    if isinstance(value, str) and len(value) >= 3:
+        return [value]
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and len(str(value)) >= 3:
+        return [str(value)]
+    return []
+
+
+def _redact_runtime_output(value: object, secrets: list[str]) -> str:
+    text = redacted_log_text(value)
+    for secret in sorted(set(secrets), key=len, reverse=True):
+        text = text.replace(secret, "[REDACTED]")
+    return text
+
+
 def run_ansible_playbook(
     *,
     playbook_yaml: str,
@@ -82,6 +101,7 @@ def run_ansible_playbook(
     dry_run: bool = False,
     become: bool = True,
     tags: str = "",
+    skip_tags: str = "",
     limit: str = "",
     extra_vars: dict[str, Any] | None = None,
     master_password: str = "",
@@ -89,6 +109,9 @@ def run_ansible_playbook(
     cancel_check=None,
     progress_callback: Callable[[dict[str, Any]], None] | None = None,
     inventory_binding_groups: dict[str, list[int]] | None = None,
+    project_files: Mapping[str, bytes] | None = None,
+    project_entrypoint: str = "playbook.yml",
+    runtime_identity: AnsibleRuntimeIdentity | None = None,
 ) -> dict[str, Any]:
     """Execute ansible-playbook and return structured host results.
 
@@ -106,6 +129,9 @@ def run_ansible_playbook(
         error: str,
       }
     """
+    runtime_secrets = _runtime_secret_values(extra_vars)
+    if master_password and len(master_password) >= 3:
+        runtime_secrets.append(master_password)
     detection = detect_ansible()
     if not detection.get("available"):
         return {
@@ -120,16 +146,48 @@ def run_ansible_playbook(
             "command": "",
             "error": detection.get("message") or "Ansible is not available",
         }
+    if detection.get("isolation_required") and runtime_identity is None:
+        return {
+            "ok": False,
+            "method": "docker",
+            "raw_stdout": "",
+            "raw_stderr": "",
+            "exit_code": 126,
+            "host_results": [],
+            "summary": {},
+            "inventory_preview": "",
+            "command": "",
+            "error": "Isolated Ansible execution requires a durable run/dispatch/attempt identity",
+        }
 
-    workdir = Path(tempfile.mkdtemp(prefix="webterm_ansible_"))
+    workdir = create_ansible_workdir(runtime_identity)
     try:
-        pb_path = workdir / "playbook.yml"
-        pb_path.write_text(playbook_yaml, encoding="utf-8")
+        try:
+            entrypoint = materialize_ansible_project(
+                workdir,
+                playbook_yaml=playbook_yaml,
+                project_files=project_files,
+                entrypoint=project_entrypoint,
+            )
+        except ValueError as exc:
+            return {
+                "ok": False,
+                "method": "none",
+                "raw_stdout": "",
+                "raw_stderr": "",
+                "exit_code": 2,
+                "host_results": [],
+                "summary": {},
+                "inventory_preview": "",
+                "command": "",
+                "error": str(exc)[:1000],
+            }
         inv_path, _cleanup_keys = _write_inventory(
             workdir,
             servers,
             master_password=master_password,
             binding_groups=inventory_binding_groups,
+            secret_collector=runtime_secrets,
         )
         _build_ansible_cfg(workdir)
 
@@ -145,7 +203,7 @@ def run_ansible_playbook(
             "ansible-playbook",
             "-i",
             "inventory.ini",
-            "playbook.yml",
+            entrypoint,
             "-f",
             str(max(1, min(int(forks or 5), 25))),
         ]
@@ -156,6 +214,8 @@ def run_ansible_playbook(
             ansible_args.append("--become")
         if tags.strip():
             ansible_args.extend(["--tags", tags.strip()])
+        if skip_tags.strip():
+            ansible_args.extend(["--skip-tags", skip_tags.strip()])
         if limit.strip():
             ansible_args.extend(["--limit", limit.strip()])
         if extra_vars:
@@ -166,7 +226,7 @@ def run_ansible_playbook(
         method = detection["method"]
         env = os.environ.copy()
         env["ANSIBLE_CONFIG"] = str(workdir / "ansible.cfg")
-        env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
+        env.pop("ANSIBLE_HOST_KEY_CHECKING", None)
         # Never set ANSIBLE_STDOUT_CALLBACK=json (breaks ansible-core without ansible.posix)
         env.pop("ANSIBLE_STDOUT_CALLBACK", None)
         env["ANSIBLE_FORCE_COLOR"] = "0"
@@ -184,13 +244,17 @@ def run_ansible_playbook(
                 "-e",
                 "bash",
                 "-lc",
-                f"cd {shlex_quote(wsl_dir)} && ANSIBLE_HOST_KEY_CHECKING=False ANSIBLE_FORCE_COLOR=0 "
+                f"cd {shlex_quote(wsl_dir)} && ANSIBLE_FORCE_COLOR=0 "
                 f"ANSIBLE_CONFIG=./ansible.cfg " + " ".join(shlex_quote(a) for a in ansible_args),
             ]
             cwd = None
         else:  # docker ad-hoc (no long-running agent)
             docker = detection["binary"]
-            image, ready = resolve_docker_ansible_image(docker)
+            if detection.get("isolation_required"):
+                image = str(detection.get("image_id") or "")
+                ready = bool(image and detection.get("image_ready"))
+            else:
+                image, ready = resolve_docker_ansible_image(docker)
             docker_image_used = image
             if not ready:
                 # Try pull only for non-local tags; for webterm-ansible ask to build
@@ -232,39 +296,27 @@ def run_ansible_playbook(
                         "error": f"Failed to pull Ansible image {image}",
                     }
 
-            workdir_mount = str(workdir.resolve())
-            cmd = [docker, "run", "--rm"]
-            # host network: Linux only (Docker Desktop on Windows/macOS does not support it well)
-            use_host_net = os.environ.get("WEBTERM_ANSIBLE_DOCKER_HOST_NETWORK", "").lower() in (
-                "1",
-                "true",
-                "yes",
-            )
-            if use_host_net or (os.name == "posix" and not os.environ.get("WEBTERM_ANSIBLE_DOCKER_BRIDGE")):
-                try:
-                    release = os.uname().release.lower() if hasattr(os, "uname") else ""
-                except Exception:
-                    release = ""
-                if os.name == "posix" and (use_host_net or ("microsoft" not in release and "wsl" not in release)):
-                    cmd.extend(["--network", "host"])
-            cmd.extend(
-                [
-                    "-v",
-                    f"{workdir_mount}:/ansible:rw",
-                    "-w",
-                    "/ansible",
-                    "-e",
-                    "ANSIBLE_HOST_KEY_CHECKING=False",
-                    "-e",
-                    "ANSIBLE_FORCE_COLOR=0",
-                    "-e",
-                    "ANSIBLE_NOCOLOR=1",
-                    "-e",
-                    "ANSIBLE_CONFIG=/ansible/ansible.cfg",
-                    image,
-                    *ansible_args,
-                ]
-            )
+            try:
+                cmd = build_isolated_docker_command(
+                    docker=docker,
+                    image=image,
+                    workdir=workdir,
+                    ansible_args=ansible_args,
+                    runtime_identity=runtime_identity,
+                )
+            except AnsibleIsolationError as exc:
+                return {
+                    "ok": False,
+                    "method": "docker",
+                    "raw_stdout": "",
+                    "raw_stderr": "",
+                    "exit_code": 126,
+                    "host_results": [],
+                    "summary": {},
+                    "inventory_preview": inv_preview_safe,
+                    "command": "",
+                    "error": str(exc),
+                }
             cwd = None
 
         if cancel_check and cancel_check():
@@ -284,11 +336,12 @@ def run_ansible_playbook(
         live_parser = AnsibleLiveParser(servers, tasks_total=estimate_total_tasks(playbook_yaml))
 
         def _on_line(line: str) -> None:
-            live_parser.feed(line)
+            safe_line = _redact_runtime_output(line, runtime_secrets)
+            live_parser.feed(safe_line)
             if progress_callback:
                 progress_callback(
                     {
-                        "line": line,
+                        "line": safe_line,
                         "progress": live_parser.snapshot(),
                         "host_results": live_parser.build_host_results(),
                     }
@@ -302,6 +355,7 @@ def run_ansible_playbook(
             cancel_check=cancel_check,
             on_line=_on_line,
         )
+        combined = _redact_runtime_output(combined, runtime_secrets)
         stdout = combined
         stderr = ""
 
@@ -419,20 +473,24 @@ def run_ansible_playbook(
             "error": f"Ansible timed out after {ANSIBLE_TIMEOUT_SEC}s",
         }
     except Exception as exc:
-        logger.exception("Ansible execution failed")
+        safe_error = _redact_runtime_output(exc, runtime_secrets)
+        logger.error("Ansible execution failed: %s", safe_error)
         return {
             "ok": False,
             "method": detection.get("method") or "unknown",
             "raw_stdout": "",
-            "raw_stderr": str(exc),
+            "raw_stderr": safe_error,
             "exit_code": 1,
             "host_results": [],
             "summary": {},
             "inventory_preview": "",
             "command": "",
-            "error": str(exc),
+            "error": safe_error,
         }
     finally:
+        if runtime_identity is not None and detection.get("method") == "docker":
+            with contextlib.suppress(Exception):
+                cleanup_ansible_runtime_job(runtime_identity, docker=str(detection.get("binary") or "docker"))
         with contextlib.suppress(Exception):
             shutil.rmtree(workdir, ignore_errors=True)
 

@@ -7,6 +7,8 @@ import re
 import uuid
 from typing import Any
 
+from servers.services.playbook_inventory_identity import inventory_host_alias
+
 
 def _task_id() -> str:
     return f"t_{uuid.uuid4().hex[:12]}"
@@ -317,7 +319,7 @@ def build_inventory_ini(servers: list[dict[str, Any]], groups: dict[str, list[in
     lines.append("[all]")
     for s in servers:
         host = str(s.get("host") or "")
-        name = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", str(s.get("name") or f"server_{s.get('id')}"))
+        name = inventory_host_alias(str(s.get("name") or ""), int(s.get("id") or 0))
         user = str(s.get("username") or "")
         port = int(s.get("port") or 22)
         line = f"{name} ansible_host={host} ansible_port={port}"
@@ -330,7 +332,7 @@ def build_inventory_ini(servers: list[dict[str, Any]], groups: dict[str, list[in
     lines.append("")
 
     id_to_name = {
-        int(s["id"]): re.sub(r"[^a-zA-Z0-9_\-\.]", "_", str(s.get("name") or f"server_{s['id']}"))
+        int(s["id"]): inventory_host_alias(str(s.get("name") or ""), int(s["id"]))
         for s in servers
         if s.get("id") is not None
     }

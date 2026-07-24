@@ -18,19 +18,17 @@ from pathlib import Path
 from typing import Any
 
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
+from servers.services.ansible_docker_runtime import isolated_execution_required
+from servers.services.playbook_inventory_identity import (
+    inventory_host_alias as _safe_host_name,
+)
+from servers.ssh_host_keys import get_server_trusted_host_keys, parse_server_host_port
 
 logger = logging.getLogger(__name__)
 
 # Prefer project image (built via docker/ansible-runner). Override with WEBTERM_ANSIBLE_IMAGE.
 LOCAL_ANSIBLE_IMAGE = os.environ.get("WEBTERM_ANSIBLE_IMAGE_LOCAL", "webterm-ansible:latest")
 FALLBACK_ANSIBLE_IMAGE = os.environ.get("WEBTERM_ANSIBLE_IMAGE_FALLBACK", "cytopia/ansible:latest-tools")
-
-
-def _safe_host_name(name: str, server_id: int) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", (name or "").strip()) or f"server_{server_id}"
-    if cleaned[0].isdigit():
-        cleaned = f"h_{cleaned}"
-    return cleaned[:64]
 
 
 def _docker_image_exists(docker: str, image: str) -> bool:
@@ -45,6 +43,94 @@ def _docker_image_exists(docker: str, image: str) -> bool:
         return proc.returncode == 0
     except Exception:
         return False
+
+
+def _valid_image_reference(image: str) -> bool:
+    return bool(image and len(image) <= 512 and not image.startswith("-") and not any(char.isspace() for char in image))
+
+
+def _inspect_docker_image(docker: str, image: str) -> dict[str, Any] | None:
+    if not _valid_image_reference(image):
+        return None
+    try:
+        result = subprocess.run(
+            [docker, "image", "inspect", image],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=False,
+        )
+        document = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    if not isinstance(document, list) or len(document) != 1 or not isinstance(document[0], dict):
+        return None
+    return document[0]
+
+
+def _probe_image_runtime_metadata(docker: str, image_id: str) -> dict[str, Any] | None:
+    try:
+        result = subprocess.run(
+            [
+                docker,
+                "run",
+                "--rm",
+                "--pull=never",
+                "--network=none",
+                "--read-only",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges:true",
+                "--pids-limit=32",
+                "--memory=128m",
+                "--cpus=0.25",
+                "--user=10001:10001",
+                "--entrypoint=python",
+                image_id,
+                "-B",
+                "/opt/webterm/runtime_metadata.py",
+                "--print",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        document = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    digest = document.get("runtime_digest") if isinstance(document, dict) else None
+    return document if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
+
+
+def resolve_isolated_docker_image(docker: str) -> dict[str, Any]:
+    """Resolve one configured image to an immutable ID plus its signed-by-content manifest."""
+
+    image = (os.environ.get("WEBTERM_ANSIBLE_IMAGE") or LOCAL_ANSIBLE_IMAGE).strip()
+    inspected = _inspect_docker_image(docker, image)
+    image_id = str(inspected.get("Id") or "") if inspected else ""
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", image_id):
+        return {
+            "available": False,
+            "image": image,
+            "image_id": "",
+            "message": f"Configured isolated Ansible image '{image}' is not available",
+        }
+    runtime = _probe_image_runtime_metadata(docker, image_id)
+    if runtime is None:
+        return {
+            "available": False,
+            "image": image,
+            "image_id": image_id,
+            "message": f"Configured Ansible image '{image}' has no valid runtime manifest; rebuild it",
+        }
+    return {
+        "available": True,
+        "image": image,
+        "image_id": image_id,
+        "runtime_metadata": runtime,
+        "runtime_digest": runtime["runtime_digest"],
+        "message": f"Isolated Ansible image ready: {image} ({image_id[:19]})",
+    }
 
 
 def resolve_docker_ansible_image(docker: str | None = None) -> tuple[str, bool]:
@@ -72,6 +158,32 @@ def resolve_docker_ansible_image(docker: str | None = None) -> tuple[str, bool]:
 
 def detect_ansible() -> dict[str, Any]:
     """Discover how (if) ansible-playbook can be run on this host."""
+    require_isolated = isolated_execution_required()
+    if require_isolated:
+        docker = shutil.which("docker")
+        if docker:
+            resolved = resolve_isolated_docker_image(docker)
+            return {
+                "available": bool(resolved["available"]),
+                "method": "docker" if resolved["available"] else "none",
+                "binary": docker,
+                "version": f"docker:{resolved.get('image_id') or resolved['image']}",
+                "message": resolved["message"],
+                "image": resolved["image"],
+                "image_id": resolved.get("image_id") or "",
+                "image_ready": bool(resolved["available"]),
+                "runtime_metadata": resolved.get("runtime_metadata") or {},
+                "runtime_digest": resolved.get("runtime_digest") or "",
+                "isolation_required": True,
+            }
+        return {
+            "available": False,
+            "method": "none",
+            "binary": "",
+            "version": "",
+            "message": "Isolated Ansible execution requires Docker",
+            "isolation_required": True,
+        }
     executable_name = "ansible-playbook.exe" if os.name == "nt" else "ansible-playbook"
     venv_candidate = Path(sys.executable).with_name(executable_name)
     native = str(venv_candidate) if venv_candidate.exists() else shutil.which("ansible-playbook")
@@ -138,7 +250,7 @@ def detect_ansible() -> dict[str, Any]:
         "message": (
             "Ansible not found. Options: (1) pip install ansible-core  "
             f"(2) build Docker runner: docker build -t {LOCAL_ANSIBLE_IMAGE} -f docker/ansible-runner/Dockerfile .  "
-            "(3) WSL with ansible-playbook. Shell fallback remains available."
+            "(3) WSL with ansible-playbook. Command runbooks can use explicit shell execution."
         ),
     }
 
@@ -215,6 +327,7 @@ def _write_inventory(
     *,
     master_password: str = "",
     binding_groups: dict[str, list[int]] | None = None,
+    secret_collector: list[str] | None = None,
 ) -> tuple[Path, list[Path]]:
     """Write inventory.ini + optional key files. Returns (inventory_path, cleanup_paths)."""
     inv_path = workdir / "inventory.ini"
@@ -226,12 +339,32 @@ def _write_inventory(
     ]
     groups: dict[str, list[str]] = {}
     binding_groups = binding_groups or {}
+    known_hosts_path = workdir / "known_hosts"
+    known_hosts_lines: list[str] = []
+    known_hosts_seen: set[str] = set()
 
     for server in servers:
         host_alias = _safe_host_name(getattr(server, "name", ""), int(server.id))
-        host = str(server.host)
-        port = int(server.port or 22)
+        host, port = parse_server_host_port(server)
         user = str(server.username or "root")
+        try:
+            trusted_host_keys = get_server_trusted_host_keys(server)
+        except Exception:
+            trusted_host_keys = []
+        host_patterns = [f"[{host.strip('[]')}]:{port}"]
+        if port == 22:
+            host_patterns.insert(0, host.strip("[]"))
+        for record in trusted_host_keys:
+            public_key = str(record.get("public_key") or "").strip()
+            for pattern in host_patterns:
+                line = f"{pattern} {public_key}".strip()
+                if public_key and line not in known_hosts_seen:
+                    known_hosts_seen.add(line)
+                    known_hosts_lines.append(line)
+        ssh_options = [
+            "-o UserKnownHostsFile=known_hosts",
+            f"-o StrictHostKeyChecking={'yes' if trusted_host_keys else 'accept-new'}",
+        ]
         parts = [
             host_alias,
             f"ansible_host={host}",
@@ -240,7 +373,7 @@ def _write_inventory(
             "ansible_connection=ssh",
             "ansible_python_interpreter=auto_silent",
             f"wt_server_id={server.id}",
-            f"wt_server_name={json.dumps(server.name)[1:-1]}",
+            f"wt_server_name={json.dumps(str(server.name), ensure_ascii=False)}",
         ]
 
         auth_method = getattr(server, "auth_method", "password") or "password"
@@ -259,6 +392,8 @@ def _write_inventory(
                 try:
                     passphrase = get_server_auth_secret(server, master_password=master_password, fallback_plain="")
                     if passphrase:
+                        if secret_collector is not None and len(passphrase) >= 3:
+                            secret_collector.append(passphrase)
                         # ssh-key with passphrase needs ssh-agent; store for advanced users in host vars comment
                         parts.append(f"ansible_ssh_passphrase={_ini_escape(passphrase)}")
                 except Exception:
@@ -269,10 +404,10 @@ def _write_inventory(
             except Exception:
                 password = ""
             if password:
+                if secret_collector is not None and len(password) >= 3:
+                    secret_collector.append(password)
                 parts.append(f"ansible_ssh_pass={_ini_escape(password)}")
-                parts.append(
-                    "ansible_ssh_common_args='-o PreferredAuthentications=password -o PubkeyAuthentication=no'"
-                )
+                ssh_options.extend(["-o PreferredAuthentications=password", "-o PubkeyAuthentication=no"])
 
         # sudo / become password
         try:
@@ -280,7 +415,11 @@ def _write_inventory(
         except Exception:
             sudo_pw = ""
         if sudo_pw:
+            if secret_collector is not None and len(sudo_pw) >= 3:
+                secret_collector.append(sudo_pw)
             parts.append(f"ansible_become_password={_ini_escape(sudo_pw)}")
+        ssh_args = " ".join(ssh_options)
+        parts.append(f"ansible_ssh_common_args='{ssh_args}'")
 
         lines.append(" ".join(parts))
 
@@ -298,13 +437,13 @@ def _write_inventory(
         lines.extend(members)
         lines.append("")
 
-    lines.extend(
-        [
-            "[all:vars]",
-            "ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'",
-            "",
-        ]
+    lines.extend(["[all:vars]", ""])
+    known_hosts_path.write_text(
+        "\n".join(known_hosts_lines) + ("\n" if known_hosts_lines else ""),
+        encoding="utf-8",
     )
+    with contextlib.suppress(OSError):
+        os.chmod(known_hosts_path, 0o600)
     inv_path.write_text("\n".join(lines), encoding="utf-8")
     return inv_path, cleanup
 
@@ -321,7 +460,7 @@ def _build_ansible_cfg(workdir: Path) -> Path:
         "\n".join(
             [
                 "[defaults]",
-                "host_key_checking = False",
+                "host_key_checking = True",
                 "retry_files_enabled = False",
                 # Built-in callbacks only — avoid 'Could not load json callback plugin'
                 "stdout_callback = default",
@@ -334,7 +473,7 @@ def _build_ansible_cfg(workdir: Path) -> Path:
                 "",
                 "[ssh_connection]",
                 "pipelining = True",
-                "ssh_args = -o ControlMaster=auto -o ControlPersist=60s -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
+                "ssh_args = -o ControlMaster=auto -o ControlPersist=60s",
                 "",
             ]
         ),

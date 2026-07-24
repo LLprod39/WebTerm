@@ -1,4 +1,4 @@
-import { Copy, Pencil, Play, Trash2 } from "lucide-react";
+import { Copy, Eye, Pencil, Play, Trash2 } from "lucide-react";
 import type { PlaybookSummary } from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
 import { cn, relativeTime } from "@/lib/utils";
@@ -19,6 +19,10 @@ export function PlaybookCard({ playbook, lang, onOpen, onRun, onDuplicate, onDel
   const lastStatus = (playbook.last_run_status || "") as PlaybookRunStatus;
   const statusMeta = lastStatus ? RUN_STATUS_META[lastStatus] : null;
   const ru = lang === "ru";
+  const canEdit = playbook.capabilities?.can_edit ?? true;
+  const canRun = playbook.capabilities?.can_run ?? true;
+  const canDuplicate = playbook.capabilities?.can_export ?? true;
+  const canDelete = playbook.capabilities?.can_delete ?? true;
 
   return (
     <article
@@ -77,36 +81,42 @@ export function PlaybookCard({ playbook, lang, onOpen, onRun, onDuplicate, onDel
               variant="ghost"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={onOpen}
-              aria-label={ru ? "Редактировать" : "Edit"}
-              title={ru ? "Редактировать" : "Edit"}
+              aria-label={canEdit ? (ru ? "Редактировать" : "Edit") : (ru ? "Просмотреть" : "View")}
+              title={canEdit ? (ru ? "Редактировать" : "Edit") : (ru ? "Просмотреть" : "View")}
             >
-              <Pencil className="h-3.5 w-3.5" />
+              {canEdit ? <Pencil className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
             </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onDuplicate}
-              aria-label={ru ? "Дублировать" : "Duplicate"}
-              title={ru ? "Дублировать" : "Duplicate"}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={onDelete}
-              aria-label={ru ? "Удалить" : "Delete"}
-              title={ru ? "Удалить" : "Delete"}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {canDuplicate ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={onDuplicate}
+                aria-label={ru ? "Дублировать" : "Duplicate"}
+                title={ru ? "Дублировать" : "Duplicate"}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                onClick={onDelete}
+                aria-label={ru ? "Удалить" : "Delete"}
+                title={ru ? "Удалить" : "Delete"}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
           </div>
-          <Button size="sm" className="h-8 gap-1.5 px-3 shadow-elev-1" onClick={onRun}>
-            <Play className="h-3.5 w-3.5" />
-            {ru ? "Запустить" : "Run"}
-          </Button>
+          {canRun ? (
+            <Button size="sm" className="h-8 gap-1.5 px-3 shadow-elev-1" onClick={onRun}>
+              <Play className="h-3.5 w-3.5" />
+              {ru ? "Запустить" : "Run"}
+            </Button>
+          ) : null}
         </div>
       </div>
     </article>

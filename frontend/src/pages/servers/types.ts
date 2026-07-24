@@ -57,7 +57,7 @@ export interface KnowledgeCategoryOption {
 }
 
 export type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
-export type MainTab = "servers" | "groups" | "rules" | "playbook";
+export type MainTab = "servers" | "groups" | "rules";
 
 export interface PlaybookTask {
   id: string;

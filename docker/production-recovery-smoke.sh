@@ -209,9 +209,9 @@ if [[ -z "$REDIS_IMAGE" ]]; then
   exit 1
 fi
 
-echo "==> Seeding persistent config/media and Redis recovery markers"
+echo "==> Seeding persistent config/media/playbook-bundle and Redis recovery markers"
 source_compose exec -T backend sh -ec \
-  "printf '%s\\n' '$MARKER' > /workspace/config_runtime/f13b-config-marker.txt; printf '%s\\n' '$MARKER' > /workspace/media/f13b-media-marker.txt"
+  "printf '%s\\n' '$MARKER' > /workspace/config_runtime/f13b-config-marker.txt; printf '%s\\n' '$MARKER' > /workspace/media/f13b-media-marker.txt; printf '%s\\n' '$MARKER' > /workspace/private/playbook_bundles/f13b-playbook-bundle-marker.txt"
 source_compose exec -T redis redis-cli -n 0 SET f13b:queue "$MARKER" >/dev/null
 source_compose exec -T redis redis-cli -n 1 SET f13b:channel "$MARKER" >/dev/null
 
@@ -237,6 +237,7 @@ cp "$SOURCE_ENV" "$SENSITIVE_DIR/production.env"
 chmod 600 "$SENSITIVE_DIR/production.env"
 source_compose exec -T backend tar -C /workspace/config_runtime -czf - . >"$SENSITIVE_DIR/config.tar.gz"
 source_compose exec -T backend tar -C /workspace/media -czf - . >"$SENSITIVE_DIR/media.tar.gz"
+source_compose exec -T backend tar -C /workspace/private/playbook_bundles -czf - . >"$SENSITIVE_DIR/playbook-bundles.tar.gz"
 source_compose exec -T redis sh -ec '
   redis-cli BGREWRITEAOF >/dev/null 2>&1 || true
   attempts=0
@@ -268,11 +269,11 @@ docker run --rm \
 
 (
   cd "$SENSITIVE_DIR"
-  sha256sum production.env config.tar.gz media.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
+  sha256sum production.env config.tar.gz media.tar.gz playbook-bundles.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
 ) >"$ARTIFACT_DIR/backup-inventory.sha256"
 (
   cd "$SENSITIVE_DIR"
-  wc -c production.env config.tar.gz media.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
+  wc -c production.env config.tar.gz media.tar.gz playbook-bundles.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
 ) >"$ARTIFACT_DIR/backup-sizes.txt"
 
 echo "==> Creating an isolated restore project and restoring Redis persistence"
@@ -310,11 +311,13 @@ COMPOSE_FILE="$COMPOSE_FILE" \
 COMPOSE_OVERRIDE_FILE="$RECOVERY_COMPOSE_FILE" \
   "$ROOT_DIR/scripts/restore_postgres.sh" "$DUMP_PATH"
 
-echo "==> Restoring config and media into project-scoped volumes"
+echo "==> Restoring config, media and private playbook bundles into project-scoped volumes"
 cat "$SENSITIVE_DIR/config.tar.gz" | restore_compose run --rm --no-deps -T backend \
   tar -C /workspace/config_runtime -xzf -
 cat "$SENSITIVE_DIR/media.tar.gz" | restore_compose run --rm --no-deps -T backend \
   tar -C /workspace/media -xzf -
+cat "$SENSITIVE_DIR/playbook-bundles.tar.gz" | restore_compose run --rm --no-deps -T backend \
+  tar -C /workspace/private/playbook_bundles -xzf -
 
 echo "==> Comparing database, authentication, managed-secret and volume integrity"
 restore_compose run --rm --no-deps -T \

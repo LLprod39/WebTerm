@@ -7,24 +7,24 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Q
-
 from servers.models import Playbook, PlaybookRun
 from servers.services.playbook_compatibility_analysis import (
     COMPATIBILITY_ANALYZER_VERSION,
     analyze_playbook_compatibility,
 )
 from servers.services.playbook_runner import normalize_tasks
+from servers.services.playbooks.access import capabilities_for, playbooks_visible_to
 
 
 def _playbooks_for_user(user):
-    return Playbook.objects.filter(Q(user=user) | Q(visibility=Playbook.VISIBILITY_SHARED)).select_related(
-        "active_compatibility_revision"
-    )
+    return playbooks_visible_to(user)
 
 
-def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str, Any]:
+def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None) -> dict[str, Any]:
+    viewer = viewer or pb.user
+    capabilities = capabilities_for(pb, viewer)
     revision = pb.active_compatibility_revision
+    published = pb.published_revision
     compatibility = pb.compatibility if isinstance(pb.compatibility, dict) else {}
     if compatibility.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION and (pb.source_yaml or "").strip():
         compatibility = analyze_playbook_compatibility(pb.source_yaml)
@@ -51,15 +51,17 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str
                 "report": revision_report,
                 "semantic_guard": revision.semantic_guard if isinstance(revision.semantic_guard, dict) else {},
                 "change_summary": revision.change_summary if isinstance(revision.change_summary, list) else [],
-                "inventory_bindings": revision.inventory_bindings
-                if isinstance(revision.inventory_bindings, dict)
-                else {},
+                "inventory_bindings": (
+                    revision.inventory_bindings
+                    if capabilities.is_owner and isinstance(revision.inventory_bindings, dict)
+                    else {}
+                ),
                 "created_at": revision.created_at.isoformat(),
             }
             if revision
             else None
         ),
-        "task_count": pb.task_count,
+        "task_count": (len(published.tasks) if published and isinstance(published.tasks, list) else pb.task_count),
         "is_template_clone": pb.is_template_clone,
         "template_slug": pb.template_slug,
         "last_run_at": pb.last_run_at.isoformat() if pb.last_run_at else None,
@@ -67,11 +69,22 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True) -> dict[str
         "created_at": pb.created_at.isoformat() if pb.created_at else None,
         "updated_at": pb.updated_at.isoformat() if pb.updated_at else None,
         "owner_id": pb.user_id,
+        "origin_revision_id": pb.origin_revision_id,
+        "published_revision_id": pb.published_revision_id,
+        "published_revision_number": published.revision_number if published else None,
+        "published_content_hash": published.content_hash if published else "",
+        "capabilities": capabilities.to_dict(),
     }
     if include_tasks:
-        data["tasks"] = pb.tasks if isinstance(pb.tasks, list) else []
-        data["source_yaml"] = pb.source_yaml or ""
-        data["adapted_source_yaml"] = revision.adapted_yaml if revision else ""
+        data["tasks"] = (
+            published.tasks
+            if published and isinstance(published.tasks, list)
+            else pb.tasks
+            if isinstance(pb.tasks, list)
+            else []
+        )
+        data["source_yaml"] = published.source_yaml if published else pb.source_yaml or ""
+        data["adapted_source_yaml"] = revision.adapted_yaml if revision and capabilities.is_owner else ""
     return data
 
 
@@ -80,11 +93,16 @@ def _serialize_run(run: PlaybookRun, *, include_hosts: bool = True) -> dict[str,
     data: dict[str, Any] = {
         "id": run.id,
         "playbook_id": run.playbook_id,
+        "revision_id": run.revision_id,
+        "validation_id": run.validation_id,
+        "binding_profile_id": run.binding_profile_id,
         "status": run.status,
         "playbook_name": snapshot.get("name") or (run.playbook.name if run.playbook_id else "Playbook"),
         "target_server_ids": run.target_server_ids or [],
         "target_group_ids": run.target_group_ids or [],
         "options": run.options if isinstance(run.options, dict) else {},
+        "variable_manifest": run.variable_manifest if isinstance(run.variable_manifest, dict) else {},
+        "execution_fingerprint": (run.execution_fingerprint if isinstance(run.execution_fingerprint, dict) else {}),
         "summary": run.summary if isinstance(run.summary, dict) else {},
         "progress": run.progress if isinstance(run.progress, dict) else {},
         "inventory_preview": run.inventory_preview or "",
@@ -96,7 +114,10 @@ def _serialize_run(run: PlaybookRun, *, include_hosts: bool = True) -> dict[str,
     }
     if include_hosts:
         data["host_results"] = run.host_results if isinstance(run.host_results, list) else []
-        data["playbook_snapshot"] = snapshot
+        visible_snapshot = dict(snapshot)
+        if run.playbook_id and run.user_id != run.playbook.user_id:
+            visible_snapshot.pop("source_yaml_original", None)
+        data["playbook_snapshot"] = visible_snapshot
         data["live_log"] = (run.live_log or "")[-120_000:]
     return data
 

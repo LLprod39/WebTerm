@@ -42,7 +42,16 @@ from servers.models_monitoring import (
     ServerHealthCheck,
     ServerWatcherDraft,
 )
-from servers.models_playbooks import Playbook, PlaybookCompatibilityRevision, PlaybookRun
+from servers.models_playbook_workspace import (
+    PlaybookAssetBundle,
+    PlaybookAuditEvent,
+    PlaybookBindingProfile,
+    PlaybookDraft,
+    PlaybookGrant,
+    PlaybookRevision,
+    PlaybookValidation,
+)
+from servers.models_playbooks import Playbook, PlaybookCompatibilityRevision, PlaybookRun, PlaybookRunDispatch
 
 __all__ = [
     "AgentRun",
@@ -78,7 +87,15 @@ __all__ = [
     "ServerShare",
     "ServerWatcherDraft",
     "Playbook",
+    "PlaybookAssetBundle",
+    "PlaybookAuditEvent",
+    "PlaybookBindingProfile",
     "PlaybookCompatibilityRevision",
+    "PlaybookDraft",
+    "PlaybookGrant",
+    "PlaybookRevision",
     "PlaybookRun",
+    "PlaybookRunDispatch",
+    "PlaybookValidation",
     "TerminalAiChatMessage",
 ]

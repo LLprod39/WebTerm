@@ -15,9 +15,17 @@ The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a
 
 ### Playbook execution worker
 
-Ansible runs are claimed from a durable database queue by `playbook-execution-worker`; the web process only validates and enqueues them. Keep `PLAYBOOK_EXECUTION_LEASE_SECONDS` longer than the expected heartbeat interval and use `PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY` as the cluster-wide safety cap. Additional replicas can be started with `docker compose --env-file .env.production -f docker-compose.production.yml up -d --scale playbook-execution-worker=N`. Each replica derives a unique worker key from its container hostname.
+Ansible runs are claimed from a durable database queue by `playbook-execution-worker`; the web process only validates and enqueues them. Syntax checks go through the networkless `playbook-validator` Unix-socket service, so the production web process never receives the Docker socket. Actual runs use one hardened, read-only runner container per claim and a per-run subdirectory in `PLAYBOOK_RUNTIME_VOLUME_NAME`.
+
+Keep `PLAYBOOK_EXECUTION_LEASE_SECONDS` longer than the expected heartbeat interval. `PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY` is the cluster-wide safety cap and `PLAYBOOK_EXECUTION_PER_USER_CONCURRENCY` prevents one user from consuming every slot. Additional replicas can be started with `docker compose --env-file .env.production -f docker-compose.production.yml up -d --scale playbook-execution-worker=N`. Each replica derives a unique worker key from its container hostname.
 
 After an unclean worker stop, an expired mutating run is marked interrupted/failed and is never replayed automatically. Inspect the run, target state and audit trail before requesting an explicit rerun. Per-run variables and the optional master password are encrypted while queued and deleted after every terminal execution path.
+
+Build `ansible-runner` and `playbook-validator` from the same `WEBTERM_ANSIBLE_IMAGE`, then force-recreate the validator after every image rebuild. Validation records the image runtime digest; execution resolves the configured reference to an immutable Docker image ID, uses `--pull=never`, and fails before remote mutation when the digest differs. The validator healthcheck performs a real Unix-socket `GET /health` and verifies this digest rather than checking only that a socket inode exists.
+
+Every execution container is named and labeled from `(run_id, dispatch_id, attempt_count)`. Cancel, lost-lease recovery and worker shutdown remove only that exact daemon job. At worker startup, `WEBTERM_ANSIBLE_RUNTIME_ROOT` is scavenged for exact runtime directories older than `WEBTERM_ANSIBLE_RUNTIME_TTL_SECONDS` (minimum 600 seconds); symlinks, malformed names and jobs whose daemon cleanup cannot be confirmed are preserved. Treat preserved artifacts as an incident: stop new playbook claims, inspect the matching dispatch/container labels, then remove the exact container before deleting its directory.
+
+Project-bundle upload is a release blocker whenever the bundle root resolves inside `MEDIA_ROOT`, because `/media/` is an HTTP-served namespace. Production Compose pins `PLAYBOOK_BUNDLE_STORAGE_ROOT` to the private `playbook_bundles` mount in only the backend and playbook execution worker; nginx never mounts it. The deploy check fails closed on an in-media override, and the protected backup/restore set must include this volume.
 
 ## Upgrade
 
@@ -26,6 +34,23 @@ After an unclean worker stop, an expired mutating run is marked interrupted/fail
 3. Pull immutable images for the target tag and record their digests.
 4. Run migration and Compose-model checks in a staging copy.
 5. Apply the upgrade during a declared window, run health/readiness and the primary smoke flow, then retain the previous images and backup.
+
+### Playbook workspace migration 0047 gate
+
+Migration `servers.0047_playbook_workspace` is a forward-only, atomic schema and data cutover. It updates historical terminal runs in one statement and performs several writes per existing playbook while creating revisions, drafts, pointers and legacy sharing grants. Do not run it as an unmeasured rolling migration on a populated database.
+
+Before approval, stop playbook mutation producers and require zero legacy `pending`/`running` runs. Record the playbook count, total YAML bytes and run-status cardinality from the production snapshot. Restore that snapshot into an isolated staging stack, run `python manage.py migrate servers 0047 --noinput`, and record elapsed time, peak lock wait, WAL/disk growth and the post-migration counts. At minimum, capture `count(*)` plus `sum(octet_length(source_yaml))` from `servers_playbook`, status counts from `servers_playbookrun`, and after migration a left join from `servers_playbook` to `servers_playbookdraft` that proves every playbook has non-null origin/published pointers and one draft. Block the release if the rehearsal exceeds the declared maintenance/lock budget or any postcondition fails. The production cutover uses the same stopped-writer window and cardinality checks. Because the reverse operation is intentionally a no-op, recovery is the validated pre-upgrade database plus matching persistent volumes, not `migrate 0046`.
+
+For an installation that already has files below `MEDIA_ROOT/playbook_bundles`, copy them into the private volume after mounting the new release and before re-enabling playbook traffic:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.production.yml \
+  exec backend python manage.py migrate_playbook_bundle_storage
+docker compose --env-file .env.production -f docker-compose.production.yml \
+  exec backend python manage.py migrate_playbook_bundle_storage --verify-only
+```
+
+The command is idempotent, compares source and destination bytes, refuses to overwrite a different target and never deletes the legacy source. Keep the legacy copy until the private-volume backup and restore drill pass. Nginx denies the legacy `/media/playbook_bundles/` path throughout the transition.
 
 The automated first-release proof runs `./docker/production-upgrade-rollback-smoke.sh` for the frozen `b8924ee` schema/data snapshot and `v0.1.0-rc.1`. Exact fixture identities and the decision rules are defined in [the first-release lifecycle policy](FIRST_RELEASE_LIFECYCLE_POLICY.md).
 
@@ -49,7 +74,7 @@ ENV_FILE=.env.production \
 ./scripts/backup_postgres.sh
 ```
 
-The command emits a compressed custom-format dump plus a SHA-256 sidecar and validates the archive with `pg_restore --list` before publishing it. Back up `.env.production` and the `mini_prod_config` / `mini_prod_media` volumes into the same access-controlled backup set. The environment contains encryption material and must never be attached to CI, tickets or ordinary logs. Static assets are rebuilt from the release; operational logs follow the separate retention/export policy. Plugin trust metadata lives in PostgreSQL, while retained package bytes live under media; the dump plus media archive cover both parts.
+The command emits a compressed custom-format dump plus a SHA-256 sidecar and validates the archive with `pg_restore --list` before publishing it. Back up `.env.production` and the `mini_prod_config`, `mini_prod_media` and project-scoped `playbook_bundles` volumes into the same access-controlled backup set. The environment contains encryption material and must never be attached to CI, tickets or ordinary logs. Static assets are rebuilt from the release; operational logs follow the separate retention/export policy. Plugin trust metadata lives in PostgreSQL, retained plugin package bytes live under media, and private playbook source archives live in the separate bundle volume; all corresponding archives are required for a consistent restore.
 
 Restore only into an isolated target first:
 
@@ -62,9 +87,9 @@ COMPOSE_OVERRIDE_FILE=docker-compose.production.recovery.yml \
 ./scripts/restore_postgres.sh /secure/webterm-backups/webterm_<UTC>.dump
 ```
 
-The restore command is intentionally blocked unless the explicit confirmation is present. Restore the matching secret environment and config/media archives, then validate authentication, managed-secret decryptability, inventory, pipelines/runs, audit chronology and plugin-package hashes. Never restore over the only copy or reuse production volumes for a drill.
+The restore command is intentionally blocked unless the explicit confirmation is present. Restore the matching secret environment and config/media/private-playbook-bundle archives, then validate authentication, managed-secret decryptability, inventory, pipelines/runs, audit chronology, plugin-package hashes and playbook-bundle hashes. Never restore over the only copy or reuse production volumes for a drill.
 
-The repository-side F-13b proof is `./docker/production-recovery-smoke.sh`. On a fresh Linux runner it builds source state through the F-13a installer, creates a consistent PostgreSQL dump, captures secret/config/media/Redis state in a temporary mode-700 directory, restores into a distinct Compose project and volumes, compares privacy-safe integrity manifests, and restarts PostgreSQL and Redis. Only checksums, sizes, exact SHA, timestamps and pass/fail manifests are uploaded; the dump, environment, volume archives and credentials are deleted during cleanup.
+The repository-side F-13b proof is `./docker/production-recovery-smoke.sh`. On a fresh Linux runner it builds source state through the F-13a installer, creates a consistent PostgreSQL dump, captures secret/config/media/private-playbook-bundle/Redis state in a temporary mode-700 directory, restores into a distinct Compose project and volumes, compares privacy-safe integrity manifests, and restarts PostgreSQL and Redis. Only checksums, sizes, exact SHA, timestamps and pass/fail manifests are uploaded; the dump, environment, volume archives and credentials are deleted during cleanup.
 
 ## Disaster recovery
 
@@ -83,6 +108,8 @@ Recovery-time and recovery-point objectives are not claimed until a separately a
 - Login works but features are denied: inspect the server-generated access payload and role assignments.
 - Terminal or guarded action failing: verify host reachability, host-key policy, approval state and audit event creation.
 - Playbook stays queued: verify `playbook-execution-worker` is running, then inspect its worker heartbeat and the dispatch lease; do not manually duplicate the queued row.
+- Playbook validation is unavailable: verify `playbook-validator` is healthy and its Unix-socket volume is mounted only into trusted application services that can initiate playbooks; never publish the socket to the host.
+- Playbook reports a runtime mismatch: rebuild/recreate `playbook-validator` and the runner from the same image reference, confirm the validator health payload, then validate the revision again; never bypass the digest gate.
 - Playbook is interrupted after a restart: review the partial remote changes and start an explicit rerun only when it is operationally safe.
 - Upgrade regression: stop new writes and follow rollback; do not run ad-hoc schema edits.
 

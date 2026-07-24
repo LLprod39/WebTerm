@@ -64,6 +64,28 @@ class Playbook(models.Model):
         blank=True,
         related_name="active_for_playbooks",
     )
+    origin_revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="origin_for_playbooks",
+    )
+    published_revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="published_for_playbooks",
+    )
+    forked_from_revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="forked_playbooks",
+    )
+    is_archived = models.BooleanField(default=False)
     is_template_clone = models.BooleanField(default=False)
     template_slug = models.CharField(max_length=80, blank=True, default="")
     last_run_at = models.DateTimeField(null=True, blank=True)
@@ -108,6 +130,20 @@ class PlaybookCompatibilityRevision(models.Model):
     semantic_guard = models.JSONField(default=dict, blank=True)
     change_summary = models.JSONField(default=list, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    source_revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_compatibility_inputs",
+    )
+    result_revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="legacy_compatibility_outputs",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -148,12 +184,39 @@ class PlaybookRun(models.Model):
         blank=True,
         related_name="runs",
     )
+    revision = models.ForeignKey(
+        "PlaybookRevision",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="runs",
+    )
+    validation = models.ForeignKey(
+        "PlaybookValidation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="runs",
+    )
+    binding_profile = models.ForeignKey(
+        "PlaybookBindingProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="runs",
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="playbook_runs")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
     playbook_snapshot = models.JSONField(default=dict, blank=True)
     target_server_ids = models.JSONField(default=list, blank=True)
     target_group_ids = models.JSONField(default=list, blank=True)
     options = models.JSONField(default=dict, blank=True)
+    variable_manifest = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Redacted variable names and managed-secret references; never raw secret values.",
+    )
+    execution_fingerprint = models.JSONField(default=dict, blank=True)
     host_results = models.JSONField(default=list, blank=True)
     summary = models.JSONField(default=dict, blank=True)
     progress = models.JSONField(
@@ -171,6 +234,10 @@ class PlaybookRun(models.Model):
     error_message = models.TextField(blank=True, default="")
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
+    terminal_notified_at = models.DateTimeField(null=True, blank=True)
+    terminal_notification_claimed_at = models.DateTimeField(null=True, blank=True)
+    terminal_notification_attempts = models.PositiveIntegerField(default=0)
+    terminal_notification_last_error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -186,3 +253,49 @@ class PlaybookRun(models.Model):
         if isinstance(self.playbook_snapshot, dict):
             name = str(self.playbook_snapshot.get("name") or "")
         return f"Run #{self.pk} {name} ({self.status})"
+
+
+class PlaybookRunDispatch(models.Model):
+    """Durable, leased queue item for a prepared playbook run."""
+
+    STATUS_QUEUED = "queued"
+    STATUS_CLAIMED = "claimed"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELED = "canceled"
+    STATUS_INTERRUPTED = "interrupted"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_CLAIMED, "Claimed"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_CANCELED, "Canceled"),
+        (STATUS_INTERRUPTED, "Interrupted"),
+    ]
+
+    run = models.OneToOneField(PlaybookRun, on_delete=models.CASCADE, related_name="dispatch")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="playbook_run_dispatches")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    metadata = models.JSONField(default=dict, blank=True)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    claimed_by = models.CharField(max_length=120, blank=True, default="")
+    attempt_count = models.PositiveIntegerField(default=0)
+    error = models.TextField(blank=True, default="")
+    mutation_safe_to_retry = models.BooleanField(
+        default=False,
+        help_text="Must be explicitly true before an expired claim may be requeued.",
+    )
+
+    class Meta:
+        ordering = ["queued_at", "id"]
+        indexes = [
+            models.Index(fields=["status", "queued_at"], name="pb_dispatch_queue_idx"),
+            models.Index(fields=["status", "lease_expires_at"], name="pb_dispatch_lease_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Playbook run {self.run_id} dispatch [{self.status}]"

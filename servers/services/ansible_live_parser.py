@@ -16,7 +16,10 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from servers.services.ansible_setup import _safe_host_name
+from servers.services.playbook_inventory_identity import (
+    inventory_host_alias,
+    legacy_inventory_host_alias,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +46,14 @@ class AnsibleLiveParser:
 
     def __init__(self, servers: list[Any], *, tasks_total: int = 0):
         self._servers = servers
-        self._by_alias = {_safe_host_name(getattr(s, "name", ""), int(s.id)): s for s in servers}
+        self._by_alias = {
+            alias: server
+            for server in servers
+            for alias in (
+                legacy_inventory_host_alias(getattr(server, "name", ""), int(server.id)),
+                inventory_host_alias(getattr(server, "name", ""), int(server.id)),
+            )
+        }
         self._by_host = {str(getattr(s, "host", "")): s for s in servers}
         self.tasks_total = int(tasks_total or 0)
         self.current_play = ""

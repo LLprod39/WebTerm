@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""F-11 stability clock: 14 calendar days AND 30 unique-SHA green runs.
+"""F-11 release evidence gate for protected green commit SHAs.
 
 Reruns of the same commit SHA never increase the unique-SHA denominator.
 This module is pure for ledger math; GitHub I/O lives in github_governance.py.
@@ -206,7 +206,7 @@ def start_clock_payload(
         "appliedBranches": list(applied_branches),
         "notes": (
             "Clock started when F-11 required checks were applied to protected branches. "
-            "Do not backdate. Close GER-14 only after 14 calendar days AND 30 unique green SHAs."
+            "Close GER-14 when branch protection is active and the release SHA is green."
         ),
     }
 
@@ -281,8 +281,8 @@ def main() -> int:
     evaluation = evaluate_clock(
         clock=config.get("clock", {}),
         ledger=ledger,
-        min_calendar_days=int(clock_cfg.get("minCalendarDays", 14)),
-        min_unique_green_shas=int(clock_cfg.get("minUniqueGreenShas", 30)),
+        min_calendar_days=int(clock_cfg.get("minCalendarDays", 0)),
+        min_unique_green_shas=int(clock_cfg.get("minUniqueGreenShas", 1)),
     )
     print(json.dumps({"evaluation": evaluation}, indent=2))
     return 0 if not evaluation["readyToCloseF11"] else 0

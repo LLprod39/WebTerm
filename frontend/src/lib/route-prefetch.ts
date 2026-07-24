@@ -12,6 +12,7 @@ type PrefetchFn = () => Promise<unknown>;
 const CORE_PREFETCH: PrefetchFn[] = [
   () => import("@/pages/DashboardRouter"),
   () => import("@/pages/Servers"),
+  () => import("@/pages/AutomationPage"),
   () => import("@/pages/AgentsPage"),
   () => import("@/pages/StudioPage"),
   () => import("@/pages/settings/SettingsAIPage"),
@@ -48,6 +49,7 @@ const SECONDARY_PREFETCH: PrefetchFn[] = [
 const PATH_PREFETCH: Array<{ prefix: string; load: PrefetchFn }> = [
   { prefix: "/dashboard", load: () => import("@/pages/DashboardRouter") },
   { prefix: "/servers", load: () => import("@/pages/Servers") },
+  { prefix: "/automation", load: () => import("@/pages/AutomationPage") },
   { prefix: "/agents", load: () => import("@/pages/AgentsPage") },
   { prefix: "/chat", load: () => import("@/pages/ChatPage") },
   { prefix: "/studio", load: () => import("@/pages/StudioPage") },

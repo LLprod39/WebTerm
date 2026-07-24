@@ -45,7 +45,10 @@ function kubernetesReadiness(readyForSidebar: boolean) {
   };
 }
 
-function renderSidebar(features: Partial<Record<FeatureFlag, boolean>>, options: { kubernetesReady?: boolean } = {}) {
+function renderSidebar(
+  features: Partial<Record<FeatureFlag, boolean>>,
+  options: { kubernetesReady?: boolean; path?: string } = {},
+) {
   vi.mocked(fetchAuthSession).mockResolvedValue({
     authenticated: true,
     user: {
@@ -61,7 +64,7 @@ function renderSidebar(features: Partial<Record<FeatureFlag, boolean>>, options:
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[options.path ?? "/"]}>
         <I18nProvider>
           <SidebarProvider>
             <AppSidebar />
@@ -104,6 +107,18 @@ describe("AppSidebar preview-gated nav", () => {
     expect(within(automation).getByText("Студия")).toBeInTheDocument();
     expect(within(extensions).getByText("Плагины")).toBeInTheDocument();
     expect(within(administration).getByText("Настройки")).toBeInTheDocument();
+  });
+
+  it("marks Playbooks active on standalone and nested automation routes", async () => {
+    renderSidebar(
+      { servers: true, dashboard: true, agents: true, settings: true },
+      { path: "/automation/playbooks/42" },
+    );
+
+    const playbooks = await screen.findByRole("link", { name: "Плейбуки" });
+    expect(playbooks).toHaveAttribute("href", "/automation");
+    expect(playbooks).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Серверы" })).not.toHaveAttribute("aria-current");
   });
 
   it("renders Kubernetes for staff when feature is enabled (no ready_for_sidebar required)", async () => {

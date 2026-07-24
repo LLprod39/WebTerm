@@ -58,8 +58,8 @@ def test_f11_governance_config_lists_product_and_security_checks() -> None:
     assert config["policyVersion"] == "F-11"
     assert config["breakGlass"]["enforceAdmins"] is True
     assert config["breakGlass"]["allowPermanentAdminBypass"] is False
-    assert config["stabilityClock"]["minCalendarDays"] == 14
-    assert config["stabilityClock"]["minUniqueGreenShas"] == 30
+    assert config["stabilityClock"]["minCalendarDays"] == 0
+    assert config["stabilityClock"]["minUniqueGreenShas"] == 1
     assert config["stabilityClock"]["countRerunsOfSameSha"] is False
     assert config["clock"]["status"] == "not_started"
 

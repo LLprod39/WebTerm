@@ -22,6 +22,7 @@ def test_f13b_smoke_restores_all_critical_state_without_uploading_secrets() -> N
         "production.env",
         "config.tar.gz",
         "media.tar.gz",
+        "playbook-bundles.tar.gz",
         "redis.tar.gz",
         "recovery_integrity_manifest.py",
         'cmp "$ARTIFACT_DIR/source-integrity.json"',
@@ -63,5 +64,6 @@ def test_recovery_manifest_checks_auth_secrets_domain_rows_and_persistent_volume
         '"managed_secrets"',
         'Path("/workspace/config_runtime")',
         'Path("/workspace/media")',
+        'Path("/workspace/private/playbook_bundles")',
     ):
         assert contract in script

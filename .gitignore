@@ -35,6 +35,7 @@ env/
 **/.vs/
 .cursor/
 .claude/
+.grok/
 .playwright-mcp/
 .linear-agent-runs/
 node_modules/
@@ -83,6 +84,7 @@ id_ed25519.pub
 # Qdrant data
 qdrant_data/
 media/
+private/
 outputs/
 *.db
 *.sqlite
@@ -170,6 +172,7 @@ docs/architecture/*
 !docs/architecture/PLATFORM_DEVELOPMENT_RULES.md
 !docs/architecture/PLUGIN_AUTHOR_GUIDE.md
 !docs/architecture/PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md
+!docs/architecture/ANSIBLE_PLAYBOOK_WORKSPACE_PLAN.md
 !docs/architecture/README.md
 !docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md
 !docs/architecture/adr/

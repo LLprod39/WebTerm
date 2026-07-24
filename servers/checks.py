@@ -1,0 +1,31 @@
+from pathlib import Path
+
+from django.conf import settings
+from django.core.checks import Error, Tags, register
+
+from servers.services.playbooks.bundle_storage import path_is_within
+
+
+@register(Tags.security, deploy=True)
+def playbook_bundle_storage_deploy_check(app_configs, **kwargs):
+    if settings.DEBUG:
+        return []
+
+    configured = getattr(
+        settings,
+        "PLAYBOOK_BUNDLE_STORAGE_ROOT",
+        Path(settings.BASE_DIR) / "private" / "playbook_bundles",
+    )
+    if not path_is_within(configured, settings.MEDIA_ROOT):
+        return []
+
+    return [
+        Error(
+            "Playbook bundle storage is inside publicly served MEDIA_ROOT.",
+            hint=(
+                "Set PLAYBOOK_BUNDLE_STORAGE_ROOT to a private path and mount the "
+                "playbook_bundles volume only into backend and playbook-execution-worker."
+            ),
+            id="servers.E001",
+        )
+    ]

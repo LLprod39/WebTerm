@@ -12,7 +12,6 @@ import {
   Server,
   Settings,
   Layers,
-  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
@@ -34,7 +33,6 @@ import type { ServerKnowledgeController } from "./useServerKnowledgeController";
 import type { ServerRulesController } from "./useServerRulesController";
 import type { ServerSecurityController } from "./useServerSecurityController";
 import type { ServerSharesController } from "./useServerSharesController";
-import { PlaybooksWorkspace } from "../automation/PlaybooksWorkspace";
 
 type ManageableGroup = FrontendGroup & { id: number; role: ServerGroupRole };
 type Translate = (key: string) => string;
@@ -47,7 +45,6 @@ export interface ServersPageViewProps {
   mainTab: MainTab;
   setMainTab: (tab: MainTab) => void;
   servers: FrontendServer[];
-  groups: FrontendGroup[];
   manageableGroups: ManageableGroup[];
   groupCount: number;
   sharedCount: number;
@@ -111,7 +108,7 @@ export interface ServersPageViewProps {
 /** Presentational layout for the Servers page (tabs, dialogs, stats). */
 export function ServersPageView(props: ServersPageViewProps) {
   const {
-    t, tr, lang, mainTab, setMainTab, servers, groups, manageableGroups, groupCount, sharedCount,
+    t, tr, lang, mainTab, setMainTab, servers, manageableGroups, groupCount, sharedCount,
     onlineCount, offlineCount, search, setSearch, collapsed, filtered, grouped, toggleGroup,
     fleetHealthByServerId, openCreate, openEdit, requestDeleteServer, dialogOpen, setDialogOpen,
     editingServer, form, formValidation, handlePrivateKeyFile, setForm, saveServer, saveAndTestServer,
@@ -130,7 +127,7 @@ export function ServersPageView(props: ServersPageViewProps) {
         compact
         title={t("srv.title")}
         count={servers.length > 0 ? servers.length : undefined}
-        subtitle={localize(lang, "Серверы, группы и runbook", "Servers, groups, and runbooks")}
+        subtitle={localize(lang, "Серверы, группы и правила", "Servers, groups, and rules")}
         actions={
           <>
             <div className="relative w-full sm:w-auto">
@@ -191,9 +188,6 @@ export function ServersPageView(props: ServersPageViewProps) {
           <TabsTrigger value="rules" className="min-h-9 gap-2 px-3 text-sm">
             <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
           </TabsTrigger>
-          <TabsTrigger value="playbook" className="min-h-9 gap-2 px-3 text-sm">
-            <BookOpen className="h-4 w-4" /> {t("pb.title")}
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="servers" className="mt-0 space-y-3">
@@ -241,15 +235,6 @@ export function ServersPageView(props: ServersPageViewProps) {
           </ContentPanel>
         </TabsContent>
 
-        <TabsContent value="playbook" className="mt-0 space-y-3">
-          <ContentPanel className="p-4 sm:p-5">
-            <PlaybooksWorkspace
-              servers={servers}
-              groups={groups}
-              enabled={mainTab === "playbook"}
-            />
-          </ContentPanel>
-        </TabsContent>
       </Tabs>
 
       <ServerFormDialog

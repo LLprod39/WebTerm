@@ -7,9 +7,9 @@ Reusable project maintenance scripts only.
 - `generate_sbom.py` — CycloneDX SBOM for backend, frontend, container Dockerfiles; optional `--image` Syft/Trivy layer SBOM (F-10).
 - `generate_release_checksums.py` — SHA-256 checksum files for release artifacts (F-10).
 - `generate_provenance.py` — in-toto/SLSA provenance inventory; local unsigned, CI records GitHub attestation metadata (F-10).
-- `github_governance.py` — audit/apply branch protection, F-11 clock start, unique-SHA sync, break-glass log (F-11).
+- `github_governance.py` — audit/apply branch protection, F-11 release evidence, green-SHA sync, break-glass log (F-11).
 - `github_governance_io.py` — GitHub/git I/O and break-glass log helpers used by `github_governance.py` (F-11).
-- `ci_stability_clock.py` — pure 14-day / 30 unique-SHA gate evaluation and ledger math (F-11).
+- `ci_stability_clock.py` — protected green-SHA release gate and evidence ledger math (F-11); no calendar waiting window.
 - `backup_postgres.sh` / `restore_postgres.sh` — validated custom-format production backup and explicitly confirmed restore commands (F-13b).
 - `verify_migration_history.py` — rejects edits to numbered migrations already frozen in a release fixture (F-13c).
 - `release_lifecycle_probe.py` — privacy-safe cross-version auth, secret and business-object integrity probe (F-13c).

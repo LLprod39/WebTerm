@@ -8,6 +8,11 @@ from django.utils import timezone
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from servers.operator_tools_common import _int_arg
+from servers.services.playbook_run_preparation import (
+    PlaybookRunPreparationError,
+    prepare_playbook_run,
+)
+from servers.services.playbook_runner import start_playbook_run_async
 from servers.views.server_helpers import _accessible_servers_queryset
 
 
@@ -44,7 +49,8 @@ def _steps_to_runbook_tasks(steps: Any) -> list[dict[str, Any]]:
 
 
 def create_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
-    from servers.models import Playbook
+    from servers.models import Playbook, PlaybookRevision
+    from servers.services.playbooks.revisions import initialize_created_playbook
 
     name = str(ctx.input_payload.get("name") or ctx.input_payload.get("title") or "Operator playbook").strip()[:200]
     yaml_text = str(ctx.input_payload.get("yaml") or ctx.input_payload.get("source_yaml") or "").strip()
@@ -64,70 +70,23 @@ def create_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
         tasks=raw_tasks if yaml_text else runbook_tasks,
         category=str(ctx.input_payload.get("category") or Playbook.CATEGORY_CUSTOM)[:30],
     )
+    initialize_created_playbook(pb, actor=ctx.user, origin_type=PlaybookRevision.ORIGIN_MANUAL)
     return {
         "ok": True,
         "playbook": {"id": pb.id, "name": pb.name, "kind": pb.kind, "task_count": len(pb.tasks or [])},
-        "target_url": f"/playbooks/{pb.id}",
+        "target_url": f"/automation/playbooks/{pb.id}",
     }
 
 
 def run_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
-    from servers.models import Playbook, PlaybookRun
-    from servers.services.playbook_runner import (
-        build_inventory_for_servers,
-        normalize_tasks,
-        resolve_target_servers,
-        start_playbook_run_async,
-    )
+    from servers.services.playbooks.access import playbooks_visible_to
 
     playbook_id = _int_arg(ctx, "playbook_id")
     assert playbook_id is not None
-    pb = Playbook.objects.filter(pk=playbook_id, user=ctx.user).first()
-    if pb is None:
-        # shared
-        pb = Playbook.objects.filter(pk=playbook_id, visibility=Playbook.VISIBILITY_SHARED).first()
+    pb = playbooks_visible_to(ctx.user).filter(pk=playbook_id).first()
     if pb is None:
         raise AssistantActionError("Playbook not found", status=404)
 
-    raw_ids = ctx.input_payload.get("server_ids") or []
-    server_ids = []
-    for item in raw_ids if isinstance(raw_ids, list) else []:
-        try:
-            server_ids.append(int(item))
-        except (TypeError, ValueError):
-            continue
-    servers = resolve_target_servers(ctx.user, server_ids=server_ids, group_ids=[])
-    if not servers:
-        raise AssistantActionError("Select at least one accessible server_ids")
-
-    dry_run = bool(ctx.input_payload.get("check_mode") or ctx.input_payload.get("dry_run"))
-    tasks = normalize_tasks(pb.tasks)
-    snapshot = {
-        "id": pb.id,
-        "name": pb.name,
-        "description": pb.description,
-        "kind": pb.kind,
-        "category": pb.category,
-        "source_yaml": pb.source_yaml or "",
-        "tasks": tasks,
-    }
-    options = {
-        "concurrency": max(1, min(int(ctx.input_payload.get("concurrency") or 4), 12)),
-        "dry_run": dry_run,
-        "engine": str(ctx.input_payload.get("engine") or "auto"),
-        "become": bool(ctx.input_payload.get("become", True)),
-    }
-    run = PlaybookRun.objects.create(
-        playbook=pb,
-        user=ctx.user,
-        status=PlaybookRun.STATUS_PENDING,
-        playbook_snapshot=snapshot,
-        target_server_ids=[s.id for s in servers],
-        options=options,
-        host_results=[],
-        summary={},
-        inventory_preview=build_inventory_for_servers(servers),
-    )
     master = ""
     if ctx.request is not None:
         try:
@@ -136,6 +95,21 @@ def run_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
             master = _effective_master_password(ctx.request, ctx.input_payload) or ""
         except Exception:  # noqa: BLE001
             master = ""
+
+    try:
+        prepared = prepare_playbook_run(
+            user=ctx.user,
+            playbook=pb,
+            payload=ctx.input_payload,
+            enqueue_master_password=master,
+        )
+    except PlaybookRunPreparationError as exc:
+        details = {"compatibility": exc.compatibility} if exc.compatibility else None
+        raise AssistantActionError(exc.message, status=exc.status, details=details) from exc
+
+    run = prepared.run
+    servers = prepared.servers
+    dry_run = bool((run.options or {}).get("dry_run"))
     start_playbook_run_async(run.id, master_password=master)
     return {
         "ok": True,
@@ -149,12 +123,13 @@ def run_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
             "server_names": [s.name for s in servers],
             "count": len(servers),
         },
-        "target_url": f"/playbooks/runs/{run.id}",
+        "target_url": f"/automation/runs/{run.id}",
     }
 
 
 def save_runbook(ctx: AssistantActionContext) -> dict[str, Any]:
-    from servers.models import Playbook
+    from servers.models import Playbook, PlaybookRevision
+    from servers.services.playbooks.revisions import initialize_created_playbook
 
     title = str(ctx.input_payload.get("title") or ctx.input_payload.get("name") or "Saved runbook").strip()[:200]
     steps = ctx.input_payload.get("steps") or ctx.input_payload.get("tasks") or ctx.input_payload.get("commands") or []
@@ -170,10 +145,11 @@ def save_runbook(ctx: AssistantActionContext) -> dict[str, Any]:
         category=Playbook.CATEGORY_MAINTENANCE,
         tags=["operator", "runbook"],
     )
+    initialize_created_playbook(pb, actor=ctx.user, origin_type=PlaybookRevision.ORIGIN_MANUAL)
     return {
         "ok": True,
         "playbook": {"id": pb.id, "name": pb.name, "kind": pb.kind, "task_count": len(tasks)},
-        "target_url": f"/playbooks/{pb.id}",
+        "target_url": f"/automation/playbooks/{pb.id}",
     }
 
 

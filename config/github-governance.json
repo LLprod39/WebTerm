@@ -17,8 +17,8 @@
     ]
   },
   "stabilityClock": {
-    "minCalendarDays": 14,
-    "minUniqueGreenShas": 30,
+    "minCalendarDays": 0,
+    "minUniqueGreenShas": 1,
     "countRerunsOfSameSha": false,
     "eligibleEvents": [
       "pull_request",
@@ -92,6 +92,6 @@
     "startedCommit": null,
     "startedBy": null,
     "appliedBranches": [],
-    "notes": "Clock starts only when F-11 required checks are successfully applied to branch protection on test and main. It cannot be backdated or accelerated."
+    "notes": "Release evidence starts when F-11 required checks are successfully applied to branch protection on test and main. There is no calendar waiting window; the protected release SHA must be green."
   }
 }

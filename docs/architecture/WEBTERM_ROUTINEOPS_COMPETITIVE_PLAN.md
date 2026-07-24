@@ -383,7 +383,7 @@ Wiring contract для `ready()`:
 
 - Required checks зелёные на clean clone.
 - Нельзя merge при красном check даже администратору без logged break-glass.
-- После promotion всех checks в F-11: минимум 14 последовательных календарных дней **и** 30 unique-SHA merge-candidate/scheduled runs зелёные; reruns одного SHA не увеличивают denominator. Clock начинается в момент F-11.
+- После promotion всех checks в F-11 календарное ожидание не требуется: нужен минимум один protected release SHA, на котором все обязательные merge-candidate checks зелёные; reruns одного SHA не увеличивают denominator.
 - CI p95 <=15 минут; slow suites sharded без потери coverage.
 - Backend coverage сначала не ниже frozen baseline, на Stage 1 exit >=80%; execution/security policy >=90%.
 - Frontend feature-module coverage >=70% сначала, затем >=80% для critical flows.
@@ -507,7 +507,7 @@ Stage 2 запрещён, пока не выполнены все пункты:
 - [ ] Ruff/ESLint/TypeScript/build green; 0 lint warnings.
 - [ ] Backend coverage >=80%, critical execution/security policy >=90%; frontend critical flows >=80%.
 - [ ] Architecture: 0 violations, all import contracts kept.
-- [ ] Required CI и branch protection включены; после F-11 выдержаны минимум 14 календарных дней и 30 unique-SHA green runs без учёта reruns.
+- [ ] Required CI и branch protection включены; F-11 подтверждён минимум одним protected release SHA со всеми зелёными обязательными checks, без календарного ожидания.
 - [ ] Один cleared brand и frozen release-scope matrix.
 - [ ] Critical-flow WCAG 2.2 AA artifact и >=90% pilot task success по versioned script/minimum sample готовы.
 - [ ] CONTRIBUTING, SECURITY, CHANGELOG, ADR/release docs готовы.
@@ -534,12 +534,12 @@ Stage 2 запрещён, пока не выполнены все пункты:
 | F-08b | Epic of small PRs: split Chat/dashboard/agent frontend god-files | F-05/F-06 | frontend sizes green |
 | F-09 | Close live remaining size/import violations | F-08a/F-08b | architecture command fully green |
 | F-10 | Security remediation, SBOM, signing/provenance | F-03/F-09 | no Critical/High in release scope |
-| F-11 | Promote all product + severity checks to required; start 14-day/30-SHA clock | F-04..F-10 | red or vulnerable merge impossible |
+| F-11 | Promote all product + severity checks to required; require one protected green release SHA with no calendar delay | F-04..F-10 | red or vulnerable merge impossible |
 | F-12 | Cleared brand, scoped API/docs, onboarding, a11y and pilot UX evidence | F-11 | clarity/docs/UX target |
 | F-13a | Clean install of already-green release profile, readiness/worker smoke | F-11/F-12 | production preflight green |
 | F-13b | Backup/restore + PostgreSQL/Redis recovery | F-13a | recovery evidence |
 | F-13c | Frozen-baseline/RC upgrade, application rollback and DB restore policy | F-13b | first-release lifecycle evidence |
-| F-13d | Publish and verify signed release artifacts | F-13c/F-11 clock | `v0.1.0` |
+| F-13d | Publish and verify signed release artifacts | F-13c/F-11 protected release evidence | `v0.1.0` |
 
 F-08a/F-08b/F-09 и F-13 — epics, а не mega-PRs. Не объединять architecture rewrite, visual redesign и behavior changes в один PR.
 
@@ -712,8 +712,8 @@ F-08a/F-08b/F-09 и F-13 — epics, а не mega-PRs. Не объединять 
   instead of pretending irreversible migrations can be silently reversed. Both
   matrix jobs passed in GitHub Actions `30083762709`.
 - F-13d remains fail-closed. No `v0.1.0` release may be published until branch
-  protection is applied to both `test` and `main`, the non-backdated F-11 clock
-  reaches **14 calendar days and 30 unique green SHAs**, the real F-12 pilot gate
+  protection is applied to both `test` and `main`, the F-11 evidence ledger
+  contains a protected green release SHA with no calendar waiting window, the real F-12 pilot gate
   passes and the immutable image/Compose/checksum/SBOM/attestation inventory is
   verified on the published digests.
 

@@ -7,7 +7,7 @@ Policy version: **F-11**
 
 All product and severity CI jobs are **required** on protected branches (`test`, `main`). Merging with a red or missing required check is impossible for everyone, including administrators, unless a **logged break-glass** incident is opened and protection is restored afterward.
 
-After required-check promotion is applied, the **F-11 stability clock** starts. The clock cannot be accelerated or backdated.
+After required-check promotion is applied, the **F-11 protected release evidence** gate starts. It has no calendar waiting window and closes on a protected green release SHA.
 
 ## Required checks (F-11)
 
@@ -84,12 +84,12 @@ There is **no permanent** admin bypass. Emergency path:
 
 Durable log: `config/break-glass-log.json`.
 
-## Stability clock (14 days AND 30 unique SHA)
+## Protected release evidence (no calendar waiting window)
 
 | Gate | Rule |
 | --- | --- |
-| Calendar | ≥ **14** calendar days after clock start (UTC date) |
-| Unique SHA | ≥ **30** distinct commit SHAs with **all** required checks green |
+| Calendar | **0 days**; there is no artificial waiting window |
+| Unique SHA | At least **1** protected release commit SHA with **all** required checks green |
 | Reruns | Rerunning workflows on the **same SHA does not** increase the unique-SHA count |
 | Eligible runs | merge-candidate / scheduled / push / PR / workflow_dispatch on `test` and `main` |
 | Start moment | First successful `--apply` of F-11 protection; stored as `clock.startedAt` + `clock.startedCommit` |
@@ -106,7 +106,7 @@ python scripts/github_governance.py
 # Apply protection + start clock (refuses if required checks are not green on heads)
 python scripts/github_governance.py --apply
 
-# Clock status (calendar + unique SHA)
+# Release evidence status
 python scripts/github_governance.py --clock-status
 python scripts/ci_stability_clock.py
 
@@ -119,13 +119,13 @@ python scripts/github_governance.py --record-sha <full_or_prefix_sha> --branch m
 
 ### Closing GER-14 / F-11
 
-**Do not close** Linear issue GER-14 until `readyToCloseF11` is true:
+Close Linear issue GER-14 when `readyToCloseF11` is true:
 
 ```text
 calendarGateMet == true AND uniqueShaGateMet == true
 ```
 
-Even if the policy code is merged earlier, the issue stays open for the waiting window.
+The gate can close immediately after branch protection is applied and the release SHA is green; no calendar delay is required.
 
 ## CI duration budget
 
@@ -134,9 +134,9 @@ Stage 1 acceptance: CI **p95 ≤ 15 minutes** for merge-candidate product workfl
 ## Promotion path
 
 1. Feature branches → `test` via PR (all required checks green).
-2. `test` accumulates stabilization evidence.
+2. `test` produces green release evidence for the candidate SHA.
 3. `main` accepts only a promotion PR from `test` with release-scope evidence.
-4. F-11 required set + clock must be green/complete before Stage 2 and v0.1.0 gates that depend on it (F-12, F-13*).
+4. F-11 required checks and release-SHA evidence must be green before Stage 2 and v0.1.0 gates that depend on it (F-12, F-13*).
 
 ## AI workflow isolation
 

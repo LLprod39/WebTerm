@@ -9,7 +9,7 @@ Overrides vs development:
   - CELERY_TASK_ALWAYS_EAGER: True (no broker needed)
   - EMAIL_BACKEND: locmem (no real emails)
   - CHANNEL_LAYERS: InMemoryChannelLayer (no Redis needed)
-  - MEDIA_ROOT: temp dir to avoid polluting dev media/
+  - MEDIA_ROOT / PLAYBOOK_BUNDLE_STORAGE_ROOT: temp dirs to avoid polluting dev storage
 """
 
 import tempfile
@@ -42,6 +42,7 @@ CHANNEL_LAYERS = {
 
 # Isolate uploaded files from dev workspace
 MEDIA_ROOT = TEST_ARTIFACT_ROOT / "media"
+PLAYBOOK_BUNDLE_STORAGE_ROOT = TEST_ARTIFACT_ROOT / "private" / "playbook_bundles"
 
 # Plugin package fixtures in tests are staged from this fake host.
 # Deploy-check tests that assert the unset-allowlist errors override this

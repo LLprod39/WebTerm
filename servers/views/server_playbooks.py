@@ -3,32 +3,38 @@
 from __future__ import annotations
 
 import json
+import os
 
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from servers.models import Playbook
+from servers.models import BackgroundWorkerState, Playbook, PlaybookRevision
+from servers.playbook_dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
 from servers.services.ansible_engine import (
     detect_ansible,
     generate_from_recipe,
     list_guided_recipes,
 )
+from servers.services.ansible_validator_client import validator_runtime_available, validator_socket_path
 from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility
-from servers.services.playbook_compatibility_inventory import (
-    inventory_groups_from_bindings,
-    normalize_inventory_bindings,
-)
 from servers.services.playbook_parser import parse_ansible_playbook
-from servers.services.playbook_runner import (
-    build_inventory_for_servers,
-    resolve_target_servers,
-)
 from servers.services.playbook_templates import get_template, list_templates
+from servers.services.playbooks.access import capabilities_for
+from servers.services.playbooks.audit import record_playbook_event
+from servers.services.playbooks.revisions import (
+    ensure_playbook_workspace,
+    initialize_created_playbook,
+    initialize_forked_playbook,
+    sync_legacy_content_save,
+)
+from servers.services.playbooks.sharing import sync_legacy_visibility_grant
 from servers.views.server_playbook_serializers import (
     _normalize_incoming_tasks,
     _playbooks_for_user,
@@ -54,7 +60,7 @@ def playbook_list(request):
             hay = f"{pb.name} {pb.description} {' '.join(pb.tags or [])}".lower()
             if q not in hay:
                 continue
-        items.append(_serialize_playbook(pb, include_tasks=False))
+        items.append(_serialize_playbook(pb, include_tasks=False, viewer=request.user))
     return JsonResponse({"success": True, "playbooks": items, "count": len(items)})
 
 
@@ -63,7 +69,7 @@ def playbook_list(request):
 @require_http_methods(["GET"])
 def playbook_detail(request, playbook_id: int):
     pb = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, include_tasks=True)})
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, include_tasks=True, viewer=request.user)})
 
 
 @login_required
@@ -75,8 +81,12 @@ def playbook_create(request):
     if not name:
         return JsonResponse({"success": False, "error": "Name required"}, status=400)
     tasks = _normalize_incoming_tasks(data.get("tasks") or [])
-    if not tasks:
-        return JsonResponse({"success": False, "error": "At least one task with a command is required"}, status=400)
+    source_yaml = str(data.get("source_yaml") or "")[:200_000]
+    if not tasks and not source_yaml.strip():
+        return JsonResponse(
+            {"success": False, "error": "Ansible YAML or at least one runbook task is required"},
+            status=400,
+        )
 
     kind = str(data.get("kind") or Playbook.KIND_ANSIBLE)
     if kind not in (Playbook.KIND_RUNBOOK, Playbook.KIND_ANSIBLE):
@@ -92,7 +102,6 @@ def playbook_create(request):
     tags = data.get("tags") if isinstance(data.get("tags"), list) else []
     tags = [str(t).strip() for t in tags if str(t).strip()][:20]
 
-    source_yaml = str(data.get("source_yaml") or "")[:200_000]
     compatibility = analyze_playbook_compatibility(source_yaml) if source_yaml.strip() else {}
     pb = Playbook.objects.create(
         user=request.user,
@@ -109,6 +118,11 @@ def playbook_create(request):
         is_template_clone=bool(data.get("is_template_clone")),
         template_slug=str(data.get("template_slug") or "")[:80],
     )
+    initialize_created_playbook(
+        pb,
+        actor=request.user,
+        origin_type=PlaybookRevision.ORIGIN_MANUAL,
+    )
     log_user_activity(
         user=request.user,
         request=request,
@@ -120,15 +134,19 @@ def playbook_create(request):
         entity_id=pb.id,
         entity_name=pb.name,
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb)})
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user)})
 
 
 @login_required
 @require_feature("servers")
 @require_http_methods(["POST"])
+@transaction.atomic
 def playbook_update(request, playbook_id: int):
-    pb = get_object_or_404(Playbook, id=playbook_id, user=request.user)
+    pb = get_object_or_404(Playbook.objects.select_for_update(), id=playbook_id, user=request.user)
+    ensure_playbook_workspace(pb, actor=request.user)
     data = json.loads(request.body or "{}")
+    content_changed = False
+    visibility_changed = False
 
     if "name" in data:
         name = str(data.get("name") or "").strip()
@@ -138,6 +156,7 @@ def playbook_update(request, playbook_id: int):
     if "description" in data:
         pb.description = str(data.get("description") or "")[:4000]
     if "kind" in data and data["kind"] in (Playbook.KIND_RUNBOOK, Playbook.KIND_ANSIBLE):
+        content_changed = content_changed or pb.kind != data["kind"]
         pb.kind = data["kind"]
     if "category" in data:
         valid_cats = {c[0] for c in Playbook.CATEGORY_CHOICES}
@@ -147,11 +166,11 @@ def playbook_update(request, playbook_id: int):
         Playbook.VISIBILITY_PRIVATE,
         Playbook.VISIBILITY_SHARED,
     ):
+        visibility_changed = pb.visibility != data["visibility"]
         pb.visibility = data["visibility"]
     if "tasks" in data:
         tasks = _normalize_incoming_tasks(data.get("tasks") or [])
-        if not tasks:
-            return JsonResponse({"success": False, "error": "At least one task required"}, status=400)
+        content_changed = content_changed or tasks != pb.tasks
         pb.tasks = tasks
     if "tags" in data and isinstance(data["tags"], list):
         pb.tags = [str(t).strip() for t in data["tags"] if str(t).strip()][:20]
@@ -159,13 +178,24 @@ def playbook_update(request, playbook_id: int):
     if "source_yaml" in data:
         next_source = str(data.get("source_yaml") or "")[:200_000]
         source_changed = next_source != pb.source_yaml
+        content_changed = content_changed or source_changed
         pb.source_yaml = next_source
         if source_changed:
             pb.compatibility = analyze_playbook_compatibility(next_source) if next_source.strip() else {}
             pb.active_compatibility_revision = None
+    if not (pb.source_yaml or "").strip() and not _normalize_incoming_tasks(pb.tasks or []):
+        return JsonResponse(
+            {"success": False, "error": "Ansible YAML or at least one runbook task is required"},
+            status=400,
+        )
     if "fidelity" in data and isinstance(data["fidelity"], dict):
         pb.fidelity = data["fidelity"]
     pb.save()
+    if content_changed:
+        sync_legacy_content_save(pb, actor=request.user)
+        pb.refresh_from_db()
+    if visibility_changed:
+        sync_legacy_visibility_grant(pb, actor=request.user)
 
     log_user_activity(
         user=request.user,
@@ -178,7 +208,7 @@ def playbook_update(request, playbook_id: int):
         entity_id=pb.id,
         entity_name=pb.name,
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb)})
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user)})
 
 
 @login_required
@@ -188,7 +218,16 @@ def playbook_delete(request, playbook_id: int):
     pb = get_object_or_404(Playbook, id=playbook_id, user=request.user)
     name = pb.name
     pid = pb.id
-    pb.delete()
+    record_playbook_event(
+        playbook=pb,
+        actor=request.user,
+        event_type="playbook_archived",
+        metadata={"name": name},
+    )
+    pb.is_archived = True
+    pb.visibility = Playbook.VISIBILITY_PRIVATE
+    pb.save(update_fields=["is_archived", "visibility", "updated_at"])
+    pb.grants.filter(revoked_at__isnull=True).update(revoked_at=timezone.now())
     log_user_activity(
         user=request.user,
         request=request,
@@ -206,8 +245,22 @@ def playbook_delete(request, playbook_id: int):
 @login_required
 @require_feature("servers")
 @require_http_methods(["POST"])
+def playbook_restore(request, playbook_id: int):
+    pb = get_object_or_404(Playbook, id=playbook_id, user=request.user, is_archived=True)
+    pb.is_archived = False
+    pb.save(update_fields=["is_archived", "updated_at"])
+    record_playbook_event(playbook=pb, actor=request.user, event_type="playbook_restored")
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user)})
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
 def playbook_duplicate(request, playbook_id: int):
     pb = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
+    if not capabilities_for(pb, request.user).can_export:
+        return JsonResponse({"success": False, "error": "Playbook export capability required"}, status=403)
+    published = pb.published_revision
     clone = Playbook.objects.create(
         user=request.user,
         name=f"{pb.name} (copy)"[:200],
@@ -215,15 +268,20 @@ def playbook_duplicate(request, playbook_id: int):
         kind=pb.kind,
         category=pb.category,
         visibility=Playbook.VISIBILITY_PRIVATE,
-        tasks=list(pb.tasks or []),
-        source_yaml=pb.source_yaml,
+        tasks=list((published.tasks if published else pb.tasks) or []),
+        source_yaml=(published.source_yaml if published else pb.source_yaml),
         tags=list(pb.tags or []),
         fidelity=dict(pb.fidelity or {}),
         compatibility=dict(pb.compatibility or {}),
         is_template_clone=pb.is_template_clone,
         template_slug=pb.template_slug,
+        forked_from_revision=published,
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(clone)})
+    if published is not None:
+        initialize_forked_playbook(clone, published, actor=request.user)
+    else:
+        initialize_created_playbook(clone, actor=request.user, origin_type=PlaybookRevision.ORIGIN_MANUAL)
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(clone, viewer=request.user)})
 
 
 @login_required
@@ -256,6 +314,7 @@ def playbook_import(request):
         fidelity=parsed.get("fidelity") or {},
         compatibility=compatibility,
     )
+    initialize_created_playbook(pb, actor=request.user, origin_type=PlaybookRevision.ORIGIN_IMPORTED)
     log_user_activity(
         user=request.user,
         request=request,
@@ -268,14 +327,41 @@ def playbook_import(request):
         entity_name=pb.name,
         metadata={"fidelity": pb.fidelity},
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb), "parsed": parsed})
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user), "parsed": parsed})
 
 
 @login_required
 @require_feature("servers")
 @require_http_methods(["GET"])
 def playbook_ansible_status(request):
-    status = detect_ansible()
+    if validator_socket_path():
+        available = validator_runtime_available()
+        status = {
+            "available": available,
+            "method": "isolated-worker" if available else "none",
+            "binary": "",
+            "version": "image-managed",
+            "image": os.environ.get("WEBTERM_ANSIBLE_IMAGE", "webterm-ansible:latest"),
+            "image_ready": available,
+            "message": (
+                "Isolated Ansible validation and worker runtime are ready"
+                if available
+                else "Isolated Ansible validator is unavailable"
+            ),
+        }
+    else:
+        status = detect_ansible()
+    validation_available = bool(status.get("available"))
+    worker_ready = BackgroundWorkerState.objects.filter(
+        worker_kind=PLAYBOOK_EXECUTION_WORKER_KIND,
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        lease_expires_at__gt=timezone.now(),
+    ).exists()
+    status["validation_available"] = validation_available
+    status["worker_ready"] = worker_ready
+    status["available"] = validation_available and worker_ready
+    if validation_available and not worker_ready:
+        status["message"] = "Ansible validation is ready; execution worker is not heartbeating"
     return JsonResponse({"success": True, "ansible": status})
 
 
@@ -316,7 +402,8 @@ def playbook_guided_generate(request):
         is_template_clone=True,
         template_slug=f"guided:{slug}",
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb)})
+    initialize_created_playbook(pb, actor=request.user, origin_type=PlaybookRevision.ORIGIN_GUIDED)
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user)})
 
 
 @login_required
@@ -347,73 +434,13 @@ def playbook_template_install(request, slug: str):
         template_slug=slug,
         fidelity=tmpl.get("fidelity") if isinstance(tmpl.get("fidelity"), dict) else {"engine": "ansible"},
     )
-    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb)})
-
-
-@login_required
-@require_feature("servers")
-@require_http_methods(["POST"])
-def playbook_inventory_preview(request):
-    data = json.loads(request.body or "{}")
-    server_ids = [int(x) for x in (data.get("server_ids") or []) if str(x).isdigit() or isinstance(x, int)]
-    group_ids = [int(x) for x in (data.get("group_ids") or []) if str(x).isdigit() or isinstance(x, int)]
-    servers = resolve_target_servers(request.user, server_ids=server_ids, group_ids=group_ids)
-    selected_ids = {server.id for server in servers}
-    normalized_bindings = normalize_inventory_bindings(data.get("inventory_bindings"))
-    resolved_bindings: dict[str, list[int]] = {}
-    for selector, binding in normalized_bindings.items():
-        bound_servers = resolve_target_servers(
-            request.user,
-            server_ids=binding["server_ids"],
-            group_ids=binding["group_ids"],
-        )
-        resolved_bindings[selector] = sorted(server.id for server in bound_servers if server.id in selected_ids)
-    binding_groups = inventory_groups_from_bindings(resolved_bindings)
-    inventory = build_inventory_for_servers(servers, extra_groups=binding_groups)
-    compatibility = {}
-    playbook_id = data.get("playbook_id")
-    if str(playbook_id).isdigit():
-        playbook = _playbooks_for_user(request.user).filter(id=int(playbook_id)).first()
-        if playbook and playbook.source_yaml:
-            analysis_source = (
-                playbook.active_compatibility_revision.adapted_yaml
-                if playbook.active_compatibility_revision
-                and playbook.active_compatibility_revision.status == "validated"
-                else playbook.source_yaml
-            )
-            analysis_bindings = {
-                selector: {"server_ids": ids, "group_ids": []} for selector, ids in resolved_bindings.items()
-            }
-            compatibility = analyze_playbook_compatibility(
-                analysis_source,
-                bindings=analysis_bindings,
-                target_servers=servers,
-            )
-    return JsonResponse(
-        {
-            "success": True,
-            "inventory": inventory,
-            "hosts": [
-                {
-                    "id": s.id,
-                    "name": s.name,
-                    "host": s.host,
-                    "port": s.port,
-                    "username": s.username,
-                    "group_id": s.group_id,
-                    "detected_os": getattr(s, "detected_os", "") or "",
-                }
-                for s in servers
-            ],
-            "count": len(servers),
-            "compatibility": compatibility,
-            "inventory_bindings": normalized_bindings,
-        }
-    )
+    initialize_created_playbook(pb, actor=request.user, origin_type=PlaybookRevision.ORIGIN_TEMPLATE)
+    return JsonResponse({"success": True, "playbook": _serialize_playbook(pb, viewer=request.user)})
 
 
 # Run lifecycle views live in server_playbook_run_views (split for size limits);
 # re-exported so servers/urls.py can keep addressing them here.
+from servers.views.server_playbook_inventory_views import playbook_inventory_preview  # noqa: E402, F401
 from servers.views.server_playbook_run_views import (  # noqa: E402, F401
     playbook_run,
     playbook_run_cancel,

@@ -2,7 +2,7 @@ name: CI Stability Clock
 
 on:
   schedule:
-    # Daily audit of the F-11 14-day / 30 unique-SHA gate (does not mutate branch protection).
+    # Daily audit of the F-11 protected green-SHA evidence gate (does not mutate branch protection).
     - cron: "17 6 * * *"
   workflow_dispatch:
   push:
