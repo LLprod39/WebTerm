@@ -17,6 +17,7 @@ def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
     script = (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
 
     for required_probe in (
+        'bash "$ROOT_DIR/docker/install-production.sh"',
         "makemigrations --check --dry-run",
         "check --deploy",
         "/api/settings/readiness/",

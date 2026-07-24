@@ -342,7 +342,7 @@ write_environment
 
 echo "==> Running the production installer on a fresh Linux host"
 STARTED=1
-"$ROOT_DIR/docker/install-production.sh" \
+bash "$ROOT_DIR/docker/install-production.sh" \
   --env-file "$ENV_FILE" \
   --compose-file "$COMPOSE_FILE" \
   --project-name "$PROJECT_NAME" \
