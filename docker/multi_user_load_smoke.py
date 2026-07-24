@@ -98,6 +98,29 @@ async def _get_agent_run_detail(
         return payload
 
 
+async def _poll_agent_run(
+    session: aiohttp.ClientSession,
+    *,
+    base_url: str,
+    run_id: int,
+    headers: dict[str, str] | None = None,
+    timeout: float = 120.0,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        payload = await _get_agent_run_detail(
+            session,
+            base_url=base_url,
+            run_id=run_id,
+            headers=headers,
+        )
+        run = payload.get("run") or {}
+        if str(run.get("status") or "") in {"completed", "failed", "stopped"}:
+            return run
+        await asyncio.sleep(1)
+    raise SmokeFailure(f"timed out waiting for agent run {run_id}")
+
+
 class SmokeUserSession:
     def __init__(
         self,
@@ -293,13 +316,12 @@ class SmokeUserSession:
             if not run_id:
                 raise SmokeFailure(f"agent run id missing for {self.seed['username']}: {payload}")
 
-        detail_payload = await _get_agent_run_detail(
+        run_detail = await _poll_agent_run(
             self.session,
             base_url=self.base_url,
             run_id=run_id,
             headers={"Cookie": self._cookie_header()},
         )
-        run_detail = detail_payload.get("run") or {}
         if str(run_detail.get("status") or "") != "completed":
             raise SmokeFailure(
                 f"agent run {run_id} for {self.seed['username']} finished with {run_detail.get('status')}: "

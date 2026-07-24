@@ -43,3 +43,4 @@ def test_https_runtime_smoke_matches_browser_csrf_and_websocket_origin() -> None
 
     assert "self.csrf_token = self.csrf_cookie" in harness
     assert 'origin=self.base_url.rstrip("/")' in harness
+    assert "await _poll_agent_run(" in harness
