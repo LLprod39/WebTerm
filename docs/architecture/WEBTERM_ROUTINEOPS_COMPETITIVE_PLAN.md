@@ -689,6 +689,34 @@ F-08a/F-08b/F-09 и F-13 — epics, а не mega-PRs. Не объединять 
   ruff/format/Django clean, `lint-imports` 9 kept / 0 broken, full suite **2191
   passed / 0 failed**. No-regression re-frozen **60 -> 59**.
 
+#### Implementation record — F-12/F-13 repository evidence (2026-07-24)
+
+- F-12 repository work is complete: canonical WebTerm identity, frozen v0.1 API
+  and documentation contracts, onboarding, accessibility/performance budgets and
+  a privacy-safe pilot-results validator are green on `test`. The product gate is
+  still open because no real, unique **>=10-participant** pilot dataset has been
+  supplied; generated test rows are not accepted as human UX evidence.
+- F-13a clean-install evidence is green on `test` commit `3e98e6c`: a fresh
+  Ubuntu runner builds the production profile, applies migrations, passes
+  deployment/readiness checks, observes worker heartbeats and exercises the
+  terminal, pipeline and agent paths. This proves a controlled-pilot profile,
+  not unrestricted public readiness while F-11/F-12 remain open.
+- F-13b recovery evidence is green on `test` commit `7ae2752`: PostgreSQL custom
+  dump, environment/config/media/package retention, Redis 7 AOF recovery,
+  isolated restore, integrity comparison and post-restore restart are exercised
+  without uploading secrets. The proof run is GitHub Actions `30082703339`.
+- F-13c lifecycle evidence is green on `test` commit `5d557e0` for both frozen
+  fixtures (`b8924ee` and `v0.1.0-rc.1`). It rejects historical migration edits,
+  performs fixture-to-current upgrades, runs the previous application against
+  the upgraded schema, then restores the mandatory pre-upgrade database backup
+  instead of pretending irreversible migrations can be silently reversed. Both
+  matrix jobs passed in GitHub Actions `30083762709`.
+- F-13d remains fail-closed. No `v0.1.0` release may be published until branch
+  protection is applied to both `test` and `main`, the non-backdated F-11 clock
+  reaches **14 calendar days and 30 unique green SHAs**, the real F-12 pilot gate
+  passes and the immutable image/Compose/checksum/SBOM/attestation inventory is
+  verified on the published digests.
+
 ## Stage 2 — Endpoint Management и функциональное превосходство
 
 ### 5. Целевая архитектура
