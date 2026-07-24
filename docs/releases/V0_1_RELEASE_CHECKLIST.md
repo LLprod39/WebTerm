@@ -7,21 +7,24 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 
 | Gate | Exact command | Expected artifact | Current state |
 |---|---|---|---|
-| Runtime contract | `python scripts/verify_runtime_contract.py` | successful command record | Implemented; CI wiring pending |
+| Runtime contract | `python scripts/verify_runtime_contract.py` | successful command record | Implemented; green on `test` commit `389c6ac`, RC proof pending |
+| Release identity | `python scripts/verify_release_identity.py` | synchronized brand/version command record | Implemented in F-12 worktree; CI proof pending |
+| Documentation contract | `python scripts/verify_docs_contract.py` | link and required-document report | Implemented; expanded F-12 proof pending |
+| Public API contract | `python -m pytest tests/test_public_api_v0_1_contract.py` | route inventory test report | Implemented in F-12 worktree; CI proof pending |
 | Locked Python install | `python -m pip install --require-hashes -r requirements-dev.lock` | installer log and tool versions | Lock implemented; clean CI proof pending |
 | Locked frontend install | `cd frontend && npm ci` | installer log | Pending proof |
-| Architecture sizes | `python scripts/check_architecture_sizes.py --strict-new` | command log/report | Failing baseline; must reach zero |
-| Import boundaries | `lint-imports --config .importlinter` | command log | Failing baseline; must reach zero |
-| Backend lint | `ruff check .` | machine-readable lint artifact or log | Pending F-06 |
+| Architecture sizes | `python scripts/check_architecture_sizes.py --strict-new` | command log/report | Zero violations; green on `test` commit `389c6ac`, RC proof pending |
+| Import boundaries | `lint-imports --config .importlinter` | command log | Green on `test` commit `389c6ac`, RC proof pending |
+| Backend lint | `ruff check .` | machine-readable lint artifact or log | Green on `test` commit `389c6ac`, RC proof pending |
 | Backend tests | `python -m pytest --junitxml=.ci-artifacts/backend-junit.xml` | `backend-junit.xml`, zero failures/errors | F-04 worktree proof: 2,175 passed, 3 integration skips; clean RC/CI proof pending |
 | Backend coverage | `python -m pytest --cov=app --cov=core_ui --cov=servers --cov=studio --cov=kubernetes_ops --cov=plugin_marketplace --cov=mars --cov=web_ui --cov-report=xml:.ci-artifacts/backend-coverage.xml --cov-fail-under=80` | `backend-coverage.xml` | Pending F-06; scope follows matrix |
 | Django system check | `python manage.py check` | command log | Locked worktree pass; clean RC/CI proof pending |
 | Production deploy check | `DJANGO_SETTINGS_MODULE=web_ui.settings.production python manage.py check --deploy` with CI-only strong secrets and explicit hosts | command log, zero errors | Locked worktree pass; plugin routes/providers confirmed absent; clean RC/CI proof pending |
-| Frontend lint | `cd frontend && npm run lint` | lint log, zero errors | Pending F-06 |
-| Frontend typecheck | `cd frontend && npm run typecheck` | typecheck log | Locked worktree pass; clean RC/CI proof pending |
-| Frontend unit tests | `cd frontend && npm test -- --coverage` | JUnit and coverage artifact | Coverage wiring pending F-06 |
-| Frontend build | `cd frontend && npm run build` | build log and `dist` manifest/hash | Pending locked proof |
-| Browser E2E | `cd frontend && npm run test:e2e` | Playwright HTML report, traces on failure | Pending F-05/F-11 |
+| Frontend lint | `cd frontend && npm run lint` | lint log, zero errors | Green on `test` commit `389c6ac`, RC proof pending |
+| Frontend typecheck | `cd frontend && npm run typecheck` | typecheck log | Green on `test` commit `389c6ac`, RC proof pending |
+| Frontend unit tests | `cd frontend && npm run test:coverage` | JUnit and coverage artifact | 112 tests green on `test` commit `389c6ac`; Stage 1 coverage target pending |
+| Frontend build | `cd frontend && npm run build:budget` | build log, budget artifact and `dist` manifest/hash | Green on `test` commit `389c6ac`, RC proof pending |
+| Browser E2E | `cd frontend && npm run test:e2e` | Playwright HTML report, traces on failure | Smoke gate green on `test` commit `389c6ac`; full primary flow pending F-13a |
 | Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report | Pending F-11 |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |

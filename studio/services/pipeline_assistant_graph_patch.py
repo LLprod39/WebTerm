@@ -85,7 +85,7 @@ def _ensure_ai_node_instructions(
         _warn(warnings, f"AI node '{node_label}' was missing goal; a working goal was added.")
     if not str(next_data.get("system_prompt") or "").strip():
         next_data["system_prompt"] = (
-            "You are a careful DevOps agent inside WebTermAI. Prefer read-only diagnostics first, "
+            "You are a careful DevOps agent inside WebTerm. Prefer read-only diagnostics first, "
             "avoid destructive commands without explicit approval, summarize evidence, and make every action auditable."
         )
         _warn(warnings, f"AI node '{node_label}' was missing system_prompt; a safe default was added.")

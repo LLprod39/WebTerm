@@ -7,7 +7,7 @@ from plugin_marketplace.services.package_service import PluginPackageValidationE
 
 
 class Command(BaseCommand):
-    help = "Pack a WebTrerm plugin source directory into a deterministic .wtp archive."
+    help = "Pack a WebTerm plugin source directory into a deterministic .wtp archive."
 
     def add_arguments(self, parser):
         parser.add_argument("path")

@@ -16,7 +16,7 @@ DEMO_PLUGIN_MANIFEST = {
     "slug": "demo-dashboard",
     "publisher": {
         "id": "webtrerm",
-        "name": "WebTrerm",
+        "name": "WebTerm",
         "verified": True,
     },
     "version": "0.1.0",

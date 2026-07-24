@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# One-command Linux server installer for WebTrerm.
+# One-command Linux server installer for WebTerm.
 # It can be run from an existing checkout or with --repo to clone/update first.
 
 DEFAULT_REPO_URL="https://github.com/LLprod39/WebTerm.git"
@@ -499,7 +499,7 @@ print_summary() {
   site_url="$(env_get SITE_URL)"
   cat <<EOF
 
-WebTrerm platform is installed and running.
+WebTerm platform is installed and running.
 
 URL:
   ${site_url}
@@ -574,7 +574,7 @@ EOF
     exit 0
   fi
 
-  log "Starting WebTrerm Docker stack (full platform)"
+  log "Starting WebTerm Docker stack (full platform)"
   run_stack_installer
   print_summary
 }

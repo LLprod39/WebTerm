@@ -79,7 +79,7 @@ class ServersListTool(BaseTool):
     def _execute_sync(self, **kwargs) -> Any:
         user_id = _get_user_id(kwargs)
         if not user_id:
-            return "Требуется контекст пользователя (user_id). Используй только в чате WEU AI."
+            return "Требуется контекст пользователя (user_id). Используй только в чате WebTerm."
 
         # Проверяем, есть ли ограничение на целевой сервер
         target_server_id, target_server_name = _get_target_server(kwargs)
@@ -134,7 +134,7 @@ class ServerExecuteTool(BaseTool):
     async def execute(self, **kwargs) -> Any:
         user_id = _get_user_id(kwargs)
         if not user_id:
-            return "Требуется контекст пользователя. Используй только в чате WEU AI."
+            return "Требуется контекст пользователя. Используй только в чате WebTerm."
 
         ctx = kwargs.get("_context") or {}
         server_name_or_id = (kwargs.get("server_name_or_id") or "").strip()

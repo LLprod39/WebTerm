@@ -1,5 +1,6 @@
 FROM node:22.23.1-bookworm-slim
 
+ARG WEBTERM_VERSION=0.1.0
 ARG http_proxy
 ARG https_proxy
 ARG ftp_proxy
@@ -18,7 +19,12 @@ ENV http_proxy=${http_proxy} \
     FTP_PROXY=${FTP_PROXY} \
     NO_PROXY=${NO_PROXY} \
     CHOKIDAR_USEPOLLING=true \
-    WATCHPACK_POLLING=true
+    WATCHPACK_POLLING=true \
+    WEBTERM_VERSION=${WEBTERM_VERSION}
+
+LABEL org.opencontainers.image.title="WebTerm" \
+      org.opencontainers.image.version=${WEBTERM_VERSION} \
+      org.opencontainers.image.source="https://github.com/LLprod39/WebTerm"
 
 WORKDIR /workspace/frontend
 

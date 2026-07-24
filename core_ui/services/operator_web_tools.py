@@ -170,7 +170,7 @@ def web_search(ctx: AssistantActionContext) -> dict[str, Any]:
         headers={
             "Accept": "application/json",
             "X-Subscription-Token": api_key,
-            "User-Agent": "WebTrerm-Operator/1.0",
+            "User-Agent": "WebTerm-Operator/1.0",
         },
     )
     try:
@@ -224,7 +224,7 @@ def _fetch_result_page(url: str) -> tuple[str, str, str]:
             current,
             headers={
                 "Accept": "text/html,text/plain,application/json;q=0.8",
-                "User-Agent": "WebTrerm-Operator/1.0",
+                "User-Agent": "WebTerm-Operator/1.0",
             },
         )
         try:

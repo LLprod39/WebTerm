@@ -1,6 +1,6 @@
 {
-  "name": "WEU AI Agent",
-  "short_name": "WEU AI",
+  "name": "WebTerm Agent",
+  "short_name": "WebTerm",
   "description": "Enterprise AI Agent with RAG, Tools, and Orchestration",
   "start_url": "/",
   "display": "standalone",

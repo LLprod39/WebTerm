@@ -126,7 +126,7 @@ def _choose_output(message: str) -> tuple[str, str, dict[str, Any]]:
             "Email Summary",
             {
                 "label": "Email Summary",
-                "subject": "WebTermAI automation result",
+                "subject": "WebTerm automation result",
                 "body": "{runbook_step_output}",
             },
         )
@@ -190,7 +190,7 @@ def build_template_draft_response(
     graph_patch = build_template_graph_patch(template, assistant_context=assistant_context)
     resource_plan = build_template_resource_plan(template, assistant_context=assistant_context)
     warning = (
-        "LLM provider did not return a usable structured draft, so WebTermAI generated a pilot template "
+        "LLM provider did not return a usable structured draft, so WebTerm generated a pilot template "
         f"skeleton locally. Reason: {fallback_reason[:500]}"
     )
     return augment_response_with_interview_questions(
@@ -270,11 +270,11 @@ def build_deterministic_draft_response(
             "data": {
                 "label": "AI Runbook Step",
                 "goal": (
-                    f"Execute this WebTermAI automation safely: {message[:900]}. "
+                    f"Execute this WebTerm automation safely: {message[:900]}. "
                     "Prefer read-only diagnostics first and clearly report missing resources."
                 ),
                 "system_prompt": (
-                    "You are a careful WebTermAI DevOps agent. Use configured resources only, "
+                    "You are a careful WebTerm DevOps agent. Use configured resources only, "
                     "avoid destructive operations without explicit approval, and keep an audit-friendly summary."
                 ),
                 "instructions": (
@@ -331,7 +331,7 @@ def build_deterministic_draft_response(
     )
 
     warning = (
-        "LLM provider did not return a usable structured draft, so WebTermAI generated a safe starter DAG locally. "
+        "LLM provider did not return a usable structured draft, so WebTerm generated a safe starter DAG locally. "
         f"Reason: {fallback_reason[:500]}"
     )
     return augment_response_with_interview_questions(

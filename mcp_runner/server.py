@@ -73,7 +73,7 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
         await manager.shutdown()
 
 
-app = FastAPI(title="WebTrerm MCP Runner", lifespan=_lifespan)
+app = FastAPI(title="WebTerm MCP Runner", lifespan=_lifespan)
 
 
 @app.get("/health")

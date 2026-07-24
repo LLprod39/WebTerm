@@ -4,7 +4,7 @@ from plugin_marketplace.services.package_service import PluginPackageValidationE
 
 
 class Command(BaseCommand):
-    help = "Install a local WebTrerm plugin package into disabled state."
+    help = "Install a local WebTerm plugin package into disabled state."
 
     def add_arguments(self, parser):
         parser.add_argument("path")

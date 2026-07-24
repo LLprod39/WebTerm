@@ -52,7 +52,7 @@ test.describe("Auth flows", () => {
     await page.goto("/servers");
 
     await expect(page).toHaveURL(/\/login\?next=%2Fservers/);
-    await expect(page.getByRole("heading", { name: /WebTermAI/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /WebTerm/ })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 

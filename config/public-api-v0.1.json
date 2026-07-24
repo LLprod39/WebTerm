@@ -1,0 +1,69 @@
+{
+  "version": "0.1.0",
+  "policy": "Only the routes listed here are declared stable for the v0.1 lifecycle.",
+  "routes": [
+    {
+      "name": "api_health",
+      "path": "/api/health/",
+      "methods": ["GET"],
+      "access": "public",
+      "view": "core_ui.views.health_views.api_health"
+    },
+    {
+      "name": "api_auth_csrf",
+      "path": "/api/auth/csrf/",
+      "methods": ["GET"],
+      "access": "public",
+      "view": "core_ui.views.auth_views.api_auth_csrf"
+    },
+    {
+      "name": "api_auth_session",
+      "path": "/api/auth/session/",
+      "methods": ["GET"],
+      "access": "public",
+      "view": "core_ui.views.auth_views.api_auth_session"
+    },
+    {
+      "name": "api_auth_login",
+      "path": "/api/auth/login/",
+      "methods": ["POST"],
+      "access": "public-with-csrf",
+      "view": "core_ui.views.auth_views.api_auth_login"
+    },
+    {
+      "name": "api_auth_logout",
+      "path": "/api/auth/logout/",
+      "methods": ["POST"],
+      "access": "session-with-csrf",
+      "view": "core_ui.views.auth_views.api_auth_logout"
+    },
+    {
+      "name": "api_settings_readiness",
+      "path": "/api/settings/readiness/",
+      "methods": ["GET"],
+      "access": "staff-and-settings-permission",
+      "view": "web_ui.views.settings_readiness_views.api_settings_readiness"
+    },
+    {
+      "name": "servers:server_list",
+      "path": "/servers/",
+      "methods": ["GET"],
+      "access": "session-and-servers-permission",
+      "view": "servers.views.server_pages.server_list"
+    },
+    {
+      "name": "servers:frontend_bootstrap",
+      "path": "/servers/api/frontend/bootstrap/",
+      "methods": ["GET"],
+      "access": "session",
+      "view": "servers.views.server_pages.frontend_bootstrap"
+    },
+    {
+      "name": "servers:monitoring_dashboard",
+      "path": "/servers/api/monitoring/dashboard/",
+      "methods": ["GET"],
+      "access": "session-and-dashboard-permission",
+      "view": "servers.views.server_monitoring.monitoring_dashboard"
+    }
+  ]
+}

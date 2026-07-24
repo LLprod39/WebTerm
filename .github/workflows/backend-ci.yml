@@ -226,3 +226,5 @@ jobs:
           python-version: "3.11.15"
       - name: Verify authoritative docs and release contracts
         run: python scripts/verify_docs_contract.py
+      - name: Verify canonical brand and synchronized version
+        run: python scripts/verify_release_identity.py

@@ -1,7 +1,7 @@
 {
   "name": "webterm-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "license": "Apache-2.0",
   "packageManager": "npm@10.9.8",
   "engines": {

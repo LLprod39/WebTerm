@@ -82,7 +82,7 @@ Owner decision: сначала полностью завершить Stage 1, т
 - Обязательный CI не запускает pytest, Ruff, Django checks, Vitest, TypeScript check и обычную production frontend build.
 - `main` не защищён. [PR #17](https://github.com/LLprod39/WebTerm/pull/17) был слит за 33 секунды при красных Architecture Fitness и Playwright.
 - Отсутствуют `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`, CODEOWNERS, git tags и GitHub Releases.
-- Бренд всё ещё расходится между `WebTrerm`, `WebTerm`, `WebTermAI`, `WEU AI`, `weu-ai-platform` и `webterm-frontend`.
+- На исходном аудите отображаемый бренд и package metadata расходились. F-12 фиксирует канонический `WebTerm`, public version `0.1.0` и отдельный список legacy compatibility identifiers.
 - Функциональность реальна: SSH, файловые операции, мониторинг, Ansible/playbooks, Studio pipelines, MCP, skills, Kubernetes, plugins, audit, permissions и production security settings присутствуют в коде.
 
 ### 2.3. Скорректированная оценка

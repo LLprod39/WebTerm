@@ -1,7 +1,7 @@
 [project]
-name = "weu-ai-platform"
-version = "2.0.0"
-description = "WEU AI Agent Platform - DevOps/IT task automation"
+name = "webterm"
+version = "0.1.0"
+description = "WebTerm self-hosted infrastructure operations platform"
 requires-python = ">=3.11,<3.13"
 license = { text = "Apache License 2.0" }
 classifiers = [

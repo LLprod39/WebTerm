@@ -167,7 +167,7 @@ class SessionManager:
             {
                 "protocolVersion": SUPPORTED_PROTOCOL_VERSION,
                 "capabilities": {},
-                "clientInfo": {"name": "WebTrerm MCP Runner", "version": "1.0"},
+                "clientInfo": {"name": "WebTerm MCP Runner", "version": "1.0"},
             },
             timeout=self.config.initialize_timeout_seconds,
             allow_initialize=True,

@@ -173,7 +173,7 @@ def _manifest(plugin_id: str, *, publisher_name: str, summary: str, template: st
         },
         "version": "0.1.0",
         "api_version": "plugins.v1",
-        "summary": summary or f"{name} plugin for WebTrerm.",
+        "summary": summary or f"{name} plugin for WebTerm.",
         "description": "",
         "risk_tier": "info",
         "categories": ["internal"] if template != "empty" else [],
@@ -222,7 +222,7 @@ def _backend_plugin_template(plugin_id: str) -> str:
 
 
 class Command(BaseCommand):
-    help = "Scaffold a safe metadata-first WebTrerm plugin source directory."
+    help = "Scaffold a safe metadata-first WebTerm plugin source directory."
 
     def add_arguments(self, parser):
         parser.add_argument("plugin_id")
@@ -274,7 +274,7 @@ class Command(BaseCommand):
             target / "backend" / "README.md",
             (
                 "Backend code is disabled by default. This template uses sandboxed executor refs, so validate and run it only "
-                "after enabling the WebTrerm plugin sandbox settings.\n"
+                "after enabling the WebTerm plugin sandbox settings.\n"
                 if sandbox_template
                 else "Backend code is disabled by default. Add sandboxed executor refs only when this extension needs backend logic.\n"
             ),

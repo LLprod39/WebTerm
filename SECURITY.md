@@ -3,7 +3,7 @@
 Last reviewed: 2026-07-23  
 Plan ID: F-10 (GER-19)
 
-This document is the formal security process for WebTerm / WebTrerm Stage 1.
+This document is the formal security process for WebTerm Stage 1.
 
 ## Supported versions
 

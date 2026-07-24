@@ -1,5 +1,5 @@
 /**
- * WEU AI - Service Worker
+ * WebTerm - Service Worker
  * Provides offline capabilities and caching for PWA
  */
 
@@ -150,7 +150,7 @@ self.addEventListener('push', (event) => {
     };
     
     event.waitUntil(
-        self.registration.showNotification(data.title || 'WEU AI', options)
+        self.registration.showNotification(data.title || 'WebTerm', options)
     );
 });
 

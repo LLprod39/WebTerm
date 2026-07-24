@@ -1,4 +1,4 @@
-# WebTrerm Self-Hosted Plugin Extensions Plan
+# WebTerm Self-Hosted Plugin Extensions Plan
 
 Last reviewed: 2026-06-28
 
@@ -6,18 +6,18 @@ Status: product direction corrected.
 
 This document keeps the old filename only because repository links already point
 to it. The product we are building is not a public marketplace. It is a
-self-hosted plugin extension system for teams that run their own WebTrerm
+self-hosted plugin extension system for teams that run their own WebTerm
 instance.
 
 Short version:
 
-> WebTrerm must let admins and internal developers add missing platform
+> WebTerm must let admins and internal developers add missing platform
 > functions through safe plugins: dashboards, pages, Studio nodes, agent tools,
 > connectors, hooks, terminal actions, and reports.
 
 The normal story is simple:
 
-1. A team deploys WebTrerm for itself.
+1. A team deploys WebTerm for itself.
 2. Admins see that the platform misses a workflow.
 3. They create a plugin with Mars, Codex, or by hand.
 4. They validate and pack it as `.wtp`.
@@ -31,7 +31,7 @@ That is the main direction. Everything else is secondary.
 
 ## 1. What We Are Building
 
-Build a private extension platform inside WebTrerm.
+Build a private extension platform inside WebTerm.
 
 The platform must support:
 
@@ -265,7 +265,7 @@ Required manifest areas:
 - stable plugin id;
 - name, slug, version, summary;
 - internal author/team metadata;
-- WebTrerm compatibility;
+- WebTerm compatibility;
 - requested permissions with reasons;
 - settings schema;
 - secret declarations;
@@ -280,7 +280,7 @@ Default package restrictions:
 - no automatic dependency installation;
 - no automatic enablement after install;
 - no raw secret exposure to frontend code;
-- no direct imports from WebTrerm feature internals;
+- no direct imports from WebTerm feature internals;
 - no shell execution unless explicitly declared and permission-gated;
 - no backend code execution unless sandbox support is enabled.
 
@@ -315,7 +315,7 @@ Supported scaffold templates:
 Prompt contract for Mars/Codex:
 
 ```text
-Build a WebTrerm self-hosted plugin.
+Build a WebTerm self-hosted plugin.
 Use webtrerm.plugin.json as the source of truth.
 Target a private team deployment, not a public marketplace.
 Package must validate with: python manage.py plugin_validate .
@@ -366,7 +366,7 @@ Enable blockers must be explicit:
 
 - missing required permission;
 - missing required secret binding;
-- incompatible WebTrerm version;
+- incompatible WebTerm version;
 - failed package validation;
 - denied scan policy;
 - sandbox required but disabled;
@@ -444,7 +444,7 @@ Acceptance:
 - code execution is denied by default;
 - enabling sandbox support is explicit;
 - denied egress is blocked and tested;
-- plugin failure does not crash WebTrerm;
+- plugin failure does not crash WebTerm;
 - repeated plugin failures can be quarantined or disabled;
 - admins can see why a plugin failed.
 
@@ -690,4 +690,4 @@ The self-hosted extension platform is ready when:
 - docs and scaffold templates let an internal team create useful plugins quickly;
 - default UI does not look like a public paid marketplace.
 
-This is the direction: make WebTrerm easy to extend privately and safely.
+This is the direction: make WebTerm easy to extend privately and safely.

@@ -25,7 +25,7 @@ describe("PlaybookCompatibilityPanel one-click adaptation", () => {
       proposal: {
         method: "ai",
         adapted_yaml: "- hosts: web\n  tasks: []\n",
-        changes: ["Prepared for WebTrerm runtime inventory"],
+        changes: ["Prepared for WebTerm runtime inventory"],
         assumptions: [],
         semantic_guard: { passed: true, differences: [] },
         report,
@@ -53,7 +53,7 @@ describe("PlaybookCompatibilityPanel one-click adaptation", () => {
     await waitFor(() => expect(adaptPlaybookCompatibility).toHaveBeenCalledWith(7));
     expect(applyPlaybookCompatibility).toHaveBeenCalledWith(7, {
       adapted_yaml: "- hosts: web\n  tasks: []\n",
-      changes: ["Prepared for WebTrerm runtime inventory"],
+      changes: ["Prepared for WebTerm runtime inventory"],
     });
     await waitFor(() => expect(onApplied).toHaveBeenCalled());
   });

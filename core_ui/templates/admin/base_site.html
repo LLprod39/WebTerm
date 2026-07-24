@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}
 {% load i18n static %}
 
-{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | WEU AI Admin{% endblock %}
+{% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | WebTerm Admin{% endblock %}
 
 {% block dark-mode-vars %}{% endblock %}
 {% block extrastyle %}{{ block.super }}
@@ -28,7 +28,7 @@
 <div id="site-name">
   <a href="{% url 'admin:index' %}" class="weu-admin-brand">
     <span class="weu-admin-brand-icon material-icons-round" aria-hidden="true">auto_awesome</span>
-    WEU AI Admin
+    WebTerm Admin
   </a>
 </div>
 {% if user.is_anonymous %}

@@ -2,7 +2,7 @@
 
 Discovers listening TCP ports on a server over SSH and performs local TLS
 handshakes against 127.0.0.1 with the server's public hostname as SNI, so
-certificates are inventoried even when the WebTrerm host cannot reach the
+certificates are inventoried even when the WebTerm host cannot reach the
 port through a firewall. STARTTLS-only services (SMTP, IMAP, LDAP) are not
 probed by this version.
 """

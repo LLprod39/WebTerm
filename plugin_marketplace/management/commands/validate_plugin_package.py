@@ -7,7 +7,7 @@ from plugin_marketplace.services.package_service import PluginPackageValidationE
 
 
 class Command(BaseCommand):
-    help = "Validate a WebTrerm plugin source directory or .wtp package without executing package contents."
+    help = "Validate a WebTerm plugin source directory or .wtp package without executing package contents."
 
     def add_arguments(self, parser):
         parser.add_argument("path")

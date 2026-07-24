@@ -182,7 +182,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     );
 
     setTimeout(() => fit.fit(), 50);
-    term.writeln("\x1b[36mWebTermAI\x1b[0m");
+    term.writeln("\x1b[36mWebTerm\x1b[0m");
     term.writeln(`\x1b[90mConnecting to server #${serverId}...\x1b[0m`);
 
     termRef.current = term;

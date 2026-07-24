@@ -1,8 +1,8 @@
 # Architecture Notes
 
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-24
 
-This folder is the public architecture entry point. The detailed working contract currently lives in the local-only file `docs/local/ARCHITECTURE_CONTRACT.md` because it came from internal root docs and is ignored by git.
+This folder is the public architecture entry point. The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
 
 ## Current Shape
 
@@ -33,7 +33,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Active Refactor Status
 
-- Current architecture command status: **FAIL** on commit `b8924ee`, rechecked 2026-07-22. The live guard reports 28 size violations and a broken `core_ui -> servers` boundary with 11 forbidden import paths. The mandatory cleanup and release gates are tracked in [the WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md); do not start another large product domain until Stage 1 is complete.
+- Architecture sizes and import boundaries are green on `test` commit `389c6ac` (2026-07-24). This removes the recorded F-08/F-09 baseline debt; it does not by itself approve a release. The remaining release gates are tracked in [the WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md).
 - Plugin work targets self-hosted extensions, not a public paid marketplace. Existing foundations include pure `app.plugins` contracts, the internal `plugin_marketplace` store/API, permission grants, package audit/signing/scanning metadata, private catalogs, lifecycle/rollback/quarantine APIs, sandbox policy boundaries, and production trust checks.
 - Backend view endpoint groups have mostly been split into focused modules.
 - `core_ui/views/_views_all.py`, `servers/views/_views_all.py`, and `studio/views/_views_all.py` remain compatibility shims.

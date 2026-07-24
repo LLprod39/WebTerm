@@ -1,5 +1,5 @@
 """
-WEU AI Platform Django project.
+WebTerm Platform Django project.
 """
 
 # Import Celery app so it's loaded when Django starts.

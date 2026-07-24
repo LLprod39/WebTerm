@@ -23,8 +23,8 @@ from django.urls import include, path
 from plugin_marketplace.release_profile import plugin_marketplace_enabled
 from web_ui.views import settings_readiness_views
 
-admin.site.site_header = "WEU AI Admin"
-admin.site.site_title = "WEU AI — Админка"
+admin.site.site_header = "WebTerm Admin"
+admin.site.site_title = "WebTerm — Админка"
 admin.site.index_title = "Управление"
 
 urlpatterns = [

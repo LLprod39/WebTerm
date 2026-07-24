@@ -188,10 +188,10 @@ export function PlaybookCompatibilityPanel({
             {tr(
               hasErrors
                 ? "Нажмите один раз: система попробует исправить всё автоматически и сообщит только о блокерах, которые нельзя устранить без файлов или секретов."
-                : "Инструкции, ограничения WebTrerm и отчёт совместимости уже передаются ИИ автоматически. Ничего вводить не нужно.",
+                : "Инструкции, ограничения WebTerm и отчёт совместимости уже передаются ИИ автоматически. Ничего вводить не нужно.",
               hasErrors
                 ? "Click once: the system will fix everything it safely can and report only blockers that require files or secrets."
-                : "WebTrerm constraints, instructions, and the compatibility report are supplied to AI automatically.",
+                : "WebTerm constraints, instructions, and the compatibility report are supplied to AI automatically.",
             )}
           </p>
           <Button

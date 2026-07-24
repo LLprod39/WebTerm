@@ -1,8 +1,8 @@
-# WebTrerm Plugin Author Guide
+# WebTerm Plugin Author Guide
 
 Last reviewed: 2026-06-28
 
-This guide is for teams building self-hosted WebTrerm plugins for their own
+This guide is for teams building self-hosted WebTerm plugins for their own
 instance. The normal flow is internal: create a plugin with Mars, Codex, or by
 hand, validate it, package it, install it disabled, review permissions, then
 enable it.
@@ -69,11 +69,11 @@ python manage.py plugin_pack . --overwrite
 When asking Mars or Codex to build a plugin, give it this contract:
 
 ```text
-Build a WebTrerm self-hosted plugin.
-Do not edit WebTrerm core files.
+Build a WebTerm self-hosted plugin.
+Do not edit WebTerm core files.
 Use webtrerm.plugin.json as the source of truth.
 Declare every permission, secret, egress host, setting, and surface.
-Do not add install scripts, automatic dependency installation, migrations, or direct imports from WebTrerm feature internals.
+Do not add install scripts, automatic dependency installation, migrations, or direct imports from WebTerm feature internals.
 Package must validate with python manage.py plugin_validate .
 Package must install disabled with python manage.py plugin_install_local <package.wtp>.
 ```

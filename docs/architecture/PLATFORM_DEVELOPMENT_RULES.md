@@ -1,8 +1,8 @@
-# WebTrerm Platform Development Rules
+# WebTerm Platform Development Rules
 
 Last reviewed: 2026-06-21
 
-These rules are the shared working contract for changing WebTrerm without damaging the platform architecture.
+These rules are the shared working contract for changing WebTerm without damaging the platform architecture.
 
 Use this file before adding or changing:
 

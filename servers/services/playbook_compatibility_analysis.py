@@ -349,7 +349,7 @@ def analyze_playbook_compatibility(
     ]
     for selector in missing_bindings:
         issues.append(
-            _issue("unbound_host_selector", "warning", f"Map '{selector}' to WebTrerm servers or groups", "hosts")
+            _issue("unbound_host_selector", "warning", f"Map '{selector}' to WebTerm servers or groups", "hosts")
         )
 
     required_vars = sorted(name for name in used_vars if name.split(".", 1)[0] not in declared_vars | _BUILTIN_VARS)

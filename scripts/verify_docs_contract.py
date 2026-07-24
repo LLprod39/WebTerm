@@ -10,11 +10,20 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 AUTHORITATIVE_DOCS = (
     "README.md",
+    "CONTRIBUTING.md",
+    "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
     "docs/architecture/ARCHITECTURE_CONTRACT.md",
     "docs/architecture/CI_GOVERNANCE.md",
     "docs/architecture/KUBERNETES_OPS_OPERATIONS.md",
+    "docs/architecture/adr/README.md",
     "docs/architecture/adr/0001-primary-runtime-and-toolchain.md",
+    "docs/architecture/adr/0002-public-version-reset.md",
+    "docs/pilot/PILOT_UX_SCRIPT_V1.md",
     "docs/releases/README.md",
+    "docs/releases/BRAND_COMPATIBILITY.md",
+    "docs/releases/OPERATIONS_RUNBOOK.md",
+    "docs/releases/PUBLIC_API_V0_1.md",
     "docs/releases/SUPPORT_MATRIX.md",
     "docs/releases/V0_1_RELEASE_SCOPE.md",
     "docs/releases/V0_1_RELEASE_CHECKLIST.md",
@@ -87,6 +96,16 @@ def verify(root: Path = ROOT) -> list[str]:
         ):
             if command not in checklist:
                 errors.append(f"release checklist is missing command: {command}")
+
+    version_path = root / "VERSION"
+    if not version_path.is_file():
+        errors.append("missing release version file: VERSION")
+    elif version_path.read_text(encoding="utf-8").strip() != "0.1.0":
+        errors.append("VERSION must declare 0.1.0")
+
+    api_inventory = root / "config/public-api-v0.1.json"
+    if not api_inventory.is_file():
+        errors.append("missing public API inventory: config/public-api-v0.1.json")
     return errors
 
 

@@ -206,3 +206,14 @@ AgentFrontedTest/
 frontend/demo-recordings/
 scripts/_*.ps1
 scripts/_tmp_*.py
+
+# Public project and release contracts required by the v0.1 readiness gate.
+!/CONTRIBUTING.md
+!/CHANGELOG.md
+!/CODE_OF_CONDUCT.md
+!/VERSION
+!docs/architecture/adr/README.md
+!docs/architecture/adr/0002-public-version-reset.md
+!docs/pilot/
+docs/pilot/*
+!docs/pilot/*.md

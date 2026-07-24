@@ -28,7 +28,7 @@ export function enableDemoMode(): boolean {
     return false;
   }
   _demoMode = true;
-  console.info("[WebTermAI] Demo mode enabled by VITE_ENABLE_DEMO_MODE=true");
+  console.info("[WebTerm] Demo mode enabled by VITE_ENABLE_DEMO_MODE=true");
   return true;
 }
 

@@ -10,7 +10,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: false });
 
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /WebTermAI/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /WebTerm/ })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {

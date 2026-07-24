@@ -60,7 +60,7 @@ test.describe("Visual regression", () => {
   test("login page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: false });
     await page.goto("/login");
-    await expect(page.getByRole("heading", { name: /WebTermAI/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /WebTerm/ })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("login-page.png", { animations: "disabled", fullPage: true });
   });

@@ -1,6 +1,6 @@
-# WebTrerm
+# WebTerm
 
-WebTrerm is a self-hosted admin and automation platform for teams that manage
+WebTerm is a self-hosted admin and automation platform for teams that manage
 servers, terminal work, infrastructure context, AI agents, and internal tools
 from one browser workspace.
 
@@ -8,7 +8,7 @@ It is not just a web SSH client. The goal is to keep the server inventory,
 terminal, monitoring, run history, automation pipelines, AI assistance, and
 private plugin extensions in one controlled product.
 
-![WebTrerm overview](.github/assets/readme-hero.svg)
+![WebTerm overview](.github/assets/readme-hero.svg)
 
 ## What This Project Does
 
@@ -45,6 +45,8 @@ private plugin extensions in one controlled product.
 ## Security
 
 - Public process: [`SECURITY.md`](SECURITY.md) (supported versions, disclosure, SLA).
+- Contributor setup and checks: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- Release history and current public version: [`CHANGELOG.md`](CHANGELOG.md) and [`VERSION`](VERSION).
 - Third-party notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 - Threat model and findings ledger: [`security/`](security/).
 - CI: `.github/workflows/security.yml` (pip-audit, npm audit, SBOM, checksums, GitHub-signed provenance attestations).
@@ -66,6 +68,10 @@ tests/               backend and integration tests
 
 The internal Django app is still named `plugin_marketplace` for compatibility,
 but the product direction is private/self-hosted plugin extensions.
+
+The v0.1 public HTTP compatibility boundary is declared in
+[`config/public-api-v0.1.json`](config/public-api-v0.1.json) and documented in
+[`docs/releases/PUBLIC_API_V0_1.md`](docs/releases/PUBLIC_API_V0_1.md).
 
 ## Quick Start
 

@@ -1,5 +1,6 @@
 FROM python:3.11.15-slim-bookworm
 
+ARG WEBTERM_VERSION=0.1.0
 ARG http_proxy
 ARG https_proxy
 ARG ftp_proxy
@@ -18,7 +19,12 @@ ENV http_proxy=${http_proxy} \
     FTP_PROXY=${FTP_PROXY} \
     NO_PROXY=${NO_PROXY} \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    WEBTERM_VERSION=${WEBTERM_VERSION}
+
+LABEL org.opencontainers.image.title="WebTerm" \
+      org.opencontainers.image.version=${WEBTERM_VERSION} \
+      org.opencontainers.image.source="https://github.com/LLprod39/WebTerm"
 
 WORKDIR /workspace
 

@@ -1,5 +1,5 @@
 """
-Celery configuration for WEU AI Platform.
+Celery configuration for WebTerm Platform.
 
 Usage:
     # Start worker:

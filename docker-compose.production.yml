@@ -1,4 +1,4 @@
-# Production stack for WebTrerm / mini_prod.
+# Production stack for WebTerm / mini_prod.
 # Quick start:
 #   1. Copy .env.production.example to .env.production
 #   2. Fill real hostnames if you expose the app outside localhost
