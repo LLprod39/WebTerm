@@ -203,6 +203,11 @@ F13A_ARTIFACT_DIR="$SENSITIVE_DIR/f13a-source-evidence" \
 F13A_KEEP_UP=1 \
   "$ROOT_DIR/docker/production-install-smoke.sh"
 SOURCE_STARTED=1
+REDIS_IMAGE="$(source_compose images -q redis | head -n 1)"
+if [[ -z "$REDIS_IMAGE" ]]; then
+  echo "Unable to resolve the source Redis image" >&2
+  exit 1
+fi
 
 echo "==> Seeding persistent config/media and Redis recovery markers"
 source_compose exec -T backend sh -ec \
@@ -232,8 +237,34 @@ cp "$SOURCE_ENV" "$SENSITIVE_DIR/production.env"
 chmod 600 "$SENSITIVE_DIR/production.env"
 source_compose exec -T backend tar -C /workspace/config_runtime -czf - . >"$SENSITIVE_DIR/config.tar.gz"
 source_compose exec -T backend tar -C /workspace/media -czf - . >"$SENSITIVE_DIR/media.tar.gz"
-source_compose exec -T redis sh -ec 'redis-cli SAVE >/dev/null; tar -C /data -czf - dump.rdb' \
-  >"$SENSITIVE_DIR/redis.tar.gz"
+source_compose exec -T redis sh -ec '
+  redis-cli BGREWRITEAOF >/dev/null 2>&1 || true
+  attempts=0
+  while [ "$attempts" -lt 120 ]; do
+    info="$(redis-cli INFO persistence | tr -d "\r")"
+    in_progress="$(printf "%s\n" "$info" | sed -n "s/^aof_rewrite_in_progress:\([0-9]*\)$/\1/p")"
+    status="$(printf "%s\n" "$info" | sed -n "s/^aof_last_bgrewrite_status:\([^[:space:]]*\)$/\1/p")"
+    if [ "$in_progress" = "0" ] && [ "$status" = "ok" ]; then
+      exit 0
+    fi
+    attempts=$((attempts + 1))
+    sleep 1
+  done
+  echo "Timed out waiting for a consistent Redis AOF rewrite" >&2
+  exit 1
+'
+source_compose stop redis
+SOURCE_REDIS_VOLUME="$(docker volume ls \
+  --filter "label=com.docker.compose.project=$SOURCE_PROJECT" \
+  --filter 'label=com.docker.compose.volume=mini_prod_redis_data' \
+  --quiet | head -n 1)"
+if [[ -z "$SOURCE_REDIS_VOLUME" ]]; then
+  echo "Unable to resolve the source Redis volume" >&2
+  exit 1
+fi
+docker run --rm \
+  --volume "$SOURCE_REDIS_VOLUME:/source:ro" \
+  "$REDIS_IMAGE" sh -ec 'tar -C /source -czf - .' >"$SENSITIVE_DIR/redis.tar.gz"
 
 (
   cd "$SENSITIVE_DIR"
@@ -248,7 +279,6 @@ echo "==> Creating an isolated restore project and restoring Redis persistence"
 write_restore_environment
 export F13B_BACKEND_IMAGE
 F13B_BACKEND_IMAGE="$(source_compose images -q backend | head -n 1)"
-REDIS_IMAGE="$(source_compose images -q redis | head -n 1)"
 if [[ -z "$F13B_BACKEND_IMAGE" || -z "$REDIS_IMAGE" ]]; then
   echo "Unable to resolve source release images" >&2
   exit 1
