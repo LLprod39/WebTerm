@@ -108,9 +108,7 @@ def evaluate(payload: Any) -> dict[str, Any]:
         else:
             for error_index, item in enumerate(classified_errors):
                 if not isinstance(item, dict) or item.get("category") not in {"environment", "product"}:
-                    errors.append(
-                        f"{prefix}.errors[{error_index}] must classify category as environment or product"
-                    )
+                    errors.append(f"{prefix}.errors[{error_index}] must classify category as environment or product")
 
         derived_pass = len(task_values) == len(PRIMARY_TASKS) and all(task_values) and hints == 0
         if attempt.get("passed") is not derived_pass:
