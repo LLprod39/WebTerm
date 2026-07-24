@@ -99,12 +99,23 @@ async def _get_agent_run_detail(
 
 
 class SmokeUserSession:
-    def __init__(self, *, base_url: str, seed: dict[str, Any], shared_password: str):
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        seed: dict[str, Any],
+        shared_password: str,
+        insecure_tls: bool = False,
+    ):
         self.base_url = _base_http(base_url)
         self.ws_base = _base_ws(base_url)
         self.seed = seed
         self.password = shared_password
-        self.session = aiohttp.ClientSession(cookie_jar=aiohttp.CookieJar(unsafe=True))
+        connector = aiohttp.TCPConnector(ssl=False) if insecure_tls else None
+        self.session = aiohttp.ClientSession(
+            cookie_jar=aiohttp.CookieJar(unsafe=True),
+            connector=connector,
+        )
         self.ws_token = ""
         self.csrf_token = ""
         self.csrf_cookie = ""
@@ -305,8 +316,14 @@ async def _run_user(
     terminal_sessions_per_user: int,
     pipeline_runs_per_user: int,
     agent_runs_per_user: int,
+    insecure_tls: bool,
 ) -> dict[str, Any]:
-    user = SmokeUserSession(base_url=base_url, seed=seed, shared_password=shared_password)
+    user = SmokeUserSession(
+        base_url=base_url,
+        seed=seed,
+        shared_password=shared_password,
+        insecure_tls=insecure_tls,
+    )
     try:
         await user.login()
         terminal_tasks = [
@@ -356,6 +373,7 @@ async def _main_async(args) -> int:
                 terminal_sessions_per_user=args.terminal_sessions_per_user,
                 pipeline_runs_per_user=args.pipeline_runs_per_user,
                 agent_runs_per_user=args.agent_runs_per_user,
+                insecure_tls=args.insecure_tls,
             )
             for user_seed in selected_users
         ]
@@ -392,6 +410,11 @@ def main() -> int:
     parser.add_argument("--pipeline-runs-per-user", type=int, default=2)
     parser.add_argument("--agent-runs-per-user", type=int, default=0)
     parser.add_argument("--default-password", default="SmokePass123!")
+    parser.add_argument(
+        "--insecure-tls",
+        action="store_true",
+        help="Trust an ephemeral self-signed TLS certificate (isolated smoke environments only).",
+    )
     args = parser.parse_args()
 
     try:

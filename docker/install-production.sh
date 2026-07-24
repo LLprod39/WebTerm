@@ -386,8 +386,7 @@ run_backend_bootstrap() {
   compose exec -T backend python manage.py collectstatic --noinput || true
   echo "==> Django system checks"
   compose exec -T backend python manage.py check
-  # --deploy can warn on local HTTP installs; keep non-fatal for installer UX
-  compose exec -T backend python manage.py check --deploy || true
+  compose exec -T backend python manage.py check --deploy
 }
 
 create_superuser_if_requested() {

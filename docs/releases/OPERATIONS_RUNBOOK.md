@@ -11,6 +11,8 @@ This runbook defines the operator procedure for the controlled v0.1 pilot. Comma
 5. Verify `docker compose -f docker-compose.production.yml ps`, `/api/health/`, login, readiness and audit access.
 6. Record the image digests, commit SHA, configuration checksum and evidence bundle.
 
+The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a fresh Ubuntu CI runner. It refuses hosts that already contain WebTerm containers, executes the real production installer, requires migration/deploy checks, verifies authenticated readiness and fail-closed Plugins, checks scheduler/worker heartbeats plus Celery, and exercises terminal, pipeline and agent runtime paths over HTTPS/WebSocket. The workflow uploads the exact SHA, host/tool versions, Compose state/images/logs and probe results from every run.
+
 ## Upgrade
 
 1. Read `CHANGELOG.md`, migrations and support-matrix changes.

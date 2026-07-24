@@ -97,6 +97,7 @@ def verify(root: Path = ROOT) -> list[str]:
             "npm run performance:budget",
             "npm run test:e2e:performance",
             "python scripts/verify_pilot_ux_results.py",
+            "./docker/production-install-smoke.sh",
             "python scripts/collect_release_evidence.py",
         ):
             if command not in checklist:

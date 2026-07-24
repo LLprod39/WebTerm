@@ -1,0 +1,36 @@
+name: Production Install Smoke
+
+on:
+  pull_request:
+    branches: [test, main]
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-install-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clean-linux-install:
+    name: Clean Linux Install and Runtime Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run production install, readiness and worker smoke
+        run: ./docker/production-install-smoke.sh
+      - name: Upload F-13a evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: f13a-production-install-${{ github.sha }}
+          path: .ci-artifacts/production-install-smoke
+          if-no-files-found: error
+          retention-days: 14
