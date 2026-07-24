@@ -33,7 +33,7 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
 | Backup/restore | `./docker/production-recovery-smoke.sh` on the `Production Recovery Smoke` Ubuntu runner | archive checksums/sizes, source/restored/restarted integrity manifests, Redis recovery and exact-SHA summary; no secret artifacts | F-13b workflow implemented; first green run and RC proof pending |
-| Upgrade/rollback | command set frozen in F-13c | migration, application rollback and DB recovery report | Pending F-13c |
+| Upgrade/rollback | `./docker/production-upgrade-rollback-smoke.sh` for frozen `b8924ee` and `v0.1.0-rc.1` fixtures | immutable migration report, migration plans, application rollback health/integrity and separate DB restore integrity | F-13c workflow implemented; first green two-fixture run and RC proof pending |
 | Primary demo | terminal/pipeline/agent production runtime smoke in F-13a; human script in `docs/releases/V0_1_PILOT_UX_SCRIPT.md` | install → add server → guarded action → audit trace | Automated production flow green on `test` commit `3e98e6c`; real pilot evidence pending |
 
 ## Evidence bundle

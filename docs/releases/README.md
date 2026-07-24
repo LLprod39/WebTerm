@@ -11,6 +11,7 @@ Authoritative release documents:
 - [Public API v0.1](PUBLIC_API_V0_1.md) — the explicitly declared stable HTTP route surface.
 - [Brand compatibility](BRAND_COMPATIBILITY.md) — canonical WebTerm display identity and frozen legacy IDs.
 - [Operations runbook](OPERATIONS_RUNBOOK.md) — install, upgrade, rollback, backup, restore and disaster recovery procedure.
+- [First-release lifecycle policy](FIRST_RELEASE_LIFECYCLE_POLICY.md) — frozen fixtures and the separate application-rollback/database-restore rules.
 - [Pilot UX script](../pilot/PILOT_UX_SCRIPT_V1.md) — versioned participant task and evidence rules.
 - [CI and Git governance](../architecture/CI_GOVERNANCE.md) — check rollout, promotion and branch-protection policy.
 

@@ -27,12 +27,16 @@ After an unclean worker stop, an expired mutating run is marked interrupted/fail
 4. Run migration and Compose-model checks in a staging copy.
 5. Apply the upgrade during a declared window, run health/readiness and the primary smoke flow, then retain the previous images and backup.
 
+The automated first-release proof runs `./docker/production-upgrade-rollback-smoke.sh` for the frozen `b8924ee` schema/data snapshot and `v0.1.0-rc.1`. Exact fixture identities and the decision rules are defined in [the first-release lifecycle policy](FIRST_RELEASE_LIFECYCLE_POLICY.md).
+
 ## Rollback
 
 1. Stop writes and record the failure time and affected operations.
 2. If migrations are backward-compatible, redeploy the prior image digests.
 3. If data was changed incompatibly, stop the stack and restore the pre-upgrade database/volumes before starting prior images.
 4. Run health, login, inventory, terminal connection and audit checks. Document data loss or replay needs.
+
+Application rollback does not imply database rollback. For v0.1, automatic reverse migration is disabled: keep the upgraded database only if the previous application image passes the lifecycle checks against it; otherwise restore the validated pre-upgrade database and matching secret/config/media set.
 
 ## Backup and restore
 

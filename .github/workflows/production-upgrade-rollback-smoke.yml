@@ -1,0 +1,53 @@
+name: Production Upgrade Rollback Smoke
+
+on:
+  pull_request:
+    branches: [test, main]
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-upgrade-rollback-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fixture-lifecycle:
+    name: Upgrade and Rollback (${{ matrix.fixture.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture:
+          - name: schema-snapshot-b8924ee
+            slug: schema-snapshot-b8924ee
+            ref: b8924eeb1bcfd0647e80615eaa8c7684828e517a
+            sha: b8924eeb1bcfd0647e80615eaa8c7684828e517a
+          - name: v0.1.0-rc.1
+            slug: v0-1-0-rc-1
+            ref: v0.1.0-rc.1
+            sha: 5c522e3d34ecdeb85d31853e9e16b7f0134532af
+    env:
+      DOCKER_BUILDKIT: "1"
+      F13C_FIXTURE_NAME: ${{ matrix.fixture.name }}
+      F13C_FIXTURE_REF: ${{ matrix.fixture.ref }}
+      F13C_EXPECTED_FIXTURE_SHA: ${{ matrix.fixture.sha }}
+    steps:
+      - name: Checkout exact target and all fixture tags
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Run fixture upgrade, application rollback and database restore
+        run: ./docker/production-upgrade-rollback-smoke.sh
+      - name: Upload privacy-safe F-13c evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: f13c-production-lifecycle-${{ matrix.fixture.name }}-${{ github.sha }}
+          path: .ci-artifacts/production-lifecycle/${{ matrix.fixture.slug }}
+          if-no-files-found: error
+          retention-days: 14
