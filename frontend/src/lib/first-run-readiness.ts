@@ -21,7 +21,14 @@ export function markFirstRunReadinessSeen(userId: number) {
 }
 
 export function safeFirstRunNextPath(value: string | null | undefined) {
-  if (!value || !value.startsWith("/") || value.startsWith("//")) return "/dashboard";
-  if (value.startsWith("/login") || value.startsWith("/settings/readiness")) return "/dashboard";
-  return value;
+  if (!value) return "/dashboard";
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return "/dashboard";
+  }
+  if (!decoded.startsWith("/") || decoded.startsWith("//") || decoded.includes("\\")) return "/dashboard";
+  if (decoded.startsWith("/login") || decoded.startsWith("/settings/readiness")) return "/dashboard";
+  return decoded;
 }

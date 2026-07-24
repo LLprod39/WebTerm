@@ -47,6 +47,14 @@ jobs:
       - name: Enforce critical-flow WCAG checks
         run: npm run test:e2e:a11y
 
+      - name: Enforce interaction latency budget
+        run: npm run test:e2e:performance
+
+      - name: Build production assets and enforce Lighthouse budget
+        run: |
+          npm run build:budget
+          npm run performance:budget
+
       - name: Upload Playwright evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -55,5 +63,8 @@ jobs:
           path: |
             frontend/playwright-report
             frontend/test-results
+            frontend/artifacts/bundle-budget.json
+            frontend/artifacts/lighthouse-budget.json
+            frontend/artifacts/lighthouse-login-run-*.json
           if-no-files-found: warn
           retention-days: 14

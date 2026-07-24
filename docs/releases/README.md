@@ -7,6 +7,7 @@ Authoritative release documents:
 - [Support matrix](SUPPORT_MATRIX.md) — supported runtimes, deployment shapes and explicit exclusions.
 - [v0.1 release scope](V0_1_RELEASE_SCOPE.md) — capability status, prerequisites and required evidence.
 - [v0.1 release checklist](V0_1_RELEASE_CHECKLIST.md) — exact gates and expected artifacts.
+- [v0.1 performance budget](V0_1_PERFORMANCE_BUDGET.md) — Lighthouse and interaction-latency thresholds with CI evidence rules.
 - [Public API v0.1](PUBLIC_API_V0_1.md) — the explicitly declared stable HTTP route surface.
 - [Brand compatibility](BRAND_COMPATIBILITY.md) — canonical WebTerm display identity and frozen legacy IDs.
 - [Operations runbook](OPERATIONS_RUNBOOK.md) — install, upgrade, rollback, backup, restore and disaster recovery procedure.

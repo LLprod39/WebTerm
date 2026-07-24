@@ -27,6 +27,7 @@ AUTHORITATIVE_DOCS = (
     "docs/releases/SUPPORT_MATRIX.md",
     "docs/releases/V0_1_RELEASE_SCOPE.md",
     "docs/releases/V0_1_RELEASE_CHECKLIST.md",
+    "docs/releases/V0_1_PERFORMANCE_BUDGET.md",
 )
 REQUIRED_DOMAINS = {
     "Servers inventory and access",
@@ -92,6 +93,8 @@ def verify(root: Path = ROOT) -> list[str]:
             "python scripts/check_architecture_sizes.py --strict-new",
             "npm run typecheck",
             "npm run test:e2e",
+            "npm run performance:budget",
+            "npm run test:e2e:performance",
             "python scripts/collect_release_evidence.py",
         ):
             if command not in checklist:

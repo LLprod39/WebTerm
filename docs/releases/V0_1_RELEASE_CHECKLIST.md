@@ -8,9 +8,9 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Gate | Exact command | Expected artifact | Current state |
 |---|---|---|---|
 | Runtime contract | `python scripts/verify_runtime_contract.py` | successful command record | Implemented; green on `test` commit `389c6ac`, RC proof pending |
-| Release identity | `python scripts/verify_release_identity.py` | synchronized brand/version command record | Implemented in F-12 worktree; CI proof pending |
-| Documentation contract | `python scripts/verify_docs_contract.py` | link and required-document report | Implemented; expanded F-12 proof pending |
-| Public API contract | `python -m pytest tests/test_public_api_v0_1_contract.py` | route inventory test report | Implemented in F-12 worktree; CI proof pending |
+| Release identity | `python scripts/verify_release_identity.py` | synchronized brand/version command record | Green on `test` commit `695c6d8`; RC proof pending |
+| Documentation contract | `python scripts/verify_docs_contract.py` | link and required-document report | Green on `test` commit `695c6d8`; RC proof pending |
+| Public API contract | `python -m pytest tests/test_public_api_v0_1_contract.py` | route inventory test report | Green on `test` commit `695c6d8`; RC proof pending |
 | Locked Python install | `python -m pip install --require-hashes -r requirements-dev.lock` | installer log and tool versions | Lock implemented; clean CI proof pending |
 | Locked frontend install | `cd frontend && npm ci` | installer log | Pending proof |
 | Architecture sizes | `python scripts/check_architecture_sizes.py --strict-new` | command log/report | Zero violations; green on `test` commit `389c6ac`, RC proof pending |
@@ -22,10 +22,11 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Production deploy check | `DJANGO_SETTINGS_MODULE=web_ui.settings.production python manage.py check --deploy` with CI-only strong secrets and explicit hosts | command log, zero errors | Locked worktree pass; plugin routes/providers confirmed absent; clean RC/CI proof pending |
 | Frontend lint | `cd frontend && npm run lint` | lint log, zero errors | Green on `test` commit `389c6ac`, RC proof pending |
 | Frontend typecheck | `cd frontend && npm run typecheck` | typecheck log | Green on `test` commit `389c6ac`, RC proof pending |
-| Frontend unit tests | `cd frontend && npm run test:coverage` | JUnit and coverage artifact | 112 tests green on `test` commit `389c6ac`; Stage 1 coverage target pending |
-| Frontend build | `cd frontend && npm run build:budget` | build log, budget artifact and `dist` manifest/hash | Green on `test` commit `389c6ac`, RC proof pending |
-| Browser E2E | `cd frontend && npm run test:e2e` | Playwright HTML report, traces on failure | Smoke gate green on `test` commit `389c6ac`; full primary flow pending F-13a |
-| Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report with zero serious/critical WCAG 2 A/AA violations | Seven critical flows pass locally in F-12; CI proof pending |
+| Frontend unit tests | `cd frontend && npm run test:coverage` | JUnit and coverage artifact | 115 tests green on `test` commit `695c6d8`; Stage 1 coverage target pending |
+| Frontend build | `cd frontend && npm run build:budget` | build log, budget artifact and `dist` manifest/hash | Green on `test` commit `695c6d8`, RC proof pending |
+| Browser E2E | `cd frontend && npm run test:e2e:smoke` | Playwright HTML report, traces on failure | Four smoke flows green on `test` commit `695c6d8`; full primary flow pending F-13a |
+| Accessibility | `cd frontend && npm run test:e2e:a11y` | Playwright/axe report with zero serious/critical WCAG 2 A/AA violations | Seven critical flows green on `test` commit `695c6d8`; RC proof pending |
+| Performance | `cd frontend && npm run build:budget && npm run performance:budget && npm run test:e2e:performance` | bundle, Lighthouse and interaction-latency JSON artifacts | Implemented in F-12 worktree; CI proof pending |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
 | Backup/restore | command set frozen in F-13b | restore log plus integrity checks | Pending F-13b |
