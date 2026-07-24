@@ -20,7 +20,8 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Backend coverage | `python -m pytest --cov=app --cov=core_ui --cov=servers --cov=studio --cov=kubernetes_ops --cov=plugin_marketplace --cov=mars --cov=web_ui --cov-report=xml:.ci-artifacts/backend-coverage.xml --cov-fail-under=80` | `backend-coverage.xml` | Pending F-06; scope follows matrix |
 | Django system check | `python manage.py check` | command log | Locked worktree pass; clean RC/CI proof pending |
 | Production deploy check | `DJANGO_SETTINGS_MODULE=web_ui.settings.production python manage.py check --deploy` with CI-only strong secrets and explicit hosts | command log, zero errors | Locked worktree pass; plugin routes/providers confirmed absent; clean RC/CI proof pending |
-| Clean production install | `./docker/production-install-smoke.sh` on the `Production Install Smoke` Ubuntu runner | exact SHA/host versions, Compose state/images/logs, migration/deploy/readiness/worker/Celery/runtime smoke artifacts | F-13a workflow implemented; first green run and RC proof pending |
+| Clean production install | `./docker/production-install-smoke.sh` on the `Production Install Smoke` Ubuntu runner | exact SHA/host versions, Compose state/images/logs, migration/deploy/readiness/worker/Celery/runtime smoke artifacts | Green on `test` commit `3e98e6c`; RC proof pending |
+| Playbook durable worker | `python manage.py run_playbook_execution_plane --once --worker-key release-check` plus restart/cancel/lease tests | queue claim, heartbeat, terminal cleanup and no-auto-replay evidence | Implemented in worktree; clean RC/CI proof pending |
 | Frontend lint | `cd frontend && npm run lint` | lint log, zero errors | Green on `test` commit `389c6ac`, RC proof pending |
 | Frontend typecheck | `cd frontend && npm run typecheck` | typecheck log | Green on `test` commit `389c6ac`, RC proof pending |
 | Frontend unit tests | `cd frontend && npm run test:coverage` | JUnit and coverage artifact | 115 tests green on `test` commit `695c6d8`; Stage 1 coverage target pending |
@@ -31,9 +32,9 @@ All commands run from a clean Linux/WSL2 checkout at the release-candidate commi
 | Pilot UX | `python scripts/verify_pilot_ux_results.py path/to/pilot-results.json --output .ci-artifacts/pilot-ux-verification.json` | privacy-safe participant results and derived gate report | Validator implemented; real >=10-participant evidence pending |
 | Security scan | repository-wide approved scanner command from F-03/F-10 | SARIF/report and finding ledger | Pending F-03/F-10 |
 | Dependency inventory | SBOM command frozen in F-10 | CycloneDX or SPDX SBOM | Pending F-10 |
-| Backup/restore | command set frozen in F-13b | restore log plus integrity checks | Pending F-13b |
+| Backup/restore | `./docker/production-recovery-smoke.sh` on the `Production Recovery Smoke` Ubuntu runner | archive checksums/sizes, source/restored/restarted integrity manifests, Redis recovery and exact-SHA summary; no secret artifacts | F-13b workflow implemented; first green run and RC proof pending |
 | Upgrade/rollback | command set frozen in F-13c | migration, application rollback and DB recovery report | Pending F-13c |
-| Primary demo | Playwright pilot flow frozen in F-13a | install → add server → guarded action → audit trace | Pending F-13a |
+| Primary demo | terminal/pipeline/agent production runtime smoke in F-13a; human script in `docs/releases/V0_1_PILOT_UX_SCRIPT.md` | install → add server → guarded action → audit trace | Automated production flow green on `test` commit `3e98e6c`; real pilot evidence pending |
 
 ## Evidence bundle
 

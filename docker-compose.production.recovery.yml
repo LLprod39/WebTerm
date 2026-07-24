@@ -1,0 +1,13 @@
+# Isolated data services used only by the F-13b restore drill.
+# The project name and host ports are also distinct, so the source stack stays untouched.
+services:
+  postgres:
+    container_name: webterm-f13b-restore-postgres
+
+  redis:
+    container_name: webterm-f13b-restore-redis
+
+  backend:
+    image: ${F13B_BACKEND_IMAGE:?Set F13B_BACKEND_IMAGE to the source release image}
+    env_file:
+      - .env.production.restore

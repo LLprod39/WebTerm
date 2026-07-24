@@ -1,34 +1,66 @@
 #!/usr/bin/env bash
-# Restore a WebTerm Postgres dump created by backup_postgres.sh.
-# Dry-run: RESTORE_DRY_RUN=1 ./scripts/restore_postgres.sh path/to.dump.sql.gz
-set -euo pipefail
+# Restore a custom-format dump created by backup_postgres.sh.
+set -Eeuo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DUMP_PATH="${1:-}"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.production.yml}"
-SERVICE="${POSTGRES_SERVICE:-db}"
-DB_NAME="${POSTGRES_DB:-webterm}"
-DB_USER="${POSTGRES_USER:-webterm}"
+COMPOSE_FILE="${COMPOSE_FILE:-$ROOT_DIR/docker-compose.production.yml}"
+COMPOSE_OVERRIDE_FILE="${COMPOSE_OVERRIDE_FILE:-}"
+ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.production}"
+PROJECT_NAME="${PROJECT_NAME:-mini-prod}"
+SERVICE="${POSTGRES_SERVICE:-postgres}"
 DRY_RUN="${RESTORE_DRY_RUN:-0}"
+CONFIRMATION="${RESTORE_CONFIRM:-}"
+
+compose() {
+  local compose_files=(-f "$COMPOSE_FILE")
+  if [[ -n "$COMPOSE_OVERRIDE_FILE" ]]; then
+    compose_files+=(-f "$COMPOSE_OVERRIDE_FILE")
+  fi
+  docker compose \
+    --project-name "$PROJECT_NAME" \
+    --env-file "$ENV_FILE" \
+    "${compose_files[@]}" \
+    "$@"
+}
 
 if [[ -z "$DUMP_PATH" || ! -f "$DUMP_PATH" ]]; then
-  echo "Usage: $0 /path/to/webterm_YYYYMMDD.sql.gz" >&2
+  echo "Usage: $0 /path/to/webterm_YYYYMMDDTHHMMSSZ.dump" >&2
+  exit 1
+fi
+if [[ ! -f "$COMPOSE_FILE" || ! -f "$ENV_FILE" ]]; then
+  echo "Compose file and production environment are required" >&2
+  exit 1
+fi
+if [[ -n "$COMPOSE_OVERRIDE_FILE" && ! -f "$COMPOSE_OVERRIDE_FILE" ]]; then
+  echo "Compose override not found: $COMPOSE_OVERRIDE_FILE" >&2
   exit 1
 fi
 
-echo "Restore source: $DUMP_PATH"
-echo "Target db: $DB_NAME via service $SERVICE"
-if [[ "$DRY_RUN" == "1" ]]; then
-  echo "DRY RUN only — validating gzip integrity"
-  gzip -t "$DUMP_PATH"
-  echo "gzip ok; restore not applied"
-  exit 0
+container_id="$(compose ps -q "$SERVICE" | head -n 1)"
+if [[ -z "$container_id" ]]; then
+  echo "PostgreSQL service is not running: $SERVICE" >&2
+  exit 1
 fi
 
-echo "WARNING: this will overwrite database $DB_NAME"
-if command -v docker >/dev/null 2>&1 && [[ -f "$COMPOSE_FILE" ]]; then
-  gunzip -c "$DUMP_PATH" | docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE" \
-    psql -U "$DB_USER" -d "$DB_NAME"
-else
-  gunzip -c "$DUMP_PATH" | psql -U "$DB_USER" -d "$DB_NAME"
+echo "Validating PostgreSQL archive: $DUMP_PATH"
+if [[ -f "$DUMP_PATH.sha256" ]]; then
+  (
+    cd "$(dirname "$DUMP_PATH")"
+    sha256sum --check "$(basename "$DUMP_PATH").sha256"
+  )
 fi
+cat "$DUMP_PATH" | compose exec -T "$SERVICE" pg_restore --list - >/dev/null
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "Archive is valid; dry run did not change the database"
+  exit 0
+fi
+if [[ "$CONFIRMATION" != "RESTORE_WEBTERM" ]]; then
+  echo "Restore is destructive. Set RESTORE_CONFIRM=RESTORE_WEBTERM for the intended isolated target." >&2
+  exit 1
+fi
+
+echo "Restoring the archive into PostgreSQL service $SERVICE"
+cat "$DUMP_PATH" | compose exec -T "$SERVICE" sh -ec \
+  'exec pg_restore --clean --if-exists --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" -'
 echo "Restore finished"

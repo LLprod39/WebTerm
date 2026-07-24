@@ -1,0 +1,36 @@
+name: Production Recovery Smoke
+
+on:
+  pull_request:
+    branches: [test, main]
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-recovery-smoke-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-backup-restore:
+    name: Isolated Backup Restore and Restart Recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Run production backup, isolated restore and recovery smoke
+        run: ./docker/production-recovery-smoke.sh
+      - name: Upload privacy-safe F-13b evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: f13b-production-recovery-${{ github.sha }}
+          path: .ci-artifacts/production-recovery-smoke
+          if-no-files-found: error
+          retention-days: 14

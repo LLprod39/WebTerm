@@ -7,6 +7,7 @@ COMPOSE_FILE="$ROOT_DIR/docker-compose.production.yml"
 SMOKE_COMPOSE_FILE="$ROOT_DIR/docker-compose.production.smoke.yml"
 ARTIFACT_DIR="${F13A_ARTIFACT_DIR:-$ROOT_DIR/.ci-artifacts/production-install-smoke}"
 PROJECT_NAME="${F13A_PROJECT_NAME:-webterm-f13a-smoke}"
+KEEP_UP="${F13A_KEEP_UP:-0}"
 HTTPS_PORT="${F13A_HTTPS_PORT:-18443}"
 ADMIN_USERNAME="f13a-admin"
 ADMIN_PASSWORD="F13aSmokePass123!"
@@ -52,18 +53,22 @@ collect_runtime_evidence() {
 
 cleanup() {
   local exit_code=$?
+  local retained=0
   trap - EXIT
   collect_runtime_evidence
   rm -f "$COOKIE_JAR" "$LOGIN_PAYLOAD"
-  if [[ "$STARTED" -eq 1 ]]; then
+  if [[ "$STARTED" -eq 1 && "$exit_code" -eq 0 && "$KEEP_UP" == "1" ]]; then
+    retained=1
+    echo "Retaining the successful F-13a stack for a parent recovery drill"
+  elif [[ "$STARTED" -eq 1 ]]; then
     set +e
     smoke_compose down -v --remove-orphans
     set -e
   fi
-  if [[ "$ENV_CREATED" -eq 1 ]]; then
+  if [[ "$ENV_CREATED" -eq 1 && "$retained" -eq 0 ]]; then
     rm -f "$ENV_FILE"
   fi
-  if [[ "$TLS_CREATED" -eq 1 ]]; then
+  if [[ "$TLS_CREATED" -eq 1 && "$retained" -eq 0 ]]; then
     rm -f "$TLS_CERT" "$TLS_KEY"
   fi
   exit "$exit_code"

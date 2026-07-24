@@ -13,6 +13,12 @@ This runbook defines the operator procedure for the controlled v0.1 pilot. Comma
 
 The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a fresh Ubuntu CI runner. It refuses hosts that already contain WebTerm containers, executes the real production installer, requires migration/deploy checks, verifies authenticated readiness and fail-closed Plugins, checks scheduler/worker heartbeats plus Celery, and exercises terminal, pipeline and agent runtime paths over HTTPS/WebSocket. The workflow uploads the exact SHA, host/tool versions, Compose state/images/logs and probe results from every run.
 
+### Playbook execution worker
+
+Ansible runs are claimed from a durable database queue by `playbook-execution-worker`; the web process only validates and enqueues them. Keep `PLAYBOOK_EXECUTION_LEASE_SECONDS` longer than the expected heartbeat interval and use `PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY` as the cluster-wide safety cap. Additional replicas can be started with `docker compose --env-file .env.production -f docker-compose.production.yml up -d --scale playbook-execution-worker=N`. Each replica derives a unique worker key from its container hostname.
+
+After an unclean worker stop, an expired mutating run is marked interrupted/failed and is never replayed automatically. Inspect the run, target state and audit trail before requesting an explicit rerun. Per-run variables and the optional master password are encrypted while queued and deleted after every terminal execution path.
+
 ## Upgrade
 
 1. Read `CHANGELOG.md`, migrations and support-matrix changes.
@@ -30,10 +36,31 @@ The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a
 
 ## Backup and restore
 
-- Back up PostgreSQL with a consistent database dump and back up persistent media/config volumes separately.
-- Store encryption material and managed-secret keys in an access-controlled secret system; a database backup without the matching keys may be unusable.
-- Test restoration into an isolated environment. Validate row counts, authentication, server inventory and audit chronology.
-- Never overwrite the only backup during a restore test.
+Create the PostgreSQL archive from the production project without placing a password on the command line:
+
+```bash
+BACKUP_DIR=/secure/webterm-backups \
+PROJECT_NAME=mini-prod \
+ENV_FILE=.env.production \
+./scripts/backup_postgres.sh
+```
+
+The command emits a compressed custom-format dump plus a SHA-256 sidecar and validates the archive with `pg_restore --list` before publishing it. Back up `.env.production` and the `mini_prod_config` / `mini_prod_media` volumes into the same access-controlled backup set. The environment contains encryption material and must never be attached to CI, tickets or ordinary logs. Static assets are rebuilt from the release; operational logs follow the separate retention/export policy. Plugin trust metadata lives in PostgreSQL, while retained package bytes live under media; the dump plus media archive cover both parts.
+
+Restore only into an isolated target first:
+
+```bash
+RESTORE_CONFIRM=RESTORE_WEBTERM \
+PROJECT_NAME=webterm-restore-drill \
+ENV_FILE=.env.production.restore \
+COMPOSE_FILE=docker-compose.production.yml \
+COMPOSE_OVERRIDE_FILE=docker-compose.production.recovery.yml \
+./scripts/restore_postgres.sh /secure/webterm-backups/webterm_<UTC>.dump
+```
+
+The restore command is intentionally blocked unless the explicit confirmation is present. Restore the matching secret environment and config/media archives, then validate authentication, managed-secret decryptability, inventory, pipelines/runs, audit chronology and plugin-package hashes. Never restore over the only copy or reuse production volumes for a drill.
+
+The repository-side F-13b proof is `./docker/production-recovery-smoke.sh`. On a fresh Linux runner it builds source state through the F-13a installer, creates a consistent PostgreSQL dump, captures secret/config/media/Redis state in a temporary mode-700 directory, restores into a distinct Compose project and volumes, compares privacy-safe integrity manifests, and restarts PostgreSQL and Redis. Only checksums, sizes, exact SHA, timestamps and pass/fail manifests are uploaded; the dump, environment, volume archives and credentials are deleted during cleanup.
 
 ## Disaster recovery
 
@@ -43,7 +70,7 @@ The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a
 4. Rotate credentials that may have been exposed.
 5. Run the release smoke flow and reconcile queued/running operations before reopening access.
 
-Recovery-time and recovery-point objectives are not claimed until F-13c completes a timed restore drill with retained evidence.
+Recovery-time and recovery-point objectives are not claimed until a separately approved timed disaster-recovery drill has retained evidence. F-13b proves recoverability, not an RTO/RPO commitment.
 
 ## Troubleshooting
 
@@ -51,6 +78,8 @@ Recovery-time and recovery-point objectives are not claimed until F-13c complete
 - Health failing: inspect backend, PostgreSQL and Redis health before restarting; preserve logs and timestamps.
 - Login works but features are denied: inspect the server-generated access payload and role assignments.
 - Terminal or guarded action failing: verify host reachability, host-key policy, approval state and audit event creation.
+- Playbook stays queued: verify `playbook-execution-worker` is running, then inspect its worker heartbeat and the dispatch lease; do not manually duplicate the queued row.
+- Playbook is interrupted after a restart: review the partial remote changes and start an explicit rerun only when it is operationally safe.
 - Upgrade regression: stop new writes and follow rollback; do not run ad-hoc schema edits.
 
 Escalation, known limitations and final sign-off live in [the release checklist](V0_1_RELEASE_CHECKLIST.md).
