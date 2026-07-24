@@ -63,7 +63,7 @@ if [[ ! -s "$TMP_FILE" ]]; then
   echo "PostgreSQL produced an empty dump" >&2
   exit 1
 fi
-cat "$TMP_FILE" | compose exec -T "$SERVICE" pg_restore --list - >/dev/null
+cat "$TMP_FILE" | compose exec -T "$SERVICE" pg_restore --list >/dev/null
 mv "$TMP_FILE" "$OUT_FILE"
 chmod 600 "$OUT_FILE"
 (

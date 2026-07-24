@@ -50,7 +50,7 @@ if [[ -f "$DUMP_PATH.sha256" ]]; then
     sha256sum --check "$(basename "$DUMP_PATH").sha256"
   )
 fi
-cat "$DUMP_PATH" | compose exec -T "$SERVICE" pg_restore --list - >/dev/null
+cat "$DUMP_PATH" | compose exec -T "$SERVICE" pg_restore --list >/dev/null
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "Archive is valid; dry run did not change the database"
   exit 0
@@ -62,5 +62,5 @@ fi
 
 echo "Restoring the archive into PostgreSQL service $SERVICE"
 cat "$DUMP_PATH" | compose exec -T "$SERVICE" sh -ec \
-  'exec pg_restore --clean --if-exists --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" -'
+  'exec pg_restore --clean --if-exists --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
 echo "Restore finished"
