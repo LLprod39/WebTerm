@@ -12,7 +12,7 @@ vi.mock("@/lib/i18n", () => ({
   localize: (_lang: string, _ru: string, en: string) => en,
   useI18n: () => ({
     lang: "en",
-    t: (key: string) => ({ "nav.playbooks": "Playbooks" })[key] ?? key,
+    t: (key: string) => ({ "nav.playbooks": "Ansible" })[key] ?? key,
   }),
 }));
 vi.mock("@/lib/ui-style", () => ({
@@ -20,7 +20,7 @@ vi.mock("@/lib/ui-style", () => ({
 }));
 
 describe("FlowTopbar automation breadcrumb", () => {
-  it("labels /automation as Playbooks", () => {
+  it("labels /automation as Ansible", () => {
     render(
       <MemoryRouter initialEntries={["/automation"]}>
         <FlowTopbar />
@@ -28,6 +28,6 @@ describe("FlowTopbar automation breadcrumb", () => {
     );
 
     const breadcrumb = screen.getByRole("navigation", { name: "Breadcrumb" });
-    expect(within(breadcrumb).getByText("Playbooks")).toBeInTheDocument();
+    expect(within(breadcrumb).getByText("Ansible")).toBeInTheDocument();
   });
 });

@@ -19,6 +19,7 @@ from servers.services.ansible_docker_runtime import (
     build_isolated_docker_command,
     cleanup_ansible_runtime_job,
     create_ansible_workdir,
+    docker_host_alias,
 )
 
 # ansible_engine.py is the public facade. Helpers live in sibling modules
@@ -188,6 +189,7 @@ def run_ansible_playbook(
             master_password=master_password,
             binding_groups=inventory_binding_groups,
             secret_collector=runtime_secrets,
+            loopback_host_alias=docker_host_alias() if detection["method"] == "docker" else "",
         )
         _build_ansible_cfg(workdir)
 

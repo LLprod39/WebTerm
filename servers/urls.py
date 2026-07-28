@@ -304,6 +304,16 @@ urlpatterns = [
         playbook_bundle_views.playbook_bundle_commit,
         name="playbook_bundle_commit",
     ),
+    path(
+        "api/playbooks/import/gitlab/preview/",
+        playbook_bundle_views.playbook_gitlab_preview,
+        name="playbook_gitlab_preview",
+    ),
+    path(
+        "api/playbooks/import/gitlab/commit/",
+        playbook_bundle_views.playbook_gitlab_commit,
+        name="playbook_gitlab_commit",
+    ),
     path("api/playbooks/ansible/status/", server_playbooks.playbook_ansible_status, name="playbook_ansible_status"),
     path("api/playbooks/guided/", server_playbooks.playbook_guided_recipes, name="playbook_guided_recipes"),
     path("api/playbooks/guided/generate/", server_playbooks.playbook_guided_generate, name="playbook_guided_generate"),

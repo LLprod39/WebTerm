@@ -4,6 +4,7 @@ import { KeyRound, Link2, Loader2, Plus, Settings2, Trash2 } from "lucide-react"
 import type { PlaybookBindingProfile, PlaybookInventoryBindings } from "@/api/playbooks";
 import { ConfirmDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -205,14 +206,14 @@ export function PlaybookBindingsPanel({ lang, workspace }: PlaybookBindingsPanel
                 <Input id="binding-concurrency" type="number" min={1} max={12} value={concurrency} onChange={(event) => setConcurrency(Number(event.target.value) || 1)} />
               </div>
               <label className="flex items-center gap-2 self-end pb-2 text-sm text-muted-foreground">
-                <input type="checkbox" checked={become} onChange={(event) => setBecome(event.target.checked)} /> become
+                <Checkbox checked={become} onCheckedChange={(checked) => setBecome(checked === true)} /> become
               </label>
               <label className="flex items-center gap-2 self-end pb-2 text-sm text-muted-foreground">
-                <input type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} /> dry-run
+                <Checkbox checked={dryRun} onCheckedChange={(checked) => setDryRun(checked === true)} /> dry-run
               </label>
             </div>
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              <input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
+              <Checkbox checked={isDefault} onCheckedChange={(checked) => setIsDefault(checked === true)} />
               {tr("Использовать по умолчанию", "Use by default")}
             </label>
             {current?.secret_variables.length ? (

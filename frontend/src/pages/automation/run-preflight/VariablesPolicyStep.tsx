@@ -1,6 +1,7 @@
 import { Braces, KeyRound, Shield } from "lucide-react";
 
 import type { PlaybookBindingProfile } from "@/api/playbooks";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -97,7 +98,7 @@ export function VariablesPolicyStep({
         </div>
 
         {missingNames.length ? (
-          <div className="mt-3 rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          <div className="mt-3 rounded-sm border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             {tr("Пока не заданы", "Not provided yet")}: {missingNames.join(", ")}
           </div>
         ) : null}
@@ -124,10 +125,9 @@ export function VariablesPolicyStep({
         </div>
 
         <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-surface-0 p-3">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={policy.become}
-            onChange={(event) => onPolicyChange({ become: event.target.checked })}
+            onCheckedChange={(checked) => onPolicyChange({ become: checked === true })}
             className="mt-1"
           />
           <span>
@@ -137,10 +137,9 @@ export function VariablesPolicyStep({
         </label>
 
         <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-surface-0 p-3">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={policy.dryRun}
-            onChange={(event) => onPolicyChange({ dryRun: event.target.checked })}
+            onCheckedChange={(checked) => onPolicyChange({ dryRun: checked === true })}
             className="mt-1"
           />
           <span>

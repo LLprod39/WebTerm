@@ -1,19 +1,32 @@
 import { useState } from "react";
 import {
   AlertTriangle,
-  Archive,
   BookOpen,
+  ChevronDown,
+  Clock3,
+  FilePlus2,
+  GitBranch,
   History,
-  Plus,
+  LayoutGrid,
+  RefreshCcw,
   Search,
   Upload,
   Wand2,
 } from "lucide-react";
 
 import { isSupportedPlaybookBundleFile } from "@/api/playbook-bundles";
-import type { PlaybookCategory, PlaybookRun, PlaybookSummary, PlaybookTemplate } from "@/api/playbooks";
+import type { AnsibleStatus, PlaybookCategory, PlaybookRun, PlaybookSummary, PlaybookTemplate } from "@/api/playbooks";
+import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
 import { cn, relativeTime } from "@/lib/utils";
 import { PlaybookCard } from "../PlaybookCard";
 import { CATEGORIES, CATEGORY_META, RUN_STATUS_META } from "../constants";
@@ -28,12 +41,12 @@ export interface PlaybooksCatalogPanelProps {
   playbooksLoading: boolean;
   playbooksError: string;
   search: string;
-  setSearch: (v: string) => void;
+  setSearch: (value: string) => void;
   categoryFilter: PlaybookCategory | "all";
-  setCategoryFilter: (v: PlaybookCategory | "all") => void;
+  setCategoryFilter: (value: PlaybookCategory | "all") => void;
   showHistory: boolean;
-  setShowHistory: (updater: (v: boolean) => boolean) => void;
-  ansible: { available?: boolean; method?: string; version?: string; message?: string } | undefined;
+  setShowHistory: (updater: (value: boolean) => boolean) => void;
+  ansible: AnsibleStatus | undefined;
   ansibleAvailable: boolean;
   onRefreshRuns: () => void;
   onRetryPlaybooks: () => void;
@@ -41,377 +54,285 @@ export interface PlaybooksCatalogPanelProps {
   onImportFile: (file: File) => void;
   onOpenNew: () => void;
   onOpenGuided: () => void;
-  onInstallTemplate: (tmpl: PlaybookTemplate) => void;
+  onInstallTemplate: (template: PlaybookTemplate) => void;
   onOpenEdit: (id: number) => void;
   onStartRun: (id: number) => void;
   onDuplicate: (id: number) => void;
-  onDelete: (pb: PlaybookSummary) => void;
+  onDelete: (playbook: PlaybookSummary) => void;
   onOpenRun: (run: PlaybookRun) => void;
 }
 
-export function PlaybooksCatalogPanel({
-  lang,
-  tr,
-  playbooks,
-  templates,
-  recentRuns,
-  playbooksLoading,
-  playbooksError,
-  search,
-  setSearch,
-  categoryFilter,
-  setCategoryFilter,
-  showHistory,
-  setShowHistory,
-  ansible,
-  ansibleAvailable,
-  onRefreshRuns,
-  onRetryPlaybooks,
-  onImportClick,
-  onImportFile,
-  onOpenNew,
-  onOpenGuided,
-  onInstallTemplate,
-  onOpenEdit,
-  onStartRun,
-  onDuplicate,
-  onDelete,
-  onOpenRun,
-}: PlaybooksCatalogPanelProps) {
-  const [bundleImportOpen, setBundleImportOpen] = useState(false);
-  const [bundleImportFile, setBundleImportFile] = useState<File | null>(null);
+export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
+  const {
+    lang, tr, playbooks, templates, recentRuns, playbooksLoading, playbooksError,
+    search, setSearch, categoryFilter, setCategoryFilter, showHistory, setShowHistory,
+    ansible, ansibleAvailable, onRefreshRuns, onRetryPlaybooks, onImportClick, onImportFile,
+    onOpenNew, onOpenGuided, onInstallTemplate, onOpenEdit, onStartRun, onDuplicate, onDelete, onOpenRun,
+  } = props;
+  const [projectImportOpen, setProjectImportOpen] = useState(false);
+  const [projectImportFile, setProjectImportFile] = useState<File | null>(null);
+
+  const openProjectImport = () => {
+    setProjectImportFile(null);
+    setProjectImportOpen(true);
+  };
   const importDroppedFile = (file: File) => {
     if (isSupportedPlaybookBundleFile(file)) {
-      setBundleImportFile(file);
-      setBundleImportOpen(true);
-      return;
+      setProjectImportFile(file);
+      setProjectImportOpen(true);
+    } else {
+      onImportFile(file);
     }
-    onImportFile(file);
   };
 
   return (
     <>
       <PlaybookBundleImportDialog
-        open={bundleImportOpen}
+        open={projectImportOpen}
         onOpenChange={(open) => {
-          setBundleImportOpen(open);
-          if (!open) setBundleImportFile(null);
+          setProjectImportOpen(open);
+          if (!open) setProjectImportFile(null);
         }}
         lang={lang}
-        initialFile={bundleImportFile}
+        initialFile={projectImportFile}
         onOpenPlaybook={onOpenEdit}
       />
 
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <h2 className="font-display text-lg font-semibold tracking-tight text-foreground">
-            Playbooks
-          </h2>
-          {!playbooksLoading ? (
-            <span className="rounded-full border border-border bg-secondary/40 px-2 py-0.5 font-mono text-2xs text-muted-foreground">
-              {playbooks.length}
+      <section className="mx-auto w-full max-w-[1320px] space-y-5">
+        <header className="flex flex-col gap-5 border-b border-border/70 pb-5 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-start gap-3.5">
+            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+              <BookOpen className="h-5 w-5" />
             </span>
-          ) : null}
-          {ansible ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-2xs",
-                ansibleAvailable
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                  : "border-amber-500/30 bg-amber-500/10 text-amber-300",
-              )}
-              title={ansibleAvailable ? [ansible.method, ansible.version].filter(Boolean).join(" · ") : undefined}
-            >
-              <span
-                aria-hidden
-                className={cn("h-1.5 w-1.5 rounded-full", ansibleAvailable ? "bg-emerald-400" : "bg-amber-400")}
-              />
-              Ansible
-              {ansibleAvailable && ansible.version ? (
-                <span className="font-mono opacity-70">{ansible.version}</span>
-              ) : null}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            size="sm"
-            variant={showHistory ? "secondary" : "ghost"}
-            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setShowHistory((v) => !v);
-              onRefreshRuns();
-            }}
-          >
-            <History className="h-3.5 w-3.5" />
-            {tr("Запуски", "Runs")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
-            onClick={onImportClick}
-          >
-            <Upload className="h-3.5 w-3.5" />
-            {tr("YAML", "YAML")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              setBundleImportFile(null);
-              setBundleImportOpen(true);
-            }}
-          >
-            <Archive className="h-3.5 w-3.5" />
-            {tr("Импорт проекта", "Import project")}
-          </Button>
-          <div aria-hidden className="mx-1 hidden h-5 w-px bg-border sm:block" />
-          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={onOpenGuided}>
-            <Wand2 className="h-3.5 w-3.5" />
-            {tr("Мастер", "Wizard")}
-          </Button>
-          <Button size="sm" className="h-8 gap-1.5 shadow-elev-1" onClick={onOpenNew}>
-            <Plus className="h-3.5 w-3.5" />
-            {tr("Новый playbook", "New playbook")}
-          </Button>
-        </div>
-      </div>
-
-      {/* Warning only when ansible is missing on the backend */}
-      {!ansibleAvailable && ansible ? (
-        <div className="rounded-sm border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-foreground">
-          <span className="font-medium">{tr("Ansible не найден на backend", "Ansible not found on backend")}</span>
-          {ansible.message ? (
-            <p className="mt-0.5 text-2xs text-muted-foreground">{ansible.message}</p>
-          ) : null}
-        </div>
-      ) : null}
-
-      {showHistory ? (
-        <div className="overflow-hidden rounded-md border border-border bg-card">
-          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-            <History className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              {tr("Недавние запуски", "Recent runs")}
-            </span>
-          </div>
-          <div className="max-h-56 divide-y divide-border/70 overflow-y-auto">
-            {recentRuns.length === 0 ? (
-              <p className="px-3 py-5 text-center text-xs text-muted-foreground">
-                {tr("Запусков пока не было", "No runs yet")}
-              </p>
-            ) : (
-              recentRuns.slice(0, 15).map((run) => {
-                const meta = RUN_STATUS_META[run.status];
-                return (
-                  <button
-                    key={run.id}
-                    type="button"
-                    onClick={() => onOpenRun(run)}
-                    className="flex w-full items-center gap-3 px-3 py-2 text-left text-xs transition-colors hover:bg-secondary/40"
-                  >
-                    <span
-                      aria-hidden
-                      className={cn("h-1.5 w-1.5 shrink-0 rounded-full", meta?.dot || "bg-muted-foreground/60")}
-                    />
-                    <span className="min-w-0 flex-1 truncate font-medium text-foreground">
-                      {run.playbook_name}
-                    </span>
-                    <span className={cn("shrink-0", meta?.className || "text-muted-foreground")}>
-                      {meta ? (lang === "ru" ? meta.labelRu : meta.labelEn) : run.status}
-                    </span>
-                    <span className="shrink-0 font-mono text-muted-foreground/60">
-                      {run.started_at ? relativeTime(run.started_at) : `#${run.id}`}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Search + category filters */}
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-        <div className="relative w-full min-w-0 lg:max-w-xs">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={tr("Поиск playbook…", "Search playbooks…")}
-            className="h-8 bg-card pl-8 text-sm"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setCategoryFilter("all")}
-            className={cn(
-              "h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
-              categoryFilter === "all"
-                ? "border-primary/40 bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground hover:border-border hover:text-foreground",
-            )}
-          >
-            {tr("Все", "All")}
-          </button>
-          {CATEGORIES.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setCategoryFilter(c)}
-              className={cn(
-                "h-7 rounded-full border px-2.5 text-xs font-medium transition-colors",
-                categoryFilter === c
-                  ? CATEGORY_META[c].kicker
-                  : "border-border bg-card text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {lang === "ru" ? CATEGORY_META[c].labelRu : CATEGORY_META[c].labelEn}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Templates — quick start */}
-      {templates.length > 0 ? (
-        <div className="rounded-md border border-border/70 bg-surface-0/40 px-3 py-2.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              {tr("Быстрый старт", "Quick start")}
-            </span>
-            {templates.map((tmpl) => (
-              <button
-                key={tmpl.slug}
-                type="button"
-                onClick={() => void onInstallTemplate(tmpl)}
-                className="inline-flex h-7 items-center gap-1 rounded-full border border-border bg-card px-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-                title={tmpl.description}
-              >
-                <Plus className="h-3 w-3 opacity-60" />
-                {tmpl.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {/* Drop zone + list */}
-      {playbooksError ? (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-6 py-8 text-center" role="alert">
-          <AlertTriangle className="mx-auto h-7 w-7 text-destructive" />
-          <p className="mt-3 text-sm font-semibold text-foreground">
-            {tr("Не удалось загрузить playbooks", "Failed to load playbooks")}
-          </p>
-          <p className="mx-auto mt-1 max-w-xl text-xs text-muted-foreground">{playbooksError}</p>
-          <Button size="sm" variant="outline" className="mt-4" onClick={onRetryPlaybooks}>
-            {tr("Повторить", "Retry")}
-          </Button>
-        </div>
-      ) : playbooksLoading ? (
-        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-40 animate-pulse rounded-md border border-border/60 bg-card/60" />
-          ))}
-        </div>
-      ) : playbooks.length === 0 ? (
-        <div
-          className="rounded-md border border-dashed border-border bg-card/40 px-6 py-14 text-center"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const file = e.dataTransfer.files[0];
-            if (file) importDroppedFile(file);
-          }}
-        >
-          {search.trim() || categoryFilter !== "all" ? (
-            <>
-              <Search className="mx-auto mb-3 h-8 w-8 text-muted-foreground/35" />
-              <p className="font-display text-sm font-semibold text-foreground">
-                {tr("Ничего не найдено", "Nothing found")}
-              </p>
-              <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
-                {tr("Попробуйте изменить запрос или сбросить фильтры", "Try a different query or reset the filters")}
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-4 h-8"
-                onClick={() => {
-                  setSearch("");
-                  setCategoryFilter("all");
-                }}
-              >
-                {tr("Сбросить фильтры", "Reset filters")}
-              </Button>
-            </>
-          ) : (
-            <>
-              <BookOpen className="mx-auto mb-3 h-8 w-8 text-muted-foreground/35" />
-              <p className="font-display text-sm font-semibold text-foreground">
-                {tr("Пока нет ни одного playbook", "No playbooks yet")}
-              </p>
-              <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">
+            <div>
+              <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">Ansible</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {tr(
-                  "Соберите первый через мастер, начните с шаблона или перетащите сюда готовый .yml",
-                  "Build your first one with the wizard, start from a template, or drop a .yml file here",
+                  "Проекты, проверки и запуски инфраструктуры — в одном рабочем месте.",
+                  "Infrastructure projects, checks, and runs in one workspace.",
                 )}
               </p>
-              <div className="mt-4 flex flex-wrap justify-center gap-2">
-                <Button size="sm" className="h-8 gap-1" onClick={onOpenGuided}>
-                  <Wand2 className="h-3.5 w-3.5" />
-                  {tr("Мастер", "Wizard")}
-                </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1" onClick={onOpenNew}>
-                  <Plus className="h-3.5 w-3.5" />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="h-9 gap-1.5">
+                  <FilePlus2 className="h-4 w-4" />
                   {tr("Создать", "Create")}
+                  <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="sm" variant="outline" className="h-8 gap-1" onClick={onImportClick}>
-                  <Upload className="h-3.5 w-3.5" />
-                  {tr("Импорт YAML", "Import YAML")}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-8 gap-1"
-                  onClick={() => {
-                    setBundleImportFile(null);
-                    setBundleImportOpen(true);
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  {tr("Импорт проекта", "Import project")}
-                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                <DropdownMenuItem onSelect={onOpenNew}>
+                  <FilePlus2 className="h-4 w-4" />{tr("Пустой playbook", "Blank playbook")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onOpenGuided}>
+                  <Wand2 className="h-4 w-4" />{tr("Создать по шагам", "Guided setup")}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={onImportClick}>
+                  <Upload className="h-4 w-4" />{tr("Импортировать YAML", "Import YAML")}
+                </DropdownMenuItem>
+                {templates.length ? <DropdownMenuSeparator /> : null}
+                {templates.slice(0, 5).map((template) => (
+                  <DropdownMenuItem key={template.slug} onSelect={() => onInstallTemplate(template)}>
+                    <BookOpen className="h-4 w-4" />{template.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button size="sm" className="h-9 gap-1.5" onClick={openProjectImport}>
+              <GitBranch className="h-4 w-4" />
+              {tr("Подключить проект", "Connect project")}
+            </Button>
+          </div>
+        </header>
+
+        <RuntimeNotice tr={tr} ansible={ansible} ready={ansibleAvailable} />
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="inline-flex w-fit rounded-lg bg-secondary/60 p-1" role="tablist" aria-label={tr("Раздел Ansible", "Ansible section")}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!showHistory}
+              onClick={() => setShowHistory(() => false)}
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors",
+                !showHistory ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              {tr("Проекты", "Projects")}
+              <span className="text-muted-foreground">{playbooks.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={showHistory}
+              onClick={() => setShowHistory(() => true)}
+              className={cn(
+                "flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium transition-colors",
+                showHistory ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <History className="h-3.5 w-3.5" />
+              {tr("Запуски", "Runs")}
+            </button>
+          </div>
+
+          {!showHistory ? (
+            <div className="flex min-w-0 flex-1 sm:max-w-md sm:justify-end">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder={tr("Найти проект", "Find a project")}
+                  className="h-9 bg-card pl-9"
+                />
               </div>
-            </>
-          )}
+            </div>
+          ) : null}
         </div>
-      ) : (
-        <div
-          className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const file = e.dataTransfer.files[0];
-            if (file) importDroppedFile(file);
-          }}
-        >
-          {playbooks.map((pb) => (
-            <PlaybookCard
-              key={pb.id}
-              playbook={pb}
-              lang={lang}
-              onOpen={() => void onOpenEdit(pb.id)}
-              onRun={() => void onStartRun(pb.id)}
-              onDuplicate={() => void onDuplicate(pb.id)}
-              onDelete={() => onDelete(pb)}
-            />
-          ))}
-        </div>
-      )}
+
+        {!showHistory ? (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="group" aria-label={tr("Фильтр по категории", "Category filter")}>
+            {(["all", ...CATEGORIES] as const).map((category) => {
+              const active = categoryFilter === category;
+              const label = category === "all"
+                ? tr("Все", "All")
+                : lang === "ru" ? CATEGORY_META[category].labelRu : CATEGORY_META[category].labelEn;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setCategoryFilter(category)}
+                  className={cn(
+                    "h-7 shrink-0 rounded-full px-3 text-xs font-medium transition-colors",
+                    active ? "bg-foreground text-background" : "bg-secondary/55 text-muted-foreground hover:bg-secondary hover:text-foreground",
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {!showHistory ? (
+          <div
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const file = event.dataTransfer.files[0];
+              if (file) importDroppedFile(file);
+            }}
+          >
+            <QueryStateBlock
+              loading={playbooksLoading}
+              error={playbooksError || undefined}
+              loadingText={tr("Загружаем проекты…", "Loading projects…")}
+              errorText={playbooksError ? `${tr("Не удалось загрузить playbooks", "Failed to load playbooks")}: ${playbooksError}` : undefined}
+              retryText={tr("Повторить", "Retry")}
+              onRetry={onRetryPlaybooks}
+            >
+              {playbooks.length === 0 ? (
+                <EmptyState
+                  icon={<GitBranch className="h-5 w-5" />}
+                  title={search.trim() || categoryFilter !== "all" ? tr("Ничего не найдено", "Nothing found") : tr("Подключите первый Ansible-проект", "Connect your first Ansible project")}
+                  description={search.trim() || categoryFilter !== "all"
+                    ? tr("Измените поиск или категорию.", "Change the search or category.")
+                    : tr("Добавьте GitLab-проект, архив или отдельный YAML.", "Add a GitLab project, archive, or individual YAML file.")}
+                  actions={search.trim() || categoryFilter !== "all" ? (
+                    <Button size="sm" variant="outline" onClick={() => { setSearch(""); setCategoryFilter("all"); }}>{tr("Сбросить", "Reset")}</Button>
+                  ) : (
+                    <Button size="sm" onClick={openProjectImport}><GitBranch className="h-4 w-4" />{tr("Подключить проект", "Connect project")}</Button>
+                  )}
+                />
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2" role="list" aria-label={tr("Проекты Ansible", "Ansible projects")}>
+                  {playbooks.map((playbook) => (
+                    <PlaybookCard
+                      key={playbook.id}
+                      playbook={playbook}
+                      lang={lang}
+                      executionReady={ansibleAvailable}
+                      onOpen={() => onOpenEdit(playbook.id)}
+                      onRun={() => onStartRun(playbook.id)}
+                      onDuplicate={() => onDuplicate(playbook.id)}
+                      onDelete={() => onDelete(playbook)}
+                    />
+                  ))}
+                </div>
+              )}
+            </QueryStateBlock>
+          </div>
+        ) : (
+          <RecentRuns lang={lang} tr={tr} runs={recentRuns} onRefresh={onRefreshRuns} onOpen={onOpenRun} />
+        )}
+      </section>
     </>
+  );
+}
+
+function RuntimeNotice({ tr, ansible, ready }: { tr: (ru: string, en: string) => string; ansible?: AnsibleStatus; ready: boolean }) {
+  if (ready) return null;
+  const validatorReady = Boolean(ansible?.validation_available ?? ansible?.method);
+  return (
+    <div role="status" className="flex items-start gap-3 border-l-2 border-warning bg-warning/[0.045] px-4 py-3 sm:items-center">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning sm:mt-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-foreground">
+          {validatorReady ? tr("Worker запуска не подключён", "Execution worker is offline") : tr("Ansible требует настройки", "Ansible needs setup")}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {validatorReady
+            ? tr("Проекты и проверка YAML доступны. Настроить запуск можно сейчас, выполнить — после подключения worker.", "Projects and YAML validation remain available. Configure now; execution resumes when the worker connects.")
+            : tr("Проверьте Ansible runtime в настройках системы.", "Check the Ansible runtime in system settings.")}
+        </p>
+        <StatusBadge label={validatorReady ? tr("Только проверка", "Validation only") : tr("Нужна настройка", "Setup required")} tone="warning" className="mt-2 normal-case tracking-normal sm:hidden" />
+      </div>
+      <StatusBadge label={validatorReady ? tr("Только проверка", "Validation only") : tr("Нужна настройка", "Setup required")} tone="warning" className="hidden normal-case tracking-normal sm:inline-flex" />
+    </div>
+  );
+}
+
+function RecentRuns({
+  lang,
+  tr,
+  runs,
+  onRefresh,
+  onOpen,
+}: {
+  lang: string;
+  tr: (ru: string, en: string) => string;
+  runs: PlaybookRun[];
+  onRefresh: () => void;
+  onOpen: (run: PlaybookRun) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-lg border border-border/80 bg-card/55" aria-labelledby="recent-runs-title">
+      <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
+        <div>
+          <h2 id="recent-runs-title" className="text-sm font-semibold text-foreground">{tr("История запусков", "Run history")}</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{tr("Последние операции Ansible", "Recent Ansible operations")}</p>
+        </div>
+        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={onRefresh} aria-label={tr("Обновить запуски", "Refresh runs")}>
+          <RefreshCcw className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+      {runs.length ? runs.slice(0, 12).map((run) => {
+        const meta = RUN_STATUS_META[run.status];
+        return (
+          <button key={run.id} type="button" onClick={() => onOpen(run)} className="grid w-full gap-2 border-b border-border/60 px-4 py-3 text-left last:border-0 hover:bg-secondary/25 sm:grid-cols-[minmax(0,1fr)_140px_100px] sm:items-center">
+            <span className="truncate text-sm font-medium text-foreground">{run.playbook_name}</span>
+            <span className={cn("text-xs", meta?.className)}>{meta ? (lang === "ru" ? meta.labelRu : meta.labelEn) : run.status}</span>
+            <span className="flex items-center gap-1 text-xs text-muted-foreground"><Clock3 className="h-3 w-3" />{run.started_at ? relativeTime(run.started_at) : "—"}</span>
+          </button>
+        );
+      }) : <p className="px-4 py-12 text-center text-sm text-muted-foreground">{tr("Запусков пока нет", "No runs yet")}</p>}
+    </section>
   );
 }

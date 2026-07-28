@@ -39,7 +39,7 @@ describe("CommandPalette Playbooks navigation", () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByText("Playbooks"));
+    fireEvent.click(screen.getByText("Ansible"));
 
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent("/automation");

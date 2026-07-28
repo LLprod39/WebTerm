@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.utils import timezone
 
-from servers.models import PlaybookRun, PlaybookRunDispatch
+from servers.models import BackgroundWorkerState, PlaybookRun, PlaybookRunDispatch
 from servers.playbook_dispatch import (
     cancel_playbook_dispatch_for_run,
     claim_next_playbook_dispatch,
@@ -143,6 +143,15 @@ def test_execution_plane_command_passes_shutdown_event_to_dispatch(monkeypatch):
         "servers.management.commands.run_playbook_execution_plane.execute_playbook_dispatch",
         fake_execute,
     )
+    runtime_fingerprint = {
+        "method": "isolated-execution-worker",
+        "available": True,
+        "runtime_digest": "sha256:" + "a" * 64,
+    }
+    monkeypatch.setattr(
+        "servers.management.commands.run_playbook_execution_plane._execution_runtime_fingerprint",
+        lambda: runtime_fingerprint,
+    )
 
     call_command(
         "run_playbook_execution_plane",
@@ -154,3 +163,27 @@ def test_execution_plane_command_passes_shutdown_event_to_dispatch(monkeypatch):
     dispatch.refresh_from_db()
     assert dispatch.status == PlaybookRunDispatch.STATUS_COMPLETED
     assert isinstance(observed[0], threading.Event)
+    worker = BackgroundWorkerState.objects.get(worker_kind="playbook_execution", worker_key="pytest-playbook-worker")
+    assert worker.last_summary["runtime_fingerprint"] == runtime_fingerprint
+
+
+@pytest.mark.django_db
+def test_validation_uses_live_execution_worker_fingerprint():
+    from servers.services.playbooks.validation import runtime_fingerprint
+
+    fingerprint = {
+        "method": "isolated-execution-worker",
+        "available": True,
+        "runtime_digest": "sha256:" + "b" * 64,
+        "image": "webterm-ansible:latest",
+    }
+    BackgroundWorkerState.objects.create(
+        worker_kind="playbook_execution",
+        worker_key="runtime-source",
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        heartbeat_at=timezone.now(),
+        lease_expires_at=timezone.now() + timedelta(minutes=3),
+        last_summary={"runtime_fingerprint": fingerprint},
+    )
+
+    assert runtime_fingerprint() == fingerprint

@@ -123,7 +123,9 @@ export function SoftHeader({
           </h1>
           {subtitle ? <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{subtitle}</p> : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
+        {actions ? (
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:shrink-0">{actions}</div>
+        ) : null}
       </div>
     </header>
   );
@@ -373,6 +375,7 @@ export function QueryStateBlock({
   error,
   loadingText,
   errorText,
+  retryText,
   onRetry,
   children,
   className,
@@ -381,6 +384,7 @@ export function QueryStateBlock({
   error?: unknown;
   loadingText?: string;
   errorText?: string;
+  retryText?: string;
   onRetry?: () => void;
   children: ReactNode;
   className?: string;
@@ -400,7 +404,7 @@ export function QueryStateBlock({
   if (error) {
     const message = errorText ?? (error instanceof Error ? error.message : t("ui.error_default"));
     return (
-      <div className={cn("rounded-lg border border-destructive/30 bg-destructive/8 px-5 py-4", className)}>
+      <div role="alert" className={cn("rounded-lg border border-destructive/30 bg-destructive/8 px-5 py-4", className)}>
         <div className="flex items-start gap-3">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div className="min-w-0">
@@ -411,7 +415,7 @@ export function QueryStateBlock({
                 onClick={onRetry}
                 className="mt-1 text-xs text-destructive/70 underline-offset-2 hover:underline"
               >
-                {t("ui.retry")}
+                {retryText ?? t("ui.retry")}
               </button>
             ) : null}
           </div>

@@ -16,6 +16,7 @@ from pathlib import Path
 
 _VOLUME_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
 _NETWORK_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+_HOST_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$")
 _IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _WORKDIR_RE = re.compile(r"^pb-r(?P<run>\d+)-d(?P<dispatch>\d+)-a(?P<attempt>\d+)$")
 RUNNER_UID = 10001
@@ -106,6 +107,14 @@ def isolated_execution_required() -> bool:
         "yes",
         "on",
     }
+
+
+def docker_host_alias() -> str:
+    configured = os.environ.get("WEBTERM_ANSIBLE_DOCKER_HOST_ALIAS")
+    alias = "host.docker.internal" if configured is None else configured.strip()
+    if alias and not _HOST_ALIAS_RE.fullmatch(alias):
+        raise AnsibleIsolationError("Ansible Docker host alias is invalid")
+    return alias
 
 
 def create_ansible_workdir(runtime_identity: AnsibleRuntimeIdentity | None = None) -> Path:
@@ -316,11 +325,18 @@ def build_isolated_docker_command(
         (os.environ.get("WEBTERM_ANSIBLE_DOCKER_CPUS") or "1.0").strip(),
         "--network",
         network,
-        "--user",
-        user,
-        "--tmpfs",
-        "/tmp:rw,noexec,nosuid,nodev,size=64m",
     ]
+    host_alias = docker_host_alias()
+    if host_alias:
+        command.extend(["--add-host", f"{host_alias}:host-gateway"])
+    command.extend(
+        [
+            "--user",
+            user,
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=64m",
+        ]
+    )
     if runtime_identity is not None:
         command.extend(["--name", runtime_identity.container_name])
         for key, value in runtime_identity.labels.items():

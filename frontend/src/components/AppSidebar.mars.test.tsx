@@ -103,7 +103,7 @@ describe("AppSidebar preview-gated nav", () => {
     expect(within(infrastructure).getByText("Серверы")).toBeInTheDocument();
     expect(within(infrastructure).getByText("Кубернетес")).toBeInTheDocument();
     expect(within(automation).getByText("Агенты")).toBeInTheDocument();
-    expect(within(automation).getByText("Плейбуки")).toBeInTheDocument();
+    expect(within(automation).getByText("Ansible")).toBeInTheDocument();
     expect(within(automation).getByText("Студия")).toBeInTheDocument();
     expect(within(extensions).getByText("Плагины")).toBeInTheDocument();
     expect(within(administration).getByText("Настройки")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("AppSidebar preview-gated nav", () => {
       { path: "/automation/playbooks/42" },
     );
 
-    const playbooks = await screen.findByRole("link", { name: "Плейбуки" });
+    const playbooks = await screen.findByRole("link", { name: "Ansible" });
     expect(playbooks).toHaveAttribute("href", "/automation");
     expect(playbooks).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Серверы" })).not.toHaveAttribute("aria-current");

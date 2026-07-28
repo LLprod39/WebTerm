@@ -96,6 +96,21 @@ export interface CommitPlaybookBundleResponse {
   preview: PlaybookBundlePreview;
 }
 
+export interface GitLabProjectSourceInput {
+  project_url: string;
+  ref: string;
+  path: string;
+  token: string;
+}
+
+export interface GitLabProjectSource {
+  type: "gitlab";
+  host: string;
+  project: string;
+  ref?: string;
+  path?: string;
+}
+
 export interface PlaybookBundleExport {
   blob: Blob;
   filename: string;
@@ -129,6 +144,30 @@ export async function commitPlaybookBundle(file: File, metadata: CommitPlaybookB
   return apiFetch<CommitPlaybookBundleResponse>("/servers/api/playbooks/import/commit/", {
     method: "POST",
     body,
+  });
+}
+
+export async function previewGitLabPlaybookProject(source: GitLabProjectSourceInput) {
+  return apiFetch<{ success: true; preview: PlaybookBundlePreview; source: GitLabProjectSource }>(
+    "/servers/api/playbooks/import/gitlab/preview/",
+    { method: "POST", body: JSON.stringify(source) },
+  );
+}
+
+export async function commitGitLabPlaybookProject(
+  source: GitLabProjectSourceInput,
+  metadata: CommitPlaybookBundleMetadata,
+  expectedContentHash: string,
+) {
+  return apiFetch<CommitPlaybookBundleResponse>("/servers/api/playbooks/import/gitlab/commit/", {
+    method: "POST",
+    body: JSON.stringify({
+      ...source,
+      expected_content_hash: expectedContentHash,
+      ...metadata,
+      name: metadata.name.trim(),
+      description: metadata.description.trim(),
+    }),
   });
 }
 

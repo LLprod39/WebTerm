@@ -52,7 +52,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { id: "dashboard", labelRu: "Дашборд", labelEn: "Dashboard", path: "/dashboard", icon: LayoutDashboard, keywords: "home main" },
   { id: "servers", labelRu: "Серверы", labelEn: "Servers", path: "/servers", icon: Server, keywords: "ssh fleet hosts" },
-  { id: "playbooks", labelRu: "Плейбуки", labelEn: "Playbooks", path: "/automation", icon: BookOpen, keywords: "ansible yaml automation runbook" },
+  { id: "playbooks", labelRu: "Ansible", labelEn: "Ansible", path: "/automation", icon: BookOpen, keywords: "playbooks yaml automation runbook" },
   { id: "agents", labelRu: "Агенты", labelEn: "Agents", path: "/agents", icon: Bot, keywords: "runs automation" },
   { id: "chat", labelRu: "Операторский чат", labelEn: "Operator chat", path: "/chat", icon: MessageSquare, keywords: "ai assistant" },
   { id: "studio", labelRu: "Studio", labelEn: "Studio", path: "/studio", icon: Workflow, keywords: "pipeline" },
