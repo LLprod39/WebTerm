@@ -189,6 +189,15 @@ _PLAYBOOK_BUNDLE_STORAGE_ROOT = (os.getenv("PLAYBOOK_BUNDLE_STORAGE_ROOT", "") o
 PLAYBOOK_BUNDLE_STORAGE_ROOT = (
     Path(_PLAYBOOK_BUNDLE_STORAGE_ROOT) if _PLAYBOOK_BUNDLE_STORAGE_ROOT else BASE_DIR / "private" / "playbook_bundles"
 )
+PLAYBOOK_GITLAB_ALLOWED_HOSTS = tuple(
+    host.strip().casefold()
+    for host in (os.getenv("PLAYBOOK_GITLAB_ALLOWED_HOSTS", "gitlab.com") or "gitlab.com").split(",")
+    if host.strip()
+)
+try:
+    PLAYBOOK_GITLAB_TIMEOUT_SECONDS = max(1.0, float(os.getenv("PLAYBOOK_GITLAB_TIMEOUT_SECONDS", "15") or "15"))
+except (TypeError, ValueError):
+    PLAYBOOK_GITLAB_TIMEOUT_SECONDS = 15.0
 SSH_PRIVATE_KEYS_DIR = BASE_DIR / "data" / "ssh_keys"
 
 # Create upload directory if it doesn't exist

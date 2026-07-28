@@ -6,9 +6,35 @@ from datetime import timedelta
 
 import pytest
 from django.contrib.auth.models import User
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from core_ui.models import UserActivityLog
 from servers.models import PlaybookRun
+
+
+@pytest.mark.django_db(transaction=True)
+def test_terminal_transition_locks_only_run_row_for_nullable_playbook(monkeypatch):
+    from servers.services.playbook_run_state import transition_playbook_run
+
+    user = User.objects.create_user(username="run-transition-lock", password="x")
+    run = PlaybookRun.objects.create(user=user, playbook=None, playbook_snapshot={"name": "Detached"})
+    monkeypatch.setattr(
+        "core_ui.services.operator_async.notify_playbook_run_terminal",
+        lambda _run_id: None,
+    )
+
+    with CaptureQueriesContext(connection) as captured:
+        result = transition_playbook_run(run.id, PlaybookRun.STATUS_FAILED, error_message="worker lease expired")
+
+    run_selects = [
+        query["sql"]
+        for query in captured.captured_queries
+        if query["sql"].lstrip().upper().startswith("SELECT") and "servers_playbookrun" in query["sql"]
+    ]
+    assert result.transitioned is True
+    assert run_selects
+    assert "JOIN" not in run_selects[0].upper()
 
 
 @pytest.mark.django_db(transaction=True)

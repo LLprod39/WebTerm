@@ -16,10 +16,12 @@ from servers.services.playbooks.access import playbooks_visible_to, require_play
 from servers.services.playbooks.bundle_archive import BundleLimits, BundleValidationError, read_archive_stream
 from servers.services.playbooks.bundle_storage import BundleStorageError
 from servers.services.playbooks.bundles import (
+    BundleCommitResult,
     commit_project_bundle,
     export_revision_bundle,
     preview_project_bundle,
 )
+from servers.services.playbooks.gitlab_source import fetch_gitlab_project_archive
 
 
 @login_required
@@ -40,6 +42,33 @@ def playbook_bundle_preview(request):
     except BundleValidationError as exc:
         return _bundle_error(exc)
     return JsonResponse({"success": True, "preview": preview})
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def playbook_gitlab_preview(request):
+    payload = _json_payload(request)
+    if payload is None:
+        return _error("A JSON request body is required", code="invalid_json", status=400)
+    try:
+        limits = BundleLimits.from_settings()
+        source = fetch_gitlab_project_archive(
+            project_url=str(payload.get("project_url") or ""),
+            ref=str(payload.get("ref") or ""),
+            project_path=str(payload.get("path") or ""),
+            private_token=str(payload.get("token") or ""),
+            limits=limits,
+        )
+        preview = preview_project_bundle(
+            source.content,
+            requested_entrypoint=str(payload.get("entrypoint") or ""),
+            limits=limits,
+            allow_single_root=True,
+        )
+    except BundleValidationError as exc:
+        return _bundle_error(exc)
+    return JsonResponse({"success": True, "preview": preview, "source": source.source})
 
 
 @login_required
@@ -68,32 +97,53 @@ def playbook_bundle_commit(request):
     except BundleStorageError:
         return _error("Bundle storage is unavailable", code="storage_unavailable", status=503)
 
-    return JsonResponse(
-        {
-            "success": True,
-            "playbook": {
-                "id": result.playbook.id,
-                "name": result.playbook.name,
-                "category": result.playbook.category,
-                "visibility": result.playbook.visibility,
-            },
-            "revision": {
-                "id": result.revision.id,
-                "number": result.revision.revision_number,
-                "content_hash": result.revision.content_hash,
-                "bundle_hash": result.revision.bundle_hash,
-            },
-            "bundle": {
-                "id": result.asset_bundle.id,
-                "content_hash": result.asset_bundle.content_hash,
-                "file_count": result.asset_bundle.file_count,
-                "size_bytes": result.asset_bundle.size_bytes,
-                "scan_status": result.asset_bundle.scan_status,
-            },
-            "preview": result.preview,
-        },
-        status=201,
-    )
+    return _commit_response(result)
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def playbook_gitlab_commit(request):
+    payload = _json_payload(request)
+    if payload is None:
+        return _error("A JSON request body is required", code="invalid_json", status=400)
+    expected_hash = str(payload.get("expected_content_hash") or "").strip()
+    if not expected_hash:
+        return _error("Preview the GitLab project before importing it", code="preview_required", status=409)
+    try:
+        limits = BundleLimits.from_settings()
+        source = fetch_gitlab_project_archive(
+            project_url=str(payload.get("project_url") or ""),
+            ref=str(payload.get("ref") or ""),
+            project_path=str(payload.get("path") or ""),
+            private_token=str(payload.get("token") or ""),
+            limits=limits,
+        )
+        preview = preview_project_bundle(source.content, limits=limits, allow_single_root=True)
+        if preview["content_hash"] != expected_hash:
+            raise BundleValidationError(
+                "The GitLab project changed after preview; review it again before importing",
+                code="gitlab_source_changed",
+                status_code=409,
+            )
+        result = commit_project_bundle(
+            source.content,
+            actor=request.user,
+            requested_entrypoint=str(payload.get("entrypoint") or ""),
+            name=str(payload.get("name") or ""),
+            description=str(payload.get("description") or ""),
+            category=str(payload.get("category") or Playbook.CATEGORY_CUSTOM),
+            visibility=str(payload.get("visibility") or Playbook.VISIBILITY_PRIVATE),
+            tags=_parse_tags(payload.get("tags")),
+            limits=limits,
+            allow_single_root=True,
+            source_metadata=source.source,
+        )
+    except BundleValidationError as exc:
+        return _bundle_error(exc)
+    except BundleStorageError:
+        return _error("Bundle storage is unavailable", code="storage_unavailable", status=503)
+    return _commit_response(result)
 
 
 @login_required
@@ -139,6 +189,43 @@ def _parse_tags(raw: Any) -> list[str] | None:
     else:
         parsed = raw
     return parsed if isinstance(parsed, list) else []
+
+
+def _json_payload(request) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _commit_response(result: BundleCommitResult) -> JsonResponse:
+    return JsonResponse(
+        {
+            "success": True,
+            "playbook": {
+                "id": result.playbook.id,
+                "name": result.playbook.name,
+                "category": result.playbook.category,
+                "visibility": result.playbook.visibility,
+            },
+            "revision": {
+                "id": result.revision.id,
+                "number": result.revision.revision_number,
+                "content_hash": result.revision.content_hash,
+                "bundle_hash": result.revision.bundle_hash,
+            },
+            "bundle": {
+                "id": result.asset_bundle.id,
+                "content_hash": result.asset_bundle.content_hash,
+                "file_count": result.asset_bundle.file_count,
+                "size_bytes": result.asset_bundle.size_bytes,
+                "scan_status": result.asset_bundle.scan_status,
+            },
+            "preview": result.preview,
+        },
+        status=201,
+    )
 
 
 def _bundle_error(exc: BundleValidationError) -> JsonResponse:

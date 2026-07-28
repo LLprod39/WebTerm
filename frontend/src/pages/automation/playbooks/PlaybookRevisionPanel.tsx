@@ -65,14 +65,14 @@ export function PlaybookRevisionPanel({ lang, playbookId, workspace }: PlaybookR
             workspace.autosaveStatus === "conflict" || workspace.autosaveStatus === "error"
               ? "border-destructive/30 bg-destructive/5 text-destructive"
               : workspace.autosaveStatus === "dirty"
-                ? "border-amber-500/30 bg-amber-500/5 text-amber-400"
+                ? "border-warning/30 bg-warning/5 text-warning"
                 : "border-border bg-surface-0 text-muted-foreground",
           )}
         >
           {workspace.autosaveStatus === "saving" || workspace.autosaveStatus === "loading" ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : workspace.autosaveStatus === "saved" ? (
-            <Check className="h-3.5 w-3.5 text-emerald-400" />
+            <Check className="h-3.5 w-3.5 text-success" />
           ) : (
             <Clock3 className="h-3.5 w-3.5" />
           )}
@@ -148,7 +148,7 @@ export function PlaybookRevisionPanel({ lang, playbookId, workspace }: PlaybookR
             {tr("История", "History")}
           </div>
           {workspace.hasUnrevisionedChanges ? (
-            <span className="text-xs text-amber-400">{tr("Есть изменения после последней ревизии", "Changes since last revision")}</span>
+            <span className="text-xs text-warning">{tr("Есть изменения после последней ревизии", "Changes since last revision")}</span>
           ) : workspace.hasUnpublishedRevision ? (
             <span className="text-xs text-primary">{tr("Последняя ревизия не опубликована", "Latest revision is unpublished")}</span>
           ) : null}
@@ -169,7 +169,7 @@ export function PlaybookRevisionPanel({ lang, playbookId, workspace }: PlaybookR
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm font-medium text-foreground">#{revision.revision_number}</span>
                     {published ? (
-                      <span className="rounded-sm bg-emerald-500/10 px-1.5 py-0.5 text-2xs text-emerald-400">
+                      <span className="rounded-sm bg-success/10 px-1.5 py-0.5 text-2xs text-success">
                         {tr("Опубликована", "Published")}
                       </span>
                     ) : null}
@@ -229,7 +229,7 @@ export function PlaybookRevisionPanel({ lang, playbookId, workspace }: PlaybookR
             <DialogDescription>{workspace.selectedRevision?.message || workspace.selectedRevision?.origin_type}</DialogDescription>
           </DialogHeader>
           <DialogBody className="max-h-[70vh] overflow-auto">
-            <pre className="whitespace-pre-wrap rounded-sm border border-border bg-[#0d1117] p-4 font-mono text-xs text-foreground">
+            <pre className="whitespace-pre-wrap rounded-sm border border-border bg-terminal-bg p-4 font-mono text-xs text-foreground">
               {workspace.selectedRevision?.content_format === "ansible_yaml"
                 ? workspace.selectedRevision.source_yaml
                 : JSON.stringify(workspace.selectedRevision?.tasks || [], null, 2)}

@@ -11,7 +11,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from servers.models import PlaybookValidation
+from servers.models import BackgroundWorkerState, PlaybookValidation
 from servers.services.ansible_engine import detect_ansible
 from servers.services.ansible_validator_client import (
     AnsibleValidatorError,
@@ -47,6 +47,25 @@ def _hash_payload(payload: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _active_execution_worker_fingerprint() -> dict[str, Any] | None:
+    state = (
+        BackgroundWorkerState.objects.filter(
+            worker_kind="playbook_execution",
+            status=BackgroundWorkerState.STATUS_RUNNING,
+            lease_expires_at__gt=timezone.now(),
+        )
+        .order_by("-heartbeat_at")
+        .first()
+    )
+    summary = state.last_summary if state is not None and isinstance(state.last_summary, dict) else {}
+    fingerprint = summary.get("runtime_fingerprint") if isinstance(summary, dict) else None
+    if not isinstance(fingerprint, dict):
+        return None
+    if not fingerprint.get("available") or not str(fingerprint.get("runtime_digest") or ""):
+        return None
+    return dict(fingerprint)
+
+
 def runtime_fingerprint() -> dict[str, Any]:
     if validator_socket_path():
         image = os.getenv("WEBTERM_ANSIBLE_IMAGE", "webterm-ansible:latest")
@@ -79,6 +98,9 @@ def runtime_fingerprint() -> dict[str, Any]:
             "config_hash": hashlib.sha256(config_seed.encode("utf-8")).hexdigest(),
             "analyzer_version": COMPATIBILITY_ANALYZER_VERSION,
         }
+    worker_fingerprint = _active_execution_worker_fingerprint()
+    if worker_fingerprint is not None:
+        return worker_fingerprint
     detection = detect_ansible()
     config_seed = "\n".join(
         [

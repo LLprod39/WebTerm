@@ -2,7 +2,7 @@
   "nav.dashboard": "Панель",
   "nav.servers": "Серверы",
   "nav.automation": "Автоматизация",
-  "nav.playbooks": "Плейбуки",
+  "nav.playbooks": "Ansible",
   "nav.agents": "Агенты",
   "nav.chat": "Чат",
   "nav.studio": "Студия",

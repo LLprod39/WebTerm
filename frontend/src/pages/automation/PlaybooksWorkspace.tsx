@@ -6,9 +6,7 @@ import { RunResultsView } from "./RunResultsView";
 import { RunWizard } from "./RunWizard";
 import { detailToPlaybookEditor } from "./playbookEditorState";
 import { PlaybooksCatalogPanel } from "./playbooks/PlaybooksCatalogPanel";
-import { PlaybookBindingsPanel } from "./playbooks/PlaybookBindingsPanel";
-import { PlaybookRevisionPanel } from "./playbooks/PlaybookRevisionPanel";
-import { PlaybookSharingPanel } from "./playbooks/PlaybookSharingPanel";
+import { PlaybookWorkspacePanels } from "./playbooks/PlaybookWorkspacePanels";
 import type { PlaybooksWorkspaceProps } from "./playbooks/types";
 import { usePlaybooksWorkspace } from "./playbooks/usePlaybooksWorkspace";
 
@@ -163,6 +161,10 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           canRun={!view.playbookId || (workspace.capabilityReady && workspace.capabilities.can_run)}
           canValidate={!view.playbookId || workspace.capabilities.can_validate}
           canAdapt={!view.playbookId || workspace.capabilities.is_owner}
+          publishedRevisionNumber={
+            workspace.revisions.find((revision) => revision.id === workspace.publishedRevisionId)?.revision_number ?? null
+          }
+          hasUnpublishedRevision={workspace.hasUnpublishedRevision}
           onChange={updateEditor}
           onSave={() => void onSave()}
           onBack={leaveEditor}
@@ -177,11 +179,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
       ) : null}
 
       {view.mode === "edit" && view.playbookId && !playbookSurfaceLoading ? (
-        <div className="space-y-4">
-          <PlaybookRevisionPanel lang={lang} playbookId={view.playbookId} workspace={workspace} />
-          <PlaybookBindingsPanel lang={lang} workspace={workspace} />
-          <PlaybookSharingPanel lang={lang} workspace={workspace} />
-        </div>
+        <PlaybookWorkspacePanels lang={lang} playbookId={view.playbookId} workspace={workspace} />
       ) : null}
 
       {view.mode === "run-wizard" && !playbookSurfaceLoading ? (

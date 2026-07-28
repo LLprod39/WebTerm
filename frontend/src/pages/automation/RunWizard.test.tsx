@@ -78,6 +78,7 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof RunWizard>>
     groups: [],
     running: false,
     ansibleAvailable: true,
+    workerReady: true,
     compatibility: { host_selectors: ["web"], required_variables: [], issues: [] },
     revisions: [draftRevision, publishedRevision],
     publishedRevisionId: publishedRevision.id,
@@ -92,30 +93,23 @@ function renderWizard(overrides: Partial<React.ComponentProps<typeof RunWizard>>
 }
 
 async function moveToTargets() {
-  const next = screen.getByRole("button", { name: "Next" });
-  await waitFor(() => expect(next).toBeEnabled());
-  fireEvent.click(next);
+  await waitFor(() => expect(screen.getByRole("button", { name: /web-01/i })).toBeInTheDocument());
 }
 
 async function selectAdhocTargetAndMoveToVariables() {
   await moveToTargets();
   fireEvent.click(screen.getByRole("button", { name: /web-01/i }));
-  const next = screen.getByRole("button", { name: "Next" });
-  await waitFor(() => expect(next).toBeEnabled());
-  fireEvent.click(next);
 }
 
 describe("RunWizard preflight", () => {
   beforeEach(() => vi.mocked(validatePlaybookRevision).mockReset());
 
-  it("presents four explicit preflight steps", async () => {
+  it("presents two clear run steps", async () => {
     renderWizard();
 
-    const steps = within(screen.getByLabelText("Preflight steps"));
-    expect(steps.getByText("1. Revision")).toBeInTheDocument();
-    expect(steps.getByText("2. Targets")).toBeInTheDocument();
-    expect(steps.getByText("3. Variables")).toBeInTheDocument();
-    expect(steps.getByText("4. Review")).toBeInTheDocument();
+    const steps = within(screen.getByLabelText("Run steps"));
+    expect(steps.getByText("Setup")).toBeInTheDocument();
+    expect(steps.getByText("Review")).toBeInTheDocument();
     expect(await screen.findByText("published-content-hash")).toBeInTheDocument();
   });
 
@@ -137,10 +131,9 @@ describe("RunWizard preflight", () => {
 
     const revisionSelect = await screen.findByLabelText("Revision");
     fireEvent.click(revisionSelect);
-    fireEvent.click(await screen.findByRole("option", { name: /#3.*unpublished/i }));
+    fireEvent.click(await screen.findByRole("option", { name: /#3.*draft/i }));
 
     expect(await screen.findByText("unpublished-content-hash")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(await screen.findByLabelText("hosts: db")).toBeInTheDocument();
     expect(screen.queryByLabelText("hosts: web")).not.toBeInTheDocument();
   });
@@ -177,12 +170,12 @@ describe("RunWizard preflight", () => {
     });
     renderWizard({ onConfirm });
     await selectAdhocTargetAndMoveToVariables();
-    fireEvent.click(screen.getByRole("button", { name: "Review & validate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Validate and continue" }));
 
-    expect(await screen.findByText("Run blocked")).toBeInTheDocument();
+    expect(await screen.findByText("Settings need attention")).toBeInTheDocument();
     expect(screen.getByText("community.general is unavailable")).toBeInTheDocument();
     expect(screen.getByText("Install the collection and validate again.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run validated revision" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(onConfirm).not.toHaveBeenCalled();
     expect(validatePlaybookRevision).toHaveBeenCalledWith(7, 12, {
       server_ids: [1],
@@ -220,18 +213,14 @@ describe("RunWizard preflight", () => {
     const onConfirm = vi.fn();
     renderWizard({ bindingProfiles: [profile], onConfirm });
 
-    await moveToTargets();
-    expect(await screen.findByText("Production")).toBeInTheDocument();
-    expect(screen.getByText("deploy_token · secret")).toBeInTheDocument();
+    expect((await screen.findAllByText("Production")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("deploy_token · secret").length).toBeGreaterThan(0);
     expect(screen.queryByText("must-never-render")).not.toBeInTheDocument();
-    const next = screen.getByRole("button", { name: "Next" });
-    await waitFor(() => expect(next).toBeEnabled());
-    fireEvent.click(next);
 
     fireEvent.change(screen.getByLabelText("extra_vars JSON"), {
       target: { value: '{"release":42,"enabled":true,"matrix":[1,2]}' },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Review & validate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Validate and continue" }));
 
     await waitFor(() => expect(validatePlaybookRevision).toHaveBeenCalledWith(7, 12, {
       binding_profile_id: 9,
@@ -241,7 +230,7 @@ describe("RunWizard preflight", () => {
       variable_names: ["deploy_token", "enabled", "matrix", "release", "release_channel"],
     }));
     expect(await screen.findByText("Ready to run")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Start dry-run" }));
+    fireEvent.click(screen.getByRole("button", { name: "Start dry run" }));
 
     expect(onConfirm).toHaveBeenCalledWith({
       revision_id: 12,
@@ -268,7 +257,7 @@ describe("RunWizard preflight", () => {
     fireEvent.change(screen.getByLabelText("extra_vars JSON"), { target: { value: '{"release":' } });
 
     expect(screen.getByRole("alert")).toHaveTextContent("Invalid JSON");
-    expect(screen.getByRole("button", { name: "Review & validate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Validate and continue" })).toBeDisabled();
     expect(validatePlaybookRevision).not.toHaveBeenCalled();
   });
 
@@ -291,10 +280,10 @@ describe("RunWizard preflight", () => {
     });
 
     await selectAdhocTargetAndMoveToVariables();
-    fireEvent.click(screen.getByRole("button", { name: "Review & validate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Validate and continue" }));
 
     expect(await screen.findByText("Ready to run")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run validated revision" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
@@ -317,11 +306,11 @@ describe("RunWizard preflight", () => {
       workerReady: true,
     });
 
-    expect(await screen.findByText("The worker is ready to execute this JSON runbook.")).toBeInTheDocument();
+    expect(await screen.findByText("Runtime ready")).toBeInTheDocument();
     await selectAdhocTargetAndMoveToVariables();
-    fireEvent.click(screen.getByRole("button", { name: "Review & validate" }));
+    fireEvent.click(screen.getByRole("button", { name: "Validate and continue" }));
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Run validated revision" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Run now" })).toBeEnabled());
   });
 
   it("does not use worker readiness to bypass a missing Ansible runtime", async () => {
@@ -332,9 +321,8 @@ describe("RunWizard preflight", () => {
     renderWizard({ ansibleAvailable: false, workerReady: true });
 
     await selectAdhocTargetAndMoveToVariables();
-    fireEvent.click(screen.getByRole("button", { name: "Review & validate" }));
-
-    expect(await screen.findByText("Ready to run")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run validated revision" })).toBeDisabled();
+    expect(screen.getByText("Execution is currently unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Validate and continue" })).toBeDisabled();
+    expect(validatePlaybookRevision).not.toHaveBeenCalled();
   });
 });

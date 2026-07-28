@@ -41,11 +41,15 @@ describe("PlaybookSharingPanel", () => {
       render(<PlaybookSharingPanel lang="en" workspace={controller({ saveShare })} />);
 
       fireEvent.click(screen.getByRole("button", { name: "Add access" }));
-      fireEvent.change(screen.getByLabelText("Principal"), { target: { value: principalType } });
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Access principal" }), { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("option", {
+        name: principalType === "user" ? "User" : principalType === "group" ? "Group" : "Entire workspace",
+      }));
       if (principalId) {
         fireEvent.change(screen.getByLabelText("User/group ID"), { target: { value: principalId } });
       }
-      fireEvent.change(screen.getByLabelText("Role"), { target: { value: "operator" } });
+      fireEvent.keyDown(screen.getByRole("combobox", { name: "Access role" }), { key: "ArrowDown" });
+      fireEvent.click(screen.getByRole("option", { name: "Operator" }));
       fireEvent.click(screen.getByRole("button", { name: "Save access" }));
 
       await waitFor(() => expect(saveShare).toHaveBeenCalledTimes(1));

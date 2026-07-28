@@ -8,8 +8,10 @@ import {
 } from "@/api/playbooks";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
@@ -180,23 +182,24 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
                       className="min-h-[100px] bg-surface-0 font-mono text-sm"
                     />
                   ) : field.type === "select" ? (
-                    <select
+                    <Select
                       value={String(params[field.key] ?? field.default ?? "")}
-                      onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.value }))}
-                      className="flex h-9 w-full rounded-sm border border-border bg-surface-0 px-2 text-sm"
+                      onValueChange={(value) => setParams((current) => ({ ...current, [field.key]: value }))}
                     >
-                      {(field.options || []).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger aria-label={field.label}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(field.options || []).map((option) => (
+                          <SelectItem key={option} value={option}>{option}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   ) : field.type === "checkbox" ? (
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
+                    <label className="flex min-h-9 items-center gap-2 rounded-sm border border-border bg-surface-0 px-3 text-sm text-foreground">
+                      <Checkbox
                         checked={Boolean(params[field.key])}
-                        onChange={(e) => setParams((p) => ({ ...p, [field.key]: e.target.checked }))}
+                        onCheckedChange={(checked) => setParams((current) => ({ ...current, [field.key]: checked === true }))}
                       />
                       {field.label}
                     </label>

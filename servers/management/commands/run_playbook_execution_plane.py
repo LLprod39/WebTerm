@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import signal
 import sys
 import threading
+from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 from loguru import logger
@@ -17,6 +19,8 @@ from servers.playbook_dispatch import (
     recover_expired_playbook_dispatches,
 )
 from servers.services.ansible_docker_runtime import scavenge_ansible_workdirs
+from servers.services.ansible_setup import detect_ansible
+from servers.services.playbook_compatibility_analysis import COMPATIBILITY_ANALYZER_VERSION
 from servers.services.playbook_run_state import deliver_pending_playbook_run_notifications
 from servers.worker_state import (
     claim_background_worker,
@@ -24,6 +28,37 @@ from servers.worker_state import (
     heartbeat_background_worker,
     stop_background_worker,
 )
+
+
+def _execution_runtime_fingerprint() -> dict[str, Any]:
+    detection = detect_ansible()
+    metadata = detection.get("runtime_metadata") if isinstance(detection.get("runtime_metadata"), dict) else {}
+    packages = metadata.get("python_packages") if isinstance(metadata.get("python_packages"), list) else []
+    ansible_version = next(
+        (
+            str(item.get("version") or "")
+            for item in packages
+            if isinstance(item, dict) and item.get("name") == "ansible-core"
+        ),
+        str(detection.get("version") or ""),
+    )
+    image = str(detection.get("image") or "")
+    image_id = str(detection.get("image_id") or "")
+    runtime_digest = str(detection.get("runtime_digest") or "")
+    config_seed = "\n".join([image, image_id, runtime_digest, "isolated-execution-worker-v1"])
+    return {
+        "method": "isolated-execution-worker",
+        "available": bool(detection.get("available")),
+        "ansible_version": ansible_version,
+        "python_version": str(metadata.get("python") or ""),
+        "image": image,
+        "image_id": image_id,
+        "image_ready": bool(detection.get("image_ready")),
+        "runtime_digest": runtime_digest,
+        "collections": metadata.get("collections") if isinstance(metadata.get("collections"), list) else [],
+        "config_hash": hashlib.sha256(config_seed.encode("utf-8")).hexdigest(),
+        "analyzer_version": COMPATIBILITY_ANALYZER_VERSION,
+    }
 
 
 class Command(BaseCommand):
@@ -86,6 +121,8 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS(f"Starting playbook execution worker ({worker_key})"))
         summary = self._empty_summary()
+        runtime_fingerprint = _execution_runtime_fingerprint()
+        summary["runtime_fingerprint"] = runtime_fingerprint
         fatal_error = ""
         try:
             if once:
@@ -96,6 +133,7 @@ class Command(BaseCommand):
                     global_concurrency=global_concurrency,
                     per_user_concurrency=per_user_concurrency,
                     shutdown_event=stop_requested,
+                    runtime_fingerprint=runtime_fingerprint,
                 )
                 self.stdout.write(self.style.SUCCESS(self._format_summary(summary)))
                 if summary["failed"]:
@@ -110,9 +148,13 @@ class Command(BaseCommand):
                     global_concurrency=global_concurrency,
                     per_user_concurrency=per_user_concurrency,
                     shutdown_event=stop_requested,
+                    runtime_fingerprint=runtime_fingerprint,
                 )
                 for key, value in cycle.items():
-                    summary[key] = int(summary.get(key) or 0) + int(value or 0)
+                    if key == "runtime_fingerprint":
+                        summary[key] = value
+                    else:
+                        summary[key] = int(summary.get(key) or 0) + int(value or 0)
                 if cycle["empty_polls"]:
                     stop_requested.wait(interval)
         except KeyboardInterrupt:
@@ -142,8 +184,11 @@ class Command(BaseCommand):
         global_concurrency: int | None,
         per_user_concurrency: int | None,
         shutdown_event: threading.Event | None = None,
-    ) -> dict[str, int]:
+        runtime_fingerprint: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         summary = self._empty_summary()
+        if runtime_fingerprint:
+            summary["runtime_fingerprint"] = runtime_fingerprint
         summary["notifications"] += deliver_pending_playbook_run_notifications(limit=limit)
         for _index in range(limit):
             if shutdown_event is not None and shutdown_event.is_set():
@@ -212,7 +257,7 @@ class Command(BaseCommand):
         return summary
 
     @staticmethod
-    def _empty_summary() -> dict[str, int]:
+    def _empty_summary() -> dict[str, Any]:
         return {
             "processed": 0,
             "completed": 0,

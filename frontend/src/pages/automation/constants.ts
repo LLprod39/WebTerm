@@ -4,12 +4,12 @@ export const CATEGORY_META: Record<
   PlaybookCategory,
   { labelRu: string; labelEn: string; accent: string; kicker: string; bar: string }
 > = {
-  deploy: { labelRu: "Deploy", labelEn: "Deploy", accent: "text-sky-300", kicker: "bg-sky-500/15 text-sky-300 border-sky-500/30", bar: "bg-sky-400" },
-  patch: { labelRu: "Patch", labelEn: "Patch", accent: "text-amber-300", kicker: "bg-amber-500/15 text-amber-300 border-amber-500/30", bar: "bg-amber-400" },
-  diagnose: { labelRu: "Diagnose", labelEn: "Diagnose", accent: "text-primary", kicker: "bg-primary/15 text-primary border-primary/30", bar: "bg-primary" },
-  security: { labelRu: "Security", labelEn: "Security", accent: "text-rose-300", kicker: "bg-rose-500/15 text-rose-300 border-rose-500/30", bar: "bg-rose-400" },
-  maintenance: { labelRu: "Maintenance", labelEn: "Maintenance", accent: "text-violet-300", kicker: "bg-violet-500/15 text-violet-300 border-violet-500/30", bar: "bg-violet-400" },
-  custom: { labelRu: "Custom", labelEn: "Custom", accent: "text-muted-foreground", kicker: "bg-secondary text-muted-foreground border-border", bar: "bg-muted-foreground/50" },
+  deploy: { labelRu: "Развёртывание", labelEn: "Deploy", accent: "text-sky-300", kicker: "bg-sky-500/15 text-sky-300 border-sky-500/30", bar: "bg-sky-400" },
+  patch: { labelRu: "Обновление", labelEn: "Patch", accent: "text-amber-300", kicker: "bg-amber-500/15 text-amber-300 border-amber-500/30", bar: "bg-amber-400" },
+  diagnose: { labelRu: "Диагностика", labelEn: "Diagnose", accent: "text-primary", kicker: "bg-primary/15 text-primary border-primary/30", bar: "bg-primary" },
+  security: { labelRu: "Безопасность", labelEn: "Security", accent: "text-rose-300", kicker: "bg-rose-500/15 text-rose-300 border-rose-500/30", bar: "bg-rose-400" },
+  maintenance: { labelRu: "Обслуживание", labelEn: "Maintenance", accent: "text-violet-300", kicker: "bg-violet-500/15 text-violet-300 border-violet-500/30", bar: "bg-violet-400" },
+  custom: { labelRu: "Другое", labelEn: "Custom", accent: "text-muted-foreground", kicker: "bg-secondary text-muted-foreground border-border", bar: "bg-muted-foreground/50" },
 };
 
 export const RUN_STATUS_META: Record<

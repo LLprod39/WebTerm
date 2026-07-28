@@ -2,7 +2,7 @@
   "nav.dashboard": "Dashboard",
   "nav.servers": "Servers",
   "nav.automation": "Automation",
-  "nav.playbooks": "Playbooks",
+  "nav.playbooks": "Ansible",
   "nav.agents": "Agents",
   "nav.chat": "Chat",
   "nav.studio": "Studio",

@@ -188,3 +188,23 @@ def test_runtime_output_redacts_nested_jit_variable_values():
     assert "token-never-log" not in output
     assert "password-never-log" not in output
     assert output.count("[REDACTED]") == 2
+
+
+def test_ansible_version_probe_is_cached(monkeypatch):
+    from servers.services import ansible_setup
+
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(command, **_kwargs):
+        calls.append(tuple(command))
+        return SimpleNamespace(returncode=0, stdout="ansible-playbook [core 2.21.1]\n", stderr="")
+
+    ansible_setup._run_version.cache_clear()
+    monkeypatch.setattr(ansible_setup.subprocess, "run", fake_run)
+    try:
+        command = ("/opt/webterm/.venv/bin/ansible-playbook", "--version")
+        assert ansible_setup._run_version(command) == "ansible-playbook [core 2.21.1]"
+        assert ansible_setup._run_version(command) == "ansible-playbook [core 2.21.1]"
+        assert calls == [command]
+    finally:
+        ansible_setup._run_version.cache_clear()

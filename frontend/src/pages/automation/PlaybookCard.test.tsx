@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PlaybookCapabilities, PlaybookSummary } from "@/api/playbooks";
@@ -56,8 +56,13 @@ describe("PlaybookCard capabilities", () => {
     expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Duplicate" })).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Playbook actions" }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    expect(screen.queryByRole("menuitem", { name: "Delete" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Duplicate" })).toBeInTheDocument();
   });
 
   it("hides duplicate when export capability is absent", () => {
@@ -73,5 +78,22 @@ describe("PlaybookCard capabilities", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Duplicate" })).not.toBeInTheDocument();
+  });
+
+  it("offers configuration instead of claiming execution is available while the worker is offline", () => {
+    render(
+      <PlaybookCard
+        playbook={playbook({ ...viewerCapabilities, can_run: true })}
+        lang="en"
+        executionReady={false}
+        onOpen={vi.fn()}
+        onRun={vi.fn()}
+        onDuplicate={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Configure" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Run" })).not.toBeInTheDocument();
   });
 });

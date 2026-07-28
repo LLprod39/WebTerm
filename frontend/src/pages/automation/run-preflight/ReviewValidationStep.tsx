@@ -1,11 +1,10 @@
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, RefreshCw, XCircle } from "lucide-react";
 
 import type { PlaybookRunValidation, PlaybookValidationStage } from "@/api/playbook-preflight";
 import type { PlaybookBindingProfile, PlaybookRevision } from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { RunPolicyOptions, RunTargetContext } from "../runPreflightState";
-import { runtimeValueType } from "../runPreflightState";
 
 interface ReviewValidationStepProps {
   lang: string;
@@ -36,140 +35,152 @@ export function ReviewValidationStep({
 }: ReviewValidationStepProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
   const ready = validation?.status === "ready";
+  const targetCount = context.serverIds.length + context.groupIds.length;
+  const technicalStages = Object.entries(validation?.stages || {}).filter(
+    ([name, stage]) => !(name === "bundle" && stage.status === "not_attached"),
+  );
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[22rem_minmax(0,1fr)]">
-      <section className="rounded-sm border border-border bg-card p-4 shadow-elev-1">
-        <h3 className="text-sm font-semibold text-foreground">{tr("Точный контекст запуска", "Exact run context")}</h3>
-        <dl className="mt-3 space-y-2 text-xs">
-          <SummaryRow label="Playbook" value={playbookName} />
-          <SummaryRow label="Revision" value={revision ? `#${revision.revision_number} · ${revision.content_hash.slice(0, 12)}…` : "—"} mono />
-          <SummaryRow label={tr("Цели", "Targets")} value={`${context.serverIds.length} S · ${context.groupIds.length} G`} mono />
-          <SummaryRow label={tr("Binding", "Binding")} value={bindingProfile ? `${bindingProfile.name} · v${bindingProfile.version}` : tr("Разовый", "Ad-hoc")} />
-          <SummaryRow label="forks" value={String(policy.concurrency)} mono />
-          <SummaryRow label="become" value={policy.become ? "yes" : "no"} mono />
-          <SummaryRow label="dry-run" value={policy.dryRun ? "yes" : "no"} mono />
-          {policy.tags ? <SummaryRow label="tags" value={policy.tags} mono /> : null}
-          {policy.skipTags ? <SummaryRow label="skip_tags" value={policy.skipTags} mono /> : null}
-          {policy.limit ? <SummaryRow label="limit" value={policy.limit} mono /> : null}
-        </dl>
-
-        <div className="mt-4 border-t border-border pt-3">
-          <p className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-            {tr("Runtime variables — типы", "Runtime variables — types")}
+    <section className="overflow-hidden rounded-xl border border-border/80 bg-card/55" aria-labelledby="validation-title">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/70 px-5 py-4">
+        <div>
+          <h2 id="validation-title" className="text-base font-semibold text-foreground">
+            {tr("Проверка перед запуском", "Pre-run check")}
+          </h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {tr("WebTerm проверяет именно выбранную версию и цели.", "WebTerm validates the exact revision and targets you selected.")}
           </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {Object.entries(extraVars).length ? Object.entries(extraVars).map(([name, value]) => (
-              <span key={name} className="rounded-sm border border-border bg-surface-0 px-2 py-1 font-mono text-2xs text-foreground">
-                {name}: {runtimeValueType(value)}
-              </span>
-            )) : <span className="text-xs text-muted-foreground">{tr("Нет дополнительных", "No extra variables")}</span>}
-          </div>
-          {bindingProfile?.secret_variables.length ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              {bindingProfile.secret_variables.length} {tr("секретных значений будут разрешены на backend", "secret values will be resolved on the backend")}
-            </p>
-          ) : null}
         </div>
-      </section>
-
-      <section className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1" aria-labelledby="validation-title">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 text-primary" />
-              <h3 id="validation-title" className="text-sm font-semibold text-foreground">Run validation</h3>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {tr("Evidence привязано к revision, runtime, targets и binding version.", "Evidence is bound to the revision, runtime, targets, and binding version.")}
-            </p>
-          </div>
-          <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={validating} onClick={onRetry}>
-            {validating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            {tr("Проверить снова", "Validate again")}
+        {!validating ? (
+          <Button size="sm" variant="ghost" className="h-8 gap-1.5" onClick={onRetry}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            {tr("Проверить снова", "Check again")}
           </Button>
+        ) : null}
+      </div>
+
+      {validating ? (
+        <div className="flex min-h-56 flex-col items-center justify-center px-5 py-10 text-center" role="status">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </span>
+          <p className="mt-4 text-sm font-medium text-foreground">{tr("Проверяем конфигурацию…", "Checking configuration…")}</p>
+          <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+            {tr("Синтаксис, доступность runtime, привязки и выбранные серверы.", "Syntax, runtime availability, bindings, and selected servers.")}
+          </p>
         </div>
-
-        {validating ? (
-          <div className="flex items-center gap-2 px-4 py-8 text-sm text-muted-foreground" role="status">
-            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            {tr("Проверяем точный контекст…", "Validating the exact context…")}
-          </div>
-        ) : validationError ? (
-          <div role="alert" className="border-b border-destructive/20 bg-destructive/5 px-4 py-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-              <div>
-                <p className="text-sm font-medium text-destructive">{tr("Validation не выполнена", "Validation failed")}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{validationError}</p>
-              </div>
-            </div>
-          </div>
-        ) : validation ? (
-          <>
-            <div className={cn(
-              "flex items-start gap-2 border-b px-4 py-3",
-              ready ? "border-emerald-500/20 bg-emerald-500/5" : "border-destructive/20 bg-destructive/5",
+      ) : validationError ? (
+        <div role="alert" className="flex min-h-56 flex-col items-center justify-center px-5 py-10 text-center">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+            <XCircle className="h-5 w-5" />
+          </span>
+          <p className="mt-4 text-sm font-semibold text-foreground">{tr("Не удалось завершить проверку", "The check could not finish")}</p>
+          <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">{validationError}</p>
+          <Button size="sm" variant="outline" className="mt-4" onClick={onRetry}>{tr("Повторить", "Retry")}</Button>
+        </div>
+      ) : validation ? (
+        <>
+          <div className={cn(
+            "flex flex-col items-center px-5 py-8 text-center",
+            ready ? "bg-success/[0.035]" : "bg-destructive/[0.035]",
+          )}>
+            <span className={cn(
+              "flex h-12 w-12 items-center justify-center rounded-full",
+              ready ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
             )}>
-              {ready ? <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-400" /> : <XCircle className="mt-0.5 h-4 w-4 text-destructive" />}
-              <div>
-                <p className={cn("text-sm font-medium", ready ? "text-emerald-400" : "text-destructive")}>
-                  {ready ? tr("Готово к запуску", "Ready to run") : tr("Запуск заблокирован", "Run blocked")}
-                </p>
-                <p className="mt-0.5 font-mono text-2xs text-muted-foreground">validation #{validation.id}</p>
-              </div>
-            </div>
+              {ready ? <CheckCircle2 className="h-6 w-6" /> : <XCircle className="h-6 w-6" />}
+            </span>
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
+              {ready ? tr("Можно запускать", "Ready to run") : tr("Нужно исправить настройки", "Settings need attention")}
+            </h3>
+            <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+              {ready
+                ? tr("Проверка пройдена. Конфигурация зафиксирована для этого запуска.", "All checks passed. This configuration is locked for the run.")
+                : tr("WebTerm не запустит playbook, пока остаются блокирующие проблемы.", "WebTerm will not run the playbook while blockers remain.")}
+            </p>
+          </div>
 
-            <div className="grid gap-2 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(validation.stages || {}).map(([name, stage]) => (
-                <ValidationStageCard key={name} name={name} stage={stage} />
+          <dl className="grid border-y border-border/70 sm:grid-cols-2 lg:grid-cols-4">
+            <SummaryItem label="Playbook" value={playbookName} />
+            <SummaryItem label={tr("Версия", "Revision")} value={revision ? `#${revision.revision_number}` : "—"} />
+            <SummaryItem label={tr("Цели", "Targets")} value={tr(`${targetCount} выбрано`, `${targetCount} selected`)} />
+            <SummaryItem label={tr("Режим", "Mode")} value={policy.dryRun ? "Dry-run" : tr("Обычный", "Standard")} />
+          </dl>
+
+          {validation.issues?.length ? (
+            <div className="divide-y divide-border/70 px-5">
+              {validation.issues.map((issue, index) => (
+                <div key={`${issue.code}-${index}`} className="flex items-start gap-3 py-4">
+                  <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", issue.severity === "error" ? "text-destructive" : "text-warning")} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">{issue.message}</p>
+                    {issue.remediation ? <p className="mt-1 text-xs leading-5 text-muted-foreground">{issue.remediation}</p> : null}
+                  </div>
+                </div>
               ))}
             </div>
+          ) : null}
 
-            {validation.issues?.length ? (
-              <div className="divide-y divide-border">
-                {validation.issues.map((issue, index) => (
-                  <div key={`${issue.code}-${index}`} className="px-4 py-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className={cn("mt-0.5 h-4 w-4 shrink-0", issue.severity === "error" ? "text-destructive" : "text-amber-400")} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{issue.message}</p>
-                        <p className="mt-1 font-mono text-2xs text-muted-foreground">
-                          {[issue.stage, issue.code, issue.path].filter(Boolean).join(" · ")}
-                        </p>
-                        {issue.remediation ? <p className="mt-1 text-xs text-muted-foreground">{issue.remediation}</p> : null}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground marker:content-none hover:text-foreground">
+              <span>{tr("Технические детали", "Technical details")} · #{validation.id}</span>
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid gap-px border-t border-border/70 bg-border/70 sm:grid-cols-2 lg:grid-cols-3">
+              {technicalStages.map(([name, stage]) => (
+                <ValidationStageRow key={name} lang={lang} name={name} stage={stage} />
+              ))}
+              <div className="bg-card px-4 py-3 text-xs">
+                <p className="text-muted-foreground">{tr("Профиль", "Profile")}</p>
+                <p className="mt-1 truncate text-foreground">{bindingProfile?.name || tr("Разовый выбор", "Ad-hoc")}</p>
               </div>
-            ) : null}
-          </>
-        ) : null}
-      </section>
-    </div>
+              <div className="bg-card px-4 py-3 text-xs">
+                <p className="text-muted-foreground">{tr("Переменные", "Variables")}</p>
+                <p className="mt-1 text-foreground">{Object.keys(extraVars).length || tr("Нет", "None")}</p>
+              </div>
+              <div className="bg-card px-4 py-3 text-xs">
+                <p className="text-muted-foreground">{tr("Параллельность", "Concurrency")}</p>
+                <p className="mt-1 text-foreground">{policy.concurrency}</p>
+              </div>
+            </div>
+          </details>
+        </>
+      ) : null}
+    </section>
   );
 }
 
-function SummaryRow({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function SummaryItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3 border-b border-border/60 py-1.5 last:border-0">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className={cn("min-w-0 truncate text-right text-foreground", mono && "font-mono")}>{value}</dd>
+    <div className="border-b border-border/70 px-5 py-3.5 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0">
+      <dt className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{label}</dt>
+      <dd className="mt-1 truncate text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }
 
-function ValidationStageCard({ name, stage }: { name: string; stage: PlaybookValidationStage }) {
+function ValidationStageRow({ lang, name, stage }: { lang: string; name: string; stage: PlaybookValidationStage }) {
   const status = stage.status || stage.execution?.status || (stage.passed === true ? "passed" : "unknown");
-  const ready = ["passed", "ready", "complete", "clean", "not_required"].includes(status);
+  const passed = ["passed", "ready", "complete", "clean", "not_required", "verified"].includes(status);
+  const labels: Record<string, [string, string]> = {
+    input_guard: ["Входные данные", "Input"],
+    parse: ["Синтаксис YAML", "YAML syntax"],
+    static_analysis: ["Статический анализ", "Static analysis"],
+    compatibility: ["Совместимость", "Compatibility"],
+    bindings: ["Привязки", "Bindings"],
+    variables: ["Переменные", "Variables"],
+    runtime: ["Ansible runtime", "Ansible runtime"],
+    targets: ["Цели", "Targets"],
+    readiness: ["Готовность", "Readiness"],
+    bundle: ["Файлы проекта", "Project files"],
+  };
+  const label = labels[name]?.[lang === "ru" ? 0 : 1] || name.replaceAll("_", " ");
   return (
-    <div className="rounded-sm border border-border bg-surface-0 px-3 py-2">
-      <p className="truncate text-2xs font-medium uppercase tracking-wider text-muted-foreground">{name.replaceAll("_", " ")}</p>
-      <p className={cn("mt-1 text-xs font-medium", ready ? "text-emerald-400" : status === "unknown" ? "text-muted-foreground" : "text-destructive")}>
-        {status}
-      </p>
-      {stage.message ? <p className="mt-1 line-clamp-2 text-2xs text-muted-foreground">{stage.message}</p> : null}
+    <div className="flex items-center justify-between gap-3 bg-card px-4 py-3 text-xs">
+      <span className="truncate text-muted-foreground">{label}</span>
+      <span className={passed ? "text-success" : status === "unknown" ? "text-muted-foreground" : "text-destructive"}>
+        {passed ? (lang === "ru" ? "Пройдено" : "Passed") : status}
+      </span>
     </div>
   );
 }

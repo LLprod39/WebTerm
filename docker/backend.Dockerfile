@@ -1,3 +1,6 @@
+ARG DOCKER_CLI_IMAGE=docker:29.1.2-cli
+FROM ${DOCKER_CLI_IMAGE} AS docker-cli
+
 FROM python:3.11.15-slim-bookworm
 
 ARG WEBTERM_VERSION=0.1.0
@@ -29,7 +32,6 @@ LABEL org.opencontainers.image.title="WebTerm" \
 WORKDIR /workspace
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    docker.io \
     gcc \
     git \
     libldap2-dev \
@@ -45,6 +47,7 @@ COPY requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN chmod +x docker/render-backend-start.sh
 
 EXPOSE 9000

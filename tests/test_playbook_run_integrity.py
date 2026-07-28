@@ -486,3 +486,31 @@ def test_inventory_aliases_include_server_ids_and_trusted_keys_are_enforced(tmp_
     assert "host_key_checking = True" in config
     assert "StrictHostKeyChecking=no" not in config
     assert runtime_secrets == ["ssh-never-log", "sudo-never-log", "ssh-never-log", "sudo-never-log"]
+
+
+def test_isolated_inventory_routes_loopback_through_docker_host(tmp_path, monkeypatch):
+    from servers.services import ansible_setup
+
+    server = SimpleNamespace(
+        id=17,
+        name="local-target",
+        host="127.0.0.1",
+        port=22,
+        username="lunix",
+        auth_method="password",
+        key_path="",
+        group=None,
+    )
+    monkeypatch.setattr(ansible_setup, "get_server_auth_secret", lambda *_a, **_k: "")
+    monkeypatch.setattr(ansible_setup, "get_server_sudo_secret", lambda *_a, **_k: "")
+    monkeypatch.setattr(ansible_setup, "get_server_trusted_host_keys", lambda _server: [])
+
+    inventory_path, _cleanup = ansible_setup._write_inventory(
+        Path(tmp_path),
+        [server],
+        loopback_host_alias="host.docker.internal",
+    )
+
+    inventory = inventory_path.read_text(encoding="utf-8")
+    assert "ansible_host=host.docker.internal" in inventory
+    assert "ansible_host=127.0.0.1" not in inventory

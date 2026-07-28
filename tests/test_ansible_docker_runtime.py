@@ -34,6 +34,7 @@ def test_isolated_docker_command_has_security_boundaries(tmp_path, monkeypatch):
     assert "--cap-drop=ALL" in command
     assert "--security-opt=no-new-privileges:true" in command
     assert command[command.index("--network") + 1] == "bridge"
+    assert command[command.index("--add-host") + 1] == "host.docker.internal:host-gateway"
     assert "host" not in command
     assert not any("DJANGO" in item or "SECRET_KEY" in item for item in command)
     assert command[-1] == "playbook.yml"
@@ -61,6 +62,17 @@ def test_named_volume_is_scoped_to_one_run(tmp_path, monkeypatch):
 def test_host_network_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setenv("WEBTERM_ANSIBLE_DOCKER_NETWORK", "host")
     with pytest.raises(AnsibleIsolationError, match="non-host"):
+        build_isolated_docker_command(
+            docker="docker",
+            image="webterm-ansible:latest",
+            workdir=Path(tmp_path),
+            ansible_args=["ansible-playbook", "playbook.yml"],
+        )
+
+
+def test_invalid_docker_host_alias_is_rejected(tmp_path, monkeypatch):
+    monkeypatch.setenv("WEBTERM_ANSIBLE_DOCKER_HOST_ALIAS", "host alias with spaces")
+    with pytest.raises(AnsibleIsolationError, match="host alias"):
         build_isolated_docker_command(
             docker="docker",
             image="webterm-ansible:latest",

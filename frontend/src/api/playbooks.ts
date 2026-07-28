@@ -87,6 +87,13 @@ export interface PlaybookSummary {
   published_revision_id?: number | null;
   published_revision_number?: number | null;
   published_content_hash?: string;
+  source?: {
+    type?: "gitlab" | string;
+    host?: string;
+    project?: string;
+    ref?: string;
+    path?: string;
+  };
   capabilities?: import("./playbook-workspace").PlaybookCapabilities;
 }
 

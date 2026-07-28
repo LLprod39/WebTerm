@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiFetch } from "@/lib/api";
 import {
   commitPlaybookBundle,
+  commitGitLabPlaybookProject,
   exportPlaybookRevisionBundle,
   isSupportedPlaybookBundleFile,
   previewPlaybookBundle,
+  previewGitLabPlaybookProject,
 } from "./playbook-bundles";
 
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn(async () => ({ success: true })) }));
@@ -61,6 +63,38 @@ describe("playbook bundle API", () => {
     expect(form.get("category")).toBe("deploy");
     expect(form.get("visibility")).toBe("shared");
     expect(form.get("tags")).toBe('["nginx","production"]');
+  });
+
+  it("sends GitLab credentials only in the import request body", async () => {
+    const source = {
+      project_url: "https://gitlab.example.com/platform/ops",
+      ref: "main",
+      path: "ansible",
+      token: "request-only-token",
+    };
+
+    await previewGitLabPlaybookProject(source);
+    let [path, options] = vi.mocked(apiFetch).mock.calls[0];
+    expect(path).toBe("/servers/api/playbooks/import/gitlab/preview/");
+    expect(JSON.parse(String(options?.body))).toEqual(source);
+
+    vi.mocked(apiFetch).mockClear();
+    await commitGitLabPlaybookProject(source, {
+      entrypoint: "site.yml",
+      name: " Production deploy ",
+      description: " GitLab snapshot ",
+      category: "deploy",
+      visibility: "shared",
+      tags: ["production"],
+    }, "sha256-preview");
+    [path, options] = vi.mocked(apiFetch).mock.calls[0];
+    expect(path).toBe("/servers/api/playbooks/import/gitlab/commit/");
+    expect(JSON.parse(String(options?.body))).toEqual(expect.objectContaining({
+      ...source,
+      expected_content_hash: "sha256-preview",
+      entrypoint: "site.yml",
+      name: "Production deploy",
+    }));
   });
 
   it("downloads the exact published revision and preserves export metadata", async () => {

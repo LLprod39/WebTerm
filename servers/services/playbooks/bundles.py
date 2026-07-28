@@ -57,8 +57,9 @@ def preview_project_bundle(
     *,
     requested_entrypoint: str = "",
     limits: BundleLimits | None = None,
+    allow_single_root: bool = False,
 ) -> dict[str, Any]:
-    inspected = inspect_project_bundle(archive, limits=limits)
+    inspected = inspect_project_bundle(archive, limits=limits, allow_single_root=allow_single_root)
     selected = _select_entrypoint(inspected, requested_entrypoint, required=False)
     return _preview_payload(inspected, selected_entrypoint=selected)
 
@@ -75,13 +76,15 @@ def commit_project_bundle(
     tags: list[str] | None = None,
     storage: PlaybookBundleStorage | None = None,
     limits: BundleLimits | None = None,
+    allow_single_root: bool = False,
+    source_metadata: dict[str, Any] | None = None,
 ) -> BundleCommitResult:
     """Commit one clean project atomically and clean up its artifact on rollback."""
 
     if not getattr(actor, "is_authenticated", False):
         raise BundleValidationError("Authentication is required", code="authentication_required", status_code=403)
     limits = limits or BundleLimits.from_settings()
-    inspected = inspect_project_bundle(archive, limits=limits)
+    inspected = inspect_project_bundle(archive, limits=limits, allow_single_root=allow_single_root)
     if inspected.secret_findings:
         raise BundleValidationError(
             "Bundle contains secret material and cannot be committed",
@@ -184,6 +187,7 @@ def commit_project_bundle(
                     "bundle_entrypoint": entrypoint,
                     "required_collections": list(inspected.manifest.get("required_collections") or []),
                     "required_roles": list(inspected.manifest.get("required_roles") or []),
+                    **({"source": _safe_source_metadata(source_metadata)} if source_metadata else {}),
                 },
             )
             playbook.origin_revision = revision
@@ -223,6 +227,17 @@ def commit_project_bundle(
         asset_bundle=asset_bundle,
         preview=_preview_payload(inspected, selected_entrypoint=entrypoint),
     )
+
+
+def _safe_source_metadata(value: dict[str, Any]) -> dict[str, str]:
+    """Persist provenance only; credentials and arbitrary provider payloads are never accepted."""
+
+    allowed = {"type", "host", "project", "ref", "path"}
+    return {
+        key: str(item)[:500]
+        for key, item in value.items()
+        if key in allowed and isinstance(item, (str, int)) and str(item).strip()
+    }
 
 
 def export_revision_bundle(

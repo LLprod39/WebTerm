@@ -9,6 +9,7 @@ import type {
 } from "@/api/playbooks";
 import { ConfirmDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { PlaybookWorkspaceVersioningController } from "./usePlaybookWorkspaceVersioning";
 
 interface PlaybookSharingPanelProps {
@@ -162,11 +164,16 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="share-principal-type">{tr("Кому", "Principal")}</Label>
-                <select id="share-principal-type" value={principalType} onChange={(event) => setPrincipalType(event.target.value as PlaybookSharePrincipalType)} className="flex h-10 w-full rounded-sm border border-border bg-surface-0 px-3 text-sm">
-                  <option value="user">{tr("Пользователь", "User")}</option>
-                  <option value="group">{tr("Группа", "Group")}</option>
-                  <option value="workspace">Workspace</option>
-                </select>
+                <Select value={principalType} onValueChange={(value) => setPrincipalType(value as PlaybookSharePrincipalType)}>
+                  <SelectTrigger id="share-principal-type" aria-label={tr("Кому предоставить доступ", "Access principal")} className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">{tr("Пользователь", "User")}</SelectItem>
+                    <SelectItem value="group">{tr("Группа", "Group")}</SelectItem>
+                    <SelectItem value="workspace">{tr("Вся рабочая область", "Entire workspace")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="share-principal-id">{tr("ID пользователя/группы", "User/group ID")}</Label>
@@ -176,12 +183,17 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="share-role">{tr("Роль", "Role")}</Label>
-                <select id="share-role" value={role} onChange={(event) => changeRole(event.target.value as PlaybookShareRole)} className="flex h-10 w-full rounded-sm border border-border bg-surface-0 px-3 text-sm">
-                  <option value="viewer">viewer</option>
-                  <option value="editor">editor</option>
-                  <option value="operator">operator</option>
-                  <option value="manager">manager</option>
-                </select>
+                <Select value={role} onValueChange={(value) => changeRole(value as PlaybookShareRole)}>
+                  <SelectTrigger id="share-role" aria-label={tr("Роль доступа", "Access role")} className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="viewer">{tr("Наблюдатель", "Viewer")}</SelectItem>
+                    <SelectItem value="editor">{tr("Редактор", "Editor")}</SelectItem>
+                    <SelectItem value="operator">{tr("Оператор", "Operator")}</SelectItem>
+                    <SelectItem value="manager">{tr("Менеджер", "Manager")}</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="share-expires">{tr("Истекает (необязательно)", "Expires (optional)")}</Label>
@@ -193,7 +205,10 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
               <div className="grid gap-2 sm:grid-cols-2">
                 {capabilityLabels.map(([key, label]) => (
                   <label key={key} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <input type="checkbox" checked={capabilities[key]} onChange={(event) => setCapabilities((current) => ({ ...current, [key]: event.target.checked }))} />
+                    <Checkbox
+                      checked={capabilities[key]}
+                      onCheckedChange={(checked) => setCapabilities((current) => ({ ...current, [key]: checked === true }))}
+                    />
                     {label}
                   </label>
                 ))}

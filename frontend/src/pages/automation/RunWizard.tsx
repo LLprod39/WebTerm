@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Play } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Play } from "lucide-react";
 
 import {
   validatePlaybookRevision,
@@ -31,7 +31,7 @@ import {
   type RunPolicyOptions,
 } from "./runPreflightState";
 
-type RunWizardStep = 1 | 2 | 3 | 4;
+type RunWizardStep = 1 | 2;
 
 interface RunWizardProps {
   lang: string;
@@ -79,7 +79,7 @@ export function RunWizard({
   bindingProfiles,
   capabilities,
 }: RunWizardProps) {
-  const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
+  const tr = useCallback((ru: string, en: string) => (lang === "ru" ? ru : en), [lang]);
   const validationSequence = useRef(0);
   const profileInitialized = useRef(false);
   const fingerprintRef = useRef("");
@@ -114,7 +114,8 @@ export function RunWizard({
     () => revisionCompatibility?.required_variables || [],
     [revisionCompatibility?.required_variables],
   );
-  const runtimeReady = selectedRevision?.content_format === "runbook_json" ? workerReady : ansibleAvailable;
+  const isRunbook = selectedRevision?.content_format === "runbook_json";
+  const runtimeReady = isRunbook ? workerReady : ansibleAvailable && workerReady;
   const onlineIds = useMemo(
     () => new Set(servers.filter((server) => server.status === "online").map((server) => server.id)),
     [servers],
@@ -167,13 +168,7 @@ export function RunWizard({
   }, [groupIds, serverIds]);
 
   const contextFingerprint = useMemo(
-    () => JSON.stringify({
-      selectedRevisionId,
-      targetContext,
-      extraVarsText,
-      extraVars,
-      policy,
-    }),
+    () => JSON.stringify({ selectedRevisionId, targetContext, extraVarsText, extraVars, policy }),
     [extraVars, extraVarsText, policy, selectedRevisionId, targetContext],
   );
 
@@ -195,10 +190,8 @@ export function RunWizard({
     const profile = bindingProfiles.find((item) => item.id === profileId);
     if (profile) setPolicy(policyFromProfile(profile));
   };
-
   const toggleServer = (serverId: number) => setServerIds((previous) => toggledSet(previous, serverId));
   const toggleGroup = (groupId: number) => setGroupIds((previous) => toggledSet(previous, groupId));
-
   const updateExtraVars = (source: string) => {
     setExtraVarsText(source);
     const parsed = parseExtraVarsJson(source);
@@ -207,13 +200,9 @@ export function RunWizard({
   };
 
   const runValidation = useCallback(async () => {
-    if (!selectedRevisionId || extraVarsError) return null;
+    if (!selectedRevisionId || extraVarsError || !runtimeReady) return null;
     if (!canValidateContext) {
-      setValidationError(
-        lang === "ru"
-          ? "Нет права проверять или запускать этот playbook."
-          : "You do not have permission to validate or run this playbook.",
-      );
+      setValidationError(tr("Нет права проверять или запускать этот playbook.", "You cannot validate or run this playbook."));
       return null;
     }
     const sequence = validationSequence.current + 1;
@@ -237,16 +226,16 @@ export function RunWizard({
     } finally {
       if (validationSequence.current === sequence) setValidating(false);
     }
-  }, [canValidateContext, extraVarsError, lang, playbookId, selectedRevisionId, targetContext]);
+  }, [canValidateContext, extraVarsError, playbookId, runtimeReady, selectedRevisionId, targetContext, tr]);
 
   const openReview = () => {
-    if (extraVarsError) return;
-    setStep(4);
+    if (extraVarsError || !runtimeReady || !targetReady) return;
+    setStep(2);
     void runValidation();
   };
 
   const confirmRun = () => {
-    if (!capabilities.can_run || !selectedRevisionId || validation?.status !== "ready") return;
+    if (!capabilities.can_run || !selectedRevisionId || validation?.status !== "ready" || !runtimeReady) return;
     onConfirm(buildRunRequest({
       revisionId: selectedRevisionId,
       validationId: validation.id,
@@ -256,97 +245,116 @@ export function RunWizard({
     }));
   };
 
-  const stepLabels = [
-    tr("Ревизия", "Revision"),
-    tr("Цели", "Targets"),
-    tr("Переменные", "Variables"),
-    "Review",
-  ];
-
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <section className="mx-auto w-full max-w-[1180px] space-y-5">
+      <header className="flex flex-col gap-4 border-b border-border/70 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <button type="button" onClick={onBack} className="text-xs text-muted-foreground hover:text-foreground">
-            ← {tr("Назад", "Back")}
+            ← {tr("К playbook", "Back to playbook")}
           </button>
-          <h2 className="mt-1 font-display text-lg font-semibold text-foreground">
-            {tr("Run preflight", "Run preflight")}: {playbookName}
-          </h2>
+          <h1 className="mt-2 font-display text-xl font-semibold tracking-tight text-foreground">
+            {tr("Запуск", "Run")}: {playbookName}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {step === 1
+              ? tr("Выберите серверы и при необходимости измените параметры.", "Choose targets and adjust optional settings.")
+              : tr("Проверьте итог и подтвердите запуск.", "Review the result and confirm the run.")}
+          </p>
         </div>
-        <ol className="flex flex-wrap items-center gap-1.5" aria-label={tr("Шаги preflight", "Preflight steps")}>
-          {stepLabels.map((label, index) => {
+        <ol className="flex items-center gap-2" aria-label={tr("Этапы запуска", "Run steps")}>
+          {[tr("Настройка", "Setup"), tr("Проверка", "Review")].map((label, index) => {
             const number = (index + 1) as RunWizardStep;
+            const active = step === number;
+            const complete = step > number;
             return (
-              <li
-                key={label}
-                aria-current={step === number ? "step" : undefined}
-                className={cn(
-                  "flex h-8 items-center justify-center rounded-sm border px-2.5 text-2xs font-medium",
-                  step === number
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : step > number
-                      ? "border-primary/40 bg-primary/10 text-primary"
-                      : "border-border bg-card text-muted-foreground",
-                )}
-              >
-                {number}. {label}
+              <li key={label} aria-current={active ? "step" : undefined} className="flex items-center gap-2 text-xs">
+                <span className={cn(
+                  "flex h-7 w-7 items-center justify-center rounded-full border font-medium",
+                  active && "border-foreground bg-foreground text-background",
+                  complete && "border-success/40 bg-success/10 text-success",
+                  !active && !complete && "border-border text-muted-foreground",
+                )}>
+                  {complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : number}
+                </span>
+                <span className={active ? "font-medium text-foreground" : "text-muted-foreground"}>{label}</span>
               </li>
             );
           })}
         </ol>
-      </div>
+      </header>
+
+      {!runtimeReady ? (
+        <div role="alert" className="flex items-start gap-3 border-l-2 border-warning bg-warning/[0.045] px-4 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div>
+            <p className="text-sm font-medium text-foreground">{tr("Запуск сейчас недоступен", "Execution is currently unavailable")}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {!workerReady
+                ? tr("Worker выполнения не подключён. Настройки можно подготовить, но WebTerm не будет запускать долгую проверку впустую.", "The execution worker is offline. You can prepare settings, but WebTerm will not run a validation that cannot be executed.")
+                : tr("Проверка Ansible runtime недоступна. Проверьте системную настройку runtime.", "Ansible runtime validation is unavailable. Check the system runtime configuration.")}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {step === 1 ? (
-        <RevisionRuntimeStep
-          lang={lang}
-          revisions={visibleRevisions}
-          selectedRevisionId={selectedRevisionId}
-          publishedRevisionId={publishedRevisionId}
-          capabilities={capabilities}
-          ansibleAvailable={ansibleAvailable}
-          workerReady={workerReady}
-          loading={revisionsLoading}
-          onRevisionChange={setSelectedRevisionId}
-        />
-      ) : null}
+        <div className="space-y-4">
+          <TargetsBindingStep
+            lang={lang}
+            servers={servers}
+            groups={groups}
+            bindingProfiles={bindingProfiles}
+            selectedBindingProfileId={selectedBindingProfileId}
+            selectedServerIds={serverIds}
+            selectedGroupIds={groupIds}
+            hostSelectors={hostSelectors}
+            inventoryBindings={targetContext.inventoryBindings}
+            bindingChoices={bindingChoices}
+            onBindingProfileChange={selectBindingProfile}
+            onToggleServer={toggleServer}
+            onToggleGroup={toggleGroup}
+            onSelectOnline={() => setServerIds(new Set(onlineIds))}
+            onClearTargets={() => { setServerIds(new Set()); setGroupIds(new Set()); }}
+            onBindingChoiceChange={(selector, choice) => setBindingChoices((current) => ({ ...current, [selector]: choice }))}
+          />
 
-      {step === 2 ? (
-        <TargetsBindingStep
-          lang={lang}
-          servers={servers}
-          groups={groups}
-          bindingProfiles={bindingProfiles}
-          selectedBindingProfileId={selectedBindingProfileId}
-          selectedServerIds={serverIds}
-          selectedGroupIds={groupIds}
-          hostSelectors={hostSelectors}
-          inventoryBindings={targetContext.inventoryBindings}
-          bindingChoices={bindingChoices}
-          onBindingProfileChange={selectBindingProfile}
-          onToggleServer={toggleServer}
-          onToggleGroup={toggleGroup}
-          onSelectOnline={() => setServerIds(new Set(onlineIds))}
-          onClearTargets={() => { setServerIds(new Set()); setGroupIds(new Set()); }}
-          onBindingChoiceChange={(selector, choice) => setBindingChoices((current) => ({ ...current, [selector]: choice }))}
-        />
-      ) : null}
-
-      {step === 3 ? (
-        <VariablesPolicyStep
-          lang={lang}
-          bindingProfile={selectedProfile}
-          extraVarsText={extraVarsText}
-          extraVarsError={extraVarsError}
-          availableVariableNames={targetContext.variableNames}
-          requiredVariableNames={requiredVariableNames}
-          policy={policy}
-          onExtraVarsChange={updateExtraVars}
-          onPolicyChange={(patch) => setPolicy((current) => ({ ...current, ...patch }))}
-        />
-      ) : null}
-
-      {step === 4 ? (
+          <details className="group overflow-hidden rounded-lg border border-border/80 bg-card/45" open={requiredVariableNames.length > 0 || Boolean(extraVarsError)}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-foreground marker:content-none">
+              <span>
+                {tr("Версия и дополнительные параметры", "Revision and advanced settings")}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {selectedRevision ? `#${selectedRevision.revision_number}` : "—"} · {policy.dryRun ? "dry-run" : tr("обычный запуск", "normal run")}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="space-y-4 border-t border-border/70 p-4">
+              <RevisionRuntimeStep
+                lang={lang}
+                revisions={visibleRevisions}
+                selectedRevisionId={selectedRevisionId}
+                publishedRevisionId={publishedRevisionId}
+                capabilities={capabilities}
+                ansibleAvailable={ansibleAvailable}
+                workerReady={workerReady}
+                loading={revisionsLoading}
+                onRevisionChange={setSelectedRevisionId}
+              />
+              <VariablesPolicyStep
+                lang={lang}
+                bindingProfile={selectedProfile}
+                extraVarsText={extraVarsText}
+                extraVarsError={extraVarsError}
+                availableVariableNames={targetContext.variableNames}
+                requiredVariableNames={requiredVariableNames}
+                policy={policy}
+                onExtraVarsChange={updateExtraVars}
+                onPolicyChange={(patch) => setPolicy((current) => ({ ...current, ...patch }))}
+              />
+            </div>
+          </details>
+        </div>
+      ) : (
         <ReviewValidationStep
           lang={lang}
           playbookName={playbookName}
@@ -360,57 +368,47 @@ export function RunWizard({
           validationError={validationError}
           onRetry={() => void runValidation()}
         />
-      ) : null}
+      )}
 
-      <div className="flex items-center justify-between gap-2">
+      <footer className="flex flex-col-reverse gap-3 border-t border-border/70 pt-4 sm:flex-row sm:items-center sm:justify-between">
         <Button
           size="sm"
-          variant="outline"
-          className="h-9"
-          disabled={step === 1 || running || validating}
-          onClick={() => setStep((current) => (current > 1 ? (current - 1) as RunWizardStep : current))}
+          variant="ghost"
+          className="h-9 sm:px-2"
+          disabled={running || validating}
+          onClick={() => step === 1 ? onBack() : setStep(1)}
         >
-          {tr("Назад", "Back")}
+          ← {step === 1 ? tr("Отмена", "Cancel") : tr("Изменить настройки", "Change settings")}
         </Button>
 
-        {step < 4 ? (
-          <Button
-            size="sm"
-            className="h-9 shadow-elev-1"
-            disabled={
-              (step === 1 && (!selectedRevisionId || revisionsLoading || !canValidateContext)) ||
-              (step === 2 && !targetReady) ||
-              (step === 3 && Boolean(extraVarsError))
-            }
-            onClick={() => {
-              if (step === 3) openReview();
-              else setStep((current) => (current + 1) as RunWizardStep);
-            }}
-          >
-            {step === 3 ? tr("Review и validation", "Review & validate") : tr("Далее", "Next")}
-          </Button>
+        {step === 1 ? (
+          <div className="flex flex-col items-stretch gap-1.5 sm:items-end">
+            <Button
+              size="sm"
+              className="h-9 px-5"
+              disabled={!selectedRevisionId || revisionsLoading || !canValidateContext || !targetReady || Boolean(extraVarsError) || !runtimeReady}
+              onClick={openReview}
+            >
+              {tr("Проверить и продолжить", "Validate and continue")}
+            </Button>
+            {!targetReady ? <span className="text-2xs text-muted-foreground">{tr("Выберите хотя бы одну цель", "Choose at least one target")}</span> : null}
+          </div>
         ) : (
           <Button
             size="sm"
-            className="h-9 gap-1.5 px-5 shadow-elev-1"
-            disabled={
-              running ||
-              validating ||
-              validation?.status !== "ready" ||
-              !runtimeReady ||
-              !capabilities.can_run
-            }
+            className="h-9 gap-1.5 px-5"
+            disabled={running || validating || validation?.status !== "ready" || !runtimeReady || !capabilities.can_run}
             onClick={confirmRun}
           >
             {running || validating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
             {running
-              ? tr("Запуск…", "Starting…")
+              ? tr("Запускаем…", "Starting…")
               : policy.dryRun
-                ? tr("Запустить dry-run", "Start dry-run")
-                : tr("Запустить validated revision", "Run validated revision")}
+                ? tr("Запустить проверочный прогон", "Start dry run")
+                : tr("Запустить", "Run now")}
           </Button>
         )}
-      </div>
+      </footer>
     </section>
   );
 }

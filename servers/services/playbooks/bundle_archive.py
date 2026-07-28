@@ -157,7 +157,12 @@ def read_archive_stream(stream: BinaryIO, *, limits: BundleLimits | None = None)
     return bytes(output)
 
 
-def inspect_project_bundle(data: bytes, *, limits: BundleLimits | None = None) -> InspectedBundle:
+def inspect_project_bundle(
+    data: bytes,
+    *,
+    limits: BundleLimits | None = None,
+    allow_single_root: bool = False,
+) -> InspectedBundle:
     from servers.services.playbooks.bundle_content import (
         build_entrypoint_previews,
         parse_manifest,
@@ -177,10 +182,10 @@ def inspect_project_bundle(data: bytes, *, limits: BundleLimits | None = None) -
     try:
         if zipfile.is_zipfile(stream):
             archive_format = "zip"
-            files = _read_zip(data, limits)
+            files = _read_zip(data, limits, allow_single_root=allow_single_root)
         else:
             archive_format = "tar"
-            files = _read_tar(data, limits)
+            files = _read_tar(data, limits, allow_single_root=allow_single_root)
     except BundleValidationError:
         raise
     except (OSError, tarfile.TarError, zipfile.BadZipFile, RuntimeError) as exc:
@@ -281,7 +286,7 @@ def normalize_bundle_path(raw_name: str) -> str:
     return "/".join(parts)
 
 
-def _read_zip(data: bytes, limits: BundleLimits) -> list[BundleFile]:
+def _read_zip(data: bytes, limits: BundleLimits, *, allow_single_root: bool = False) -> list[BundleFile]:
     files: list[BundleFile] = []
     seen: set[str] = set()
     total = 0
@@ -289,8 +294,16 @@ def _read_zip(data: bytes, limits: BundleLimits) -> list[BundleFile]:
         members = archive.infolist()
         if len(members) > limits.max_files:
             raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
-        for info in members:
-            path = normalize_bundle_path(info.filename)
+        normalized_paths = [normalize_bundle_path(info.filename) for info in members]
+        root_prefix = _single_root_prefix(
+            [path for info, path in zip(members, normalized_paths, strict=True) if not info.is_dir()]
+        ) if allow_single_root else ""
+        for info, normalized_path in zip(members, normalized_paths, strict=True):
+            path = _strip_root_prefix(normalized_path, root_prefix)
+            if not path and info.is_dir():
+                continue
+            if not path:
+                raise BundleValidationError("Archive root contains an invalid file", code="unsafe_path")
             mode = (info.external_attr >> 16) & 0xFFFF
             file_type = stat.S_IFMT(mode)
             if file_type == stat.S_IFLNK:
@@ -312,15 +325,29 @@ def _read_zip(data: bytes, limits: BundleLimits) -> list[BundleFile]:
     return files
 
 
-def _read_tar(data: bytes, limits: BundleLimits) -> list[BundleFile]:
+def _read_tar(data: bytes, limits: BundleLimits, *, allow_single_root: bool = False) -> list[BundleFile]:
     files: list[BundleFile] = []
     seen: set[str] = set()
     total = 0
     with tarfile.open(fileobj=BytesIO(data), mode="r:*") as archive:
-        for member_count, member in enumerate(archive, start=1):
+        members = archive.getmembers()
+        if len(members) > limits.max_files:
+            raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
+        normalized_paths = [normalize_bundle_path(member.name) for member in members]
+        root_prefix = _single_root_prefix(
+            [path for member, path in zip(members, normalized_paths, strict=True) if member.isfile()]
+        ) if allow_single_root else ""
+        for member_count, (member, normalized_path) in enumerate(
+            zip(members, normalized_paths, strict=True),
+            start=1,
+        ):
             if member_count > limits.max_files:
                 raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
-            path = normalize_bundle_path(member.name)
+            path = _strip_root_prefix(normalized_path, root_prefix)
+            if not path and member.isdir():
+                continue
+            if not path:
+                raise BundleValidationError("Archive root contains an invalid file", code="unsafe_path")
             if member.issym() or member.islnk():
                 raise BundleValidationError("Archive links are not allowed", code="unsafe_link")
             if member.isdir():
@@ -338,6 +365,27 @@ def _read_tar(data: bytes, limits: BundleLimits) -> list[BundleFile]:
             total = _check_actual_limits(content, len(files) + 1, total, limits)
             files.append(_bundle_file(path, content))
     return files
+
+
+def _single_root_prefix(file_paths: list[str]) -> str:
+    """Return the wrapper directory used by provider-generated repository archives."""
+
+    if not file_paths:
+        return ""
+    parts = [PurePosixPath(path).parts for path in file_paths]
+    first = parts[0][0]
+    if all(len(item) > 1 and item[0] == first for item in parts):
+        return first
+    return ""
+
+
+def _strip_root_prefix(path: str, root_prefix: str) -> str:
+    if not root_prefix:
+        return path
+    if path == root_prefix:
+        return ""
+    prefix = f"{root_prefix}/"
+    return path[len(prefix):] if path.startswith(prefix) else path
 
 
 def _bundle_file(path: str, content: bytes) -> BundleFile:

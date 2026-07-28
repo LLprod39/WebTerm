@@ -1,123 +1,153 @@
-import { Copy, Eye, Pencil, Play, Trash2 } from "lucide-react";
-import type { PlaybookSummary } from "@/api/playbooks";
+import {
+  ArrowUpRight,
+  Copy,
+  Eye,
+  FileCode2,
+  GitBranch,
+  ListChecks,
+  MoreHorizontal,
+  Pencil,
+  Play,
+  Settings2,
+  Trash2,
+} from "lucide-react";
+
+import type { PlaybookRunStatus, PlaybookSummary } from "@/api/playbooks";
+import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn, relativeTime } from "@/lib/utils";
 import { CATEGORY_META, RUN_STATUS_META } from "./constants";
-import type { PlaybookRunStatus } from "@/api/playbooks";
 
 interface PlaybookCardProps {
   playbook: PlaybookSummary;
   lang: string;
+  executionReady?: boolean;
   onOpen: () => void;
   onRun: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
 }
 
-export function PlaybookCard({ playbook, lang, onOpen, onRun, onDuplicate, onDelete }: PlaybookCardProps) {
-  const cat = CATEGORY_META[playbook.category] || CATEGORY_META.custom;
-  const lastStatus = (playbook.last_run_status || "") as PlaybookRunStatus;
-  const statusMeta = lastStatus ? RUN_STATUS_META[lastStatus] : null;
+function tasksLabel(count: number, ru: boolean) {
+  if (!ru) return `${count} ${count === 1 ? "task" : "tasks"}`;
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  const word = mod100 >= 11 && mod100 <= 14 ? "задач" : mod10 === 1 ? "задача" : mod10 >= 2 && mod10 <= 4 ? "задачи" : "задач";
+  return `${count} ${word}`;
+}
+
+export function PlaybookCard({ playbook, lang, executionReady = true, onOpen, onRun, onDuplicate, onDelete }: PlaybookCardProps) {
   const ru = lang === "ru";
   const canEdit = playbook.capabilities?.can_edit ?? true;
   const canRun = playbook.capabilities?.can_run ?? true;
   const canDuplicate = playbook.capabilities?.can_export ?? true;
   const canDelete = playbook.capabilities?.can_delete ?? true;
+  const ready = Boolean(playbook.active_compatibility_revision?.status === "validated" || playbook.compatibility?.ready);
+  const runStatus = playbook.last_run_status ? RUN_STATUS_META[playbook.last_run_status as PlaybookRunStatus] : null;
+  const category = CATEGORY_META[playbook.category];
+  const isGitLab = playbook.source?.type === "gitlab";
+  const sourceLabel = isGitLab
+    ? `GitLab · ${playbook.source?.project || (ru ? "проект" : "project")}`
+    : playbook.kind === "ansible" ? "Ansible YAML" : "Runbook";
+  const sourceContext = isGitLab
+    ? [playbook.source?.ref, playbook.source?.path].filter(Boolean).join(" · ")
+    : playbook.published_revision_number
+      ? `${ru ? "Версия" : "Version"} #${playbook.published_revision_number}`
+      : "";
 
   return (
     <article
-      className={cn(
-        "group relative flex flex-col overflow-hidden rounded-md border border-border bg-card",
-        "transition-[border-color,box-shadow] duration-150 hover:border-primary/35 hover:shadow-elev-2",
-      )}
+      role="listitem"
+      className="group relative flex min-h-56 flex-col overflow-hidden rounded-xl border border-border/75 bg-card/45 p-5 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border hover:bg-card/80 motion-reduce:transform-none"
     >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", cat.bar)} />
+      <span className={cn("absolute inset-y-0 left-0 w-0.5 opacity-70 transition-opacity group-hover:opacity-100", category.bar)} />
 
-      <div className="flex flex-1 flex-col gap-2.5 p-4 pl-5">
-        <div className="flex items-start justify-between gap-2">
-          <button
-            type="button"
-            onClick={onOpen}
-            className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
-            title={ru ? "Открыть playbook" : "Open playbook"}
-          >
-            <h3 className="truncate font-display text-[0.9375rem] font-semibold tracking-tight text-foreground transition-colors group-hover:text-primary">
-              {playbook.name}
-            </h3>
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-              {playbook.description || (ru ? "Без описания" : "No description")}
-            </p>
-          </button>
-          <span
-            className={cn(
-              "shrink-0 rounded-full border px-2 py-0.5 text-2xs font-medium",
-              cat.kicker,
-            )}
-          >
-            {ru ? cat.labelRu : cat.labelEn}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-secondary/75 text-muted-foreground transition-colors group-hover:text-foreground">
+            {isGitLab ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}
           </span>
-        </div>
-
-        <div className="flex items-center gap-2 text-2xs text-muted-foreground">
-          <span className="font-mono">
-            {playbook.task_count} {ru ? "задач" : "tasks"}
-          </span>
-          <span aria-hidden className="text-border">·</span>
-          {playbook.last_run_at && statusMeta ? (
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <span aria-hidden className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusMeta.dot)} />
-              <span className={statusMeta.className}>{ru ? statusMeta.labelRu : statusMeta.labelEn}</span>
-              <span className="truncate opacity-70">{relativeTime(playbook.last_run_at)}</span>
-            </span>
-          ) : (
-            <span className="opacity-70">{ru ? "Ещё не запускался" : "Never run"}</span>
-          )}
-        </div>
-
-        <div className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2.5">
-          <div className="flex items-center gap-0.5">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={onOpen}
-              aria-label={canEdit ? (ru ? "Редактировать" : "Edit") : (ru ? "Просмотреть" : "View")}
-              title={canEdit ? (ru ? "Редактировать" : "Edit") : (ru ? "Просмотреть" : "View")}
-            >
-              {canEdit ? <Pencil className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-            </Button>
-            {canDuplicate ? (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                onClick={onDuplicate}
-                aria-label={ru ? "Дублировать" : "Duplicate"}
-                title={ru ? "Дублировать" : "Duplicate"}
-              >
-                <Copy className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-            {canDelete ? (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                onClick={onDelete}
-                aria-label={ru ? "Удалить" : "Delete"}
-                title={ru ? "Удалить" : "Delete"}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-muted-foreground" title={sourceLabel}>{sourceLabel}</p>
+            {sourceContext ? <p className="mt-0.5 truncate text-2xs text-muted-foreground/70" title={sourceContext}>{sourceContext}</p> : null}
           </div>
-          {canRun ? (
-            <Button size="sm" className="h-8 gap-1.5 px-3 shadow-elev-1" onClick={onRun}>
-              <Play className="h-3.5 w-3.5" />
-              {ru ? "Запустить" : "Run"}
-            </Button>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className={cn("rounded-full border px-2 py-0.5 text-2xs font-medium", category.kicker)}>
+            {ru ? category.labelRu : category.labelEn}
+          </span>
+          {canDuplicate || canDelete ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost" className="h-7 w-7" aria-label={ru ? "Действия с playbook" : "Playbook actions"}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {canDuplicate ? <DropdownMenuItem onSelect={onDuplicate}><Copy className="h-4 w-4" />{ru ? "Создать копию" : "Duplicate"}</DropdownMenuItem> : null}
+                {canDuplicate && canDelete ? <DropdownMenuSeparator /> : null}
+                {canDelete ? <DropdownMenuItem onSelect={onDelete} className="text-destructive focus:text-destructive"><Trash2 className="h-4 w-4" />{ru ? "Удалить" : "Delete"}</DropdownMenuItem> : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
         </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-5 min-h-20 flex-1 text-left focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <span className="flex items-start gap-2">
+          <span className="min-w-0 flex-1">
+            <span className="block text-base font-semibold leading-6 text-foreground">{playbook.name}</span>
+            <span className="mt-1.5 line-clamp-2 block max-w-xl text-sm leading-5 text-muted-foreground">
+              {playbook.description || (ru ? "Описание проекта пока не добавлено." : "No project description yet.")}
+            </span>
+          </span>
+          <ArrowUpRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/50 transition-[color,transform] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground motion-reduce:transform-none" />
+        </span>
+      </button>
+
+      <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 pt-3.5 text-xs text-muted-foreground">
+        <StatusBadge
+          label={ready ? (ru ? "Готов" : "Ready") : ru ? "Нужна проверка" : "Needs check"}
+          tone={ready ? "success" : "warning"}
+          className="normal-case tracking-normal"
+        />
+        <span className="inline-flex items-center gap-1.5">
+          <ListChecks className="h-3.5 w-3.5" />
+          {tasksLabel(playbook.task_count, ru)}
+        </span>
+        <span className="min-w-0 flex-1 text-right">
+          {playbook.last_run_at && runStatus ? (
+            <span className={cn("inline-flex items-center gap-1.5", runStatus.className)}>
+              <span className={cn("h-1.5 w-1.5 rounded-full", runStatus.dot)} />
+              {ru ? runStatus.labelRu : runStatus.labelEn} · {relativeTime(playbook.last_run_at)}
+            </span>
+          ) : ru ? "Ещё не запускался" : "Never run"}
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-center justify-end gap-1.5">
+        <Button size="sm" variant="ghost" className="h-8 gap-1.5" onClick={onOpen}>
+          {canEdit ? <Pencil className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          {canEdit ? (ru ? "Открыть" : "Open") : ru ? "Смотреть" : "View"}
+        </Button>
+        {canRun ? (
+          <Button size="sm" className="h-8 gap-1.5" onClick={onRun}>
+            {executionReady ? <Play className="h-3.5 w-3.5" /> : <Settings2 className="h-3.5 w-3.5" />}
+            {executionReady ? (ru ? "Запустить" : "Run") : ru ? "Настроить" : "Configure"}
+          </Button>
+        ) : null}
       </div>
     </article>
   );

@@ -230,7 +230,10 @@ def transition_playbook_run(
     fields.setdefault("finished_at", timezone.now())
 
     with transaction.atomic():
-        run = PlaybookRun.objects.select_for_update().select_related("playbook", "user").get(pk=run_id)
+        # Lock only the run row. ``playbook`` is nullable, so combining
+        # ``select_for_update()`` with ``select_related("playbook")`` produces
+        # a LEFT OUTER JOIN that PostgreSQL refuses to lock.
+        run = PlaybookRun.objects.select_for_update().get(pk=run_id)
         if run.status in TERMINAL_PLAYBOOK_RUN_STATUSES:
             should_notify = run.terminal_notified_at is None
             _schedule_terminal_side_effects(run.pk, notify=should_notify)

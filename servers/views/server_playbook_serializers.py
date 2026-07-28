@@ -25,6 +25,8 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None
     capabilities = capabilities_for(pb, viewer)
     revision = pb.active_compatibility_revision
     published = pb.published_revision
+    published_metadata = published.metadata if published and isinstance(published.metadata, dict) else {}
+    source = published_metadata.get("source") if isinstance(published_metadata.get("source"), dict) else {}
     compatibility = pb.compatibility if isinstance(pb.compatibility, dict) else {}
     if compatibility.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION and (pb.source_yaml or "").strip():
         compatibility = analyze_playbook_compatibility(pb.source_yaml)
@@ -73,6 +75,11 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None
         "published_revision_id": pb.published_revision_id,
         "published_revision_number": published.revision_number if published else None,
         "published_content_hash": published.content_hash if published else "",
+        "source": {
+            key: str(value)
+            for key, value in source.items()
+            if key in {"type", "host", "project", "ref", "path"} and isinstance(value, str)
+        },
         "capabilities": capabilities.to_dict(),
     }
     if include_tasks:

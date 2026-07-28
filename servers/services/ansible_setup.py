@@ -7,6 +7,7 @@ Re-exported from servers.services.ansible_engine for backward compatibility.
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -188,7 +190,7 @@ def detect_ansible() -> dict[str, Any]:
     venv_candidate = Path(sys.executable).with_name(executable_name)
     native = str(venv_candidate) if venv_candidate.exists() else shutil.which("ansible-playbook")
     if native:
-        version = _run_version([native, "--version"])
+        version = _run_version((native, "--version"))
         return {
             "available": True,
             "method": "native",
@@ -255,7 +257,9 @@ def detect_ansible() -> dict[str, Any]:
     }
 
 
-def _run_version(cmd: list[str]) -> str:
+@lru_cache(maxsize=16)
+def _run_version(cmd: tuple[str, ...]) -> str:
+    """Cache the expensive Ansible runtime import for this process."""
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=10, check=False)
         line = (proc.stdout or proc.stderr or "").splitlines()
@@ -328,6 +332,7 @@ def _write_inventory(
     master_password: str = "",
     binding_groups: dict[str, list[int]] | None = None,
     secret_collector: list[str] | None = None,
+    loopback_host_alias: str = "",
 ) -> tuple[Path, list[Path]]:
     """Write inventory.ini + optional key files. Returns (inventory_path, cleanup_paths)."""
     inv_path = workdir / "inventory.ini"
@@ -346,6 +351,13 @@ def _write_inventory(
     for server in servers:
         host_alias = _safe_host_name(getattr(server, "name", ""), int(server.id))
         host, port = parse_server_host_port(server)
+        normalized_host = host.strip("[]").lower()
+        try:
+            is_loopback = ipaddress.ip_address(normalized_host).is_loopback
+        except ValueError:
+            is_loopback = normalized_host == "localhost"
+        if loopback_host_alias and is_loopback:
+            host = loopback_host_alias
         user = str(server.username or "root")
         try:
             trusted_host_keys = get_server_trusted_host_keys(server)

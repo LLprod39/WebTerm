@@ -87,7 +87,7 @@ describe("PlaybookEditor YAML mode", () => {
       />,
     );
 
-    expect(screen.getByText("Derived step")).toBeInTheDocument();
+    expect(screen.queryByText("Derived step")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Task 1 command")).not.toBeInTheDocument();
 
@@ -96,7 +96,7 @@ describe("PlaybookEditor YAML mode", () => {
     });
     expect(onChange).toHaveBeenCalledWith({ sourceYaml: "- hosts: web\n  tasks: []\n" });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Original" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Original" }), { button: 0, ctrlKey: false });
     const original = screen.getByLabelText("Original Ansible YAML, read only");
     expect(original).toHaveValue("- hosts: all\n  tasks: []\n");
     expect(original).toHaveAttribute("readonly");
@@ -152,9 +152,10 @@ describe("PlaybookEditor YAML mode", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Name *")).toBeDisabled();
     expect(screen.getByLabelText("Working Ansible YAML editor")).toHaveAttribute("readonly");
     expect(screen.getByRole("button", { name: "Read only" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Run…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Prepare run…" })).toBeDisabled();
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Settings" }), { button: 0, ctrlKey: false });
+    expect(screen.getByLabelText("Name *")).toBeDisabled();
   });
 });
