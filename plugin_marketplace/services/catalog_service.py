@@ -198,9 +198,7 @@ def fetch_federated_catalog_payload(source: MarketplaceSource) -> dict[str, Any]
             allowed_hosts=_allowed_catalog_hosts(),
         )
         if not 200 <= response.status_code < 300:
-            raise MarketplaceCatalogSourceError(
-                f"Federated catalog source returned HTTP {response.status_code}."
-            )
+            raise MarketplaceCatalogSourceError(f"Federated catalog source returned HTTP {response.status_code}.")
         content_length = response.headers.get("Content-Length")
         if content_length and int(content_length) > MAX_FEDERATED_CATALOG_BYTES:
             raise MarketplaceCatalogSourceError("Federated catalog payload is too large.")
