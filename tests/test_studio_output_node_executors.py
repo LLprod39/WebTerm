@@ -14,6 +14,7 @@ class _FakeHttpResponse:
     def __init__(self, status_code: int = 200, text: str = "ok") -> None:
         self.status_code = status_code
         self.text = text
+        self.headers: dict[str, str] = {}
 
 
 def _make_user(username: str) -> User:
@@ -51,9 +52,13 @@ def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
+    async def _public_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
     monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
     monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
     monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", _public_resolver)
 
 
 def test_output_report_node_updates_run_summary():
@@ -131,7 +136,7 @@ def test_output_webhook_node_posts_payload(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeHttpClient:
-        def __init__(self, timeout: int = 30) -> None:
+        def __init__(self, timeout: int = 30, **_kwargs) -> None:
             captured["timeout"] = timeout
 
         async def __aenter__(self):
@@ -140,8 +145,11 @@ def test_output_webhook_node_posts_payload(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def post(self, url: str, json: dict, headers: dict | None = None):
-            captured["url"], captured["json"], captured["headers"] = url, json, headers or {}
+        async def request(self, method: str, url, **kwargs):
+            captured["method"] = method
+            captured["url"] = str(url)
+            captured["json"] = kwargs.get("json")
+            captured["headers"] = dict(kwargs.get("headers") or {})
             return _FakeHttpResponse(status_code=204)
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)
@@ -163,11 +171,13 @@ def test_output_webhook_node_posts_payload(monkeypatch):
 
     assert result["status"] == "completed"
     assert result["http_status"] == 204
-    assert captured["url"] == "https://example.com/hook"
+    assert captured["method"] == "POST"
+    assert captured["url"] == "https://93.184.216.34/hook"
     assert captured["json"]["kind"] == "smoke"
     assert captured["json"]["outputs"]["prep"]["output"] == "done"
     assert captured["json"]["context"]["ticket"] == "INC-404"
-    assert captured["headers"] == {"X-Ticket": "INC-404"}
+    assert captured["headers"]["x-ticket"] == "INC-404"
+    assert captured["headers"]["host"] == "example.com"
     assert captured["timeout"] == 7
 
 
@@ -177,7 +187,7 @@ def test_output_webhook_node_redacts_secret_payload(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeHttpClient:
-        def __init__(self, timeout: int = 30) -> None:
+        def __init__(self, timeout: int = 30, **_kwargs) -> None:
             self.timeout = timeout
 
         async def __aenter__(self):
@@ -186,10 +196,10 @@ def test_output_webhook_node_redacts_secret_payload(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def post(self, url: str, json: dict, headers: dict | None = None):
-            captured["url"] = url
-            captured["json"] = json
-            captured["headers"] = headers or {}
+        async def request(self, _method: str, url, **kwargs):
+            captured["url"] = str(url)
+            captured["json"] = kwargs.get("json")
+            captured["headers"] = dict(kwargs.get("headers") or {})
             return _FakeHttpResponse(status_code=204)
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)
@@ -215,7 +225,7 @@ def test_output_webhook_node_can_fail_on_non_2xx(monkeypatch):
     executor = PipelineExecutor(run)
 
     class FakeHttpClient:
-        def __init__(self, timeout: int = 30) -> None:
+        def __init__(self, timeout: int = 30, **_kwargs) -> None:
             self.timeout = timeout
 
         async def __aenter__(self):
@@ -224,7 +234,7 @@ def test_output_webhook_node_can_fail_on_non_2xx(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def post(self, url: str, json: dict, headers: dict | None = None):
+        async def request(self, _method: str, _url, **_kwargs):
             return _FakeHttpResponse(status_code=503)
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)

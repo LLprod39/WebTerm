@@ -11,6 +11,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 class _FakeHttpResponse:
     def __init__(self, status_code: int = 204):
         self.status_code = status_code
+        self.headers: dict[str, str] = {}
 
 
 def _make_run() -> PipelineRun:
@@ -24,8 +25,11 @@ def test_webhook_output_redacts_context_headers_and_result_url(monkeypatch):
     executor = PipelineExecutor(run)
     captured: dict[str, object] = {}
 
+    async def public_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
     class FakeHttpClient:
-        def __init__(self, timeout: int = 30) -> None:
+        def __init__(self, timeout: int = 30, **_kwargs) -> None:
             self.timeout = timeout
 
         async def __aenter__(self):
@@ -34,13 +38,14 @@ def test_webhook_output_redacts_context_headers_and_result_url(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def post(self, url: str, json: dict, headers: dict | None = None):
-            captured["url"] = url
-            captured["json"] = json
-            captured["headers"] = headers or {}
+        async def request(self, _method: str, url, **kwargs):
+            captured["url"] = str(url)
+            captured["json"] = kwargs.get("json")
+            captured["headers"] = dict(kwargs.get("headers") or {})
             return _FakeHttpResponse()
 
     monkeypatch.setattr("studio.executor.nodes.output_webhook.httpx.AsyncClient", FakeHttpClient)
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", public_resolver)
 
     result = async_to_sync(executor._execute_node)(
         {
@@ -59,7 +64,7 @@ def test_webhook_output_redacts_context_headers_and_result_url(monkeypatch):
     payload_text = str(captured["json"])
     header_text = str(captured["headers"])
     assert result["status"] == "completed"
-    assert captured["url"] == "https://example.com/hook?token=sk-proj-abc123def456ghi789jkl012mno"
+    assert captured["url"] == "https://93.184.216.34/hook?token=sk-proj-abc123def456ghi789jkl012mno"
     assert "super-secret" not in payload_text
     assert "Bearer eyJ" not in payload_text
     assert "Bearer eyJ" not in header_text
