@@ -181,7 +181,10 @@ describe("MarsPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Запустить выполнение/i }));
     await waitFor(() => {
-      expect(marsApi.runSession).toHaveBeenCalledWith(3, expect.objectContaining({ allow_dirty: false }));
+      expect(marsApi.runSession).toHaveBeenCalledWith(
+        3,
+        expect.objectContaining({ allow_dirty: false, verification_profile: "none" }),
+      );
     });
   });
 });

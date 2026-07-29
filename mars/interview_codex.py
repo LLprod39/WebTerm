@@ -137,6 +137,8 @@ async def _run_codex_interview_process(
                 inner_command=codex_inner_cmd,
                 extra_mounts=[(tmp_dir, "/mars-interview", "rw")],
                 include_codex_home=True,
+                allow_network=True,
+                include_provider_credentials=True,
             )
             if mars_agent_uses_docker()
             else codex_inner_cmd

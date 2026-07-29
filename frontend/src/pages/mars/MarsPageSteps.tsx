@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { MarsInterviewQuestion, MarsRun } from "@/lib/api";
 import { localize } from "@/lib/i18n";
@@ -353,10 +354,10 @@ type RunStepProps = {
   latestRun: MarsRun | undefined;
   latestRunId: number | null;
   sessionStatus: string | undefined;
-  testCommand: string;
+  verificationProfile: string;
   canRun: boolean;
   runPending: boolean;
-  onTestCommandChange: (value: string) => void;
+  onVerificationProfileChange: (value: string) => void;
   onRun: () => void;
   onOpenRun: (runId: number) => void;
 };
@@ -366,10 +367,10 @@ export function MarsRunStep({
   latestRun,
   latestRunId,
   sessionStatus,
-  testCommand,
+  verificationProfile,
   canRun,
   runPending,
-  onTestCommandChange,
+  onVerificationProfileChange,
   onRun,
   onOpenRun,
 }: RunStepProps) {
@@ -394,8 +395,20 @@ export function MarsRunStep({
           </div>
 
           <div className="grid gap-2">
-            <Label>{localize(lang, "Как проверить результат", "How to verify the result")}</Label>
-            <Input value={testCommand} onChange={(event) => onTestCommandChange(event.target.value)} placeholder="npm run build" className="bg-background font-mono text-xs" />
+            <Label>{localize(lang, "Профиль проверки", "Verification profile")}</Label>
+            <Select value={verificationProfile || "none"} onValueChange={onVerificationProfileChange}>
+              <SelectTrigger className="bg-background text-xs" aria-label={localize(lang, "Профиль проверки", "Verification profile")}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">{localize(lang, "Без автоматической проверки", "No automated verification")}</SelectItem>
+                <SelectItem value="frontend-build">{localize(lang, "Сборка фронтенда", "Frontend build")}</SelectItem>
+                <SelectItem value="frontend-tests">{localize(lang, "Тесты фронтенда", "Frontend tests")}</SelectItem>
+                <SelectItem value="frontend-typecheck">{localize(lang, "Проверка типов фронтенда", "Frontend typecheck")}</SelectItem>
+                <SelectItem value="backend-tests">{localize(lang, "Тесты бэкенда", "Backend tests")}</SelectItem>
+                <SelectItem value="django-check">{localize(lang, "Проверка Django", "Django check")}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

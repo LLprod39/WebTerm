@@ -116,13 +116,15 @@ async def execute_mars_run(run_id: int) -> None:
             return
 
         runtime_control = run.runtime_control or {}
-        test_command = str(runtime_control.get("test_command") or "").strip()
+        verification_profile = str(
+            runtime_control.get("verification_profile") or runtime_control.get("test_command") or ""
+        ).strip()
         test_history: list[str] = []
         test_exit, test_output = await _run_verification(
             run,
             workspace_root=policy.root,
             docker_runtime=docker_runtime,
-            test_command=test_command,
+            verification_profile=verification_profile,
             event_prefix="tests",
         )
         test_history.append(_test_history_entry("verification attempt 1", test_exit, test_output))
@@ -158,7 +160,7 @@ async def execute_mars_run(run_id: int) -> None:
                     run,
                     workspace_root=policy.root,
                     docker_runtime=docker_runtime,
-                    test_command=test_command,
+                    verification_profile=verification_profile,
                     event_prefix=f"tests_repair_{repair_round}",
                 )
                 test_history.append(
@@ -219,12 +221,12 @@ async def execute_mars_run(run_id: int) -> None:
                     raise RuntimeError(f"Codex review repair round {repair_round} exited with code {repair_exit}")
                 if await _check_stop_and_finish(run):
                     return
-                if test_command:
+                if verification_profile:
                     test_exit, test_output = await _run_verification(
                         run,
                         workspace_root=policy.root,
                         docker_runtime=docker_runtime,
-                        test_command=test_command,
+                        verification_profile=verification_profile,
                         event_prefix=f"tests_review_repair_{repair_round}",
                     )
                     test_history.append(

@@ -108,6 +108,8 @@ export interface MarsSessionPayload {
 
 export interface MarsRunPayload {
   allow_dirty?: boolean;
+  verification_profile?: string;
+  /** @deprecated Use verification_profile. */
   test_command?: string;
 }
 
