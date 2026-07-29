@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import io
+import json
+import zipfile
+from pathlib import PurePosixPath
 from typing import Any
 
 from django.conf import settings
@@ -7,6 +11,8 @@ from django.conf import settings
 from plugin_marketplace.models import MarketplaceCatalogItem, PluginPackage
 from plugin_marketplace.services.backend_sandbox_runner_service import execute_sandbox_package
 from plugin_marketplace.services.package_retention_service import PackageRetentionError, read_retained_package_bytes
+
+MANIFEST_NAME = "webtrerm.plugin.json"
 
 
 def _sandbox_executor_refs(manifest: dict[str, Any]) -> list[str]:
@@ -55,6 +61,21 @@ def _compatibility_test_cases(manifest: dict[str, Any], executor_refs: list[str]
             }
         )
     return cases
+
+
+def _retained_package_manifest(package_bytes: bytes) -> dict[str, Any]:
+    try:
+        with zipfile.ZipFile(io.BytesIO(package_bytes)) as archive:
+            names = [
+                info.filename
+                for info in archive.infolist()
+                if not info.is_dir() and PurePosixPath(info.filename).name == MANIFEST_NAME
+            ]
+            manifest_name = MANIFEST_NAME if MANIFEST_NAME in names else names[0]
+            manifest = json.loads(archive.read(manifest_name).decode("utf-8"))
+    except (IndexError, KeyError, UnicodeDecodeError, json.JSONDecodeError, zipfile.BadZipFile):
+        return {}
+    return manifest if isinstance(manifest, dict) else {}
 
 
 def _sandbox_enabled() -> bool:
@@ -114,9 +135,6 @@ def add_sandbox_compatibility_checks(item: MarketplaceCatalogItem, report: dict[
     checks = list(report.get("checks") if isinstance(report.get("checks"), list) else [])
     manifest = item.manifest if isinstance(item.manifest, dict) else {}
     refs = _sandbox_executor_refs(manifest)
-    for test_case in _compatibility_test_cases(manifest, []):
-        if test_case["executor_ref"] not in refs:
-            refs.append(test_case["executor_ref"])
     if not refs:
         checks.append(
             {
@@ -153,6 +171,11 @@ def add_sandbox_compatibility_checks(item: MarketplaceCatalogItem, report: dict[
             except PackageRetentionError as exc:
                 checks.append({"name": "sandbox_executor_smoke", "ok": False, "executor_refs": refs, "error": str(exc)})
             else:
+                retained_manifest = _retained_package_manifest(package_bytes)
+                test_cases = _compatibility_test_cases(retained_manifest, refs)
+                for test_case in test_cases:
+                    if test_case["executor_ref"] not in refs:
+                        refs.append(test_case["executor_ref"])
                 results = [{"executor_ref": ref, "result": _run_smoke_worker(package_bytes, ref)} for ref in refs]
                 checks.append(
                     {
@@ -162,7 +185,6 @@ def add_sandbox_compatibility_checks(item: MarketplaceCatalogItem, report: dict[
                         "results": results,
                     }
                 )
-                test_cases = _compatibility_test_cases(manifest, refs)
                 if test_cases:
                     case_results = []
                     for test_case in test_cases:

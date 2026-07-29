@@ -8,6 +8,7 @@ from django.test import override_settings
 from django.utils import timezone
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
+from app.plugins.validation import validate_plugin_manifest
 from plugin_marketplace.checks import plugin_marketplace_deploy_check
 from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginInstallation, PluginPackage
 from plugin_marketplace.services.catalog_service import compatibility_report
@@ -15,6 +16,7 @@ from plugin_marketplace.services.install_service import set_installation_status
 from plugin_marketplace.services.lifecycle_service import installation_impact
 from plugin_marketplace.services.package_attestation_service import append_package_attestation
 from plugin_marketplace.services.package_service import install_local_package
+from plugin_marketplace.services.signing_service import sign_package
 
 
 def _manifest(*, plugin_id: str = "acme.attested", slug: str = "attested") -> dict:
@@ -43,18 +45,19 @@ def _install_reviewed_package(tmp_path, manifest: dict) -> tuple[PluginInstallat
     installation = install_local_package(package_path)
     package = PluginPackage.objects.get(plugin_id=manifest["id"])
     package.review_status = PluginPackage.REVIEW_VERIFIED
-    package.signature_status = PluginPackage.SIGNATURE_SIGNED
-    package.save(update_fields=["review_status", "signature_status", "updated_at"])
+    package.save(update_fields=["review_status", "updated_at"])
+    package = sign_package(package.id)
     return installation, package
 
 
 def _catalog_item(manifest: dict) -> MarketplaceCatalogItem:
     source = MarketplaceSource.objects.create(name="Attested Catalog", source_url="local://attested")
+    normalized_manifest = validate_plugin_manifest(manifest).to_dict(include_surfaces=True)
     return MarketplaceCatalogItem.objects.create(
         source=source,
         plugin_id=manifest["id"],
         version=manifest["version"],
-        manifest=manifest,
+        manifest=normalized_manifest,
         compatibility={"api_versions": ["plugins.v1"]},
         review_status=PluginPackage.REVIEW_VERIFIED,
         signature_status=PluginPackage.SIGNATURE_SIGNED,
@@ -122,7 +125,7 @@ def test_catalog_compatibility_requires_matching_package_attestation(tmp_path):
     append_package_attestation(package, kind="security_scan", status="passed", report={"scanner": "test"})
     allowed = compatibility_report(item)
 
-    assert allowed["compatible"] is True
+    assert allowed["compatible"] is True, allowed
     assert allowed["attestation_policy"]["allowed"] is True
 
 

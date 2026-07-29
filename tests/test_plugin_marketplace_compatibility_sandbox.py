@@ -7,11 +7,13 @@ from django.contrib.auth.models import User
 from django.test import Client, override_settings
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
+from app.plugins.validation import validate_plugin_manifest
 from core_ui.models import UserAppPermission
 from plugin_marketplace.checks import plugin_marketplace_deploy_check
 from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginCompatibilityJob
 from plugin_marketplace.services.compatibility_matrix_service import run_compatibility_job
 from plugin_marketplace.services.package_service import install_local_package
+from plugin_marketplace.services.signing_service import sign_package
 
 
 def _json(payload: dict) -> str:
@@ -62,15 +64,24 @@ def _write_package(tmp_path, manifest: dict, code: str = "def handle(payload):\n
 
 def _catalog_item(manifest: dict) -> MarketplaceCatalogItem:
     source = MarketplaceSource.objects.create(name="Sandbox Compatibility", source_url="local://compatibility")
+    normalized_manifest = validate_plugin_manifest(manifest).to_dict(include_surfaces=True)
     return MarketplaceCatalogItem.objects.create(
         source=source,
         plugin_id=manifest["id"],
         version=manifest["version"],
-        manifest=manifest,
+        manifest=normalized_manifest,
         compatibility={"api_versions": ["plugins.v1"]},
         review_status="verified",
         signature_status="signed",
     )
+
+
+def _install_reviewed_package(package_path: str) -> None:
+    installation = install_local_package(package_path)
+    package = installation.package
+    package.review_status = package.REVIEW_VERIFIED
+    package.save(update_fields=["review_status", "updated_at"])
+    sign_package(package.id)
 
 
 @pytest.mark.django_db
@@ -81,7 +92,7 @@ def _catalog_item(manifest: dict) -> MarketplaceCatalogItem:
 )
 def test_subprocess_sandbox_compatibility_job_loads_retained_executor(tmp_path):
     manifest = _sandbox_manifest()
-    install_local_package(_write_package(tmp_path, manifest))
+    _install_reviewed_package(_write_package(tmp_path, manifest))
     item = _catalog_item(manifest)
 
     job = run_compatibility_job(item, isolation_mode="subprocess_sandbox")
@@ -111,7 +122,7 @@ def test_subprocess_sandbox_compatibility_job_runs_manifest_test_cases(tmp_path)
             "expect": {"result.echo": "expected"},
         }
     ]
-    install_local_package(
+    _install_reviewed_package(
         _write_package(
             tmp_path,
             manifest,
@@ -127,6 +138,37 @@ def test_subprocess_sandbox_compatibility_job_runs_manifest_test_cases(tmp_path)
     assert tests["ok"] is True
     assert tests["cases"][0]["id"] == "echo-value"
     assert tests["cases"][0]["expectations"][0]["actual"] == "expected"
+
+
+@pytest.mark.django_db
+@override_settings(
+    PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES=True,
+    PLUGIN_MARKETPLACE_BACKEND_SANDBOX_ENABLED=True,
+    PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED=True,
+)
+def test_subprocess_sandbox_ignores_catalog_only_compatibility_test_cases(tmp_path):
+    manifest = _sandbox_manifest(plugin_id="acme.compat-forged-case", slug="compat-forged-case")
+    _install_reviewed_package(_write_package(tmp_path, manifest))
+    item = _catalog_item(manifest)
+    item.manifest = {
+        **item.manifest,
+        "compatibility_tests": [
+            {
+                "id": "catalog-only",
+                "executor_ref": "sandbox:backend/plugin.py:handle",
+                "payload": {"surface": "compatibility_job", "arguments": {"forged": True}},
+                "expect": {},
+            }
+        ],
+    }
+    item.save(update_fields=["manifest", "updated_at"])
+
+    job = run_compatibility_job(item, isolation_mode="subprocess_sandbox")
+
+    assert job.status == PluginCompatibilityJob.STATUS_FAILED
+    assert not any(check["name"] == "sandbox_compatibility_tests" for check in job.checks)
+    catalog_policy = next(check for check in job.checks if check["name"] == "catalog_policy")
+    assert "Catalog manifest does not match the trusted package manifest." in catalog_policy["errors"]
 
 
 @pytest.mark.django_db
@@ -156,7 +198,7 @@ def test_compatibility_jobs_api_accepts_subprocess_sandbox_mode(tmp_path):
     user = User.objects.create_user(username="compat-sandbox-admin", password="x", is_staff=True)
     _grant_feature(user, "settings")
     manifest = _sandbox_manifest(plugin_id="acme.compat-api", slug="compat-api")
-    install_local_package(_write_package(tmp_path, manifest))
+    _install_reviewed_package(_write_package(tmp_path, manifest))
     item = _catalog_item(manifest)
     client = Client()
     client.force_login(user)

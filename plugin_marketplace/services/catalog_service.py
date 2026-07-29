@@ -13,8 +13,11 @@ from django.utils import timezone
 from app.plugins.validation import validate_plugin_manifest
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginInstallation, PluginPackage
-from plugin_marketplace.services.package_attestation_policy_service import catalog_attestation_policy_report
-from plugin_marketplace.services.signing_service import canonical_manifest_hash
+from plugin_marketplace.services.package_attestation_policy_service import (
+    catalog_attestation_policy_report,
+    package_for_catalog_item,
+)
+from plugin_marketplace.services.package_trust_service import package_trust_report
 
 SUPPORTED_PLUGIN_API_VERSIONS = {"plugins.v1"}
 MAX_FEDERATED_CATALOG_BYTES = 1024 * 1024
@@ -44,7 +47,7 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
-def compatibility_report(item: MarketplaceCatalogItem) -> dict[str, Any]:
+def _compatibility_report(item: MarketplaceCatalogItem, package: PluginPackage | None) -> dict[str, Any]:
     manifest = item.manifest or {}
     api_version = str(manifest.get("api_version") or "").strip()
     compatibility = item.compatibility or {}
@@ -58,10 +61,8 @@ def compatibility_report(item: MarketplaceCatalogItem) -> dict[str, Any]:
         errors.append(f"Unsupported plugin api_version: {api_version or 'missing'}")
     if declared_set and not declared_set.intersection(SUPPORTED_PLUGIN_API_VERSIONS):
         errors.append("Catalog compatibility does not include a supported plugin API version.")
-    if item.review_status not in {PluginPackage.REVIEW_VERIFIED}:
-        errors.append(f"Package review status is {item.review_status}.")
-    if item.signature_status not in {PluginPackage.SIGNATURE_BUILTIN, PluginPackage.SIGNATURE_SIGNED}:
-        errors.append(f"Package signature status is {item.signature_status}.")
+    trust_report = package_trust_report(package, expected_manifest=manifest)
+    errors.extend(trust_report["errors"])
     attestation_policy = catalog_attestation_policy_report(item)
     if not attestation_policy["allowed"]:
         errors.extend(f"Attestation policy: {item}" for item in attestation_policy["blockers"])
@@ -71,8 +72,13 @@ def compatibility_report(item: MarketplaceCatalogItem) -> dict[str, Any]:
         "errors": errors,
         "api_version": api_version,
         "supported_api_versions": sorted(SUPPORTED_PLUGIN_API_VERSIONS),
+        "package_trust": trust_report,
         "attestation_policy": attestation_policy,
     }
+
+
+def compatibility_report(item: MarketplaceCatalogItem) -> dict[str, Any]:
+    return _compatibility_report(item, package_for_catalog_item(item))
 
 
 def _redact_source_url(source_url: str) -> str:
@@ -222,8 +228,8 @@ def sync_catalog_payload(source: MarketplaceSource, payload: dict[str, Any]) -> 
                 "manifest": manifest.to_dict(include_surfaces=True),
                 "package_url": str(item.get("package_url") or ""),
                 "compatibility": item.get("compatibility") if isinstance(item.get("compatibility"), dict) else {},
-                "review_status": str(item.get("review_status") or "pending"),
-                "signature_status": str(item.get("signature_status") or "unsigned"),
+                "review_status": PluginPackage.REVIEW_PENDING,
+                "signature_status": PluginPackage.SIGNATURE_UNSIGNED,
             },
         )
         synced += 1
@@ -246,28 +252,19 @@ def sync_federated_catalog_source(source: MarketplaceSource) -> int:
 @transaction.atomic
 def install_catalog_item(item_id: int, *, actor=None, request=None) -> PluginInstallation:
     item = MarketplaceCatalogItem.objects.select_for_update().select_related("source").get(id=item_id)
-    report = compatibility_report(item)
+    package = (
+        PluginPackage.objects.select_for_update()
+        .filter(plugin_id=item.plugin_id, version=item.version)
+        .order_by("-updated_at", "-id")
+        .first()
+    )
+    report = _compatibility_report(item, package)
     if not report["compatible"]:
         raise ValueError("; ".join(report["errors"]))
-    manifest = validate_plugin_manifest(item.manifest)
-    package, _created = PluginPackage.objects.update_or_create(
-        plugin_id=manifest.id,
-        version=manifest.version,
-        defaults={
-            "name": manifest.name,
-            "slug": manifest.slug,
-            "publisher_id": manifest.publisher.id,
-            "publisher_name": manifest.publisher.name,
-            "source": PluginPackage.SOURCE_CATALOG,
-            "package_hash": canonical_manifest_hash(manifest.to_dict(include_surfaces=True)),
-            "manifest": manifest.to_dict(include_surfaces=True),
-            "risk_tier": manifest.risk_tier,
-            "review_status": item.review_status,
-            "signature_status": item.signature_status,
-        },
-    )
+    if package is None:
+        raise ValueError("Catalog item does not have a trusted package record.")
     installation, _created = PluginInstallation.objects.update_or_create(
-        plugin_id=manifest.id,
+        plugin_id=package.plugin_id,
         defaults={
             "package": package,
             "status": PluginInstallation.STATUS_DISABLED,
@@ -277,13 +274,13 @@ def install_catalog_item(item_id: int, *, actor=None, request=None) -> PluginIns
     from plugin_marketplace.services.install_service import record_event
 
     record_event(
-        plugin_id=manifest.id,
+        plugin_id=package.plugin_id,
         event_type="plugin_catalog_installed",
         status=UserActivityLog.STATUS_SUCCESS,
         actor=actor,
         request=request,
         installation=installation,
-        message=f"Catalog plugin {manifest.id}@{manifest.version} installed disabled.",
+        message=f"Catalog plugin {package.plugin_id}@{package.version} installed disabled.",
         metadata={"catalog_item_id": item.id, "source_id": item.source_id},
     )
     return installation

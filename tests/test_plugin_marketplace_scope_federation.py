@@ -157,5 +157,5 @@ def test_federated_marketplace_source_sync_fetches_https_catalog(monkeypatch):
     assert sync.json()["source"]["last_error"] == ""
     item = MarketplaceCatalogItem.objects.get(plugin_id="acme.federated-alerts")
     assert item.source_id == source_id
-    assert item.review_status == PluginPackage.REVIEW_VERIFIED
-    assert item.signature_status == PluginPackage.SIGNATURE_SIGNED
+    assert item.review_status == PluginPackage.REVIEW_PENDING
+    assert item.signature_status == PluginPackage.SIGNATURE_UNSIGNED

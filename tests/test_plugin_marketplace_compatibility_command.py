@@ -8,6 +8,7 @@ from django.core.management.base import CommandError
 
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
 from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginCompatibilityJob, PluginPackage
+from plugin_marketplace.services.signing_service import sign_package
 
 
 def _catalog_item(*, plugin_id: str, api_version: str = "plugins.v1") -> MarketplaceCatalogItem:
@@ -25,6 +26,20 @@ def _catalog_item(*, plugin_id: str, api_version: str = "plugins.v1") -> Marketp
             "api_version": api_version,
         }
     )
+    package = PluginPackage.objects.create(
+        plugin_id=manifest["id"],
+        version=manifest["version"],
+        name=manifest["name"],
+        slug=manifest["slug"],
+        publisher_id=str(manifest["publisher"]["id"]),
+        publisher_name=str(manifest["publisher"]["name"]),
+        source=PluginPackage.SOURCE_CATALOG,
+        package_hash=f"sha256:{plugin_id}",
+        manifest=manifest,
+        review_status=PluginPackage.REVIEW_VERIFIED,
+        signature_status=PluginPackage.SIGNATURE_UNSIGNED,
+    )
+    sign_package(package.id)
     return MarketplaceCatalogItem.objects.create(
         source=source,
         plugin_id=manifest["id"],
