@@ -28,6 +28,7 @@ from servers.agent_schedule import compute_next_due_by_schedule, normalize_sched
 from servers.models import AgentRun, BackgroundWorkerState, ServerAgent, ServerWatcherDraft
 from servers.run_events import record_run_event
 from servers.scheduled_agents import dispatch_scheduled_agents, is_agent_due
+from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 from servers.watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
 from servers.worker_state import serialize_background_worker_state
 
@@ -379,7 +380,18 @@ def approve_agent_plan_for_user(*, run_id: int, user, accessible_servers_queryse
             "payload": {"success": False, "error": "Run has no agent plan to approve"},
         }
     server_ids = list(agent.servers.values_list("id", flat=True))
-    servers = list(accessible_servers_queryset.filter(id__in=server_ids))
+    servers, denied_server_ids = resolve_servers_for_user_capability(
+        server_ids,
+        user,
+        CAPABILITY_EXECUTE_COMMAND,
+        base_queryset=accessible_servers_queryset,
+    )
+    if denied_server_ids:
+        return {
+            "ok": False,
+            "status": 403,
+            "payload": {"success": False, "error": "Missing server capability: execute_command"},
+        }
     if not servers:
         return {"ok": False, "status": 400, "payload": {"success": False, "error": "No accessible servers"}}
 

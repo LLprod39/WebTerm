@@ -30,6 +30,8 @@ class OperatorServersProvider(Protocol):
 
     def accessible_servers_queryset(self, user: Any) -> Any: ...
 
+    def owned_servers_queryset(self, user: Any) -> Any: ...
+
     def server_names_for_ids(self, ids: list[int]) -> list[str]: ...
 
     def get_agent_run(self, run_id: int) -> Any | None: ...
@@ -85,6 +87,10 @@ def _require() -> OperatorServersProvider:
 
 def accessible_servers_queryset(user: Any) -> Any:
     return _require().accessible_servers_queryset(user)
+
+
+def owned_servers_queryset(user: Any) -> Any:
+    return _require().owned_servers_queryset(user)
 
 
 def server_names_for_ids(ids: list[int]) -> list[str]:

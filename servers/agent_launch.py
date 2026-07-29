@@ -3,6 +3,7 @@ from __future__ import annotations
 from servers.agent_background import launch_agent_run_background
 from servers.models import AgentRun
 from servers.run_events import record_run_event
+from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 
 
 def launch_queued_agent_run(
@@ -21,14 +22,29 @@ def launch_queued_agent_run(
         server = accessible_servers_queryset.filter(id=int(server_id)).first()
         if not server:
             return {"ok": False, "status": 404, "error": "Server not found"}
-        servers = [server]
+        servers, denied = resolve_servers_for_user_capability(
+            [server.id],
+            user,
+            CAPABILITY_EXECUTE_COMMAND,
+            base_queryset=accessible_servers_queryset,
+        )
+        if denied:
+            return {"ok": False, "status": 403, "error": "Missing server capability: execute_command"}
     else:
         server_ids = list(agent.servers.values_list("id", flat=True))
         if not server_ids:
             return {"ok": False, "status": 400, "error": "No servers assigned to agent"}
-        servers = list(accessible_servers_queryset.filter(id__in=server_ids))
-        if not servers:
+        accessible_servers = list(accessible_servers_queryset.filter(id__in=server_ids))
+        if not accessible_servers:
             return {"ok": False, "status": 400, "error": "No accessible servers"}
+        servers, denied = resolve_servers_for_user_capability(
+            server_ids,
+            user,
+            CAPABILITY_EXECUTE_COMMAND,
+            base_queryset=accessible_servers_queryset,
+        )
+        if denied:
+            return {"ok": False, "status": 403, "error": "Missing server capability: execute_command"}
 
     already_running = AgentRun.objects.filter(
         agent=agent,

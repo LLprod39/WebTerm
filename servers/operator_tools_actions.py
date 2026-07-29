@@ -6,6 +6,7 @@ from typing import Any
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from servers.operator_tools_common import _int_arg, _server_for_user
+from servers.services.server_query import user_has_server_capability
 
 
 def server_metrics(ctx: AssistantActionContext) -> dict[str, Any]:
@@ -71,7 +72,9 @@ def server_metrics(ctx: AssistantActionContext) -> dict[str, Any]:
 def server_memory(ctx: AssistantActionContext) -> dict[str, Any]:
     server_id = _int_arg(ctx, "server_id")
     assert server_id is not None
-    _server_for_user(ctx.user, server_id)
+    server = _server_for_user(ctx.user, server_id)
+    if not user_has_server_capability(server, ctx.user, "view_context"):
+        raise AssistantActionError("Missing server capability: view_context", status=403)
     from core_ui.services.operator_memory import memory_hints_for_server
     from servers.services.memory_service import get_memory_overview
 

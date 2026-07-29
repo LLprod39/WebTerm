@@ -44,10 +44,22 @@ def get_servers_for_user(user) -> QuerySet[Server]:
     (own servers + shared servers with active non-revoked shares).
     This is the canonical queryset used across the platform.
     """
+    return get_servers_for_user_capability(user, CAPABILITY_VIEW)
+
+
+def get_servers_for_user_capability(user, capability: str) -> QuerySet[Server]:
+    """Return active SSH servers on which ``user`` holds the exact capability."""
     now = timezone.now()
-    share_q = Q(shares__user=user, shares__is_revoked=False) & (
+    active_share_q = Q(shares__user=user, shares__is_revoked=False) & (
         Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now)
     )
+    if capability == CAPABILITY_VIEW:
+        share_q = active_share_q
+    elif capability == CAPABILITY_VIEW_CONTEXT:
+        share_q = active_share_q & Q(shares__share_context=True)
+    else:
+        field = _SHARE_CAPABILITY_FIELDS.get(capability)
+        share_q = active_share_q & Q(**{f"shares__{field}": True}) if field else Q(pk__in=[])
     return (
         Server.objects.select_related("group", "user")
         .filter(is_active=True)
@@ -55,6 +67,30 @@ def get_servers_for_user(user) -> QuerySet[Server]:
         .filter(Q(user=user) | share_q)
         .distinct()
     )
+
+
+def resolve_servers_for_user_capability(
+    server_ids,
+    user,
+    capability: str,
+    *,
+    base_queryset=None,
+) -> tuple[list[Server], list[int]]:
+    """Resolve requested ids in order and report every id denied by the exact capability."""
+    requested: list[int] = []
+    for value in server_ids or []:
+        try:
+            server_id = int(value)
+        except (TypeError, ValueError):
+            continue
+        if server_id > 0 and server_id not in requested:
+            requested.append(server_id)
+    permitted_ids = get_servers_for_user_capability(user, capability).filter(pk__in=requested).values("pk")
+    queryset = base_queryset if base_queryset is not None else Server.objects.all()
+    servers_by_id = {server.id: server for server in queryset.filter(pk__in=permitted_ids)}
+    resolved = [servers_by_id[server_id] for server_id in requested if server_id in servers_by_id]
+    denied = [server_id for server_id in requested if server_id not in servers_by_id]
+    return resolved, denied
 
 
 def get_server(server_id: int, user) -> Server | None:

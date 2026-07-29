@@ -9,7 +9,11 @@ from servers.agent_inputs import normalize_input_artifacts, normalize_report_del
 from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agent_service import list_agents_for_user
 from servers.models import ServerAgent
-from servers.views.server_helpers import _accessible_servers_queryset
+from servers.services.server_query import (
+    CAPABILITY_EXECUTE_COMMAND,
+    get_servers_for_user_capability,
+    resolve_servers_for_user_capability,
+)
 
 
 def list_agents(ctx: AssistantActionContext) -> dict:
@@ -128,7 +132,7 @@ def create_agent(ctx: AssistantActionContext) -> dict:
                 continue
     server_ids = cleaned_ids
 
-    accessible_qs = _accessible_servers_queryset(ctx.user)
+    accessible_qs = get_servers_for_user_capability(ctx.user, CAPABILITY_EXECUTE_COMMAND)
     if not server_ids:
         # Auto-pick: sole server, or match by name tokens in goal/description/name
         accessible = list(accessible_qs.order_by("name")[:50])
@@ -202,6 +206,15 @@ def create_agent(ctx: AssistantActionContext) -> dict:
     stop_conditions = data.get("stop_conditions") if isinstance(data.get("stop_conditions"), list) else []
     sudo_policy = data.get("sudo_policy")
 
+    accessible, denied_server_ids = resolve_servers_for_user_capability(
+        server_ids,
+        ctx.user,
+        CAPABILITY_EXECUTE_COMMAND,
+        base_queryset=accessible_qs,
+    )
+    if denied_server_ids or not accessible:
+        raise AssistantActionError("Missing server capability: execute_command", status=403)
+
     agent = ServerAgent.objects.create(
         user=ctx.user,
         name=name,
@@ -225,10 +238,6 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         report_delivery=normalize_report_delivery(data.get("report_delivery")),
         is_enabled=True,
     )
-    accessible = list(accessible_qs.filter(id__in=server_ids))
-    if not accessible:
-        agent.delete()
-        raise AssistantActionError("No accessible servers matched server_ids", status=403)
     agent.servers.set(accessible)
 
     from servers.agent_service import serialize_agent_item
