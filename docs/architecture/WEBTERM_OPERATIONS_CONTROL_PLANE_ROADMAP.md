@@ -1,7 +1,9 @@
 # WebTerm operations control plane roadmap
 
-Status: active product roadmap  
-Baseline: published `v0.1.0` plus the unreleased hardening tracked in [PR #26](https://github.com/LLprod39/WebTerm/pull/26)  
+Status: active product roadmap
+
+Baseline: published `v0.1.0` plus the unreleased hardening tracked in [PR #26](https://github.com/LLprod39/WebTerm/pull/26)
+
 Last reviewed: 2026-07-29
 
 This roadmap supersedes the Endpoint Management stage in the older
