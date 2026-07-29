@@ -204,8 +204,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
       - name: Install locked development dependencies
         run: python -m pip install --require-hashes -r requirements-dev.lock
-      - name: Create an ephemeral managed-secret key
-        run: echo "MANAGED_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+      - name: Create ephemeral production secrets
+        run: |
+          echo "MANAGED_SECRET_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+          echo "STUDIO_MCP_RUNNER_TOKEN=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
       - name: Django production deploy check
         run: python manage.py check --deploy --settings=web_ui.settings.production
       - name: Prepare the example production environment for Compose parsing

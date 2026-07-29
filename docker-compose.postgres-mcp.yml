@@ -77,13 +77,23 @@ services:
         NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
     container_name: mini-prod-mcp-runner
     environment:
-      MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+      MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
       MCP_RUNNER_SESSION_TTL_SECONDS: ${MCP_RUNNER_SESSION_TTL_SECONDS:-300}
       MCP_RUNNER_MAX_SESSIONS: ${MCP_RUNNER_MAX_SESSIONS:-50}
     # Published to loopback so a host-run backend can reach it at
     # STUDIO_MCP_RUNNER_URL=http://127.0.0.1:9100
     ports:
-      - "${MCP_RUNNER_PORT:-9100}:9000"
+      - "${MCP_RUNNER_BIND_HOST:-127.0.0.1}:${MCP_RUNNER_PORT:-9100}:9000"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+      - /app/.cache:rw,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=0700
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     restart: unless-stopped
     healthcheck:
       test:
