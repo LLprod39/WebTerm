@@ -175,7 +175,13 @@ compose() {
 }
 
 copy_env_if_missing() {
+  umask 077
+  if [[ -L "$ENV_FILE" ]]; then
+    echo "Error: refusing symbolic-link env file: $ENV_FILE" >&2
+    exit 1
+  fi
   if [[ -f "$ENV_FILE" ]]; then
+    chmod 600 "$ENV_FILE"
     return 0
   fi
   if [[ ! -f "$ENV_TEMPLATE" ]]; then
@@ -183,6 +189,7 @@ copy_env_if_missing() {
     exit 1
   fi
   cp "$ENV_TEMPLATE" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
   echo "[ok] created env file: $ENV_FILE"
 }
 
