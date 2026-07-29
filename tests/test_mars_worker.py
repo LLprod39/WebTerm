@@ -179,8 +179,9 @@ def test_mars_docker_command_mounts_only_user_workspace(tmp_path):
     unrelated_server_root = tmp_path / "server_root"
     unrelated_server_root.mkdir()
 
+    mars_image = "mars-agent@sha256:" + "b" * 64
     with override_settings(
-        MARS_AGENT_DOCKER_IMAGE="mars-agent:test",
+        MARS_AGENT_DOCKER_IMAGE=mars_image,
         MARS_AGENT_DOCKER_NETWORK="bridge",
         MARS_AGENT_DOCKER_CPUS="",
         MARS_AGENT_DOCKER_MEMORY="",
@@ -201,5 +202,5 @@ def test_mars_docker_command_mounts_only_user_workspace(tmp_path):
     assert "--cap-drop" in command
     assert "ALL" in command
     assert "no-new-privileges:true" in command
-    image_index = command.index("mars-agent:test")
+    image_index = command.index(mars_image)
     assert command[image_index + 1 :] == ["codex", "exec", "-"]

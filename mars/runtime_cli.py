@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 from django.conf import settings
 
 from mars.policy import MarsPolicyError
+
+_IMMUTABLE_MARS_IMAGE = re.compile(r"^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$")
 
 
 def _command_prefix(value: Any, default: str) -> list[str]:
@@ -202,9 +205,12 @@ def build_mars_agent_docker_command(
 ) -> list[str]:
     workspace = Path(workspace_root).expanduser().resolve(strict=False)
     docker_command = str(getattr(settings, "MARS_AGENT_DOCKER_COMMAND", "docker") or "docker")
-    image = str(getattr(settings, "MARS_AGENT_DOCKER_IMAGE", "webterm-mars-agent:latest") or "").strip()
-    if not image:
-        raise MarsPolicyError("MARS_AGENT_DOCKER_IMAGE is not configured.")
+    image = str(getattr(settings, "MARS_AGENT_DOCKER_IMAGE", "") or "").strip()
+    if not _IMMUTABLE_MARS_IMAGE.fullmatch(image):
+        raise MarsPolicyError(
+            "MARS_AGENT_DOCKER_IMAGE must be configured as an immutable digest reference "
+            "(repository@sha256:<64 lowercase hex characters>)."
+        )
 
     command = [
         docker_command,

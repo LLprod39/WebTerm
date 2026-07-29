@@ -1,7 +1,7 @@
 # WebTerm v0.1 release-scope matrix
 
 Status: frozen scope candidate; release evidence incomplete
-Last reviewed: 2026-07-22
+Last reviewed: 2026-07-29
 
 This is a scope classification, not a claim that v0.1 has passed release gates. `GA` means the capability is intended to be supported inside the controlled pilot after every mandatory checklist item passes. `preview` means opt-in, best-effort and outside the pilot availability promise. `disabled` means fail-closed in production until a later release decision.
 
@@ -19,7 +19,7 @@ This is a scope classification, not a claim that v0.1 has passed release gates. 
 | MCP integrations | preview | `studio` | allowlisted transports/hosts, owner isolation, SSRF controls | transport security tests, ownership tests, degraded-state UI |
 | Plugins | disabled | `plugin_marketplace` + `app.plugins` | external signing/KMS, scanner, allowlists, isolated jobs | deploy checks, trust-chain tests, install/rollback/quarantine E2E |
 | Kubernetes Ops | disabled | `kubernetes_ops` | separate readiness flag, least-privilege credentials, action approvals | RBAC/read-only/mutation tests, cluster E2E, operator runbook |
-| MARS | disabled | `mars` | isolated runtime, per-user workspace, resource/network policy | isolation/approval tests, sandbox evidence, failure recovery |
+| MARS | disabled | `mars` | release-pinned agent image digest, isolated runtime, per-user workspace, resource/network policy | image-policy/isolation/approval tests, sandbox evidence, failure recovery |
 
 ## Required foundations
 
