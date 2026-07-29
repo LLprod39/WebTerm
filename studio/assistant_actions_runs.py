@@ -1,4 +1,4 @@
-"""Pipeline run validate / start / stop / approve assistant actions."""
+"""Pipeline run validate / start / stop assistant actions."""
 
 from __future__ import annotations
 
@@ -168,31 +168,3 @@ def stop_pipeline_run(ctx: AssistantActionContext) -> dict[str, Any]:
         "runtime_control": control,
         "target_url": f"/studio/runs?run={run.pk}",
     }
-
-
-def approve_pipeline_node(ctx: AssistantActionContext) -> dict[str, Any]:
-    run = _run_for_user(ctx.user, _int_payload(ctx, "run_id"))
-    node_id = str(ctx.input_payload.get("node_id") or "").strip()
-    decision = str(ctx.input_payload.get("decision") or "approved").strip().lower()
-    response_text = str(ctx.input_payload.get("response_text") or "").strip()
-    if not node_id:
-        raise AssistantActionError("node_id is required")
-    if decision not in {"approved", "rejected"}:
-        raise AssistantActionError("decision must be approved or rejected")
-    state = dict((run.node_states or {}).get(node_id) or {})
-    if not state:
-        raise AssistantActionError(f"Node '{node_id}' not found in run #{run.pk}", status=404)
-    if state.get("approval_decision"):
-        return {
-            "ok": True,
-            "message": f"Already decided: {state['approval_decision']}",
-            "target_url": f"/studio/runs?run={run.pk}",
-        }
-    run.node_states[node_id] = {
-        **state,
-        "approval_decision": decision,
-        "approval_response": response_text,
-        "decided_at": timezone.now().isoformat(),
-    }
-    PipelineRun.objects.filter(pk=run.pk).update(node_states=run.node_states)
-    return {"ok": True, "decision": decision, "node_id": node_id, "target_url": f"/studio/runs?run={run.pk}"}

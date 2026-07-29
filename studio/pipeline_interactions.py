@@ -10,6 +10,8 @@ from threading import Event
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
+from .approval_models import ApprovalRequest
+from .approval_service import ApprovalAccessError, arm_approval_request, resolve_approval_approver
 from .models import PipelineRun
 from .pipeline_interactions_telegram import (
     execute_logic_telegram_input,
@@ -35,10 +37,6 @@ from .pipeline_redaction import (
 )
 from .pipeline_run_state import update_node_state as _update_node_state
 from .pipeline_runtime import is_runtime_stop_requested
-from .pipeline_telegram import (
-    _poll_telegram_approval_decision,
-    _telegram_approval_callback_data,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -64,12 +62,10 @@ async def execute_logic_human_approval(
     Pause the pipeline and wait for a human approve/reject decision.
 
     How it works:
-    1. Generates a signed one-time token stored in node_states.
+    1. Generates a one-time token and stores only its hash in ApprovalRequest.
     2. Sends an email and/or Telegram message with approve/reject actions.
-       APPROVE -> GET /api/studio/runs/<run_id>/approve/<node_id>/?token=...&decision=approved
-       REJECT  -> GET /api/studio/runs/<run_id>/approve/<node_id>/?token=...&decision=rejected
-       Telegram uses inline callback buttons, so no external browser access is required.
-    3. Polls Telegram callbacks and the DB for the decision.
+       The link opens an authenticated confirmation page; only CSRF-protected POST mutates state.
+    3. Polls the durable approval request for the decision.
     4. On timeout, returns failed.
     5. If approved, the pipeline continues; if rejected, the run is treated as failed
        (downstream nodes can check {node_id_status} == "failed" with a logic/condition).
@@ -95,23 +91,40 @@ async def execute_logic_human_approval(
         "❌ *ОТКЛОНИТЬ:* {reject_url}",
     )
 
-    approval_token = secrets.token_urlsafe(32)
-    approve_url = f"{base_url}/api/studio/runs/{run.pk}/approve/{node_id}/?token={approval_token}&decision=approved"
-    reject_url = f"{base_url}/api/studio/runs/{run.pk}/approve/{node_id}/?token={approval_token}&decision=rejected"
-    manual_link_only = bool(config.get("manual_link_only", False))
     preview_to_email = (config.get("to_email") or g_to or "").strip()
     preview_tg_bot_token, preview_tg_chat_id = resolve_telegram_target(
         config,
         token_keys=("tg_bot_token", "bot_token", "telegram_bot_token"),
         chat_keys=("tg_chat_id", "chat_id", "telegram_chat_id"),
     )
-    if not preview_to_email and not (preview_tg_bot_token and preview_tg_chat_id) and not manual_link_only:
+    if not preview_to_email and not (preview_tg_bot_token and preview_tg_chat_id):
         return {
             "status": "failed",
-            "error": "No delivery channel configured for human approval. Set email/Telegram or enable manual_link_only.",
+            "error": "No delivery channel configured for human approval. Set email or Telegram.",
             "decision": "timeout",
-            "output": f"Approval links were not armed because delivery is missing.\nApprove: {approve_url}\nReject: {reject_url}",
+            "output": "Approval request was not armed because delivery is missing.",
         }
+
+    try:
+        approver = await _s2a(lambda: resolve_approval_approver(run, config), thread_sensitive=True)()
+    except ApprovalAccessError as exc:
+        return {"status": "failed", "error": str(exc), "decision": "timeout"}
+
+    approval_token = secrets.token_urlsafe(32)
+    expires_at = timezone.now() + timedelta(minutes=timeout_minutes)
+    confirmation_url = f"{base_url}/api/studio/runs/{run.pk}/approve/{node_id}/?token={approval_token}"
+    approval_request = await _s2a(
+        lambda: arm_approval_request(
+            run=run,
+            node_id=node_id,
+            approver=approver,
+            raw_token=approval_token,
+            expires_at=expires_at,
+        ),
+        thread_sensitive=True,
+    )()
+    approve_url = confirmation_url
+    reject_url = confirmation_url
 
     subs["pipeline_name"] = run.pipeline.name
     subs["run_id"] = str(run.pk)
@@ -128,9 +141,9 @@ async def execute_logic_human_approval(
         node_id,
         {
             "status": "awaiting_approval",
-            "approval_token": approval_token,
-            "approve_url": approve_url,
-            "reject_url": reject_url,
+            "approval_request_id": approval_request.pk,
+            "approval_expires_at": expires_at.isoformat(),
+            "approval_approver": approver.username,
             "started_at": timezone.now().isoformat(),
         },
     )
@@ -177,7 +190,7 @@ async def execute_logic_human_approval(
                 "smtp_user": config.get("smtp_user") or "",
                 "smtp_password": config.get("smtp_password") or "",
                 "from_email": config.get("from_email") or "",
-                "_redaction_preserve_values": [approve_url, reject_url],
+                "_redaction_preserve_values": [confirmation_url],
                 "_redaction_preserve_context_keys": ["approve_url", "reject_url"],
             },
         }
@@ -215,19 +228,15 @@ async def execute_logic_human_approval(
                 "message": telegram_message,
                 "parse_mode": tg_parse_mode,
                 "disable_web_page_preview": True,
-                "_redaction_preserve_values": [approve_url, reject_url],
+                "_redaction_preserve_values": [confirmation_url],
                 "_redaction_preserve_context_keys": ["approve_url", "reject_url"],
                 "reply_markup": {
                     "inline_keyboard": [
                         [
                             {
-                                "text": "✅ Одобрить",
-                                "callback_data": _telegram_approval_callback_data("approved", approval_token),
-                            },
-                            {
-                                "text": "❌ Отклонить",
-                                "callback_data": _telegram_approval_callback_data("rejected", approval_token),
-                            },
+                                "text": "Review approval request",
+                                "url": confirmation_url,
+                            }
                         ]
                     ]
                 },
@@ -239,7 +248,7 @@ async def execute_logic_human_approval(
         except Exception as exc:
             logger.warning("human_approval Telegram failed: %s", exc)
 
-    deadline = timezone.now() + timedelta(minutes=timeout_minutes)
+    deadline = expires_at
     poll_interval = 2
 
     while True:
@@ -247,40 +256,15 @@ async def execute_logic_human_approval(
             return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
         await asyncio.sleep(poll_interval)
 
-        telegram_callback = None
-        if tg_bot_token and tg_chat_id:
-            telegram_callback = await _poll_telegram_approval_decision(tg_bot_token, approval_token)
-
         fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
+        fresh_approval = await _s2a(
+            lambda: ApprovalRequest.objects.get(pk=approval_request.pk),
+            thread_sensitive=False,
+        )()
+        decision = fresh_approval.status
 
-        node_state = dict(fresh_run.node_states.get(node_id, {}))
-        if telegram_callback and not node_state.get("approval_decision"):
-            node_state["approval_decision"] = telegram_callback.get("decision")
-            node_state["approval_response"] = telegram_callback.get("response_text") or "via Telegram callback"
-            node_state["approval_source"] = "telegram_callback"
-            node_state["decided_at"] = timezone.now().isoformat()
-            await _update_node_state(fresh_run, node_id, node_state)
-            if tg_bot_token and tg_chat_id:
-                verdict = "approved" if node_state["approval_decision"] == "approved" else "rejected"
-                emoji = "✅" if verdict == "approved" else "❌"
-                verdict_text = "одобрено" if verdict == "approved" else "отклонено"
-                with contextlib.suppress(Exception):
-                    await _send_telegram_message(
-                        bot_token=tg_bot_token,
-                        chat_id=tg_chat_id,
-                        message=(
-                            f"{emoji} *Решение записано*\n\n"
-                            f"*Пайплайн:* {run.pipeline.name}\n"
-                            f"*Запуск:* #{run.pk}\n"
-                            f"*Узел:* {config.get('label') or node_id}\n"
-                            f"*Решение:* {verdict_text}"
-                        ),
-                    )
-
-        decision = node_state.get("approval_decision")
-
-        if decision == "approved":
-            user_response = node_state.get("approval_response", "")
+        if decision == ApprovalRequest.STATUS_APPROVED:
+            user_response = fresh_approval.response_text
             logger.info("human_approval node %s: APPROVED (response: %r)", node_id, user_response[:100])
             return {
                 "status": "completed",
@@ -290,8 +274,8 @@ async def execute_logic_human_approval(
                 "user_response": user_response,
             }
 
-        if decision == "rejected":
-            user_response = node_state.get("approval_response", "")
+        if decision == ApprovalRequest.STATUS_REJECTED:
+            user_response = fresh_approval.response_text
             logger.info("human_approval node %s: REJECTED", node_id)
             return {
                 "status": "failed",
@@ -306,6 +290,13 @@ async def execute_logic_human_approval(
             return {"status": "stopped", "output": "Approval wait cancelled by stop request", "stopped": True}
 
         if timezone.now() >= deadline:
+            await _s2a(
+                lambda: ApprovalRequest.objects.filter(
+                    pk=approval_request.pk,
+                    status=ApprovalRequest.STATUS_PENDING,
+                ).update(status=ApprovalRequest.STATUS_EXPIRED),
+                thread_sensitive=False,
+            )()
             logger.warning("human_approval node %s: TIMEOUT after %.0f min", node_id, timeout_minutes)
             return {
                 "status": "failed",

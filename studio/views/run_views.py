@@ -2,12 +2,12 @@
 Studio pipeline run endpoints.
 """
 
-import hmac
 import json
 import re
 import sys
 
 import httpx
+from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.utils import timezone
@@ -15,6 +15,11 @@ from django.utils.html import escape
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from studio.approval_service import (
+    ApprovalAccessError,
+    get_approval_for_confirmation,
+    record_approval_decision,
+)
 from studio.models import PipelineRun
 from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
 from studio.pipeline_secrets import hydrate_pipeline_node_data
@@ -149,6 +154,7 @@ def api_run_stop(request, run_id: int):
     return _ok({"ok": True, "live_executor": stop_delivered, "runtime_control": control})
 
 
+@login_required
 @require_http_methods(["GET", "POST"])
 def api_run_approve(request, run_id: int, node_id: str):
     """Render a confirmation page on GET and record a CSRF-protected POST decision."""
@@ -185,15 +191,19 @@ def api_run_approve(request, run_id: int, node_id: str):
     if not node_state:
         return _err(f"Node '{node_id}' not found in run #{run_id}", 404)
 
-    stored_token = node_state.get("approval_token", "")
-    if not stored_token or not hmac.compare_digest(str(stored_token), str(token)):
-        return _err("Invalid or expired token", 403)
-
-    if node_state.get("approval_decision"):
-        existing = node_state["approval_decision"]
-        return _ok({"ok": True, "message": f"Already decided: {existing}"})
-
     if request.method == "GET":
+        try:
+            approval = get_approval_for_confirmation(
+                run_id=run_id,
+                node_id=resolved_node_id,
+                user=request.user,
+                raw_token=str(token),
+            )
+        except ApprovalAccessError as exc:
+            return _err(str(exc), exc.status_code)
+        if approval.status != approval.STATUS_PENDING:
+            return _ok({"ok": True, "message": f"Already decided: {approval.status}"})
+
         csrf_token = escape(get_token(request))
         safe_token = escape(str(token))
         safe_pipeline_name = escape(run.pipeline.name)
@@ -219,13 +229,20 @@ def api_run_approve(request, run_id: int, node_id: str):
         response["X-Frame-Options"] = "DENY"
         return response
 
-    run.node_states[resolved_node_id] = {
-        **node_state,
-        "approval_decision": decision,
-        "approval_response": response_text,
-        "decided_at": timezone.now().isoformat(),
-    }
-    PipelineRun.objects.filter(pk=run_id).update(node_states=run.node_states)
+    try:
+        approval, recorded = record_approval_decision(
+            run_id=run_id,
+            node_id=resolved_node_id,
+            user=request.user,
+            raw_token=str(token),
+            decision=str(decision),
+            response_text=str(response_text),
+        )
+    except ApprovalAccessError as exc:
+        return _err(str(exc), exc.status_code)
+    if not recorded:
+        return _ok({"ok": True, "message": f"Already decided: {approval.status}"})
+
     _send_approval_telegram_confirmation(run, resolved_node_id, decision)
 
     emoji = "✅" if decision == "approved" else "❌"

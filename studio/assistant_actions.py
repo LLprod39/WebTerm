@@ -28,18 +28,12 @@ from studio.assistant_actions_inspect import (
     list_studio_skills,
     validate_studio_skills,
 )
-from studio.assistant_actions_runs import (
-    approve_pipeline_node,
-    run_pipeline,
-    stop_pipeline_run,
-    validate_pipeline_run,
-)
+from studio.assistant_actions_runs import run_pipeline, stop_pipeline_run, validate_pipeline_run
 from studio.assistant_actions_skills import create_studio_skill, update_studio_skill
 from studio.views.pipeline_helpers import _pipeline_queryset_for_user
 
 __all__ = [
     "apply_pipeline_draft",
-    "approve_pipeline_node",
     "build_assistant_runtime_context",
     "capability_registry",
     "create_pipeline_draft",

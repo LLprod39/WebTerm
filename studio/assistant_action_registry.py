@@ -3,7 +3,6 @@ from __future__ import annotations
 from app.assistant_actions import AssistantActionSpec, register_action, register_runtime_context_provider
 from studio.assistant_actions import (
     apply_pipeline_draft,
-    approve_pipeline_node,
     build_assistant_runtime_context,
     capability_registry,
     create_pipeline_draft,
@@ -161,16 +160,6 @@ def register_assistant_actions() -> None:
             requires_confirmation=True,
             input_schema={"required": ["run_id"]},
             handler=stop_pipeline_run,
-        ),
-        AssistantActionSpec(
-            action_type="studio.run.approve_node",
-            label="Approve pipeline node",
-            description="Record an approval/rejection for a waiting pipeline approval node owned by the user.",
-            required_feature="studio_runs",
-            risk="mutating",
-            requires_confirmation=True,
-            input_schema={"required": ["run_id", "node_id", "decision"]},
-            handler=approve_pipeline_node,
         ),
         AssistantActionSpec(
             action_type="studio.skills.get",

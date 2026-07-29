@@ -233,7 +233,7 @@ describe("PipelineEditorPage save hydration", () => {
     expect(await screen.findByText(/Текущий шаг:/)).toHaveTextContent("Entry Snapshot");
   });
 
-  it("keeps explicit manual-link approval mode in save payload", () => {
+  it("keeps the assigned approval user in save payload", () => {
     const approvalPipeline = {
       ...freshPipeline,
       nodes: [
@@ -247,7 +247,7 @@ describe("PipelineEditorPage save hydration", () => {
             to_email: "",
             tg_chat_id: "",
             timeout_minutes: 45,
-            manual_link_only: true,
+            approver_username: "oncall-approver",
           },
         },
       ],
@@ -262,7 +262,7 @@ describe("PipelineEditorPage save hydration", () => {
       hasLocalChanges: true,
     });
     const approvalNode = payload.nodes.find((item) => item.id === "approval_gate");
-    expect(approvalNode?.data).toMatchObject({ manual_link_only: true });
+    expect(approvalNode?.data).toMatchObject({ approver_username: "oncall-approver" });
   });
 
   it("round-trips SSH preflight and verification command lists", () => {
