@@ -262,11 +262,12 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/health/', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=5).read()",
+          "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/ready/', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=4).read()",
         ]
-      interval: 15s
+      interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 3
+      start_period: 30s
     logging: *json-logging
 
   scheduled-pipelines:

@@ -43,6 +43,7 @@ urlpatterns = [
     path("settings/permissions/", auth_views.frontend_settings_permissions_redirect, name="settings_permissions"),
     # Health
     path("api/health/", health_views.api_health, name="api_health"),
+    path("api/ready/", health_views.api_ready, name="api_ready"),
     path("api/admin/dashboard/", admin_views.api_admin_dashboard, name="api_admin_dashboard"),
     path("api/admin/users/activity/", admin_views.api_admin_users_activity, name="api_admin_users_activity"),
     path("api/admin/users/sessions/", admin_views.api_admin_users_sessions, name="api_admin_users_sessions"),
