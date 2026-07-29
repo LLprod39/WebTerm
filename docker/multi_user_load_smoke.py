@@ -6,11 +6,20 @@ import json
 import statistics
 import sys
 import time
+from collections.abc import Awaitable
 from pathlib import Path
 from typing import Any
 from urllib.parse import urljoin
 
 import aiohttp
+from yarl import URL
+
+HTTP_TIMEOUT_SECONDS = 45.0
+WEBSOCKET_HANDSHAKE_TIMEOUT_SECONDS = 20.0
+WEBSOCKET_RECEIVE_TIMEOUT_SECONDS = 45.0
+WEBSOCKET_CLOSE_TIMEOUT_SECONDS = 5.0
+USER_TIMEOUT_SECONDS = 180.0
+OVERALL_TIMEOUT_SECONDS = 240.0
 
 
 def _base_http(url: str) -> str:
@@ -39,7 +48,8 @@ async def _expect_json(
     deadline = time.monotonic() + timeout
     last_error: str | None = None
     while time.monotonic() < deadline:
-        msg = await ws.receive(timeout=timeout)
+        remaining = max(0.1, deadline - time.monotonic())
+        msg = await ws.receive(timeout=min(timeout, remaining))
         if msg.type == aiohttp.WSMsgType.TEXT:
             payload = json.loads(msg.data)
             if payload.get("type") == "error" and payload.get("fatal"):
@@ -138,18 +148,21 @@ class SmokeUserSession:
         self.session = aiohttp.ClientSession(
             cookie_jar=aiohttp.CookieJar(unsafe=True),
             connector=connector,
+            timeout=aiohttp.ClientTimeout(
+                total=HTTP_TIMEOUT_SECONDS,
+                connect=WEBSOCKET_HANDSHAKE_TIMEOUT_SECONDS,
+                sock_connect=WEBSOCKET_HANDSHAKE_TIMEOUT_SECONDS,
+                sock_read=HTTP_TIMEOUT_SECONDS,
+            ),
         )
         self.csrf_token = ""
         self.csrf_cookie = ""
         self.session_cookie = ""
 
-    def _cookie_header(self) -> str:
-        parts: list[str] = []
-        if self.csrf_cookie or self.csrf_token:
-            parts.append(f"csrftoken={self.csrf_cookie or self.csrf_token}")
-        if self.session_cookie:
-            parts.append(f"sessionid={self.session_cookie}")
-        return "; ".join(parts)
+    def _session_cookie_from_jar(self) -> str:
+        cookies = self.session.cookie_jar.filter_cookies(URL(self.base_url))
+        session_cookie = cookies.get("sessionid")
+        return str(session_cookie.value if session_cookie else "")
 
     async def close(self) -> None:
         await self.session.close()
@@ -167,7 +180,6 @@ class SmokeUserSession:
             "X-CSRFToken": self.csrf_token,
             "Referer": self.base_url,
             "Origin": self.base_url.rstrip("/"),
-            "Cookie": self._cookie_header(),
         }
         async with self.session.post(
             urljoin(self.base_url, "api/auth/login/"),
@@ -190,9 +202,11 @@ class SmokeUserSession:
             if response.status != 200 or not payload.get("success"):
                 raise SmokeFailure(f"login failed for {self.seed['username']}: HTTP {response.status} {payload}")
 
-        auth_headers = {"Cookie": self._cookie_header()}
+        self.session_cookie = self._session_cookie_from_jar()
+        if not self.session_cookie:
+            raise SmokeFailure(f"session cookie missing from client cookie jar for {self.seed['username']}")
 
-        async with self.session.get(urljoin(self.base_url, "api/auth/session/"), headers=auth_headers) as response:
+        async with self.session.get(urljoin(self.base_url, "api/auth/session/")) as response:
             payload = await response.json()
             if response.status != 200 or not payload.get("authenticated"):
                 raise SmokeFailure(
@@ -201,7 +215,6 @@ class SmokeUserSession:
 
         async with self.session.get(
             urljoin(self.base_url, "servers/api/frontend/bootstrap/"),
-            headers=auth_headers,
         ) as response:
             payload = await response.json()
             if response.status != 200 or not payload.get("success"):
@@ -216,9 +229,12 @@ class SmokeUserSession:
         marker = f"TERM_OK_{self.seed['username']}_{session_index}"
         async with self.session.ws_connect(
             ws_url,
-            headers={"Cookie": self._cookie_header()},
             heartbeat=20,
             origin=self.base_url.rstrip("/"),
+            timeout=aiohttp.ClientWSTimeout(
+                ws_receive=WEBSOCKET_RECEIVE_TIMEOUT_SECONDS,
+                ws_close=WEBSOCKET_CLOSE_TIMEOUT_SECONDS,
+            ),
         ) as ws:
             await _expect_json(ws, predicate=lambda p: p.get("type") == "ready")
             await ws.send_json(
@@ -255,7 +271,6 @@ class SmokeUserSession:
             "X-CSRFToken": self.csrf_token,
             "Referer": self.base_url,
             "Origin": self.base_url.rstrip("/"),
-            "Cookie": self._cookie_header(),
         }
         async with self.session.post(
             urljoin(self.base_url, f"api/studio/pipelines/{int(self.seed['pipeline_id'])}/run/"),
@@ -271,7 +286,6 @@ class SmokeUserSession:
             self.session,
             base_url=self.base_url,
             run_id=run_id,
-            headers={"Cookie": self._cookie_header()},
         )
         if str(run_detail.get("status") or "") != "completed":
             raise SmokeFailure(
@@ -293,7 +307,6 @@ class SmokeUserSession:
             "X-CSRFToken": self.csrf_token,
             "Referer": self.base_url,
             "Origin": self.base_url.rstrip("/"),
-            "Cookie": self._cookie_header(),
         }
         async with self.session.post(
             urljoin(self.base_url, f"servers/api/agents/{int(self.seed['agent_id'])}/run/"),
@@ -314,7 +327,6 @@ class SmokeUserSession:
             self.session,
             base_url=self.base_url,
             run_id=run_id,
-            headers={"Cookie": self._cookie_header()},
         )
         if str(run_detail.get("status") or "") != "completed":
             raise SmokeFailure(
@@ -341,24 +353,61 @@ async def _run_user(
     agent_runs_per_user: int,
     insecure_tls: bool,
 ) -> dict[str, Any]:
+    username = str(seed["username"])
+
+    def progress(message: str) -> None:
+        print(f"[runtime-smoke:{username}] {message}", file=sys.stderr, flush=True)
+
+    async def run_phase(label: str, operation: Awaitable[float]) -> float:
+        progress(f"starting {label}")
+        try:
+            latency = await operation
+        except Exception as exc:
+            progress(f"failed {label}: {type(exc).__name__}: {exc}")
+            raise
+        progress(f"completed {label} in {latency:.3f}s")
+        return latency
+
     user = SmokeUserSession(
         base_url=base_url,
         seed=seed,
         shared_password=shared_password,
         insecure_tls=insecure_tls,
     )
+    tasks: list[asyncio.Task[float]] = []
     try:
+        progress("starting login")
         await user.login()
+        progress("completed login")
         terminal_tasks = [
-            asyncio.create_task(user.run_terminal_session(index)) for index in range(1, terminal_sessions_per_user + 1)
+            asyncio.create_task(
+                run_phase(f"terminal#{index}", user.run_terminal_session(index)),
+                name=f"{username}:terminal:{index}",
+            )
+            for index in range(1, terminal_sessions_per_user + 1)
         ]
         pipeline_tasks = [
-            asyncio.create_task(user.run_pipeline(index)) for index in range(1, pipeline_runs_per_user + 1)
+            asyncio.create_task(
+                run_phase(f"pipeline#{index}", user.run_pipeline(index)),
+                name=f"{username}:pipeline:{index}",
+            )
+            for index in range(1, pipeline_runs_per_user + 1)
         ]
-        agent_tasks = [asyncio.create_task(user.run_agent(index)) for index in range(1, agent_runs_per_user + 1)]
-        terminal_latencies = await asyncio.gather(*terminal_tasks)
-        pipeline_latencies = await asyncio.gather(*pipeline_tasks)
-        agent_latencies = await asyncio.gather(*agent_tasks)
+        agent_tasks = [
+            asyncio.create_task(
+                run_phase(f"agent#{index}", user.run_agent(index)),
+                name=f"{username}:agent:{index}",
+            )
+            for index in range(1, agent_runs_per_user + 1)
+        ]
+        tasks = [*terminal_tasks, *pipeline_tasks, *agent_tasks]
+        latencies = await asyncio.gather(*tasks)
+        terminal_end = len(terminal_tasks)
+        pipeline_end = terminal_end + len(pipeline_tasks)
+        terminal_latencies = latencies[:terminal_end]
+        pipeline_latencies = latencies[terminal_end:pipeline_end]
+        agent_latencies = latencies[pipeline_end:]
+        progress("completed all runtime phases")
         return {
             "username": seed["username"],
             "terminal_sessions": len(terminal_latencies),
@@ -369,6 +418,11 @@ async def _run_user(
             "agent_latencies": agent_latencies,
         }
     finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
         await user.close()
 
 
@@ -379,6 +433,14 @@ def _flatten(items: list[dict[str, Any]], key: str) -> list[float]:
     return out
 
 
+async def _run_user_with_timeout(*, timeout_seconds: float, **kwargs) -> dict[str, Any]:
+    username = str((kwargs.get("seed") or {}).get("username") or "unknown")
+    try:
+        return await asyncio.wait_for(_run_user(**kwargs), timeout=timeout_seconds)
+    except TimeoutError as exc:
+        raise SmokeFailure(f"runtime smoke user {username} exceeded {timeout_seconds:.0f}s timeout") from exc
+
+
 async def _main_async(args) -> int:
     seed_data = json.loads(Path(args.seed_file).read_text(encoding="utf-8"))
     users = list(seed_data.get("users") or [])
@@ -387,20 +449,26 @@ async def _main_async(args) -> int:
         raise SmokeFailure("seed file contains no users")
 
     started = time.perf_counter()
-    results = await asyncio.gather(
-        *[
-            _run_user(
-                base_url=args.base_url,
-                seed=user_seed,
-                shared_password=str(seed_data.get("password") or args.default_password),
-                terminal_sessions_per_user=args.terminal_sessions_per_user,
-                pipeline_runs_per_user=args.pipeline_runs_per_user,
-                agent_runs_per_user=args.agent_runs_per_user,
-                insecure_tls=args.insecure_tls,
-            )
-            for user_seed in selected_users
-        ]
-    )
+    user_runs = [
+        _run_user_with_timeout(
+            timeout_seconds=args.user_timeout_seconds,
+            base_url=args.base_url,
+            seed=user_seed,
+            shared_password=str(seed_data.get("password") or args.default_password),
+            terminal_sessions_per_user=args.terminal_sessions_per_user,
+            pipeline_runs_per_user=args.pipeline_runs_per_user,
+            agent_runs_per_user=args.agent_runs_per_user,
+            insecure_tls=args.insecure_tls,
+        )
+        for user_seed in selected_users
+    ]
+    try:
+        results = await asyncio.wait_for(
+            asyncio.gather(*user_runs),
+            timeout=args.overall_timeout_seconds,
+        )
+    except TimeoutError as exc:
+        raise SmokeFailure(f"runtime smoke exceeded {args.overall_timeout_seconds:.0f}s overall timeout") from exc
     elapsed = time.perf_counter() - started
 
     terminal_latencies = _flatten(results, "terminal_latencies")
@@ -433,6 +501,8 @@ def main() -> int:
     parser.add_argument("--pipeline-runs-per-user", type=int, default=2)
     parser.add_argument("--agent-runs-per-user", type=int, default=0)
     parser.add_argument("--default-password", default="SmokePass123!")
+    parser.add_argument("--user-timeout-seconds", type=float, default=USER_TIMEOUT_SECONDS)
+    parser.add_argument("--overall-timeout-seconds", type=float, default=OVERALL_TIMEOUT_SECONDS)
     parser.add_argument(
         "--insecure-tls",
         action="store_true",

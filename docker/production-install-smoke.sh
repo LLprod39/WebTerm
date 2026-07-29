@@ -345,6 +345,7 @@ require_command git
 require_command curl
 require_command python3
 require_command openssl
+require_command timeout
 docker compose version >/dev/null
 record_host_metadata
 assert_fresh_host
@@ -407,7 +408,12 @@ wait_for_service ssh-target 180
 echo "==> Seeding and running HTTPS/WebSocket terminal, pipeline and agent smoke"
 compose exec -T backend sh -lc \
   "python manage.py seed_multi_user_smoke --users 1 --password '$SMOKE_PASSWORD' --ssh-host ssh-target --ssh-port 2222 --ssh-username smoke --ssh-password smoke-password --json > /tmp/f13a-seed.json"
-compose exec -T backend python docker/multi_user_load_smoke.py \
+timeout --signal=TERM --kill-after=15s 300s \
+  docker compose \
+  --project-name "$PROJECT_NAME" \
+  --env-file "$ENV_FILE" \
+  -f "$COMPOSE_FILE" \
+  exec -T backend python docker/multi_user_load_smoke.py \
   --base-url https://nginx:8443 \
   --insecure-tls \
   --seed-file /tmp/f13a-seed.json \
