@@ -25,6 +25,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.shell_commands import analyze_shell_command
 from app.tools.safety import CommandRisk, evaluate_command_safety
 
 
@@ -67,9 +68,9 @@ def match_patterns(command: str, patterns: list[str] | None) -> bool:
       contiguous token sub-sequence; also falls back to case-insensitive
       substring match.
 
-    This is the *exact* same matching algorithm that lived inline in
-    ``SSHTerminalConsumer._matches_patterns`` — extracted verbatim so
-    existing forbidden/allowlist patterns keep behaving identically.
+    This is the legacy search matcher used for forbidden patterns and the
+    public compatibility helper.  Command allowlists use stricter per-fragment
+    leading-token or full-regex matching in :func:`decide_command_policy`.
     """
     cmd_l = (command or "").lower()
     for raw in patterns or []:
@@ -100,6 +101,38 @@ def match_patterns(command: str, patterns: list[str] | None) -> bool:
         if pl in cmd_l:
             return True
     return False
+
+
+def _matches_allowlist_fragment(fragment: str, patterns: list[str] | None) -> bool:
+    """Require one allowlist entry to cover a whole executable fragment."""
+
+    fragment_tokens = _TOKEN_RE.findall((fragment or "").lower())
+    for raw in patterns or []:
+        pattern = str(raw or "").strip()
+        if not pattern:
+            continue
+        if pattern.lower().startswith("re:"):
+            expression = pattern[3:].strip()
+            if not expression:
+                continue
+            try:
+                if re.fullmatch(expression, fragment, flags=re.IGNORECASE):
+                    return True
+            except re.error:
+                continue
+            continue
+
+        pattern_tokens = _TOKEN_RE.findall(pattern.lower())
+        if pattern_tokens and fragment_tokens[: len(pattern_tokens)] == pattern_tokens:
+            return True
+    return False
+
+
+def _matches_command_allowlist(command: str, patterns: list[str] | None) -> bool:
+    analysis = analyze_shell_command(command)
+    if not analysis.fragments or not analysis.is_classifiable:
+        return False
+    return all(_matches_allowlist_fragment(fragment, patterns) for fragment in analysis.fragments)
 
 
 # ---------------------------------------------------------------------------
@@ -235,8 +268,10 @@ def decide_command_policy(
 
     Precedence (high → low):
     1. ``forbidden_patterns`` match → ``reason="forbidden"``, not allowed.
-    2. ``allowlist_patterns`` provided and command does not match →
-       ``reason="outside_allowlist"``, not allowed.
+    2. ``allowlist_patterns`` provided and any executable fragment is not
+       covered by a leading-token or full-regex match →
+       ``reason="outside_allowlist"``, not allowed.  Indirect execution,
+       substitutions, and redirections fail this check closed.
     3. ``confirm_dangerous_commands`` and :func:`evaluate_command_safety`
        returned dangerous → ``reason="dangerous"``, requires confirm.
     4. ``chat_mode == "ask"`` on any non-blocked command → ``reason="ask_mode"``,
@@ -270,7 +305,7 @@ def decide_command_policy(
     if match_patterns(text, forbidden_patterns):
         return _verdict(allowed=False, requires_confirm=False, reason="forbidden")
 
-    if allowlist_patterns and not match_patterns(text, allowlist_patterns):
+    if allowlist_patterns and not _matches_command_allowlist(text, allowlist_patterns):
         return _verdict(allowed=False, requires_confirm=False, reason="outside_allowlist")
 
     if confirm_dangerous_commands and risk.is_dangerous:
