@@ -395,13 +395,7 @@ services:
     command: ["sh", "-lc", "python manage.py run_telegram_bot"]
 
   mars-agent:
-    build:
-      context: .
-      dockerfile: docker/mars-agent.Dockerfile
-      args:
-        CODEX_NPM_PACKAGE: ${MARS_CODEX_NPM_PACKAGE:-@openai/codex@0.139.0}
-        GEMINI_NPM_PACKAGE: ${MARS_GEMINI_NPM_PACKAGE:-@google/gemini-cli@0.46.0}
-    image: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
+    image: ${MARS_AGENT_DOCKER_IMAGE:-registry.invalid/webterm-mars-agent@sha256:0000000000000000000000000000000000000000000000000000000000000000}
     profiles: ["mars-agent"]
     command: ["node", "--version"]
 

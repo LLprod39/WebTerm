@@ -575,8 +575,9 @@ Useful commands:
 Optional profiles:
   # Telegram bot (needs TELEGRAM_BOT_TOKEN in env)
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile telegram-bot up -d telegram-bot
-  # MARS agent image build
-  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile mars-agent build mars-agent
+  # MARS (disabled until MARS_AGENT_DOCKER_IMAGE is an exact release digest)
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile mars-agent pull mars-agent
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile mars-agent run --rm mars-agent
 
 First login checklist:
   1. Sign in as admin

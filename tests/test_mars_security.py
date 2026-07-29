@@ -92,6 +92,32 @@ def test_mars_host_runtime_is_fail_closed() -> None:
         mars_agent_uses_docker()
 
 
+@pytest.mark.parametrize(
+    "image",
+    [
+        "",
+        "webterm-mars-agent:latest",
+        "webterm-mars-agent:release",
+        "webterm-mars-agent@sha256:abc123",
+        "webterm-mars-agent@sha256:" + "A" * 64,
+    ],
+)
+def test_mars_rejects_mutable_agent_image_before_building_container_command(tmp_path: Path, image: str) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+
+    with (
+        override_settings(MARS_AGENT_DOCKER_IMAGE=image),
+        pytest.raises(MarsPolicyError, match="immutable digest"),
+    ):
+        build_mars_agent_docker_command(
+            phase="codex-mutable-image",
+            workspace_root=workspace,
+            workspace_mode="rw",
+            inner_command=["codex", "exec", "-"],
+        )
+
+
 def test_mars_verification_container_has_no_network_or_provider_keys(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "provider-secret")
     monkeypatch.setenv("GEMINI_API_KEY", "provider-secret")

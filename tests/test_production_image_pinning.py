@@ -19,3 +19,12 @@ def test_production_registry_images_are_release_bound_by_digest() -> None:
         image = compose["services"][service]["image"]
         assert IMAGE_DIGEST.fullmatch(image), f"{service} image is mutable: {image}"
         assert image.startswith(expected_prefix), f"{service} image changed compatibility line: {image}"
+
+
+def test_mars_profile_has_no_mutable_fallback_image() -> None:
+    compose = yaml.safe_load((ROOT / "docker-compose.production.yml").read_text(encoding="utf-8"))
+
+    image = compose["services"]["mars-agent"]["image"]
+    assert "MARS_AGENT_DOCKER_IMAGE" in image
+    assert ":latest" not in image
+    assert "@sha256:" in image
