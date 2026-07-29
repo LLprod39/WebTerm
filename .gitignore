@@ -175,6 +175,7 @@ docs/architecture/*
 !docs/architecture/ANSIBLE_PLAYBOOK_WORKSPACE_PLAN.md
 !docs/architecture/README.md
 !docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md
+!docs/architecture/WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md
 !docs/architecture/adr/
 docs/architecture/adr/*
 !docs/architecture/adr/0001-primary-runtime-and-toolchain.md

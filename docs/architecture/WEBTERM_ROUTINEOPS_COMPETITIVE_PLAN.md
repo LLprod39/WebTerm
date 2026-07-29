@@ -1,10 +1,17 @@
 # WebTerm: план превосходства над RoutineOps
 
-- Статус: proposed implementation roadmap.
+- Статус: historical Stage 1 implementation record. Stage 2 superseded on 2026-07-29.
 - Baseline date: 2026-07-22.
 - WebTerm baseline: [`b8924ee`](https://github.com/LLprod39/WebTerm/commit/b8924eeb1bcfd0647e80615eaa8c7684828e517a), branch `test`.
 - RoutineOps baseline: [`8453023`](https://github.com/Floodww/RoutineOps/commit/8453023fd248e538b81abcd0203b7cdbc9879833), version `2.4.6`.
 Owner decision: сначала полностью завершить Stage 1, только затем начинать Stage 2.
+
+> **Superseded roadmap notice.** Stage 1 ниже сохраняется как историческая запись
+> стабилизации и выпуска `v0.1.0`. Предложенный Stage 2 Endpoint Management и Go
+> endpoint agent не реализуется. Текущий продуктовый порядок зафиксирован в
+> [operations control plane roadmap](WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md):
+> `v0.1.1` Pilot Hardening -> `v0.2.0` Daily Operations -> `v0.3.0`
+> Infrastructure Cockpit.
 
 ## Содержание
 
@@ -41,7 +48,7 @@ Owner decision: сначала полностью завершить Stage 1, т
 1. **Stage 1 — исправления, стабилизация и честный release gate.** Новые крупные подсистемы заморожены.
 2. **Stage 2 — endpoint management и дополнительные функции.** Добавляются только поверх зелёной архитектуры и CI.
 
-Этот документ является текущим roadmap. Старые отчёты, где architecture guard назван зелёным, не являются доказательством текущего состояния.
+Этот документ является историческим planning baseline и записью выполнения Stage 1. Он не разрешает Stage 2 Endpoint Management. Текущий roadmap указан в superseded notice выше.
 
 ## 2. Проверенный вывод по сравнению
 
@@ -711,13 +718,13 @@ F-08a/F-08b/F-09 и F-13 — epics, а не mega-PRs. Не объединять 
   the upgraded schema, then restores the mandatory pre-upgrade database backup
   instead of pretending irreversible migrations can be silently reversed. Both
   matrix jobs passed in GitHub Actions `30083762709`.
-- F-13d remains fail-closed. No `v0.1.0` release may be published until branch
-  protection is applied to both `test` and `main`, the F-11 evidence ledger
-  contains a protected green release SHA with no calendar waiting window, the real F-12 pilot gate
-  passes and the immutable image/Compose/checksum/SBOM/attestation inventory is
-  verified on the published digests.
+- F-13d completed on 2026-07-24. Tag `v0.1.0` resolves to commit `4317126`; the
+  protected checks and Release workflow `30103632944` passed, and GitHub Release
+  `v0.1.0` contains immutable image digests, install bundles, checksums, SBOMs,
+  provenance and attestations. The human cohort remains post-release product
+  evidence and is not replaced with generated participants.
 
-## Stage 2 — Endpoint Management и функциональное превосходство
+## Stage 2 — Endpoint Management и функциональное превосходство (SUPERSEDED — DO NOT IMPLEMENT)
 
 ### 5. Целевая архитектура
 

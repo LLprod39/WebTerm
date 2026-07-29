@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last reviewed: 2026-07-24
+Last reviewed: 2026-07-29
 
 This folder is the public architecture entry point. The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
 
@@ -58,7 +58,8 @@ python scripts/check_architecture_sizes.py --strict-new
 - [ADR-0001: primary runtime and toolchain](adr/0001-primary-runtime-and-toolchain.md) freezes the supported Python/Django/Node/npm contract and the boundary between WSL release evidence and native Windows compatibility.
 - [CI and Git governance](CI_GOVERNANCE.md) defines independent product gates, the no-regression rollout, `test -> main` promotion and safe branch-protection bootstrap.
 - [Release documentation](../releases/README.md) contains the v0.1 support matrix, frozen capability scope and evidence-driven release checklist.
-- [WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md) is the current stabilization and endpoint-management roadmap: first close tests, CI, architecture, security, docs, brand, and release readiness; only then add a separate agent-managed device plane.
+- [Operations control plane roadmap](WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md) is the active three-release product plan: Pilot Hardening, Daily Operations and Infrastructure Cockpit, centered on the existing server and Playbooks lifecycle.
+- [WebTerm/RoutineOps competitive plan](WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md) is retained as the historical Stage 1 stabilization record. Its Endpoint Management stage is superseded and must not be implemented without passing the new-major-subsystem gate.
 - `STUDIO_OPS_AUTOMATION_PLATFORM_PLAN.md` describes the target shape for turning Studio into a broad admin/DevOps automation platform using pipeline nodes, MCP connectors, skills, policy, approvals, and domain capability packs.
 - `PLUGIN_PLATFORM_ARCHITECTURE_PLAN.md` describes the next plugin-platform layer: manifests, registries, hooks, connector contracts, dashboard widgets, plugin pages, Studio nodes, agent tools, terminal actions, permissions, and rollout phases.
 - `PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md` describes the roadmap for the self-hosted plugin extension system: package format, local install store, permissions, private catalogs, safe code gates, health, rollback, and quarantine.
