@@ -259,4 +259,51 @@ describe("Servers page rules and translations", () => {
     });
     expect(alertSpy).not.toHaveBeenCalled();
   });
+
+  it("requires exact SSH fingerprint confirmation before enrollment", async () => {
+    const fingerprint = "SHA256:2mQGzS9J1P4mFZf1QWQhOq8bW2TnJ8hJ7yE9wTq0abc";
+    vi.mocked(api.testServer)
+      .mockResolvedValueOnce({
+        success: false,
+        code: "host_key_confirmation_required",
+        error: "Verify the SSH host key fingerprint before the first connection.",
+        host_key: { algorithm: "ssh-ed25519", fingerprint_sha256: fingerprint },
+        trusted_fingerprints: [],
+        is_rotation: false,
+      })
+      .mockResolvedValueOnce({ success: true, message: "Connection successful" });
+
+    renderServers("en");
+    await screen.findByText("prod-web-01");
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Server" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Test connection" }));
+
+    expect(await screen.findByRole("dialog", { name: "Verify this SSH host key" })).toBeInTheDocument();
+    expect(screen.getByText(fingerprint)).toBeInTheDocument();
+    const trustButton = screen.getByRole("button", { name: "Trust key and test" });
+    expect(trustButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Paste the verified fingerprint"), {
+      target: { value: "SHA256:wrong" },
+    });
+    expect(trustButton).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText("Paste the verified fingerprint"), {
+      target: { value: fingerprint },
+    });
+    expect(trustButton).toBeEnabled();
+    fireEvent.click(trustButton);
+
+    await waitFor(() => {
+      expect(api.testServer).toHaveBeenNthCalledWith(2, 1, {
+        enroll_host_key: true,
+        expected_host_key_fingerprint: fingerprint,
+        replace_host_key: false,
+      });
+    });
+  });
 });

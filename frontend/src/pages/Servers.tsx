@@ -73,11 +73,14 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     setAdvancedServer(null);
   }, [advancedServer?.id]);
   const {
+    closeHostKeyEnrollment,
+    confirmHostKeyEnrollment,
     dialogOpen,
     editingServer,
     form,
     formValidation,
     handlePrivateKeyFile,
+    hostKeyEnrollmentTarget,
     openCreate,
     openEdit,
     requestDeleteServer,
@@ -251,6 +254,9 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       serverDeleteTarget={serverDeleteTarget}
       clearServerDeleteTarget={clearServerDeleteTarget}
       confirmDeleteServer={confirmDeleteServer}
+      hostKeyEnrollmentTarget={hostKeyEnrollmentTarget}
+      closeHostKeyEnrollment={closeHostKeyEnrollment}
+      confirmHostKeyEnrollment={confirmHostKeyEnrollment}
       openCreateGroup={openCreateGroup}
       openGroupSettings={openGroupSettings}
       requestDeleteGroup={requestDeleteGroup}

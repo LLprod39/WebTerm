@@ -5,7 +5,9 @@ from django.contrib.auth.models import User
 
 from servers.models import Server
 from servers.ssh_host_keys import (
+    SSHHostKeyEnrollmentRequired,
     build_known_hosts_for_server,
+    enroll_server_host_key,
     ensure_server_known_hosts,
     get_server_trusted_host_keys,
     parse_server_host_port,
@@ -21,7 +23,7 @@ def _public_key_record() -> tuple[str, asyncssh.SSHKey]:
 
 
 @pytest.mark.django_db
-def test_ensure_server_known_hosts_trusts_first_seen_key(monkeypatch):
+def test_enroll_then_ensure_server_known_hosts(monkeypatch):
     user = User.objects.create_user(username="ssh-owner", password="x")
     server = Server.objects.create(
         user=user,
@@ -41,6 +43,10 @@ def test_ensure_server_known_hosts_trusts_first_seen_key(monkeypatch):
 
     monkeypatch.setattr("servers.ssh_host_keys.asyncssh.get_server_host_key", fake_get_server_host_key)
 
+    enrolled = async_to_sync(enroll_server_host_key)(
+        server,
+        expected_fingerprint=parsed_key.get_fingerprint("sha256"),
+    )
     known_hosts = async_to_sync(ensure_server_known_hosts)(server)
     server.refresh_from_db()
     host, port = parse_server_host_port(server)
@@ -50,6 +56,7 @@ def test_ensure_server_known_hosts_trusts_first_seen_key(monkeypatch):
     assert calls[0]["host"] == host
     assert calls[0]["port"] == port
     assert len(records) == 1
+    assert enrolled["fingerprint_sha256"] == parsed_key.get_fingerprint("sha256")
     assert records[0]["public_key"] == public_key
     assert records[0]["fingerprint_sha256"].startswith("SHA256:")
     assert len(known_hosts.match(host, None, port)[0]) == 1
@@ -90,7 +97,7 @@ def test_ensure_server_known_hosts_reuses_stored_key_without_refetch(monkeypatch
 
 
 @pytest.mark.django_db
-def test_ensure_server_known_hosts_refresh_overwrites_existing_key(monkeypatch):
+def test_host_key_rotation_requires_explicit_replacement(monkeypatch):
     user = User.objects.create_user(username="ssh-refresh", password="x")
     old_public_key, old_parsed_key = _public_key_record()
     new_public_key, new_parsed_key = _public_key_record()
@@ -117,7 +124,15 @@ def test_ensure_server_known_hosts_refresh_overwrites_existing_key(monkeypatch):
 
     monkeypatch.setattr("servers.ssh_host_keys.asyncssh.get_server_host_key", fake_get_server_host_key)
 
-    known_hosts = async_to_sync(ensure_server_known_hosts)(server, refresh=True)
+    with pytest.raises(SSHHostKeyEnrollmentRequired):
+        async_to_sync(ensure_server_known_hosts)(server, refresh=True)
+
+    async_to_sync(enroll_server_host_key)(
+        server,
+        expected_fingerprint=new_parsed_key.get_fingerprint("sha256"),
+        allow_replace=True,
+    )
+    known_hosts = async_to_sync(ensure_server_known_hosts)(server)
     server.refresh_from_db()
     host, port = parse_server_host_port(server)
     records = get_server_trusted_host_keys(server)

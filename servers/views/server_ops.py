@@ -17,6 +17,14 @@ from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import ServerCommandHistory
+from servers.ssh_host_keys import (
+    SSHHostKeyEnrollmentRequired,
+    SSHHostKeyFingerprintMismatch,
+    SSHHostKeyRotationRequired,
+    enroll_server_host_key,
+    get_server_trusted_host_keys,
+    probe_server_host_key,
+)
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _resolve_server_secret,
@@ -36,9 +44,97 @@ def server_test_connection(request, server_id):
         if not _server_has_capability(server, request.user, "connect_terminal"):
             return JsonResponse({"success": False, "error": "Missing server capability: connect_terminal"}, status=403)
         data = json.loads(request.body)
-        refresh_host_key = bool(data.get("refresh_host_key"))
-        if refresh_host_key and server.user_id != request.user.id:
-            return JsonResponse({"success": False, "error": "Only owner can refresh trusted SSH host key"}, status=403)
+        refresh_host_key = data.get("refresh_host_key") is True
+        enroll_host_key = data.get("enroll_host_key") is True
+        is_owner = server.user_id == request.user.id
+        trusted_host_keys = get_server_trusted_host_keys(server)
+        trusted_fingerprints = [
+            str(item.get("fingerprint_sha256") or "")
+            for item in trusted_host_keys
+            if item.get("fingerprint_sha256")
+        ]
+
+        if (refresh_host_key or enroll_host_key) and not is_owner:
+            return JsonResponse({"success": False, "error": "Only owner can enroll trusted SSH host key"}, status=403)
+
+        if enroll_host_key:
+            expected_fingerprint = str(data.get("expected_host_key_fingerprint") or "").strip()
+            try:
+                enrolled_record = async_to_sync(enroll_server_host_key)(
+                    server,
+                    expected_fingerprint=expected_fingerprint,
+                    allow_replace=data.get("replace_host_key") is True,
+                )
+            except SSHHostKeyFingerprintMismatch as exc:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "code": "host_key_fingerprint_mismatch",
+                        "error": str(exc),
+                        "host_key": {
+                            "fingerprint_sha256": exc.observed,
+                        },
+                        "trusted_fingerprints": trusted_fingerprints,
+                        "is_rotation": bool(trusted_host_keys),
+                    }
+                )
+            except (SSHHostKeyEnrollmentRequired, SSHHostKeyRotationRequired) as exc:
+                return JsonResponse({"success": False, "code": "host_key_enrollment_rejected", "error": str(exc)}, status=409)
+
+            log_user_activity(
+                user=request.user,
+                request=request,
+                category="servers",
+                action="server_host_key_rotated" if trusted_host_keys else "server_host_key_enrolled",
+                status=UserActivityLog.STATUS_SUCCESS,
+                description=f'SSH host key trusted for "{server.name}"',
+                entity_type="server",
+                entity_id=server.id,
+                entity_name=server.name,
+                metadata={
+                    "algorithm": enrolled_record.get("algorithm", ""),
+                    "fingerprint_sha256": enrolled_record.get("fingerprint_sha256", ""),
+                    "previous_fingerprints": trusted_fingerprints,
+                },
+            )
+            trusted_host_keys = [enrolled_record]
+        elif is_owner:
+            candidate = async_to_sync(probe_server_host_key)(server)
+            candidate_is_trusted = any(
+                item.get("public_key") == candidate.get("public_key") for item in trusted_host_keys
+            )
+            if refresh_host_key or not candidate_is_trusted:
+                is_rotation = bool(trusted_host_keys)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "code": (
+                            "host_key_rotation_confirmation_required"
+                            if is_rotation
+                            else "host_key_confirmation_required"
+                        ),
+                        "error": (
+                            "SSH host key changed. Verify the new fingerprint before replacing trust."
+                            if is_rotation
+                            else "Verify the SSH host key fingerprint before the first connection."
+                        ),
+                        "host_key": {
+                            "algorithm": candidate.get("algorithm", ""),
+                            "fingerprint_sha256": candidate.get("fingerprint_sha256", ""),
+                        },
+                        "trusted_fingerprints": trusted_fingerprints,
+                        "is_rotation": is_rotation,
+                    }
+                )
+        elif not trusted_host_keys:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "code": "host_key_owner_enrollment_required",
+                    "error": "Server owner must verify and enroll the SSH host key before shared connections.",
+                },
+                status=409,
+            )
         try:
             password = _resolve_server_secret(server, request, data)
         except ValueError as e:
@@ -54,7 +150,6 @@ def server_test_connection(request, server_id):
                     port=server.port,
                     network_config=server.network_config or {},
                     server=server,
-                    refresh_host_key=refresh_host_key,
                 )
                 await ssh_manager.disconnect(conn_id)
                 return {"success": True, "message": "Connection successful"}

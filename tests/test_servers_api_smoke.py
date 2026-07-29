@@ -1,5 +1,6 @@
 import os
 
+import asyncssh
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client, override_settings
@@ -210,12 +211,28 @@ def test_server_test_and_execute_endpoints_use_mocked_ssh(monkeypatch):
     client = Client()
     client.force_login(user)
     server = _create_server(user, name="ssh-node", server_type="ssh", port=22)
+    private_host_key = asyncssh.generate_private_key("ssh-ed25519")
+    public_host_key = private_host_key.export_public_key("openssh")
+    if isinstance(public_host_key, bytes):
+        public_host_key = public_host_key.decode("utf-8")
+    parsed_host_key = asyncssh.import_public_key(public_host_key)
+    trusted_host_key = {
+        "public_key": public_host_key.strip(),
+        "algorithm": parsed_host_key.get_algorithm(),
+        "fingerprint_sha256": parsed_host_key.get_fingerprint("sha256"),
+        "trusted_at": "2026-07-29T00:00:00+00:00",
+    }
+    server.trusted_host_keys = [trusted_host_key]
+    server.save(update_fields=["trusted_host_keys"])
 
     async def fake_connect(*_args, **_kwargs):
         return "conn-1"
 
     async def fake_disconnect(_conn_id):
         return None
+
+    async def fake_probe(_server):
+        return dict(trusted_host_key)
 
     async def fake_execute(self, conn_id, command, allow_destructive=False, sudo_auth_mode=None, sudo_password=None):
         assert conn_id == "conn-1"
@@ -227,6 +244,7 @@ def test_server_test_and_execute_endpoints_use_mocked_ssh(monkeypatch):
 
     monkeypatch.setattr("servers.views.ssh_manager.connect", fake_connect)
     monkeypatch.setattr("servers.views.ssh_manager.disconnect", fake_disconnect)
+    monkeypatch.setattr("servers.views.server_ops.probe_server_host_key", fake_probe)
     monkeypatch.setattr("app.tools.ssh_tools.SSHExecuteTool.execute", fake_execute)
     monkeypatch.setattr("servers.views.ServerCommandHistory.objects.create", lambda *args, **kwargs: None)
     monkeypatch.setattr("servers.os_detect_service.schedule_os_detect_for_server_ids", lambda *_args, **_kwargs: None)

@@ -7,13 +7,14 @@ import {
   testServer,
   updateServer,
   type FrontendServer,
+  type TestServerResponse,
 } from "@/lib/api";
 import { localize } from "@/lib/i18n";
 import { notify } from "@/lib/notify";
 import { notifyWithUndo } from "@/lib/notify-undo";
 
 import { asPayload, initialForm } from "./serverForm";
-import type { ServerForm } from "./types";
+import type { ServerForm, SSHHostKeyEnrollmentTarget } from "./types";
 import { validateServerForm } from "./serverValidation";
 
 type Translate = (key: string) => string;
@@ -38,6 +39,33 @@ export function useServerCrudController({
   const [form, setForm] = useState<ServerForm>(initialForm());
   const [saving, setSaving] = useState(false);
   const [testingConnection, setTestingConnection] = useState(false);
+  const [hostKeyEnrollmentTarget, setHostKeyEnrollmentTarget] = useState<SSHHostKeyEnrollmentTarget | null>(null);
+
+  const captureHostKeyConfirmation = useCallback((
+    serverId: number,
+    serverName: string,
+    result: TestServerResponse,
+  ) => {
+    if (
+      !result.host_key?.fingerprint_sha256
+      || ![
+        "host_key_confirmation_required",
+        "host_key_rotation_confirmation_required",
+        "host_key_fingerprint_mismatch",
+      ].includes(result.code || "")
+    ) {
+      return false;
+    }
+    setHostKeyEnrollmentTarget({
+      serverId,
+      serverName,
+      algorithm: result.host_key.algorithm || "SSH",
+      fingerprintSha256: result.host_key.fingerprint_sha256,
+      trustedFingerprints: result.trusted_fingerprints || [],
+      isRotation: result.code === "host_key_rotation_confirmation_required" || Boolean(result.is_rotation),
+    });
+    return true;
+  }, []);
 
   const formValidation = useMemo(
     () => validateServerForm(form, t, editingServer?.has_saved_sudo_password ?? false),
@@ -172,6 +200,7 @@ export function useServerCrudController({
     setTestingConnection(true);
     try {
       const result = await testServer(server.id, {});
+      if (captureHostKeyConfirmation(server.id, server.name, result)) return;
       if (result.success) {
         notify.success({ title: tr("srv.connection_success", { name: server.name }) });
       } else {
@@ -189,12 +218,13 @@ export function useServerCrudController({
     } finally {
       setTestingConnection(false);
     }
-  }, [reload, t, tr]);
+  }, [captureHostKeyConfirmation, reload, t, tr]);
 
   const testConnectionById = useCallback(async (serverId: number, name: string) => {
     setTestingConnection(true);
     try {
       const result = await testServer(serverId, {});
+      if (captureHostKeyConfirmation(serverId, name, result)) return;
       if (result.success) {
         notify.success({ title: tr("srv.connection_success", { name }) });
       } else {
@@ -212,7 +242,42 @@ export function useServerCrudController({
     } finally {
       setTestingConnection(false);
     }
-  }, [reload, t, tr]);
+  }, [captureHostKeyConfirmation, reload, t, tr]);
+
+  const closeHostKeyEnrollment = useCallback(() => {
+    if (!testingConnection) setHostKeyEnrollmentTarget(null);
+  }, [testingConnection]);
+
+  const confirmHostKeyEnrollment = useCallback(async (fingerprint: string) => {
+    const target = hostKeyEnrollmentTarget;
+    if (!target || fingerprint !== target.fingerprintSha256) return;
+    setTestingConnection(true);
+    try {
+      const result = await testServer(target.serverId, {
+        enroll_host_key: true,
+        expected_host_key_fingerprint: fingerprint,
+        replace_host_key: target.isRotation,
+      });
+      if (captureHostKeyConfirmation(target.serverId, target.serverName, result)) return;
+      if (result.success) {
+        setHostKeyEnrollmentTarget(null);
+        notify.success({ title: tr("srv.connection_success", { name: target.serverName }) });
+        await reload();
+      } else {
+        notify.error({
+          title: t("srv.connection_failed_title"),
+          description: tr("srv.connection_failed", { error: result.error || t("srv.unknown_error") }),
+        });
+      }
+    } catch (error) {
+      notify.error({
+        title: t("srv.connection_failed_title"),
+        description: error instanceof Error ? error.message : t("srv.unknown_error"),
+      });
+    } finally {
+      setTestingConnection(false);
+    }
+  }, [captureHostKeyConfirmation, hostKeyEnrollmentTarget, reload, t, tr]);
 
   const saveAndTestServer = useCallback(async () => {
     const serverName = form.name.trim() || editingServer?.name || t("srv.create_server");
@@ -223,12 +288,15 @@ export function useServerCrudController({
 
   return {
     clearServerDeleteTarget,
+    closeHostKeyEnrollment,
     confirmDeleteServer,
+    confirmHostKeyEnrollment,
     dialogOpen,
     editingServer,
     form,
     formValidation,
     handlePrivateKeyFile,
+    hostKeyEnrollmentTarget,
     openCreate,
     openEdit,
     requestDeleteServer,

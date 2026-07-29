@@ -432,7 +432,7 @@ def test_isolated_worker_fails_closed_when_runtime_digest_changed(monkeypatch):
 
 
 def test_inventory_aliases_include_server_ids_and_trusted_keys_are_enforced(tmp_path, monkeypatch):
-    from servers.services import ansible_setup
+    from servers.services import ansible_host_keys, ansible_setup
     from servers.services.playbook_parser import build_inventory_ini
 
     servers = [
@@ -469,9 +469,9 @@ def test_inventory_aliases_include_server_ids_and_trusted_keys_are_enforced(tmp_
     monkeypatch.setattr(ansible_setup, "get_server_auth_secret", lambda *_a, **_k: "ssh-never-log")
     monkeypatch.setattr(ansible_setup, "get_server_sudo_secret", lambda *_a, **_k: "sudo-never-log")
     monkeypatch.setattr(
-        ansible_setup,
+        ansible_host_keys,
         "get_server_trusted_host_keys",
-        lambda server: ([{"public_key": "ssh-ed25519 AAAATEST trusted"}] if server.id == 11 else []),
+        lambda _server: [{"public_key": "ssh-ed25519 AAAATEST trusted"}],
     )
     runtime_secrets: list[str] = []
     inventory_path, _cleanup = ansible_setup._write_inventory(Path(tmp_path), servers, secret_collector=runtime_secrets)
@@ -480,9 +480,11 @@ def test_inventory_aliases_include_server_ids_and_trusted_keys_are_enforced(tmp_
     config = ansible_setup._build_ansible_cfg(Path(tmp_path)).read_text(encoding="utf-8")
 
     assert "wt_11_duplicate" in inventory and "StrictHostKeyChecking=yes" in inventory
-    assert "wt_12_duplicate" in inventory and "StrictHostKeyChecking=accept-new" in inventory
+    assert "wt_12_duplicate" in inventory and "StrictHostKeyChecking=yes" in inventory
     assert "10.0.0.11 ssh-ed25519 AAAATEST trusted" in known_hosts
     assert "[10.0.0.11]:22 ssh-ed25519 AAAATEST trusted" in known_hosts
+    assert "[10.0.0.12]:2222 ssh-ed25519 AAAATEST trusted" in known_hosts
+    assert "StrictHostKeyChecking=accept-new" not in inventory
     assert "host_key_checking = True" in config
     assert "StrictHostKeyChecking=no" not in config
     assert runtime_secrets == ["ssh-never-log", "sudo-never-log", "ssh-never-log", "sudo-never-log"]
