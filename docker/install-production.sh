@@ -40,7 +40,6 @@ The script will:
 
 Default stack services:
   postgres, redis, backend, frontend, nginx,
-  mcp-demo,
   scheduled-pipelines, scheduled-agents, monitor,
   ops-supervisor (agent execution + watchers + memory dreams),
   kubernetes-ops-sync, celery-worker
@@ -472,7 +471,6 @@ wait_for_stack() {
   echo "==> Waiting for core service health"
   wait_for_service postgres 180
   wait_for_service redis 120
-  wait_for_service mcp-demo 120
   wait_for_service backend 300
   wait_for_service frontend 240
   wait_for_service nginx 180
@@ -547,7 +545,7 @@ Open:
   http://127.0.0.1:${frontend_port}
 
 Core services:
-  postgres redis backend frontend nginx mcp-demo
+  postgres redis backend frontend nginx mcp-runner
 
 Background workers (agents / studio / monitoring):
   ops-supervisor          # full/multi agent execution + watchers + memory dreams
@@ -639,7 +637,7 @@ main() {
   local services=(
     postgres
     redis
-    mcp-demo
+    mcp-runner
     backend
     scheduled-pipelines
     scheduled-agents

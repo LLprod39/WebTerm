@@ -27,8 +27,6 @@ jobs:
             dockerfile: docker/frontend.Dockerfile
           - name: ansible
             dockerfile: docker/ansible-runner/Dockerfile
-          - name: mcp-demo
-            dockerfile: docker/demo-mcp.Dockerfile
           - name: mcp-runner
             dockerfile: docker/mcp-runner.Dockerfile
           - name: mars-agent
@@ -105,7 +103,6 @@ jobs:
               "backend": "WEBTERM_BACKEND_IMAGE",
               "frontend": "WEBTERM_FRONTEND_IMAGE",
               "ansible": "WEBTERM_ANSIBLE_IMAGE",
-              "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
           }
@@ -196,7 +193,7 @@ jobs:
           import json
           from pathlib import Path
 
-          names = ["backend", "frontend", "ansible", "mcp-demo", "mcp-runner", "mars-agent"]
+          names = ["backend", "frontend", "ansible", "mcp-runner", "mars-agent"]
           images = {}
           for name in names:
               images[name] = Path(f".ci-artifacts/release-images/release-image-{name}.txt").read_text().strip()
@@ -213,7 +210,6 @@ jobs:
               "backend": "WEBTERM_BACKEND_IMAGE",
               "frontend": "WEBTERM_FRONTEND_IMAGE",
               "ansible": "WEBTERM_ANSIBLE_IMAGE",
-              "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
           }

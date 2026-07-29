@@ -149,7 +149,6 @@ replacements = {
     "REDIS_BIND_HOST": "127.0.0.1",
     "REDIS_HOST_PORT": "26379",
     "MCP_BIND_HOST": "127.0.0.1",
-    "STUDIO_MCP_DEMO_PORT": "28765",
 }
 lines = path.read_text(encoding="utf-8").splitlines()
 seen = set()

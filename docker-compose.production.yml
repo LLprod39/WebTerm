@@ -8,11 +8,11 @@ x-proxy-env: &proxy-env
   http_proxy: ${http_proxy:-}
   https_proxy: ${https_proxy:-}
   ftp_proxy: ${ftp_proxy:-}
-  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
   FTP_PROXY: ${FTP_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
 
 x-json-logging: &json-logging
   driver: json-file
@@ -27,11 +27,11 @@ x-backend-build: &backend-build
     http_proxy: ${http_proxy:-}
     https_proxy: ${https_proxy:-}
     ftp_proxy: ${ftp_proxy:-}
-    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
     HTTP_PROXY: ${HTTP_PROXY:-}
     HTTPS_PROXY: ${HTTPS_PROXY:-}
     FTP_PROXY: ${FTP_PROXY:-}
-    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
 
 x-backend-worker: &backend-worker
   image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
@@ -221,7 +221,6 @@ services:
       PIPELINE_NOTIFY_EMAIL: ${PIPELINE_NOTIFY_EMAIL:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
-      STUDIO_MCP_DEMO_URL: ${STUDIO_MCP_DEMO_URL:-http://mcp-demo:8765/mcp}
       # MCP Runner: when set, stdio MCP servers run isolated in the runner (not on
       # this host) and become available to non-admins. Set STUDIO_MCP_RUNNER_TOKEN
       # to a strong shared secret so only the backend can reach the runner.
@@ -247,8 +246,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      mcp-demo:
         condition: service_healthy
       mcp-runner:
         condition: service_healthy
@@ -414,11 +411,11 @@ services:
         http_proxy: ${http_proxy:-}
         https_proxy: ${https_proxy:-}
         ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
     container_name: mini-prod-frontend
     environment:
       NODE_ENV: production
@@ -466,37 +463,6 @@ services:
       retries: 10
     logging: *json-logging
 
-  mcp-demo:
-    image: ${WEBTERM_MCP_DEMO_IMAGE:-webterm-mcp-demo:latest}
-    build:
-      context: .
-      dockerfile: docker/demo-mcp.Dockerfile
-      args:
-        http_proxy: ${http_proxy:-}
-        https_proxy: ${https_proxy:-}
-        ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-        FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
-    container_name: mini-prod-mcp-demo
-    ports:
-      - "${MCP_BIND_HOST:-127.0.0.1}:${STUDIO_MCP_DEMO_PORT:-8765}:8765"
-    restart: unless-stopped
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=5).read()",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    logging: *json-logging
-
   mcp-runner:
     image: ${WEBTERM_MCP_RUNNER_IMAGE:-webterm-mcp-runner:latest}
     build:
@@ -506,11 +472,11 @@ services:
         http_proxy: ${http_proxy:-}
         https_proxy: ${https_proxy:-}
         ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
         HTTP_PROXY: ${HTTP_PROXY:-}
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
     container_name: mini-prod-mcp-runner
     environment:
       <<: *proxy-env
