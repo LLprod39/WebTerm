@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 from asgiref.sync import async_to_sync, sync_to_async
+from django.contrib.auth.models import User
 
-from studio.models import PipelineRun
+from studio.models import ApprovalRequest, PipelineRun
 from studio.pipeline_executor import PipelineExecutor, _poll_telegram_approval_decision
 from tests.studio_node_executor_harness import FakeHttpResponse, disable_activity_logging, make_run
 
@@ -17,6 +20,7 @@ def _disable_activity_logging(monkeypatch):
 
 def test_human_approval_node_returns_approved_decision(monkeypatch):
     run = make_run("approval-node-user")
+    User.objects.create_user(username="approval-node-approver", email="ops@example.com", password="x")
     node = {
         "id": "approval",
         "type": "logic/human_approval",
@@ -36,12 +40,10 @@ def test_human_approval_node_returns_approved_decision(monkeypatch):
 
     async def fake_sleep(seconds: float) -> None:
         def _approve() -> None:
-            fresh_run = PipelineRun.objects.get(pk=run.pk)
-            node_state = dict(fresh_run.node_states.get("approval", {}))
-            node_state["approval_decision"] = "approved"
-            node_state["approval_response"] = "Ship it"
-            fresh_run.node_states["approval"] = node_state
-            fresh_run.save(update_fields=["node_states"])
+            ApprovalRequest.objects.filter(run=run, node_id="approval").update(
+                status=ApprovalRequest.STATUS_APPROVED,
+                response_text="Ship it",
+            )
 
         await sync_to_async(_approve, thread_sensitive=True)()
 
@@ -56,8 +58,9 @@ def test_human_approval_node_returns_approved_decision(monkeypatch):
     assert "Ship it" in result["output"]
 
 
-def test_human_approval_node_sends_telegram_callback_buttons(monkeypatch):
+def test_human_approval_node_sends_telegram_confirmation_link(monkeypatch):
     run = make_run("approval-telegram-user")
+    User.objects.create_user(username="approval-telegram-approver", password="x", is_staff=True)
     node = {
         "id": "approval_gate",
         "type": "logic/human_approval",
@@ -78,18 +81,20 @@ def test_human_approval_node_sends_telegram_callback_buttons(monkeypatch):
         captured["data"] = tg_node["data"]
         return {"status": "completed", "output": "telegram sent"}
 
-    async def fake_poll(*_args, **_kwargs):
-        return {"decision": "approved", "response_text": "Подтверждено из Telegram"}
-
     async def fake_sleep(_seconds: float) -> None:
-        return None
+        await sync_to_async(
+            lambda: ApprovalRequest.objects.filter(run=run, node_id="approval_gate").update(
+                status=ApprovalRequest.STATUS_APPROVED,
+                response_text="Подтверждено из Telegram",
+            ),
+            thread_sensitive=True,
+        )()
 
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
 
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_approval_decision", fake_poll)
     monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
     monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
@@ -104,14 +109,23 @@ def test_human_approval_node_sends_telegram_callback_buttons(monkeypatch):
     assert "Подтверждено из Telegram" in result["output"]
     reply_markup = captured["data"]["reply_markup"]
     assert captured["data"]["parse_mode"] == ""
-    assert reply_markup["inline_keyboard"][0][0]["text"] == "✅ Одобрить"
-    assert reply_markup["inline_keyboard"][0][0]["callback_data"].startswith("approval:approved:")
-    assert reply_markup["inline_keyboard"][0][1]["text"] == "❌ Отклонить"
-    assert reply_markup["inline_keyboard"][0][1]["callback_data"].startswith("approval:rejected:")
+    assert reply_markup["inline_keyboard"][0][0]["text"] == "Review approval request"
+    assert reply_markup["inline_keyboard"][0][0]["url"].startswith(
+        f"http://localhost:9000/api/studio/runs/{run.id}/approve/approval_gate/?token="
+    )
+    assert "callback_data" not in reply_markup["inline_keyboard"][0][0]
+    raw_token = parse_qs(urlparse(reply_markup["inline_keyboard"][0][0]["url"]).query)["token"][0]
+    approval = ApprovalRequest.objects.get(run=run, node_id="approval_gate")
+    assert approval.token_matches(raw_token)
+    assert raw_token != approval.token_digest
+    run.refresh_from_db()
+    assert "approval_token" not in run.node_states["approval_gate"]
+    assert "approve_url" not in run.node_states["approval_gate"]
 
 
 def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blank(monkeypatch):
     run = make_run("approval-global-telegram-user")
+    User.objects.create_user(username="approval-global-telegram-approver", password="x", is_staff=True)
     node = {
         "id": "approval_gate",
         "type": "logic/human_approval",
@@ -129,11 +143,14 @@ def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blan
         captured["data"] = tg_node["data"]
         return {"status": "completed", "output": "telegram sent"}
 
-    async def fake_poll(*_args, **_kwargs):
-        return {"decision": "approved", "response_text": "Подтверждено через глобальные настройки"}
-
     async def fake_sleep(_seconds: float) -> None:
-        return None
+        await sync_to_async(
+            lambda: ApprovalRequest.objects.filter(run=run, node_id="approval_gate").update(
+                status=ApprovalRequest.STATUS_APPROVED,
+                response_text="Подтверждено через глобальные настройки",
+            ),
+            thread_sensitive=True,
+        )()
 
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
@@ -142,7 +159,6 @@ def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blan
     monkeypatch.setattr("studio.pipeline_interactions._global_email_defaults", lambda: ("", "", "", "", ""))
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_email", fake_output_email)
     monkeypatch.setattr("studio.pipeline_interactions._execute_output_telegram", fake_output_telegram)
-    monkeypatch.setattr("studio.pipeline_interactions._poll_telegram_approval_decision", fake_poll)
     monkeypatch.setattr("studio.pipeline_interactions._send_telegram_message", fake_send_telegram_message)
     monkeypatch.setattr("studio.pipeline_interactions.asyncio.sleep", fake_sleep)
 
@@ -156,6 +172,25 @@ def test_human_approval_node_uses_global_telegram_defaults_when_node_fields_blan
     assert result["decision"] == "approved"
     assert captured["data"]["bot_token"] == "global-bot"
     assert captured["data"]["chat_id"] == "global-chat"
+
+
+def test_human_approval_node_fails_closed_without_distinct_approver(monkeypatch):
+    run = make_run("approval-missing-approver-user")
+    node = {
+        "id": "approval_gate",
+        "type": "logic/human_approval",
+        "data": {
+            "timeout_minutes": 1,
+            "to_email": "external-only@example.com",
+            "base_url": "http://localhost:9000",
+        },
+    }
+
+    result = async_to_sync(PipelineExecutor(run)._execute_node)(node, {}, {})
+
+    assert result["status"] == "failed"
+    assert "distinct active approver" in result["error"]
+    assert not ApprovalRequest.objects.filter(run=run).exists()
 
 
 def test_poll_telegram_approval_decision_consumes_callback_updates(monkeypatch):

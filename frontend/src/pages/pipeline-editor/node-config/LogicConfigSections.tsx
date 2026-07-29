@@ -125,24 +125,21 @@ function HumanApprovalConfig({ data, lang, onSet, onSetMany }: SecretLogicProps)
           <Label className="text-xs">Кому (email)</Label>
           <Input value={(data.to_email as string) || ""} onChange={(event) => onSet("to_email", event.target.value)} placeholder="или из Studio → Notifications" className="h-8 text-xs" />
         </div>
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-yellow-500/20 bg-yellow-500/10 px-3 py-2">
-          <div className="min-w-0 space-y-1">
-            <Label className="text-xs">{localize(lang, "Ручная ссылка без доставки", "Manual link only")}</Label>
-            <p className="text-xs leading-relaxed text-yellow-100/80">
-              {localize(
-                lang,
-                "Email/Telegram не отправляются; запуск будет ждать решение по approve/reject ссылкам.",
-                "Email/Telegram are not sent; the run waits for a decision through approve/reject links.",
-              )}
-            </p>
-          </div>
-          <Switch
-            aria-label={localize(lang, "Ручная ссылка без доставки", "Manual link only")}
-            data-testid="manual-link-only-switch"
-            checked={Boolean(data.manual_link_only)}
-            onCheckedChange={(checked) => onSet("manual_link_only", checked)}
-            className="mt-0.5"
+        <div className="space-y-1.5">
+          <Label className="text-xs">{localize(lang, "Назначенный согласующий", "Assigned approver")}</Label>
+          <Input
+            value={(data.approver_username as string) || ""}
+            onChange={(event) => onSet("approver_username", event.target.value)}
+            placeholder={localize(lang, "Имя пользователя, отличное от владельца", "Username distinct from the owner")}
+            className="h-8 text-xs"
           />
+          <FieldHint>
+            {localize(
+              lang,
+              "Только этот активный пользователь сможет принять решение после входа. Владелец и инициатор запуска запрещены.",
+              "Only this active signed-in user can decide. The pipeline owner and run requester are not allowed.",
+            )}
+          </FieldHint>
         </div>
         <TextTemplateField label="Тема письма (шаблон)" value={(data.email_subject as string) || ""} placeholder="Пусто = тема по умолчанию" hint={<>Переменные: {"{pipeline_name}"}, {"{run_id}"}</>} onChange={(value) => onSet("email_subject", value)} />
         <TextTemplateField label="Текст письма (шаблон)" value={(data.email_body as string) || ""} placeholder="Пусто = текст по умолчанию. Переменные ниже." hint={<>{ "{approve_url}"}, {"{reject_url}"}, {"{all_outputs}"}, {"{timeout_minutes}"}</>} rows={8} textarea onChange={(value) => onSet("email_body", value)} />

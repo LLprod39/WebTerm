@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     AgentConfig,
+    ApprovalRequest,
     MCPServerPool,
     Pipeline,
     PipelineDraftRevision,
@@ -10,6 +11,14 @@ from .models import (
     PipelineTemplate,
     PipelineTrigger,
 )
+
+
+@admin.register(ApprovalRequest)
+class ApprovalRequestAdmin(admin.ModelAdmin):
+    list_display = ["run", "node_id", "approver", "status", "expires_at", "decided_at"]
+    list_filter = ["status", "expires_at"]
+    search_fields = ["run__pipeline__name", "node_id", "approver__username"]
+    readonly_fields = ["token_digest", "created_at", "decided_at"]
 
 
 @admin.register(MCPServerPool)

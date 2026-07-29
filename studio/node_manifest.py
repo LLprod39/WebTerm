@@ -237,6 +237,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
             {
                 "message": _str(description="Approval request template."),
                 "manual_link_only": _bool(default=False),
+                "approver_username": _str(description="Distinct active platform user assigned to decide."),
                 "timeout_minutes": _int(minimum=1, maximum=4320, default=60),
                 "email_subject": _str(description="Optional email subject template."),
                 "tg_chat_id": _str(description="Optional Telegram chat id override."),

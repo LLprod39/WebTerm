@@ -5,6 +5,7 @@ from django.db import models, transaction
 
 from app.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
 
+from .approval_models import ApprovalRequest  # noqa: F401
 from .model_serializers import (
     agent_config_to_dict,
     pipeline_get_last_run,

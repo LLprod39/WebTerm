@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
+from django.utils import timezone
 
-from studio.models import Pipeline, PipelineRun
+from studio.assistant_action_registry import register_assistant_actions
+from studio.models import ApprovalRequest, Pipeline, PipelineRun
 from studio.pipeline_run_state import update_node_state
 from tests.studio_pipeline_v2_harness import (
     build_run,
@@ -24,6 +28,11 @@ def _disable_activity_logging(monkeypatch):
 @pytest.mark.django_db
 def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
     user = User.objects.create_user(username="approval-link-user", password="x")
+    approver = User.objects.create_user(
+        username="approval-link-approver",
+        email="approver@example.com",
+        password="x",
+    )
     pipeline = Pipeline.objects.create(
         name="Approval link flow",
         owner=user,
@@ -46,10 +55,19 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
     run.node_states = {
         "approval_gate": {
             "status": "awaiting_approval",
-            "approval_token": "tok-123",
         }
     }
     run.save(update_fields=["node_states"])
+    raw_token = "tok-123"
+    approval = ApprovalRequest.objects.create(
+        run=run,
+        node_id="approval_gate",
+        token_digest=ApprovalRequest.digest_token(raw_token),
+        approver=approver,
+        requested_by=user,
+        expires_at=timezone.now() + timedelta(minutes=10),
+    )
+    assert approval.token_digest != raw_token
 
     captured: dict[str, object] = {}
 
@@ -65,8 +83,9 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
 
     monkeypatch.setattr("studio.views.httpx.post", fake_post)
     client = Client(enforce_csrf_checks=True)
+    client.force_login(approver)
 
-    url = f"/api/studio/runs/{run.id}/approve/approvalgate/?token=tok-123&decision=approved"
+    url = f"/api/studio/runs/{run.id}/approve/approvalgate/?token={raw_token}&decision=approved"
     confirmation = client.get(url)
 
     assert confirmation.status_code == 200
@@ -78,9 +97,20 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
     assert "approval_decision" not in run.node_states["approval_gate"]
 
     csrf_token = client.cookies["csrftoken"].value
-    rejected_without_csrf = Client(enforce_csrf_checks=True).post(
+    owner_client = Client(enforce_csrf_checks=True)
+    owner_client.force_login(user)
+    assert owner_client.get(url).status_code == 403
+
+    unrelated = User.objects.create_user(username="approval-unrelated-user", password="x")
+    unrelated_client = Client(enforce_csrf_checks=True)
+    unrelated_client.force_login(unrelated)
+    assert unrelated_client.get(url).status_code == 403
+
+    rejected_without_csrf_client = Client(enforce_csrf_checks=True)
+    rejected_without_csrf_client.force_login(approver)
+    rejected_without_csrf = rejected_without_csrf_client.post(
         url.split("?", 1)[0],
-        data={"token": "tok-123", "decision": "approved"},
+        data={"token": raw_token, "decision": "approved"},
     )
     assert rejected_without_csrf.status_code == 403
 
@@ -88,7 +118,7 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
         url.split("?", 1)[0],
         data={
             "csrfmiddlewaretoken": csrf_token,
-            "token": "tok-123",
+            "token": raw_token,
             "decision": "approved",
             "response_text": "Reviewed",
         },
@@ -99,8 +129,63 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
     run.refresh_from_db()
     assert run.node_states["approval_gate"]["approval_decision"] == "approved"
     assert run.node_states["approval_gate"]["approval_response"] == "Reviewed"
+    approval.refresh_from_db()
+    assert approval.status == ApprovalRequest.STATUS_APPROVED
+    assert approval.decided_by == approver
+    assert approval.response_text == "Reviewed"
     assert captured["url"] == "https://api.telegram.org/botbot-123/sendMessage"
     assert "Решение записано" in str(captured["json"]["text"])
+
+    replay = client.post(
+        url.split("?", 1)[0],
+        data={
+            "csrfmiddlewaretoken": csrf_token,
+            "token": raw_token,
+            "decision": "rejected",
+        },
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
+    assert replay.status_code == 200
+    approval.refresh_from_db()
+    assert approval.status == ApprovalRequest.STATUS_APPROVED
+
+
+@pytest.mark.django_db
+def test_expired_approval_request_fails_closed():
+    owner = User.objects.create_user(username="approval-expired-owner", password="x")
+    approver = User.objects.create_user(username="approval-expired-approver", password="x")
+    pipeline = Pipeline.objects.create(name="Expired approval", owner=owner, nodes=[], edges=[])
+    run = build_run(pipeline, entry_node_id="")
+    run.node_states = {"approval": {"status": "awaiting_approval"}}
+    run.save(update_fields=["node_states"])
+    raw_token = "expired-approval-token"
+    approval = ApprovalRequest.objects.create(
+        run=run,
+        node_id="approval",
+        token_digest=ApprovalRequest.digest_token(raw_token),
+        approver=approver,
+        requested_by=owner,
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    client = Client()
+    client.force_login(approver)
+
+    response = client.get(f"/api/studio/runs/{run.id}/approve/approval/?token={raw_token}")
+
+    assert response.status_code == 403
+    approval.refresh_from_db()
+    assert approval.status == ApprovalRequest.STATUS_EXPIRED
+
+
+def test_studio_assistant_cannot_bypass_assigned_approval(monkeypatch):
+    registered_actions = []
+    monkeypatch.setattr("studio.assistant_action_registry.register_action", registered_actions.append)
+    monkeypatch.setattr("studio.assistant_action_registry.register_runtime_context_provider", lambda *_args: None)
+
+    register_assistant_actions()
+
+    action_types = {spec.action_type for spec in registered_actions}
+    assert "studio.run.approve_node" not in action_types
 
 
 @pytest.mark.django_db
