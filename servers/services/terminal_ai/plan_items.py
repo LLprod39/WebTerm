@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.shell_commands import is_read_only_command
 from servers.memory_heuristics import normalize_memory_command_text
 from servers.services import terminal_input
 from servers.services.terminal_ai.policy import decide_command_policy
@@ -145,6 +146,7 @@ def build_plan_item(
     allowlist_patterns: list[str] | None = None,
     confirm_dangerous_commands: bool = True,
     exec_mode: str | None = None,
+    read_only: bool = False,
 ) -> dict[str, Any]:
     clean_cmd = str(command or "").strip()
     verdict = decide_command_policy(
@@ -155,6 +157,16 @@ def build_plan_item(
         confirm_dangerous_commands=confirm_dangerous_commands,
     )
     blocked = not verdict.allowed
+    reason = verdict.reason
+    requires_confirm = verdict.requires_confirm
+    risk_categories = list(verdict.risk_categories)
+    risk_reasons = list(verdict.risk_reasons)
+    if not blocked and read_only and not is_read_only_command(clean_cmd):
+        blocked = True
+        reason = "server_read_only"
+        requires_confirm = False
+        risk_categories.append("server_read_only")
+        risk_reasons.append("Server AI access is read-only; changing or unclassified commands are disabled.")
     resolved_exec_mode = (exec_mode or verdict.exec_mode or "pty").strip().lower()
     if resolved_exec_mode not in {"pty", "direct"}:
         resolved_exec_mode = verdict.exec_mode
@@ -162,12 +174,12 @@ def build_plan_item(
         "id": int(item_id),
         "cmd": clean_cmd,
         "why": str(why or "").strip(),
-        "requires_confirm": verdict.requires_confirm,
+        "requires_confirm": requires_confirm,
         "blocked": blocked,
-        "reason": verdict.reason,
+        "reason": reason,
         "status": "blocked" if blocked else "pending",
         "streaming": terminal_input.is_streaming_command(clean_cmd),
-        "risk_categories": list(verdict.risk_categories),
-        "risk_reasons": list(verdict.risk_reasons),
+        "risk_categories": risk_categories,
+        "risk_reasons": risk_reasons,
         "exec_mode": resolved_exec_mode,
     }

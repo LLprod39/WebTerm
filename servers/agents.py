@@ -14,6 +14,7 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
+from app.shell_commands import is_read_only_command
 from app.sudo_policy import evaluate_sudo_command, prepare_sudo_command
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
@@ -137,6 +138,17 @@ async def _run_agent_body(
     try:
         async with asyncssh.connect(**kwargs) as conn:
             for cmd in commands:
+                if getattr(server, "ai_read_only", False) and not is_read_only_command(cmd):
+                    outputs.append(
+                        {
+                            "cmd": cmd,
+                            "stdout": "",
+                            "stderr": "BLOCKED: server allows read-only AI commands only",
+                            "exit_code": -1,
+                            "duration_ms": 0,
+                        }
+                    )
+                    continue
                 if is_dangerous_command(cmd):
                     outputs.append(
                         {

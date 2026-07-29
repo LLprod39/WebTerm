@@ -17,7 +17,7 @@ export function initialForm(): ServerForm {
     notes: "",
     group_id: null,
     is_active: true,
-    ai_read_only: false,
+    ai_read_only: true,
   };
 }
 

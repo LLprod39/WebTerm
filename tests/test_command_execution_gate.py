@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
 from app.command_execution_gate import evaluate_command_execution_gate
 from servers.agent_tools import tool_ssh_execute
+from servers.operator_mutate_exec import _execute_on_server
 
 
 @pytest.mark.parametrize(
@@ -41,6 +43,7 @@ def test_bypass_corpus_never_auto_runs(command):
         "kubectl get pods -A",
         "systemctl status nginx",
         "git status",
+        "echo INC-55",
     ],
 )
 def test_builtin_read_only_allowlist_auto_runs(command):
@@ -58,6 +61,7 @@ class _AgentSessionStub:
         self.reply = reply
         self.executed: list[str] = []
         self.execution_approval_granted = False
+        self.allowed_servers = {1: SimpleNamespace(ai_read_only=False)}
 
     def resolve_server(self, _server: str) -> int:
         return 1
@@ -105,3 +109,25 @@ async def test_agent_tool_accepts_preapproved_pipeline_scope_without_second_prom
 
     assert result.success is True
     assert session.executed == ["mv /tmp/a /tmp/b"]
+
+
+@pytest.mark.asyncio
+async def test_agent_tool_read_only_boundary_cannot_be_overridden_by_preapproval():
+    session = _AgentSessionStub(None)
+    session.event_callback = None
+    session.execution_approval_granted = True
+    session.allowed_servers[1].ai_read_only = True
+
+    result = await tool_ssh_execute(session, server="prod", command="mv /tmp/a /tmp/b")
+
+    assert result.success is False
+    assert session.executed == []
+
+
+def test_operator_read_only_boundary_rejects_denylist_bypass():
+    server = SimpleNamespace(id=1, name="prod", ai_read_only=True)
+
+    result = _execute_on_server(None, server, "R=mv; $R /etc /tmp/gone", allow_destructive=True)
+
+    assert result["blocked"] is True
+    assert "ai_read_only" in result["error"]
