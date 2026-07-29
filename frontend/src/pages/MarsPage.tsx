@@ -34,7 +34,7 @@ export default function MarsPage() {
   const [session, setSession] = useState<MarsSession | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [planDraft, setPlanDraft] = useState("");
-  const [testCommand, setTestCommand] = useState("");
+  const [verificationProfile, setVerificationProfile] = useState("none");
   const [latestRunId, setLatestRunId] = useState<number | null>(null);
   const [activeQuestionId, setActiveQuestionId] = useState("");
   const [activeStep, setActiveStep] = useState<WizardStepId>("brief");
@@ -132,7 +132,11 @@ export default function MarsPage() {
   });
 
   const runSession = useMutation({
-    mutationFn: () => marsApi.runSession(Number(session?.id), { allow_dirty: false, test_command: testCommand }),
+    mutationFn: () =>
+      marsApi.runSession(Number(session?.id), {
+        allow_dirty: false,
+        verification_profile: verificationProfile,
+      }),
     onSuccess: ({ run }) => {
       setLatestRunId(run.id);
       void queryClient.invalidateQueries({ queryKey: ["mars", "projects"] });
@@ -343,10 +347,10 @@ export default function MarsPage() {
           latestRun={latestRun}
           latestRunId={latestRunId}
           sessionStatus={session?.status}
-          testCommand={testCommand}
+          verificationProfile={verificationProfile}
           canRun={canRun}
           runPending={runSession.isPending}
-          onTestCommandChange={setTestCommand}
+          onVerificationProfileChange={setVerificationProfile}
           onRun={() => runSession.mutate()}
           onOpenRun={(runId) => navigate(`/mars/runs/${runId}`)}
         />

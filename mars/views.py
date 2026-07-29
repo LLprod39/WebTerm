@@ -263,6 +263,7 @@ def api_session_run(request, session_id: int):
         run = create_run_for_session(
             session,
             allow_dirty=bool(payload.get("allow_dirty")),
+            verification_profile=str(payload.get("verification_profile") or ""),
             test_command=str(payload.get("test_command") or ""),
         )
     except MarsPolicyError as exc:

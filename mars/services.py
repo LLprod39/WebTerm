@@ -29,6 +29,7 @@ from mars.runtime_cli import (
     subprocess_env_for_cli,
 )
 from mars.skill_catalog import recommend_task_skills
+from mars.verification import normalize_verification_profile
 
 PERSONAL_WORKSPACE_NAME = "Personal workspace"
 
@@ -335,13 +336,20 @@ def claim_next_run() -> MarsRun | None:
         return run
 
 
-def create_run_for_session(session: MarsSession, *, allow_dirty: bool, test_command: str = "") -> MarsRun:
+def create_run_for_session(
+    session: MarsSession,
+    *,
+    allow_dirty: bool,
+    verification_profile: str = "",
+    test_command: str = "",
+) -> MarsRun:
     require_personal_workspace(session.user, session.workspace)
     dirty_status = git_status(session.workspace.root_path)
     if dirty_status and not allow_dirty:
         raise MarsPolicyError("Workspace has uncommitted changes. Confirm dirty worktree before running MARS.")
+    profile = normalize_verification_profile(verification_profile or test_command)
     runtime_control = merge_runtime_orchestration(
-        {"stop_requested": False, "test_command": test_command[:500]},
+        {"stop_requested": False, "verification_profile": profile},
         selected_skills=session.selected_skill_slugs,
     )
     run = MarsRun.objects.create(

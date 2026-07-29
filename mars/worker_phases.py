@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
-import shlex
 import subprocess
 import threading
 import time
@@ -23,6 +22,7 @@ from mars.services import (
     record_event,
     subprocess_env_for_cli,
 )
+from mars.verification import verification_command
 
 
 def _command_prefix(value: Any, default: str) -> list[str]:
@@ -290,6 +290,8 @@ async def _run_codex_phase(
             inner_command=codex_inner_cmd,
             extra_mounts=[(run_dir, "/mars-run", "rw")],
             include_codex_home=True,
+            allow_network=True,
+            include_provider_credentials=True,
         )
         if docker_runtime
         else codex_inner_cmd
@@ -334,6 +336,8 @@ async def _run_gemini_phase(
             workspace_mode="ro",
             inner_command=gemini_inner_cmd,
             include_gemini_home=True,
+            allow_network=True,
+            include_provider_credentials=True,
         )
         if docker_runtime
         else gemini_inner_cmd
@@ -383,14 +387,14 @@ async def _run_verification(
     *,
     workspace_root: Path,
     docker_runtime: bool,
-    test_command: str,
+    verification_profile: str,
     event_prefix: str,
 ) -> tuple[int | None, str]:
-    if not test_command:
+    test_parts = verification_command(verification_profile)
+    if not test_parts:
         await sync_to_async(record_event)(run, "tests_skipped", "No verification command configured")
         return None, ""
 
-    test_parts = shlex.split(test_command, posix=False)
     test_cmd = (
         build_mars_agent_docker_command(
             phase=f"{event_prefix}-{run.id}",

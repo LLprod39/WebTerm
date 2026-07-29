@@ -139,6 +139,7 @@ def test_mars_worker_routes_failed_verification_to_codex_repair(tmp_path):
         MARS_CODEX_REPAIR_TIMEOUT_SECONDS=20,
         MARS_GEMINI_TIMEOUT_SECONDS=20,
         MARS_TEST_TIMEOUT_SECONDS=20,
+        MARS_VERIFICATION_PROFILES={"repair-test": [sys.executable, str(verify_script)]},
         MEDIA_ROOT=tmp_path / "media",
     ):
         workspace = ensure_personal_workspace(user)
@@ -153,7 +154,7 @@ def test_mars_worker_routes_failed_verification_to_codex_repair(tmp_path):
             user=user,
             workspace=workspace,
             session=session,
-            runtime_control={"stop_requested": False, "test_command": f"{sys.executable} {verify_script}"},
+            runtime_control={"stop_requested": False, "verification_profile": "repair-test"},
         )
         asyncio.run(execute_mars_run(run.id))
 

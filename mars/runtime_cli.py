@@ -115,8 +115,12 @@ def subprocess_env_for_cli(command: list[str]) -> dict[str, str]:
 
 
 def mars_agent_uses_docker() -> bool:
-    runtime = str(getattr(settings, "MARS_AGENT_RUNTIME", "host") or "host").strip().lower()
-    return runtime in {"docker", "container", "containers"}
+    runtime = str(getattr(settings, "MARS_AGENT_RUNTIME", "docker") or "docker").strip().lower()
+    if runtime in {"docker", "container", "containers"}:
+        return True
+    if runtime == "host" and bool(getattr(settings, "MARS_ALLOW_UNSAFE_HOST_RUNTIME_FOR_TESTS", False)):
+        return False
+    raise MarsPolicyError("MARS requires the isolated Docker runtime; host execution is disabled.")
 
 
 def docker_workspace_path() -> str:
@@ -171,19 +175,12 @@ def docker_container_child_path(container_root: str, host_root: str | Path, host
     return str(PurePosixPath(container_root) / PurePosixPath(rel.as_posix()))
 
 
-def _docker_env_passthrough() -> list[str]:
-    names = [
-        "OPENAI_API_KEY",
-        "GEMINI_API_KEY",
-        "GOOGLE_API_KEY",
-        "GOOGLE_CLOUD_PROJECT",
-        "http_proxy",
-        "https_proxy",
-        "no_proxy",
-        "HTTP_PROXY",
-        "HTTPS_PROXY",
-        "NO_PROXY",
-    ]
+def _docker_env_passthrough(*, include_network_environment: bool, include_provider_credentials: bool) -> list[str]:
+    names = []
+    if include_network_environment:
+        names.extend(("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY"))
+    if include_provider_credentials:
+        names.extend(("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_CLOUD_PROJECT"))
     args: list[str] = []
     for name in names:
         if os.environ.get(name):
@@ -200,6 +197,8 @@ def build_mars_agent_docker_command(
     extra_mounts: list[tuple[str | Path, str, str]] | None = None,
     include_codex_home: bool = False,
     include_gemini_home: bool = False,
+    allow_network: bool = False,
+    include_provider_credentials: bool = False,
 ) -> list[str]:
     workspace = Path(workspace_root).expanduser().resolve(strict=False)
     docker_command = str(getattr(settings, "MARS_AGENT_DOCKER_COMMAND", "docker") or "docker")
@@ -215,7 +214,7 @@ def build_mars_agent_docker_command(
         "--workdir",
         docker_workspace_path(),
         "--network",
-        str(getattr(settings, "MARS_AGENT_DOCKER_NETWORK", "bridge") or "bridge"),
+        str(getattr(settings, "MARS_AGENT_DOCKER_NETWORK", "bridge") or "bridge") if allow_network else "none",
         "--cap-drop",
         "ALL",
         "--security-opt",
@@ -264,7 +263,12 @@ def build_mars_agent_docker_command(
         elif gemini_home.exists():
             command.extend(["-v", _docker_volume_arg(gemini_home, "/home/node/.gemini", "ro")])
 
-    command.extend(_docker_env_passthrough())
+    command.extend(
+        _docker_env_passthrough(
+            include_network_environment=allow_network,
+            include_provider_credentials=include_provider_credentials,
+        )
+    )
     command.append(image)
     command.extend(inner_command)
     return command

@@ -343,7 +343,7 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "MARS_GEMINI_TIMEOUT_SECONDS": env_int("MARS_GEMINI_TIMEOUT_SECONDS", 900),
         "MARS_TEST_TIMEOUT_SECONDS": env_int("MARS_TEST_TIMEOUT_SECONDS", 900),
         "MARS_INTERVIEW_CODEX_TIMEOUT_SECONDS": env_int("MARS_INTERVIEW_CODEX_TIMEOUT_SECONDS", 180),
-        "MARS_AGENT_RUNTIME": os.getenv("MARS_AGENT_RUNTIME", "host").strip().lower(),
+        "MARS_AGENT_RUNTIME": os.getenv("MARS_AGENT_RUNTIME", "docker").strip().lower(),
         "MARS_AGENT_DOCKER_COMMAND": os.getenv("MARS_AGENT_DOCKER_COMMAND", "docker"),
         "MARS_AGENT_DOCKER_IMAGE": os.getenv("MARS_AGENT_DOCKER_IMAGE", "webterm-mars-agent:latest"),
         "MARS_AGENT_DOCKER_NETWORK": os.getenv("MARS_AGENT_DOCKER_NETWORK", "bridge"),
