@@ -41,6 +41,38 @@ def test_isolated_docker_command_has_security_boundaries(tmp_path, monkeypatch):
     assert command.count("ansible-playbook") == 1
 
 
+def test_isolated_inventory_routes_loopback_through_docker_host(tmp_path, monkeypatch):
+    from servers.services import ansible_host_keys, ansible_setup
+
+    server = SimpleNamespace(
+        id=17,
+        name="local-target",
+        host="127.0.0.1",
+        port=22,
+        username="lunix",
+        auth_method="password",
+        key_path="",
+        group=None,
+    )
+    monkeypatch.setattr(ansible_setup, "get_server_auth_secret", lambda *_a, **_k: "")
+    monkeypatch.setattr(ansible_setup, "get_server_sudo_secret", lambda *_a, **_k: "")
+    monkeypatch.setattr(
+        ansible_host_keys,
+        "get_server_trusted_host_keys",
+        lambda _server: [{"public_key": "ssh-ed25519 AAAATEST trusted"}],
+    )
+
+    inventory_path, _cleanup = ansible_setup._write_inventory(
+        Path(tmp_path),
+        [server],
+        loopback_host_alias="host.docker.internal",
+    )
+
+    inventory = inventory_path.read_text(encoding="utf-8")
+    assert "ansible_host=host.docker.internal" in inventory
+    assert "ansible_host=127.0.0.1" not in inventory
+
+
 def test_named_volume_is_scoped_to_one_run(tmp_path, monkeypatch):
     root = tmp_path / "runtime"
     workdir = root / "run_123"

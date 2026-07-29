@@ -7,7 +7,6 @@ Re-exported from servers.services.ansible_engine for backward compatibility.
 from __future__ import annotations
 
 import contextlib
-import ipaddress
 import json
 import logging
 import os
@@ -20,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
-from servers.services.ansible_docker_runtime import isolated_execution_required
+from servers.services.ansible_docker_runtime import isolated_execution_required, route_loopback_to_docker_host
 from servers.services.ansible_host_keys import require_trusted_host_keys
 from servers.services.playbook_inventory_identity import (
     inventory_host_alias as _safe_host_name,
@@ -353,13 +352,7 @@ def _write_inventory(
     for server in servers:
         host_alias = _safe_host_name(getattr(server, "name", ""), int(server.id))
         host, port = parse_server_host_port(server)
-        normalized_host = host.strip("[]").lower()
-        try:
-            is_loopback = ipaddress.ip_address(normalized_host).is_loopback
-        except ValueError:
-            is_loopback = normalized_host == "localhost"
-        if loopback_host_alias and is_loopback:
-            host = loopback_host_alias
+        host = route_loopback_to_docker_host(host, loopback_host_alias)
         user = str(server.username or "root")
         trusted_host_keys = trusted_keys_by_server_id[int(server.id)]
         host_patterns = [f"[{host.strip('[]')}]:{port}"]

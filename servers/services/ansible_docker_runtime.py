@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
@@ -115,6 +116,17 @@ def docker_host_alias() -> str:
     if alias and not _HOST_ALIAS_RE.fullmatch(alias):
         raise AnsibleIsolationError("Ansible Docker host alias is invalid")
     return alias
+
+
+def route_loopback_to_docker_host(host: str, docker_host: str) -> str:
+    """Route loopback inventory targets through the Docker host gateway."""
+
+    normalized_host = host.strip("[]").lower()
+    try:
+        is_loopback = ipaddress.ip_address(normalized_host).is_loopback
+    except ValueError:
+        is_loopback = normalized_host == "localhost"
+    return docker_host if docker_host and is_loopback else host
 
 
 def create_ansible_workdir(runtime_identity: AnsibleRuntimeIdentity | None = None) -> Path:
