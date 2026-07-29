@@ -14,6 +14,16 @@ from dataclasses import dataclass
 
 _SHELLS = {"bash", "dash", "fish", "ksh", "sh", "zsh"}
 _INDIRECT_COMMANDS = {".", "eval", "exec", "source", "xargs"}
+_CODE_INTERPRETERS = {
+    "node",
+    "nodejs",
+    "perl",
+    "php",
+    "python",
+    "python2",
+    "python3",
+    "ruby",
+}
 _FIND_EXEC_OPTIONS = {"-exec", "-execdir", "-ok", "-okdir"}
 _ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 
@@ -62,6 +72,8 @@ def _has_indirect_execution(fragments: tuple[str, ...]) -> bool:
         executable = lowered[executable_index].rsplit("/", 1)[-1]
         remaining = lowered[executable_index + 1 :]
         if executable in _INDIRECT_COMMANDS:
+            return True
+        if executable in _CODE_INTERPRETERS and any(flag in remaining for flag in ("-c", "-e", "--eval")):
             return True
         if executable == "env":
             return True

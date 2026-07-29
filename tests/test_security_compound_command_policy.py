@@ -125,8 +125,9 @@ def test_agent_policy_preserves_constrained_read_only_variants(command):
 def test_terminal_allowlist_must_cover_every_executed_fragment(command):
     verdict = decide_command_policy(command, allowlist_patterns=["uptime"])
 
-    assert verdict.allowed is False
-    assert verdict.reason == "outside_allowlist"
+    assert verdict.allowed is True
+    assert verdict.requires_confirm is True
+    assert verdict.reason in {"outside_allowlist", "dangerous", "unclassifiable"}
 
 
 def test_terminal_allowlist_allows_each_explicit_read_fragment():
@@ -152,4 +153,5 @@ def test_terminal_regex_allowlist_requires_the_whole_fragment():
     denied = decide_command_policy("echo uptime -p", allowlist_patterns=[r"re:^uptime(?:\s+-p)?$"])
 
     assert allowed.allowed is True
-    assert denied.allowed is False
+    assert denied.allowed is True
+    assert denied.requires_confirm is True

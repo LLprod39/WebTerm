@@ -21,8 +21,8 @@ def _build_container_snapshot_command(container_name: str) -> str:
         "exit_code={{{{.State.ExitCode}}}} "
         "health={{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}n/a{{{{end}}}} "
         "started={{{{.State.StartedAt}}}} finished={{{{.State.FinishedAt}}}}' "
-        f"{quoted} 2>&1 || true; "
-        f"docker logs --tail 40 {quoted} 2>&1 || true"
+        f"{quoted} || true; "
+        f"docker logs --tail 40 {quoted} || true"
     )
 
 

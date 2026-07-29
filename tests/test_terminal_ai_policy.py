@@ -57,7 +57,7 @@ class TestDecideCommandPolicy:
         assert verdict.requires_confirm is False
         assert verdict.reason == ""
 
-    def test_safe_command_auto_runs_in_agent_mode(self):
+    def test_builtin_read_only_command_auto_runs_in_agent_mode(self):
         verdict = decide_command_policy("ls -la", chat_mode="agent")
         assert verdict.allowed and not verdict.requires_confirm
         assert verdict.reason == ""
@@ -71,12 +71,11 @@ class TestDecideCommandPolicy:
         assert verdict.risk.is_dangerous is True
         assert verdict.risk_reasons  # non-empty human explanation
 
-    def test_dangerous_confirm_disabled_still_allowed(self):
+    def test_dangerous_confirm_setting_cannot_disable_fail_closed_gate(self):
         verdict = decide_command_policy("rm -rf /opt", confirm_dangerous_commands=False)
         assert verdict.allowed is True
-        assert verdict.requires_confirm is False
-        # Reason: may fall through to "" or "ask_mode"; never "dangerous".
-        assert verdict.reason in {"", "ask_mode"}
+        assert verdict.requires_confirm is True
+        assert verdict.reason == "dangerous"
 
     def test_forbidden_pattern_blocks(self):
         verdict = decide_command_policy(
@@ -95,12 +94,13 @@ class TestDecideCommandPolicy:
         assert verdict.allowed is False
         assert verdict.reason == "forbidden"
 
-    def test_outside_allowlist_blocks(self):
+    def test_outside_allowlist_requires_confirmation(self):
         verdict = decide_command_policy(
             "apt install curl",
             allowlist_patterns=["ls", "pwd"],
         )
-        assert verdict.allowed is False
+        assert verdict.allowed is True
+        assert verdict.requires_confirm is True
         assert verdict.reason == "outside_allowlist"
 
     def test_allowlist_match_is_allowed(self):

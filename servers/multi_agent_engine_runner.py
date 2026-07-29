@@ -111,6 +111,7 @@ async def run_multi_agent_engine(
             getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
         ),
         sudo_policy=engine.permission_engine.sudo_policy,
+        execution_approval_granted=bool(getattr(engine, "execution_approval_granted", False)),
     )
 
     plan_tasks: list[dict] = []
@@ -277,6 +278,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
             getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
         ),
         sudo_policy=engine.permission_engine.sudo_policy,
+        execution_approval_granted=bool(getattr(engine, "execution_approval_granted", False)),
     )
 
     try:

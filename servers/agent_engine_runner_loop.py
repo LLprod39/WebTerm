@@ -100,6 +100,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             getattr(engine, "input_materials", None) or getattr(engine.agent, "input_artifacts", None) or []
         ),
         sudo_policy=engine.permission_engine.sudo_policy,
+        execution_approval_granted=bool(getattr(engine, "execution_approval_granted", False)),
     )
 
     iterations_log: list[dict] = []

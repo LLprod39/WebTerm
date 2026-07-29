@@ -10,6 +10,7 @@ from app.pipeline_agent_provider import run_pipeline_multi_agent, run_pipeline_r
 from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from core_ui.activity import log_user_activity_async
+from studio.execution_policy import build_execution_policy_decisions
 from studio.ops_controls import assert_agents_not_paused
 
 from .models import MCPServerPool, PipelineRun
@@ -70,6 +71,17 @@ __all__ = [
     "run_pipeline_multi_agent",
     "run_pipeline_react_agent",
 ]
+
+
+def _node_execution_approval_granted(run: PipelineRun, node_id: str) -> bool:
+    decisions = build_execution_policy_decisions(
+        nodes=list(run.nodes_snapshot or []),
+        edges=list(run.edges_snapshot or []),
+    )
+    return any(
+        decision.node_id == str(node_id) and decision.requires_approval and decision.allowed
+        for decision in decisions
+    )
 
 
 async def execute_agent_react(
@@ -203,6 +215,7 @@ async def execute_agent_react(
         unattended=unattended,
         pipeline_run_id=run.pk,
         require_all_servers=require_all_servers_enabled(config, default=False),
+        execution_approval_granted=_node_execution_approval_granted(run, str(node["id"])),
     )
     logger.info(
         "pipeline run %s node %s agent/react done: agent_run_id=%s status=%s outcome=%s report_chars=%s",
@@ -350,6 +363,7 @@ async def execute_agent_multi(
         unattended=unattended,
         pipeline_run_id=run.pk,
         require_all_servers=require_all_servers_enabled(config, default=True),
+        execution_approval_granted=_node_execution_approval_granted(run, str(node["id"])),
     )
     state = map_agent_outcome_to_pipeline_state(
         outcome=getattr(agent_run, "outcome", "") or "",
