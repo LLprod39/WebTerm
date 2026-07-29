@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import statistics
 import sys
 import time
 from collections.abc import Awaitable
@@ -12,6 +11,7 @@ from typing import Any
 from urllib.parse import urljoin
 
 import aiohttp
+from runtime_smoke_report import build_runtime_smoke_summary
 from yarl import URL
 
 HTTP_TIMEOUT_SECONDS = 45.0
@@ -426,13 +426,6 @@ async def _run_user(
         await user.close()
 
 
-def _flatten(items: list[dict[str, Any]], key: str) -> list[float]:
-    out: list[float] = []
-    for item in items:
-        out.extend(float(x) for x in item.get(key, []))
-    return out
-
-
 async def _run_user_with_timeout(*, timeout_seconds: float, **kwargs) -> dict[str, Any]:
     username = str((kwargs.get("seed") or {}).get("username") or "unknown")
     try:
@@ -471,23 +464,7 @@ async def _main_async(args) -> int:
         raise SmokeFailure(f"runtime smoke exceeded {args.overall_timeout_seconds:.0f}s overall timeout") from exc
     elapsed = time.perf_counter() - started
 
-    terminal_latencies = _flatten(results, "terminal_latencies")
-    pipeline_latencies = _flatten(results, "pipeline_latencies")
-    agent_latencies = _flatten(results, "agent_latencies")
-    summary = {
-        "users": len(results),
-        "terminal_sessions_total": len(terminal_latencies),
-        "pipeline_runs_total": len(pipeline_latencies),
-        "agent_runs_total": len(agent_latencies),
-        "elapsed_seconds": round(elapsed, 3),
-        "terminal_latency_avg": round(statistics.mean(terminal_latencies), 3) if terminal_latencies else 0.0,
-        "terminal_latency_max": round(max(terminal_latencies), 3) if terminal_latencies else 0.0,
-        "pipeline_latency_avg": round(statistics.mean(pipeline_latencies), 3) if pipeline_latencies else 0.0,
-        "pipeline_latency_max": round(max(pipeline_latencies), 3) if pipeline_latencies else 0.0,
-        "agent_latency_avg": round(statistics.mean(agent_latencies), 3) if agent_latencies else 0.0,
-        "agent_latency_max": round(max(agent_latencies), 3) if agent_latencies else 0.0,
-        "results": results,
-    }
+    summary = build_runtime_smoke_summary(results, elapsed=elapsed)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0
 
