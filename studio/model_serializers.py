@@ -94,22 +94,26 @@ def pipeline_to_list_dict(pipeline) -> dict:
 
 
 def pipeline_to_detail_dict(pipeline) -> dict:
+    from studio.pipeline_secrets import redact_pipeline_nodes
+
     payload = pipeline.to_list_dict()
-    payload["nodes"] = pipeline.nodes
+    payload["nodes"] = redact_pipeline_nodes(pipeline.nodes)
     payload["edges"] = pipeline.edges
     payload["triggers"] = [trigger.to_dict() for trigger in pipeline.triggers.order_by("created_at", "id")]
     return payload
 
 
 def pipeline_run_to_dict(run) -> dict:
+    from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
+
     trigger = getattr(run, "trigger", None)
     return {
         "id": run.pk,
         "pipeline_id": run.pipeline_id,
         "pipeline_name": run.pipeline.name,
         "status": run.status,
-        "node_states": run.node_states,
-        "nodes_snapshot": run.nodes_snapshot,
+        "node_states": redact_pipeline_secret_values(run.node_states),
+        "nodes_snapshot": redact_pipeline_nodes(run.nodes_snapshot),
         "context": run.context,
         "summary": run.summary,
         "error": run.error,

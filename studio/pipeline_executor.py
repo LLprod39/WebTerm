@@ -130,6 +130,7 @@ from .pipeline_run_state import (
     update_run_status as _update_run_status,
 )
 from .pipeline_runtime import is_runtime_stop_requested, register_executor, unregister_executor
+from .pipeline_secrets import hydrate_pipeline_node_data
 from .pipeline_telegram import (
     _TELEGRAM_PENDING_CALLBACKS,
     _TELEGRAM_PENDING_REPLIES,
@@ -230,8 +231,12 @@ async def _execute_registry_node(
             },
         },
     )
+    node_data = await _s2a_fn(
+        lambda: hydrate_pipeline_node_data(run.pipeline_id, node_id, node.get("data") or {}),
+        thread_sensitive=True,
+    )()
     try:
-        result = await registry.create(node_type, node_id=node_id, node_data=node.get("data") or {}).execute(ctx)
+        result = await registry.create(node_type, node_id=node_id, node_data=node_data).execute(ctx)
     except Exception as exc:
         logger.exception("pipeline run %s registry node %s raised exception", run.pk, node_id)
         return {"status": "failed", "error": _redact_pipeline_text(str(exc))}

@@ -166,7 +166,6 @@ async def execute_logic_telegram_input(
                 "status": "awaiting_operator_reply",
                 "telegram_prompt_message_id": prompt_message_id,
                 "telegram_chat_id": chat_id,
-                "bot_token": bot_token,
                 "started_at": started_at.isoformat(),
             },
         )

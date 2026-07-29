@@ -22,6 +22,7 @@ KUBERNETES_PROVIDER_TOKEN_NAMESPACE = "kubernetes_provider_token"
 PLAYBOOK_BINDING_VARIABLES_NAMESPACE = "playbook_binding_variables"
 PLAYBOOK_RUN_VARIABLES_NAMESPACE = "playbook_run_variables"
 PLAYBOOK_RUN_MASTER_PASSWORD_NAMESPACE = "playbook_run_master_password"
+STUDIO_PIPELINE_SECRETS_NAMESPACE = "studio_pipeline_secrets"
 LLM_API_KEY_PROVIDERS = {
     "gemini": "GEMINI_API_KEY",
     "grok": "GROK_API_KEY",
@@ -128,6 +129,57 @@ def _has(namespace: str, object_id: int, *, key: str = "default") -> bool:
 
 def _delete(namespace: str, object_id: int, *, key: str = "default") -> None:
     ManagedSecret.objects.filter(namespace=namespace, object_id=int(object_id), key=key).delete()
+
+
+def set_studio_pipeline_secrets(pipeline_id: int, nodes: dict[str, dict[str, str]]) -> None:
+    """Store all write-only node credentials for one Studio pipeline."""
+    clean_nodes: dict[str, dict[str, str]] = {}
+    for raw_node_id, raw_values in (nodes or {}).items():
+        node_id = str(raw_node_id or "").strip()
+        if not node_id or not isinstance(raw_values, dict):
+            continue
+        values = {
+            str(key): str(value)
+            for key, value in raw_values.items()
+            if str(key).strip() and str(value or "").strip()
+        }
+        if values:
+            clean_nodes[node_id] = values
+
+    if not clean_nodes:
+        _delete(STUDIO_PIPELINE_SECRETS_NAMESPACE, pipeline_id)
+        return
+    secret_names = sorted(f"{node_id}:{key}" for node_id, values in clean_nodes.items() for key in values)
+    _upsert(
+        STUDIO_PIPELINE_SECRETS_NAMESPACE,
+        pipeline_id,
+        {"nodes": clean_nodes},
+        metadata={"kind": "studio_pipeline_node_credentials", "secret_names": secret_names},
+    )
+
+
+def get_studio_pipeline_secrets(pipeline_id: int) -> dict[str, dict[str, str]]:
+    payload = _get(STUDIO_PIPELINE_SECRETS_NAMESPACE, pipeline_id, default={})
+    raw_nodes = payload.get("nodes") if isinstance(payload, dict) else {}
+    if not isinstance(raw_nodes, dict):
+        return {}
+    result: dict[str, dict[str, str]] = {}
+    for raw_node_id, raw_values in raw_nodes.items():
+        node_id = str(raw_node_id or "").strip()
+        if not node_id or not isinstance(raw_values, dict):
+            continue
+        values = {
+            str(key): str(value)
+            for key, value in raw_values.items()
+            if str(key).strip() and str(value or "").strip()
+        }
+        if values:
+            result[node_id] = values
+    return result
+
+
+def delete_studio_pipeline_secrets(pipeline_id: int) -> None:
+    _delete(STUDIO_PIPELINE_SECRETS_NAMESPACE, pipeline_id)
 
 
 def set_playbook_binding_secret_values(binding_profile_id: int, values: dict[str, str]) -> None:

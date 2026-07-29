@@ -6,6 +6,7 @@ import json
 import re
 
 from studio.execution_policy import build_execution_policy_decisions
+from studio.pipeline_secrets import redact_pipeline_secret_values
 
 
 def _clone_json_snapshot(value):
@@ -242,5 +243,5 @@ def compact_selected_node(node: dict) -> dict:
         "id": str(node.get("id") or ""),
         "type": str(node.get("type") or ""),
         "position": node.get("position") or {},
-        "data": data,
+        "data": redact_pipeline_secret_values(data),
     }

@@ -7,24 +7,27 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { AdvancedDisclosure, FieldHint, NodeFormSection } from "../PanelPrimitives";
 import { localize } from "../presentation";
-import type { Lang, NodeData, SetNodeData } from "./types";
+import { ManagedSecretInput } from "./ManagedSecretInput";
+import type { Lang, NodeData, SetNodeData, SetNodePatch } from "./types";
 
 export function LogicConfigSections({
   type,
   data,
   lang,
   onSet,
+  onSetMany,
 }: {
   type: string;
   data: NodeData;
   lang: Lang;
   onSet: SetNodeData;
+  onSetMany: SetNodePatch;
 }) {
   if (type === "logic/condition") return <ConditionConfig data={data} lang={lang} onSet={onSet} />;
   if (type === "logic/merge") return <MergeConfig data={data} lang={lang} onSet={onSet} />;
   if (type === "logic/wait") return <WaitConfig data={data} lang={lang} onSet={onSet} />;
-  if (type === "logic/human_approval") return <HumanApprovalConfig data={data} lang={lang} onSet={onSet} />;
-  if (type === "logic/telegram_input") return <TelegramInputConfig data={data} lang={lang} onSet={onSet} />;
+  if (type === "logic/human_approval") return <HumanApprovalConfig data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />;
+  if (type === "logic/telegram_input") return <TelegramInputConfig data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />;
   return null;
 }
 
@@ -111,7 +114,7 @@ function WaitConfig({ data, lang, onSet }: LogicProps) {
   );
 }
 
-function HumanApprovalConfig({ data, lang, onSet }: LogicProps) {
+function HumanApprovalConfig({ data, lang, onSet, onSetMany }: SecretLogicProps) {
   return (
     <>
       <NodeFormSection
@@ -146,20 +149,20 @@ function HumanApprovalConfig({ data, lang, onSet }: LogicProps) {
         <TimeoutField data={data} lang={lang} onSet={onSet} min={5} />
       </NodeFormSection>
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")}>
-        <TelegramSettings data={data} onSet={onSet} tokenKey="tg_bot_token" chatKey="tg_chat_id" tokenPlaceholder="Bot Token (from @BotFather)" chatPlaceholder="Chat ID (e.g. -100123456)" />
+        <TelegramSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} tokenKey="tg_bot_token" chatKey="tg_chat_id" tokenPlaceholder="Bot Token (from @BotFather)" chatPlaceholder="Chat ID (e.g. -100123456)" />
         <div className="space-y-1.5">
           <Label className="text-xs">{localize(lang, "Base URL для ссылок подтверждения", "Base URL for approval links")}</Label>
           <Input value={(data.base_url as string) || ""} onChange={(event) => onSet("base_url", event.target.value)} placeholder="https://your-server.example.com" className="h-8 text-xs" />
           <FieldHint>{localize(lang, "Используется в approve/reject ссылках из уведомлений.", "Used in approve/reject URLs sent in notifications.")}</FieldHint>
         </div>
         <TextTemplateField label="Сообщение в Telegram (шаблон)" value={(data.message as string) || ""} placeholder="{approve_url}, {reject_url}..." textarea rows={4} onChange={(value) => onSet("message", value)} />
-        <SmtpSettings data={data} lang={lang} onSet={onSet} />
+        <SmtpSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />
       </AdvancedDisclosure>
     </>
   );
 }
 
-function TelegramInputConfig({ data, lang, onSet }: LogicProps) {
+function TelegramInputConfig({ data, lang, onSet, onSetMany }: SecretLogicProps) {
   return (
     <>
       <NodeFormSection
@@ -173,7 +176,7 @@ function TelegramInputConfig({ data, lang, onSet }: LogicProps) {
         <TimeoutField data={data} lang={lang} onSet={onSet} min={1} />
       </NodeFormSection>
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")}>
-        <TelegramSettings data={data} onSet={onSet} tokenKey="tg_bot_token" chatKey="tg_chat_id" />
+        <TelegramSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} tokenKey="tg_bot_token" chatKey="tg_chat_id" />
       </AdvancedDisclosure>
     </>
   );
@@ -208,21 +211,29 @@ function TelegramSettings({
   chatKey,
   tokenPlaceholder = "или глобально в Studio → Notifications",
   chatPlaceholder = "-100123456789",
+  lang,
   onSet,
+  onSetMany,
 }: {
   data: NodeData;
+  lang: Lang;
   tokenKey: string;
   chatKey: string;
   tokenPlaceholder?: string;
   chatPlaceholder?: string;
   onSet: SetNodeData;
+  onSetMany: SetNodePatch;
 }) {
   return (
     <>
-      <div className="space-y-1.5">
-        <Label className="text-xs">Bot Token</Label>
-        <Input value={(data[tokenKey] as string) || ""} onChange={(event) => onSet(tokenKey, event.target.value)} placeholder={tokenPlaceholder} className="h-8 text-xs font-mono" />
-      </div>
+      <ManagedSecretInput
+        data={data}
+        label="Bot Token"
+        lang={lang}
+        onSetMany={onSetMany}
+        placeholder={tokenPlaceholder}
+        secretKey={tokenKey}
+      />
       <div className="space-y-1.5">
         <Label className="text-xs">Chat ID</Label>
         <Input value={(data[chatKey] as string) || ""} onChange={(event) => onSet(chatKey, event.target.value)} placeholder={chatPlaceholder} className="h-8 text-xs font-mono" />
@@ -231,14 +242,23 @@ function TelegramSettings({
   );
 }
 
-function SmtpSettings({ data, lang, onSet }: LogicProps) {
+function SmtpSettings({ data, lang, onSet, onSetMany }: SecretLogicProps) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground uppercase">{localize(lang, "SMTP для писем подтверждения", "SMTP for approval email")}</Label>
       <Input value={(data.smtp_host as string) || ""} onChange={(event) => onSet("smtp_host", event.target.value)} placeholder="smtp.gmail.com" className="h-8 text-xs" />
       <div className="flex gap-2">
         <Input value={(data.smtp_user as string) || ""} onChange={(event) => onSet("smtp_user", event.target.value)} placeholder="user@gmail.com" className="h-8 text-xs flex-1" />
-        <Input value={(data.smtp_password as string) || ""} onChange={(event) => onSet("smtp_password", event.target.value)} placeholder="app password" type="password" className="h-8 text-xs w-28" />
+        <div className="w-44 shrink-0">
+          <ManagedSecretInput
+            data={data}
+            label="SMTP password"
+            lang={lang}
+            onSetMany={onSetMany}
+            placeholder="app password"
+            secretKey="smtp_password"
+          />
+        </div>
       </div>
     </div>
   );
@@ -248,4 +268,8 @@ type LogicProps = {
   data: NodeData;
   lang: Lang;
   onSet: SetNodeData;
+};
+
+type SecretLogicProps = LogicProps & {
+  onSetMany: SetNodePatch;
 };
