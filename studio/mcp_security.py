@@ -203,6 +203,16 @@ def _host_is_private(host: str) -> bool:
     return False
 
 
+def mcp_sse_allows_private_url(url: str) -> bool:
+    parsed = urlparse((url or "").strip() if "://" in (url or "") else "http://" + (url or "").strip())
+    host = (parsed.hostname or "").rstrip(".").lower()
+    trusted_hosts = _setting_list(
+        "STUDIO_MCP_SSE_TRUSTED_PRIVATE_HOSTS",
+        ("127.0.0.1", "::1", "localhost", "mcp-demo"),
+    )
+    return bool(host and host in trusted_hosts)
+
+
 def validate_sse_mcp_policy(url: str, *, user=None, action: str = "run") -> MCPStdioPolicyResult:
     raw = (url or "").strip()
     if not raw:
@@ -213,23 +223,20 @@ def validate_sse_mcp_policy(url: str, *, user=None, action: str = "run") -> MCPS
     host = parsed.hostname
     if not host:
         return MCPStdioPolicyResult(False, "MCP URL host is required.")
-    # Admins may target internal endpoints (bundled keycloak/demo MCP, docker
-    # service names). Non-admins must not point an MCP at private/loopback
-    # addresses, which would turn "test connection" into an internal-network
-    # SSRF probe.
-    if user is not None and bool(getattr(user, "is_staff", False)):
-        return MCPStdioPolicyResult(True)
-    if _setting_bool("STUDIO_MCP_SSE_ALLOW_PRIVATE", False):
-        return MCPStdioPolicyResult(True)
+    # Private MCP endpoints must be named explicitly. This preserves the bundled
+    # local demo without giving staff-created URLs a blanket internal-network
+    # bypass that can later be abused through DNS rebinding.
     if _host_is_private(host):
-        return MCPStdioPolicyResult(
-            False,
-            f"Only admins can {action} an MCP server pointing at a private or loopback address.",
-        )
+        private_allowed = mcp_sse_allows_private_url(raw) and (user is None or bool(getattr(user, "is_staff", False)))
+        if not private_allowed:
+            return MCPStdioPolicyResult(
+                False,
+                f"Cannot {action} an MCP server pointing at a private address unless its host is explicitly trusted.",
+            )
     return MCPStdioPolicyResult(True)
 
 
 def validate_mcp_runtime_policy(mcp: MCPServerPool, *, user=None, action: str = "run") -> MCPStdioPolicyResult:
     if mcp.transport != MCPServerPool.TRANSPORT_STDIO:
-        return MCPStdioPolicyResult(True)
+        return validate_sse_mcp_policy(mcp.url or "", user=user, action=action)
     return validate_stdio_mcp_policy(mcp.command, mcp.args, user=user, action=action)

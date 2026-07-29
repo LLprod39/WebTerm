@@ -6,19 +6,21 @@ import asyncio
 import subprocess
 import sys
 
-import httpx
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from app.outbound_http import request_outbound_http
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
 from studio.mcp_client import MCPClientError, inspect_mcp_server
 from studio.mcp_runner_client import _mcp_runner_url
 from studio.mcp_security import (
     build_mcp_subprocess_env,
+    mcp_sse_allows_private_url,
     validate_mcp_runtime_policy,
     validate_sse_mcp_policy,
     validate_stdio_mcp_policy,
@@ -242,7 +244,14 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
         if raw_auth:
             headers["Authorization"] = raw_auth
         try:
-            response = httpx.get(url, timeout=10, headers=headers or None)
+            response = async_to_sync(request_outbound_http)(
+                "GET",
+                url,
+                timeout=10,
+                headers=headers or None,
+                max_redirects=0,
+                allow_private=mcp_sse_allows_private_url(url),
+            )
             response.raise_for_status()
             content_type = (response.headers.get("content-type") or "").lower()
             if "text/html" in content_type:

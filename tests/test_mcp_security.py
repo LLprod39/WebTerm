@@ -17,6 +17,7 @@ from studio.mcp_security import (
     validate_sse_mcp_policy,
     validate_stdio_mcp_policy,
 )
+from studio.views.mcp_views import _default_test_mcp_connection
 
 
 def test_build_mcp_subprocess_env_drops_platform_secrets(monkeypatch):
@@ -49,7 +50,7 @@ def test_validate_stdio_mcp_policy_blocks_inline_exec(monkeypatch):
     assert not validate_stdio_mcp_policy("node", ["--eval=1+1"], user=None).allowed
 
 
-def test_validate_sse_mcp_policy_ssrf_guard():
+def test_validate_sse_mcp_policy_ssrf_guard(monkeypatch):
     non_admin = SimpleNamespace(is_staff=False)
     admin = SimpleNamespace(is_staff=True)
 
@@ -58,6 +59,9 @@ def test_validate_sse_mcp_policy_ssrf_guard():
     assert not validate_sse_mcp_policy("http://10.1.2.3/mcp", user=non_admin).allowed
     # Admins may target internal endpoints (bundled keycloak/demo MCP).
     assert validate_sse_mcp_policy("http://127.0.0.1/mcp", user=admin).allowed
+    assert not validate_sse_mcp_policy("http://10.1.2.3/mcp", user=admin).allowed
+    monkeypatch.setenv("STUDIO_MCP_SSE_TRUSTED_PRIVATE_HOSTS", "10.1.2.3")
+    assert validate_sse_mcp_policy("http://10.1.2.3/mcp", user=admin).allowed
     # Non-http schemes are rejected for everyone.
     assert not validate_sse_mcp_policy("ftp://example.com/mcp", user=admin).allowed
 
@@ -163,3 +167,115 @@ async def test_http_client_merges_static_headers():
         await client.client.aclose()
 
     assert headers == {"X-Api-Version": "2"}
+
+
+@pytest.mark.asyncio
+async def test_http_client_blocks_mixed_dns_before_sending_managed_authorization(monkeypatch):
+    async def mixed_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34", "127.0.0.1"]
+
+    class ForbiddenStreamClient:
+        def stream(self, *_args, **_kwargs):
+            raise AssertionError("managed Authorization must not reach a blocked destination")
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", mixed_resolver)
+    client = _HttpMCPClient(
+        SimpleNamespace(
+            name="dns-rebinding",
+            url="https://mcp.example/rpc",
+            transport="sse",
+            headers={},
+            id=None,
+        )
+    )
+    client._extra_headers = {"Authorization": "Bearer managed-secret"}
+    await client.client.aclose()
+    client.client = ForbiddenStreamClient()
+
+    with pytest.raises(MCPClientError, match="destination is blocked"):
+        await client._request(
+            {"jsonrpc": "2.0", "id": "req-1", "method": "tools/list", "params": {}},
+            timeout=5,
+        )
+
+
+@pytest.mark.asyncio
+async def test_http_client_pins_public_dns_and_preserves_host_sni_and_authorization(monkeypatch):
+    async def public_resolver(host: str, port: int) -> list[str]:
+        assert (host, port) == ("mcp.example", 443)
+        return ["93.184.216.34"]
+
+    class JsonResponse:
+        status_code = 200
+        headers = {"content-type": "application/json"}
+        text = '{"jsonrpc":"2.0","id":"req-1","result":{"tools":[]}}'
+
+        def raise_for_status(self):
+            return None
+
+        async def aread(self):
+            return self.text.encode()
+
+    class StreamContext:
+        async def __aenter__(self):
+            return JsonResponse()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class RecordingStreamClient:
+        def __init__(self):
+            self.call = None
+
+        def stream(self, method, url, **kwargs):
+            self.call = {"method": method, "url": str(url), **kwargs}
+            return StreamContext()
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", public_resolver)
+    client = _HttpMCPClient(
+        SimpleNamespace(name="public", url="https://mcp.example/rpc", transport="sse", headers={}, id=None)
+    )
+    client._extra_headers = {"Authorization": "Bearer managed-secret"}
+    await client.client.aclose()
+    client.client = RecordingStreamClient()
+
+    result = await client._request(
+        {"jsonrpc": "2.0", "id": "req-1", "method": "tools/list", "params": {}},
+        timeout=5,
+    )
+
+    assert result == {"tools": []}
+    assert client.client.call["url"] == "https://93.184.216.34/rpc"
+    assert client.client.call["headers"]["host"] == "mcp.example"
+    assert client.client.call["headers"]["authorization"] == "Bearer managed-secret"
+    assert client.client.call["extensions"] == {"sni_hostname": "mcp.example"}
+    assert client.client.call["follow_redirects"] is False
+
+
+def test_mcp_connection_probe_blocks_rebound_dns_before_managed_authorization(monkeypatch):
+    async def rebound_resolver(_host: str, _port: int) -> list[str]:
+        return ["169.254.169.254"]
+
+    class ForbiddenClient:
+        def __init__(self, **_kwargs):
+            raise AssertionError("connection probe must stop before creating an HTTP client")
+
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", rebound_resolver)
+    monkeypatch.setattr("app.outbound_http.httpx.AsyncClient", ForbiddenClient)
+    mcp = SimpleNamespace(
+        id=None,
+        transport="sse",
+        url="https://mcp.example/rpc",
+        headers={"Authorization": "Bearer managed-secret"},
+    )
+
+    ok, error = _default_test_mcp_connection(mcp)
+
+    assert ok is False
+    assert "destination is blocked" in error.lower()
