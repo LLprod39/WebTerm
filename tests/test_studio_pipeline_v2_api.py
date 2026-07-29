@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import pytest
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
 
 from studio.models import Pipeline, PipelineRun
+from studio.pipeline_run_state import update_node_state
 from tests.studio_pipeline_v2_harness import (
     build_run,
     disable_activity_logging,
@@ -71,6 +73,79 @@ def test_api_run_approve_resolves_normalized_node_id_and_sends_telegram_confirma
     assert run.node_states["approval_gate"]["approval_decision"] == "approved"
     assert captured["url"] == "https://api.telegram.org/botbot-123/sendMessage"
     assert "Решение записано" in str(captured["json"]["text"])
+
+
+@pytest.mark.django_db
+def test_run_apis_expose_only_allowlisted_node_state_fields():
+    user = User.objects.create_user(username="run-state-contract-user", password="x")
+    grant_feature(user, "studio", "studio_runs")
+    pipeline = Pipeline.objects.create(name="Public run state", owner=user, nodes=[], edges=[])
+    run = build_run(pipeline, entry_node_id="")
+    token = "APPROVAL_TOKEN_SENTINEL_9a60e9"
+    approve_url = f"https://ops.example/approve/?token={token}&decision=approved"
+    run.node_states = {
+        "approval": {
+            "status": "awaiting_approval",
+            "output": f"Review: {approve_url}",
+            "started_at": "2026-07-30T00:00:00+00:00",
+            "approval_token": token,
+            "approve_url": approve_url,
+            "reject_url": approve_url.replace("approved", "rejected"),
+            "telegram_chat_id": "sensitive-chat-id",
+        }
+    }
+    run.save(update_fields=["node_states"])
+    client = Client()
+    client.force_login(user)
+
+    detail = client.get(f"/api/studio/runs/{run.id}/")
+    listing = client.get("/api/studio/runs/")
+
+    assert detail.status_code == 200
+    assert listing.status_code == 200
+    for payload in (detail.json(), listing.json()[0]):
+        serialized = payload["node_states"]["approval"]
+        assert set(serialized) == {"status", "output", "started_at"}
+        assert serialized["status"] == "awaiting_approval"
+        assert "token=[REDACTED]" in serialized["output"]
+        assert token not in json_payload(payload)
+        assert "sensitive-chat-id" not in json_payload(payload)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_live_run_updates_expose_only_allowlisted_node_state_fields(monkeypatch):
+    user = User.objects.create_user(username="live-run-state-contract-user", password="x")
+    pipeline = Pipeline.objects.create(name="Live public run state", owner=user, nodes=[], edges=[])
+    run = build_run(pipeline, entry_node_id="")
+    token = "LIVE_APPROVAL_TOKEN_SENTINEL_d38ac1"
+    events: list[dict] = []
+
+    class FakeChannelLayer:
+        async def group_send(self, _group: str, event: dict) -> None:
+            events.append(event)
+
+    async def no_activity_log(**_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: FakeChannelLayer())
+    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", no_activity_log)
+
+    async_to_sync(update_node_state)(
+        run,
+        "approval",
+        {
+            "status": "awaiting_approval",
+            "output": f"Review https://ops.example/approve/?token={token}",
+            "approval_token": token,
+            "approve_url": f"https://ops.example/approve/?token={token}",
+        },
+    )
+
+    assert len(events) == 1
+    assert set(events[0]["state"]) == {"status", "output"}
+    assert token not in json_payload(events[0])
+    run.refresh_from_db()
+    assert run.node_states["approval"]["approval_token"] == token
 
 
 @pytest.mark.django_db

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from typing import Any
 
@@ -12,6 +13,24 @@ PIPELINE_NODE_SECRET_FIELDS = (
     "tg_bot_token",
     "telegram_bot_token",
     "smtp_password",
+)
+
+PIPELINE_RUN_PUBLIC_NODE_STATE_FIELDS = frozenset(
+    {
+        "agent_run_id",
+        "decision",
+        "error",
+        "finished_at",
+        "output",
+        "passed",
+        "routing_ports",
+        "started_at",
+        "status",
+    }
+)
+
+_RUNTIME_TOKEN_QUERY_RE = re.compile(
+    r"(?i)([?&](?:approval_token|token)=)[^&\s\"'<>]+",
 )
 
 
@@ -111,6 +130,42 @@ def redact_pipeline_nodes(nodes: Any) -> Any:
     return [redact_pipeline_secret_values(node) for node in nodes]
 
 
+def _redact_runtime_token_text(value: str) -> str:
+    return _RUNTIME_TOKEN_QUERY_RE.sub(r"\1[REDACTED]", value)
+
+
+def _serialize_public_node_state_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _redact_runtime_token_text(value)
+    if isinstance(value, dict):
+        return {str(key): _serialize_public_node_state_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialize_public_node_state_value(item) for item in value]
+    return value
+
+
+def serialize_pipeline_node_state(state: Any) -> dict[str, Any]:
+    """Return the explicit public contract for one persisted node state."""
+    if not isinstance(state, dict):
+        return {}
+    return {
+        key: _serialize_public_node_state_value(state[key])
+        for key in PIPELINE_RUN_PUBLIC_NODE_STATE_FIELDS
+        if key in state
+    }
+
+
+def serialize_pipeline_node_states(node_states: Any) -> dict[str, dict[str, Any]]:
+    """Return node states without runtime-only credentials or delivery links."""
+    if not isinstance(node_states, dict):
+        return {}
+    return {
+        str(node_id): serialize_pipeline_node_state(state)
+        for node_id, state in node_states.items()
+        if isinstance(state, dict)
+    }
+
+
 def redact_pipeline_secret_values(value: Any) -> Any:
     if isinstance(value, dict):
         redacted = {
@@ -127,4 +182,6 @@ def redact_pipeline_secret_values(value: Any) -> Any:
         return [redact_pipeline_secret_values(item) for item in value]
     if isinstance(value, tuple):
         return [redact_pipeline_secret_values(item) for item in value]
+    if isinstance(value, str):
+        return _redact_runtime_token_text(value)
     return value
