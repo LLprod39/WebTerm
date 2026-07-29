@@ -100,7 +100,13 @@ def _upsert_requirement(
 def _telegram_requirement(requirements: dict[str, dict[str, Any]], node_id: str, data: dict[str, Any]) -> None:
     cfg = _load_notif_cfg()
     token = _first_nonblank(
-        data.get("bot_token"), data.get("tg_bot_token"), data.get("telegram_bot_token"), cfg.get("telegram_bot_token")
+        data.get("bot_token"),
+        data.get("tg_bot_token"),
+        data.get("telegram_bot_token"),
+        data.get("bot_token_configured"),
+        data.get("tg_bot_token_configured"),
+        data.get("telegram_bot_token_configured"),
+        cfg.get("telegram_bot_token"),
     )
     chat = _first_nonblank(
         data.get("chat_id"), data.get("tg_chat_id"), data.get("telegram_chat_id"), cfg.get("telegram_chat_id")

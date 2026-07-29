@@ -1,7 +1,7 @@
 import secrets
 
 from django.contrib.auth.models import User
-from django.db import models
+from django.db import models, transaction
 
 from app.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
 
@@ -240,6 +240,23 @@ class Pipeline(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        touches_nodes = self._state.adding or update_fields is None or "nodes" in set(update_fields)
+        if not touches_nodes:
+            return super().save(*args, **kwargs)
+
+        from studio.pipeline_secrets import persist_pipeline_secrets, secure_pipeline_nodes_for_storage
+
+        with transaction.atomic():
+            if self.pk and not self._state.adding:
+                type(self).objects.select_for_update().filter(pk=self.pk).exists()
+            safe_nodes, next_secrets = secure_pipeline_nodes_for_storage(self.pk, self.nodes)
+            self.nodes = safe_nodes
+            result = super().save(*args, **kwargs)
+            persist_pipeline_secrets(self.pk, next_secrets)
+        return result
 
     def get_last_run(self):
         return pipeline_get_last_run(self)

@@ -12,6 +12,7 @@ from studio.capability_registry import build_studio_capability_registry
 from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
 )
+from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
 from studio.pipeline_validation import validate_pipeline_definition
 from studio.services import (
     PipelineAssistantError,
@@ -292,16 +293,17 @@ def _build_assistant_response_for_payload(request, data: dict) -> tuple[dict | N
             else ["Review the diff", "Apply the draft", "Save the pipeline", "Run a manual test"]
         )
 
+    response = redact_pipeline_secret_values(response)
     meta = {
         "pipeline": assistant_pipeline,
         "pipeline_name": pipeline_name,
-        "nodes": nodes,
+        "nodes": redact_pipeline_nodes(nodes),
         "edges": edges,
-        "selected_node": selected_node if isinstance(selected_node, dict) else None,
+        "selected_node": redact_pipeline_secret_values(selected_node) if isinstance(selected_node, dict) else None,
         "selected_node_id": selected_node_id,
         "intent": intent,
         "user_message": user_message,
-        "preview_nodes": preview_nodes,
+        "preview_nodes": redact_pipeline_nodes(preview_nodes),
         "preview_edges": preview_edges,
     }
     return response, meta, None

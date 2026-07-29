@@ -127,6 +127,8 @@ class PipelineDraftRevision(models.Model):
         return f"{self.session_id} revision #{self.pk}"
 
     def to_dict(self) -> dict:
+        from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
+
         response = dict(self.response_payload or {})
         response.setdefault("reply", self.assistant_reply)
         response.setdefault("target_node_id", self.target_node_id or None)
@@ -143,12 +145,13 @@ class PipelineDraftRevision(models.Model):
         response.setdefault("patch_summary", self.patch_summary)
         response.setdefault("suggested_next_actions", self.suggested_next_actions or [])
         response.setdefault("confidence", self.confidence)
+        response = redact_pipeline_secret_values(response)
         return {
             "id": self.pk,
             "session_id": self.session_id,
             "user_message": self.user_message,
             "created_at": self.created_at.isoformat(),
-            "preview_nodes": self.preview_nodes,
+            "preview_nodes": redact_pipeline_nodes(self.preview_nodes),
             "preview_edges": self.preview_edges,
             "response": response,
         }

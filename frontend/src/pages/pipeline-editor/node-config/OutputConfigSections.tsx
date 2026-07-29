@@ -4,23 +4,26 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { AdvancedDisclosure, FieldHint, NodeFormSection } from "../PanelPrimitives";
 import { localize } from "../presentation";
-import type { Lang, NodeData, SetNodeData } from "./types";
+import { ManagedSecretInput } from "./ManagedSecretInput";
+import type { Lang, NodeData, SetNodeData, SetNodePatch } from "./types";
 
 export function OutputConfigSections({
   type,
   data,
   lang,
   onSet,
+  onSetMany,
 }: {
   type: string;
   data: NodeData;
   lang: Lang;
   onSet: SetNodeData;
+  onSetMany: SetNodePatch;
 }) {
   if (type === "output/webhook") return <WebhookOutput data={data} lang={lang} onSet={onSet} />;
   if (type === "output/report") return <ReportOutput data={data} lang={lang} onSet={onSet} />;
-  if (type === "output/email") return <EmailOutput data={data} lang={lang} onSet={onSet} />;
-  if (type === "output/telegram") return <TelegramOutput data={data} lang={lang} onSet={onSet} />;
+  if (type === "output/email") return <EmailOutput data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />;
+  if (type === "output/telegram") return <TelegramOutput data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />;
   return null;
 }
 
@@ -58,7 +61,7 @@ function ReportOutput({ data, lang, onSet }: OutputProps) {
   );
 }
 
-function EmailOutput({ data, lang, onSet }: OutputProps) {
+function EmailOutput({ data, lang, onSet, onSetMany }: SecretOutputProps) {
   return (
     <>
       <NodeFormSection title={localize(lang, "Доставка", "Delivery")}>
@@ -77,13 +80,13 @@ function EmailOutput({ data, lang, onSet }: OutputProps) {
         </div>
       </NodeFormSection>
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")}>
-        <SmtpSettings data={data} lang={lang} onSet={onSet} />
+        <SmtpSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />
       </AdvancedDisclosure>
     </>
   );
 }
 
-function TelegramOutput({ data, lang, onSet }: OutputProps) {
+function TelegramOutput({ data, lang, onSet, onSetMany }: SecretOutputProps) {
   return (
     <>
       <NodeFormSection title={localize(lang, "Доставка", "Delivery")}>
@@ -103,11 +106,14 @@ function TelegramOutput({ data, lang, onSet }: OutputProps) {
         </div>
       </NodeFormSection>
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")}>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Bot Token</Label>
-          <Input value={(data.bot_token as string) || ""} onChange={(event) => onSet("bot_token", event.target.value)} placeholder="1234567890:AAF..." className="h-8 text-xs font-mono" />
-          <FieldHint>{localize(lang, "Получите токен у @BotFather в Telegram.", "Get from @BotFather on Telegram.")}</FieldHint>
-        </div>
+        <ManagedSecretInput
+          data={data}
+          label="Bot Token"
+          lang={lang}
+          onSetMany={onSetMany}
+          placeholder="1234567890:AAF..."
+          secretKey="bot_token"
+        />
         <div className="space-y-1.5">
           <Label className="text-xs">Chat ID</Label>
           <Input value={(data.chat_id as string) || ""} onChange={(event) => onSet("chat_id", event.target.value)} placeholder="-100123456789" className="h-8 text-xs font-mono" />
@@ -118,14 +124,23 @@ function TelegramOutput({ data, lang, onSet }: OutputProps) {
   );
 }
 
-function SmtpSettings({ data, lang, onSet }: OutputProps) {
+function SmtpSettings({ data, lang, onSet, onSetMany }: SecretOutputProps) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground uppercase">{localize(lang, "SMTP настройки", "SMTP settings")}</Label>
       <Input value={(data.smtp_host as string) || ""} onChange={(event) => onSet("smtp_host", event.target.value)} placeholder="smtp.gmail.com" className="h-8 text-xs" />
       <div className="flex gap-2">
         <Input value={(data.smtp_user as string) || ""} onChange={(event) => onSet("smtp_user", event.target.value)} placeholder="user@gmail.com" className="h-8 text-xs flex-1" />
-        <Input value={(data.smtp_password as string) || ""} onChange={(event) => onSet("smtp_password", event.target.value)} placeholder="app password" type="password" className="h-8 text-xs w-28" />
+        <div className="w-44 shrink-0">
+          <ManagedSecretInput
+            data={data}
+            label="SMTP password"
+            lang={lang}
+            onSetMany={onSetMany}
+            placeholder="app password"
+            secretKey="smtp_password"
+          />
+        </div>
       </div>
     </div>
   );
@@ -135,4 +150,8 @@ type OutputProps = {
   data: NodeData;
   lang: Lang;
   onSet: SetNodeData;
+};
+
+type SecretOutputProps = OutputProps & {
+  onSetMany: SetNodePatch;
 };
