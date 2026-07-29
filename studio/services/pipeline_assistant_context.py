@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
+from studio.pipeline_secrets import redact_pipeline_secret_values
 
 
 def _extract_json_object(raw_text: str) -> dict[str, Any]:
@@ -23,6 +24,7 @@ def _extract_json_object(raw_text: str) -> dict[str, Any]:
 
 
 def _prompt_json(value: object, *, limit: int) -> str:
+    value = redact_pipeline_secret_values(value)
     try:
         serialized = json.dumps(value, ensure_ascii=False, indent=2)
     except TypeError:

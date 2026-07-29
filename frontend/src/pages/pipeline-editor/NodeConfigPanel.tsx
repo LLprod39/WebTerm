@@ -77,6 +77,7 @@ export function NodeConfigPanel({
   const { data: skillList = [] } = useQuery({ queryKey: ["studio", "skills"], queryFn: studioSkills.list });
   const { data: modelsData } = useQuery({ queryKey: ["api", "models"], queryFn: fetchModels });
   const [d, setD] = useState<Record<string, unknown>>(node.data || {});
+  const dataRef = useRef<Record<string, unknown>>(node.data || {});
   const [loadingModelsFor, setLoadingModelsFor] = useState<string | null>(null);
   const [webhookMapText, setWebhookMapText] = useState(() => toJsonEditorText(node.data?.webhook_payload_map));
   const [mcpArgsText, setMcpArgsText] = useState(
@@ -90,37 +91,31 @@ export function NodeConfigPanel({
   const isPluginNode = isPluginStudioNode(activeManifest);
   const pluginManifest = isPluginNode ? activeManifest : undefined;
 
-  const set = useCallback((key: string, val: unknown) => {
-    setD((prev) => {
-      const next = { ...prev, [key]: val };
-      onUpdate(node.id, next);
-      return next;
-    });
+  const setMany = useCallback((patch: Record<string, unknown>) => {
+    const next = { ...dataRef.current, ...patch };
+    dataRef.current = next;
+    setD(next);
+    onUpdate(node.id, next);
   }, [node.id, onUpdate]);
 
-  const setMany = useCallback((patch: Record<string, unknown>) => {
-    setD((prev) => {
-      const next = { ...prev, ...patch };
-      onUpdate(node.id, next);
-      return next;
-    });
-  }, [node.id, onUpdate]);
+  const set = useCallback((key: string, val: unknown) => {
+    setMany({ [key]: val });
+  }, [setMany]);
 
   const setMonitoringFilters = useCallback((patch: Record<string, unknown>) => {
-    setD((prev) => {
-      const next = { ...prev, ...patch } as Record<string, unknown>;
-      const monitoringFilters: Record<string, unknown> = {};
+    const next = { ...dataRef.current, ...patch } as Record<string, unknown>;
+    const monitoringFilters: Record<string, unknown> = {};
 
-      if (Array.isArray(next.server_ids) && next.server_ids.length) monitoringFilters.server_ids = next.server_ids;
-      if (Array.isArray(next.severities) && next.severities.length) monitoringFilters.severities = next.severities;
-      if (Array.isArray(next.alert_types) && next.alert_types.length) monitoringFilters.alert_types = next.alert_types;
-      if (Array.isArray(next.container_names) && next.container_names.length) monitoringFilters.container_names = next.container_names;
-      if (String(next.match_text || "").trim()) monitoringFilters.match_text = String(next.match_text || "").trim();
+    if (Array.isArray(next.server_ids) && next.server_ids.length) monitoringFilters.server_ids = next.server_ids;
+    if (Array.isArray(next.severities) && next.severities.length) monitoringFilters.severities = next.severities;
+    if (Array.isArray(next.alert_types) && next.alert_types.length) monitoringFilters.alert_types = next.alert_types;
+    if (Array.isArray(next.container_names) && next.container_names.length) monitoringFilters.container_names = next.container_names;
+    if (String(next.match_text || "").trim()) monitoringFilters.match_text = String(next.match_text || "").trim();
 
-      next.monitoring_filters = monitoringFilters;
-      onUpdate(node.id, next);
-      return next;
-    });
+    next.monitoring_filters = monitoringFilters;
+    dataRef.current = next;
+    setD(next);
+    onUpdate(node.id, next);
   }, [node.id, onUpdate]);
 
   const type = node.type as NodeType;
@@ -141,7 +136,9 @@ export function NodeConfigPanel({
   const mcpArgsState = parseJsonObjectText(mcpArgsText);
 
   useEffect(() => {
-    setD(node.data || {});
+    const nextData = node.data || {};
+    dataRef.current = nextData;
+    setD(nextData);
     setWebhookMapText(toJsonEditorText(node.data?.webhook_payload_map));
     setMcpArgsText(
       typeof node.data?.arguments_text === "string"
@@ -224,15 +221,11 @@ export function NodeConfigPanel({
           [prov]: res.models,
         }));
         if (res.models.length && providerRef.current === prov) {
-          setD((prev) => {
-            const next = { ...prev, provider: prov, model: res.models[0] };
-            onUpdate(node.id, next);
-            return next;
-          });
+          setMany({ provider: prov, model: res.models[0] });
         }
       })
       .finally(() => setLoadingModelsFor(null));
-  }, [loadingModelsFor, modelProvider, modelsData, node.id, onUpdate, queryClient, type]);
+  }, [loadingModelsFor, modelProvider, modelsData, queryClient, setMany, type]);
 
   const typeInfo = isPluginNode
     ? { label: pluginNodeLabel(pluginManifest as StudioCapabilityNode) }
@@ -430,8 +423,8 @@ export function NodeConfigPanel({
         />
         <SshCommandConfig type={type} data={d} servers={servers} lang={uiLang} onSet={set} />
         <OpsConfigSections type={type} data={d} servers={servers} lang={uiLang} onSet={set} />
-        <LogicConfigSections type={type} data={d} lang={uiLang} onSet={set} />
-        <OutputConfigSections type={type} data={d} lang={uiLang} onSet={set} />
+        <LogicConfigSections type={type} data={d} lang={uiLang} onSet={set} onSetMany={setMany} />
+        <OutputConfigSections type={type} data={d} lang={uiLang} onSet={set} onSetMany={setMany} />
         <LlmQueryConfig
           type={type}
           data={d}

@@ -12,6 +12,7 @@ class StudioConfig(AppConfig):
         from app.agent_kernel import mcp_runtime_registry, skill_promotion_registry, skill_provider_registry
         from app.runtime_limits import register_pipeline_run_limit_provider
         from app.smoke_seed_provider import register_smoke_pipeline_seed_provider
+        from studio import signals as _signals  # noqa: F401
         from studio.assistant_action_registry import register_assistant_actions
         from studio.mcp_runtime_adapter import StudioMCPRuntimeProvider
         from studio.runtime_limit_provider import DjangoPipelineRunLimitProvider

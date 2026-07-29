@@ -17,6 +17,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.decorators import require_feature
 from studio.models import PipelineRun
 from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline_secrets import hydrate_pipeline_node_data
 from studio.views.notification_views import _load_notif_config
 
 STUDIO_FEATURE_RUNS = "studio_runs"
@@ -82,7 +83,7 @@ def _package_attr(name: str, fallback):
 
 def _send_approval_telegram_confirmation(run: PipelineRun, node_id: str, decision: str) -> None:
     node = _lookup_run_node_snapshot(run, node_id) or {}
-    node_data = node.get("data") or {}
+    node_data = hydrate_pipeline_node_data(run.pipeline_id, node_id, node.get("data") or {})
     notif_cfg = _load_notif_config()
     bot_token = str(node_data.get("tg_bot_token") or notif_cfg.get("telegram_bot_token") or "").strip()
     chat_id = str(node_data.get("tg_chat_id") or notif_cfg.get("telegram_chat_id") or "").strip()

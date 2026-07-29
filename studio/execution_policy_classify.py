@@ -160,7 +160,15 @@ def _classify_external_output(
         ]
     if node_type == "output/telegram":
         chat_id = str(data.get("chat_id") or data.get("tg_chat_id") or "").strip()
-        bot_token = str(data.get("bot_token") or data.get("tg_bot_token") or "").strip()
+        bot_token = str(
+            data.get("bot_token")
+            or data.get("tg_bot_token")
+            or data.get("telegram_bot_token")
+            or data.get("bot_token_configured")
+            or data.get("tg_bot_token_configured")
+            or data.get("telegram_bot_token_configured")
+            or ""
+        ).strip()
         if not chat_id and not bot_token:
             return []
         return [

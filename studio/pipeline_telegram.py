@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import secrets
 import threading
 from typing import Any
 
@@ -11,6 +12,7 @@ from django.utils import timezone
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
 from studio.models import PipelineRun
+from studio.pipeline_secrets import get_pipeline_node_secret
 
 logger = logging.getLogger(__name__)
 
@@ -197,7 +199,7 @@ def store_telegram_operator_reply(bot_token: str, message: dict[str, Any]) -> bo
     runs = list(
         PipelineRun.objects.filter(status__in=[PipelineRun.STATUS_RUNNING, PipelineRun.STATUS_HIBERNATING])
         .order_by("-created_at")
-        .only("id", "node_states")[:100]
+        .only("id", "pipeline_id", "node_states")[:100]
     )
     for run in runs:
         node_states = run.node_states if isinstance(run.node_states, dict) else {}
@@ -214,8 +216,20 @@ def store_telegram_operator_reply(bot_token: str, message: dict[str, Any]) -> bo
                 prompt_message_id = 0
             if prompt_message_id != reply_to_message_id:
                 continue
-            stored_token = str(state.get("bot_token") or "").strip()
-            if stored_token and bot_token and stored_token != bot_token:
+            managed_token = get_pipeline_node_secret(
+                run.pipeline_id,
+                str(node_id),
+                "tg_bot_token",
+                "bot_token",
+                "telegram_bot_token",
+            )
+            legacy_token = str(state.get("bot_token") or "").strip()
+            if not managed_token and not legacy_token:
+                from studio.pipeline_notifications import _global_tg_defaults
+
+                managed_token = _global_tg_defaults()[0]
+            expected_token = managed_token or legacy_token
+            if not expected_token or not bot_token or not secrets.compare_digest(expected_token, bot_token):
                 continue
             next_state = dict(state)
             next_state.update(
