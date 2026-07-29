@@ -8,6 +8,7 @@ wiring coverage is tracked in security/FINDINGS_LEDGER.md (APP-003).
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from app.core.redacted_logging import redacted_config_value, redacted_log_text
 from app.egress_redaction import (
@@ -24,6 +25,19 @@ SECRET_SAMPLES = {
     "github_pat": "ghp_abcdefghijklmnopqrstuvwxyz0123456789",
     "connection": "postgres://user:hunter2@db.internal:5432/prod",
 }
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_repository_example_does_not_ship_a_telegram_bot_token():
+    """Tracked environment examples must never contain a live bot credential."""
+    assignments = [
+        line
+        for line in (REPOSITORY_ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+        if line.startswith("TELEGRAM_BOT_TOKEN=")
+    ]
+
+    assert assignments == ["TELEGRAM_BOT_TOKEN="]
 
 
 def test_redacted_log_text_strips_common_secrets():
