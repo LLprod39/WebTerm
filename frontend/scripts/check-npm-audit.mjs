@@ -117,7 +117,7 @@ function main() {
   ).length;
   if (highCount > 0) {
     console.log(
-      `npm audit policy: PASS (${ALLOWED_ADVISORY} is RSC-only; WebTrerm has no production RSC API usage)`,
+      `npm audit policy: PASS (${ALLOWED_ADVISORY} is RSC-only; WebTerm has no production RSC API usage)`,
     );
   } else {
     console.log("npm audit policy: PASS (no high or critical vulnerabilities)");
