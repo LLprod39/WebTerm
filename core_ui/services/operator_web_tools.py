@@ -10,9 +10,11 @@ import socket
 from html.parser import HTMLParser
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+import httpx
+from asgiref.sync import async_to_sync
 from django.core import signing
 
 from app.assistant_actions import (
@@ -23,6 +25,7 @@ from app.assistant_actions import (
     register_action,
 )
 from app.egress_redaction import redact_egress_text, sanitize_observation_text
+from app.outbound_http import OutboundHTTPPolicyError, request_outbound_http
 from core_ui.models import ChatMessage
 
 BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
@@ -217,36 +220,32 @@ def web_search(ctx: AssistantActionContext) -> dict[str, Any]:
 
 
 def _fetch_result_page(url: str) -> tuple[str, str, str]:
-    opener = build_opener(_NoRedirect())
     current = _public_url(url)
-    for _hop in range(MAX_REDIRECTS + 1):
-        request = Request(
+    try:
+        response = async_to_sync(request_outbound_http)(
+            "GET",
             current,
+            timeout=10,
+            max_redirects=MAX_REDIRECTS,
             headers={
                 "Accept": "text/html,text/plain,application/json;q=0.8",
                 "User-Agent": "WebTerm-Operator/1.0",
             },
         )
-        try:
-            response = opener.open(request, timeout=10)
-        except HTTPError as exc:
-            if exc.code in {301, 302, 303, 307, 308} and exc.headers.get("Location"):
-                current = _public_url(urljoin(current, exc.headers["Location"]))
-                continue
-            raise AssistantActionError(f"Source returned HTTP {exc.code}", status=502) from exc
-        except (URLError, TimeoutError, OSError) as exc:
-            raise AssistantActionError(f"Could not open source: {str(exc)[:200]}", status=502) from exc
-        with response:
-            content_type = str(response.headers.get_content_type() or "").lower()
-            if not any(content_type.startswith(value) for value in ALLOWED_CONTENT_TYPES):
-                raise AssistantActionError(f"Unsupported source content type: {content_type}")
-            raw = response.read(MAX_FETCH_BYTES + 1)
-            if len(raw) > MAX_FETCH_BYTES:
-                raise AssistantActionError("Source exceeded the 512 KB limit")
-            charset = response.headers.get_content_charset() or "utf-8"
-        text = raw.decode(charset, errors="replace")
-        return current, content_type, text
-    raise AssistantActionError("Too many source redirects")
+    except (OutboundHTTPPolicyError, httpx.HTTPError, TimeoutError, OSError) as exc:
+        raise AssistantActionError(f"Could not open source: {str(exc)[:200]}", status=502) from exc
+    if not 200 <= response.status_code < 300:
+        raise AssistantActionError(f"Source returned HTTP {response.status_code}", status=502)
+    content_type = str(response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()
+    if not any(content_type.startswith(value) for value in ALLOWED_CONTENT_TYPES):
+        raise AssistantActionError(f"Unsupported source content type: {content_type}")
+    raw = response.content
+    if len(raw) > MAX_FETCH_BYTES:
+        raise AssistantActionError("Source exceeded the 512 KB limit")
+    charset = str(getattr(response, "encoding", None) or "utf-8")
+    text = raw.decode(charset, errors="replace")
+    final_url = str((getattr(response, "extensions", {}) or {}).get("webterm_logical_url") or current)
+    return final_url, content_type, text
 
 
 def web_open_result(ctx: AssistantActionContext) -> dict[str, Any]:

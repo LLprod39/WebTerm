@@ -197,6 +197,9 @@ async def request_outbound_http(
 
             location = response.headers.get("location") if response.status_code in _REDIRECT_STATUSES else None
             if not location:
+                response_extensions = dict(getattr(response, "extensions", {}) or {})
+                response_extensions["webterm_logical_url"] = str(logical_url)
+                response.extensions = response_extensions
                 return response
             if redirect_count >= redirect_limit:
                 raise OutboundHTTPPolicyError("Outbound HTTP redirect limit exceeded")

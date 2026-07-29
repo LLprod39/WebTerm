@@ -173,3 +173,38 @@ def test_outbound_http_revalidates_redirect_before_second_request():
         )
 
     assert requests == ["https://93.184.216.34/start"]
+
+
+def test_outbound_http_records_validated_logical_url_after_redirect():
+    requests: list[str] = []
+
+    async def public_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
+    class RedirectingClient:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        async def request(self, _method: str, url, **_kwargs):
+            requests.append(str(url))
+            if len(requests) == 1:
+                return SimpleNamespace(status_code=302, headers={"location": "/final"}, extensions={})
+            return SimpleNamespace(status_code=200, headers={}, extensions={})
+
+    response = async_to_sync(request_outbound_http)(
+        "GET",
+        "https://public.example/start",
+        timeout=5,
+        max_redirects=1,
+        client_factory=RedirectingClient,
+        resolver=public_resolver,
+    )
+
+    assert requests == ["https://93.184.216.34/start", "https://93.184.216.34/final"]
+    assert response.extensions["webterm_logical_url"] == "https://public.example/final"
