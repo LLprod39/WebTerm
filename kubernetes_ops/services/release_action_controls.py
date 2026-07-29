@@ -4,6 +4,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -45,6 +46,11 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
     try:
         with transaction.atomic():
             suffix = uuid.uuid4().hex[:10]
+            approver = get_user_model().objects.create_user(
+                username=f"release-evidence-approver-{suffix}",
+                password=None,
+                is_staff=True,
+            )
             cluster = K8sCluster.objects.create(name=f"release-evidence-{suffix}", environment="test")
             restricted_gate_cluster = K8sCluster(name=f"release-evidence-prod-{suffix}", environment="prod")
             restricted_gate_missing = production_write_restricted_credential_gate_report(
@@ -97,7 +103,7 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 allowed_namespaces=["release-evidence"],
                 reason="release evidence apply action request smoke",
                 approval_ref="CHG-RELEASE-EVIDENCE",
-                approved_by=user,
+                approved_by=approver,
                 approved_at=timezone.now(),
                 expires_at=timezone.now() + timedelta(minutes=30),
             )
@@ -223,7 +229,7 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
             )
             approved_request = approve_external_action_request(
                 action_request=action_request,
-                user=user,
+                user=approver,
                 data={
                     "approval_ref": "CHG-RELEASE-EVIDENCE",
                     "summary": "release evidence external approval smoke",
@@ -243,7 +249,7 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 },
             )
             terminal_execute_rejected = _terminal_execute_rejected(verified_request, user)
-            blocked_request = _blocked_execution_request(user, workload)
+            blocked_request = _blocked_execution_request(user, approver, workload)
             terminal_verify_rejected = _terminal_verify_rejected(blocked_request, user)
             restart_verification_plan = build_native_action_verification_plan(
                 action_request=action_request,
@@ -353,6 +359,7 @@ def build_kubernetes_release_action_controls_evidence(user, enabled: bool) -> di
                 "created_request_status": K8sActionRequest.STATUS_PENDING_APPROVAL,
                 "approval_status": approval_status,
                 "approval_recorded": approval_recorded,
+                "approval_principals_distinct": approved_request.requested_by_id != approver.id,
                 "preview_blast_radius": action_request.preview.get("blast_radius"),
                 "scale_request_status": scale_request.status,
                 "scale_preview_blast_radius": scale_request.preview.get("blast_radius"),

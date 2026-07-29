@@ -58,6 +58,8 @@ def _action_request_not_found() -> JsonResponse:
 
 
 def _action_error_status(error: ActionRequestValidationError) -> int:
+    if error.code == "self_approval_forbidden":
+        return 403
     return 409 if error.code in {"action_request_not_pending", "action_request_not_approved"} else 400
 
 

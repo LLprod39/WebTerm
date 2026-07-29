@@ -137,6 +137,7 @@ def test_kubernetes_release_evidence_green_before_sidebar_flag_when_all_runtime_
         evidence["action_controls"]["mode"],
         evidence["action_controls"]["approval_status"],
     ) == ("ready", "transaction_rollback", K8sActionRequest.STATUS_APPROVED_EXTERNAL)
+    assert evidence["action_controls"]["approval_principals_distinct"] is True
     assert (
         evidence["action_controls"]["approval_recorded"],
         evidence["action_controls"]["native_execution_enabled"],

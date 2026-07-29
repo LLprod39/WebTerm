@@ -18,9 +18,9 @@ def _terminal_execute_rejected(action_request: K8sActionRequest, user) -> bool:
     return False
 
 
-def _blocked_execution_request(user, workload: K8sWorkloadRef) -> K8sActionRequest:
+def _blocked_execution_request(requester, approver, workload: K8sWorkloadRef) -> K8sActionRequest:
     request = create_kubernetes_action_request(
-        user=user,
+        user=requester,
         data={
             "action": K8sActionRequest.ACTION_K8S_ROLLOUT_RESTART,
             "reason": "release evidence execution block smoke",
@@ -29,13 +29,13 @@ def _blocked_execution_request(user, workload: K8sWorkloadRef) -> K8sActionReque
     )
     request = approve_external_action_request(
         action_request=request,
-        user=user,
+        user=approver,
         data={
             "approval_ref": "CHG-RELEASE-EVIDENCE-BLOCK",
             "summary": "release evidence blocked execution approval smoke",
         },
     )
-    return block_kubernetes_action_execution(action_request=request, user=user)
+    return block_kubernetes_action_execution(action_request=request, user=requester)
 
 
 def _terminal_verify_rejected(action_request: K8sActionRequest, user) -> bool:
