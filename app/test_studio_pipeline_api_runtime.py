@@ -208,8 +208,14 @@ def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
 
     captured: dict[str, object] = {}
 
-    async def fake_build_connect_kwargs(_server):
-        return {"host": "ssh-target", "port": 2222, "username": "smoke", "password": "smoke-password"}
+    async def fake_build_connect_kwargs(_server, *, connect_timeout=None):
+        return {
+            "host": "ssh-target",
+            "port": 2222,
+            "username": "smoke",
+            "password": "smoke-password",
+            "connect_timeout": connect_timeout,
+        }
 
     async def fake_log_pipeline_ssh_command(**kwargs):
         captured["log"] = kwargs
@@ -230,7 +236,8 @@ def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
         captured["connect_kwargs"] = kwargs
         return DummyConn()
 
-    monkeypatch.setattr("servers.monitor._build_connect_kwargs", fake_build_connect_kwargs)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.get_server_connect_kwargs", fake_build_connect_kwargs)
+    monkeypatch.setattr("studio.pipeline_agent_runtime.get_server_sudo_password", lambda _server: "")
     monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
     monkeypatch.setattr(Server.objects, "get", lambda *args, **kwargs: server)
     monkeypatch.setattr(asyncssh, "connect", fake_connect)
