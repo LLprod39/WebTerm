@@ -10,6 +10,8 @@ from django.db.models import Q
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sCluster, K8sProvider
 from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.services.admin_resource_registry import (
+    COMMON_KIND_API_VERSIONS,
+    COMMON_RESOURCE_KINDS,
     COMMON_RESOURCES,
     display_kind,
     pluralize_kind,
@@ -110,7 +112,30 @@ def build_resource_ref(
     if not normalized_kind:
         raise AdminResourceError("kind is required.", code="kind_required")
     configured = COMMON_RESOURCES.get((version, normalized_kind), {})
-    resource_name = str(resource or configured.get("resource") or pluralize_kind(normalized_kind)).strip().lower()
+    requested_resource = str(resource or "").strip().lower()
+    expected_resource = str(configured.get("resource") or "")
+    resource_kind = COMMON_RESOURCE_KINDS.get((version, requested_resource)) if requested_resource else None
+    if configured:
+        if requested_resource and requested_resource != expected_resource:
+            raise AdminResourceError(
+                "resource does not match api_version and kind.",
+                code="resource_kind_mismatch",
+                payload={"expected_resource": expected_resource, "kind": normalized_kind, "api_version": version},
+            )
+        resource_name = expected_resource
+    elif COMMON_KIND_API_VERSIONS.get(normalized_kind) or resource_kind:
+        raise AdminResourceError(
+            "resource does not match api_version and kind.",
+            code="resource_kind_mismatch",
+            payload={
+                "expected_api_versions": sorted(COMMON_KIND_API_VERSIONS.get(normalized_kind, ())),
+                "resource_kind": resource_kind or "",
+                "kind": normalized_kind,
+                "api_version": version,
+            },
+        )
+    else:
+        resource_name = requested_resource or pluralize_kind(normalized_kind)
     return KubernetesResourceRef(
         api_version=version,
         kind=normalized_kind,

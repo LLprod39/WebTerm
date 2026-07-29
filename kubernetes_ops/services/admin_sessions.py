@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from kubernetes_ops.models import K8sAdminSession, K8sCluster, K8sProvider
 from kubernetes_ops.permissions import kubernetes_permission_policy
+from kubernetes_ops.services.admin_resource_registry import display_kind
 
 
 class AdminSessionValidationError(ValueError):
@@ -105,6 +106,29 @@ def _allowed_verbs_for_mode(mode: str) -> list[str]:
     ):
         verbs.append("apply")
     return verbs
+
+
+def _allowed_kinds_for_mode(mode: str, value: Any) -> list[str]:
+    requested = _clean_string_list(value, max_length=80)
+    defaults = list(MODE_ALLOWED_KINDS[mode])
+    if not requested:
+        return defaults
+    normalized = []
+    for item in requested:
+        kind = display_kind(item).lower()
+        if kind and kind not in normalized:
+            normalized.append(kind)
+    if "*" in defaults:
+        return normalized
+    allowed = set(defaults)
+    invalid = sorted(item for item in normalized if item not in allowed)
+    if invalid:
+        raise AdminSessionValidationError(
+            "allowed_kinds cannot expand the selected admin mode scope.",
+            code="allowed_kinds_out_of_scope",
+            payload={"invalid_kinds": invalid, "allowed_kinds": defaults},
+        )
+    return normalized
 
 
 def _cluster_from_value(value: Any) -> K8sCluster | None:
@@ -204,7 +228,7 @@ def create_admin_session(*, user, data: dict[str, Any]) -> K8sAdminSession:
         allowed_namespaces.insert(0, namespace)
     if not allowed_namespaces:
         allowed_namespaces = [namespace] if namespace else ["*"]
-    allowed_kinds = _clean_string_list(data.get("allowed_kinds"), max_length=80) or MODE_ALLOWED_KINDS[mode]
+    allowed_kinds = _allowed_kinds_for_mode(mode, data.get("allowed_kinds"))
 
     status = (
         K8sAdminSession.STATUS_ACTIVE if mode == K8sAdminSession.MODE_READ else K8sAdminSession.STATUS_PENDING_APPROVAL

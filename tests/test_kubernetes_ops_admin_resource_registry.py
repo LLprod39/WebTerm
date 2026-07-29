@@ -1,6 +1,8 @@
+import pytest
+
 from kubernetes_ops.models import K8sCluster, K8sProvider
 from kubernetes_ops.services.admin_resource_registry import common_resource_payload
-from kubernetes_ops.services.admin_resources import build_resource_ref, rancher_resource_path
+from kubernetes_ops.services.admin_resources import AdminResourceError, build_resource_ref, rancher_resource_path
 
 
 def _provider() -> K8sProvider:
@@ -44,6 +46,22 @@ def test_resource_ref_accepts_common_kubectl_aliases():
     assert (pdb.kind, pdb.resource) == ("PodDisruptionBudget", "poddisruptionbudgets")
     assert (service_account.kind, service_account.resource) == ("ServiceAccount", "serviceaccounts")
     assert (network_policy.kind, network_policy.resource) == ("NetworkPolicy", "networkpolicies")
+
+
+@pytest.mark.parametrize(
+    ("api_version", "kind", "resource"),
+    [
+        ("apps/v1", "Deployment", "secrets"),
+        ("v1", "Secret", "deployments"),
+        ("v1", "Deployment", "deployments"),
+        ("apps/v1", "UnknownKind", "deployments"),
+    ],
+)
+def test_resource_ref_rejects_mismatched_known_resource_identity(api_version, kind, resource):
+    with pytest.raises(AdminResourceError) as denied:
+        build_resource_ref(api_version=api_version, kind=kind, resource=resource, namespace="payments", name="target")
+
+    assert denied.value.code == "resource_kind_mismatch"
 
 
 def test_rancher_resource_path_handles_new_namespaced_and_cluster_scoped_resources():
