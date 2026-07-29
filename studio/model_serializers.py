@@ -104,7 +104,7 @@ def pipeline_to_detail_dict(pipeline) -> dict:
 
 
 def pipeline_run_to_dict(run) -> dict:
-    from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
+    from studio.pipeline_secrets import redact_pipeline_nodes, serialize_pipeline_node_states
 
     trigger = getattr(run, "trigger", None)
     return {
@@ -112,7 +112,7 @@ def pipeline_run_to_dict(run) -> dict:
         "pipeline_id": run.pipeline_id,
         "pipeline_name": run.pipeline.name,
         "status": run.status,
-        "node_states": redact_pipeline_secret_values(run.node_states),
+        "node_states": serialize_pipeline_node_states(run.node_states),
         "nodes_snapshot": redact_pipeline_nodes(run.nodes_snapshot),
         "context": run.context,
         "summary": run.summary,

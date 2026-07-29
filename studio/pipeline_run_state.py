@@ -12,6 +12,7 @@ from core_ui.activity import log_user_activity_async
 from .models import PipelineRun
 from .pipeline_context import pipeline_actor_context
 from .pipeline_routing import serialize_routing_state
+from .pipeline_secrets import serialize_pipeline_node_state
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,11 @@ async def update_node_state(run: PipelineRun, node_id: str, state: dict):
         with contextlib.suppress(Exception):
             await layer.group_send(
                 f"pipeline_run_{run.pk}",
-                {"type": "pipeline.node.state", "node_id": node_id, "state": state},
+                {
+                    "type": "pipeline.node.state",
+                    "node_id": node_id,
+                    "state": serialize_pipeline_node_state(state),
+                },
             )
 
 
