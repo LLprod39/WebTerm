@@ -49,9 +49,7 @@ def server_test_connection(request, server_id):
         is_owner = server.user_id == request.user.id
         trusted_host_keys = get_server_trusted_host_keys(server)
         trusted_fingerprints = [
-            str(item.get("fingerprint_sha256") or "")
-            for item in trusted_host_keys
-            if item.get("fingerprint_sha256")
+            str(item.get("fingerprint_sha256") or "") for item in trusted_host_keys if item.get("fingerprint_sha256")
         ]
 
         if (refresh_host_key or enroll_host_key) and not is_owner:
@@ -79,7 +77,9 @@ def server_test_connection(request, server_id):
                     }
                 )
             except (SSHHostKeyEnrollmentRequired, SSHHostKeyRotationRequired) as exc:
-                return JsonResponse({"success": False, "code": "host_key_enrollment_rejected", "error": str(exc)}, status=409)
+                return JsonResponse(
+                    {"success": False, "code": "host_key_enrollment_rejected", "error": str(exc)}, status=409
+                )
 
             log_user_activity(
                 user=request.user,

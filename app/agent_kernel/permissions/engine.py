@@ -351,9 +351,7 @@ class PermissionEngine:
             spec,
             args,
             allowed=False,
-            reason=(
-                f"{self.mode} блокирует составную, косвенную или неклассифицированную shell-команду."
-            ),
+            reason=(f"{self.mode} блокирует составную, косвенную или неклассифицированную shell-команду."),
             requires_approval=True,
             risk_categories=("unclassified_shell",),
         )

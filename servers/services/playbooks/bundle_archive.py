@@ -295,9 +295,13 @@ def _read_zip(data: bytes, limits: BundleLimits, *, allow_single_root: bool = Fa
         if len(members) > limits.max_files:
             raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
         normalized_paths = [normalize_bundle_path(info.filename) for info in members]
-        root_prefix = _single_root_prefix(
-            [path for info, path in zip(members, normalized_paths, strict=True) if not info.is_dir()]
-        ) if allow_single_root else ""
+        root_prefix = (
+            _single_root_prefix(
+                [path for info, path in zip(members, normalized_paths, strict=True) if not info.is_dir()]
+            )
+            if allow_single_root
+            else ""
+        )
         for info, normalized_path in zip(members, normalized_paths, strict=True):
             path = _strip_root_prefix(normalized_path, root_prefix)
             if not path and info.is_dir():
@@ -334,9 +338,13 @@ def _read_tar(data: bytes, limits: BundleLimits, *, allow_single_root: bool = Fa
         if len(members) > limits.max_files:
             raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
         normalized_paths = [normalize_bundle_path(member.name) for member in members]
-        root_prefix = _single_root_prefix(
-            [path for member, path in zip(members, normalized_paths, strict=True) if member.isfile()]
-        ) if allow_single_root else ""
+        root_prefix = (
+            _single_root_prefix(
+                [path for member, path in zip(members, normalized_paths, strict=True) if member.isfile()]
+            )
+            if allow_single_root
+            else ""
+        )
         for member_count, (member, normalized_path) in enumerate(
             zip(members, normalized_paths, strict=True),
             start=1,
@@ -385,7 +393,7 @@ def _strip_root_prefix(path: str, root_prefix: str) -> str:
     if path == root_prefix:
         return ""
     prefix = f"{root_prefix}/"
-    return path[len(prefix):] if path.startswith(prefix) else path
+    return path[len(prefix) :] if path.startswith(prefix) else path
 
 
 def _bundle_file(path: str, content: bytes) -> BundleFile:
