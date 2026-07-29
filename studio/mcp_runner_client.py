@@ -78,8 +78,9 @@ class _ManagedMCPClient:
     def _headers(self) -> dict[str, str]:
         headers = {"Content-Type": "application/json"}
         token = _mcp_runner_token()
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        if not token:
+            raise MCPClientError("STUDIO_MCP_RUNNER_TOKEN is required when the MCP Runner is enabled")
+        headers["Authorization"] = f"Bearer {token}"
         return headers
 
     async def _call_runner(

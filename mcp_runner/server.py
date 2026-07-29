@@ -17,6 +17,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from mcp_runner.config import RunnerConfig
+from mcp_runner.security import RunnerAuthError, authorize_request, public_health_payload
 from mcp_runner.sessions import RunnerError, SessionManager
 
 logger = logging.getLogger("mcp_runner")
@@ -41,13 +42,10 @@ class RpcRequest(BaseModel):
 
 
 async def _require_token(authorization: str | None = Header(default=None)) -> None:
-    if not config.token:
-        # No token configured => auth disabled (single-tenant/dev). Fail closed in
-        # production by always setting MCP_RUNNER_TOKEN.
-        return
-    expected = f"Bearer {config.token}"
-    if authorization != expected:
-        raise HTTPException(status_code=401, detail="Invalid or missing runner token")
+    try:
+        authorize_request(config.token, authorization)
+    except RunnerAuthError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 async def _reaper() -> None:
@@ -63,6 +61,7 @@ async def _reaper() -> None:
 
 @contextlib.asynccontextmanager
 async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
+    config.validate_startup()
     task = asyncio.create_task(_reaper())
     try:
         yield
@@ -78,7 +77,7 @@ app = FastAPI(title="WebTerm MCP Runner", lifespan=_lifespan)
 
 @app.get("/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "service": "mcp-runner", **manager.stats()}
+    return public_health_payload(manager.stats())
 
 
 @app.post("/rpc", dependencies=[Depends(_require_token)])

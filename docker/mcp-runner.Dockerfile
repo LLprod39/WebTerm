@@ -32,7 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-venv \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 10001 mcp-runner \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin mcp-runner
 
 WORKDIR /app
 
@@ -41,13 +43,16 @@ RUN python3 -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r /app/mcp_runner/requirements.txt
 ENV PATH="/opt/venv/bin:${PATH}"
 
-COPY mcp_runner /app/mcp_runner
+COPY --chown=10001:10001 mcp_runner /app/mcp_runner
 
 # Writable caches so npx/uvx reuse downloads across spawns instead of refetching.
 ENV NPM_CONFIG_CACHE=/app/.cache/npm \
     UV_CACHE_DIR=/app/.cache/uv \
     XDG_CACHE_HOME=/app/.cache
-RUN mkdir -p /app/.cache/npm /app/.cache/uv
+RUN mkdir -p /app/.cache/npm /app/.cache/uv \
+    && chown -R 10001:10001 /app/.cache
+
+USER 10001:10001
 
 EXPOSE 9000
 

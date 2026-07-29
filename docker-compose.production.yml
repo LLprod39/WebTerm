@@ -53,7 +53,7 @@ x-backend-worker: &backend-worker
     # MCP Runner: workers execute agent/pipeline MCP calls too, so they route
     # stdio MCP through the shared runner instead of spawning on the host.
     STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
-    STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+    STUDIO_MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
     WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
     WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
     WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
@@ -226,7 +226,7 @@ services:
       # this host) and become available to non-admins. Set STUDIO_MCP_RUNNER_TOKEN
       # to a strong shared secret so only the backend can reach the runner.
       STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
-      STUDIO_MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+      STUDIO_MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
       # Production HTTP processes intentionally have no Docker socket. Runtime
       # execution is owned by the durable playbook worker below.
       WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
@@ -514,7 +514,7 @@ services:
     container_name: mini-prod-mcp-runner
     environment:
       <<: *proxy-env
-      MCP_RUNNER_TOKEN: ${STUDIO_MCP_RUNNER_TOKEN:-}
+      MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
       MCP_RUNNER_SESSION_TTL_SECONDS: ${MCP_RUNNER_SESSION_TTL_SECONDS:-300}
       MCP_RUNNER_MAX_SESSIONS: ${MCP_RUNNER_MAX_SESSIONS:-50}
       MCP_RUNNER_REQUEST_TIMEOUT_SECONDS: ${MCP_RUNNER_REQUEST_TIMEOUT_SECONDS:-120}
@@ -522,6 +522,16 @@ services:
     # published to the host.
     expose:
       - "9000"
+    user: "10001:10001"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+      - /app/.cache:rw,nosuid,nodev,size=512m,uid=10001,gid=10001,mode=0700
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
     restart: unless-stopped
     healthcheck:
       test:
