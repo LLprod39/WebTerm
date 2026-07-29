@@ -26,6 +26,7 @@ from servers.agent_service import (
 )
 from servers.agents import get_all_templates, get_template
 from servers.models import ServerAgent
+from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 from servers.views.server_helpers import _accessible_servers_queryset
 
 
@@ -226,6 +227,18 @@ def agent_create(request):
         if not stop_conditions:
             stop_conditions = tpl.get("stop_conditions", [])
 
+    execution_servers, denied_server_ids = resolve_servers_for_user_capability(
+        server_ids,
+        request.user,
+        CAPABILITY_EXECUTE_COMMAND,
+        base_queryset=_accessible_servers_queryset(request.user),
+    )
+    if denied_server_ids:
+        return JsonResponse(
+            {"success": False, "error": "Missing server capability: execute_command"},
+            status=403,
+        )
+
     agent = ServerAgent.objects.create(
         user=request.user,
         name=name,
@@ -249,8 +262,7 @@ def agent_create(request):
         report_delivery=report_delivery,
     )
 
-    accessible = _accessible_servers_queryset(request.user).filter(id__in=server_ids)
-    agent.servers.set(accessible)
+    agent.servers.set(execution_servers)
 
     log_user_activity(
         user=request.user,
@@ -336,11 +348,23 @@ def agent_update(request, agent_id):
     if "report_delivery" in data:
         agent.report_delivery = normalize_report_delivery(data.get("report_delivery"))
 
+    execution_servers = None
     if "server_ids" in data:
-        accessible = _accessible_servers_queryset(request.user).filter(id__in=data["server_ids"])
-        agent.servers.set(accessible)
+        execution_servers, denied_server_ids = resolve_servers_for_user_capability(
+            data["server_ids"],
+            request.user,
+            CAPABILITY_EXECUTE_COMMAND,
+            base_queryset=_accessible_servers_queryset(request.user),
+        )
+        if denied_server_ids:
+            return JsonResponse(
+                {"success": False, "error": "Missing server capability: execute_command"},
+                status=403,
+            )
 
     agent.save()
+    if execution_servers is not None:
+        agent.servers.set(execution_servers)
     return JsonResponse({"success": True})
 
 

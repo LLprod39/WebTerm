@@ -117,21 +117,21 @@ def save_lesson_from_operator(
 
     from app.agent_kernel import operator_provider_registry
 
-    accessible = {
-        int(sid)
-        for sid in operator_provider_registry.accessible_servers_queryset(user)
+    owned = {
+        int(server_id)
+        for server_id in operator_provider_registry.owned_servers_queryset(user)
         .filter(pk__in=server_ids)
         .values_list("id", flat=True)
     }
-    denied = [sid for sid in server_ids if int(sid) not in accessible]
+    denied = [server_id for server_id in server_ids if int(server_id) not in owned]
     if denied:
-        raise PermissionError(f"Servers not accessible: {denied}")
+        raise PermissionError(f"Servers are not owned by the operator: {denied}")
 
     results = []
-    for sid in sorted(accessible)[:20]:
+    for server_id in sorted(owned)[:20]:
         results.append(
             _ingest_lesson_to_server(
-                server_id=sid,
+                server_id=server_id,
                 title=title,
                 body=lesson,
                 actor_user_id=getattr(user, "id", None),

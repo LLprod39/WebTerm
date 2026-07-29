@@ -28,6 +28,11 @@ class ServersOperatorProvider:
 
         return _accessible_servers_queryset(user)
 
+    def owned_servers_queryset(self, user: Any) -> Any:
+        from servers.models import Server
+
+        return Server.objects.filter(user=user, is_active=True, server_type="ssh")
+
     def server_names_for_ids(self, ids: list[int]) -> list[str]:
         from servers.models import Server
 

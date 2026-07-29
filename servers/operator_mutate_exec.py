@@ -119,12 +119,12 @@ def _execute_on_server(ctx: AssistantActionContext, server, command: str, *, all
         }
 
     _require_ssh_server(server)
-    if not _server_has_capability(server, ctx.user, "connect_terminal"):
+    if not _server_has_capability(server, ctx.user, "execute_command"):
         return {
             "ok": False,
             "server_id": server.id,
             "server_name": server.name,
-            "error": "Missing capability: connect_terminal",
+            "error": "Missing capability: execute_command",
         }
 
     secret = _resolve_secret(ctx, server)

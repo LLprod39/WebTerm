@@ -28,9 +28,10 @@ from servers.agent_dispatch import (
 from servers.agent_engine import AgentEngine
 from servers.agent_run_report import refresh_agent_run_report_payload
 from servers.agent_runtime import is_runtime_stop_requested
-from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent
+from servers.models import AgentRun, AgentRunDispatch, ServerAgent
 from servers.multi_agent_engine import MultiAgentEngine
 from servers.run_events import record_run_event, record_run_event_async
+from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 from servers.worker_state import heartbeat_background_worker
 
 
@@ -109,10 +110,12 @@ async def _run_agent_background(
         thread_sensitive=True,
     )()
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
-    servers = await sync_to_async(
-        lambda: _load_servers_in_order(server_ids),
+    servers, denied_server_ids = await sync_to_async(
+        lambda: resolve_servers_for_user_capability(server_ids, user, CAPABILITY_EXECUTE_COMMAND),
         thread_sensitive=True,
     )()
+    if denied_server_ids:
+        raise PermissionError("Missing server capability: execute_command")
     if not servers:
         await sync_to_async(_mark_background_failure, thread_sensitive=True)(
             run_id,
@@ -173,10 +176,12 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         thread_sensitive=True,
     )()
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
-    servers = await sync_to_async(
-        lambda: _load_servers_in_order(server_ids),
+    servers, denied_server_ids = await sync_to_async(
+        lambda: resolve_servers_for_user_capability(server_ids, user, CAPABILITY_EXECUTE_COMMAND),
         thread_sensitive=True,
     )()
+    if denied_server_ids:
+        raise PermissionError("Missing server capability: execute_command")
     skills, skill_errors = await sync_to_async(
         lambda: skill_provider_registry.resolve_skills(list(agent.skill_slugs or [])),
         thread_sensitive=True,
@@ -263,8 +268,3 @@ async def execute_agent_dispatch(
         with contextlib.suppress(asyncio.CancelledError):
             await heartbeat_task
         await sync_to_async(connections.close_all, thread_sensitive=True)()
-
-
-def _load_servers_in_order(server_ids: list[int]) -> list[Server]:
-    servers_by_id = {server.id: server for server in Server.objects.filter(id__in=server_ids)}
-    return [servers_by_id[server_id] for server_id in server_ids if server_id in servers_by_id]
