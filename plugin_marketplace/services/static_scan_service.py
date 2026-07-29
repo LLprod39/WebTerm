@@ -5,6 +5,8 @@ from pathlib import PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
+from plugin_marketplace.archive_paths import is_safe_archive_member
+
 BLOCKED_NAMES = {
     "install.sh",
     "postinstall.sh",
@@ -59,13 +61,6 @@ class StaticScanResult:
         }
 
 
-def _safe_zip_name(name: str) -> bool:
-    item = PurePosixPath(name)
-    if item.is_absolute() or ".." in item.parts:
-        return False
-    return bool(item.parts) and not any(part.startswith("\\") for part in item.parts)
-
-
 def _sandbox_code_entry_allowed(name: str) -> bool:
     path = PurePosixPath(name)
     lowered = str(path).lower()
@@ -107,7 +102,7 @@ def scan_package_entries(entries: list[tuple[str, int]], *, allow_sandboxed_code
     findings: list[StaticScanFinding] = []
     for name, file_size in entries:
         path_name = PurePosixPath(name).name.lower()
-        if not _safe_zip_name(name):
+        if not is_safe_archive_member(name):
             findings.append(
                 StaticScanFinding(
                     code="unsafe_path",

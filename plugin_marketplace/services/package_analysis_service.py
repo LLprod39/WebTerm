@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from plugin_marketplace.archive_paths import is_safe_archive_member
 from plugin_marketplace.services.dependency_policy_service import (
     configured_sandbox_dependency_allowlist,
     dependency_policy_blockers,
@@ -31,11 +32,6 @@ REQUIREMENT_NAME_RE = re.compile(r"^\s*([A-Za-z0-9_.-]+)")
 
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def _is_safe_archive_path(name: str) -> bool:
-    path = PurePosixPath(name)
-    return bool(path.parts) and not path.is_absolute() and ".." not in path.parts
 
 
 def _dependency_from_requirement(line: str) -> str:
@@ -143,7 +139,7 @@ def analyze_wtp_archive(
                 continue
             raw = archive.read(info.filename)
             basename = PurePosixPath(info.filename).name.lower()
-            safe_path = _is_safe_archive_path(info.filename)
+            safe_path = is_safe_archive_member(info.filename)
             file_record = {
                 "path": info.filename,
                 "size": info.file_size,
