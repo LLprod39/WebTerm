@@ -16,6 +16,7 @@ AUTHORITATIVE_DOCS = (
     "docs/architecture/ARCHITECTURE_CONTRACT.md",
     "docs/architecture/CI_GOVERNANCE.md",
     "docs/architecture/KUBERNETES_OPS_OPERATIONS.md",
+    "docs/architecture/WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md",
     "docs/architecture/adr/README.md",
     "docs/architecture/adr/0001-primary-runtime-and-toolchain.md",
     "docs/architecture/adr/0002-public-version-reset.md",
