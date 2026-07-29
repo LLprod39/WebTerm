@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import socket
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from typing import Any
 
 import httpx
@@ -51,6 +51,7 @@ async def validate_outbound_http_target(
     resolver: AddressResolver | None = None,
     *,
     allow_private: bool = False,
+    allowed_hosts: Collection[str] | None = None,
 ) -> tuple[httpx.URL, httpx.URL, str]:
     try:
         logical_url = httpx.URL(url)
@@ -67,6 +68,14 @@ async def validate_outbound_http_target(
     host = logical_url.host.rstrip(".").lower()
     if not host:
         raise OutboundHTTPPolicyError("Outbound HTTP URL has no destination host")
+    if allowed_hosts is not None:
+        normalized_allowed_hosts = {
+            str(allowed_host).strip().rstrip(".").lower()
+            for allowed_host in allowed_hosts
+            if str(allowed_host).strip()
+        }
+        if host not in normalized_allowed_hosts:
+            raise OutboundHTTPPolicyError("Outbound HTTP destination host is not allowed")
 
     try:
         direct_address = ipaddress.ip_address(host)
@@ -112,10 +121,12 @@ async def prepare_outbound_http_request(
     headers: Mapping[str, str] | httpx.Headers | None = None,
     *,
     allow_private: bool = False,
+    allowed_hosts: Collection[str] | None = None,
 ) -> tuple[httpx.URL, httpx.Headers, dict[str, str | None]]:
     logical_url, pinned_url, host_header = await validate_outbound_http_target(
         url,
         allow_private=allow_private,
+        allowed_hosts=allowed_hosts,
     )
     secured_headers = httpx.Headers(headers or {})
     secured_headers["Host"] = host_header
@@ -151,6 +162,7 @@ async def request_outbound_http(
     client_factory: Callable[..., Any] | None = None,
     resolver: AddressResolver | None = None,
     allow_private: bool = False,
+    allowed_hosts: Collection[str] | None = None,
     **request_kwargs: Any,
 ) -> httpx.Response:
     """Request a public destination through a DNS-pinned, proxy-free connection.
@@ -169,6 +181,7 @@ async def request_outbound_http(
         url,
         resolver,
         allow_private=allow_private,
+        allowed_hosts=allowed_hosts,
     )
     request_headers = httpx.Headers(headers or {})
     request_payload = dict(request_kwargs)
@@ -199,6 +212,7 @@ async def request_outbound_http(
                 next_logical,
                 resolver,
                 allow_private=allow_private,
+                allowed_hosts=allowed_hosts,
             )
 
     raise OutboundHTTPPolicyError("Outbound HTTP request did not produce a response")

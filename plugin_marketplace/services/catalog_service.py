@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from typing import Any
 
+import httpx
+from asgiref.sync import async_to_sync
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from app.outbound_http import OutboundHTTPPolicyError, request_outbound_http
 from app.plugins.validation import validate_plugin_manifest
 from core_ui.models import UserActivityLog
 from plugin_marketplace.models import MarketplaceCatalogItem, MarketplaceSource, PluginInstallation, PluginPackage
@@ -167,7 +168,7 @@ def _allowed_catalog_hosts() -> set[str]:
     configured = getattr(settings, "PLUGIN_MARKETPLACE_CATALOG_SOURCE_ALLOWED_HOSTS", [])
     if isinstance(configured, str):
         configured = [configured]
-    return {str(item).lower() for item in configured if str(item).strip()}
+    return {str(item).strip().rstrip(".").lower() for item in configured if str(item).strip()}
 
 
 def _validate_federated_catalog_url(source_url: str) -> urllib.parse.ParseResult:
@@ -176,7 +177,9 @@ def _validate_federated_catalog_url(source_url: str) -> urllib.parse.ParseResult
         raise MarketplaceCatalogSourceError("Federated catalog source URL must use HTTPS.")
     host = (parsed.hostname or "").lower()
     allowed = _allowed_catalog_hosts()
-    if allowed and host not in allowed:
+    if not allowed:
+        raise MarketplaceCatalogSourceError("Federated catalog source requires at least one allowed host.")
+    if host.rstrip(".") not in allowed:
         raise MarketplaceCatalogSourceError("Federated catalog source host is not allowed.")
     return parsed
 
@@ -186,12 +189,25 @@ def fetch_federated_catalog_payload(source: MarketplaceSource) -> dict[str, Any]
         raise MarketplaceCatalogSourceError("Private catalog source is disabled.")
     _validate_federated_catalog_url(source.source_url)
     try:
-        with urllib.request.urlopen(source.source_url, timeout=20) as response:
-            content_length = response.headers.get("Content-Length")
-            if content_length and int(content_length) > MAX_FEDERATED_CATALOG_BYTES:
-                raise MarketplaceCatalogSourceError("Federated catalog payload is too large.")
-            data = response.read(MAX_FEDERATED_CATALOG_BYTES + 1)
-    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        response = async_to_sync(request_outbound_http)(
+            "GET",
+            source.source_url,
+            timeout=20,
+            headers={"Accept": "application/json"},
+            max_redirects=3,
+            allowed_hosts=_allowed_catalog_hosts(),
+        )
+        if not 200 <= response.status_code < 300:
+            raise MarketplaceCatalogSourceError(
+                f"Federated catalog source returned HTTP {response.status_code}."
+            )
+        content_length = response.headers.get("Content-Length")
+        if content_length and int(content_length) > MAX_FEDERATED_CATALOG_BYTES:
+            raise MarketplaceCatalogSourceError("Federated catalog payload is too large.")
+        data = response.content
+    except (OutboundHTTPPolicyError, httpx.HTTPError, TimeoutError, ValueError) as exc:
+        if isinstance(exc, MarketplaceCatalogSourceError):
+            raise
         raise MarketplaceCatalogSourceError(f"Federated catalog fetch failed: {exc}") from exc
     if len(data) > MAX_FEDERATED_CATALOG_BYTES:
         raise MarketplaceCatalogSourceError("Federated catalog payload is too large.")

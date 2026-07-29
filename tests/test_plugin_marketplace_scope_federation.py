@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 from django.contrib.auth.models import Group, User
@@ -132,24 +133,22 @@ def test_federated_marketplace_source_sync_fetches_https_catalog(monkeypatch):
         }
     ).encode("utf-8")
 
-    class FakeResponse:
-        headers = {"Content-Length": str(len(payload))}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_args):
-            return False
-
-        def read(self, _limit):
-            return payload
-
-    def fake_urlopen(url, timeout):
+    async def fake_request(method, url, **kwargs):
+        assert method == "GET"
         assert url == "https://catalog.example/webtrerm/catalog.json"
-        assert timeout == 20
-        return FakeResponse()
+        assert kwargs == {
+            "timeout": 20,
+            "headers": {"Accept": "application/json"},
+            "max_redirects": 3,
+            "allowed_hosts": {"catalog.example"},
+        }
+        return SimpleNamespace(
+            status_code=200,
+            headers={"Content-Length": str(len(payload))},
+            content=payload,
+        )
 
-    monkeypatch.setattr("plugin_marketplace.services.catalog_service.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("plugin_marketplace.services.catalog_service.request_outbound_http", fake_request)
 
     sync = client.post(f"/api/plugins/marketplace/sources/{source_id}/sync-remote/")
     assert sync.status_code == 200, sync.content
