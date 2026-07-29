@@ -5,7 +5,9 @@ from dataclasses import dataclass
 
 from app.agent_kernel.domain.specs import PermissionDecision, ToolSpec
 from app.agent_kernel.permissions.modes import MODE_AUTO_GUARDED, MODE_PLAN, MODE_SAFE, MUTATION_SANDBOX
+from app.agent_kernel.permissions.shell_policy import is_read_only_analysis, is_read_only_command
 from app.execution_policy import build_execution_policy_audit_metadata
+from app.shell_commands import ShellCommandAnalysis, analyze_shell_command
 from app.sudo_policy import (
     SUDO_POLICY_DISABLED,
     evaluate_sudo_command,
@@ -15,31 +17,43 @@ from app.tools.safety import evaluate_command_safety
 
 _MUTATING_PATTERNS: tuple[tuple[re.Pattern[str], str, tuple[str, ...], tuple[str, ...]], ...] = (
     (
-        re.compile(r"\bdocker\s+compose\s+(up|down|restart|pull)\b", re.IGNORECASE),
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?docker\s+compose\s+(up|down|restart|pull)\b",
+            re.IGNORECASE,
+        ),
         "docker_mutation",
         ("docker_preflight",),
         ("docker_verification",),
     ),
     (
-        re.compile(r"\bsystemctl\s+(restart|reload|start|stop)\b", re.IGNORECASE),
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?systemctl\s+(restart|reload|start|stop)\b",
+            re.IGNORECASE,
+        ),
         "service_mutation",
         ("service_preflight",),
         ("service_verification",),
     ),
     (
-        re.compile(r"\bnginx\s+(-s\s+reload|reload)\b", re.IGNORECASE),
+        re.compile(r"^(?:sudo\s+(?:-n\s+)?)?nginx\s+(-s\s+reload|reload)\b", re.IGNORECASE),
         "nginx_mutation",
         ("nginx_preflight",),
         ("nginx_verification",),
     ),
     (
-        re.compile(r"\b(apt|apt-get|yum|dnf)\s+(install|upgrade|remove)\b", re.IGNORECASE),
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?(apt|apt-get|yum|dnf)\s+(install|upgrade|remove)\b",
+            re.IGNORECASE,
+        ),
         "package_mutation",
         ("system_preflight",),
         ("system_verification",),
     ),
     (
-        re.compile(r"(?:^|\s)(?:tee|sed\s+-i|cp|mv|chmod|chown)\b", re.IGNORECASE),
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?(?:tee|sed\s+-i|cp|mv|chmod|chown)\b",
+            re.IGNORECASE,
+        ),
         "config_mutation",
         ("config_preflight",),
         ("config_verification",),
@@ -47,31 +61,40 @@ _MUTATING_PATTERNS: tuple[tuple[re.Pattern[str], str, tuple[str, ...], tuple[str
 )
 
 _PREFLIGHT_MARKERS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\bdocker\s+compose\s+config\b|\bdocker\s+ps\b", re.IGNORECASE), "docker_preflight"),
-    (re.compile(r"\bsystemctl\s+status\b|\bservice\s+\S+\s+status\b", re.IGNORECASE), "service_preflight"),
-    (re.compile(r"\bnginx\s+-t\b", re.IGNORECASE), "nginx_preflight"),
-    (re.compile(r"\b(df\s+-h|free\s+-m|uptime)\b", re.IGNORECASE), "system_preflight"),
-    (re.compile(r"\b(ls|cat|grep|find)\b", re.IGNORECASE), "config_preflight"),
+    (
+        re.compile(r"^(?:sudo\s+(?:-n\s+)?)?docker\s+(?:compose\s+config|ps)\b", re.IGNORECASE),
+        "docker_preflight",
+    ),
+    (
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?(?:systemctl\s+status|service\s+\S+\s+status)\b",
+            re.IGNORECASE,
+        ),
+        "service_preflight",
+    ),
+    (re.compile(r"^(?:sudo\s+(?:-n\s+)?)?nginx\s+-t\b", re.IGNORECASE), "nginx_preflight"),
+    (re.compile(r"^(?:df\s+-h|free\s+-m|uptime)\b", re.IGNORECASE), "system_preflight"),
+    (re.compile(r"^(?:ls|cat|grep|find)\b", re.IGNORECASE), "config_preflight"),
 )
 
 _VERIFICATION_MARKERS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (re.compile(r"\bdocker\s+ps\b|\bdocker\s+compose\s+ps\b|\bcurl\b", re.IGNORECASE), "docker_verification"),
-    (re.compile(r"\bsystemctl\s+status\b|\bjournalctl\b|\bcurl\b", re.IGNORECASE), "service_verification"),
-    (re.compile(r"\bnginx\s+-t\b|\bcurl\b", re.IGNORECASE), "nginx_verification"),
-    (re.compile(r"\b(df\s+-h|free\s+-m|uptime)\b|\bcurl\b", re.IGNORECASE), "system_verification"),
-    (re.compile(r"\b(cat|grep|ls|curl)\b", re.IGNORECASE), "config_verification"),
-)
-
-_READ_ONLY_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(
-        r"\b(ls|cat|grep|find|head|tail|less|more|pwd|whoami|env|printenv|ps|top|ss|netstat|ip\b|hostname)\b",
-        re.IGNORECASE,
+    (
+        re.compile(r"^(?:sudo\s+(?:-n\s+)?)?(?:docker\s+(?:ps|compose\s+ps)|curl)\b", re.IGNORECASE),
+        "docker_verification",
     ),
-    re.compile(r"\b(df\s+-h|free\s+-m|uptime|du\s+-sh)\b", re.IGNORECASE),
-    re.compile(r"\bsystemctl\s+status\b|\bservice\s+\S+\s+status\b|\bjournalctl\b", re.IGNORECASE),
-    re.compile(r"\bdocker\s+(ps|inspect|logs)\b|\bdocker\s+compose\s+(ps|config)\b", re.IGNORECASE),
-    re.compile(r"\bnginx\s+-t\b", re.IGNORECASE),
-    re.compile(r"\bcurl\b", re.IGNORECASE),
+    (
+        re.compile(
+            r"^(?:sudo\s+(?:-n\s+)?)?(?:systemctl\s+status|journalctl|curl)\b",
+            re.IGNORECASE,
+        ),
+        "service_verification",
+    ),
+    (
+        re.compile(r"^(?:sudo\s+(?:-n\s+)?)?(?:nginx\s+-t|curl)\b", re.IGNORECASE),
+        "nginx_verification",
+    ),
+    (re.compile(r"^(?:df\s+-h|free\s+-m|uptime|curl)\b", re.IGNORECASE), "system_verification"),
+    (re.compile(r"^(?:cat|grep|ls|curl)\b", re.IGNORECASE), "config_verification"),
 )
 
 _UNKNOWN_MUTATION_PATTERN = re.compile(
@@ -100,6 +123,7 @@ class PermissionEngine:
     def evaluate(self, spec: ToolSpec, args: dict) -> PermissionDecision:
         command = str(args.get("command") or "")
         command_risk = evaluate_command_safety(command)
+        shell_analysis = analyze_shell_command(command) if command else None
 
         if command and command_risk.is_dangerous:
             return self._decision(
@@ -127,7 +151,10 @@ class PermissionEngine:
                 )
 
         if self.mode == MODE_PLAN and (
-            spec.mutates_state or spec.risk in {"write", "admin"} or self._is_mutating_command(command)
+            spec.mutates_state
+            or spec.risk in {"write", "admin"}
+            or self._is_mutating_command(command)
+            or (spec.name == "ssh_execute" and command and not self._is_read_only_command(command))
         ):
             return self._decision(
                 spec,
@@ -148,6 +175,17 @@ class PermissionEngine:
             )
 
         if spec.name == "ssh_execute":
+            if command and shell_analysis and not shell_analysis.is_classifiable:
+                return self._unclassified_shell_decision(spec, args)
+
+            if (
+                command
+                and shell_analysis
+                and len(shell_analysis.fragments) > 1
+                and not self._is_read_only_analysis(shell_analysis)
+            ):
+                return self._unclassified_shell_decision(spec, args)
+
             mutation = self._match_mutation(command)
             if mutation:
                 _kind, preflights, _verifications = mutation
@@ -173,6 +211,9 @@ class PermissionEngine:
                     ),
                 )
 
+            if command and not self._is_read_only_command(command):
+                return self._unclassified_shell_decision(spec, args)
+
         if self.mode == MODE_SAFE and spec.risk == "admin":
             return self._decision(
                 spec,
@@ -196,17 +237,7 @@ class PermissionEngine:
 
             if spec.name == "ssh_execute":
                 if command and self._is_read_only_command(command):
-                    return self._decision(
-                        spec,
-                        args,
-                        allowed=True,
-                        sandbox_profile="ops_read",
-                        risk_categories=("read_only",),
-                        notes=(
-                            *self._sudo_notes(command),
-                            "Команда классифицирована как read-only и разрешена в AUTO_GUARDED.",
-                        ),
-                    )
+                    return self._read_only_decision(spec, args, command)
 
                 mutation = self._match_mutation(command)
                 if mutation:
@@ -253,6 +284,13 @@ class PermissionEngine:
         if not command:
             return
 
+        analysis = analyze_shell_command(command)
+        if not analysis.is_classifiable or len(analysis.fragments) != 1:
+            return
+        mutation = self._match_mutation(command)
+        if not self._is_read_only_analysis(analysis) and mutation is None:
+            return
+
         for pattern, marker in _PREFLIGHT_MARKERS:
             if pattern.search(command):
                 self.observed_markers.add(marker)
@@ -262,7 +300,6 @@ class PermissionEngine:
                 self.observed_markers.add(marker)
                 self.pending_verifications.discard(marker)
 
-        mutation = self._match_mutation(command)
         if mutation:
             _kind, _preflights, verifications = mutation
             for marker in verifications:
@@ -279,15 +316,47 @@ class PermissionEngine:
 
     @staticmethod
     def _match_mutation(command: str) -> tuple[str, tuple[str, ...], tuple[str, ...]] | None:
+        analysis = analyze_shell_command(command)
+        if not analysis.is_classifiable or len(analysis.fragments) != 1:
+            return None
+        value = analysis.fragments[0]
         for pattern, kind, preflights, verifications in _MUTATING_PATTERNS:
-            if pattern.search(command or ""):
+            if pattern.search(value):
                 return kind, preflights, verifications
         return None
 
     @staticmethod
     def _is_read_only_command(command: str) -> bool:
-        value = command or ""
-        return any(pattern.search(value) for pattern in _READ_ONLY_PATTERNS)
+        return is_read_only_command(command)
+
+    @staticmethod
+    def _is_read_only_analysis(analysis: ShellCommandAnalysis) -> bool:
+        return is_read_only_analysis(analysis)
+
+    def _read_only_decision(self, spec: ToolSpec, args: dict, command: str) -> PermissionDecision:
+        return self._decision(
+            spec,
+            args,
+            allowed=True,
+            sandbox_profile="ops_read",
+            risk_categories=("read_only",),
+            notes=(
+                *self._sudo_notes(command),
+                "Команда классифицирована как read-only и разрешена политикой.",
+            ),
+        )
+
+    def _unclassified_shell_decision(self, spec: ToolSpec, args: dict) -> PermissionDecision:
+        return self._decision(
+            spec,
+            args,
+            allowed=False,
+            reason=(
+                f"{self.mode} блокирует составную, косвенную или неклассифицированную shell-команду."
+            ),
+            requires_approval=True,
+            risk_categories=("unclassified_shell",),
+        )
 
     def _decision(
         self,
