@@ -15,7 +15,7 @@ from pathlib import Path
 
 from .auth import build_auth_settings
 from .celery_settings import build_celery_settings
-from .database import build_channel_settings, build_database_settings
+from .database import build_cache_settings, build_channel_settings, build_database_settings
 from .plugin_marketplace import build_plugin_marketplace_settings
 from .runtime_services import build_runtime_service_settings
 from .security import build_security_settings
@@ -71,6 +71,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core_ui.auth_throttle.LoginBruteForceProtectionMiddleware",
     "core_ui.domain_auth.DomainAutoLoginMiddleware",
     "core_ui.middleware.RequestAuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -102,7 +103,9 @@ TEMPLATES = [
 WSGI_APPLICATION = "web_ui.wsgi.application"
 ASGI_APPLICATION = "web_ui.asgi.application"
 
-globals().update(build_channel_settings(debug=DEBUG))
+_channel_settings = build_channel_settings(debug=DEBUG)
+globals().update(_channel_settings)
+globals().update(build_cache_settings(redis_url=str(_channel_settings.get("CHANNEL_REDIS_URL") or "")))
 globals().update(build_database_settings(base_dir=BASE_DIR))
 
 

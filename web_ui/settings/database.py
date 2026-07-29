@@ -49,6 +49,29 @@ def build_channel_settings(*, debug: bool) -> dict[str, object]:
     }
 
 
+def build_cache_settings(*, redis_url: str) -> dict[str, object]:
+    if not redis_url:
+        return {
+            "CACHES": {
+                "default": {
+                    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+                    "LOCATION": "webterm-local-cache",
+                    "TIMEOUT": 300,
+                }
+            }
+        }
+    return {
+        "CACHES": {
+            "default": {
+                "BACKEND": "django.core.cache.backends.redis.RedisCache",
+                "LOCATION": redis_url,
+                "TIMEOUT": 300,
+                "KEY_PREFIX": "webterm",
+            }
+        }
+    }
+
+
 def build_database_settings(*, base_dir: Path) -> dict[str, object]:
     use_postgres = os.getenv("POSTGRES_HOST") or os.getenv("POSTGRES_DB")
     if use_postgres:
