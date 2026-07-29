@@ -286,6 +286,12 @@ def approve_admin_session(*, session: K8sAdminSession, user, data: dict[str, Any
     if not getattr(user, "is_staff", False):
         raise AdminSessionValidationError("Staff approval is required.", code="staff_required", status=403)
     _require_mode_access(user, session.mode)
+    if session.user_id == getattr(user, "id", None):
+        raise AdminSessionValidationError(
+            "The requester cannot approve their own admin session.",
+            code="self_approval_forbidden",
+            status=403,
+        )
 
     approval_ref = _clean_text(data.get("approval_ref"), max_length=160)
     if not approval_ref:

@@ -197,6 +197,12 @@ def approve_external_action_request(
         transition="approve_external",
         code="action_request_not_pending",
     )
+    if action_request.requested_by_id == getattr(user, "id", None):
+        raise ActionRequestValidationError(
+            "The requester cannot approve their own action request.",
+            code="self_approval_forbidden",
+            payload={"request_id": str(action_request.request_id)},
+        )
     approval_ref = _reference_text(
         data.get("approval_ref") or data.get("change_request_url") or action_request.approval_ref or "", limit=160
     )
