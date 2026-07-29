@@ -71,12 +71,28 @@ class TestShellTool:
         assert "multi-line" in result.error.lower()
 
     @pytest.mark.asyncio
-    async def test_safety_blocks_dangerous(self):
+    async def test_safety_requires_explicit_approval_for_dangerous(self):
         ctx = tool_context()
         # rm -rf / is in the default dangerous patterns
         result = await ShellTool().run(ShellArgs(cmd="rm -rf /"), ctx)
         assert result.ok is False
-        assert "safety" in result.error.lower() or "safety" in result.output.lower()
+        assert "approval" in result.error.lower() or "разрешение" in result.output.lower()
+
+    @pytest.mark.asyncio
+    async def test_mutation_runs_after_one_time_operator_approval(self):
+        conn = FakeSSHConn(default=FakeRunResult(stdout="ok\n", exit_status=0))
+        prompts = []
+
+        async def prompt_user(request):
+            prompts.append(request)
+            return "allow_once"
+
+        ctx = ToolContext(primary=primary_target(ssh_conn=conn), prompt_user=prompt_user)
+        result = await ShellTool().run(ShellArgs(cmd="mv /tmp/a /tmp/b"), ctx)
+
+        assert result.ok is True
+        assert len(prompts) == 1
+        assert conn.calls == ["mv /tmp/a /tmp/b"]
 
     @pytest.mark.asyncio
     async def test_unknown_target_returns_error(self):

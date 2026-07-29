@@ -72,6 +72,7 @@ class AgentSessionManager(AgentSessionExecMixin):
         available_skills: list[dict[str, Any]] | None = None,
         available_materials: list[dict[str, Any]] | None = None,
         sudo_policy: str = "disabled",
+        execution_approval_granted: bool = False,
     ):
         self.allowed_servers: dict[int, Any] = {s.id: s for s in allowed_servers}
         self.max_connections = max_connections
@@ -80,6 +81,7 @@ class AgentSessionManager(AgentSessionExecMixin):
         self.user_reply_future: asyncio.Future | None = None
         self.available_skills = [dict(skill) for skill in (available_skills or [])]
         self.sudo_policy = normalize_sudo_policy(sudo_policy)
+        self.execution_approval_granted = bool(execution_approval_granted)
 
         self.connections: dict[int, _ServerSession] = {}
         self._name_to_id: dict[str, int] = {}

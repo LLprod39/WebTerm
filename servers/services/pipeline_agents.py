@@ -65,10 +65,12 @@ def _apply_engine_runtime_flags(
     unattended: bool,
     pipeline_run_id: int | None,
     require_all_servers: bool,
+    execution_approval_granted: bool,
 ) -> None:
     engine.unattended = bool(unattended)
     engine.pipeline_run_id = pipeline_run_id
     engine.require_all_servers = bool(require_all_servers)
+    engine.execution_approval_granted = bool(execution_approval_granted)
     engine._policy_blocked_count = 0
     engine._disconnected_servers = []
 
@@ -94,6 +96,7 @@ async def run_pipeline_react_agent(
     unattended: bool = False,
     pipeline_run_id: int | None = None,
     require_all_servers: bool = False,
+    execution_approval_granted: bool = False,
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_node_{node_id}",
@@ -124,6 +127,7 @@ async def run_pipeline_react_agent(
         unattended=unattended,
         pipeline_run_id=pipeline_run_id,
         require_all_servers=require_all_servers,
+        execution_approval_granted=execution_approval_granted,
     )
     agent_run = await engine.run()
     return _snapshot_from_agent_run(agent_run)
@@ -150,6 +154,7 @@ async def run_pipeline_multi_agent(
     unattended: bool = False,
     pipeline_run_id: int | None = None,
     require_all_servers: bool = True,
+    execution_approval_granted: bool = False,
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_multi_{node_id}",
@@ -180,6 +185,7 @@ async def run_pipeline_multi_agent(
         unattended=unattended,
         pipeline_run_id=pipeline_run_id,
         require_all_servers=require_all_servers,
+        execution_approval_granted=execution_approval_granted,
     )
     agent_run = await engine.run()
     return _snapshot_from_agent_run(agent_run)

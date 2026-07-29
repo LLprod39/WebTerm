@@ -9,9 +9,8 @@ equivalents (``cat`` instead of ``less``, ``sed -i`` instead of ``vim``).
 
 Safety
 ------
-- :func:`app.tools.safety.is_dangerous_command` vetoes destructive
-  commands; the agent receives the veto as a tool error and must either
-  rephrase or invoke ``ask_user`` for confirmation.
+- the shared fail-closed execution gate auto-runs only classified read-only
+  commands and pauses every other command for one-command operator approval.
 - :func:`servers.services.terminal_ai.server_ai_policy.is_server_ai_read_only`
   short-circuits the tool on read-only servers (2.11) unless the command
   is itself read-only.
@@ -21,11 +20,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
 from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.agent_kernel.permissions.shell_policy import is_read_only_command
+from app.command_execution_gate import evaluate_command_execution_gate
 from app.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
 from servers.services.terminal_ai.agent.schemas import ToolResult
 from servers.services.terminal_ai.agent.tools.base import (
@@ -36,48 +36,6 @@ from servers.services.terminal_ai.agent.tools.base import (
     tool_err,
     tool_ok,
 )
-
-# Heuristic write-detector for the read-only guard. Conservative — any
-# pattern match classifies the command as a write. Tested with common
-# DevOps operations; false positives are fine (they just force the
-# agent to rephrase or ask the user).
-_WRITE_PATTERN = re.compile(
-    r"""(?ix)
-    (?:^|[\s;&|`])              # boundary
-    (?:
-      rm|mv|cp|chmod|chown|chgrp|touch|mkdir|rmdir|ln|dd
-      |install|apt(?:-get)?|yum|dnf|pacman|snap|brew|pip|npm|cargo
-      |reboot|shutdown|halt|poweroff|init\s+\d
-      |kill(?:all)?|pkill
-      |sed\s+[^|]*-i|awk\s+[^|]*-i
-      |find\s+[^|]*(?:-delete|-exec)
-      |tee(?:\s+-a)?
-      |systemctl\s+(?:start|stop|restart|reload|enable|disable|daemon-reload|edit)
-      |service\s+\S+\s+(?:start|stop|restart|reload)
-      |docker\s+(?:run|stop|start|rm|rmi|kill|exec|build|push|pull|tag|login|logout|network\s+create|network\s+rm|volume\s+create|volume\s+rm|container\s+(?:stop|start|rm|kill|exec|prune)|image\s+(?:rm|prune))
-      |kubectl\s+(?:apply|create|delete|replace|patch|edit|scale|rollout|drain|cordon|uncordon|taint|label(?!\s+--list)|annotate|exec|port-forward|cp)
-      |git\s+(?:add|rm|mv|commit|push|pull|fetch|merge|rebase|cherry-pick|reset(?!\s*$)|checkout|switch|branch\s+-[dD]|tag\s+-[dD]|stash)
-      |psql\s+.*-c\s+["'].*(?:insert|update|delete|drop|alter|create|truncate)
-    )
-    \b
-    """
-)
-
-
-def _is_write_command(cmd: str) -> bool:
-    """Best-effort heuristic: does this command mutate server state?
-
-    Primarily used by the read-only-target guard. Detects shell
-    redirections (``>``, ``>>``, ``|tee``) plus a curated list of
-    write-verb binaries (``rm``, ``mv``, ``systemctl start``, etc).
-    """
-    if not cmd:
-        return False
-    # Redirections — any un-quoted ``>`` is a write.
-    if re.search(r"(?<![0-9&])>{1,2}(?!&)", cmd):
-        return True
-    return bool(_WRITE_PATTERN.search(cmd))
-
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +81,41 @@ class ShellTool:
         "vetoed by the safety engine and return an error."
     )
     args_schema: type[BaseModel] = ShellArgs
+
+    async def _approve_command_once(
+        self,
+        *,
+        cmd: str,
+        target: ServerTarget,
+        reason: str,
+        ctx: ToolContext,
+    ) -> bool:
+        if ctx.prompt_user is None:
+            return False
+        reply = await ctx.prompt_user(
+            UserPromptRequest(
+                question=(
+                    "Nova запрашивает одноразовое разрешение на команду:\n"
+                    f"`{cmd}`\n\nСервер: {target.display_name or target.name}. Причина: {reason}."
+                ),
+                timeout_seconds=300,
+                options=[
+                    UserPromptOption(
+                        label="Разрешить один раз",
+                        value="allow_once",
+                        description="Разрешение действует только для этого вызова команды.",
+                    ),
+                    UserPromptOption(
+                        label="Заблокировать",
+                        value="block",
+                        description="Команда не будет выполнена.",
+                    ),
+                ],
+                allow_multiple=False,
+                free_text_allowed=False,
+            )
+        )
+        return str(reply or "").strip().lower() in {"allow_once", "allow", "yes", "y", "да", "разрешить"}
 
     async def _approve_sudo_once(self, *, cmd: str, target: ServerTarget, ctx: ToolContext) -> bool:
         if ctx.prompt_user is None:
@@ -187,32 +180,27 @@ class ShellTool:
                 ),
             )
 
-        # Safety: destructive commands blocked.
-        try:
-            from app.tools.safety import is_dangerous_command
+        gate = evaluate_command_execution_gate(cmd)
 
-            danger = is_dangerous_command(cmd)
-        except Exception:  # noqa: BLE001 — safety must never be bypassed by import error
-            danger = True
-        if danger:
-            return tool_err(
-                f"command vetoed by safety engine: {cmd[:120]}",
-                output=(
-                    "The safety engine blocked this command as destructive. "
-                    "If the user explicitly approved it, use `ask_user` first "
-                    "and rephrase to the approved form."
-                ),
-            )
-
-        # Read-only target mode (2.11): only permit read-only commands.
-        if target.read_only and _is_write_command(cmd):
+        # Read-only is an immutable target boundary, not an approval prompt.
+        if target.read_only and not is_read_only_command(cmd):
             return tool_err(
                 f"target '{target.name}' is in read-only mode",
                 output=(
-                    f"Server '{target.display_name or target.name}' only "
-                    "allows read-only commands (no rm/mv/cp/chmod/systemctl "
-                    "start|stop|..., no `>` redirections, etc)."
+                    f"Server '{target.display_name or target.name}' only allows "
+                    "commands from the built-in read-only allowlist."
                 ),
+            )
+
+        if gate.requires_approval and not await self._approve_command_once(
+            cmd=cmd,
+            target=target,
+            reason=gate.reason,
+            ctx=ctx,
+        ):
+            return tool_err(
+                f"command requires explicit operator approval: {cmd[:120]}",
+                output="Команда не выполнена: оператор не дал одноразовое разрешение.",
             )
 
         sudo_notes: tuple[str, ...] = ()

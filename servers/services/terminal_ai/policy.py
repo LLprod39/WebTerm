@@ -25,7 +25,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from app.shell_commands import analyze_shell_command
+from app.command_execution_gate import evaluate_command_execution_gate
 from app.tools.safety import CommandRisk, evaluate_command_safety
 
 
@@ -34,10 +34,11 @@ class CommandPolicy:
     """Verdict for a single candidate command.
 
     Attributes:
-        allowed: ``False`` iff ``reason in {"forbidden", "outside_allowlist"}``.
+        allowed: ``False`` only for a non-overridable forbidden-pattern match.
         requires_confirm: ``True`` iff the client must display a confirm prompt.
         reason: Canonical short reason code — one of
-            ``"forbidden" | "outside_allowlist" | "dangerous" | "ask_mode" | ""``.
+            ``"forbidden" | "outside_allowlist" | "unclassifiable" |
+            "dangerous" | "ask_mode" | ""``.
         risk: :class:`CommandRisk` verdict from :mod:`app.tools.safety`.
         exec_mode: ``"pty"`` (default, stateful shell) or ``"direct"``
             (stateless one-off exec). F2-8 — for now consumed as a hint only.
@@ -101,38 +102,6 @@ def match_patterns(command: str, patterns: list[str] | None) -> bool:
         if pl in cmd_l:
             return True
     return False
-
-
-def _matches_allowlist_fragment(fragment: str, patterns: list[str] | None) -> bool:
-    """Require one allowlist entry to cover a whole executable fragment."""
-
-    fragment_tokens = _TOKEN_RE.findall((fragment or "").lower())
-    for raw in patterns or []:
-        pattern = str(raw or "").strip()
-        if not pattern:
-            continue
-        if pattern.lower().startswith("re:"):
-            expression = pattern[3:].strip()
-            if not expression:
-                continue
-            try:
-                if re.fullmatch(expression, fragment, flags=re.IGNORECASE):
-                    return True
-            except re.error:
-                continue
-            continue
-
-        pattern_tokens = _TOKEN_RE.findall(pattern.lower())
-        if pattern_tokens and fragment_tokens[: len(pattern_tokens)] == pattern_tokens:
-            return True
-    return False
-
-
-def _matches_command_allowlist(command: str, patterns: list[str] | None) -> bool:
-    analysis = analyze_shell_command(command)
-    if not analysis.fragments or not analysis.is_classifiable:
-        return False
-    return all(_matches_allowlist_fragment(fragment, patterns) for fragment in analysis.fragments)
 
 
 # ---------------------------------------------------------------------------
@@ -268,12 +237,10 @@ def decide_command_policy(
 
     Precedence (high → low):
     1. ``forbidden_patterns`` match → ``reason="forbidden"``, not allowed.
-    2. ``allowlist_patterns`` provided and any executable fragment is not
-       covered by a leading-token or full-regex match →
-       ``reason="outside_allowlist"``, not allowed.  Indirect execution,
-       substitutions, and redirections fail this check closed.
-    3. ``confirm_dangerous_commands`` and :func:`evaluate_command_safety`
-       returned dangerous → ``reason="dangerous"``, requires confirm.
+    2. Anything outside the built-in read-only allowlist and optional custom
+       allowlist requires one-command confirmation. Indirect execution,
+       substitutions, and redirections fail closed into confirmation.
+    3. The dangerous-command catalogue is an additional confirmation signal.
     4. ``chat_mode == "ask"`` on any non-blocked command → ``reason="ask_mode"``,
        requires confirm.
     5. Otherwise auto-run.
@@ -282,6 +249,9 @@ def decide_command_policy(
     """
     text = (command or "").strip()
     risk = evaluate_command_safety(text)
+    # Retained for API/settings compatibility. The fail-closed gate cannot be
+    # disabled by a client-provided preference.
+    _ = confirm_dangerous_commands
 
     def _verdict(
         *,
@@ -305,11 +275,9 @@ def decide_command_policy(
     if match_patterns(text, forbidden_patterns):
         return _verdict(allowed=False, requires_confirm=False, reason="forbidden")
 
-    if allowlist_patterns and not _matches_command_allowlist(text, allowlist_patterns):
-        return _verdict(allowed=False, requires_confirm=False, reason="outside_allowlist")
-
-    if confirm_dangerous_commands and risk.is_dangerous:
-        return _verdict(allowed=True, requires_confirm=True, reason="dangerous")
+    gate = evaluate_command_execution_gate(text, allowlist_patterns=allowlist_patterns)
+    if gate.requires_approval:
+        return _verdict(allowed=True, requires_confirm=True, reason=gate.reason)
 
     if (chat_mode or "").lower() == "ask":
         return _verdict(allowed=True, requires_confirm=True, reason="ask_mode")

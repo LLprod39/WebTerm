@@ -86,6 +86,20 @@ def test_execution_policy_decision_flags_dangerous_ssh_command():
     assert decision.to_risk_item()["level"] == "dangerous"
 
 
+def test_execution_policy_requires_approval_for_command_outside_read_only_allowlist():
+    decisions = build_execution_policy_decisions(
+        nodes=[
+            _node("manual", "trigger/manual"),
+            _node("ssh", "agent/ssh_cmd", {"label": "Move config", "command": "mv /etc/a /etc/b"}),
+        ],
+        edges=[_edge("manual", "ssh")],
+    )
+
+    assert len(decisions) == 1
+    assert decisions[0].requires_approval is True
+    assert decisions[0].allowed is False
+
+
 def test_execution_policy_requires_approval_for_dynamic_agent_with_default_tools_and_server():
     decisions = build_execution_policy_decisions(
         nodes=[

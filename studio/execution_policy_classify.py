@@ -4,7 +4,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from app.tools.safety import evaluate_command_safety
+from app.command_execution_gate import evaluate_command_execution_gate
 from studio.execution_policy_agents import classify_dynamic_agent_policy
 from studio.execution_policy_types import (
     ExecutionPolicyDecision,
@@ -204,11 +204,16 @@ def _classify_ssh_cmd(
         command = str(raw_command or "").strip()
         if not command:
             continue
-        verdict = evaluate_command_safety(command)
+        gate = evaluate_command_execution_gate(command)
+        verdict = gate.risk
         looks_mutating = bool(SSH_MUTATING_COMMAND_RE.search(command))
-        if not verdict.is_dangerous and not looks_mutating:
+        if not gate.requires_approval and not looks_mutating:
             continue
-        reasons = list(verdict.reasons) if verdict.is_dangerous else ["SSH command appears to mutate system state."]
+        reasons = list(verdict.reasons)
+        if not reasons:
+            reasons.append(
+                "SSH command is outside the built-in read-only allowlist or cannot be classified safely."
+            )
         if has_approved_approval_path is False:
             reasons.append("Missing approved human approval path.")
         decisions.append(
@@ -220,7 +225,9 @@ def _classify_ssh_cmd(
                 requires_approval=True,
                 has_approved_approval_path=has_approved_approval_path,
                 command=command,
-                categories=tuple(verdict.categories) if verdict.is_dangerous else ("ssh_mutation",),
+                categories=tuple(verdict.categories)
+                if verdict.is_dangerous
+                else (("unclassifiable_shell",) if gate.reason == "unclassifiable" else ("ssh_mutation",)),
                 matched_patterns=tuple(verdict.matched_patterns)
                 if verdict.is_dangerous
                 else (SSH_MUTATING_COMMAND_RE.pattern,),

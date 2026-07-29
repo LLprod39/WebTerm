@@ -11,8 +11,8 @@ import asyncio
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.command_execution_gate import evaluate_command_execution_gate
 from app.plugins.agent_tools import plugin_agent_tool_specs
-from app.tools.safety import is_dangerous_command
 
 if TYPE_CHECKING:
     from servers.agent_sessions import AgentSessionManager
@@ -39,12 +39,22 @@ async def tool_ssh_execute(session: AgentSessionManager, *, server: str, command
     if sid is None:
         return ToolResult(False, f"Server '{server}' not found or not connected.")
 
-    if is_dangerous_command(command):
-        return ToolResult(False, f"Blocked: command is dangerous — {command}")
-
     forbidden = session.get_forbidden_patterns(sid)
     if _matches_forbidden(command, forbidden):
         return ToolResult(False, f"Blocked: command matches forbidden pattern — {command}")
+
+    gate = evaluate_command_execution_gate(command)
+    if gate.requires_approval and not bool(getattr(session, "execution_approval_granted", False)):
+        approval = await tool_ask_user(
+            session,
+            question=(
+                "Approve this command for one execution only?\n"
+                f"Server: {server}\nCommand: {command}\nPolicy reason: {gate.reason}"
+            ),
+        )
+        answer = approval.result.removeprefix("User replied:").strip().lower() if approval.success else ""
+        if answer not in {"approve", "approved", "allow", "allow_once", "yes", "y", "да", "разрешить"}:
+            return ToolResult(False, f"Blocked: command requires explicit operator approval — {command}")
 
     try:
         out = await session.execute(sid, command)
@@ -143,8 +153,9 @@ async def tool_report(session: AgentSessionManager, *, text: str, **_kw) -> Tool
 
 async def tool_ask_user(session: AgentSessionManager, *, question: str, **_kw) -> ToolResult:
     """Ask the user a question and wait for a response (pauses the agent)."""
-    if session.event_callback:
-        await session.event_callback("agent_question", {"question": question})
+    if not session.event_callback:
+        return ToolResult(False, "User approval channel is unavailable.")
+    await session.event_callback("agent_question", {"question": question})
     if session.user_reply_future is not None and not session.user_reply_future.done():
         session.user_reply_future.cancel()
     session.user_reply_future = asyncio.get_event_loop().create_future()
