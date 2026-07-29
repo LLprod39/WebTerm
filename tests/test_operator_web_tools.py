@@ -86,6 +86,60 @@ def test_public_url_blocks_nonstandard_and_cross_scheme_ports():
         web_tools._public_url("https://example.com:80/")
 
 
+def test_open_result_revalidates_rebound_dns_before_network(monkeypatch):
+    dns_answers = iter(("93.184.216.34", "127.0.0.1"))
+    network_calls: list[str] = []
+
+    def rebinding_dns(_host, port, *args, **kwargs):
+        address = next(dns_answers)
+        return [(2, 1, 6, "", (address, port))]
+
+    class ForbiddenOpener:
+        def open(self, request, timeout=10):
+            network_calls.append(str(request.full_url))
+            raise AssertionError("network sink reached after stale DNS validation")
+
+    class ForbiddenClient:
+        def __init__(self, **_kwargs) -> None:
+            network_calls.append("http-client-created")
+
+    monkeypatch.setattr(web_tools.socket, "getaddrinfo", rebinding_dns)
+    monkeypatch.setattr(web_tools, "build_opener", lambda *args: ForbiddenOpener())
+    monkeypatch.setattr("app.outbound_http.httpx.AsyncClient", ForbiddenClient)
+
+    with pytest.raises(AssistantActionError, match="blocked by policy"):
+        web_tools._fetch_result_page("https://public.example/source")
+
+    assert network_calls == []
+
+
+def test_fetch_result_page_returns_validated_logical_final_url(monkeypatch):
+    async def fake_request(method, url, **kwargs):
+        assert method == "GET"
+        assert url == "https://public.example/source"
+        assert kwargs["max_redirects"] == web_tools.MAX_REDIRECTS
+        return type(
+            "Response",
+            (),
+            {
+                "status_code": 200,
+                "headers": {"content-type": "text/plain; charset=utf-8"},
+                "content": "Проверенный текст".encode(),
+                "encoding": "utf-8",
+                "extensions": {"webterm_logical_url": "https://public.example/final"},
+            },
+        )()
+
+    monkeypatch.setattr(web_tools, "_public_url", lambda value: value)
+    monkeypatch.setattr(web_tools, "request_outbound_http", fake_request)
+
+    final_url, content_type, text = web_tools._fetch_result_page("https://public.example/source")
+
+    assert final_url == "https://public.example/final"
+    assert content_type == "text/plain"
+    assert text == "Проверенный текст"
+
+
 def test_web_tools_registered():
     web_tools.register_operator_web_tools()
     search = get_action_spec("web.search")
