@@ -393,10 +393,13 @@ env_set() {
 
 prepare_env() {
   local env_file="$PROJECT_DIR/.env.production"
+  umask 077
+  [[ ! -L "$env_file" ]] || fail "refusing symbolic-link env file: $env_file"
   if [[ ! -f "$env_file" ]]; then
     cp "$PROJECT_DIR/.env.production.example" "$env_file"
     ok "Created $env_file"
   fi
+  chmod 600 "$env_file"
 
   detect_public_host
   local public_url="${PUBLIC_SCHEME}://${PUBLIC_HOST}"
