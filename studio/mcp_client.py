@@ -14,9 +14,10 @@ from loguru import logger
 
 from app.egress_redaction import redact_egress_text
 from app.execution_policy import safe_payload_preview
+from app.outbound_http import OutboundHTTPPolicyError, prepare_outbound_http_request
 from app.runtime_limit_config import get_runtime_limit_setting
 from core_ui.managed_secrets import get_mcp_secret_env
-from studio.mcp_security import build_mcp_subprocess_env, validate_mcp_runtime_policy
+from studio.mcp_security import build_mcp_subprocess_env, mcp_sse_allows_private_url, validate_mcp_runtime_policy
 
 from .models import MCPServerPool
 
@@ -54,7 +55,6 @@ def _is_retryable_http_error(exc: httpx.HTTPError) -> bool:
 
 
 def _normalize_sse_url(url: str) -> str:
-    """Ensure SSE URL has http:// or https:// for httpx."""
     u = (url or "").strip()
     if not u or u.startswith(("http://", "https://")):
         return u
@@ -232,7 +232,7 @@ class _HttpMCPClient:
     def __init__(self, server: MCPServerPool):
         self.server = server
         self._sse_url = _normalize_sse_url(server.url or "")
-        self.client = httpx.AsyncClient(timeout=None)
+        self.client = httpx.AsyncClient(timeout=None, follow_redirects=False, trust_env=False)
         self.protocol_version = SUPPORTED_PROTOCOL_VERSIONS[0]
         self._extra_headers: dict[str, str] = {}
 
@@ -244,10 +244,7 @@ class _HttpMCPClient:
         await self.client.aclose()
 
     async def _load_auth_headers(self) -> dict[str, str]:
-        """Static custom headers plus an Authorization header derived from
-        managed secrets (MCP_BEARER_TOKEN / MCP_AUTHORIZATION), so remote MCP
-        endpoints that require auth can be reached without storing the token in
-        plaintext on the model."""
+        """Merge static headers with MCP credentials held in managed secrets."""
         headers: dict[str, str] = {}
         static = getattr(self.server, "headers", None)
         if isinstance(static, dict):
@@ -314,12 +311,19 @@ class _HttpMCPClient:
         )
         for attempt in range(max(int(retries), 0) + 1):
             try:
+                pinned_url, secured_headers, extensions = await prepare_outbound_http_request(
+                    self._sse_url,
+                    headers,
+                    allow_private=mcp_sse_allows_private_url(self._sse_url),
+                )
                 async with self.client.stream(
                     "POST",
-                    self._sse_url,
+                    pinned_url,
                     json=payload,
-                    headers=headers,
+                    headers=secured_headers,
                     timeout=_mcp_http_timeout(effective_timeout),
+                    follow_redirects=False,
+                    extensions=extensions,
                 ) as response:
                     response.raise_for_status()
                     content_type = (response.headers.get("content-type") or "").lower()
@@ -340,6 +344,8 @@ class _HttpMCPClient:
                             return _extract_json_rpc_result(data, request_id)
                         raise MCPClientError("MCP HTTP stream ended before a response was received")
                     raise MCPClientError(f"Unsupported MCP HTTP response type: {content_type or 'unknown'}")
+            except OutboundHTTPPolicyError as exc:
+                raise MCPClientError(str(exc)) from exc
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 if status in (404, 405, 406):
@@ -373,14 +379,20 @@ class _HttpMCPClient:
         headers = {"Content-Type": "application/json", "MCP-Protocol-Version": self.protocol_version}
         headers.update(getattr(self, "_extra_headers", {}))
         try:
-            await self.client.post(
+            pinned_url, secured_headers, extensions = await prepare_outbound_http_request(
                 self._sse_url,
+                headers,
+                allow_private=mcp_sse_allows_private_url(self._sse_url),
+            )
+            await self.client.post(
+                pinned_url,
                 json=_json_rpc_payload(method, params),
-                headers=headers,
+                headers=secured_headers,
                 timeout=_mcp_http_timeout(float(_setting_int("MCP_HTTP_REQUEST_TIMEOUT_SECONDS", 30))),
+                follow_redirects=False,
+                extensions=extensions,
             )
         except Exception:
-            # Notifications are best-effort for direct tool calls.
             return
 
 

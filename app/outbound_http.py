@@ -46,7 +46,12 @@ def _is_public_unicast(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -
     )
 
 
-async def _validated_target(url: str | httpx.URL, resolver: AddressResolver) -> tuple[httpx.URL, httpx.URL, str]:
+async def validate_outbound_http_target(
+    url: str | httpx.URL,
+    resolver: AddressResolver | None = None,
+    *,
+    allow_private: bool = False,
+) -> tuple[httpx.URL, httpx.URL, str]:
     try:
         logical_url = httpx.URL(url)
     except (TypeError, ValueError) as exc:
@@ -66,7 +71,7 @@ async def _validated_target(url: str | httpx.URL, resolver: AddressResolver) -> 
     try:
         direct_address = ipaddress.ip_address(host)
     except ValueError:
-        addresses = await resolver(host, port)
+        addresses = await (resolver or _resolve_host_addresses)(host, port)
     else:
         addresses = [str(direct_address)]
 
@@ -74,19 +79,47 @@ async def _validated_target(url: str | httpx.URL, resolver: AddressResolver) -> 
         raise OutboundHTTPPolicyError("Outbound HTTP destination could not be resolved")
 
     parsed_addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    public_classes: set[bool] = set()
     for raw_address in addresses:
         try:
             address = ipaddress.ip_address(str(raw_address).split("%", 1)[0])
         except ValueError as exc:
             raise OutboundHTTPPolicyError("Outbound HTTP resolver returned an invalid address") from exc
-        if not _is_public_unicast(address):
+        is_public = _is_public_unicast(address)
+        allowed_private = bool(
+            allow_private
+            and (address.is_private or address.is_loopback)
+            and not address.is_link_local
+            and not address.is_multicast
+            and not address.is_unspecified
+        )
+        if not is_public and not allowed_private:
             raise OutboundHTTPPolicyError("Outbound HTTP destination is blocked by policy")
         parsed_addresses.append(address)
+        public_classes.add(is_public)
+
+    if len(public_classes) > 1:
+        raise OutboundHTTPPolicyError("Outbound HTTP destination returned mixed public and private addresses")
 
     pinned_address = sorted(parsed_addresses, key=lambda item: (item.version, int(item)))[0]
     pinned_url = logical_url.copy_with(host=str(pinned_address), port=logical_url.port)
     host_header = logical_url.netloc.decode("ascii")
     return logical_url, pinned_url, host_header
+
+
+async def prepare_outbound_http_request(
+    url: str | httpx.URL,
+    headers: Mapping[str, str] | httpx.Headers | None = None,
+    *,
+    allow_private: bool = False,
+) -> tuple[httpx.URL, httpx.Headers, dict[str, str | None]]:
+    logical_url, pinned_url, host_header = await validate_outbound_http_target(
+        url,
+        allow_private=allow_private,
+    )
+    secured_headers = httpx.Headers(headers or {})
+    secured_headers["Host"] = host_header
+    return pinned_url, secured_headers, {"sni_hostname": logical_url.host}
 
 
 def _redirect_method(method: str, status_code: int) -> str:
@@ -117,6 +150,7 @@ async def request_outbound_http(
     max_redirects: int = 0,
     client_factory: Callable[..., Any] | None = None,
     resolver: AddressResolver | None = None,
+    allow_private: bool = False,
     **request_kwargs: Any,
 ) -> httpx.Response:
     """Request a public destination through a DNS-pinned, proxy-free connection.
@@ -130,9 +164,12 @@ async def request_outbound_http(
     if not request_method:
         raise OutboundHTTPPolicyError("Outbound HTTP method is required")
     redirect_limit = max(0, min(int(max_redirects), 10))
-    resolve = resolver or _resolve_host_addresses
     factory = client_factory or httpx.AsyncClient
-    logical_url, pinned_url, host_header = await _validated_target(url, resolve)
+    logical_url, pinned_url, host_header = await validate_outbound_http_target(
+        url,
+        resolver,
+        allow_private=allow_private,
+    )
     request_headers = httpx.Headers(headers or {})
     request_payload = dict(request_kwargs)
 
@@ -158,6 +195,10 @@ async def request_outbound_http(
                 for key in ("content", "data", "files", "json"):
                     request_payload.pop(key, None)
             request_method = next_method
-            logical_url, pinned_url, host_header = await _validated_target(next_logical, resolve)
+            logical_url, pinned_url, host_header = await validate_outbound_http_target(
+                next_logical,
+                resolver,
+                allow_private=allow_private,
+            )
 
     raise OutboundHTTPPolicyError("Outbound HTTP request did not produce a response")
