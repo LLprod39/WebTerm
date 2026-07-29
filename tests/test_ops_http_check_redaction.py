@@ -19,10 +19,19 @@ def _make_run() -> PipelineRun:
 
 
 def test_ops_http_check_node_redacts_failed_response_payload(monkeypatch):
+    async def public_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
     class FakeHttpClient:
-        def __init__(self, timeout: int = 15, follow_redirects: bool = True) -> None:
+        def __init__(
+            self,
+            timeout: int = 15,
+            follow_redirects: bool = False,
+            trust_env: bool = False,
+        ) -> None:
             self.timeout = timeout
             self.follow_redirects = follow_redirects
+            self.trust_env = trust_env
 
         async def __aenter__(self):
             return self
@@ -30,13 +39,15 @@ def test_ops_http_check_node_redacts_failed_response_payload(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def request(self, method: str, url: str):
+        async def request(self, method: str, url, **_kwargs):
             return SimpleNamespace(
                 status_code=500,
                 text="backend leaked Authorization: Bearer abcdefghijklmnopqrstuvwxyz123456",
+                headers={},
             )
 
     monkeypatch.setattr("studio.executor.nodes.ops.httpx.AsyncClient", FakeHttpClient)
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", public_resolver)
 
     result = async_to_sync(_execute_registry_node)(
         {

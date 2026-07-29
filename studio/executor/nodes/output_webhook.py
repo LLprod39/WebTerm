@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import httpx
 
 from app.agent_kernel.memory.redaction import redact_payload
+from app.outbound_http import request_outbound_http
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.pipeline_redaction import (
@@ -86,8 +87,14 @@ class OutputWebhookNode(BaseNode):
         fail_on_non_2xx = _coerce_bool(self.node_data.get("fail_on_non_2xx"))
 
         try:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                resp = await client.post(url, json=payload, headers=headers)
+            resp = await request_outbound_http(
+                "POST",
+                url,
+                timeout=timeout,
+                headers=headers,
+                client_factory=httpx.AsyncClient,
+                json=payload,
+            )
             output = {
                 "status": "completed",
                 "output": f"POST {_redact_pipeline_text(url)} -> {resp.status_code}",

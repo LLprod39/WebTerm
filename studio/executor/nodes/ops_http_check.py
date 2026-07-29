@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from app.egress_redaction import redact_egress_text
+from app.outbound_http import OutboundHTTPPolicyError, request_outbound_http
 from studio.executor.nodes.base import NodeResult
 from studio.executor.nodes.ops_helpers import coerce_int as _coerce_int
 from studio.executor.nodes.ops_helpers import coerce_list as _coerce_list
@@ -28,8 +29,13 @@ async def execute_http_check(ctx: ExecutionContext, config: dict[str, Any], *, a
     safe_url = redact_egress_text(url).text
     for attempt in range(1, retries + 1):
         try:
-            async with async_client_factory(timeout=timeout, follow_redirects=True) as client:
-                response = await client.request(method, url)
+            response = await request_outbound_http(
+                method,
+                url,
+                timeout=timeout,
+                max_redirects=5,
+                client_factory=async_client_factory,
+            )
             body = response.text[:2000] if method != "HEAD" else ""
             safe_body = redact_egress_text(body).text
             response_payload = {
@@ -47,6 +53,10 @@ async def execute_http_check(ctx: ExecutionContext, config: dict[str, Any], *, a
                 continue
             text = f"HTTP check passed: {method} {safe_url} -> {response.status_code}"
             return NodeResult(output={"output": text, "http_check": response_payload})
+        except OutboundHTTPPolicyError as exc:
+            last_error = str(exc)
+            response_payload = {"url": safe_url, "method": method, "attempt": attempt, "error": last_error}
+            break
         except Exception as exc:
             last_error = redact_egress_text(str(exc)).text
             response_payload = {"url": safe_url, "method": method, "attempt": attempt, "error": last_error}

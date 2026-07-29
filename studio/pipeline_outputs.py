@@ -12,6 +12,7 @@ from asgiref.sync import sync_to_async as _s2a
 from django.conf import settings
 
 from app.agent_kernel.memory.redaction import redact_payload
+from app.outbound_http import request_outbound_http
 
 from .models import PipelineRun
 from .pipeline_context import render_template_value
@@ -199,20 +200,26 @@ async def execute_output_webhook(node: dict, context: dict, node_outputs: dict[s
     fail_on_non_2xx = bool(config.get("fail_on_non_2xx", False))
 
     try:
-        async with httpx.AsyncClient(timeout=timeout_seconds) as client:
-            response = await client.post(url, json=payload, headers=rendered_headers)
-            if fail_on_non_2xx and not (200 <= response.status_code < 300):
-                return {
-                    "status": "failed",
-                    "error": f"Webhook returned HTTP {response.status_code}",
-                    "output": f"POST {redact_pipeline_text(url)} → {response.status_code}",
-                    "http_status": response.status_code,
-                }
+        response = await request_outbound_http(
+            "POST",
+            url,
+            timeout=timeout_seconds,
+            headers=rendered_headers,
+            client_factory=httpx.AsyncClient,
+            json=payload,
+        )
+        if fail_on_non_2xx and not (200 <= response.status_code < 300):
             return {
-                "status": "completed",
+                "status": "failed",
+                "error": f"Webhook returned HTTP {response.status_code}",
                 "output": f"POST {redact_pipeline_text(url)} → {response.status_code}",
                 "http_status": response.status_code,
             }
+        return {
+            "status": "completed",
+            "output": f"POST {redact_pipeline_text(url)} → {response.status_code}",
+            "http_status": response.status_code,
+        }
     except Exception as exc:
         return {"status": "failed", "error": str(exc)}
 

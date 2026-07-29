@@ -48,9 +48,13 @@ def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
+    async def _public_resolver(_host: str, _port: int) -> list[str]:
+        return ["93.184.216.34"]
+
     monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
     monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
     monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
+    monkeypatch.setattr("app.outbound_http._resolve_host_addresses", _public_resolver)
 
 
 def test_ops_backup_restore_check_verifies_latest_archive(monkeypatch):
@@ -93,9 +97,15 @@ def test_ops_http_check_node_passes_expected_status(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeHttpClient:
-        def __init__(self, timeout: int = 15, follow_redirects: bool = True) -> None:
+        def __init__(
+            self,
+            timeout: int = 15,
+            follow_redirects: bool = False,
+            trust_env: bool = False,
+        ) -> None:
             self.timeout = timeout
             self.follow_redirects = follow_redirects
+            self.trust_env = trust_env
 
         async def __aenter__(self):
             return self
@@ -103,10 +113,10 @@ def test_ops_http_check_node_passes_expected_status(monkeypatch):
         async def __aexit__(self, exc_type, exc, tb) -> None:
             return None
 
-        async def request(self, method: str, url: str):
+        async def request(self, method: str, url, **_kwargs):
             captured["method"] = method
-            captured["url"] = url
-            return SimpleNamespace(status_code=204, text="healthy")
+            captured["url"] = str(url)
+            return SimpleNamespace(status_code=204, text="healthy", headers={})
 
     monkeypatch.setattr("studio.executor.nodes.ops.httpx.AsyncClient", FakeHttpClient)
 
@@ -127,7 +137,7 @@ def test_ops_http_check_node_passes_expected_status(monkeypatch):
     )
 
     assert result["status"] == "completed"
-    assert captured == {"method": "GET", "url": "https://example.test/health"}
+    assert captured == {"method": "GET", "url": "https://93.184.216.34/health"}
     assert result["http_check"]["status_code"] == 204
 
 
