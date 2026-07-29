@@ -1,9 +1,9 @@
 # WebTerm v0.1 release-scope matrix
 
-Status: frozen scope candidate; release evidence incomplete
+Status: published `v0.1.0` scope; later hardening changes remain unreleased until a new protected release
 Last reviewed: 2026-07-29
 
-This is a scope classification, not a claim that v0.1 has passed release gates. `GA` means the capability is intended to be supported inside the controlled pilot after every mandatory checklist item passes. `preview` means opt-in, best-effort and outside the pilot availability promise. `disabled` means fail-closed in production until a later release decision.
+This is the capability contract shipped with `v0.1.0`, whose protected checks and signed Release workflow passed on 2026-07-24. `GA` means supported inside the controlled pilot boundary only; it does not mean public multi-tenant or multi-worker production support. `preview` means opt-in, best-effort and outside the pilot availability promise. `disabled` means fail-closed in production until a later release decision. Changes after tag `v0.1.0` must pass the same protected gates and receive a new release before they become part of the published contract.
 
 ## Product domains
 
