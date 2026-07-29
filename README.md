@@ -157,9 +157,12 @@ cp .env.production.example .env.production
 # edit secrets / SITE_URL / ALLOWED_HOSTS
 ./docker/install-production.sh --generate-secrets --create-superuser \
   --superuser-username admin \
-  --superuser-email admin@example.com \
-  --superuser-password 'ChangeMe123!'
+  --superuser-email admin@example.com
 ```
+
+The installer prompts for the administrator password without echoing it. For
+automation, pipe exactly one line with `--superuser-password-stdin` or use a
+non-symlink mode-`600` file with `--superuser-password-file`.
 
 Or:
 

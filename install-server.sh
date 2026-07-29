@@ -18,6 +18,8 @@ PUBLIC_HTTPS_PORT="443"
 ADMIN_USERNAME="admin"
 ADMIN_EMAIL="admin@example.local"
 ADMIN_PASSWORD=""
+ADMIN_PASSWORD_SOURCE=""
+ADMIN_PASSWORD_FILE=""
 ADMIN_PROFILE="admin_full"
 PULL_IMAGES=0
 NO_BUILD=0
@@ -67,7 +69,8 @@ Options:
   --https-port PORT          Public HTTPS port mapped by nginx (default: 443)
   --admin-user USER          Admin username (default: admin)
   --admin-email EMAIL        Admin email (default: admin@example.local)
-  --admin-password PASS      Admin password; generated if omitted
+  --admin-password-stdin     Read the admin password from one stdin line
+  --admin-password-file P    Read it from a non-symlink file with mode 600
   --admin-profile NAME       Access profile for admin (default: admin_full)
   --project-name NAME        Docker Compose project name (default: webtrerm-prod)
   --pull                     Pull base images before start
@@ -94,7 +97,23 @@ while [[ $# -gt 0 ]]; do
     --https-port) PUBLIC_HTTPS_PORT="${2:-}"; shift 2 ;;
     --admin-user) ADMIN_USERNAME="${2:-}"; shift 2 ;;
     --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
-    --admin-password) ADMIN_PASSWORD="${2:-}"; shift 2 ;;
+    --admin-password-stdin)
+      [[ -z "$ADMIN_PASSWORD_SOURCE" ]] || {
+        echo "Error: choose only one admin password source" >&2
+        exit 1
+      }
+      ADMIN_PASSWORD_SOURCE="stdin"
+      shift
+      ;;
+    --admin-password-file)
+      [[ -z "$ADMIN_PASSWORD_SOURCE" ]] || {
+        echo "Error: choose only one admin password source" >&2
+        exit 1
+      }
+      ADMIN_PASSWORD_SOURCE="file"
+      ADMIN_PASSWORD_FILE="${2:-}"
+      shift 2
+      ;;
     --admin-profile) ADMIN_PROFILE="${2:-admin_full}"; shift 2 ;;
     --project-name) PROJECT_NAME="${2:-}"; shift 2 ;;
     --pull) PULL_IMAGES=1; shift ;;
@@ -466,10 +485,14 @@ prepare_env() {
   ok "Prepared production env for $public_url"
 }
 
-ensure_admin_password() {
-  if [[ -z "$ADMIN_PASSWORD" ]]; then
-    ADMIN_PASSWORD="$(random_string 24)"
-  fi
+load_admin_password() {
+  # shellcheck source=docker/installer-secret-input.sh
+  source "$PROJECT_DIR/docker/installer-secret-input.sh"
+  installer_read_secret \
+    ADMIN_PASSWORD \
+    "Administrator password" \
+    "$ADMIN_PASSWORD_SOURCE" \
+    "$ADMIN_PASSWORD_FILE"
 }
 
 run_stack_installer() {
@@ -485,7 +508,7 @@ run_stack_installer() {
     --create-superuser
     --superuser-username "$ADMIN_USERNAME"
     --superuser-email "$ADMIN_EMAIL"
-    --superuser-password "$ADMIN_PASSWORD"
+    --superuser-password-stdin
     --admin-profile "$ADMIN_PROFILE"
   )
   [[ "$PULL_IMAGES" -eq 1 ]] && args+=(--pull)
@@ -494,7 +517,7 @@ run_stack_installer() {
   [[ "$SKIP_HEALTHCHECKS" -eq 1 ]] && args+=(--skip-healthchecks)
   [[ "$SKIP_SMOKE" -eq 1 ]] && args+=(--skip-smoke)
 
-  (cd "$PROJECT_DIR" && "$installer" "${args[@]}")
+  printf '%s\n' "$ADMIN_PASSWORD" | (cd "$PROJECT_DIR" && "$installer" "${args[@]}")
 }
 
 print_summary() {
@@ -511,7 +534,7 @@ URL:
 
 Admin login:
   username: ${ADMIN_USERNAME}
-  password: ${ADMIN_PASSWORD}
+  password: supplied through private input and intentionally not displayed
   profile:  ${ADMIN_PROFILE}
 
 Project:
@@ -537,8 +560,8 @@ After login:
   3. Agents — create Mini agent and Run (works without extra setup)
   4. Full/multi agents are served by ops-supervisor already running in Docker
 
-Important:
-  Save this admin password now. It is printed only by this installer run.
+Security:
+  The admin password is never written to stdout or process arguments.
 EOF
 }
 
@@ -559,7 +582,6 @@ main() {
 
   log "Preparing environment"
   prepare_env
-  ensure_admin_password
 
   if [[ "$ONLY_PREPARE" -eq 1 ]]; then
     ok "Prepared project and env only; containers were not started"
@@ -572,13 +594,15 @@ Project:
 
 Next command:
   cd ${PROJECT_DIR}
-  ./docker/install-production.sh --env-file .env.production --compose-file docker-compose.production.yml --project-name ${PROJECT_NAME} --generate-secrets --create-superuser --superuser-username ${ADMIN_USERNAME} --superuser-email ${ADMIN_EMAIL} --superuser-password '<choose-password>' --admin-profile ${ADMIN_PROFILE}
+  ./docker/install-production.sh --env-file .env.production --compose-file docker-compose.production.yml --project-name ${PROJECT_NAME} --generate-secrets --create-superuser --superuser-username ${ADMIN_USERNAME} --superuser-email ${ADMIN_EMAIL} --admin-profile ${ADMIN_PROFILE}
 EOF
     exit 0
   fi
 
+  load_admin_password
   log "Starting WebTerm Docker stack (full platform)"
   run_stack_installer
+  unset ADMIN_PASSWORD
   print_summary
 }
 

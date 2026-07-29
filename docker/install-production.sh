@@ -18,6 +18,8 @@ CREATE_SUPERUSER=0
 SUPERUSER_USERNAME=""
 SUPERUSER_EMAIL=""
 SUPERUSER_PASSWORD=""
+SUPERUSER_PASSWORD_SOURCE=""
+SUPERUSER_PASSWORD_FILE=""
 ADMIN_PROFILE="admin_full"
 
 print_help() {
@@ -61,7 +63,8 @@ Options:
   --create-superuser           Create Django superuser after stack startup
   --superuser-username USER    Superuser username for --create-superuser
   --superuser-email EMAIL      Superuser email for --create-superuser
-  --superuser-password PASS    Superuser password for --create-superuser
+  --superuser-password-stdin   Read the superuser password from one stdin line
+  --superuser-password-file P  Read it from a non-symlink file with mode 600
   --admin-profile NAME         Access profile for superuser (default: admin_full)
   -h, --help                   Show this help
 
@@ -70,8 +73,9 @@ Examples:
   ./docker/install-production.sh --pull --generate-secrets
   ./docker/install-production.sh --create-superuser \
     --superuser-username admin \
-    --superuser-email admin@example.com \
-    --superuser-password 'ChangeMe123!'
+    --superuser-email admin@example.com
+  printf '%s\n' "$ADMIN_PASSWORD" | ./docker/install-production.sh \
+    --create-superuser --superuser-username admin --superuser-password-stdin
 EOF
 }
 
@@ -133,8 +137,21 @@ while [[ $# -gt 0 ]]; do
       SUPERUSER_EMAIL="${2:-}"
       shift 2
       ;;
-    --superuser-password)
-      SUPERUSER_PASSWORD="${2:-}"
+    --superuser-password-stdin)
+      [[ -z "$SUPERUSER_PASSWORD_SOURCE" ]] || {
+        echo "Error: choose only one superuser password source" >&2
+        exit 1
+      }
+      SUPERUSER_PASSWORD_SOURCE="stdin"
+      shift
+      ;;
+    --superuser-password-file)
+      [[ -z "$SUPERUSER_PASSWORD_SOURCE" ]] || {
+        echo "Error: choose only one superuser password source" >&2
+        exit 1
+      }
+      SUPERUSER_PASSWORD_SOURCE="file"
+      SUPERUSER_PASSWORD_FILE="${2:-}"
       shift 2
       ;;
     --admin-profile)
@@ -340,10 +357,23 @@ ensure_superuser_args() {
   if [[ "$CREATE_SUPERUSER" -eq 0 ]]; then
     return 0
   fi
-  if [[ -z "$SUPERUSER_USERNAME" || -z "$SUPERUSER_PASSWORD" ]]; then
-    echo "Error: --create-superuser requires --superuser-username and --superuser-password" >&2
+  if [[ -z "$SUPERUSER_USERNAME" ]]; then
+    echo "Error: --create-superuser requires --superuser-username" >&2
     exit 1
   fi
+}
+
+load_superuser_password() {
+  if [[ "$CREATE_SUPERUSER" -eq 0 ]]; then
+    return 0
+  fi
+  # shellcheck source=installer-secret-input.sh
+  source "$ROOT_DIR/docker/installer-secret-input.sh"
+  installer_read_secret \
+    SUPERUSER_PASSWORD \
+    "Superuser password" \
+    "$SUPERUSER_PASSWORD_SOURCE" \
+    "$SUPERUSER_PASSWORD_FILE"
 }
 
 service_container_id() {
@@ -400,79 +430,13 @@ create_superuser_if_requested() {
   if [[ "$CREATE_SUPERUSER" -eq 0 ]]; then
     return 0
   fi
-  compose exec -T \
-    -e DJANGO_SUPERUSER_USERNAME="$SUPERUSER_USERNAME" \
-    -e DJANGO_SUPERUSER_EMAIL="$SUPERUSER_EMAIL" \
-    -e DJANGO_SUPERUSER_PASSWORD="$SUPERUSER_PASSWORD" \
-    -e DJANGO_ADMIN_PROFILE="$ADMIN_PROFILE" \
-    backend python - <<'PY'
-import os
-import django
-
-django.setup()
-
-from django.contrib.auth import get_user_model
-from django.db import transaction
-
-from core_ui.access import PROFILE_STAFF_FLAGS, VALID_ACCESS_PROFILES, access_profile_permissions
-from core_ui.models import UserAppPermission
-
-User = get_user_model()
-username = os.environ["DJANGO_SUPERUSER_USERNAME"]
-email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "")
-password = os.environ["DJANGO_SUPERUSER_PASSWORD"]
-profile = (os.environ.get("DJANGO_ADMIN_PROFILE") or "admin_full").strip()
-if profile not in VALID_ACCESS_PROFILES or profile in {"custom", "reset_defaults", "server_only"}:
-    profile = "admin_full"
-
-user, created = User.objects.get_or_create(
-    username=username,
-    defaults={
-        "email": email,
-        "is_staff": True,
-        "is_superuser": True,
-        "is_active": True,
-    },
-)
-if created:
-    user.set_password(password)
-    user.save()
-    print(f"Created superuser: {username}")
-else:
-    update_fields = []
-    if email and user.email != email:
-        user.email = email
-        update_fields.append("email")
-    if not user.is_staff:
-        user.is_staff = True
-        update_fields.append("is_staff")
-    if not user.is_superuser:
-        user.is_superuser = True
-        update_fields.append("is_superuser")
-    if not user.is_active:
-        user.is_active = True
-        update_fields.append("is_active")
-    user.set_password(password)
-    update_fields.append("password")
-    user.save(update_fields=update_fields)
-    print(f"Updated superuser: {username}")
-
-# Grant every product feature (incl. kubernetes, studio sections, settings).
-staff_target = PROFILE_STAFF_FLAGS.get(profile, True)
-if user.is_staff != staff_target:
-    user.is_staff = staff_target
-    user.save(update_fields=["is_staff"])
-
-target = access_profile_permissions(profile)
-with transaction.atomic():
-    for feature, allowed in target.items():
-        UserAppPermission.objects.update_or_create(
-            user=user,
-            feature=feature,
-            defaults={"allowed": bool(allowed)},
-        )
-print(f"Applied access profile '{profile}' ({len(target)} features) to {username}")
-PY
+  printf '%s\n' "$SUPERUSER_PASSWORD" | compose exec -T \
+    backend python manage.py bootstrap_admin \
+    --username "$SUPERUSER_USERNAME" \
+    --email "$SUPERUSER_EMAIL" \
+    --profile "$ADMIN_PROFILE" \
+    --password-stdin
+  unset SUPERUSER_PASSWORD
 }
 
 wait_for_stack() {
@@ -592,7 +556,7 @@ EOF
 
 Admin account:
   username: $SUPERUSER_USERNAME
-  password: (the one you passed to the installer)
+  password: supplied through private input and intentionally not displayed
   profile:  $ADMIN_PROFILE
 EOF
   fi
@@ -612,6 +576,7 @@ main() {
 
   copy_env_if_missing
   ensure_superuser_args
+  load_superuser_password
 
   if [[ "$GENERATE_SECRETS" -eq 1 ]]; then
     generate_secret_if_needed "DJANGO_SECRET_KEY" 64

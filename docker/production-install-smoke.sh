@@ -235,16 +235,20 @@ probe_authenticated_readiness() {
     "$BASE_URL/api/auth/csrf/" >"$ARTIFACT_DIR/csrf.json"
   csrf_token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["csrfToken"])' "$ARTIFACT_DIR/csrf.json")"
 
-  python3 - "$LOGIN_PAYLOAD" "$ADMIN_USERNAME" "$ADMIN_PASSWORD" <<'PY'
+  printf '%s\n' "$ADMIN_PASSWORD" | python3 -c '
 import json
 import sys
 from pathlib import Path
 
+password = sys.stdin.readline().removesuffix("\n").removesuffix("\r")
+if not password or sys.stdin.read(1):
+    raise SystemExit("admin password stdin must contain exactly one non-empty line")
 Path(sys.argv[1]).write_text(
-    json.dumps({"username": sys.argv[2], "password": sys.argv[3], "auth_mode": "local"}),
+    json.dumps({"username": sys.argv[2], "password": password, "auth_mode": "local"}),
     encoding="utf-8",
 )
-PY
+' "$LOGIN_PAYLOAD" "$ADMIN_USERNAME"
+  chmod 600 "$LOGIN_PAYLOAD"
   curl --insecure --fail --silent --show-error \
     --cookie "$COOKIE_JAR" \
     --cookie-jar "$COOKIE_JAR" \
@@ -355,12 +359,12 @@ install_args=(
   --create-superuser
   --superuser-username "$ADMIN_USERNAME"
   --superuser-email "f13a-admin@example.test"
-  --superuser-password "$ADMIN_PASSWORD"
+  --superuser-password-stdin
 )
 if [[ "$RELEASE_IMAGES" == "1" ]]; then
   install_args+=(--pull --no-build)
 fi
-bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
+printf '%s\n' "$ADMIN_PASSWORD" | bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
 
 echo "==> Verifying migration drift and the strict production profile"
 compose exec -T backend python manage.py makemigrations --check --dry-run \
