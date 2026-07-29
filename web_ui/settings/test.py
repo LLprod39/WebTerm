@@ -42,6 +42,14 @@ CHANNEL_LAYERS = {
     }
 }
 
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "webterm-test-cache",
+        "TIMEOUT": 300,
+    }
+}
+
 # Isolate uploaded files from dev workspace
 MEDIA_ROOT = TEST_ARTIFACT_ROOT / "media"
 PLAYBOOK_BUNDLE_STORAGE_ROOT = TEST_ARTIFACT_ROOT / "private" / "playbook_bundles"

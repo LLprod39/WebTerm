@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from urllib.parse import urlparse
 
-from .env_helpers import env_bool
+from .env_helpers import env_bool, env_int
 
 
 def _ldap_server_uri() -> str:
@@ -30,6 +30,9 @@ def build_auth_settings(*, debug: bool) -> dict[str, object]:
         "LOGIN_REDIRECT_URL": "servers:server_list",
         "LOGOUT_REDIRECT_URL": "login",
         "AUTHENTICATION_BACKENDS": ["django.contrib.auth.backends.ModelBackend"],
+        "AUTH_LOGIN_THROTTLE_ENABLED": env_bool("AUTH_LOGIN_THROTTLE_ENABLED", True),
+        "AUTH_LOGIN_FAILURE_LIMIT": max(1, env_int("AUTH_LOGIN_FAILURE_LIMIT", 10)),
+        "AUTH_LOGIN_FAILURE_WINDOW_SECONDS": max(1, env_int("AUTH_LOGIN_FAILURE_WINDOW_SECONDS", 900)),
         "DOMAIN_AUTH_ENABLED": env_bool("DOMAIN_AUTH_ENABLED", False),
         "DOMAIN_AUTH_HEADER": (os.getenv("DOMAIN_AUTH_HEADER", "REMOTE_USER") or "REMOTE_USER").strip()
         or "REMOTE_USER",
