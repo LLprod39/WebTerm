@@ -48,7 +48,6 @@ urlpatterns = [
     path("api/admin/users/sessions/", admin_views.api_admin_users_sessions, name="api_admin_users_sessions"),
     path("api/auth/csrf/", auth_views.api_auth_csrf, name="api_auth_csrf"),
     path("api/auth/session/", auth_views.api_auth_session, name="api_auth_session"),
-    path("api/auth/ws-token/", auth_views.api_ws_token, name="api_ws_token"),
     path("api/auth/login/", auth_views.api_auth_login, name="api_auth_login"),
     path("api/auth/logout/", auth_views.api_auth_logout, name="api_auth_logout"),
     # Models/settings API

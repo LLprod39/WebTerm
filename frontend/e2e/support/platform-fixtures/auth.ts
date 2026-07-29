@@ -2,7 +2,7 @@ import { json } from "../apiHarness";
 import { makeSessionUser } from "../platformFixtureTypes";
 import type { PlatformFixtureContext } from "../platformFixtureState";
 
-/** Auth session/login/logout/ws-token fixtures. */
+/** Auth session/login/logout fixtures. */
 export function handleAuthFixture(req: any, ctx: PlatformFixtureContext) {
   const { options, defaultUser, state } = ctx;
       if (req.path === "/api/auth/session/" && req.method === "GET") {
@@ -27,8 +27,5 @@ export function handleAuthFixture(req: any, ctx: PlatformFixtureContext) {
         return json({ success: true });
       }
 
-      if (req.path === "/api/auth/ws-token/" && req.method === "GET") {
-        return json({ token: "mock-ws-token" });
-      }
   return undefined;
 }

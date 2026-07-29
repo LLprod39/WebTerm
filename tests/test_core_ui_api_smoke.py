@@ -34,13 +34,11 @@ def test_health_and_anonymous_auth_endpoints():
     assert session.status_code == 200
     assert session.json() == {"authenticated": False, "user": None}
 
-    ws = client.get("/api/auth/ws-token/")
-    assert ws.status_code == 401
-    assert ws.json()["error"] == "Not authenticated"
+    assert client.get("/api/auth/ws-token/").status_code == 404
 
 
 @pytest.mark.django_db
-def test_auth_login_logout_session_and_ws_token_flow():
+def test_auth_login_logout_session_flow():
     user = User.objects.create_user(username="auth-user", password="secret123")
     client = Client()
 
@@ -57,10 +55,6 @@ def test_auth_login_logout_session_and_ws_token_flow():
     assert session.status_code == 200
     assert session.json()["authenticated"] is True
     assert session.json()["user"]["id"] == user.id
-
-    ws = client.get("/api/auth/ws-token/")
-    assert ws.status_code == 200
-    assert ws.json()["token"]
 
     logout = client.post("/api/auth/logout/")
     assert logout.status_code == 200

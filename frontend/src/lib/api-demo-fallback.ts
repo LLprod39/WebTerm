@@ -15,7 +15,6 @@ export function demoFallback<T>(path: string, _options: RequestInit = {}): T {
   if (path.includes("/api/auth/session")) return DEMO_SESSION as T;
   if (path.includes("/api/auth/login")) return { success: true, authenticated: true, next_url: "/servers", user: DEMO_SESSION.user } as T;
   if (path.includes("/api/auth/logout")) return { success: true } as T;
-  if (path.includes("/api/auth/ws-token")) return { token: "demo-token" } as T;
   if (path.includes("/frontend/bootstrap")) return DEMO_BOOTSTRAP as T;
 
   // Plugin surfaces: dashboards expect surfaces.dashboard_widgets[] even when empty.

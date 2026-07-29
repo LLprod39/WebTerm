@@ -139,7 +139,6 @@ class SmokeUserSession:
             cookie_jar=aiohttp.CookieJar(unsafe=True),
             connector=connector,
         )
-        self.ws_token = ""
         self.csrf_token = ""
         self.csrf_cookie = ""
         self.session_cookie = ""
@@ -200,12 +199,6 @@ class SmokeUserSession:
                     f"session check failed for {self.seed['username']}: HTTP {response.status} {payload}"
                 )
 
-        async with self.session.get(urljoin(self.base_url, "api/auth/ws-token/"), headers=auth_headers) as response:
-            payload = await response.json()
-            if response.status != 200 or not payload.get("token"):
-                raise SmokeFailure(f"ws-token failed for {self.seed['username']}: HTTP {response.status} {payload}")
-            self.ws_token = str(payload["token"])
-
         async with self.session.get(
             urljoin(self.base_url, "servers/api/frontend/bootstrap/"),
             headers=auth_headers,
@@ -219,10 +212,11 @@ class SmokeUserSession:
 
     async def run_terminal_session(self, session_index: int) -> float:
         started = time.perf_counter()
-        ws_url = f"{self.ws_base}/ws/servers/{int(self.seed['server_id'])}/terminal/?ws_token={self.ws_token}"
+        ws_url = f"{self.ws_base}/ws/servers/{int(self.seed['server_id'])}/terminal/"
         marker = f"TERM_OK_{self.seed['username']}_{session_index}"
         async with self.session.ws_connect(
             ws_url,
+            headers={"Cookie": self._cookie_header()},
             heartbeat=20,
             origin=self.base_url.rstrip("/"),
         ) as ws:

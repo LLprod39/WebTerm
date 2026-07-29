@@ -223,12 +223,8 @@ function buildWsBase(): string {
   return `${proto}//${host}`;
 }
 
-export function getWsUrl(serverId: number | string, wsToken?: string): string {
-  const base = `${buildWsBase()}/ws/servers/${serverId}/terminal/`;
-  if (wsToken) {
-    return `${base}?ws_token=${encodeURIComponent(wsToken)}`;
-  }
-  return base;
+export function getWsUrl(serverId: number | string): string {
+  return `${buildWsBase()}/ws/servers/${serverId}/terminal/`;
 }
 
 export function getStudioPipelineRunWsUrl(runId: number | string): string {

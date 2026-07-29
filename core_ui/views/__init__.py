@@ -3,7 +3,7 @@ core_ui/views — Views package.
 
 Current state: auth, health, page, dashboard/terminal helpers live in focused modules; _views_all.py keeps legacy groups.
 Target structure (split progressively):
-  auth.py        — login, logout, session, csrf, ws-token
+  auth.py        — login, logout, session, csrf
   health.py      — health/readiness checks
   pages.py       — legacy Django-rendered page views
   access.py      — users, groups, permissions CRUD
