@@ -9,6 +9,7 @@ from asgiref.sync import async_to_sync
 from loguru import logger
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
+from app.shell_commands import is_read_only_command
 from app.tools.safety import evaluate_command_safety
 from servers.operator_tools_common import _int_arg, _server_for_user
 from servers.views.server_helpers import (
@@ -71,45 +72,7 @@ def _execute_on_server(ctx: AssistantActionContext, server, command: str, *, all
             "error": "Dangerous command requires allow_destructive=true after confirmation",
             "risk_categories": list(risk.categories),
         }
-    # Soft guard: ai_read_only blocks non-read-ish commands unless clearly status-like.
-    if (
-        getattr(server, "ai_read_only", False)
-        and not command.strip().startswith(
-            (
-                "ls",
-                "cat ",
-                "df",
-                "free",
-                "uptime",
-                "ps ",
-                "systemctl status",
-                "journalctl",
-                "uname",
-                "hostname",
-                "whoami",
-                "id",
-                "pwd",
-                "echo ",
-            )
-        )
-        and (
-            risk.is_dangerous
-            or any(
-                token in command
-                for token in (
-                    "rm ",
-                    "mv ",
-                    "chmod",
-                    "chown",
-                    "systemctl restart",
-                    "systemctl stop",
-                    "apt ",
-                    "yum ",
-                    "dnf ",
-                )
-            )
-        )
-    ):
+    if getattr(server, "ai_read_only", False) and not is_read_only_command(command):
         return {
             "ok": False,
             "server_id": server.id,

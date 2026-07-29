@@ -161,6 +161,7 @@ class SSHTerminalAiToolsMixin:
             allowlist_patterns=allowlist_patterns,
             confirm_dangerous_commands=confirm_dangerous_commands,
             exec_mode=exec_mode,
+            read_only=bool(getattr(getattr(self, "server", None), "ai_read_only", False)),
         )
 
     def _legacy_direct_exec_enabled(self) -> bool:

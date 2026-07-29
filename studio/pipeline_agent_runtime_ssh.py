@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
+from app.shell_commands import is_read_only_command
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 
 from .models import PipelineRun
@@ -66,6 +67,15 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
     server = await _s2a_fn(get_owned_server)(owner, server_id)
     if server is None:
         return {"status": "failed", "error": f"Server not found: {server_id}"}
+    commands_to_check = [command, *preflight_commands, *verification_commands]
+    if getattr(server, "ai_read_only", False) and any(
+        not is_read_only_command(str(candidate or "")) for candidate in commands_to_check if str(candidate or "").strip()
+    ):
+        return {
+            "status": "failed",
+            "error": "Server is in AI read-only mode; changing or unclassified SSH commands are blocked.",
+            "output": "",
+        }
 
     permission_engine = runtime.PermissionEngine(
         mode=pipeline_permission_mode(config),

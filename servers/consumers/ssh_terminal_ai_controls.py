@@ -141,18 +141,6 @@ class SSHTerminalAiControlsMixin:
             await self._send_ai_event(terminal_events.ai_error("Server not loaded"))
             return
 
-        # 2.11: per-server read-only guard. Check flag synchronously via
-        # database_sync_to_async before starting any LLM/exec work.
-        if getattr(self.server, "ai_read_only", False):
-            await self._send_ai_event(
-                terminal_events.ai_error(
-                    "Сервер переведён в режим read-only для AI. "
-                    "AI-агент может только читать состояние; изменяющие команды заблокированы."
-                )
-            )
-            await self._send_ai_event(terminal_events.ai_status("idle"))
-            return
-
         self._ai_audit_context = {
             "user_id": self._user_id,
             "channel": "ws",

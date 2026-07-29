@@ -81,6 +81,24 @@ def test_ssh_cmd_node_runs_preflight_command_and_verification(monkeypatch):
     assert connect_kwargs_seen["connect_timeout"] == 30
 
 
+def test_ssh_cmd_node_cannot_mutate_new_read_only_server():
+    run = make_run("ssh-read-only-user")
+    server = Server.objects.create(user=run.pipeline.owner, name="ssh-ro", host="10.0.0.4", username="root")
+
+    result = async_to_sync(PipelineExecutor(run)._execute_node)(
+        {
+            "id": "ssh",
+            "type": "agent/ssh_cmd",
+            "data": {"server_id": server.id, "command": "mv /tmp/a /tmp/b"},
+        },
+        {},
+        {},
+    )
+
+    assert result["status"] == "failed"
+    assert "read-only" in result["error"]
+
+
 def test_llm_query_node_streams_response_with_context(monkeypatch):
     run = make_run("llm-node-user")
     captured: dict[str, object] = {}

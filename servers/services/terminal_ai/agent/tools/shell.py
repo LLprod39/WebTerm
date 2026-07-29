@@ -24,8 +24,8 @@ import logging
 from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.agent_kernel.permissions.shell_policy import is_read_only_command
 from app.command_execution_gate import evaluate_command_execution_gate
+from app.shell_commands import is_read_only_command
 from app.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
 from servers.services.terminal_ai.agent.schemas import ToolResult
 from servers.services.terminal_ai.agent.tools.base import (

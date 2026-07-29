@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.agent_kernel.permissions.shell_policy import is_read_only_analysis
-from app.shell_commands import ShellCommandAnalysis, analyze_shell_command
+from app.shell_commands import ShellCommandAnalysis, analyze_shell_command, is_read_only_analysis
 from app.tools.safety import CommandRisk, evaluate_command_safety
 
 

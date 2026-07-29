@@ -28,7 +28,7 @@ export function demoServerCrudFallback<T>(path: string, _options: RequestInit = 
       notes: "Demo server (static UI demo — no live SSH).",
       group_id: seed?.group_id ?? 1,
       is_active: true,
-      ai_read_only: false,
+      ai_read_only: true,
       sudo_auth_mode: "none",
       has_saved_sudo_password: false,
       corporate_context: "",

@@ -89,3 +89,30 @@ def test_build_plan_item_marks_forbidden_as_blocked():
     assert item["blocked"] is True
     assert item["status"] == "blocked"
     assert item["reason"] == "forbidden"
+
+
+def test_build_plan_item_allows_diagnostics_on_read_only_server():
+    item = build_plan_item(
+        item_id=2,
+        command="systemctl status nginx",
+        why="diagnose",
+        chat_mode="agent",
+        read_only=True,
+    )
+
+    assert item["blocked"] is False
+
+
+def test_build_plan_item_blocks_mutation_on_read_only_server_even_with_allowlist():
+    item = build_plan_item(
+        item_id=3,
+        command="systemctl restart nginx",
+        why="restart",
+        chat_mode="agent",
+        allowlist_patterns=["systemctl restart"],
+        read_only=True,
+    )
+
+    assert item["blocked"] is True
+    assert item["requires_confirm"] is False
+    assert item["reason"] == "server_read_only"

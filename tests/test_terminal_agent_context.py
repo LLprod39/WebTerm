@@ -89,7 +89,7 @@ def test_accessible_server_sync_helpers_include_owned_server_only():
             "id": server.id,
             "name": "agent-srv",
             "host": "10.0.0.50",
-            "ai_read_only": False,
+            "ai_read_only": True,
             "sudo_auth_mode": "none",
             "description": "ops target",
         }

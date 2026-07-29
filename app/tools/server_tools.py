@@ -11,6 +11,7 @@ from asgiref.sync import sync_to_async
 from loguru import logger
 
 from app.execution_policy import build_execution_policy_audit_metadata
+from app.shell_commands import is_read_only_command
 from app.tools.activity_provider import log_tool_user_activity
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
@@ -190,6 +191,9 @@ class ServerExecuteTool(BaseTool):
             if target_server_id:
                 return f"Сервер не найден: «{server_name_or_id}». ВАЖНО: Используй ТОЛЬКО целевой сервер «{target_server_name}» (id={target_server_id})!"
             return f"Сервер не найден: «{server_name_or_id}». Вызови servers_list, чтобы увидеть доступные серверы."
+
+        if getattr(server, "ai_read_only", False) and not is_read_only_command(command):
+            return "Сервер работает в AI read-only режиме. Изменяющая или неклассифицируемая команда заблокирована."
 
         # Если есть ограничение на целевой сервер — проверяем
         if target_server_id and server.id != target_server_id:
