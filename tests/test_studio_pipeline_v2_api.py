@@ -22,7 +22,7 @@ def _disable_activity_logging(monkeypatch):
 
 
 @pytest.mark.django_db
-def test_api_run_approve_resolves_normalized_node_id_and_sends_telegram_confirmation(monkeypatch):
+def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
     user = User.objects.create_user(username="approval-link-user", password="x")
     pipeline = Pipeline.objects.create(
         name="Approval link flow",
@@ -64,13 +64,41 @@ def test_api_run_approve_resolves_normalized_node_id_and_sends_telegram_confirma
         return _Resp()
 
     monkeypatch.setattr("studio.views.httpx.post", fake_post)
-    client = Client()
+    client = Client(enforce_csrf_checks=True)
 
-    response = client.get(f"/api/studio/runs/{run.id}/approve/approvalgate/?token=tok-123&decision=approved")
+    url = f"/api/studio/runs/{run.id}/approve/approvalgate/?token=tok-123&decision=approved"
+    confirmation = client.get(url)
+
+    assert confirmation.status_code == 200
+    assert b"Review pipeline decision" in confirmation.content
+    assert confirmation.headers["Cache-Control"] == "no-store"
+    assert confirmation.headers["Referrer-Policy"] == "no-referrer"
+    assert captured == {}
+    run.refresh_from_db()
+    assert "approval_decision" not in run.node_states["approval_gate"]
+
+    csrf_token = client.cookies["csrftoken"].value
+    rejected_without_csrf = Client(enforce_csrf_checks=True).post(
+        url.split("?", 1)[0],
+        data={"token": "tok-123", "decision": "approved"},
+    )
+    assert rejected_without_csrf.status_code == 403
+
+    response = client.post(
+        url.split("?", 1)[0],
+        data={
+            "csrfmiddlewaretoken": csrf_token,
+            "token": "tok-123",
+            "decision": "approved",
+            "response_text": "Reviewed",
+        },
+        HTTP_X_CSRFTOKEN=csrf_token,
+    )
 
     assert response.status_code == 200
     run.refresh_from_db()
     assert run.node_states["approval_gate"]["approval_decision"] == "approved"
+    assert run.node_states["approval_gate"]["approval_response"] == "Reviewed"
     assert captured["url"] == "https://api.telegram.org/botbot-123/sendMessage"
     assert "Решение записано" in str(captured["json"]["text"])
 

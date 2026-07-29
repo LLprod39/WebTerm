@@ -9,9 +9,9 @@ import sys
 
 import httpx
 from django.http import HttpResponse, JsonResponse
+from django.middleware.csrf import get_token
 from django.utils import timezone
 from django.utils.html import escape
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
@@ -149,25 +149,27 @@ def api_run_stop(request, run_id: int):
     return _ok({"ok": True, "live_executor": stop_delivered, "runtime_control": control})
 
 
-@csrf_exempt
 @require_http_methods(["GET", "POST"])
 def api_run_approve(request, run_id: int, node_id: str):
-    """
-    Public endpoint authenticated only by the one-time token embedded in the URL.
-    """
+    """Render a confirmation page on GET and record a CSRF-protected POST decision."""
     if request.method == "GET":
         token = request.GET.get("token", "")
-        decision = request.GET.get("decision", "")
-        response_text = request.GET.get("response", "")
+        decision = ""
+        response_text = ""
     else:
-        body = _json_body(request)
-        token = body.get("token", "")
-        decision = body.get("decision", "")
-        response_text = body.get("response_text", "")
+        if request.content_type == "application/json":
+            body = _json_body(request)
+            token = body.get("token", "")
+            decision = body.get("decision", "")
+            response_text = body.get("response_text", "")
+        else:
+            token = request.POST.get("token", "")
+            decision = request.POST.get("decision", "")
+            response_text = request.POST.get("response_text", "")
 
     if not token:
         return _err("token is required", 400)
-    if decision not in ("approved", "rejected"):
+    if request.method == "POST" and decision not in ("approved", "rejected"):
         return _err("decision must be 'approved' or 'rejected'", 400)
 
     try:
@@ -190,6 +192,32 @@ def api_run_approve(request, run_id: int, node_id: str):
     if node_state.get("approval_decision"):
         existing = node_state["approval_decision"]
         return _ok({"ok": True, "message": f"Already decided: {existing}"})
+
+    if request.method == "GET":
+        csrf_token = escape(get_token(request))
+        safe_token = escape(str(token))
+        safe_pipeline_name = escape(run.pipeline.name)
+        safe_node_id = escape(resolved_node_id)
+        html = (
+            "<html><body style='font-family:sans-serif;max-width:640px;margin:60px auto'>"
+            "<h1>Review pipeline decision</h1>"
+            f"<p>Pipeline <strong>{safe_pipeline_name}</strong> (run #{int(run_id)}) is waiting "
+            f"for a decision on <strong>{safe_node_id}</strong>.</p>"
+            "<form method='post' style='display:grid;gap:16px'>"
+            f"<input type='hidden' name='csrfmiddlewaretoken' value='{csrf_token}'>"
+            f"<input type='hidden' name='token' value='{safe_token}'>"
+            "<label>Comment (optional)<textarea name='response_text' rows='5' "
+            "style='display:block;width:100%;margin-top:8px'></textarea></label>"
+            "<div style='display:flex;gap:12px'>"
+            "<button type='submit' name='decision' value='approved'>Approve</button>"
+            "<button type='submit' name='decision' value='rejected'>Reject</button>"
+            "</div></form></body></html>"
+        )
+        response = HttpResponse(html, content_type="text/html")
+        response["Cache-Control"] = "no-store"
+        response["Referrer-Policy"] = "no-referrer"
+        response["X-Frame-Options"] = "DENY"
+        return response
 
     run.node_states[resolved_node_id] = {
         **node_state,
