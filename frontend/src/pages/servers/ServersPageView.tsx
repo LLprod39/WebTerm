@@ -24,9 +24,16 @@ import { ServerFormDialog } from "./ServerFormDialog";
 import { ServerGroupDialog } from "./ServerGroupDialog";
 import { ServerGroupsTab } from "./ServerGroupsTab";
 import { ServerKnowledgeDialogs } from "./ServerKnowledgeDialogs";
+import { SSHHostKeyEnrollmentDialog } from "./SSHHostKeyEnrollmentDialog";
 import { ServerRulesTab } from "./ServerRulesTab";
 import { ServersListTab } from "./ServersListTab";
-import type { AdvancedTab, MainTab, ServerForm, ServerGroupForm } from "./types";
+import type {
+  AdvancedTab,
+  MainTab,
+  ServerForm,
+  ServerGroupForm,
+  SSHHostKeyEnrollmentTarget,
+} from "./types";
 import type { ServerValidationResult } from "./serverValidation";
 import type { ServerCommandController } from "./useServerCommandController";
 import type { ServerKnowledgeController } from "./useServerKnowledgeController";
@@ -75,6 +82,9 @@ export interface ServersPageViewProps {
   serverDeleteTarget: FrontendServer | null;
   clearServerDeleteTarget: () => void;
   confirmDeleteServer: () => void;
+  hostKeyEnrollmentTarget: SSHHostKeyEnrollmentTarget | null;
+  closeHostKeyEnrollment: () => void;
+  confirmHostKeyEnrollment: (fingerprint: string) => void | Promise<void>;
   openCreateGroup: () => void;
   openGroupSettings: (group: FrontendGroup) => void;
   requestDeleteGroup: (group: FrontendGroup) => void;
@@ -113,7 +123,8 @@ export function ServersPageView(props: ServersPageViewProps) {
     fleetHealthByServerId, openCreate, openEdit, requestDeleteServer, dialogOpen, setDialogOpen,
     editingServer, form, formValidation, handlePrivateKeyFile, setForm, saveServer, saveAndTestServer,
     testConnection, saving, testingConnection, serverDeleteTarget, clearServerDeleteTarget,
-    confirmDeleteServer, openCreateGroup, openGroupSettings, requestDeleteGroup, openGroupRules,
+    confirmDeleteServer, hostKeyEnrollmentTarget, closeHostKeyEnrollment, confirmHostKeyEnrollment,
+    openCreateGroup, openGroupSettings, requestDeleteGroup, openGroupRules,
     groupDialogOpen, setGroupDialogOpen, editingGroup, groupForm, setGroupForm, groupSaving,
     closeGroupDialog, saveGroup, groupDeleteTarget, clearGroupDeleteTarget, confirmDeleteGroup,
     advancedOpen, setAdvancedOpen, advancedServer, advancedTab, setAdvancedTab, advancedLoading,
@@ -289,6 +300,15 @@ export function ServersPageView(props: ServersPageViewProps) {
       <ServerKnowledgeDialogs
         controller={knowledgeController}
         t={t}
+      />
+
+      <SSHHostKeyEnrollmentDialog
+        busy={testingConnection}
+        onClose={closeHostKeyEnrollment}
+        onConfirm={confirmHostKeyEnrollment}
+        open={Boolean(hostKeyEnrollmentTarget)}
+        t={t}
+        target={hostKeyEnrollmentTarget}
       />
 
       <DeleteDialog

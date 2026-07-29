@@ -70,7 +70,15 @@ def test_server_test_connection_passes_server_to_ssh_manager(monkeypatch):
     client = Client()
     client.force_login(user)
 
-    server = _create_server(user, name="ssh-check", host="10.0.0.25", port=2222, auth_method="password")
+    trusted_record = _make_public_key_record()
+    server = _create_server(
+        user,
+        name="ssh-check",
+        host="10.0.0.25",
+        port=2222,
+        auth_method="password",
+        trusted_host_keys=[trusted_record],
+    )
     calls: dict[str, object] = {}
 
     async def fake_connect(**kwargs):
@@ -80,8 +88,12 @@ def test_server_test_connection_passes_server_to_ssh_manager(monkeypatch):
     async def fake_disconnect(conn_id: str):
         calls["disconnect_conn_id"] = conn_id
 
+    async def fake_probe(_server):
+        return dict(trusted_record)
+
     monkeypatch.setattr("servers.views.ssh_manager.connect", fake_connect)
     monkeypatch.setattr("servers.views.ssh_manager.disconnect", fake_disconnect)
+    monkeypatch.setattr("servers.views.server_ops.probe_server_host_key", fake_probe)
 
     response = client.post(
         f"/servers/api/{server.id}/test/",
@@ -118,4 +130,4 @@ def test_shared_user_cannot_refresh_trusted_host_key():
     )
 
     assert response.status_code == 403
-    assert "Only owner can refresh" in response.json()["error"]
+    assert "Only owner can enroll" in response.json()["error"]

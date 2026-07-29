@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from typing import Any
 
 import asyncssh
@@ -12,6 +13,23 @@ from servers.models import Server
 
 class SSHHostKeyVerificationError(RuntimeError):
     """Raised when the SSH server host key cannot be verified."""
+
+
+class SSHHostKeyEnrollmentRequired(SSHHostKeyVerificationError):
+    """Raised when a server has no explicitly trusted SSH host key."""
+
+
+class SSHHostKeyFingerprintMismatch(SSHHostKeyVerificationError):
+    """Raised when an operator-confirmed fingerprint is not currently served."""
+
+    def __init__(self, expected: str, observed: str):
+        super().__init__("SSH host key fingerprint изменился или не совпадает с подтверждённым значением")
+        self.expected = expected
+        self.observed = observed
+
+
+class SSHHostKeyRotationRequired(SSHHostKeyVerificationError):
+    """Raised when replacing an existing trusted key was not explicitly approved."""
 
 
 def parse_host_port_value(host_value: str, default_port: int = 22) -> tuple[str, int]:
@@ -76,10 +94,6 @@ def normalize_trusted_host_keys(raw_value: Any) -> list[dict[str, str]]:
                 public_key = _normalize_public_key(item.get("public_key", ""))
                 parsed = asyncssh.import_public_key(public_key)
                 record = _serialize_host_key(parsed, trusted_at=str(item.get("trusted_at") or "").strip() or None)
-                if item.get("algorithm"):
-                    record["algorithm"] = str(item["algorithm"]).strip()
-                if item.get("fingerprint_sha256"):
-                    record["fingerprint_sha256"] = str(item["fingerprint_sha256"]).strip()
             else:
                 continue
         except Exception:
@@ -220,13 +234,27 @@ async def fetch_server_host_key(
     return _serialize_host_key(key)
 
 
-async def tofu_known_hosts_for_host(
+async def probe_server_host_key(server: Server, *, connect_timeout: int = 10) -> dict[str, str]:
+    host, port = parse_server_host_port(server)
+    return await fetch_server_host_key(
+        host,
+        port,
+        network_config=getattr(server, "network_config", None) or {},
+        connect_timeout=connect_timeout,
+    )
+
+
+async def verified_known_hosts_for_host(
     host: str,
     port: int,
     *,
+    expected_fingerprint: str,
     network_config: Any = None,
     connect_timeout: int = 10,
 ) -> tuple[asyncssh.SSHKnownHosts, dict[str, str]]:
+    expected = str(expected_fingerprint or "").strip()
+    if not expected:
+        raise SSHHostKeyEnrollmentRequired("Для SSH подключения укажи заранее проверенный fingerprint host key")
     normalized_host, normalized_port = parse_host_port_value(host, port)
     record = await fetch_server_host_key(
         normalized_host,
@@ -234,22 +262,58 @@ async def tofu_known_hosts_for_host(
         network_config=network_config,
         connect_timeout=connect_timeout,
     )
+    observed = str(record.get("fingerprint_sha256") or "").strip()
+    if not secrets.compare_digest(expected, observed):
+        raise SSHHostKeyFingerprintMismatch(expected, observed)
     return build_known_hosts(normalized_host, normalized_port, [record]), record
 
 
-async def ensure_server_known_hosts(server: Server, *, refresh: bool = False) -> asyncssh.SSHKnownHosts:
-    records = get_server_trusted_host_keys(server)
-    if records and not refresh:
-        normalized = normalize_trusted_host_keys(records)
-        if normalized != records:
-            await sync_to_async(_save_server_trusted_host_keys, thread_sensitive=True)(server.id, normalized)
-            server.trusted_host_keys = normalized
-            records = normalized
-        return build_known_hosts_for_server(server)
+async def enroll_server_host_key(
+    server: Server,
+    *,
+    expected_fingerprint: str,
+    allow_replace: bool = False,
+    connect_timeout: int = 10,
+) -> dict[str, str]:
+    expected = str(expected_fingerprint or "").strip()
+    if not expected:
+        raise SSHHostKeyEnrollmentRequired("Подтверди точный SSH host key fingerprint перед сохранением")
 
-    host, port = parse_server_host_port(server)
-    record = await fetch_server_host_key(host, port, network_config=server.network_config or {})
-    records = [record]
+    candidate = await probe_server_host_key(server, connect_timeout=connect_timeout)
+    observed = str(candidate.get("fingerprint_sha256") or "").strip()
+    if not secrets.compare_digest(expected, observed):
+        raise SSHHostKeyFingerprintMismatch(expected, observed)
+
+    existing = get_server_trusted_host_keys(server)
+    same_key = any(
+        secrets.compare_digest(str(item.get("public_key") or ""), str(candidate.get("public_key") or ""))
+        for item in existing
+    )
+    if existing and not same_key and not allow_replace:
+        raise SSHHostKeyRotationRequired("Замена trusted SSH host key требует отдельного подтверждения ротации")
+
+    trusted_record = {
+        **candidate,
+        "trusted_at": timezone.now().isoformat(),
+    }
+    records = [trusted_record]
     await sync_to_async(_save_server_trusted_host_keys, thread_sensitive=True)(server.id, records)
     server.trusted_host_keys = records
+    return trusted_record
+
+
+async def ensure_server_known_hosts(server: Server, *, refresh: bool = False) -> asyncssh.SSHKnownHosts:
+    if refresh:
+        raise SSHHostKeyEnrollmentRequired("SSH host key нельзя обновить без проверки и подтверждения fingerprint")
+
+    raw_records = getattr(server, "trusted_host_keys", None)
+    records = normalize_trusted_host_keys(raw_records)
+    if not records:
+        raise SSHHostKeyEnrollmentRequired(
+            "SSH host key не подтверждён. Владелец сервера должен проверить и сохранить fingerprint."
+        )
+    if records != raw_records:
+        await sync_to_async(_save_server_trusted_host_keys, thread_sensitive=True)(server.id, records)
+        server.trusted_host_keys = records
+    host, port = parse_server_host_port(server)
     return build_known_hosts(host, port, records)

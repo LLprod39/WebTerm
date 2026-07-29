@@ -21,10 +21,11 @@ from typing import Any
 
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 from servers.services.ansible_docker_runtime import isolated_execution_required
+from servers.services.ansible_host_keys import require_trusted_host_keys
 from servers.services.playbook_inventory_identity import (
     inventory_host_alias as _safe_host_name,
 )
-from servers.ssh_host_keys import get_server_trusted_host_keys, parse_server_host_port
+from servers.ssh_host_keys import parse_server_host_port
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +348,7 @@ def _write_inventory(
     known_hosts_path = workdir / "known_hosts"
     known_hosts_lines: list[str] = []
     known_hosts_seen: set[str] = set()
+    trusted_keys_by_server_id = require_trusted_host_keys(servers)
 
     for server in servers:
         host_alias = _safe_host_name(getattr(server, "name", ""), int(server.id))
@@ -359,10 +361,7 @@ def _write_inventory(
         if loopback_host_alias and is_loopback:
             host = loopback_host_alias
         user = str(server.username or "root")
-        try:
-            trusted_host_keys = get_server_trusted_host_keys(server)
-        except Exception:
-            trusted_host_keys = []
+        trusted_host_keys = trusted_keys_by_server_id[int(server.id)]
         host_patterns = [f"[{host.strip('[]')}]:{port}"]
         if port == 22:
             host_patterns.insert(0, host.strip("[]"))
@@ -375,7 +374,7 @@ def _write_inventory(
                     known_hosts_lines.append(line)
         ssh_options = [
             "-o UserKnownHostsFile=known_hosts",
-            f"-o StrictHostKeyChecking={'yes' if trusted_host_keys else 'accept-new'}",
+            "-o StrictHostKeyChecking=yes",
         ]
         parts = [
             host_alias,

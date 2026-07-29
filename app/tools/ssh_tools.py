@@ -19,7 +19,11 @@ from app.tools.activity_provider import get_tool_audit_context, log_tool_user_ac
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
 from app.tools.server_secret_provider import get_server_sudo_secret
-from app.tools.ssh_host_key_provider import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
+from app.tools.ssh_host_key_provider import (
+    ensure_server_known_hosts,
+    parse_host_port_value,
+    verified_known_hosts_for_host,
+)
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -56,7 +60,7 @@ class SSHConnectionManager:
         port: int = 22,
         network_config: dict | None = None,
         server: Any | None = None,
-        refresh_host_key: bool = False,
+        expected_host_key_fingerprint: str = "",
     ) -> str:
         """
         Establish SSH connection с учётом network_config
@@ -80,11 +84,12 @@ class SSHConnectionManager:
             effective_network_config = network_config or getattr(server, "network_config", None) or {}
 
             if server is not None:
-                known_hosts = await ensure_server_known_hosts(server, refresh=refresh_host_key)
+                known_hosts = await ensure_server_known_hosts(server)
             else:
-                known_hosts, _trusted_record = await tofu_known_hosts_for_host(
+                known_hosts, _trusted_record = await verified_known_hosts_for_host(
                     normalized_host,
                     normalized_port,
+                    expected_fingerprint=expected_host_key_fingerprint,
                     network_config=effective_network_config,
                 )
 
@@ -276,14 +281,32 @@ class SSHConnectTool(BaseTool):
                     name="key_path", type="string", description="Path to SSH private key (optional)", required=False
                 ),
                 ToolParameter(name="port", type="number", description="SSH port", required=False, default=22),
+                ToolParameter(
+                    name="expected_host_key_fingerprint",
+                    type="string",
+                    description="Out-of-band verified SHA256 SSH host-key fingerprint",
+                ),
             ],
         )
 
     async def execute(
-        self, host: str, username: str, password: str | None = None, key_path: str | None = None, port: int = 22
+        self,
+        host: str,
+        username: str,
+        password: str | None = None,
+        key_path: str | None = None,
+        port: int = 22,
+        expected_host_key_fingerprint: str = "",
     ) -> str:
         """Execute SSH connection"""
-        conn_id = await ssh_manager.connect(host, username, password, key_path, port)
+        conn_id = await ssh_manager.connect(
+            host,
+            username,
+            password,
+            key_path,
+            port,
+            expected_host_key_fingerprint=expected_host_key_fingerprint,
+        )
         return f"Successfully connected to {conn_id}. Use this ID for subsequent SSH commands."
 
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import re
 
 from asgiref.sync import sync_to_async
@@ -8,7 +7,7 @@ from loguru import logger
 
 from app.tools.server_tools import ServerExecuteTool
 from servers.models import Server
-from servers.secret_utils import get_server_auth_secret
+from servers.ssh_host_keys import has_trusted_host_keys
 
 
 class DjangoChatServerProvider:
@@ -18,7 +17,6 @@ class DjangoChatServerProvider:
         if not user_id:
             return ""
         try:
-            master_pwd = os.environ.get("MASTER_PASSWORD", "").strip()
             servers = list(
                 Server.objects.filter(user_id=user_id).only(
                     "id",
@@ -27,9 +25,7 @@ class DjangoChatServerProvider:
                     "port",
                     "username",
                     "auth_method",
-                    "key_path",
-                    "encrypted_password",
-                    "salt",
+                    "trusted_host_keys",
                 )
             )
             if not servers:
@@ -37,40 +33,18 @@ class DjangoChatServerProvider:
             lines = [
                 "\n\n=== СЕРВЕРЫ ПОЛЬЗОВАТЕЛЯ ===",
                 "ВАЖНО: Данные серверов ниже. НЕ ищи их в коде!",
-                "Для SSH-команд используй готовые команды подключения:",
+                "Для команд используй server tools по server_id; raw SSH-клиенты запрещены.",
                 "",
             ]
             for server in servers:
-                auth = server.auth_method or "password"
-                key_path = server.key_path or ""
-                pwd_decrypted = ""
-                if auth in ("password", "key_password"):
-                    try:
-                        pwd_decrypted = get_server_auth_secret(server, master_password=master_pwd)
-                    except Exception as exc:
-                        logger.debug(f"Password decryption failed for server {server.name}: {exc}")
-                        pwd_decrypted = ""
-                if auth == "key" and key_path:
-                    cmd_hint = (
-                        f"ssh -i {key_path} -o StrictHostKeyChecking=no "
-                        f"{server.username}@{server.host} -p {server.port} '<COMMAND>'"
-                    )
-                elif pwd_decrypted:
-                    safe_pwd = pwd_decrypted.replace("'", "'\\''")
-                    cmd_hint = (
-                        f"sshpass -p '{safe_pwd}' ssh -o StrictHostKeyChecking=no "
-                        f"{server.username}@{server.host} -p {server.port} '<COMMAND>'"
-                    )
-                else:
-                    cmd_hint = (
-                        f"ssh -o StrictHostKeyChecking=no {server.username}@{server.host} "
-                        f"-p {server.port} '<COMMAND>'  # пароль недоступен"
-                    )
                 lines.append(f"• {server.name}:")
-                lines.append(f"    {cmd_hint}")
+                lines.append(
+                    f"    server_id={server.id}; endpoint={server.host}:{server.port}; "
+                    f"user={server.username}; auth={server.auth_method}; "
+                    f"host_key={'trusted' if has_trusted_host_keys(server) else 'enrollment_required'}"
+                )
             lines.append("")
-            lines.append("Замени <COMMAND> на нужную команду (например df -h, hostname, uptime).")
-            lines.append("sshpass установлен в системе.")
+            lines.append("Не запрашивай и не вставляй пароли или приватные ключи в команды и ответы.")
             lines.append("")
             return "\n".join(lines)
         except Exception as exc:

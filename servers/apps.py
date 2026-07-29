@@ -38,7 +38,11 @@ class ServersConfig(AppConfig):
         from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
         from servers.server_alert_provider import DjangoServerAlertProvider
         from servers.smoke_seed_provider import DjangoSmokeServerSeedProvider
-        from servers.ssh_host_keys import ensure_server_known_hosts, parse_host_port_value, tofu_known_hosts_for_host
+        from servers.ssh_host_keys import (
+            ensure_server_known_hosts,
+            parse_host_port_value,
+            verified_known_hosts_for_host,
+        )
         from servers.studio_server_access_provider import DjangoStudioServerAccessProvider
         from servers.tool_gateway import DjangoServerToolGateway
 
@@ -61,7 +65,7 @@ class ServersConfig(AppConfig):
         register_server_sudo_secret_provider(get_server_sudo_secret)
         register_ssh_host_key_provider(
             ensure_server_known_hosts=ensure_server_known_hosts,
-            tofu_known_hosts_for_host=tofu_known_hosts_for_host,
+            verified_known_hosts_for_host=verified_known_hosts_for_host,
             parse_host_port_value=parse_host_port_value,
         )
         register_assistant_actions()
