@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authLogin, fetchAuthSession, type AuthLoginResponse } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { normalizeInternalRedirectPath } from "@/lib/safeRedirect";
 import { cn } from "@/lib/utils";
 
 type AuthMode = "local" | "sso";
@@ -31,7 +32,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
-  const nextFromUrl = searchParams.get("next") || "";
+  const requestedNext = searchParams.get("next") || "";
+  const nextFromUrl = normalizeInternalRedirectPath(requestedNext);
   const isLocal = authMode === "local";
 
   const { data: session } = useQuery({
@@ -45,7 +47,7 @@ export default function Login() {
 
   useEffect(() => {
     if (!isLocal && session?.authenticated) {
-      navigate(nextFromUrl || "/dashboard", { replace: true });
+      navigate(nextFromUrl ?? "/dashboard", { replace: true });
     }
   }, [isLocal, session?.authenticated, navigate, nextFromUrl]);
 
@@ -55,7 +57,9 @@ export default function Login() {
       user: result.user,
     });
     await queryClient.invalidateQueries({ queryKey: ["auth", "session"] });
-    const nextUrl = nextFromUrl || result.next_url || "/dashboard";
+    const nextUrl = requestedNext
+      ? nextFromUrl ?? "/dashboard"
+      : normalizeInternalRedirectPath(result.next_url) ?? "/dashboard";
     navigate(nextUrl, { replace: true });
   };
 
