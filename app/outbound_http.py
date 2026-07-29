@@ -70,9 +70,7 @@ async def validate_outbound_http_target(
         raise OutboundHTTPPolicyError("Outbound HTTP URL has no destination host")
     if allowed_hosts is not None:
         normalized_allowed_hosts = {
-            str(allowed_host).strip().rstrip(".").lower()
-            for allowed_host in allowed_hosts
-            if str(allowed_host).strip()
+            str(allowed_host).strip().rstrip(".").lower() for allowed_host in allowed_hosts if str(allowed_host).strip()
         }
         if host not in normalized_allowed_hosts:
             raise OutboundHTTPPolicyError("Outbound HTTP destination host is not allowed")
