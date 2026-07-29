@@ -4,24 +4,24 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 KnownHostsProvider = Callable[[Any], Awaitable[Any]]
-TofuKnownHostsProvider = Callable[..., Awaitable[tuple[Any, dict[str, str]]]]
+VerifiedKnownHostsProvider = Callable[..., Awaitable[tuple[Any, dict[str, str]]]]
 HostPortParser = Callable[[str, int], tuple[str, int]]
 
 _ensure_server_known_hosts_provider: KnownHostsProvider | None = None
-_tofu_known_hosts_provider: TofuKnownHostsProvider | None = None
+_verified_known_hosts_provider: VerifiedKnownHostsProvider | None = None
 _host_port_parser: HostPortParser | None = None
 
 
 def register_ssh_host_key_provider(
     *,
     ensure_server_known_hosts: KnownHostsProvider | None = None,
-    tofu_known_hosts_for_host: TofuKnownHostsProvider | None = None,
+    verified_known_hosts_for_host: VerifiedKnownHostsProvider | None = None,
     parse_host_port_value: HostPortParser | None = None,
 ) -> None:
     """Register server-owned SSH host-key verification helpers for app tools."""
-    global _ensure_server_known_hosts_provider, _tofu_known_hosts_provider, _host_port_parser
+    global _ensure_server_known_hosts_provider, _verified_known_hosts_provider, _host_port_parser
     _ensure_server_known_hosts_provider = ensure_server_known_hosts
-    _tofu_known_hosts_provider = tofu_known_hosts_for_host
+    _verified_known_hosts_provider = verified_known_hosts_for_host
     _host_port_parser = parse_host_port_value
 
 
@@ -50,18 +50,20 @@ async def ensure_server_known_hosts(server: Any, *, refresh: bool = False) -> An
     return await _ensure_server_known_hosts_provider(server, refresh=refresh)
 
 
-async def tofu_known_hosts_for_host(
+async def verified_known_hosts_for_host(
     host: str,
     port: int,
     *,
+    expected_fingerprint: str,
     network_config: Any = None,
     connect_timeout: int = 10,
 ) -> tuple[Any, dict[str, str]]:
-    if _tofu_known_hosts_provider is None:
+    if _verified_known_hosts_provider is None:
         raise RuntimeError("SSH host-key provider is not registered")
-    return await _tofu_known_hosts_provider(
+    return await _verified_known_hosts_provider(
         host,
         port,
+        expected_fingerprint=expected_fingerprint,
         network_config=network_config,
         connect_timeout=connect_timeout,
     )

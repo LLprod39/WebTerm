@@ -59,6 +59,15 @@ export interface KnowledgeCategoryOption {
 export type AdvancedTab = "access" | "knowledge" | "context" | "security" | "execute";
 export type MainTab = "servers" | "groups" | "rules";
 
+export interface SSHHostKeyEnrollmentTarget {
+  serverId: number;
+  serverName: string;
+  algorithm: string;
+  fingerprintSha256: string;
+  trustedFingerprints: string[];
+  isRotation: boolean;
+}
+
 export interface PlaybookTask {
   id: string;
   command: string;

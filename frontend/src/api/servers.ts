@@ -28,6 +28,7 @@ export interface FrontendServer {
   last_connected: string | null;
   sudo_auth_mode?: "none" | "nopasswd" | "stored_password";
   has_saved_sudo_password?: boolean;
+  has_trusted_host_keys?: boolean;
   detected_os?: string;
   detected_os_pretty?: string;
   detected_os_meta?: Record<string, unknown>;
@@ -59,6 +60,28 @@ export interface ServerDetailsResponse {
   is_shared_server?: boolean;
   share_context_enabled?: boolean;
   shared_by_username?: string;
+  has_trusted_host_keys?: boolean;
+  trusted_host_key_fingerprints?: string[];
+}
+
+export interface SSHHostKeyCandidate {
+  algorithm?: string;
+  fingerprint_sha256: string;
+}
+
+export interface TestServerResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  code?:
+    | "host_key_confirmation_required"
+    | "host_key_rotation_confirmation_required"
+    | "host_key_owner_enrollment_required"
+    | "host_key_fingerprint_mismatch"
+    | "host_key_enrollment_rejected";
+  host_key?: SSHHostKeyCandidate;
+  trusted_fingerprints?: string[];
+  is_rotation?: boolean;
 }
 
 export type ServerGroupRole = "owner" | "admin" | "member" | "viewer";
@@ -262,7 +285,7 @@ export async function clearMasterPassword() {
 }
 
 export async function testServer(serverId: number, payload: Record<string, unknown> = {}) {
-  return apiFetch<{ success: boolean; message?: string; error?: string }>(`/servers/api/${serverId}/test/`, {
+  return apiFetch<TestServerResponse>(`/servers/api/${serverId}/test/`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
