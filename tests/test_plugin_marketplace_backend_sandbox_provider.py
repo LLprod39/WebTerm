@@ -9,6 +9,7 @@ from django.test import override_settings
 
 from app.plugins.agent_tools import active_agent_tools
 from app.plugins.catalog import DEMO_PLUGIN_MANIFEST
+from app.plugins.validation import validate_plugin_manifest
 from plugin_marketplace.checks import plugin_marketplace_deploy_check
 from plugin_marketplace.models import (
     MarketplaceCatalogItem,
@@ -22,6 +23,7 @@ from plugin_marketplace.services.backend_sandbox_runner_service import execute_s
 from plugin_marketplace.services.compatibility_matrix_service import run_compatibility_job
 from plugin_marketplace.services.install_service import set_installation_status
 from plugin_marketplace.services.package_service import install_local_package
+from plugin_marketplace.services.signing_service import sign_package
 
 
 def _sandbox_manifest(*, plugin_id: str = "acme.external-sandbox", slug: str = "external-sandbox") -> dict:
@@ -61,18 +63,19 @@ def _install_enabled_package(tmp_path, manifest: dict) -> PluginInstallation:
     installation = install_local_package(package_path)
     stored = PluginPackage.objects.get(plugin_id=manifest["id"])
     stored.review_status = PluginPackage.REVIEW_VERIFIED
-    stored.signature_status = PluginPackage.SIGNATURE_SIGNED
-    stored.save(update_fields=["review_status", "signature_status", "updated_at"])
+    stored.save(update_fields=["review_status", "updated_at"])
+    sign_package(stored.id)
     return set_installation_status(installation.id, enable=True)
 
 
 def _catalog_item(manifest: dict) -> MarketplaceCatalogItem:
     source = MarketplaceSource.objects.create(name="External Sandbox Catalog", source_url="local://sandbox")
+    normalized_manifest = validate_plugin_manifest(manifest).to_dict(include_surfaces=True)
     return MarketplaceCatalogItem.objects.create(
         source=source,
         plugin_id=manifest["id"],
         version=manifest["version"],
-        manifest=manifest,
+        manifest=normalized_manifest,
         compatibility={"api_versions": ["plugins.v1"]},
         review_status=PluginPackage.REVIEW_VERIFIED,
         signature_status=PluginPackage.SIGNATURE_SIGNED,
@@ -129,7 +132,10 @@ def test_external_backend_sandbox_provider_runs_compatibility_smoke(tmp_path, mo
     with zipfile.ZipFile(package_path, "w") as archive:
         archive.writestr("webtrerm.plugin.json", json.dumps(manifest))
         archive.writestr("backend/plugin.py", "def handle(payload):\n    return {'ok': True}\n")
-    install_local_package(package_path)
+    installation = install_local_package(package_path)
+    installation.package.review_status = PluginPackage.REVIEW_VERIFIED
+    installation.package.save(update_fields=["review_status", "updated_at"])
+    sign_package(installation.package_id)
     item = _catalog_item(manifest)
 
     def _fake_worker(url: str, payload: dict, *, timeout_seconds: int) -> dict:

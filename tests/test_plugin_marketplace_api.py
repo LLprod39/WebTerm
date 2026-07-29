@@ -1,4 +1,5 @@
 import json
+import zipfile
 
 import pytest
 from django.contrib.auth.models import User
@@ -13,6 +14,8 @@ from plugin_marketplace.models import (
     PluginPermissionGrant,
     PluginSecretBinding,
 )
+from plugin_marketplace.services.package_service import install_local_package
+from plugin_marketplace.services.signing_service import sign_package
 from studio.pipeline_validation import validate_pipeline_definition
 
 
@@ -128,7 +131,7 @@ def test_unknown_permission_scope_is_rejected():
 
 
 @pytest.mark.django_db
-def test_private_catalog_sync_and_install_disabled():
+def test_private_catalog_sync_and_install_disabled(tmp_path):
     user = User.objects.create_user(username="catalog-admin", password="x", is_staff=True)
     _grant_feature(user, "settings")
     client = Client()
@@ -173,6 +176,15 @@ def test_private_catalog_sync_and_install_disabled():
     assert sync.status_code == 200, sync.content
     assert sync.json()["synced"] == 1
 
+    package_path = tmp_path / "acme.slack-alerts.wtp"
+    with zipfile.ZipFile(package_path, "w") as archive:
+        archive.writestr("webtrerm.plugin.json", json.dumps(manifest))
+        archive.writestr("README.md", "Reviewed catalog package")
+    staged = install_local_package(package_path, actor=user)
+    staged.package.review_status = PluginPackage.REVIEW_VERIFIED
+    staged.package.save(update_fields=["review_status", "updated_at"])
+    sign_package(staged.package_id, actor=user)
+
     catalog = client.get("/api/plugins/marketplace/catalog/")
     assert catalog.status_code == 200, catalog.content
     item = catalog.json()["items"][0]
@@ -184,7 +196,7 @@ def test_private_catalog_sync_and_install_disabled():
     installation = PluginInstallation.objects.get(plugin_id="acme.slack-alerts")
     package = PluginPackage.objects.get(plugin_id="acme.slack-alerts")
     assert installation.status == PluginInstallation.STATUS_DISABLED
-    assert package.source == PluginPackage.SOURCE_CATALOG
+    assert package.source == PluginPackage.SOURCE_LOCAL
     assert PluginInstallEvent.objects.filter(
         plugin_id="acme.slack-alerts", event_type="plugin_catalog_installed"
     ).exists()

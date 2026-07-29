@@ -24,12 +24,6 @@ def canonical_manifest_hash(manifest: dict[str, Any]) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def signature_status_for_hash(expected_hash: str, manifest: dict[str, Any]) -> str:
-    if not expected_hash:
-        return "unsigned"
-    return "signed" if canonical_manifest_hash(manifest) == expected_hash else "invalid"
-
-
 def _signing_keys() -> dict[str, str]:
     configured = getattr(settings, "PLUGIN_MARKETPLACE_SIGNING_KEYS", None)
     if isinstance(configured, dict) and configured:
@@ -199,7 +193,11 @@ def package_signature_status(package: PluginPackage) -> str:
             if hmac.compare_digest(signature, expected)
             else PluginPackage.SIGNATURE_INVALID
         )
-    return signature_status_for_hash(package.package_hash, package.manifest or {})
+    return (
+        PluginPackage.SIGNATURE_INVALID
+        if package.signature_status in {PluginPackage.SIGNATURE_SIGNED, PluginPackage.SIGNATURE_INVALID}
+        else PluginPackage.SIGNATURE_UNSIGNED
+    )
 
 
 @transaction.atomic
