@@ -158,6 +158,24 @@ class KubernetesOpsAdminSessionTests(TestCase):
         self.assertEqual(payload["approval_ref"], "CHG-2026-0001")
         self.assertEqual(payload["approved_by"], approver.username)
 
+    def test_write_session_cannot_expand_mode_allowed_kinds(self):
+        requester = self.create_user("k8s-write-kind-escalation", grant_admin_write=True)
+        self.client.force_login(requester)
+
+        response = self.post_session(
+            {
+                "mode": K8sAdminSession.MODE_WRITE,
+                "cluster_id": f"cluster_{self.cluster.id}",
+                "namespace": "payments",
+                "reason": "request a write session",
+                "allowed_kinds": ["Deployment", "Secret"],
+            }
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["code"], "allowed_kinds_out_of_scope")
+        self.assertFalse(K8sAdminSession.objects.exists())
+
     def test_nonstaff_user_cannot_approve_write_session(self):
         requester = self.create_user("k8s-write-requester-nonstaff", grant_admin_write=True)
         self.client.force_login(requester)

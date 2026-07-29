@@ -204,7 +204,7 @@ class KubernetesOpsAdminWorkloadActionTests(TestCase):
                 user=user,
                 session_id=str(session.session_id),
                 cluster_id=f"cluster_{self.cluster.id}",
-                api_version="apps/v1",
+                api_version="batch/v1",
                 kind="Job",
                 namespace="platform",
                 name="nightly",

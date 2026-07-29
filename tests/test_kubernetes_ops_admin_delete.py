@@ -222,3 +222,33 @@ class KubernetesOpsAdminDeleteTests(TestCase):
         self.assertEqual(namespace_denied.exception.code, "admin_session_namespace_denied")
         self.assertEqual(kind_denied.exception.code, "admin_session_kind_denied")
         self.assertFalse(K8sAdminAction.objects.exists())
+
+    @override_settings(KUBERNETES_ADMIN_NATIVE_DELETE_ENABLED=True)
+    def test_delete_rejects_resource_that_does_not_match_declared_kind_before_provider_call(self):
+        user = self.create_user("k8s-delete-kind-resource-mismatch", grant_admin_write=True)
+        session = self.create_write_session(user, allowed_kinds=["Deployment"])
+        provider_called = False
+
+        def transport(*_args, **_kwargs):
+            nonlocal provider_called
+            provider_called = True
+            return {}
+
+        with self.assertRaises(AdminResourceError) as denied:
+            delete_kubernetes_resource(
+                user=user,
+                session_id=str(session.session_id),
+                cluster_id=f"cluster_{self.cluster.id}",
+                api_version="apps/v1",
+                kind="Deployment",
+                resource="secrets",
+                namespace="payments",
+                name="db-creds",
+                confirmation="delete Deployment payments/db-creds",
+                reason="attempt mismatched delete target",
+                transport=transport,
+            )
+
+        self.assertEqual(denied.exception.code, "resource_kind_mismatch")
+        self.assertFalse(provider_called)
+        self.assertFalse(K8sAdminAction.objects.exists())

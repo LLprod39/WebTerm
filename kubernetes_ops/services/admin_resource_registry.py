@@ -69,6 +69,19 @@ COMMON_RESOURCES: dict[tuple[str, str], dict[str, Any]] = {
     for api_version, kind, resource, namespaced, _aliases in COMMON_RESOURCE_SPECS
 }
 
+COMMON_RESOURCE_KINDS: dict[tuple[str, str], str] = {
+    (api_version, resource): kind for api_version, kind, resource, _namespaced, _aliases in COMMON_RESOURCE_SPECS
+}
+
+COMMON_KIND_API_VERSIONS: dict[str, frozenset[str]] = {
+    kind: frozenset(
+        api_version
+        for api_version, candidate, _resource, _namespaced, _aliases in COMMON_RESOURCE_SPECS
+        if candidate == kind
+    )
+    for kind in {item[1] for item in COMMON_RESOURCE_SPECS}
+}
+
 KIND_ALIASES: dict[str, str] = {
     alias: kind
     for _api_version, kind, _resource, _namespaced, aliases in COMMON_RESOURCE_SPECS
