@@ -107,8 +107,8 @@ function makeTerminalHandler() {
       });
     }
 
-    if (req.path === "/api/auth/ws-token/" && req.method === "GET") {
-      return json({ token: "mock-terminal-token" });
+    if (req.path === "/api/settings/readiness/" && req.method === "GET") {
+      return json({ success: true, status: "ready", checks: [] });
     }
 
     if (req.path === "/servers/api/frontend/bootstrap/" && req.method === "GET") {

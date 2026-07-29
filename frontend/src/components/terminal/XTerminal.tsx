@@ -6,7 +6,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import "@xterm/xterm/css/xterm.css";
-import { getWsUrl, fetchWsToken } from "@/lib/api";
+import { getWsUrl } from "@/lib/api";
 import { createTerminalFileLinkProvider, parsePromptCwd } from "@/lib/terminal-file-links";
 import { serializeAiSettings } from "./ai-preferences";
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode } from "./ai-types";
@@ -224,15 +224,12 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       }, delay);
     };
 
-    const openSocket = async () => {
+    const openSocket = () => {
       if (intentionalCloseRef.current || !mountedRef.current) return;
       onStatusChangeRef.current?.("connecting");
 
       try {
-        const wsToken = await fetchWsToken();
-        if (intentionalCloseRef.current || !mountedRef.current) return;
-
-        const socket = new WebSocket(getWsUrl(serverId, wsToken ?? undefined));
+        const socket = new WebSocket(getWsUrl(serverId));
         wsRef.current = socket;
         wsOpenedRef.current = false;
 

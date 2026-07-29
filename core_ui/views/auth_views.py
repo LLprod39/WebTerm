@@ -10,7 +10,6 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.core.signing import TimestampSigner
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import redirect
@@ -119,17 +118,6 @@ def api_auth_session(request):
 @require_http_methods(["GET"])
 def api_auth_csrf(request):
     return JsonResponse({"csrfToken": get_token(request)})
-
-
-@require_http_methods(["GET"])
-def api_ws_token(request):
-    """Return a short-lived signed token for WebSocket authentication."""
-    if not request.user or not request.user.is_authenticated:
-        return JsonResponse({"error": "Not authenticated"}, status=401)
-
-    signer = TimestampSigner(salt="ws-token")
-    token = signer.sign(str(request.user.id))
-    return JsonResponse({"token": token})
 
 
 @require_http_methods(["POST"])

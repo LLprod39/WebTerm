@@ -1,5 +1,5 @@
 /**
- * Authentication, session, and WebSocket-token API.
+ * Authentication and session API.
  */
 import { apiFetch } from "@/lib/api";
 import type { FeatureFlag } from "@/lib/api";
@@ -31,16 +31,6 @@ export interface AuthLoginResponse {
   authenticated: boolean;
   next_url: string;
   user: AuthUser;
-}
-
-/** Fetch a short-lived WS auth token from Django (solves Vite proxy cookie issue). */
-export async function fetchWsToken(): Promise<string | null> {
-  try {
-    const data = await apiFetch<{ token: string }>("/api/auth/ws-token/");
-    return data.token ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export async function fetchAuthSession(): Promise<AuthSessionResponse> {

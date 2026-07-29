@@ -26,19 +26,6 @@ _TermSize = terminal_input.TerminalSize
 
 
 class SSHTerminalLifecycleMixin:
-    @staticmethod
-    def _resolve_ws_token_user(token: str):
-        """Validate a short-lived WS token and return the User or None."""
-        from django.contrib.auth.models import User as _User
-        from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
-
-        signer = TimestampSigner(salt="ws-token")
-        try:
-            user_id = int(signer.unsign(token, max_age=300))
-            return _User.objects.filter(id=user_id, is_active=True).first()
-        except (BadSignature, SignatureExpired, ValueError, TypeError):
-            return None
-
     _default_ai_settings = staticmethod(ai_preferences.default_ai_settings)
     _parse_bool = staticmethod(ai_preferences.parse_bool)
     _normalize_pattern_list = staticmethod(ai_preferences.normalize_pattern_list)
@@ -52,19 +39,6 @@ class SSHTerminalLifecycleMixin:
         self._connect_lock = asyncio.Lock()
 
         user = self.scope.get("user")
-
-        # Fallback: authenticate via ?ws_token query parameter.
-        # Required when the Vite dev-proxy doesn't forward the Cookie header
-        # on WebSocket upgrades (common http-proxy limitation).
-        if not user or not getattr(user, "is_authenticated", False):
-            from urllib.parse import parse_qs, unquote
-
-            qs = self.scope.get("query_string", b"").decode()
-            qs_params = parse_qs(qs)
-            ws_token = unquote(qs_params.get("ws_token", [""])[0])
-            if ws_token:
-                user = await database_sync_to_async(self._resolve_ws_token_user)(ws_token)
-                logger.debug("WS connect: token auth resolved user={}", user)
 
         logger.debug("WS connect: user={} authenticated={}", user, getattr(user, "is_authenticated", "N/A"))
         if not user or not getattr(user, "is_authenticated", False):
