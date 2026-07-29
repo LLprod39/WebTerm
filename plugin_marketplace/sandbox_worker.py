@@ -12,9 +12,21 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
+def _load_archive_path_controls():
+    module_path = Path(__file__).with_name("archive_paths.py")
+    spec = importlib.util.spec_from_file_location("_webtrerm_plugin_archive_paths", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("plugin archive path controls are unavailable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+_ARCHIVE_PATHS = _load_archive_path_controls()
+
+
 def _safe_member(name: str) -> bool:
-    path = PurePosixPath(name)
-    return bool(path.parts) and not path.is_absolute() and ".." not in path.parts
+    return _ARCHIVE_PATHS.is_safe_archive_member(name)
 
 
 def _parse_executor_ref(executor_ref: str) -> tuple[str, str]:
@@ -33,14 +45,18 @@ def _parse_executor_ref(executor_ref: str) -> tuple[str, str]:
 
 def _extract_package(package_path: Path, destination: Path) -> None:
     with zipfile.ZipFile(package_path) as archive:
+        members = []
         for member in archive.infolist():
             if member.is_dir():
                 continue
             if not _safe_member(member.filename):
                 raise ValueError(f"unsafe package path: {member.filename}")
-            target = destination / member.filename
+            _ARCHIVE_PATHS.archive_member_target(destination, member.filename)
+            members.append(member)
+        for member in members:
+            target = _ARCHIVE_PATHS.archive_member_target(destination, member.filename)
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(archive.read(member.filename))
+            target.write_bytes(archive.read(member))
 
 
 def _load_manifest(root: Path) -> dict[str, Any]:
