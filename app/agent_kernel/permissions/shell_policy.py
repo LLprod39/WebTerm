@@ -39,8 +39,10 @@ def is_read_only_command(command: str) -> bool:
 
 
 def is_read_only_analysis(analysis: ShellCommandAnalysis) -> bool:
-    return bool(analysis.fragments) and analysis.is_classifiable and all(
-        _is_read_only_fragment(fragment) for fragment in analysis.fragments
+    return (
+        bool(analysis.fragments)
+        and analysis.is_classifiable
+        and all(_is_read_only_fragment(fragment) for fragment in analysis.fragments)
     )
 
 

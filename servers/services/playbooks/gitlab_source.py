@@ -158,11 +158,15 @@ def _raise_for_gitlab_status(status_code: int) -> None:
     if status_code == 200:
         return
     if status_code in {301, 302, 303, 307, 308}:
-        raise BundleValidationError("GitLab redirected the archive request", code="gitlab_redirect_rejected", status_code=502)
+        raise BundleValidationError(
+            "GitLab redirected the archive request", code="gitlab_redirect_rejected", status_code=502
+        )
     if status_code in {401, 403}:
         raise BundleValidationError("GitLab rejected the access token", code="gitlab_auth_failed", status_code=422)
     if status_code == 404:
-        raise BundleValidationError("GitLab project, ref, or directory was not found", code="gitlab_project_not_found", status_code=404)
+        raise BundleValidationError(
+            "GitLab project, ref, or directory was not found", code="gitlab_project_not_found", status_code=404
+        )
     raise BundleValidationError("GitLab archive request failed", code="gitlab_unavailable", status_code=502)
 
 

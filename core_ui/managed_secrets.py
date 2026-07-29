@@ -139,9 +139,7 @@ def set_studio_pipeline_secrets(pipeline_id: int, nodes: dict[str, dict[str, str
         if not node_id or not isinstance(raw_values, dict):
             continue
         values = {
-            str(key): str(value)
-            for key, value in raw_values.items()
-            if str(key).strip() and str(value or "").strip()
+            str(key): str(value) for key, value in raw_values.items() if str(key).strip() and str(value or "").strip()
         }
         if values:
             clean_nodes[node_id] = values
@@ -169,9 +167,7 @@ def get_studio_pipeline_secrets(pipeline_id: int) -> dict[str, dict[str, str]]:
         if not node_id or not isinstance(raw_values, dict):
             continue
         values = {
-            str(key): str(value)
-            for key, value in raw_values.items()
-            if str(key).strip() and str(value or "").strip()
+            str(key): str(value) for key, value in raw_values.items() if str(key).strip() and str(value or "").strip()
         }
         if values:
             result[node_id] = values
