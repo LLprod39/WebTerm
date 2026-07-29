@@ -85,9 +85,11 @@ class _FakeRpcClient:
     def __init__(self, responses: list[_FakeRpcResponse]):
         self.responses = list(responses)
         self.sent: list[dict] = []
+        self.sent_headers: list[dict | None] = []
 
     async def post(self, url, json=None, headers=None, timeout=None):
         self.sent.append(json)
+        self.sent_headers.append(headers)
         return self.responses.pop(0)
 
     async def aclose(self):
@@ -95,7 +97,8 @@ class _FakeRpcClient:
 
 
 @pytest.mark.asyncio
-async def test_managed_client_routes_through_runner():
+async def test_managed_client_routes_through_runner(monkeypatch):
+    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
     server = SimpleNamespace(id=1, command="python", args=["srv.py"], env={"A": "1"}, transport="stdio")
     client = _ManagedMCPClient(server, "http://runner:9000/")
     client.client = _FakeRpcClient(
@@ -117,10 +120,24 @@ async def test_managed_client_routes_through_runner():
     assert first_body["session"] == "srv-1"
     assert first_body["method"] == "initialize"
     assert first_body["spec"]["command"] == "python"
+    assert client.client.sent_headers[0]["Authorization"] == "Bearer runner-test-secret"
 
 
 @pytest.mark.asyncio
-async def test_managed_client_propagates_runner_error():
+async def test_managed_client_refuses_runner_without_token(monkeypatch):
+    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "")
+    server = SimpleNamespace(id=1, command="python", args=[], env={}, transport="stdio")
+    client = _ManagedMCPClient(server, "http://runner:9000")
+    try:
+        with pytest.raises(MCPClientError, match="STUDIO_MCP_RUNNER_TOKEN"):
+            client._headers()
+    finally:
+        await client.client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_managed_client_propagates_runner_error(monkeypatch):
+    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
     server = SimpleNamespace(id=2, command="python", args=[], env={}, transport="stdio")
     client = _ManagedMCPClient(server, "http://runner:9000")
     client.client = _FakeRpcClient([_FakeRpcResponse({"error": {"message": "boom"}})])

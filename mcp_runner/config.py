@@ -75,6 +75,11 @@ class RunnerConfig:
         self.terminate_timeout_seconds = max(_env_int("MCP_RUNNER_TERMINATE_TIMEOUT_SECONDS", 3), 1)
         self.env_passlist = set(ENV_PASSLIST_DEFAULTS) | set(_env_list("MCP_RUNNER_ENV_PASSLIST"))
 
+    def validate_startup(self) -> None:
+        """Reject a runner process that would expose its execution API anonymously."""
+        if not self.token:
+            raise RuntimeError("MCP_RUNNER_TOKEN is required; refusing to start without authentication")
+
     def build_child_env(self, spec_env: dict | None) -> dict[str, str]:
         env: dict[str, str] = {}
         for key, value in os.environ.items():
