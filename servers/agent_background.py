@@ -20,6 +20,7 @@ from loguru import logger
 
 from app.agent_kernel import skill_provider_registry
 from servers.agent_dispatch import (
+    AgentDispatchLeaseLost,
     complete_agent_dispatch,
     enqueue_agent_run_dispatch,
     fail_agent_dispatch,
@@ -203,7 +204,16 @@ async def execute_agent_dispatch(
         lambda: AgentRunDispatch.objects.select_related("run", "agent", "user").get(pk=dispatch_id),
         thread_sensitive=True,
     )()
+    worker = str(worker_key or "default")[:120]
+    if (
+        dispatch.status != AgentRunDispatch.STATUS_CLAIMED
+        or dispatch.claimed_by != worker
+        or dispatch.lease_expires_at is None
+        or dispatch.lease_expires_at <= timezone.now()
+    ):
+        raise AgentDispatchLeaseLost(f"Agent dispatch {dispatch_id} is not owned by {worker}")
     run_id = int(dispatch.run_id)
+    attempt_count = int(dispatch.attempt_count)
     await record_run_event_async(
         run_id,
         "agent_worker_claimed",
@@ -216,15 +226,20 @@ async def execute_agent_dispatch(
     )
 
     stop_heartbeat = asyncio.Event()
+    lost_lease = asyncio.Event()
 
     async def _heartbeat_loop() -> None:
         interval = max(15, min(int(lease_seconds // 3), 60))
         while not stop_heartbeat.is_set():
-            await sync_to_async(heartbeat_agent_dispatch, thread_sensitive=True)(
+            owned = await sync_to_async(heartbeat_agent_dispatch, thread_sensitive=True)(
                 dispatch.id,
-                worker_name=worker_key,
+                worker_name=worker,
+                attempt_count=attempt_count,
                 lease_seconds=lease_seconds,
             )
+            if not owned:
+                lost_lease.set()
+                break
             await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
                 "agent_execution",
                 worker_key=worker_key,
@@ -250,17 +265,36 @@ async def execute_agent_dispatch(
                 dispatch.user_id,
                 plan_only=bool(dispatch.plan_only),
             )
-        await sync_to_async(complete_agent_dispatch, thread_sensitive=True)(
+        if lost_lease.is_set():
+            raise AgentDispatchLeaseLost(f"Agent dispatch {dispatch.id} lease was lost during execution")
+        completed = await sync_to_async(complete_agent_dispatch, thread_sensitive=True)(
             dispatch.id,
+            worker_name=worker,
+            attempt_count=attempt_count,
             summary={"run_id": run_id, "dispatch_kind": dispatch.dispatch_kind},
         )
-    except Exception as exc:
-        await sync_to_async(fail_agent_dispatch, thread_sensitive=True)(dispatch.id, error=str(exc))
-        await sync_to_async(_mark_background_failure, thread_sensitive=True)(
-            run_id,
-            exc,
-            phase=dispatch.dispatch_kind,
+        if completed is None:
+            raise AgentDispatchLeaseLost(f"Agent dispatch {dispatch.id} completion fence was rejected")
+    except AgentDispatchLeaseLost:
+        logger.warning(
+            "Agent dispatch {} attempt {} lost its lease; stale result was rejected",
+            dispatch.id,
+            attempt_count,
         )
+        raise
+    except Exception as exc:
+        failed = await sync_to_async(fail_agent_dispatch, thread_sensitive=True)(
+            dispatch.id,
+            worker_name=worker,
+            attempt_count=attempt_count,
+            error=str(exc),
+        )
+        if failed is not None:
+            await sync_to_async(_mark_background_failure, thread_sensitive=True)(
+                run_id,
+                exc,
+                phase=dispatch.dispatch_kind,
+            )
         raise
     finally:
         stop_heartbeat.set()

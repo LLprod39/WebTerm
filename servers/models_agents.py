@@ -298,10 +298,14 @@ class AgentRunDispatch(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
     claimed_by = models.CharField(max_length=120, blank=True)
     attempt_count = models.IntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=3)
     error = models.TextField(blank=True)
 
     class Meta:
         ordering = ["queued_at", "id"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(max_attempts__gte=1), name="agent_dispatch_max_attempts_gte_1"),
+        ]
         indexes = [
             models.Index(fields=["status", "queued_at"]),
             models.Index(fields=["run", "status", "-queued_at"]),
