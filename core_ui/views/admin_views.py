@@ -15,6 +15,7 @@ from django.utils import timezone as django_timezone
 from django.views.decorators.http import require_http_methods
 
 from app.admin_metrics_provider import (
+    get_admin_execution_queue_summary,
     get_admin_fleet_summary,
     get_admin_server_summary,
     get_admin_terminal_summary,
@@ -230,6 +231,7 @@ def _collect_admin_dashboard_data(include_version: bool = False) -> dict:
             "success_rate": success_rate,
             "daily": agents_daily,
         },
+        "execution_queues": get_admin_execution_queue_summary(),
         "api_usage": api_usage,
         "api_calls_today": sum(v["calls"] for v in api_usage.values()),
         "providers": providers,

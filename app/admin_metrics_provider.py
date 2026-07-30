@@ -10,6 +10,8 @@ class AdminServerMetricsProvider(Protocol):
 
     def fleet_summary(self) -> dict: ...
 
+    def execution_queue_summary(self) -> dict: ...
+
     def active_terminal_count_for_user(self, user_id: int) -> int: ...
 
 
@@ -50,6 +52,23 @@ def get_admin_fleet_summary() -> dict:
             "alerts": [],
         }
     return dict(_admin_server_metrics_provider.fleet_summary())
+
+
+def get_admin_execution_queue_summary() -> dict:
+    if _admin_server_metrics_provider is None:
+        return {
+            "observed_at": None,
+            "depth": 0,
+            "in_flight": 0,
+            "lease_expired": 0,
+            "retrying": 0,
+            "retried_24h": 0,
+            "attempts_exhausted_24h": 0,
+            "stale_workers": 0,
+            "oldest_queued_seconds": 0,
+            "queues": [],
+        }
+    return dict(_admin_server_metrics_provider.execution_queue_summary())
 
 
 def get_admin_user_active_terminal_count(user_id: int) -> int:

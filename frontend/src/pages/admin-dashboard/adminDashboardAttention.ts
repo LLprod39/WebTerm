@@ -20,7 +20,10 @@ export function buildAdminAttentionItems(
         title: `${localize(lang, "Сервер недоступен", "Server unreachable")}: ${server.server_name}`,
         detail: server.host,
         time: server.checked_at,
-        action: { label: localize(lang, "К серверам", "Servers"), to: "/servers" },
+        action: {
+          label: localize(lang, "К серверам", "Servers"),
+          to: "/servers",
+        },
       });
     } else if (server.status === "critical") {
       items.push({
@@ -29,21 +32,36 @@ export function buildAdminAttentionItems(
         title: `${localize(lang, "Критическая нагрузка", "Critical load")}: ${server.server_name}`,
         detail: `CPU ${server.cpu_percent ?? "—"}% · RAM ${server.memory_percent ?? "—"}% · ${localize(lang, "Диск", "Disk")} ${server.disk_percent ?? "—"}%`,
         time: server.checked_at,
-        action: { label: localize(lang, "Терминал", "Terminal"), to: `/servers/${server.server_id}/terminal` },
+        action: {
+          label: localize(lang, "Терминал", "Terminal"),
+          to: `/servers/${server.server_id}/terminal`,
+        },
       });
     }
   }
 
   for (const alert of (mon?.alerts ?? []).filter((a) => !a.is_resolved)) {
     // A separate "unreachable" row already covers these servers.
-    if (unreachableIds.has(alert.server_id) && alert.alert_type.toLowerCase().includes("unreachable")) continue;
+    if (
+      unreachableIds.has(alert.server_id) &&
+      alert.alert_type.toLowerCase().includes("unreachable")
+    )
+      continue;
     items.push({
       id: `alert-${alert.id}`,
-      severity: alert.severity === "critical" ? "critical" : alert.severity === "warning" ? "warning" : "info",
+      severity:
+        alert.severity === "critical"
+          ? "critical"
+          : alert.severity === "warning"
+            ? "warning"
+            : "info",
       title: alert.title,
       detail: `${alert.server_name} · ${alert.message}`,
       time: alert.created_at,
-      action: { label: localize(lang, "Терминал", "Terminal"), to: `/servers/${alert.server_id}/terminal` },
+      action: {
+        label: localize(lang, "Терминал", "Terminal"),
+        to: `/servers/${alert.server_id}/terminal`,
+      },
     });
   }
 
@@ -51,8 +69,55 @@ export function buildAdminAttentionItems(
     items.push({
       id: "agents-failed-24h",
       severity: "warning",
-      title: localize(lang, `Сбои агентов за 24 ч: ${d.agents.failed_24h}`, `Agent failures in 24h: ${d.agents.failed_24h}`),
-      detail: localize(lang, `Успешность запусков ${d.agents.success_rate}%`, `Run success rate ${d.agents.success_rate}%`),
+      title: localize(
+        lang,
+        `Сбои агентов за 24 ч: ${d.agents.failed_24h}`,
+        `Agent failures in 24h: ${d.agents.failed_24h}`,
+      ),
+      detail: localize(
+        lang,
+        `Успешность запусков ${d.agents.success_rate}%`,
+        `Run success rate ${d.agents.success_rate}%`,
+      ),
+      action: { label: localize(lang, "К агентам", "Agents"), to: "/agents" },
+    });
+  }
+
+  const queues = d.execution_queues;
+  if (queues?.lease_expired || queues?.stale_workers) {
+    items.push({
+      id: "execution-queue-leases",
+      severity: queues.lease_expired > 0 ? "critical" : "warning",
+      title: localize(
+        lang,
+        `Просроченные lease: ${queues.lease_expired}`,
+        `Expired execution leases: ${queues.lease_expired}`,
+      ),
+      detail: localize(
+        lang,
+        `Зависших воркеров: ${queues.stale_workers} · очередь: ${queues.depth}`,
+        `Stale workers: ${queues.stale_workers} · queue depth: ${queues.depth}`,
+      ),
+      time: queues.observed_at,
+      action: { label: localize(lang, "К агентам", "Agents"), to: "/agents" },
+    });
+  }
+
+  if (queues?.attempts_exhausted_24h) {
+    items.push({
+      id: "execution-attempts-exhausted",
+      severity: "warning",
+      title: localize(
+        lang,
+        `Исчерпаны попытки за 24 ч: ${queues.attempts_exhausted_24h}`,
+        `Attempts exhausted in 24h: ${queues.attempts_exhausted_24h}`,
+      ),
+      detail: localize(
+        lang,
+        `Повторных запусков: ${queues.retried_24h}`,
+        `Retried runs: ${queues.retried_24h}`,
+      ),
+      time: queues.observed_at,
       action: { label: localize(lang, "К агентам", "Agents"), to: "/agents" },
     });
   }
@@ -63,8 +128,15 @@ export function buildAdminAttentionItems(
         id: `llm-errors-${provider}`,
         severity: "warning",
         title: `${localize(lang, "Ошибки LLM-провайдера", "LLM provider errors")}: ${shortProviderName(provider)} — ${usage.errors}`,
-        detail: localize(lang, "Проверьте ключи, лимиты и доступность модели", "Check keys, limits and model availability"),
-        action: { label: localize(lang, "Настройки AI", "AI settings"), to: "/settings/ai" },
+        detail: localize(
+          lang,
+          "Проверьте ключи, лимиты и доступность модели",
+          "Check keys, limits and model availability",
+        ),
+        action: {
+          label: localize(lang, "Настройки AI", "AI settings"),
+          to: "/settings/ai",
+        },
       });
     }
   }

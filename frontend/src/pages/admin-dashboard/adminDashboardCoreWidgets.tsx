@@ -1,4 +1,15 @@
-import { Activity, AlertTriangle, Bot, LayoutGrid, Server, Siren, TrendingUp } from "lucide-react";
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  Clock3,
+  LayoutGrid,
+  RotateCcw,
+  Server,
+  Siren,
+  TrendingUp,
+  Workflow,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   Area,
@@ -14,10 +25,17 @@ import {
 
 import type { AdminDashboardData, MonitoringDashboard } from "@/api";
 import { Button } from "@/components/ui/button";
-import { MetricCard, MetricGrid, SectionCard } from "@/components/ui/page-shell";
+import {
+  MetricCard,
+  MetricGrid,
+  SectionCard,
+} from "@/components/ui/page-shell";
 import { AttentionPanel } from "@/components/dashboard/AttentionPanel";
 import { FleetHeatmap } from "@/components/dashboard/FleetHeatmap";
-import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
+import {
+  getWidgetNumberProp,
+  getWidgetStringProp,
+} from "@/components/dashboard/widgetProps";
 import type { WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
 import { localize } from "@/lib/i18n";
 import { buildAdminAttentionItems } from "./adminDashboardAttention";
@@ -27,6 +45,13 @@ import {
   pctTone,
   sectionToneStyles,
 } from "./adminDashboardFormatters";
+
+function formatQueueAge(seconds: number, lang: string): string {
+  if (seconds < 60) return `${seconds} ${localize(lang, "сек", "sec")}`;
+  if (seconds < 3600)
+    return `${Math.floor(seconds / 60)} ${localize(lang, "мин", "min")}`;
+  return `${Math.floor(seconds / 3600)} ${localize(lang, "ч", "h")}`;
+}
 
 /** Attention, fleet map/metrics, agent trend, hourly activity. */
 export function buildAdminCoreWidgets(
@@ -43,14 +68,22 @@ export function buildAdminCoreWidgets(
       render: (config) => {
         const limit = getWidgetNumberProp(config, "limit", 6);
         const tone = getWidgetStringProp(config, "tone", "default");
-        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Требует внимания", "Needs attention"));
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          localize(lang, "Требует внимания", "Needs attention"),
+        );
         const items = buildAdminAttentionItems(d, mon, lang);
 
         return (
           <SectionCard
             title={title}
             icon={<Siren className="h-4 w-4" />}
-            description={localize(lang, "Сводка проблем по всей платформе с быстрыми действиями", "Platform-wide problems with one-click follow-ups")}
+            description={localize(
+              lang,
+              "Сводка проблем по всей платформе с быстрыми действиями",
+              "Platform-wide problems with one-click follow-ups",
+            )}
             className={sectionToneStyles[tone]}
           >
             <AttentionPanel items={items} lang={lang} maxItems={limit} />
@@ -65,7 +98,11 @@ export function buildAdminCoreWidgets(
       defaultSize: { w: 12, h: 1 },
       render: (config) => {
         const tone = getWidgetStringProp(config, "tone", "default");
-        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Карта флота", "Fleet map"));
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          localize(lang, "Карта флота", "Fleet map"),
+        );
         const summary = mon?.summary;
 
         return (
@@ -79,7 +116,9 @@ export function buildAdminCoreWidgets(
             }
             actions={
               <Button size="xs" variant="outline" asChild>
-                <Link to="/servers">{localize(lang, "Все серверы", "All servers")}</Link>
+                <Link to="/servers">
+                  {localize(lang, "Все серверы", "All servers")}
+                </Link>
               </Button>
             }
             className={sectionToneStyles[tone]}
@@ -96,11 +135,19 @@ export function buildAdminCoreWidgets(
       defaultSize: { w: 4, h: 1 },
       render: (config) => {
         const tone = getWidgetStringProp(config, "tone", "default");
-        const title = getWidgetStringProp(config, "customTitle", localize(lang, "Запуски агентов, 7 дней", "Agent runs, 7 days"));
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          localize(lang, "Запуски агентов, 7 дней", "Agent runs, 7 days"),
+        );
         const daily = d.agents?.daily ?? [];
-        const total = daily.reduce((sum, day) => sum + day.succeeded + day.failed, 0);
+        const total = daily.reduce(
+          (sum, day) => sum + day.succeeded + day.failed,
+          0,
+        );
         const failed = daily.reduce((sum, day) => sum + day.failed, 0);
-        const successRate = total > 0 ? Math.round(((total - failed) / total) * 100) : null;
+        const successRate =
+          total > 0 ? Math.round(((total - failed) / total) * 100) : null;
 
         return (
           <SectionCard
@@ -109,16 +156,35 @@ export function buildAdminCoreWidgets(
             description={
               total > 0
                 ? `${total} ${localize(lang, "запусков", "runs")} · ${successRate}% ${localize(lang, "успех", "success")}`
-                : localize(lang, "Запусков за неделю не было", "No runs this week")
+                : localize(
+                    lang,
+                    "Запусков за неделю не было",
+                    "No runs this week",
+                  )
             }
             className={sectionToneStyles[tone]}
           >
             <div className="h-[180px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={daily} margin={{ top: 5, right: 5, left: -25, bottom: 0 }} barCategoryGap="25%">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={(value) => formatChartDay(lang, value)} className="text-xs font-medium fill-muted-foreground" />
-                  <YAxis allowDecimals={false} className="text-xs font-medium fill-muted-foreground" />
+                <BarChart
+                  data={daily}
+                  margin={{ top: 5, right: 5, left: -25, bottom: 0 }}
+                  barCategoryGap="25%"
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-border/40"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) => formatChartDay(lang, value)}
+                    className="text-xs font-medium fill-muted-foreground"
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    className="text-xs font-medium fill-muted-foreground"
+                  />
                   <Tooltip
                     labelFormatter={(value) => formatChartDay(lang, value)}
                     cursor={{ fill: "hsl(var(--muted) / 0.25)" }}
@@ -129,8 +195,18 @@ export function buildAdminCoreWidgets(
                       fontSize: "11px",
                     }}
                   />
-                  <Bar dataKey="succeeded" stackId="runs" name={localize(lang, "Успешно", "Succeeded")} fill="hsl(var(--success))" />
-                  <Bar dataKey="failed" stackId="runs" name={localize(lang, "Сбой", "Failed")} fill="hsl(var(--destructive))" />
+                  <Bar
+                    dataKey="succeeded"
+                    stackId="runs"
+                    name={localize(lang, "Успешно", "Succeeded")}
+                    fill="hsl(var(--success))"
+                  />
+                  <Bar
+                    dataKey="failed"
+                    stackId="runs"
+                    name={localize(lang, "Сбой", "Failed")}
+                    fill="hsl(var(--destructive))"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -145,7 +221,11 @@ export function buildAdminCoreWidgets(
       defaultSize: { w: 12, h: 1 },
       render: (config) => {
         const tone = getWidgetStringProp(config, "tone", "default");
-        const title = getWidgetStringProp(config, "customTitle", "Метрики инфраструктуры");
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          "Метрики инфраструктуры",
+        );
 
         const cpu = d.fleet_health?.avg_cpu || 0;
         const mem = d.fleet_health?.avg_memory || 0;
@@ -154,7 +234,11 @@ export function buildAdminCoreWidgets(
         const failed24h = d.agents?.failed_24h ?? 0;
 
         return (
-          <SectionCard title={title} icon={<Server className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+          <SectionCard
+            title={title}
+            icon={<Server className="h-4 w-4" />}
+            className={sectionToneStyles[tone]}
+          >
             <MetricGrid>
               <MetricCard
                 label={localize(lang, "Серверы", "Servers")}
@@ -163,7 +247,11 @@ export function buildAdminCoreWidgets(
                 icon={<Server className="h-5 w-5" />}
               />
               <MetricCard
-                label={localize(lang, "CPU инфраструктуры", "Infrastructure CPU")}
+                label={localize(
+                  lang,
+                  "CPU инфраструктуры",
+                  "Infrastructure CPU",
+                )}
                 value={`${cpu}%`}
                 description={localize(lang, "Средняя нагрузка", "Average load")}
                 icon={<Activity className="h-5 w-5" />}
@@ -172,14 +260,22 @@ export function buildAdminCoreWidgets(
               <MetricCard
                 label={localize(lang, "Память", "Memory")}
                 value={`${mem}%`}
-                description={localize(lang, "Средняя по флоту", "Fleet average")}
+                description={localize(
+                  lang,
+                  "Средняя по флоту",
+                  "Fleet average",
+                )}
                 icon={<Activity className="h-5 w-5" />}
                 tone={pctTone(mem)}
               />
               <MetricCard
                 label={localize(lang, "Диск", "Disk")}
                 value={`${disk}%`}
-                description={localize(lang, "Средняя по флоту", "Fleet average")}
+                description={localize(
+                  lang,
+                  "Средняя по флоту",
+                  "Fleet average",
+                )}
                 icon={<Activity className="h-5 w-5" />}
                 tone={pctTone(disk)}
               />
@@ -188,7 +284,9 @@ export function buildAdminCoreWidgets(
                 value={d.agents?.running || 0}
                 description={`${d.agents?.today || 0} ${localize(lang, "сегодня", "today")} · ${successRate}% ${localize(lang, "успех", "success")}`}
                 icon={<Bot className="h-5 w-5" />}
-                tone={successRate > 0 && successRate < 60 ? "warning" : "default"}
+                tone={
+                  successRate > 0 && successRate < 60 ? "warning" : "default"
+                }
               />
               <MetricCard
                 label={localize(lang, "Алерты", "Alerts")}
@@ -207,27 +305,154 @@ export function buildAdminCoreWidgets(
       },
     },
     {
+      id: "execution_queues",
+      title: localize(lang, "Очереди выполнения", "Execution queues"),
+      icon: <Workflow className="h-4 w-4" />,
+      defaultSize: { w: 12, h: 1 },
+      render: (config) => {
+        const tone = getWidgetStringProp(config, "tone", "default");
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          localize(lang, "Очереди выполнения", "Execution queues"),
+        );
+        const queues = d.execution_queues;
+        const breakdown = (queues?.queues ?? [])
+          .map((queue) => `${queue.label}: ${queue.depth}`)
+          .join(" · ");
+
+        return (
+          <SectionCard
+            title={title}
+            icon={<Workflow className="h-4 w-4" />}
+            description={
+              breakdown || localize(lang, "Очереди пусты", "Queues are empty")
+            }
+            className={sectionToneStyles[tone]}
+          >
+            <MetricGrid>
+              <MetricCard
+                label={localize(lang, "Глубина", "Depth")}
+                value={queues?.depth ?? 0}
+                description={localize(
+                  lang,
+                  "Ожидают воркера",
+                  "Waiting for a worker",
+                )}
+                icon={<Workflow className="h-5 w-5" />}
+                tone={(queues?.depth ?? 0) > 0 ? "warning" : "default"}
+              />
+              <MetricCard
+                label={localize(lang, "В работе", "In flight")}
+                value={queues?.in_flight ?? 0}
+                description={localize(lang, "Активные lease", "Active leases")}
+                icon={<Activity className="h-5 w-5" />}
+              />
+              <MetricCard
+                label={localize(lang, "Lease истёк", "Lease expired")}
+                value={queues?.lease_expired ?? 0}
+                description={`${queues?.stale_workers ?? 0} ${localize(lang, "зависших воркеров", "stale workers")}`}
+                icon={<AlertTriangle className="h-5 w-5" />}
+                tone={
+                  (queues?.lease_expired ?? 0) > 0 ||
+                  (queues?.stale_workers ?? 0) > 0
+                    ? "danger"
+                    : "default"
+                }
+              />
+              <MetricCard
+                label={localize(lang, "Повторы", "Retrying")}
+                value={queues?.retrying ?? 0}
+                description={`${queues?.retried_24h ?? 0} ${localize(lang, "за 24 ч", "in 24h")}`}
+                icon={<RotateCcw className="h-5 w-5" />}
+                tone={
+                  (queues?.attempts_exhausted_24h ?? 0) > 0
+                    ? "warning"
+                    : "default"
+                }
+              />
+              <MetricCard
+                label={localize(
+                  lang,
+                  "Попытки исчерпаны",
+                  "Attempts exhausted",
+                )}
+                value={queues?.attempts_exhausted_24h ?? 0}
+                description={localize(
+                  lang,
+                  "За последние 24 ч",
+                  "In the last 24h",
+                )}
+                icon={<AlertTriangle className="h-5 w-5" />}
+                tone={
+                  (queues?.attempts_exhausted_24h ?? 0) > 0
+                    ? "danger"
+                    : "default"
+                }
+              />
+              <MetricCard
+                label={localize(lang, "Самое долгое ожидание", "Oldest wait")}
+                value={formatQueueAge(queues?.oldest_queued_seconds ?? 0, lang)}
+                description={localize(
+                  lang,
+                  "Возраст старейшей задачи",
+                  "Age of the oldest queued job",
+                )}
+                icon={<Clock3 className="h-5 w-5" />}
+              />
+            </MetricGrid>
+          </SectionCard>
+        );
+      },
+    },
+    {
       id: "hourly_activity_chart",
       title: "Часовой график активности",
       icon: <Activity className="h-4 w-4" />,
       defaultSize: { w: 8, h: 1 },
       render: (config) => {
         const tone = getWidgetStringProp(config, "tone", "default");
-        const title = getWidgetStringProp(config, "customTitle", "Активность системы (по часам)");
+        const title = getWidgetStringProp(
+          config,
+          "customTitle",
+          "Активность системы (по часам)",
+        );
 
         return (
-          <SectionCard title={title} icon={<Activity className="h-4 w-4" />} className={sectionToneStyles[tone]}>
+          <SectionCard
+            title={title}
+            icon={<Activity className="h-4 w-4" />}
+            className={sectionToneStyles[tone]}
+          >
             <div className="h-[200px] w-full mt-2">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={d.hourly_activity ?? []} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
+                <AreaChart
+                  data={d.hourly_activity ?? []}
+                  margin={{ top: 5, right: 5, left: -25, bottom: 0 }}
+                >
                   <defs>
                     <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      <stop
+                        offset="5%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0.35}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="hsl(var(--primary))"
+                        stopOpacity={0}
+                      />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/40" />
-                  <XAxis dataKey="hour" tickFormatter={formatChartHour} className="text-xs font-medium fill-muted-foreground" />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-border/40"
+                  />
+                  <XAxis
+                    dataKey="hour"
+                    tickFormatter={formatChartHour}
+                    className="text-xs font-medium fill-muted-foreground"
+                  />
                   <YAxis className="text-xs font-medium fill-muted-foreground" />
                   <Tooltip
                     labelFormatter={formatChartHour}
@@ -239,7 +464,15 @@ export function buildAdminCoreWidgets(
                       boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
                     }}
                   />
-                  <Area type="monotone" dataKey="count" name="Действия" stroke="hsl(var(--primary))" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    name="Действия"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    fillOpacity={1}
+                    fill="url(#colorCount)"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
