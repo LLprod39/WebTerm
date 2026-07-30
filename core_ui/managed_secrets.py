@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import json
-import os
 from typing import Any
 
-from cryptography.fernet import Fernet, InvalidToken
-from django.conf import settings
-
+from core_ui.managed_secret_crypto import (
+    ManagedSecretError,
+    allow_secret_key_fallback,
+    decrypt_managed_payload as _decrypt_payload,
+    encrypt_managed_payload as _encrypt_payload,
+    managed_secret_key_source,
+    uses_dedicated_managed_secret_key,
+    verify_managed_secret_roundtrip,
+)
 from core_ui.models import ManagedSecret
 
 SERVER_AUTH_NAMESPACE = "server_auth_secret"
@@ -33,59 +35,7 @@ LLM_API_KEY_PROVIDERS = {
 }
 
 
-class ManagedSecretError(RuntimeError):
-    pass
-
-
-def allow_secret_key_fallback() -> bool:
-    return (os.getenv("ALLOW_SECRET_KEY_MANAGED_ENCRYPTION", "") or "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-
-def uses_dedicated_managed_secret_key() -> bool:
-    return bool((os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip())
-
-
-def _build_fernet() -> Fernet:
-    seed = os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or settings.SECRET_KEY
-    digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode()).digest()
-    return Fernet(base64.urlsafe_b64encode(digest))
-
-
-def _encrypt_payload(payload: Any) -> str:
-    raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return _build_fernet().encrypt(raw).decode("utf-8")
-
-
-def _decrypt_payload(ciphertext: str) -> Any:
-    try:
-        raw = _build_fernet().decrypt((ciphertext or "").encode("utf-8"))
-    except InvalidToken as exc:
-        raise ManagedSecretError("Managed secret cannot be decrypted with the current server key") from exc
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except json.JSONDecodeError as exc:
-        raise ManagedSecretError("Managed secret payload is corrupted") from exc
-
-
-def managed_secret_key_source() -> str:
-    if (os.getenv("MANAGED_SECRET_KEY") or "").strip():
-        return "MANAGED_SECRET_KEY"
-    if (os.getenv("APP_SECRET_ENCRYPTION_KEY") or "").strip():
-        return "APP_SECRET_ENCRYPTION_KEY"
-    return "SECRET_KEY"
-
-
-def verify_managed_secret_roundtrip() -> bool:
-    probe = {"kind": "managed_secret_probe", "version": 1}
-    return _decrypt_payload(_encrypt_payload(probe)) == probe
-
-
-def list_undecryptable_secrets(limit: int = 500) -> list[str]:
+def list_undecryptable_secrets(limit: int | None = 500) -> list[str]:
     """Return identifiers of stored secrets the current key cannot decrypt.
 
     A non-empty result means secrets were written under a different key seed
@@ -93,7 +43,10 @@ def list_undecryptable_secrets(limit: int = 500) -> list[str]:
     with its own key) and every consumer of those secrets will fail at runtime.
     """
     broken: list[str] = []
-    for secret in ManagedSecret.objects.all().order_by("namespace", "object_id", "key")[: max(int(limit), 1)]:
+    queryset = ManagedSecret.objects.all().order_by("namespace", "object_id", "key")
+    if limit is not None:
+        queryset = queryset[: max(int(limit), 1)]
+    for secret in queryset:
         try:
             _decrypt_payload(secret.ciphertext)
         except ManagedSecretError:
