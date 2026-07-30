@@ -8,6 +8,6 @@
 /core_ui/managed_secrets.py @LLprod39
 /app/execution_policy.py @LLprod39
 /app/sudo_policy.py @LLprod39
-/studio/execution_policy.py @LLprod39
-/kubernetes_ops/services/admin_write_approval.py @LLprod39
+/studio/policy/ @LLprod39
+/kubernetes_ops/ @LLprod39
 **/migrations/** @LLprod39
