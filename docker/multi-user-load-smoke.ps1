@@ -108,7 +108,14 @@ try {
     Wait-HttpOk -Url "http://127.0.0.1:18080/nginx-health" | Out-Null
     Wait-HttpOk -Url "http://127.0.0.1:18080/api/health/" | Out-Null
 
-    & docker exec $backendContainer sh -lc "python manage.py seed_multi_user_smoke --users $Users --password 'SmokePass123!' --ssh-host ssh-target --ssh-port 2222 --ssh-username smoke --ssh-password smoke-password --json > /tmp/multi-user-load-seed.json"
+    $sshHostKeyLine = & docker exec $sshTargetContainer ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256
+    Assert-LastExitCode -Message "Failed to read isolated SSH target fingerprint"
+    $sshHostKeyFingerprint = ($sshHostKeyLine -split '\s+')[1]
+    if ($sshHostKeyFingerprint -notmatch '^SHA256:') {
+        throw "Invalid isolated SSH target fingerprint: $sshHostKeyFingerprint"
+    }
+
+    & docker exec $backendContainer sh -lc "python manage.py seed_multi_user_smoke --users $Users --password 'SmokePass123!' --ssh-host ssh-target --ssh-port 2222 --ssh-username smoke --ssh-password smoke-password --ssh-host-key-fingerprint '$sshHostKeyFingerprint' --json > /tmp/multi-user-load-seed.json"
     Assert-LastExitCode -Message "Failed to seed multi-user smoke data"
     & docker cp "${backendContainer}:/tmp/multi-user-load-seed.json" $seedFile | Out-Null
     Assert-LastExitCode -Message "Failed to copy multi-user seed file"
