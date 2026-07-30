@@ -225,3 +225,23 @@ forbidden_modules =
     studio.urls
     studio.views
     web_ui
+
+
+# ─── Contract 16: execution policy is a leaf domain ─────────────────────────
+# Goal: Classification and approval decisions stay independent from pipeline
+# execution, MCP runtime, delivery adapters, and server feature code.
+[importlinter:contract:studio-policy-leaf-domain]
+name = studio.policy must not import execution or delivery domains
+type = forbidden
+source_modules =
+    studio.policy
+forbidden_modules =
+    core_ui.views
+    servers
+    studio.consumers
+    studio.mcp
+    studio.pipeline
+    studio.routing
+    studio.urls
+    studio.views
+    web_ui

@@ -7,8 +7,8 @@ from typing import Any
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
-from studio.execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
 from studio.models import PipelineRun
+from studio.policy.execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
 
 from .pipeline_routing import build_execution_graph, reachable_nodes_from_entry, serialize_routing_state
 from .pipeline_run_state import update_run_status

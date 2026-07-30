@@ -1,4 +1,13 @@
-from studio.execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
+import importlib
+
+from studio.policy.execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
+
+
+def test_legacy_execution_policy_modules_alias_domain_implementations():
+    for module_name in ("execution_policy", "execution_policy_types"):
+        legacy = importlib.import_module(f"studio.{module_name}")
+        current = importlib.import_module(f"studio.policy.{module_name}")
+        assert legacy is current
 
 
 def _node(node_id: str, node_type: str, data: dict | None = None) -> dict:

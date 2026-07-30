@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 from app.execution_policy import build_execution_policy_audit_metadata
 
 if TYPE_CHECKING:
-    from studio.execution_policy import ExecutionPolicyDecision
+    from studio.policy.execution_policy import ExecutionPolicyDecision
 
 
 def _operation_kind(decision: ExecutionPolicyDecision) -> str:

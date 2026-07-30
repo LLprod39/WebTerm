@@ -10,9 +10,9 @@ from app.pipeline_agent_provider import run_pipeline_multi_agent, run_pipeline_r
 from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from core_ui.activity import log_user_activity_async
-from studio.execution_policy import build_execution_policy_decisions
 from studio.models import MCPServerPool, PipelineRun
 from studio.ops_controls import assert_agents_not_paused
+from studio.policy.execution_policy import build_execution_policy_decisions
 from studio.skill_registry import normalise_skill_slugs, resolve_skills
 
 from .pipeline_agent_config import (
