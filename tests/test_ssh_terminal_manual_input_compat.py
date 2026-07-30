@@ -72,10 +72,7 @@ def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypat
     async_to_sync(consumer._handle_input)("systemctl status nginx\r")
 
     assert consumer._manual_state.active_command_id == 1_000_000
-    assert any(
-        "__WEUAI_EXIT_manualtest_1000000" in item
-        for item in consumer._transport_state.ssh_proc.stdin.writes
-    )
+    assert any("__WEUAI_EXIT_manualtest_1000000" in item for item in consumer._transport_state.ssh_proc.stdin.writes)
 
     consumer._append_manual_output("systemctl status nginx\nnginx.service - active (running)\n")
     async_to_sync(consumer._finalize_manual_terminal_command)(1_000_000, 0)
@@ -94,10 +91,7 @@ def test_manual_terminal_multiline_block_skips_marker_injection(monkeypatch):
     async_to_sync(consumer._handle_input)("if true; then\r")
 
     assert consumer._manual_state.active_command_id is None
-    assert not any(
-        "__WEUAI_EXIT_" in item
-        for item in consumer._transport_state.ssh_proc.stdin.writes
-    )
+    assert not any("__WEUAI_EXIT_" in item for item in consumer._transport_state.ssh_proc.stdin.writes)
     assert len(persisted) == 1
     assert persisted[0]["command"] == "if true; then"
     assert persisted[0]["output"] == ""

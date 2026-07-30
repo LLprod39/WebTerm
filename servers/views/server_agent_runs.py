@@ -36,7 +36,9 @@ def _owned_agent_run(user, run_id: int) -> AgentRun | None:
     run = AgentRun.objects.filter(project=project, id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
-    return AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
+    return (
+        AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
+    )
 
 
 def _run_agent_name(run: AgentRun) -> str:

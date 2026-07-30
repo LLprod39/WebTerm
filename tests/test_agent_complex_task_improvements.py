@@ -153,7 +153,9 @@ def test_model_and_engine_defaults_wire_to_budgets():
 
 
 def test_agent_engine_runner_uses_command_timeout_from_engine():
-    src = inspect.getsource(__import__("servers.agents.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine)
+    src = inspect.getsource(
+        __import__("servers.agents.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine
+    )
     assert 'command_timeout=int(getattr(engine, "command_timeout"' in src or "command_timeout=" in src
     assert "command_timeout=30" not in src
 

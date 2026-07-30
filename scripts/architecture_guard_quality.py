@@ -178,8 +178,7 @@ class ArchitectureQualityChecker:
             if path.exists()
             and not any(part in self._config.exclude_dirs for part in path.relative_to(root).parts)
             and not any(
-                fragment in path.relative_to(root).as_posix()
-                for fragment in self._config.exclude_path_fragments
+                fragment in path.relative_to(root).as_posix() for fragment in self._config.exclude_path_fragments
             )
         )
 

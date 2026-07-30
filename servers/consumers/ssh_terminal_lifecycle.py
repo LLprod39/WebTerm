@@ -287,7 +287,9 @@ class SSHTerminalLifecycleMixin:
         try:
             while self._transport_state.server_connection_id:
                 await asyncio.sleep(interval)
-                if not self._transport_state.server_connection_id or not (self._transport_state.ssh_conn or self._transport_state.ssh_proc):
+                if not self._transport_state.server_connection_id or not (
+                    self._transport_state.ssh_conn or self._transport_state.ssh_proc
+                ):
                     return
                 await self._touch_server_connection(self._transport_state.server_connection_id)
         except asyncio.CancelledError:

@@ -60,7 +60,9 @@ def test_agent_launch_requires_execute_command_capability(monkeypatch):
     )
     agent.servers.set([server])
     launched: list[dict] = []
-    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", lambda **kwargs: launched.append(kwargs))
+    monkeypatch.setattr(
+        "servers.agents.agent_launch.launch_agent_run_background", lambda **kwargs: launched.append(kwargs)
+    )
 
     denied = launch_queued_agent_run(
         agent=agent,

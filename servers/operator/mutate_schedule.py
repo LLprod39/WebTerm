@@ -57,9 +57,7 @@ def schedule_agent(ctx: AssistantActionContext) -> dict[str, Any]:
 
     agent_id = _int_arg(ctx, "agent_id")
     assert agent_id is not None
-    agent = ServerAgent.objects.filter(
-        pk=agent_id, user=ctx.user, project=active_project_for_user(ctx.user)
-    ).first()
+    agent = ServerAgent.objects.filter(pk=agent_id, user=ctx.user, project=active_project_for_user(ctx.user)).first()
     if agent is None:
         raise AssistantActionError("Agent not found", status=404)
 

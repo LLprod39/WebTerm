@@ -23,9 +23,7 @@ def test_release_publishes_and_smokes_the_socket_proxy_image() -> None:
     assert "dockerfile: docker/agent-command-runner/Dockerfile" in workflow
     assert workflow.count('"agent-command-runner": "AGENT_COMMAND_RUNNER_IMAGE"') == 2
     assert "name: agent-command-docker-proxy" in workflow
-    assert workflow.count(
-        '"agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE"'
-    ) == 2
+    assert workflow.count('"agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE"') == 2
 
 
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:

@@ -193,8 +193,12 @@ class SSHTerminalSessionOpsMixin:
                 )
                 self._start_connection_heartbeat()
 
-                self._transport_state.stdout_task = asyncio.create_task(self._stream_reader(self._transport_state.ssh_proc.stdout, "stdout"))
-                self._transport_state.stderr_task = asyncio.create_task(self._stream_reader(self._transport_state.ssh_proc.stderr, "stderr"))
+                self._transport_state.stdout_task = asyncio.create_task(
+                    self._stream_reader(self._transport_state.ssh_proc.stdout, "stdout")
+                )
+                self._transport_state.stderr_task = asyncio.create_task(
+                    self._stream_reader(self._transport_state.ssh_proc.stderr, "stderr")
+                )
                 self._transport_state.wait_task = asyncio.create_task(self._wait_for_process_exit())
 
                 self._transport_state.nova_session_context = await self._probe_nova_session_context(merged_env)

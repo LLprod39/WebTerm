@@ -56,7 +56,9 @@ def enforce_agent_server_project(sender, instance, action: str, reverse: bool, p
     if reverse:
         mismatched = ServerAgent.objects.filter(pk__in=pk_set).exclude(project_id=instance.project_id).exists()
     else:
-        mismatched = instance.servers.model.objects.filter(pk__in=pk_set).exclude(project_id=instance.project_id).exists()
+        mismatched = (
+            instance.servers.model.objects.filter(pk__in=pk_set).exclude(project_id=instance.project_id).exists()
+        )
     if mismatched:
         raise ValidationError("Agent and servers must belong to the same project")
 

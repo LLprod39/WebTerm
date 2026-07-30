@@ -15,6 +15,7 @@ if sys.platform == "win32":
         """Keep subprocess support when Daphne selects Windows' selector loop."""
         return asyncio.WindowsProactorEventLoopPolicy()
 
+
 _RELEASE_EVIDENCE_TEST_MODULES = frozenset(
     {
         "test_kubernetes_ops_release_evidence.py",

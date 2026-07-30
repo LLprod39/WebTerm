@@ -121,6 +121,7 @@ values = {
     "MASTER_PASSWORD": secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
     "STUDIO_MCP_RUNNER_TOKEN": secrets.token_urlsafe(48),
+    "AGENT_COMMAND_RUNNER_IMAGE": "sha256:" + "0" * 64,
     "PLUGIN_MARKETPLACE_RELEASE_MODE": "disabled",
 }
 lines = path.read_text(encoding="utf-8").splitlines()

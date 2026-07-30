@@ -204,7 +204,9 @@ class SSHTerminalAiControlsMixin:
                     user_message=msg,
                     rules_context=rules_context,
                     terminal_tail=(self._transport_state.terminal_tail or "")[-2000:],
-                    history=list(self._ai_state.history) if bool(self._ai_state.settings.get("memory_enabled", True)) else [],
+                    history=list(self._ai_state.history)
+                    if bool(self._ai_state.settings.get("memory_enabled", True))
+                    else [],
                     unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
                     chat_mode=requested_chat_mode,
                     execution_mode=requested_mode,
