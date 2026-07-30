@@ -30,6 +30,9 @@ AUTHORITATIVE_DOCS = (
     "docs/releases/V0_1_RELEASE_SCOPE.md",
     "docs/releases/V0_1_RELEASE_CHECKLIST.md",
     "docs/releases/V0_1_PERFORMANCE_BUDGET.md",
+    "docs/releases/V0_2_0_RELEASE_NOTES.md",
+    "docs/releases/V0_2_RELEASE_CHECKLIST.md",
+    "docs/releases/V0_2_RELEASE_SCOPE.md",
 )
 REQUIRED_DOMAINS = {
     "Servers inventory and access",
@@ -70,7 +73,7 @@ def verify(root: Path = ROOT) -> list[str]:
             if not resolved.exists():
                 errors.append(f"broken local link in {relative}: {target}")
 
-    scope_path = root / "docs/releases/V0_1_RELEASE_SCOPE.md"
+    scope_path = root / "docs/releases/V0_2_RELEASE_SCOPE.md"
     if scope_path.is_file():
         scope = scope_path.read_text(encoding="utf-8")
         for domain in sorted(REQUIRED_DOMAINS):
@@ -87,7 +90,7 @@ def verify(root: Path = ROOT) -> list[str]:
             if value not in support:
                 errors.append(f"support matrix is missing: {value}")
 
-    checklist_path = root / "docs/releases/V0_1_RELEASE_CHECKLIST.md"
+    checklist_path = root / "docs/releases/V0_2_RELEASE_CHECKLIST.md"
     if checklist_path.is_file():
         checklist = checklist_path.read_text(encoding="utf-8")
         for command in (
@@ -107,8 +110,8 @@ def verify(root: Path = ROOT) -> list[str]:
     version_path = root / "VERSION"
     if not version_path.is_file():
         errors.append("missing release version file: VERSION")
-    elif version_path.read_text(encoding="utf-8").strip() != "0.1.0":
-        errors.append("VERSION must declare 0.1.0")
+    elif version_path.read_text(encoding="utf-8").strip() != "0.2.0":
+        errors.append("VERSION must declare 0.2.0")
 
     api_inventory = root / "config/public-api-v0.1.json"
     if not api_inventory.is_file():

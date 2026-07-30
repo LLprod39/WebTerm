@@ -26,6 +26,27 @@ def test_release_publishes_and_smokes_the_socket_proxy_image() -> None:
     assert workflow.count('"agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE"') == 2
 
 
+def test_release_excludes_the_local_mcp_demo_fixture() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+    production_env = (ROOT / ".env.production.example").read_text(encoding="utf-8")
+
+    for content in (workflow, compose, installer, production_env):
+        assert "WEBTERM_MCP_DEMO_IMAGE" not in content
+        assert "STUDIO_MCP_DEMO_URL" not in content
+        assert "mcp-demo" not in content
+
+
+def test_release_tag_must_match_the_canonical_version() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+
+    assert "Verify release tag and contracts" in workflow
+    assert 'expected="v$(tr -d' in workflow
+    assert 'test "$GITHUB_REF_NAME" = "$expected"' in workflow
+    assert "docs/releases/V0_2_0_RELEASE_NOTES.md" in workflow
+
+
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
     script = (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
 

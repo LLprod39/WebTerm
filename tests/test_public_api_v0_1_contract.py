@@ -13,7 +13,7 @@ def _inventory():
 
 def test_public_api_inventory_has_unique_complete_operations():
     inventory = _inventory()
-    assert inventory["version"] == (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    assert inventory["version"] == "0.1.0"
     routes = inventory["routes"]
     assert len(routes) == 9
     assert len({route["name"] for route in routes}) == len(routes)

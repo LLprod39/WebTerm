@@ -41,7 +41,7 @@ What it does (full platform install):
   4. sets host/URL/security values for the server
   5. builds and starts the full Docker Compose production stack:
        postgres, redis, backend, frontend, nginx,
-       mcp-demo,
+       mcp-runner,
        ops-supervisor (agent execution + watchers + memory),
        scheduled-agents, scheduled-pipelines, monitor,
        kubernetes-ops-sync, celery-worker
@@ -474,7 +474,6 @@ prepare_env() {
   [[ -n "$(env_get CHANNEL_REDIS_URL)" ]] || env_set CHANNEL_REDIS_URL "redis://redis:6379/1"
   [[ -n "$(env_get CELERY_BROKER_URL)" ]] || env_set CELERY_BROKER_URL "redis://redis:6379/0"
   [[ -n "$(env_get CELERY_RESULT_BACKEND)" ]] || env_set CELERY_RESULT_BACKEND "redis://redis:6379/0"
-  [[ -n "$(env_get STUDIO_MCP_DEMO_URL)" ]] || env_set STUDIO_MCP_DEMO_URL "http://mcp-demo:8765/mcp"
   [[ -n "$(env_get AGENT_EXECUTION_INTERVAL)" ]] || env_set AGENT_EXECUTION_INTERVAL "5"
   [[ -n "$(env_get SCHEDULED_AGENTS_INTERVAL)" ]] || env_set SCHEDULED_AGENTS_INTERVAL "60"
   [[ -n "$(env_get PIPELINE_SCHEDULER_INTERVAL)" ]] || env_set PIPELINE_SCHEDULER_INTERVAL "60"
@@ -542,7 +541,7 @@ Project:
 
 What is running:
   core     postgres redis backend frontend nginx
-  mcp      mcp-demo
+  mcp      mcp-runner
   workers  ops-supervisor scheduled-agents scheduled-pipelines
            monitor kubernetes-ops-sync celery-worker
 
