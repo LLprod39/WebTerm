@@ -384,11 +384,11 @@ class AgentSessionManager(AgentSessionExecMixin):
             rules = GlobalServerRules.objects.filter(user=server.user).first()
             if rules and rules.forbidden_commands:
                 patterns.extend(rules.forbidden_commands)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("global forbidden-command rules unavailable: {}", exc)
         try:
             if server.group and server.group.forbidden_commands:
                 patterns.extend(server.group.forbidden_commands)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("group forbidden-command rules unavailable: {}", exc)
         return patterns

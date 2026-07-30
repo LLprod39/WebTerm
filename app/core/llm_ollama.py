@@ -38,8 +38,8 @@ def get_ollama_think_value(model_manager: Any) -> Any | None:
             return True
         if override in {"low", "medium", "high"}:
             return override
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Ollama thinking-mode override unavailable: {}", exc)
 
     think_mode = model_manager._get_ollama_think_mode()
     if think_mode == "off":
@@ -155,8 +155,8 @@ async def stream_ollama_response(
                                 from app.core.ollama_config import remember_ollama_url
 
                                 remember_ollama_url(base_url)
-                            except Exception:
-                                pass
+                            except Exception as exc:
+                                logger.debug("Ollama URL persistence skipped: {}", exc)
                         _log_usage(
                             usage_logger,
                             payload=payload,

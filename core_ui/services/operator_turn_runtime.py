@@ -189,10 +189,10 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
         cancelled_task = True
         try:
             await asyncio.wait_for(asyncio.shield(task), timeout=5)
-        except (TimeoutError, asyncio.CancelledError):
-            pass
-        except Exception:  # noqa: BLE001 — task failure still counts as stopped
-            pass
+        except (TimeoutError, asyncio.CancelledError) as exc:
+            logger.debug("operator task stop settled with {}", type(exc).__name__)
+        except Exception as exc:  # noqa: BLE001 — task failure still counts as stopped
+            logger.warning("operator task failed while stopping chat_id={}: {}", chat_id, exc)
 
     def _close_open_turns() -> list[int]:
         qs = ChatTurnState.objects.filter(

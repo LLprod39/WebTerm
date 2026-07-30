@@ -6,6 +6,7 @@ import contextlib
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from loguru import logger
 
 from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState
 from core_ui.services.operator_loop_helpers import (
@@ -156,8 +157,8 @@ async def process_tool_calls(
                                 "version": art.version,
                             },
                         )
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("operator artifact extraction skipped: {}", exc)
                 if action_type in {"web.search", "web.open_result"}:
                     from core_ui.services.operator_web_tools import attach_web_sources
 
@@ -369,8 +370,8 @@ async def process_tool_calls(
                     on_event,
                     {"type": "plan_update", "turn_id": turn.pk, "plan": plan, "status": "running"},
                 )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("operator plan progress update skipped: {}", exc)
         await _save_turn(
             turn,
             status=ChatTurnState.STATUS_AWAITING_CONFIRM,

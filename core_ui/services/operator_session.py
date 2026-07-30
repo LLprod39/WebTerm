@@ -12,6 +12,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.db import transaction
+from loguru import logger
 
 from core_ui.activity import log_user_activity
 from core_ui.models import ChatMessage, ChatSession, ChatTurnState, UserActivityLog
@@ -157,8 +158,8 @@ def start_operator_turn(
                 mem = memory_context_block(server_ids[:3])
                 if mem:
                     history.insert(0, {"role": "user", "content": mem[:1200]})
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator memory context enrichment skipped: {}", exc)
 
         turn = ChatTurnState.objects.create(
             session=session,

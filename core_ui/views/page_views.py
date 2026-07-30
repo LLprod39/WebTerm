@@ -55,7 +55,7 @@ def serve_landing_video(request, filename):
     try:
         filepath.relative_to(video_dir)
     except ValueError:
-        raise Http404
+        raise Http404 from None
     if not filepath.is_file():
         raise Http404
     content_type = "video/mp4" if filename.endswith(".mp4") else "video/x-matroska"

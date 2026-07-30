@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from collections.abc import Mapping
@@ -11,11 +12,13 @@ from typing import Any
 
 from django.conf import settings
 
+logger = logging.getLogger(__name__)
+
 _FRONTMATTER_BOUNDARY = "---"
 _TITLE_RE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 try:
     import yaml
-except Exception:  # pragma: no cover - optional dependency in minimal envs
+except ImportError:  # pragma: no cover - optional dependency in minimal envs
     yaml = None
 
 
@@ -145,8 +148,8 @@ def _split_frontmatter(content: str) -> tuple[dict[str, Any], str]:
             parsed_yaml = yaml.safe_load("\n".join(frontmatter_lines))
             if isinstance(parsed_yaml, dict):
                 metadata = parsed_yaml
-        except Exception:
-            pass
+        except yaml.YAMLError:
+            logger.warning("skill YAML frontmatter parsing failed; using conservative parser", exc_info=True)
 
     body = "\n".join(lines[end_index + 1 :]).lstrip()
     return metadata, body

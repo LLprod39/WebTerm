@@ -260,7 +260,7 @@ def _stream_command(
             for line in proc.stdout:
                 lines_q.put(line)
         except Exception:
-            pass
+            logger.warning("ansible output reader stopped unexpectedly", exc_info=True)
         finally:
             lines_q.put(None)
 
@@ -297,7 +297,7 @@ def _stream_command(
                 if cancel_check():
                     cancelled = True
             except Exception:
-                pass
+                logger.warning("ansible cancellation probe failed", exc_info=True)
         if cancelled or now > deadline:
             timed_out = not cancelled and now > deadline
             killed = True

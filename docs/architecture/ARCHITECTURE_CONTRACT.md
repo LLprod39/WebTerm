@@ -62,6 +62,16 @@ policy package, while the reverse dependency is forbidden.
   extracted modules should still target fewer than 500 lines; route, view and
   coordinator modules should target 300 lines or less.
 
+## Exception visibility
+
+- Ruff rules `E722` and `B904` are mandatory: bare handlers and raises that
+  lose the original cause fail CI.
+- Ruff rule `S110` forbids silent `try`/`except`/`pass` anywhere in the Python
+  tree. Best-effort fallbacks must emit a sanitized debug/warning event.
+- Security classifiers use specific exception types. Broad catches are allowed
+  only at external execution boundaries where they log and convert the failure
+  into an explicit failed/cancelled run or tool result.
+
 Run both views of the gate:
 
 ```bash

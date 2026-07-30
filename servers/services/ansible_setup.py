@@ -373,7 +373,7 @@ def _write_inventory(
                         # ssh-key with passphrase needs ssh-agent; store for advanced users in host vars comment
                         parts.append(f"ansible_ssh_passphrase={_ini_escape(passphrase)}")
                 except Exception:
-                    pass
+                    logger.warning("unable to load SSH key passphrase for Ansible inventory", exc_info=True)
         else:
             try:
                 password = get_server_auth_secret(server, master_password=master_password, fallback_plain="")
