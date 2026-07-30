@@ -22,6 +22,12 @@ loguru>=0.7
 pydantic>=2.8
 PyYAML>=6.0
 
+# OpenTelemetry: W3C trace propagation across HTTP/worker boundaries and
+# OTLP/HTTP export for traces and operational metrics.
+opentelemetry-api>=1.36,<2
+opentelemetry-sdk>=1.36,<2
+opentelemetry-exporter-otlp-proto-http>=1.36,<2
+
 
 # LLM providers used by mini settings + terminal AI
 google-genai>=1.0

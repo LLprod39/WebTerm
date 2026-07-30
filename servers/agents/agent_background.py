@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
@@ -17,8 +18,10 @@ from django.contrib.auth.models import User
 from django.db import close_old_connections, connections
 from django.utils import timezone
 from loguru import logger
+from opentelemetry.trace import SpanKind
 
 from app.agent_kernel import skill_provider_registry
+from app.observability import extract_trace_context, record_agent_dispatch, record_agent_run, start_span
 from servers.agents.agent_dispatch import (
     AgentDispatchLeaseLost,
     complete_agent_dispatch,
@@ -212,6 +215,52 @@ async def execute_agent_dispatch(
         or dispatch.lease_expires_at <= timezone.now()
     ):
         raise AgentDispatchLeaseLost(f"Agent dispatch {dispatch_id} is not owned by {worker}")
+
+    metadata = dispatch.metadata if isinstance(dispatch.metadata, dict) else {}
+    carrier = metadata.get("otel_context") if isinstance(metadata.get("otel_context"), dict) else {}
+    parent_context = extract_trace_context(carrier)
+    queue_delay_ms = max((timezone.now() - dispatch.queued_at).total_seconds() * 1000, 0.0)
+    started = time.monotonic()
+    outcome = "failed"
+    with start_span(
+        "agent.dispatch.execute",
+        kind=SpanKind.CONSUMER,
+        context=parent_context,
+        attributes={
+            "agent.dispatch.id": dispatch.id,
+            "agent.run.id": dispatch.run_id,
+            "agent.id": dispatch.agent_id,
+            "dispatch.kind": dispatch.dispatch_kind,
+            "dispatch.attempt": dispatch.attempt_count,
+            "messaging.message.id": str(dispatch.id),
+        },
+    ):
+        record_agent_dispatch(
+            queue_delay_ms=queue_delay_ms,
+            dispatch_kind=dispatch.dispatch_kind,
+            attempt_count=dispatch.attempt_count,
+        )
+        try:
+            await _execute_claimed_agent_dispatch(dispatch, worker=worker, lease_seconds=lease_seconds)
+            outcome = "completed"
+        except AgentDispatchLeaseLost:
+            outcome = "lease_lost"
+            raise
+        finally:
+            record_agent_run(
+                duration_ms=(time.monotonic() - started) * 1000,
+                status=outcome,
+                agent_mode=dispatch.agent.mode,
+            )
+
+
+async def _execute_claimed_agent_dispatch(
+    dispatch: AgentRunDispatch,
+    *,
+    worker: str,
+    lease_seconds: int,
+) -> None:
+    worker_key = worker
     run_id = int(dispatch.run_id)
     attempt_count = int(dispatch.attempt_count)
     await record_run_event_async(

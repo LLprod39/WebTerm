@@ -6,6 +6,7 @@ This folder is the public architecture entry point. The enforced working contrac
 
 Production agent SSH isolation is defined in [AGENT_COMMAND_SANDBOX.md](AGENT_COMMAND_SANDBOX.md).
 Append-only agent event integrity and export are defined in [AGENT_AUDIT_INTEGRITY.md](AGENT_AUDIT_INTEGRITY.md).
+Cross-process traces and agent runtime metrics are defined in [OPENTELEMETRY.md](OPENTELEMETRY.md).
 
 ## Current Shape
 
