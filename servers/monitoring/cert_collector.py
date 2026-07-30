@@ -206,7 +206,7 @@ async def collect_server_certificates(server: Server) -> dict[str, int] | None:
     if server.server_type != "ssh" or not server.is_active:
         return None
 
-    from servers.monitor import _build_connect_kwargs
+    from servers.monitoring.monitor import _build_connect_kwargs
 
     try:
         kwargs = await _build_connect_kwargs(server)

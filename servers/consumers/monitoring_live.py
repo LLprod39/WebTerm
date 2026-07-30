@@ -20,7 +20,7 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import User
 
 from core_ui.context_processors import user_can_feature
-from servers.monitoring_live import live_group_name, live_metrics_manager
+from servers.monitoring.monitoring_live import live_group_name, live_metrics_manager
 
 MAX_LIVE_SUBSCRIPTIONS = 100
 

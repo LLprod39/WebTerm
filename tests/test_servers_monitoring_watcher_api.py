@@ -92,7 +92,7 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
             checked_at=timezone.now(),
         )
 
-    monkeypatch.setattr("servers.monitor.check_server", fake_check_server)
+    monkeypatch.setattr("servers.monitoring.monitor.check_server", fake_check_server)
 
     check_now = client.post(
         f"/servers/api/{server.id}/health/check/",

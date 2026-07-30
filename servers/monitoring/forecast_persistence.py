@@ -1,6 +1,6 @@
 """Persist deterministic forecasts and turn them into stable alerts.
 
-build_server_predictions (servers.forecasting) is stateless; this module
+build_server_predictions (servers.monitoring.forecasting) is stateless; this module
 gives each (server, kind, target) forecast a stable row that re-activates on
 recurrence and resolves when the trend disappears, and mirrors the
 critical/warning ones into ServerAlert with update-in-place semantics so a
@@ -15,8 +15,8 @@ from typing import Any
 from django.utils import timezone
 from loguru import logger
 
-from servers.forecasting import build_server_predictions
 from servers.models import Server, ServerAlert, ServerPrediction
+from servers.monitoring.forecasting import build_server_predictions
 
 _ALERTABLE_SEVERITIES = {"critical", "warning"}
 

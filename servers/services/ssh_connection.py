@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from servers import monitor
+from servers.monitoring import monitor
 from servers.secret_utils import get_server_sudo_secret
 
 

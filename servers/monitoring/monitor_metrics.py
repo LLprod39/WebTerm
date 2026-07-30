@@ -1,6 +1,6 @@
-"""Persistence for collector v2 metric samples (servers.metrics_parsing output).
+"""Persistence for collector v2 metric samples (servers.monitoring.metrics_parsing output).
 
-Split from servers.monitor to keep that module under the size limit.
+Split from servers.monitoring.monitor to keep that module under the size limit.
 """
 
 from __future__ import annotations

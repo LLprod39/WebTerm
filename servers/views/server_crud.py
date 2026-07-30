@@ -138,7 +138,7 @@ def server_create(request):
             },
         )
 
-        from servers.monitor import schedule_health_check_for_server_ids
+        from servers.monitoring.monitor import schedule_health_check_for_server_ids
         from servers.os_detect_service import schedule_os_detect_for_server_ids
 
         # Start fleet monitoring immediately so the list has current status.

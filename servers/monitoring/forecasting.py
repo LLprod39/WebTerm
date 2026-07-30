@@ -14,8 +14,8 @@ from typing import Any
 
 from django.utils import timezone
 
-from servers.metrics_rollup import iter_sample_metrics
 from servers.models import Server, ServerCertificate, ServerMetricRollup, ServerMetricSample
+from servers.monitoring.metrics_rollup import iter_sample_metrics
 
 SEVERITY_INFO = "info"
 SEVERITY_WARNING = "warning"

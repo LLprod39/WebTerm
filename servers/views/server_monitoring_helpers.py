@@ -64,7 +64,7 @@ def _maybe_kick_stale_fleet_refresh(server_health: list[dict]) -> None:
         return
 
     try:
-        from servers.monitor import schedule_health_check_for_server_ids
+        from servers.monitoring.monitor import schedule_health_check_for_server_ids
 
         schedule_health_check_for_server_ids(stale_ids, deep=False)
     except Exception:
@@ -341,7 +341,7 @@ def _build_monitoring_status_payload(user) -> dict:
     # Last live WebSocket samples (cached ~2m) — fresher than 60s DB monitor after reload.
     live_by_id: dict[int, dict] = {}
     with contextlib.suppress(Exception):
-        from servers.monitoring_live import fetch_live_samples
+        from servers.monitoring.monitoring_live import fetch_live_samples
 
         live_by_id = fetch_live_samples(server_ids)
 

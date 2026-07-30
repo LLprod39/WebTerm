@@ -16,8 +16,8 @@ from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from servers.agent_service import launch_watcher_draft_for_user
 from servers.models import Server, ServerAlert, ServerHealthCheck
+from servers.monitoring.watcher_service import WatcherService
 from servers.views.server_helpers import _accessible_servers_queryset
-from servers.watcher_service import WatcherService
 
 
 @login_required
@@ -244,7 +244,7 @@ def monitoring_config(request):
     if not request.user.is_staff:
         return JsonResponse({"error": "Forbidden"}, status=403)
 
-    import servers.monitor as mon
+    import servers.monitoring.monitor as mon
 
     if request.method == "GET":
         total_checks = ServerHealthCheck.objects.count()

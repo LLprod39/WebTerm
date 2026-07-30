@@ -1,7 +1,7 @@
 """Alert creation/resolution rules for server health monitoring.
 
 Extracted from monitor.py to keep modules under the size limit.
-Re-exported from servers.monitor for backward compatibility (tests import it there).
+Re-exported from servers.monitoring.monitor for backward compatibility (tests import it there).
 """
 
 from __future__ import annotations
@@ -10,7 +10,14 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
 from servers.models import Server, ServerAlert
-from servers.monitor_thresholds import CPU_CRIT, CPU_WARN, DISK_CRIT, DISK_WARN, MEM_CRIT, MEM_WARN
+from servers.monitoring.monitor_thresholds import (
+    CPU_CRIT,
+    CPU_WARN,
+    DISK_CRIT,
+    DISK_WARN,
+    MEM_CRIT,
+    MEM_WARN,
+)
 
 
 def sync_to_async(func, thread_sensitive=False):

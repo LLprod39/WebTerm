@@ -7,8 +7,8 @@ from datetime import UTC, datetime
 import pytest
 from django.contrib.auth.models import User
 
-from servers.cert_collector import build_cert_script, parse_cert_output, upsert_certificates
 from servers.models import Server, ServerCertificate
+from servers.monitoring.cert_collector import build_cert_script, parse_cert_output, upsert_certificates
 
 RAW_CERT_OUTPUT = """==WTCERT:443==
 subject=CN = api.example.com

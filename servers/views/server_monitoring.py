@@ -74,7 +74,7 @@ def monitoring_dashboard(request):
     metrics_by_id = _latest_health_checks_by_server_id(server_ids, with_metrics=True)
     live_by_id: dict[int, dict] = {}
     with contextlib.suppress(Exception):
-        from servers.monitoring_live import fetch_live_samples
+        from servers.monitoring.monitoring_live import fetch_live_samples
 
         live_by_id = fetch_live_samples(server_ids)
 
@@ -187,7 +187,7 @@ def monitoring_refresh(request):
     With body ``{"metrics": true}``: full SSH quick metrics (CPU/RAM/disk) so the
     servers list can update when live WebSocket is unavailable.
     """
-    from servers.monitor import check_all_servers
+    from servers.monitoring.monitor import check_all_servers
 
     try:
         body = json.loads(request.body) if request.body else {}
@@ -273,7 +273,7 @@ def server_health_history(request, server_id):
 @require_http_methods(["POST"])
 def server_health_check_now(request, server_id):
     """Trigger an immediate health check for a server."""
-    from servers.monitor import check_all_servers
+    from servers.monitoring.monitor import check_all_servers
 
     server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
     if not server:

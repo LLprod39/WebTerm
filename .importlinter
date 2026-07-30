@@ -125,3 +125,18 @@ source_modules =
 forbidden_modules =
     servers
     studio
+
+
+# ─── Contract 10: monitoring is an infrastructure domain ────────────────────
+# Goal: Telemetry collection and forecasting stay independent from HTTP,
+# websocket, and cross-feature orchestration entry points. Shared secret
+# infrastructure remains allowed through servers.secret_utils.
+[importlinter:contract:servers-monitoring-no-ui-or-orchestration]
+name = servers.monitoring must not import HTTP, websocket, or studio entry points
+type = forbidden
+source_modules =
+    servers.monitoring
+forbidden_modules =
+    servers.consumers
+    servers.views
+    studio

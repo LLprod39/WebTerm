@@ -10,7 +10,6 @@ from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 
-from servers.forecasting import build_server_predictions, eta_days_to, theil_sen
 from servers.models import (
     Server,
     ServerAlert,
@@ -18,6 +17,7 @@ from servers.models import (
     ServerMetricRollup,
     ServerMetricSample,
 )
+from servers.monitoring.forecasting import build_server_predictions, eta_days_to, theil_sen
 
 
 def test_theil_sen_recovers_linear_slope():

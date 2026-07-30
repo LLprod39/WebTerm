@@ -5,7 +5,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from servers.models import Server, ServerAlert
-from servers.monitor import _create_alerts
+from servers.monitoring.monitor import _create_alerts
 from studio.docker_service_recovery import (
     _build_container_verify_command,
     ensure_docker_service_recovery_pipeline,
