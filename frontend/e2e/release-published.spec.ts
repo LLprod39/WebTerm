@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { firstRunReadinessStorageKey } from "../src/lib/first-run-readiness";
+
 type ServerBootstrapResponse = {
   success: boolean;
   servers: Array<{ id: number; name: string }>;
@@ -40,10 +42,15 @@ test("published digest serves the authenticated operator golden path", async ({ 
     },
   });
   expect(login.ok()).toBeTruthy();
+  const loginPayload = (await login.json()) as { user: { id: number } };
 
   const readiness = await page.request.get("/api/settings/readiness/");
   expect(readiness.ok()).toBeTruthy();
   expect((await readiness.json()).success).toBe(true);
+  await page.addInitScript(
+    (storageKey) => window.localStorage.setItem(storageKey, "seen"),
+    firstRunReadinessStorageKey(loginPayload.user.id),
+  );
 
   const serverName = `Release SSH ${Date.now()}`;
   await page.goto("/servers");
