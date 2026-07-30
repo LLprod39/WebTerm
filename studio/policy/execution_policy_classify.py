@@ -5,8 +5,8 @@ from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from app.command_execution_gate import evaluate_command_execution_gate
-from studio.execution_policy_agents import classify_dynamic_agent_policy
-from studio.execution_policy_types import (
+from studio.policy.execution_policy_agents import classify_dynamic_agent_policy
+from studio.policy.execution_policy_types import (
     ExecutionPolicyDecision,
     PolicyActionClass,
     PolicyRiskLevel,

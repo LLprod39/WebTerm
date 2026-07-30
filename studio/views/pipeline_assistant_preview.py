@@ -5,8 +5,8 @@ Pure preview and risk helpers for Studio pipeline assistant responses.
 import json
 import re
 
-from studio.execution_policy import build_execution_policy_decisions
 from studio.pipeline.pipeline_secrets import redact_pipeline_secret_values
+from studio.policy.execution_policy import build_execution_policy_decisions
 
 
 def _clone_json_snapshot(value):

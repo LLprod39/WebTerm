@@ -4,7 +4,6 @@ from collections import defaultdict, deque
 from typing import Any
 
 from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
-from studio.execution_policy import validate_execution_policy_guardrails
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
 
 # Compatibility re-export: ``KNOWN_NODE_TYPES`` is imported from this module by
@@ -12,6 +11,7 @@ from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
 # alias marks it as an intentional re-export so ruff's F401 keeps it.
 from studio.node_manifest import KNOWN_NODE_TYPES as KNOWN_NODE_TYPES
 from studio.node_manifest import TRIGGER_NODE_TYPES, allowed_source_handles, runtime_known_node_types
+from studio.policy.execution_policy import validate_execution_policy_guardrails
 
 from .pipeline_validation_references import validate_node_references
 
