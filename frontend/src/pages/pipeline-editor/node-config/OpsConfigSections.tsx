@@ -242,7 +242,7 @@ function DiskCleanupFields({ type, data, lang, onSet }: OpsBaseProps) {
       ) : null}
       {action !== "inspect" ? (
         <div className="grid grid-cols-2 gap-3">
-          <CheckboxCard label={localize(lang, "Dry run", "Dry run")} checked={data.dry_run !== false} onChange={(checked) => onSet("dry_run", checked)} />
+          <CheckboxCard label={localize(lang, "Dry run", "Dry run")} checked={data.dry_run === true} onChange={(checked) => onSet("dry_run", checked)} />
           <CheckboxCard label={localize(lang, "Verify after", "Verify after")} checked={data.verify !== false} onChange={(checked) => onSet("verify", checked)} />
         </div>
       ) : null}
@@ -393,6 +393,11 @@ type OpsBaseProps = {
 export function OpsConfigSections(props: OpsBaseProps) {
   const { type, data, lang, onSet } = props;
   if (!type.startsWith("ops/")) return null;
+  const action = String(data.action || "");
+  const mutatingWithGenericDryRun =
+    (type === "ops/file_action" && action === "write") ||
+    (type === "ops/package_action" && ["install", "update", "remove"].includes(action)) ||
+    ["ops/service_action", "ops/docker_action", "ops/process_action", "ops/alert_update"].includes(type);
 
   return (
     <NodeFormSection
@@ -407,6 +412,13 @@ export function OpsConfigSections(props: OpsBaseProps) {
       <DiskCleanupFields {...props} />
       <BackupFields {...props} />
       <SimpleActionFields {...props} />
+      {mutatingWithGenericDryRun ? (
+        <CheckboxCard
+          label={localize(lang, "Только предпросмотр (без изменений)", "Preview only (no changes)")}
+          checked={data.dry_run === true}
+          onChange={(checked) => onSet("dry_run", checked)}
+        />
+      ) : null}
       {type === "ops/service_action" || type === "ops/docker_action" ? (
         <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
           <span className="text-xs">{localize(lang, "Post-change verification", "Post-change verification")}</span>

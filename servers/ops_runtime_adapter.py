@@ -78,12 +78,16 @@ class ServersOpsRuntimeProvider:
     async def write_text_file(self, server, *, secret: str = "", path: str, content: str, max_bytes: int):
         return await write_text_file(server, secret=secret, path=path, content=content, max_bytes=max_bytes)
 
-    async def update_alert(self, *, user, alert_id: int, action: str):
+    async def update_alert(self, *, user, alert_id: int, action: str, dry_run: bool = False):
         def _resolve_alert():
             alert = ServerAlert.objects.select_related("server").filter(id=alert_id, server__user=user).first()
             if alert is None:
                 return None
-            if action == "resolve":
+            before = {
+                "is_resolved": alert.is_resolved,
+                "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
+            }
+            if action == "resolve" and not dry_run:
                 alert.is_resolved = True
                 alert.resolved_at = timezone.now()
                 alert.resolved_by = user if getattr(user, "is_authenticated", False) else None
@@ -92,8 +96,16 @@ class ServersOpsRuntimeProvider:
                 "id": alert.id,
                 "title": alert.title,
                 "server_name": alert.server.name,
-                "is_resolved": alert.is_resolved,
-                "resolved_at": alert.resolved_at.isoformat() if alert.resolved_at else None,
+                "is_resolved": True if dry_run and action == "resolve" else alert.is_resolved,
+                "resolved_at": (
+                    "<set-at-execution>"
+                    if dry_run and action == "resolve"
+                    else alert.resolved_at.isoformat()
+                    if alert.resolved_at
+                    else None
+                ),
+                "before": before,
+                "dry_run": dry_run,
             }
 
         return await sync_to_async(_resolve_alert, thread_sensitive=True)()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import posixpath
 import re
 import stat as stat_module
@@ -18,6 +19,7 @@ from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_kno
 
 TEXT_FILE_MAX_BYTES = 256 * 1024
 OWNER_GROUP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
+logger = logging.getLogger(__name__)
 
 
 def _normalize_path_value(value: bytes | str | asyncssh_sftp.SFTPName) -> str:
@@ -336,10 +338,24 @@ async def write_text_file(
     async with open_server_sftp(server, secret=secret) as sftp:
         target_path = await resolve_remote_file_path(sftp, path)
         attrs = None
+        previous_content: str | None = None
+        previous_size = 0
         if await sftp.exists(target_path):
             attrs = await sftp.stat(target_path)
             if _entry_kind(attrs) == "dir":
                 raise IsADirectoryError(target_path)
+            previous_size = int(getattr(attrs, "size", 0) or 0)
+            if previous_size <= max_bytes:
+                try:
+                    async with sftp.open(target_path, "rb", encoding=None) as remote_file:
+                        previous_raw = await remote_file.read(max_bytes + 1)
+                    if len(previous_raw) <= max_bytes:
+                        previous_content = previous_raw.decode("utf-8")
+                except Exception as exc:
+                    logger.warning(
+                        "Could not capture pre-write content for change preview (%s)",
+                        type(exc).__name__,
+                    )
 
         payload = str(content or "").encode("utf-8")
         if len(payload) > max_bytes:
@@ -373,6 +389,9 @@ async def write_text_file(
             "size": int(getattr(updated_attrs, "size", 0) or 0),
             "encoding": "utf-8",
             "content": str(content or ""),
+            "previous_content": previous_content,
+            "previous_size": previous_size,
+            "existed": attrs is not None,
         }
 
 

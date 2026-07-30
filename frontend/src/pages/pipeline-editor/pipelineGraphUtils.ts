@@ -264,7 +264,7 @@ export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNo
     case "agent/llm_query":
       return { provider: "gemini", on_failure: "abort" };
     case "agent/ssh_cmd":
-      return { preflight_commands: [], verification_commands: [], permission_mode: "SAFE", sudo_policy: "disabled", on_failure: "abort" };
+      return { dry_run: true, preflight_commands: [], verification_commands: [], permission_mode: "SAFE", sudo_policy: "disabled", on_failure: "abort" };
     case "agent/mcp_call":
       return { arguments: {}, arguments_text: "{}", permission_mode: "SAFE", skill_slugs: [], on_failure: "abort" };
     case "ops/server_snapshot":
@@ -272,23 +272,23 @@ export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNo
     case "ops/log_query":
       return { source: "journal", lines: 120, service: "", container: "", filter_text: "", server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/file_action":
-      return { action: "read", path: "", content: "", max_bytes: 131072, server_id_context_key: "server_id", on_failure: "continue" };
+      return { action: "read", path: "", content: "", dry_run: true, max_bytes: 131072, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/package_action":
-      return { action: "list_updates", packages: [], verify: true, server_id_context_key: "server_id", on_failure: "continue" };
+      return { action: "list_updates", packages: [], dry_run: true, verify: true, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/disk_cleanup":
       return { action: "inspect", dry_run: true, verify: true, min_age_days: 7, max_entries: 50, vacuum_time_days: 14, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/backup_restore_check":
       return { action: "inspect", path: "/var/backups", max_depth: 2, max_files: 20, max_age_hours: 24, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/service_action":
-      return { action: "restart", verify: true, server_id_context_key: "server_id", on_failure: "continue" };
+      return { action: "restart", dry_run: true, verify: true, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/docker_action":
-      return { action: "restart", include_logs: true, verify: true, server_id_context_key: "server_id", on_failure: "continue" };
+      return { action: "restart", dry_run: true, include_logs: true, verify: true, server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/process_action":
-      return { action: "terminate", pid_context_key: "pid", server_id_context_key: "server_id", on_failure: "continue" };
+      return { action: "terminate", dry_run: true, pid_context_key: "pid", server_id_context_key: "server_id", on_failure: "continue" };
     case "ops/http_check":
       return { method: "GET", expected_status: [200], timeout_seconds: 15, retries: 1, on_failure: "continue" };
     case "ops/alert_update":
-      return { action: "resolve", alert_id_context_key: "alert_id", on_failure: "continue" };
+      return { action: "resolve", dry_run: true, alert_id_context_key: "alert_id", on_failure: "continue" };
     case "logic/condition":
       return { check_type: "contains" };
     case "logic/merge":

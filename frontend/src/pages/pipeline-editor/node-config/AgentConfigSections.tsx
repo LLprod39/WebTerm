@@ -94,6 +94,15 @@ export function SshCommandConfig({
         </Select>
         <FieldHint>{localize(lang, sudoHint.hintRu, sudoHint.hintEn)}</FieldHint>
       </div>
+      <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground">
+        <input
+          type="checkbox"
+          className="h-4 w-4"
+          checked={data.dry_run === true}
+          onChange={(event) => onSet("dry_run", event.target.checked)}
+        />
+        <span>{localize(lang, "Только предпросмотр изменяющей команды", "Preview changing command only")}</span>
+      </label>
       <AdvancedDisclosure title={localize(lang, "Проверки до/после", "Pre/post checks")}>
         <div className="space-y-1.5">
           <Label className="text-xs">{localize(lang, "Preflight команды", "Preflight commands")}</Label>

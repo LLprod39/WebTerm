@@ -32,7 +32,7 @@ from core_ui.audit import audit_context
 from studio.executor import nodes as _registered_executor_nodes  # noqa: F401
 from studio.executor.context import ExecutionContext
 from studio.executor.plugin_nodes import clear_plugin_node_registry_async, sync_plugin_node_registry_async
-from studio.executor.registry import registry
+from studio.executor.registry import mutation_preview_required, mutation_preview_valid, registry
 from studio.models import PipelineRun
 
 from .pipeline_agent_llm import (
@@ -242,6 +242,24 @@ async def _execute_registry_node(
         return {"status": "failed", "error": _redact_pipeline_text(str(exc))}
 
     payload = dict(result.output or {})
+    reported_status = str(payload.get("status") or "").strip().lower()
+    if (
+        result.ok
+        and reported_status not in {"failed", "blocked", "cancelled", "canceled"}
+        and mutation_preview_required(node_type, node_data)
+        and not mutation_preview_valid(payload.get("change_preview"))
+    ):
+        logger.error(
+            "pipeline run %s mutating node %s (%s) completed without a valid change preview",
+            run.pk,
+            node_id,
+            node_type,
+        )
+        return {
+            "status": "failed",
+            "error": "Mutating node did not produce the required change preview; execution result was rejected.",
+            "output": "",
+        }
     status = str(payload.pop("status", "") or ("completed" if result.ok else "failed"))
     state = {"status": status, **payload}
     if result.error:

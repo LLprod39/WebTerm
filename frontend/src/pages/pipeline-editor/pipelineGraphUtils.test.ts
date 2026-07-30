@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PipelineNode } from "@/lib/api";
 
-import { getMissingRunContextFields, getPipelineRuntimePlaceholders } from "./pipelineGraphUtils";
+import { buildDefaultNodeData, getMissingRunContextFields, getPipelineRuntimePlaceholders } from "./pipelineGraphUtils";
 
 describe("pipelineGraphUtils runtime context fields", () => {
   it("extracts runtime context placeholders without built-in run tokens", () => {
@@ -32,5 +32,20 @@ describe("pipelineGraphUtils runtime context fields", () => {
       },
       ["domain", "image_name", "retries", "dry_run", "targets", "ticket_id"],
     )).toEqual(["domain", "targets", "ticket_id"]);
+  });
+
+  it("defaults every changing SSH and ops node to preview-only mode", () => {
+    for (const type of [
+      "agent/ssh_cmd",
+      "ops/file_action",
+      "ops/package_action",
+      "ops/disk_cleanup",
+      "ops/service_action",
+      "ops/docker_action",
+      "ops/process_action",
+      "ops/alert_update",
+    ]) {
+      expect(buildDefaultNodeData(type).dry_run, type).toBe(true);
+    }
   });
 });
