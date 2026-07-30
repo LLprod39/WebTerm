@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from servers.monitor_parsing import (
+from servers.monitoring.monitor_parsing import (
     _cpu_percent_from_load,
     _get_cpu_estimate,
     _parse_quick_output,

@@ -1,6 +1,6 @@
 """LLM analysis layer over collected telemetry (AI SRE verdicts).
 
-Deterministic math (servers.forecasting) says *when* something breaks; this
+Deterministic math (servers.monitoring.forecasting) says *when* something breaks; this
 module has the LLM read the full picture per physical endpoint — metrics,
 trends, forecasts, alerts, sanitized log excerpts, certificates, server
 memory notes — and produce a verdict with reasoning and actions.
@@ -23,7 +23,6 @@ from django.utils import timezone
 from loguru import logger
 
 from app.egress_redaction import sanitize_prompt_context_text
-from servers.forecasting import build_server_predictions
 from servers.models import (
     Server,
     ServerAiInsight,
@@ -32,6 +31,7 @@ from servers.models import (
     ServerHealthCheck,
     ServerMetricSample,
 )
+from servers.monitoring.forecasting import build_server_predictions
 
 _MAX_CONTENT_CHARS = 8000
 _MAX_LOG_LINES = 10

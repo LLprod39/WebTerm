@@ -2,7 +2,7 @@
 
 One payload feeds the "Метрики и прогнозы" page: fleet summary, per-server
 latest collector-v2 sample with 24h sparklines, deterministic predictions
-(servers.forecasting), certificate inventory, and active alerts.
+(servers.monitoring.forecasting), certificate inventory, and active alerts.
 """
 
 from __future__ import annotations
@@ -20,14 +20,6 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
-from servers.ai_insights import (
-    ai_insights_enabled,
-    latest_fleet_insight,
-    latest_insights_by_endpoint,
-    run_ai_insights_for_servers,
-    serialize_insight,
-)
-from servers.forecasting import build_server_predictions
 from servers.models import (
     Server,
     ServerAlert,
@@ -35,6 +27,14 @@ from servers.models import (
     ServerMetricRollup,
     ServerMetricSample,
 )
+from servers.monitoring.ai_insights import (
+    ai_insights_enabled,
+    latest_fleet_insight,
+    latest_insights_by_endpoint,
+    run_ai_insights_for_servers,
+    serialize_insight,
+)
+from servers.monitoring.forecasting import build_server_predictions
 from servers.views.server_monitoring import _latest_health_checks_by_server_id
 
 __all__ = ["admin_insights", "admin_insights_ai_run"]

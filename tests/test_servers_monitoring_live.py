@@ -6,7 +6,7 @@ from channels.routing import URLRouter
 from channels.testing import WebsocketCommunicator
 from django.contrib.auth.models import User
 
-from servers.monitoring_live import (
+from servers.monitoring.monitoring_live import (
     REMOTE_LOOP_TEMPLATE,
     LiveMetricsManager,
     compute_cpu_percent,
@@ -15,6 +15,12 @@ from servers.monitoring_live import (
     parse_live_line,
 )
 from tests.servers_api_smoke_harness import create_server, grant_feature
+
+
+def test_legacy_monitoring_live_module_reexports_public_api():
+    from servers import monitoring_live as legacy_monitoring_live
+
+    assert legacy_monitoring_live.LiveMetricsManager is LiveMetricsManager
 
 
 def test_parse_live_line_full_sample():
@@ -54,7 +60,7 @@ def test_compute_cpu_percent_from_tick_deltas():
 def test_live_sample_cache_roundtrip(monkeypatch):
     from django.core.cache import cache
 
-    from servers import monitoring_live
+    from servers.monitoring import monitoring_live
 
     class ConfiguredButUnavailableRedis:
         def pipeline(self):

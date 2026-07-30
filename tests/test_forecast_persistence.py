@@ -9,12 +9,6 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from servers.forecast_persistence import (
-    alert_title_for,
-    persist_predictions_for_server,
-    run_forecast_persistence,
-    sync_forecast_alerts,
-)
 from servers.models import (
     Server,
     ServerAlert,
@@ -22,8 +16,14 @@ from servers.models import (
     ServerMetricSample,
     ServerPrediction,
 )
-from servers.monitor_alerts import _create_alerts
-from servers.watcher_service import WatcherService
+from servers.monitoring.forecast_persistence import (
+    alert_title_for,
+    persist_predictions_for_server,
+    run_forecast_persistence,
+    sync_forecast_alerts,
+)
+from servers.monitoring.monitor_alerts import _create_alerts
+from servers.monitoring.watcher_service import WatcherService
 
 pytestmark = pytest.mark.django_db
 

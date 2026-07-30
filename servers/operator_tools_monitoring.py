@@ -48,7 +48,7 @@ def _forecast_spark_series(
         try:
             from django.utils import timezone
 
-            from servers.forecasting import fetch_series
+            from servers.monitoring.forecasting import fetch_series
 
             series = fetch_series(int(server_id), metric_key, now=timezone.now())
             points = [float(y) for _x, y in series[-28:]]
@@ -422,8 +422,8 @@ def list_certificates(ctx: AssistantActionContext) -> dict[str, Any]:
 
 def fleet_ai_insights(ctx: AssistantActionContext) -> dict[str, Any]:
     try:
-        from servers.ai_insights import latest_fleet_insight
         from servers.models import ServerAiInsight
+        from servers.monitoring.ai_insights import latest_fleet_insight
     except Exception as exc:  # noqa: BLE001
         return {"insights": [], "count": 0, "note": f"AI insights unavailable: {exc}"}
 

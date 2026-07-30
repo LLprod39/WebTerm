@@ -1,4 +1,4 @@
-"""Parsers for collector v2 output (servers.metrics_script).
+"""Parsers for collector v2 output (servers.monitoring.metrics_script).
 
 build_metrics_v2() turns raw marker-delimited output into one flat dict that
 is a superset of the legacy quick-check metrics: legacy keys (cpu_percent,
@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from servers.metrics_script import SECTION_PREFIX, SECTION_SUFFIX
+from servers.monitoring.metrics_script import SECTION_PREFIX, SECTION_SUFFIX
 
 _MARKER_RE = re.compile(re.escape(SECTION_PREFIX) + r"([A-Z0-9]+)" + re.escape(SECTION_SUFFIX))
 

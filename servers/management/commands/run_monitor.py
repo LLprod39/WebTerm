@@ -19,11 +19,11 @@ from django.core.management.base import BaseCommand
 from loguru import logger
 
 from app.background_workers import STUDIO_MONITOR_WORKER
-from servers.ai_insights import run_ai_insights_for_servers
-from servers.cert_collector import collect_certificates_for_all
-from servers.forecast_persistence import run_forecast_persistence
-from servers.metrics_rollup import run_metric_rollups
-from servers.monitor import check_all_servers, cleanup_old_data
+from servers.monitoring.ai_insights import run_ai_insights_for_servers
+from servers.monitoring.cert_collector import collect_certificates_for_all
+from servers.monitoring.forecast_persistence import run_forecast_persistence
+from servers.monitoring.metrics_rollup import run_metric_rollups
+from servers.monitoring.monitor import check_all_servers, cleanup_old_data
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 
 

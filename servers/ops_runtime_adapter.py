@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from servers import linux_ui
 from servers.models import ServerAlert
-from servers.monitor import _decrypt_server_secret
+from servers.monitoring.monitor import _decrypt_server_secret
 from servers.services.server_query import get_servers_for_user
 from servers.sftp import read_text_file, write_text_file
 

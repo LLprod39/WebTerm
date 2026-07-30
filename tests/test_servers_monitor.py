@@ -5,9 +5,15 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from servers.models import Server, ServerHealthCheck
-from servers.monitor import check_all_servers
+from servers.monitoring.monitor import check_all_servers
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def test_legacy_monitor_module_reexports_public_api():
+    from servers import monitor as legacy_monitor
+
+    assert legacy_monitor.check_all_servers is check_all_servers
 
 
 def test_check_all_servers_can_be_scoped_to_specific_server_ids(monkeypatch):
@@ -35,7 +41,7 @@ def test_check_all_servers_can_be_scoped_to_specific_server_ids(monkeypatch):
         seen.append(server.id)
         return None
 
-    monkeypatch.setattr("servers.monitor.check_server", fake_check_server)
+    monkeypatch.setattr("servers.monitoring.monitor.check_server", fake_check_server)
 
     async_to_sync(check_all_servers)(deep=True, concurrency=2, server_ids=[server_b.id])
 
@@ -87,7 +93,7 @@ def test_check_all_servers_dedupes_same_host_across_users(monkeypatch):
 
         return await sync_to_async(_create)()
 
-    monkeypatch.setattr("servers.monitor.check_server", fake_check_server)
+    monkeypatch.setattr("servers.monitoring.monitor.check_server", fake_check_server)
 
     results = async_to_sync(check_all_servers)(deep=False, concurrency=2)
 

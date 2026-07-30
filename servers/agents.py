@@ -24,7 +24,7 @@ from servers.agent_run_report import build_agent_run_report_payload
 from servers.agent_templates import get_all_templates as get_all_templates
 from servers.agent_templates import get_template
 from servers.models import AgentRun, Server, ServerAgent
-from servers.monitor import _build_connect_kwargs
+from servers.monitoring.monitor import _build_connect_kwargs
 from servers.report_delivery import deliver_agent_report_async
 from servers.secret_utils import get_server_sudo_secret
 

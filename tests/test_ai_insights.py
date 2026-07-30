@@ -1,4 +1,4 @@
-"""Tests for the LLM analysis layer (servers.ai_insights) with a mocked LLM."""
+"""Tests for the LLM analysis layer (servers.monitoring.ai_insights) with a mocked LLM."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from django.core.cache import cache
 from django.urls import reverse
 from django.utils import timezone
 
-from servers import ai_insights
-from servers.ai_insights import (
+from servers.models import Server, ServerAiInsight, ServerAlert, ServerMetricSample
+from servers.monitoring.ai_insights import (
     build_server_context,
     parse_verdict,
     run_ai_insights_for_servers,
     run_server_insight,
 )
-from servers.models import Server, ServerAiInsight, ServerAlert, ServerMetricSample
+from servers.monitoring import ai_insights
 
 FAKE_ANALYSIS = (
     "## Вердикт\nСервер деградирует.\nУровень риска: Высокий\n"

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from servers.metrics_parsing import build_metrics_v2, split_sections
-from servers.metrics_script import build_metrics_script, section_marker
+from servers.monitoring.metrics_parsing import build_metrics_v2, split_sections
+from servers.monitoring.metrics_script import build_metrics_script, section_marker
 
 RAW_V2_OUTPUT = """==WT2:BEGIN==
 ==WT2:NPROC==

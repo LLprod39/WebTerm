@@ -8,7 +8,8 @@ import pytest
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from servers.metrics_rollup import (
+from servers.models import Server, ServerMetricRollup, ServerMetricSample
+from servers.monitoring.metrics_rollup import (
     bucket_start_for,
     cleanup_metric_data,
     compute_day_rollups,
@@ -16,8 +17,7 @@ from servers.metrics_rollup import (
     fetch_metric_series,
     run_metric_rollups,
 )
-from servers.models import Server, ServerMetricRollup, ServerMetricSample
-from servers.monitor_metrics import create_metric_sample, mirror_metric_sample
+from servers.monitoring.monitor_metrics import create_metric_sample, mirror_metric_sample
 
 pytestmark = pytest.mark.django_db
 

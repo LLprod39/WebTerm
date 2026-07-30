@@ -18,7 +18,7 @@ from django.core.management.base import BaseCommand
 from loguru import logger
 
 from servers.models import Server
-from servers.watcher_service import WatcherService
+from servers.monitoring.watcher_service import WatcherService
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 
 

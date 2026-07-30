@@ -1,7 +1,7 @@
 """Collector v2 remote script for extended fleet metrics.
 
 One POSIX-sh command string executed over SSH. Emits marker-delimited
-sections that servers.metrics_parsing understands. Every probe is wrapped
+sections that servers.monitoring.metrics_parsing understands. Every probe is wrapped
 so missing tools degrade to an empty section instead of failing the run.
 
 CPU usage is computed from two /proc/stat samples taken ~1s apart, so the

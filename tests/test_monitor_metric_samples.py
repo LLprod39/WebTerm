@@ -7,8 +7,8 @@ from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth.models import User
 
 from servers.models import Server, ServerHealthCheck, ServerMetricSample
-from servers.monitor import check_all_servers
-from servers.monitor_metrics import create_metric_sample
+from servers.monitoring.monitor import check_all_servers
+from servers.monitoring.monitor_metrics import create_metric_sample
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -56,7 +56,7 @@ def test_check_all_servers_mirrors_metric_samples_to_siblings(monkeypatch):
 
         return await sync_to_async(_create)()
 
-    monkeypatch.setattr("servers.monitor.check_server", fake_check_server)
+    monkeypatch.setattr("servers.monitoring.monitor.check_server", fake_check_server)
 
     results = async_to_sync(check_all_servers)(deep=False, lite=False, concurrency=2)
     assert len(results) == 2

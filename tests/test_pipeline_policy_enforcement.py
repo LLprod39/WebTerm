@@ -110,7 +110,7 @@ def test_pipeline_direct_ssh_node_requires_preflight_and_verification(monkeypatc
     async def fake_log_pipeline_ssh_command(**_kwargs):
         return None
 
-    monkeypatch.setattr("servers.monitor._build_connect_kwargs", fake_build_connect_kwargs)
+    monkeypatch.setattr("servers.monitoring.monitor._build_connect_kwargs", fake_build_connect_kwargs)
     monkeypatch.setattr("asyncssh.connect", lambda **_kwargs: _FakeConnection())
     monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
 

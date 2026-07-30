@@ -24,7 +24,7 @@ from loguru import logger
 
 from app.sudo_policy import normalize_sudo_policy
 from servers.agent_sessions_exec import AgentSessionExecMixin
-from servers.monitor import _build_connect_kwargs
+from servers.monitoring.monitor import _build_connect_kwargs
 
 BUFFER_MAX_CHARS = 8192
 COMMAND_TIMEOUT = 30

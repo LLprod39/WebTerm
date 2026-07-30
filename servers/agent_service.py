@@ -26,10 +26,10 @@ from servers.agent_runtime_overview import (
 )
 from servers.agent_schedule import compute_next_due_by_schedule, normalize_schedule_config
 from servers.models import AgentRun, BackgroundWorkerState, ServerAgent, ServerWatcherDraft
+from servers.monitoring.watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
 from servers.run_events import record_run_event
 from servers.scheduled_agents import dispatch_scheduled_agents, is_agent_due
 from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
-from servers.watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
 from servers.worker_state import serialize_background_worker_state
 
 
@@ -467,7 +467,7 @@ def launch_watcher_draft_for_user(*, draft_id: int, user, accessible_servers_que
     mark_watcher_draft_launched(draft=draft, user=user, agent=agent, run=run)
     with contextlib.suppress(Exception):
         draft.refresh_from_db()
-    from servers.watcher_service import WatcherService
+    from servers.monitoring.watcher_service import WatcherService
 
     payload.update(
         {
