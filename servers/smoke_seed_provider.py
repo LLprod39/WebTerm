@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from asgiref.sync import async_to_sync
+
 from app.smoke_seed_provider import SmokeSeedItem, SmokeSshTarget
 from servers.models import Server, ServerAgent
 from servers.secret_utils import store_server_auth_secret
+from servers.ssh_host_keys import enroll_server_host_key
 
 
 class DjangoSmokeServerSeedProvider:
@@ -30,6 +33,12 @@ class DjangoSmokeServerSeedProvider:
         server.save()
         store_server_auth_secret(server, secret_value=target.password)
         server.save()
+        if target.host_key_fingerprint:
+            async_to_sync(enroll_server_host_key)(
+                server,
+                expected_fingerprint=target.host_key_fingerprint,
+                allow_replace=True,
+            )
         return SmokeSeedItem(id=server.id, name=server.name)
 
     def upsert_agent(self, *, user_id: int, index: int, username: str, server_id: int) -> SmokeSeedItem:

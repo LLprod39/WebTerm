@@ -58,3 +58,39 @@ def test_seed_multi_user_smoke_creates_domain_objects_through_providers():
     assert agent.user_id == user.id
     assert agent.name == "Smoke Agent 01"
     assert agent.servers.filter(pk=server.id).exists()
+
+
+@pytest.mark.django_db
+def test_seed_multi_user_smoke_enrolls_only_the_confirmed_host_key(monkeypatch):
+    observed: dict[str, object] = {}
+
+    async def fake_enroll(server, *, expected_fingerprint, allow_replace, connect_timeout=10):
+        observed.update(
+            server_id=server.id,
+            expected_fingerprint=expected_fingerprint,
+            allow_replace=allow_replace,
+        )
+        return {"fingerprint_sha256": expected_fingerprint}
+
+    monkeypatch.setattr("servers.smoke_seed_provider.enroll_server_host_key", fake_enroll)
+
+    call_command(
+        "seed_multi_user_smoke",
+        users=1,
+        prefix="trusted-smoke",
+        password="SmokePass123!",
+        ssh_host="smoke-host",
+        ssh_port=2200,
+        ssh_username="smoke",
+        ssh_password="smoke-secret",
+        ssh_host_key_fingerprint="SHA256:confirmed-smoke-key",
+        json=True,
+        stdout=io.StringIO(),
+    )
+
+    server = Server.objects.get(user__username="trusted-smoke-01")
+    assert observed == {
+        "server_id": server.id,
+        "expected_fingerprint": "SHA256:confirmed-smoke-key",
+        "allow_replace": True,
+    }

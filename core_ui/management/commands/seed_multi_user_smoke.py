@@ -24,6 +24,7 @@ class Command(BaseCommand):
         parser.add_argument("--ssh-port", type=int, default=2222)
         parser.add_argument("--ssh-username", default="smoke")
         parser.add_argument("--ssh-password", default="smoke-password")
+        parser.add_argument("--ssh-host-key-fingerprint", default="")
         parser.add_argument("--prefix", default="smoke-user")
         parser.add_argument("--json", action="store_true")
 
@@ -34,6 +35,7 @@ class Command(BaseCommand):
         ssh_port = int(options["ssh_port"] or 2222)
         ssh_username = str(options["ssh_username"] or "smoke").strip() or "smoke"
         ssh_password = str(options["ssh_password"] or "smoke-password")
+        ssh_host_key_fingerprint = str(options["ssh_host_key_fingerprint"] or "").strip()
         prefix = str(options["prefix"] or "smoke-user").strip() or "smoke-user"
 
         payload: dict[str, object] = {
@@ -46,7 +48,13 @@ class Command(BaseCommand):
             },
             "users": [],
         }
-        target = SmokeSshTarget(host=ssh_host, port=ssh_port, username=ssh_username, password=ssh_password)
+        target = SmokeSshTarget(
+            host=ssh_host,
+            port=ssh_port,
+            username=ssh_username,
+            password=ssh_password,
+            host_key_fingerprint=ssh_host_key_fingerprint,
+        )
 
         for index in range(1, users_count + 1):
             username = f"{prefix}-{index:02d}"

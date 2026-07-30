@@ -404,10 +404,19 @@ grep -qi "pong" "$ARTIFACT_DIR/celery-ping.txt"
 echo "==> Starting the isolated SSH target"
 smoke_compose up -d --build ssh-target
 wait_for_service ssh-target 180
+SMOKE_SSH_FINGERPRINT="$(
+  smoke_compose exec -T ssh-target \
+    ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256 \
+    | awk '{print $2}'
+)"
+if [[ ! "$SMOKE_SSH_FINGERPRINT" =~ ^SHA256: ]]; then
+  echo "Unable to read the isolated SSH target fingerprint" >&2
+  exit 1
+fi
 
 echo "==> Seeding and running HTTPS/WebSocket terminal, pipeline and agent smoke"
 compose exec -T backend sh -lc \
-  "python manage.py seed_multi_user_smoke --users 1 --password '$SMOKE_PASSWORD' --ssh-host ssh-target --ssh-port 2222 --ssh-username smoke --ssh-password smoke-password --json > /tmp/f13a-seed.json"
+  "python manage.py seed_multi_user_smoke --users 1 --password '$SMOKE_PASSWORD' --ssh-host ssh-target --ssh-port 2222 --ssh-username smoke --ssh-password smoke-password --ssh-host-key-fingerprint '$SMOKE_SSH_FINGERPRINT' --json > /tmp/f13a-seed.json"
 timeout --signal=TERM --kill-after=15s 300s \
   docker compose \
   --project-name "$PROJECT_NAME" \

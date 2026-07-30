@@ -10,6 +10,7 @@ class SmokeSshTarget:
     port: int
     username: str
     password: str
+    host_key_fingerprint: str = ""
 
 
 @dataclass(frozen=True)
