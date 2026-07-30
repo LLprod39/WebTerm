@@ -406,7 +406,7 @@ smoke_compose up -d --build ssh-target
 wait_for_service ssh-target 180
 SMOKE_SSH_FINGERPRINT="$(
   smoke_compose exec -T ssh-target \
-    ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256 \
+    ssh-keygen -lf //etc/ssh/ssh_host_ed25519_key.pub -E sha256 \
     | awk '{print $2}'
 )"
 if [[ ! "$SMOKE_SSH_FINGERPRINT" =~ ^SHA256: ]]; then
