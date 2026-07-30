@@ -1,4 +1,4 @@
-/** Budget profiles aligned with servers.agent_runtime_guidance.FULL_BUDGET_PROFILES */
+/** Budget profiles aligned with servers.agents.agent_runtime_guidance.FULL_BUDGET_PROFILES */
 export type AgentBudgetProfileId = "quick" | "standard" | "complex";
 
 export const AGENT_BUDGET_PROFILES: Record<

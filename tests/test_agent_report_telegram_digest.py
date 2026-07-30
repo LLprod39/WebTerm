@@ -4,7 +4,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
-from servers.agent_inputs import format_telegram_report_message
+from servers.agents.agent_inputs import format_telegram_report_message
 from servers.models import AgentRun, ServerAgent
 from servers.report_delivery import deliver_agent_report_async
 

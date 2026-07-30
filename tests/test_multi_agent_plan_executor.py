@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from servers.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
+from servers.agents.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
 
 
 class FakePlanCallbacks:
@@ -177,7 +177,7 @@ async def test_execute_plan_tasks_ask_user_updates_waiting_state_and_context():
 @pytest.mark.asyncio
 async def test_execute_plan_tasks_unattended_ask_user_does_not_block():
     """Production path: orchestrator recovery ask_user must not await human reply when unattended."""
-    from servers.multi_agent_plan_executor import UNATTENDED_ASK_USER_DENY
+    from servers.agents.multi_agent_plan_executor import UNATTENDED_ASK_USER_DENY
 
     fake = FakePlanCallbacks()
     fake.unattended = True

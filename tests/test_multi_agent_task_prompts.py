@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from app.agent_kernel.domain.roles import ROLE_SPECS
-from servers.multi_agent_task_prompts import build_multi_agent_task_prompt
+from servers.agents.multi_agent_task_prompts import build_multi_agent_task_prompt
 
 
 class FakeMCPRuntimeProvider:

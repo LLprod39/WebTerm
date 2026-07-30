@@ -9,8 +9,8 @@ from django.core.management.base import BaseCommand, CommandError
 from loguru import logger
 
 from app.runtime_limits import cleanup_stale_agent_runs
-from servers.agent_background import execute_agent_dispatch
-from servers.agent_dispatch import claim_next_agent_dispatch
+from servers.agents.agent_background import execute_agent_dispatch
+from servers.agents.agent_dispatch import claim_next_agent_dispatch
 from servers.worker_state import (
     claim_background_worker,
     cleanup_stale_background_workers,

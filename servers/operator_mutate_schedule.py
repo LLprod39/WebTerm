@@ -51,7 +51,7 @@ def _cron_to_schedule_config(cron: str) -> dict[str, Any]:
 
 def schedule_agent(ctx: AssistantActionContext) -> dict[str, Any]:
     """Attach a schedule to an existing agent (phrase → cron-ish config)."""
-    from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
+    from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
     from servers.models import ServerAgent
 
     agent_id = _int_arg(ctx, "agent_id")

@@ -4,7 +4,7 @@ from app.agent_kernel.domain.roles import get_role_spec
 from app.agent_kernel.domain.specs import ToolSpec
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.tools.registry import ToolRegistry
-from servers.multi_agent_subagents import (
+from servers.agents.multi_agent_subagents import (
     build_subagent_prompt_context,
     build_task_subagent,
     prepare_plan_tasks,

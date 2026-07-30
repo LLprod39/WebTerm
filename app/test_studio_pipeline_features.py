@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from django.contrib.auth.models import User
 
-from servers.agent_tools import tool_list_skills, tool_read_skill
+from servers.agents.agent_tools import tool_list_skills, tool_read_skill
 from studio.mcp_tool_runtime import (
     MCPBoundTool,
     build_mcp_tools_description,

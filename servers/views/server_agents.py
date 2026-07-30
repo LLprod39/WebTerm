@@ -13,9 +13,10 @@ from app.agent_kernel import skill_provider_registry
 from app.sudo_policy import normalize_sudo_policy
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
-from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
-from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
-from servers.agent_service import (
+from servers.agents import get_all_templates, get_template
+from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
+from servers.agents.agent_service import (
     cleanup_stale_agent_runs_for_user,
     dispatch_scheduled_agents_for_user,
     get_agent_runtime_overview,
@@ -24,7 +25,6 @@ from servers.agent_service import (
     list_scheduled_agents_for_user,
     start_agent_run_for_user,
 )
-from servers.agents import get_all_templates, get_template
 from servers.models import ServerAgent
 from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 from servers.views.server_helpers import _accessible_servers_queryset
@@ -184,7 +184,7 @@ def agent_create(request):
 
     goal = data.get("goal", "")
     system_prompt = data.get("system_prompt", "")
-    from servers.agent_budgets import (
+    from servers.agents.agent_budgets import (
         FULL_DEFAULT_MAX_ITERATIONS,
         FULL_DEFAULT_SESSION_TIMEOUT_SEC,
         FULL_MAX_ITERATIONS_CAP,

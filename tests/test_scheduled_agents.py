@@ -9,9 +9,9 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
 
-from servers.agent_dispatch import enqueue_agent_run_dispatch
+from servers.agents.agent_dispatch import enqueue_agent_run_dispatch
+from servers.agents.scheduled_agents import dispatch_scheduled_agents, is_agent_due
 from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
-from servers.scheduled_agents import dispatch_scheduled_agents, is_agent_due
 
 
 def _create_server(user: User, **kwargs) -> Server:
@@ -95,7 +95,7 @@ def test_dispatch_scheduled_agents_launches_due_full_agent(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     summary = dispatch_scheduled_agents(limit=10)
 
@@ -146,7 +146,7 @@ def test_dispatch_scheduled_agents_queues_mini_agent(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     summary = dispatch_scheduled_agents(limit=10)
 
@@ -247,7 +247,7 @@ def test_execution_plane_worker_processes_queued_dispatch(monkeypatch):
         target_run.final_report = "worker completed run"
         await sync_to_async(target_run.save)(update_fields=["status", "final_report"])
 
-    monkeypatch.setattr("servers.agent_background.AgentEngine.run", fake_engine_run)
+    monkeypatch.setattr("servers.agents.agent_background.AgentEngine.run", fake_engine_run)
 
     call_command("run_agent_execution_plane", once=True, worker_key="pytest-exec-plane")
 
@@ -302,7 +302,7 @@ def test_execution_plane_worker_failure_marks_run_failed_with_report_payload(mon
     async def fake_engine_run(self, *, run_record=None):
         raise RuntimeError("worker boom")
 
-    monkeypatch.setattr("servers.agent_background.AgentEngine.run", fake_engine_run)
+    monkeypatch.setattr("servers.agents.agent_background.AgentEngine.run", fake_engine_run)
 
     with pytest.raises(CommandError, match="Execution plane dispatches failed: 1"):
         call_command("run_agent_execution_plane", once=True, worker_key="pytest-exec-plane-failure")

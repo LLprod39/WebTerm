@@ -140,3 +140,17 @@ forbidden_modules =
     servers.consumers
     servers.views
     studio
+
+
+# ─── Contract 11: agent domain does not depend on delivery entry points ──────
+# Goal: Agent execution and scheduling remain callable from workers, commands,
+# and APIs without importing HTTP or websocket adapters.
+[importlinter:contract:servers-agents-no-delivery-entry-points]
+name = servers.agents must not import HTTP, websocket, or studio entry points
+type = forbidden
+source_modules =
+    servers.agents
+forbidden_modules =
+    servers.consumers
+    servers.views
+    studio

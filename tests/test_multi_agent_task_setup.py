@@ -7,7 +7,7 @@ import pytest
 from app.agent_kernel.domain.roles import ROLE_SPECS
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.tools.registry import ToolRegistry
-from servers.multi_agent_task_setup import (
+from servers.agents.multi_agent_task_setup import (
     MultiAgentTaskRuntime,
     apply_task_runtime_metadata,
     build_task_recipe_query,

@@ -11,10 +11,10 @@ from app.sudo_policy import (
     output_indicates_privilege_error,
     wrap_command_for_controlled_sudo,
 )
-from servers.agent_engine import AgentEngine
-from servers.agent_sessions import AgentSessionManager
+from servers.agents.agent_engine import AgentEngine
+from servers.agents.agent_sessions import AgentSessionManager
+from servers.agents.multi_agent_engine import MultiAgentEngine
 from servers.models import ServerAgent
-from servers.multi_agent_engine import MultiAgentEngine
 from studio.skill_registry import SkillDefinition
 
 

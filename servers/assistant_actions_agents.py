@@ -5,9 +5,9 @@ from __future__ import annotations
 from app.agent_kernel import skill_provider_registry
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from app.sudo_policy import normalize_sudo_policy
-from servers.agent_inputs import normalize_input_artifacts, normalize_report_delivery
-from servers.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
-from servers.agent_service import list_agents_for_user
+from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
+from servers.agents.agent_service import list_agents_for_user
 from servers.models import ServerAgent
 from servers.services.server_query import (
     CAPABILITY_EXECUTE_COMMAND,
@@ -155,7 +155,7 @@ def create_agent(ctx: AssistantActionContext) -> dict:
                     server_ids = [recent[0].id]
 
     commands = data.get("commands") if isinstance(data.get("commands"), list) else []
-    from servers.agent_budgets import (
+    from servers.agents.agent_budgets import (
         FULL_DEFAULT_MAX_ITERATIONS,
         FULL_DEFAULT_SESSION_TIMEOUT_SEC,
         clamp_full_iterations,
@@ -240,7 +240,7 @@ def create_agent(ctx: AssistantActionContext) -> dict:
     )
     agent.servers.set(accessible)
 
-    from servers.agent_service import serialize_agent_item
+    from servers.agents.agent_service import serialize_agent_item
 
     item = serialize_agent_item(agent)
     return {

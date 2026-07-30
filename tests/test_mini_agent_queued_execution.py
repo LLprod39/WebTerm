@@ -6,8 +6,8 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
-from servers.agent_background import execute_agent_dispatch
-from servers.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
+from servers.agents.agent_background import execute_agent_dispatch
+from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent
 
 

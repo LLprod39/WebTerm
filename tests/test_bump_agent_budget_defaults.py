@@ -6,7 +6,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
 
-from servers.agent_budgets import FULL_DEFAULT_MAX_ITERATIONS, FULL_DEFAULT_SESSION_TIMEOUT_SEC
+from servers.agents.agent_budgets import FULL_DEFAULT_MAX_ITERATIONS, FULL_DEFAULT_SESSION_TIMEOUT_SEC
 from servers.models import ServerAgent
 
 

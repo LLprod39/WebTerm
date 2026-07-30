@@ -61,7 +61,7 @@ export function useCreateAgentDialogState({
   const [aiPrompt, setAiPrompt] = useState("");
   const [goal, setGoal] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  // Keep in sync with servers.agent_budgets FULL_DEFAULT_* (complex-task defaults).
+  // Keep in sync with servers.agents.agent_budgets FULL_DEFAULT_* (complex-task defaults).
   const [maxIter, setMaxIter] = useState(40);
   const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
   const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");

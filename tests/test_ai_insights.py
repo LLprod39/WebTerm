@@ -9,13 +9,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from servers.models import Server, ServerAiInsight, ServerAlert, ServerMetricSample
+from servers.monitoring import ai_insights
 from servers.monitoring.ai_insights import (
     build_server_context,
     parse_verdict,
     run_ai_insights_for_servers,
     run_server_insight,
 )
-from servers.monitoring import ai_insights
 
 FAKE_ANALYSIS = (
     "## Вердикт\nСервер деградирует.\nУровень риска: Высокий\n"

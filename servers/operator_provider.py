@@ -51,7 +51,7 @@ class ServersOperatorProvider:
         return PlaybookRun.objects.filter(pk=run_id).first()
 
     def build_agent_run_report_response(self, run: Any) -> dict[str, Any]:
-        from servers.agent_run_report import build_agent_run_report_response
+        from servers.agents.agent_run_report import build_agent_run_report_response
 
         return build_agent_run_report_response(run)
 

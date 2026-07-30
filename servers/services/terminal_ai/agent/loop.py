@@ -31,7 +31,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from servers.agent_budgets import (
+from servers.agents.agent_budgets import (
     NOVA_COMPACT_AFTER_TURNS,
     NOVA_DEFAULT_ITERATION_TIMEOUT_SEC,
     NOVA_DEFAULT_MAX_ITERATIONS,

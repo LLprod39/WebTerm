@@ -6,7 +6,7 @@ import inspect
 
 import pytest
 
-from servers.agent_budgets import (
+from servers.agents.agent_budgets import (
     FAST_PLANNER_COMMAND_CAP,
     FAST_PLANNER_COMMAND_HARD_MAX,
     FULL_DEFAULT_COMMAND_TIMEOUT_SEC,
@@ -128,17 +128,17 @@ def test_create_agent_dialog_seeds_complex_defaults():
 
 
 def test_model_and_engine_defaults_wire_to_budgets():
-    from servers.agent_engine import DEFAULT_COMMAND_TIMEOUT, MAX_ITERATIONS_CAP, SESSION_TIMEOUT_DEFAULT
-    from servers.models_agents import ServerAgent
-    from servers.multi_agent_engine_config import (
+    from servers.agents.agent_engine import DEFAULT_COMMAND_TIMEOUT, MAX_ITERATIONS_CAP, SESSION_TIMEOUT_DEFAULT
+    from servers.agents.multi_agent_engine_config import (
         DEFAULT_COMMAND_TIMEOUT as MULTI_CMD,
     )
-    from servers.multi_agent_engine_config import (
+    from servers.agents.multi_agent_engine_config import (
         MAX_TASK_ITERATIONS,
     )
-    from servers.multi_agent_engine_config import (
+    from servers.agents.multi_agent_engine_config import (
         SESSION_TIMEOUT_DEFAULT as MULTI_SESSION,
     )
+    from servers.models_agents import ServerAgent
 
     field_iters = ServerAgent._meta.get_field("max_iterations")
     field_timeout = ServerAgent._meta.get_field("session_timeout_seconds")
@@ -153,7 +153,7 @@ def test_model_and_engine_defaults_wire_to_budgets():
 
 
 def test_agent_engine_runner_uses_command_timeout_from_engine():
-    src = inspect.getsource(__import__("servers.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine)
+    src = inspect.getsource(__import__("servers.agents.agent_engine_runner", fromlist=["run_agent_engine"]).run_agent_engine)
     assert 'command_timeout=int(getattr(engine, "command_timeout"' in src or "command_timeout=" in src
     assert "command_timeout=30" not in src
 
@@ -377,8 +377,8 @@ def test_multi_structured_handoff_and_verification_plan():
 
 
 def test_multi_config_and_planning_prompt_no_five_to_seven_cap():
-    from servers.multi_agent_engine_config import MAX_TASK_ITERATIONS
-    from servers.multi_agent_planning import plan_multi_agent_tasks
+    from servers.agents.multi_agent_engine_config import MAX_TASK_ITERATIONS
+    from servers.agents.multi_agent_planning import plan_multi_agent_tasks
 
     assert MAX_TASK_ITERATIONS >= 12
     src = inspect.getsource(plan_multi_agent_tasks)

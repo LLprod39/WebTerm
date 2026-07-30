@@ -6,7 +6,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.utils import timezone
 
-from servers.agent_dispatch import (
+from servers.agents.agent_dispatch import (
     claim_next_agent_dispatch,
     complete_agent_dispatch,
     enqueue_agent_run_dispatch,

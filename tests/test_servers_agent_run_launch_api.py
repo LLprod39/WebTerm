@@ -55,7 +55,7 @@ def test_agent_run_launches_in_background(monkeypatch, mode, extra_fields):
             }
         )
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     response = client.post(
         f"/servers/api/agents/{agent.id}/run/",
@@ -121,7 +121,7 @@ def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "servers.agent_launch.launch_agent_run_background",
+        "servers.agents.agent_launch.launch_agent_run_background",
         lambda **_kwargs: pytest.fail("launch_agent_run_background should not run when the active-run limit is hit"),
     )
 
@@ -163,7 +163,7 @@ def test_multi_agent_run_launches_without_plan_only(monkeypatch):
     def fake_launch(**kwargs):
         captured.update(kwargs)
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     response = client.post(
         f"/servers/api/agents/{agent.id}/run/",
@@ -237,7 +237,7 @@ def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("servers.agent_service.launch_plan_execution_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_service.launch_plan_execution_background", fake_launch)
 
     response = client.post(f"/servers/api/agents/runs/{run.id}/approve-plan/")
 
@@ -291,7 +291,7 @@ def test_agent_schedule_overview_and_dispatch_api(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     overview = client.get("/servers/api/agents/schedules/")
     assert overview.status_code == 200

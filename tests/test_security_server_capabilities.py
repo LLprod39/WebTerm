@@ -12,9 +12,9 @@ from django.test import Client
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from core_ui.models import UserAppPermission
 from core_ui.services.operator_memory import save_lesson_from_operator
-from servers.agent_background import execute_agent_dispatch
-from servers.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
-from servers.agent_launch import launch_queued_agent_run
+from servers.agents.agent_background import execute_agent_dispatch
+from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
+from servers.agents.agent_launch import launch_queued_agent_run
 from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent, ServerShare
 from servers.operator_mutate_exec import run_command, run_fanout
 from servers.operator_tools_actions import server_memory
@@ -60,7 +60,7 @@ def test_agent_launch_requires_execute_command_capability(monkeypatch):
     )
     agent.servers.set([server])
     launched: list[dict] = []
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", lambda **kwargs: launched.append(kwargs))
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", lambda **kwargs: launched.append(kwargs))
 
     denied = launch_queued_agent_run(
         agent=agent,
@@ -151,7 +151,7 @@ def test_agent_worker_reauthorizes_execute_command_before_engine(monkeypatch):
     async def forbidden_engine_run(*_args, **_kwargs):
         pytest.fail("agent engine must not run after execute_command is revoked")
 
-    monkeypatch.setattr("servers.agent_background.AgentEngine.run", forbidden_engine_run)
+    monkeypatch.setattr("servers.agents.agent_background.AgentEngine.run", forbidden_engine_run)
 
     with pytest.raises(PermissionError, match="execute_command"):
         async_to_sync(execute_agent_dispatch)(dispatch.id, worker_key="capability-test", lease_seconds=60)
