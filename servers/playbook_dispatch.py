@@ -6,7 +6,6 @@ import threading
 from datetime import datetime, timedelta
 from typing import Any
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -21,16 +20,19 @@ from servers.services.ansible_docker_runtime import (
     cleanup_claim_runtime_after_commit,
     cleanup_claim_runtime_job,
 )
+from servers.services.playbook_dispatch_capacity import (
+    DEFAULT_PLAYBOOK_GLOBAL_CONCURRENCY,
+    DEFAULT_PLAYBOOK_PER_USER_CONCURRENCY,
+    lock_playbook_claim_capacity,
+    playbook_concurrency_limit,
+)
 from servers.services.playbook_run_state import (
     TERMINAL_PLAYBOOK_RUN_STATUSES,
     transition_playbook_run,
 )
 
 PLAYBOOK_EXECUTION_WORKER_KIND = "playbook_execution"
-DEFAULT_PLAYBOOK_GLOBAL_CONCURRENCY = 4
-DEFAULT_PLAYBOOK_PER_USER_CONCURRENCY = 2
 DEFAULT_PLAYBOOK_LEASE_SECONDS = 180
-MAX_PLAYBOOK_GLOBAL_CONCURRENCY = 64
 
 
 class PlaybookDispatchError(RuntimeError):
@@ -39,15 +41,6 @@ class PlaybookDispatchError(RuntimeError):
 
 def _lease_delta(lease_seconds: int) -> timedelta:
     return timedelta(seconds=max(int(lease_seconds), 30))
-
-
-def _concurrency_limit(value: int | None, *, setting_name: str, default: int) -> int:
-    configured = getattr(settings, setting_name, default) if value is None else value
-    try:
-        parsed = int(configured)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(1, min(parsed, MAX_PLAYBOOK_GLOBAL_CONCURRENCY))
 
 
 def _dispatch_metadata(run: PlaybookRun, *, has_master_password: bool) -> dict[str, Any]:
@@ -149,7 +142,7 @@ def recover_expired_playbook_dispatches(*, now: datetime | None = None) -> dict[
         cleanup_run_id: int | None = None
         with transaction.atomic():
             dispatch = (
-                PlaybookRunDispatch.objects.select_for_update()
+                PlaybookRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
                 .select_related("run")
                 .filter(pk=dispatch_id, status=PlaybookRunDispatch.STATUS_CLAIMED)
                 .first()
@@ -253,14 +246,14 @@ def claim_next_playbook_dispatch(
     """Transactionally claim the oldest queued run under the global DB limit."""
     now = timezone.now()
     recover_expired_playbook_dispatches(now=now)
-    limit = _concurrency_limit(
+    limit = playbook_concurrency_limit(
         global_concurrency,
         setting_name="PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY",
         default=DEFAULT_PLAYBOOK_GLOBAL_CONCURRENCY,
     )
     user_limit = min(
         limit,
-        _concurrency_limit(
+        playbook_concurrency_limit(
             per_user_concurrency,
             setting_name="PLAYBOOK_EXECUTION_PER_USER_CONCURRENCY",
             default=DEFAULT_PLAYBOOK_PER_USER_CONCURRENCY,
@@ -268,13 +261,6 @@ def claim_next_playbook_dispatch(
     )
     worker = str(worker_name or "default")[:120]
     with transaction.atomic():
-        active = PlaybookRunDispatch.objects.select_for_update().filter(
-            status__in=[PlaybookRunDispatch.STATUS_QUEUED, PlaybookRunDispatch.STATUS_CLAIMED]
-        )
-        # Every claimant locks the same oldest active row. This serializes the
-        # count-and-claim decision and prevents two workers exceeding the cap.
-        if active.order_by("id").first() is None:
-            return None
         current_claims = PlaybookRunDispatch.objects.filter(
             status=PlaybookRunDispatch.STATUS_CLAIMED,
             lease_expires_at__gt=now,
@@ -290,7 +276,8 @@ def claim_next_playbook_dispatch(
         ]
 
         candidates = (
-            active.select_related("run", "user")
+            PlaybookRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
+            .select_related("run", "user")
             .filter(
                 status=PlaybookRunDispatch.STATUS_QUEUED,
                 run__status=PlaybookRun.STATUS_PENDING,
@@ -317,6 +304,19 @@ def claim_next_playbook_dispatch(
                 summary={"authorization_or_identity_changed": True},
             )
             transaction.on_commit(lambda run_id=dispatch.run_id: _cleanup_run_execution_secrets(run_id))
+            return None
+
+        # Candidate authorization can involve several reads. Keep it outside
+        # the short capacity critical section so other workers can validate
+        # different skip-locked rows concurrently.
+        lock_playbook_claim_capacity()
+        current_claims = PlaybookRunDispatch.objects.filter(
+            status=PlaybookRunDispatch.STATUS_CLAIMED,
+            lease_expires_at__gt=now,
+        )
+        if current_claims.count() >= limit:
+            return None
+        if current_claims.filter(user_id=dispatch.user_id).count() >= user_limit:
             return None
         dispatch.status = PlaybookRunDispatch.STATUS_CLAIMED
         dispatch.claimed_at = now
