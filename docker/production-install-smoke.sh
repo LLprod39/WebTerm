@@ -89,6 +89,7 @@ assert_fresh_host() {
     mini-prod-postgres mini-prod-redis mini-prod-backend mini-prod-frontend mini-prod-nginx
     mini-prod-mcp-demo mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-scheduled-agents
     mini-prod-history-pruner mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
+    mini-prod-playbook-docker-proxy-smoke
     mini-prod-ssh-target-smoke
   )
   local existing_names
@@ -366,6 +367,24 @@ if [[ "$RELEASE_IMAGES" == "1" ]]; then
   install_args+=(--pull --no-build)
 fi
 printf '%s\n' "$ADMIN_PASSWORD" | bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
+
+echo "==> Verifying the playbook worker has only the filtered Docker API"
+compose exec -T playbook-execution-worker sh -lc \
+  'test "$DOCKER_HOST" = "tcp://playbook-docker-proxy:2375" && test ! -S /var/run/docker.sock'
+runner_image_id="$(docker image inspect --format '{{.Id}}' "${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}")"
+set +e
+privileged_output="$(
+  compose exec -T -e SMOKE_RUNNER_IMAGE_ID="$runner_image_id" playbook-execution-worker \
+    sh -lc 'docker run --pull=never --rm --name webterm-pb-r999-d999-a1 --privileged "$SMOKE_RUNNER_IMAGE_ID" --version' 2>&1
+)"
+privileged_status=$?
+set -e
+printf '%s\n' "$privileged_output" | tee "$ARTIFACT_DIR/docker-proxy-privileged-denial.txt"
+if [[ "$privileged_status" -eq 0 ]] || ! grep -Fq "privileged containers are forbidden" <<<"$privileged_output"; then
+  echo "Filtered Docker API did not explicitly reject a privileged container" >&2
+  exit 1
+fi
+echo "PLAYBOOK_DOCKER_PROXY_PRIVILEGED_BLOCK_OK"
 
 echo "==> Verifying migration drift and the strict production profile"
 compose exec -T backend python manage.py makemigrations --check --dry-run \

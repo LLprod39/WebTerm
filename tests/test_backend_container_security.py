@@ -35,7 +35,11 @@ def test_production_compose_prepares_volumes_for_non_root_backend():
     assert permissions["read_only"] is True
     assert permissions["cap_drop"] == ["ALL"]
     assert services["backend"]["depends_on"]["volume-permissions"]["condition"] == "service_completed_successfully"
-    assert services["playbook-execution-worker"]["group_add"] == ["${DOCKER_SOCKET_GID:-0}"]
+    proxy = services["playbook-docker-proxy"]
+    worker = services["playbook-execution-worker"]
+    assert proxy["group_add"] == ["${DOCKER_SOCKET_GID:-0}"]
+    assert worker["environment"]["DOCKER_HOST"] == "tcp://playbook-docker-proxy:2375"
+    assert not any("/var/run/docker.sock" in volume for volume in worker["volumes"])
     for worker_name in (
         "scheduled-pipelines",
         "scheduled-agents",

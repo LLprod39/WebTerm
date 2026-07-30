@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -25,6 +26,46 @@ RUNNER_GID = 10001
 RUNTIME_LABEL_PREFIX = "com.webterm.playbook"
 
 logger = logging.getLogger(__name__)
+
+
+def probe_image_runtime_metadata(docker: str, image_id: str) -> dict | None:
+    """Read the trusted runner manifest with the socket-proxy probe profile."""
+    probe_name = f"webterm-pb-probe-{secrets.token_hex(8)}"
+    try:
+        result = subprocess.run(
+            [
+                docker,
+                "run",
+                "--rm",
+                "--pull=never",
+                "--network=none",
+                "--read-only",
+                "--cap-drop=ALL",
+                "--security-opt=no-new-privileges:true",
+                "--cgroupns=private",
+                "--pids-limit=32",
+                "--memory=128m",
+                "--cpus=0.25",
+                "--user=10001:10001",
+                "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
+                f"--name={probe_name}",
+                "--label=com.webterm.playbook.probe=runtime-metadata",
+                "--entrypoint=python",
+                image_id,
+                "-B",
+                "/opt/webterm/runtime_metadata.py",
+                "--print",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        document = json.loads(result.stdout) if result.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return None
+    digest = document.get("runtime_digest") if isinstance(document, dict) else None
+    return document if isinstance(digest, str) and _IMAGE_ID_RE.fullmatch(digest) else None
 
 
 class AnsibleIsolationError(RuntimeError):
@@ -330,6 +371,7 @@ def build_isolated_docker_command(
         "--read-only",
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
+        "--cgroupns=private",
         "--pids-limit=256",
         "--memory",
         (os.environ.get("WEBTERM_ANSIBLE_DOCKER_MEMORY") or "512m").strip(),
