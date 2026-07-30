@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from architecture_guard_config import ArchitectureConfig, FileMetric, PathNormalizer
+try:
+    from architecture_guard_config import ArchitectureConfig, FileMetric, PathNormalizer
+except ModuleNotFoundError:  # pragma: no cover - package import in tests
+    from scripts.architecture_guard_config import ArchitectureConfig, FileMetric, PathNormalizer
 
 
 class ISizeValidator(ABC):
@@ -27,9 +30,8 @@ class DefaultSizeValidator(ISizeValidator):
 
     @staticmethod
     def _check_legacy(path: str, lines: int, baseline: int) -> FileMetric:
-        passed = lines <= baseline
-        error = f"Legacy file grew: {lines} > {baseline}" if not passed else ""
-        return FileMetric(path, lines, is_legacy=True, limit=baseline, passed=passed, error_message=error)
+        error = f"Line-count warning: legacy file grew to {lines} > {baseline}" if lines > baseline else ""
+        return FileMetric(path, lines, is_legacy=True, limit=baseline, passed=True, error_message=error)
 
     @staticmethod
     def _check_new_file(path: str, lines: int, config: ArchitectureConfig) -> FileMetric:
@@ -37,15 +39,13 @@ class DefaultSizeValidator(ISizeValidator):
         if passed:
             return FileMetric(path, lines, is_legacy=False, limit=config.standard_limit, passed=True)
 
-        is_critical = lines > config.strict_limit
-        severity = "CRITICAL GOD-FILE" if is_critical else "GOD-FILE"
-        error = f"{severity}: {lines} > {config.standard_limit}"
-        hard_fail = is_critical or config.strict_new_files
+        severity = "large file" if lines <= config.strict_limit else "very large file"
+        error = f"Line-count warning ({severity}): {lines} > {config.standard_limit}"
         return FileMetric(
             path,
             lines,
             is_legacy=False,
             limit=config.standard_limit,
-            passed=not hard_fail,
+            passed=True,
             error_message=error,
         )

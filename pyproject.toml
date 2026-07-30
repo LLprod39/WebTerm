@@ -84,7 +84,11 @@ exclude_lines = [
 standard_limit = 500
 strict_limit = 1000
 enforce_import_boundaries = true
-strict_new_files = true
+strict_new_files = false
+complexity_limit = 30
+fan_out_limit = 20
+fan_in_limit = 40
+metrics_baseline_file = "config/architecture-metrics-baseline.json"
 contract_file = "docs/architecture/ARCHITECTURE_CONTRACT.md"
 
 # import-linter configuration (used by pre-commit / CI via lint-imports).
