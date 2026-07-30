@@ -48,8 +48,11 @@ test("published digest serves the authenticated operator golden path", async ({ 
   expect(readiness.ok()).toBeTruthy();
   expect((await readiness.json()).success).toBe(true);
   await page.addInitScript(
-    (storageKey) => window.localStorage.setItem(storageKey, "seen"),
-    firstRunReadinessStorageKey(loginPayload.user.id),
+    ({ readinessKey }) => {
+      window.localStorage.setItem(readinessKey, "seen");
+      window.localStorage.setItem("weu_lang", "en");
+    },
+    { readinessKey: firstRunReadinessStorageKey(loginPayload.user.id) },
   );
 
   const serverName = `Release SSH ${Date.now()}`;
