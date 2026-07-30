@@ -14,7 +14,7 @@ from servers.services.ansible_docker_runtime import (
     isolated_execution_required,
     scavenge_ansible_workdirs,
 )
-from servers.services.ansible_setup import resolve_isolated_docker_image
+from servers.services.ansible_setup import _probe_image_runtime_metadata, resolve_isolated_docker_image
 
 
 def test_isolated_docker_command_has_security_boundaries(tmp_path, monkeypatch):
@@ -33,6 +33,7 @@ def test_isolated_docker_command_has_security_boundaries(tmp_path, monkeypatch):
     assert "--read-only" in command
     assert "--cap-drop=ALL" in command
     assert "--security-opt=no-new-privileges:true" in command
+    assert "--cgroupns=private" in command
     assert command[command.index("--network") + 1] == "bridge"
     assert command[command.index("--add-host") + 1] == "host.docker.internal:host-gateway"
     assert "host" not in command
@@ -231,3 +232,22 @@ def test_isolated_image_resolution_never_falls_back_from_configured_reference(mo
     assert unavailable["available"] is False
     assert unavailable["image"] == "registry.example/webterm-ansible:release"
     assert unavailable["image_id"] == ""
+
+
+def test_runtime_metadata_probe_uses_the_proxy_allowlisted_profile(monkeypatch):
+    image_id = "sha256:" + "a" * 64
+    digest = "sha256:" + "b" * 64
+    captured: list[str] = []
+
+    def fake_run(command, **_kwargs):
+        captured.extend(command)
+        return SimpleNamespace(returncode=0, stdout=json.dumps({"runtime_digest": digest}))
+
+    monkeypatch.setattr("servers.services.ansible_docker_runtime.secrets.token_hex", lambda _length: "0123456789abcdef")
+    monkeypatch.setattr("servers.services.ansible_docker_runtime.subprocess.run", fake_run)
+
+    assert _probe_image_runtime_metadata("docker", image_id) == {"runtime_digest": digest}
+    assert "--name=webterm-pb-probe-0123456789abcdef" in captured
+    assert "--label=com.webterm.playbook.probe=runtime-metadata" in captured
+    assert "--cgroupns=private" in captured
+    assert "--network=none" in captured

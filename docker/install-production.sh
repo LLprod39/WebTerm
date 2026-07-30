@@ -367,7 +367,7 @@ configure_docker_socket_gid() {
     return 0
   fi
   export DOCKER_SOCKET_GID=0
-  echo "[warn] /var/run/docker.sock is unavailable; playbook execution worker may not start" >&2
+  echo "[warn] /var/run/docker.sock is unavailable; playbook Docker proxy may not start" >&2
 }
 
 ensure_superuser_args() {

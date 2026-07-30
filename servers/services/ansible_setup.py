@@ -19,7 +19,13 @@ from pathlib import Path
 from typing import Any
 
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
-from servers.services.ansible_docker_runtime import isolated_execution_required, route_loopback_to_docker_host
+from servers.services.ansible_docker_runtime import (
+    isolated_execution_required,
+    route_loopback_to_docker_host,
+)
+from servers.services.ansible_docker_runtime import (
+    probe_image_runtime_metadata as _probe_image_runtime_metadata,
+)
 from servers.services.ansible_host_keys import require_trusted_host_keys
 from servers.services.playbook_inventory_identity import (
     inventory_host_alias as _safe_host_name,
@@ -68,40 +74,6 @@ def _inspect_docker_image(docker: str, image: str) -> dict[str, Any] | None:
     if not isinstance(document, list) or len(document) != 1 or not isinstance(document[0], dict):
         return None
     return document[0]
-
-
-def _probe_image_runtime_metadata(docker: str, image_id: str) -> dict[str, Any] | None:
-    try:
-        result = subprocess.run(
-            [
-                docker,
-                "run",
-                "--rm",
-                "--pull=never",
-                "--network=none",
-                "--read-only",
-                "--cap-drop=ALL",
-                "--security-opt=no-new-privileges:true",
-                "--pids-limit=32",
-                "--memory=128m",
-                "--cpus=0.25",
-                "--user=10001:10001",
-                "--entrypoint=python",
-                image_id,
-                "-B",
-                "/opt/webterm/runtime_metadata.py",
-                "--print",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-            check=False,
-        )
-        document = json.loads(result.stdout) if result.returncode == 0 else None
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
-        return None
-    digest = document.get("runtime_digest") if isinstance(document, dict) else None
-    return document if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest) else None
 
 
 def resolve_isolated_docker_image(docker: str) -> dict[str, Any]:

@@ -43,6 +43,10 @@ def test_backend_and_every_worker_have_runtime_resource_limits():
     assert services["backend"]["mem_limit"] == "${WEBTERM_BACKEND_MEMORY:-1g}"
     assert services["backend"]["cpus"] == "${WEBTERM_BACKEND_CPUS:-2.0}"
     assert services["backend"]["pids_limit"] == "${WEBTERM_BACKEND_PIDS_LIMIT:-512}"
+    proxy = services["playbook-docker-proxy"]
+    assert proxy["mem_limit"] == "128m"
+    assert proxy["cpus"] == 0.5
+    assert proxy["pids_limit"] == 64
     for service_name in worker_names:
         service = services[service_name]
         assert service["mem_limit"] == "${WEBTERM_BACKEND_WORKER_MEMORY:-768m}"
