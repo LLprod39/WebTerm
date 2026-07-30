@@ -678,7 +678,9 @@ main() {
     redis
     mcp-demo
     agent-command-docker-proxy
+    playbook-docker-proxy
     backend
+    playbook-execution-worker
     scheduled-pipelines
     scheduled-agents
     monitor

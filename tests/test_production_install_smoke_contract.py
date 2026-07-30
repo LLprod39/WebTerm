@@ -54,6 +54,14 @@ def test_production_installer_does_not_ignore_deploy_check_failure() -> None:
     assert "check --deploy || true" not in installer
 
 
+def test_production_installer_starts_the_playbook_execution_plane() -> None:
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+
+    service_block = installer.split("local services=(", 1)[1].split(")", 1)[0]
+    assert "playbook-docker-proxy" in service_block
+    assert "playbook-execution-worker" in service_block
+
+
 def test_https_runtime_smoke_matches_browser_csrf_and_websocket_origin() -> None:
     harness = (ROOT / "docker/multi_user_load_smoke.py").read_text(encoding="utf-8")
 
