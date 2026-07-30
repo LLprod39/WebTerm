@@ -74,7 +74,7 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
     lease_delta = timedelta(seconds=max(int(lease_seconds), 30))
     with transaction.atomic():
         dispatch = (
-            AgentRunDispatch.objects.select_for_update()
+            AgentRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("run", "agent", "user")
             .filter(
                 Q(status=AgentRunDispatch.STATUS_QUEUED)
