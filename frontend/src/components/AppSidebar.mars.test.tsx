@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { I18nProvider } from "@/lib/i18n";
 import { AppSidebar } from "@/components/AppSidebar";
-import { fetchAuthSession, fetchKubernetesReadiness, type FeatureFlag } from "@/lib/api";
+import { fetchAuthSession, fetchKubernetesReadiness, fetchProjects, type FeatureFlag } from "@/lib/api";
 import { featureMap } from "@/test/featureFlags";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -16,6 +16,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     authLogout: vi.fn(),
     fetchAuthSession: vi.fn(),
     fetchKubernetesReadiness: vi.fn(),
+    fetchProjects: vi.fn(),
   };
 });
 
@@ -47,7 +48,7 @@ function kubernetesReadiness(readyForSidebar: boolean) {
 
 function renderSidebar(
   features: Partial<Record<FeatureFlag, boolean>>,
-  options: { kubernetesReady?: boolean; path?: string } = {},
+  options: { kubernetesReady?: boolean; path?: string; projectCount?: number } = {},
 ) {
   vi.mocked(fetchAuthSession).mockResolvedValue({
     authenticated: true,
@@ -57,9 +58,38 @@ function renderSidebar(
       email: "admin@example.com",
       is_staff: true,
       features: featureMap(features),
+      active_project: options.projectCount ? { id: "project-a", name: "Production", slug: "production" } : null,
+      project_count: options.projectCount,
     },
   });
   vi.mocked(fetchKubernetesReadiness).mockResolvedValue(kubernetesReadiness(Boolean(options.kubernetesReady)));
+  vi.mocked(fetchProjects).mockResolvedValue({
+    active_project_id: "project-a",
+    projects: [
+      {
+        id: "project-a",
+        name: "Production",
+        slug: "production",
+        role: "owner",
+        is_active: true,
+        is_default: false,
+        member_count: 3,
+        can_manage: true,
+        created_at: "2026-07-30T00:00:00Z",
+      },
+      {
+        id: "project-b",
+        name: "Staging",
+        slug: "staging",
+        role: "operator",
+        is_active: false,
+        is_default: false,
+        member_count: 4,
+        can_manage: false,
+        created_at: "2026-07-30T00:00:00Z",
+      },
+    ],
+  });
 
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -88,6 +118,14 @@ describe("AppSidebar preview-gated nav", () => {
     // Staff mock always has is_staff=true → Kubernetes is open when feature is on.
     expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
+  });
+
+  it("shows the active project selector when the user belongs to multiple projects", async () => {
+    renderSidebar({ servers: true, dashboard: true }, { projectCount: 2 });
+
+    const selector = await screen.findByLabelText("Активный проект");
+    expect(selector).toHaveValue("project-a");
+    expect(within(selector).getByRole("option", { name: "Staging" })).toBeInTheDocument();
   });
 
   it("uses the five target navigation groups and exposes playbooks", async () => {

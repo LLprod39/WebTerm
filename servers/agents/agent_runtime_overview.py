@@ -7,6 +7,7 @@ from django.db.models import Count, Q
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
+from core_ui.projects import active_project_for_user
 from servers.agents.agent_dispatch import serialize_agent_dispatch
 from servers.agents.agent_execution_state import (
     AGENT_EXECUTION_COMMAND,
@@ -218,7 +219,7 @@ def get_agent_runtime_overview(user) -> dict:
         "status": status,
         "severity": severity,
         "summary": {
-            "configured_agents": ServerAgent.objects.filter(user=user).count(),
+            "configured_agents": ServerAgent.objects.filter(user=user, project=active_project_for_user(user)).count(),
             "active_runs": active_runs,
             "pending_runs": run_counts.get(AgentRun.STATUS_PENDING, 0),
             "running_runs": run_counts.get(AgentRun.STATUS_RUNNING, 0),

@@ -208,7 +208,7 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
         }
 
     owner = await _s2a_fn(lambda: run.pipeline.owner)()
-    server = await _s2a_fn(get_owned_server)(owner, server_id)
+    server = await _s2a_fn(get_owned_server)(owner, server_id, project_id=run.project_id)
     if server is None:
         return {"status": "failed", "error": f"Server not found: {server_id}"}
     commands_to_check = [command, *preflight_commands, *verification_commands]

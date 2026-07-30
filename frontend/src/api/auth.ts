@@ -19,6 +19,12 @@ export interface AuthUser {
   access_profile?: string;
   permission_sources?: Record<string, string>;
   features: Record<FeatureFlag, boolean> & Partial<Record<string, boolean>>;
+  active_project?: {
+    id: string;
+    name: string;
+    slug: string;
+  } | null;
+  project_count?: number;
 }
 
 export interface AuthSessionResponse {

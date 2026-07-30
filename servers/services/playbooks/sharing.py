@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -52,6 +53,36 @@ class PlaybookGrantError(ValueError):
     pass
 
 
+def _project_role_for_grant(role: str) -> str:
+    from core_ui.models.projects import ProjectMembership
+
+    return ProjectMembership.ROLE_VIEWER if role == PlaybookGrant.ROLE_VIEWER else ProjectMembership.ROLE_OPERATOR
+
+
+def _enroll_playbook_principals(playbook, *, role: str, user=None, group=None, include_all_users: bool = False) -> None:
+    from core_ui.models.projects import ProjectMembership
+    from core_ui.projects import activate_first_shared_project_if_personal_empty
+
+    users = []
+    if user is not None:
+        users = [user]
+    elif group is not None:
+        users = list(group.user_set.filter(is_active=True))
+    elif include_all_users:
+        users = list(get_user_model().objects.filter(is_active=True).exclude(pk=playbook.user_id))
+    project_role = _project_role_for_grant(role)
+    for principal_user in users:
+        membership, created = ProjectMembership.objects.get_or_create(
+            project_id=playbook.project_id,
+            user=principal_user,
+            defaults={"role": project_role},
+        )
+        if not created and project_role == ProjectMembership.ROLE_OPERATOR and membership.role == "viewer":
+            membership.role = ProjectMembership.ROLE_OPERATOR
+            membership.save(update_fields=["role", "updated_at"])
+        activate_first_shared_project_if_personal_empty(principal_user, playbook.project)
+
+
 @transaction.atomic
 def sync_legacy_visibility_grant(playbook, *, actor) -> PlaybookGrant | None:
     """Dual-write the old shared flag without overriding an explicit V2 policy."""
@@ -64,6 +95,11 @@ def sync_legacy_visibility_grant(playbook, *, actor) -> PlaybookGrant | None:
         .first()
     )
     if playbook.visibility == "shared":
+        _enroll_playbook_principals(
+            playbook,
+            role=PlaybookGrant.ROLE_OPERATOR,
+            include_all_users=True,
+        )
         if existing is not None:
             if existing.is_legacy and existing.revoked_at is not None:
                 existing.revoked_at = None
@@ -142,6 +178,7 @@ def save_grant(
             "is_legacy": False,
         },
     )
+    _enroll_playbook_principals(playbook, role=role, user=user, group=group)
     record_playbook_event(
         playbook=playbook,
         actor=actor,

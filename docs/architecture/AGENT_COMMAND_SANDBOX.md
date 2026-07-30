@@ -1,6 +1,6 @@
 # Agent command sandbox
 
-WebTrerm production agents do not open SSH sessions from the backend process.
+WebTerm production agents do not open SSH sessions from the backend process.
 Every full-agent, mini-agent, and Studio direct-SSH command is submitted to a
 new single-shot container through `servers.services.agent_command_runner`.
 

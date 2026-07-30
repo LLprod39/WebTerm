@@ -95,6 +95,10 @@ def _auth_user_payload(user):
     # Product release capability, not a grantable database permission.  Plugin
     # UI is staff-only and disappears when the production profile is disabled.
     feature_payload["plugins"] = bool(user.is_staff and plugin_marketplace_enabled())
+    from core_ui.projects import active_project_for_user, projects_for_user
+
+    active_project = active_project_for_user(user)
+    projects = projects_for_user(user)
     return {
         "id": user.id,
         "username": user.username,
@@ -103,6 +107,16 @@ def _auth_user_payload(user):
         "access_profile": access["access_profile"],
         "permission_sources": access["permission_sources"],
         "features": feature_payload,
+        "active_project": (
+            {
+                "id": str(active_project.public_id),
+                "name": active_project.name,
+                "slug": active_project.slug,
+            }
+            if active_project
+            else None
+        ),
+        "project_count": projects.count(),
     }
 
 

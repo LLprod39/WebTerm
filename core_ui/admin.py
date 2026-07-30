@@ -1,6 +1,20 @@
 from django.contrib import admin
 
-from .models import UserActivityLog, UserAppPermission
+from .models import Project, ProjectMembership, UserActivityLog, UserAppPermission
+
+
+@admin.register(Project)
+class ProjectAdmin(admin.ModelAdmin):
+    list_display = ["name", "slug", "owner", "is_default", "is_archived", "created_at"]
+    list_filter = ["is_default", "is_archived"]
+    search_fields = ["name", "slug", "owner__username"]
+
+
+@admin.register(ProjectMembership)
+class ProjectMembershipAdmin(admin.ModelAdmin):
+    list_display = ["project", "user", "role", "is_active", "created_at"]
+    list_filter = ["role", "is_active"]
+    search_fields = ["project__name", "user__username", "user__email"]
 
 
 @admin.register(UserAppPermission)

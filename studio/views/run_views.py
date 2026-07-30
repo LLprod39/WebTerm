@@ -15,6 +15,7 @@ from django.utils.html import escape
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
 from studio.approval_service import (
     ApprovalAccessError,
     get_approval_for_confirmation,
@@ -48,7 +49,9 @@ def _is_admin(user) -> bool:
 
 
 def _run_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = PipelineRun.objects.select_related("pipeline", "pipeline__owner", "triggered_by")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs.order_by("-created_at")
     return qs.filter(pipeline__owner=user).order_by("-created_at")

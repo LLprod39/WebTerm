@@ -1,4 +1,4 @@
-"""Single-shot SSH client for the WebTrerm agent command container."""
+"""Single-shot SSH client for the WebTerm agent command container."""
 
 from __future__ import annotations
 

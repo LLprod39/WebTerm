@@ -180,7 +180,11 @@ def _is_admin(user) -> bool:
 
 
 def _mcp_read_queryset_for_user(user):
+    from core_ui.projects import active_project_for_user
+
+    project = active_project_for_user(user)
     qs = MCPServerPool.objects.select_related("owner").prefetch_related("shared_with")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs.order_by("name")
     return qs.filter(Q(owner=user) | Q(is_shared=True) | Q(shared_with=user)).distinct().order_by("name")
@@ -197,6 +201,10 @@ def _can_read_skill(user, access: StudioSkillAccess | None) -> bool:
     if _is_admin(user):
         return True
     if access is None or not user or not getattr(user, "is_authenticated", False):
+        return False
+    from core_ui.projects import active_project_for_user
+
+    if access.project_id != getattr(active_project_for_user(user), "id", None):
         return False
     if access.owner_id == user.id or access.is_shared:
         return True

@@ -17,6 +17,7 @@ from .views import (
     auth_views,
     health_views,
     model_views,
+    project_views,
     settings_activity_views,
     settings_config_views,
 )
@@ -56,6 +57,23 @@ urlpatterns = [
     path("api/settings/check/", settings_config_views.api_settings_check, name="api_settings_check"),
     path("api/models/", model_views.api_models_list, name="api_models"),
     path("api/models/refresh/", model_views.api_models_refresh, name="api_models_refresh"),
+    # Project tenant boundary
+    path("api/projects/", project_views.api_projects, name="api_projects"),
+    path(
+        "api/projects/<uuid:project_id>/activate/",
+        project_views.api_project_activate,
+        name="api_project_activate",
+    ),
+    path(
+        "api/projects/<uuid:project_id>/members/",
+        project_views.api_project_members,
+        name="api_project_members",
+    ),
+    path(
+        "api/projects/<uuid:project_id>/members/<int:user_id>/",
+        project_views.api_project_member_detail,
+        name="api_project_member_detail",
+    ),
     # Settings activity
     path(
         "api/settings/activity/",

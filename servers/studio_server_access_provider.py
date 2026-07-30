@@ -42,10 +42,16 @@ class DjangoStudioServerAccessProvider:
             return []
         return list(self._owned_servers_queryset(user, order_by=order_by).filter(pk__in=requested_ids))
 
-    def get_owned_server(self, user: Any, server_id: int | None) -> Any | None:
+    def get_owned_server(
+        self,
+        user: Any,
+        server_id: int | None,
+        *,
+        project_id: int | None = None,
+    ) -> Any | None:
         if server_id is None:
             return None
-        return get_owned_server_for_user(server_id, user)
+        return get_owned_server_for_user(server_id, user, project_id=project_id)
 
     def get_owned_server_id_set(self, user: Any, server_ids: list[int] | None) -> set[int]:
         requested_ids = server_ids or []

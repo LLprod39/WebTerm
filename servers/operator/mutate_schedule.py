@@ -51,12 +51,15 @@ def _cron_to_schedule_config(cron: str) -> dict[str, Any]:
 
 def schedule_agent(ctx: AssistantActionContext) -> dict[str, Any]:
     """Attach a schedule to an existing agent (phrase → cron-ish config)."""
+    from core_ui.projects import active_project_for_user
     from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
     from servers.models import ServerAgent
 
     agent_id = _int_arg(ctx, "agent_id")
     assert agent_id is not None
-    agent = ServerAgent.objects.filter(pk=agent_id, user=ctx.user).first()
+    agent = ServerAgent.objects.filter(
+        pk=agent_id, user=ctx.user, project=active_project_for_user(ctx.user)
+    ).first()
     if agent is None:
         raise AssistantActionError("Agent not found", status=404)
 

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models.signals import post_save
+from django.db.models.signals import m2m_changed, post_save, pre_save
 from django.dispatch import receiver
 
 from app.monitoring_events import server_alert_opened
@@ -9,12 +10,55 @@ from servers.memory_heuristics import should_capture_command_history_memory
 from servers.models import (
     AgentRun,
     AgentRunEvent,
+    ServerAgent,
     ServerAlert,
     ServerCommandHistory,
     ServerHealthCheck,
+    ServerShare,
     ServerWatcherDraft,
 )
 from servers.tasks import ingest_memory_event_task
+
+
+@receiver(pre_save, sender=ServerShare)
+def ensure_server_share_project_membership(sender, instance: ServerShare, **kwargs):
+    """Keep legacy server sharing inside the server's project tenant."""
+    if not instance.server_id or not instance.user_id:
+        return
+    from core_ui.models.projects import ProjectMembership
+
+    operational = any(
+        (
+            instance.can_connect_terminal,
+            instance.can_execute_command,
+            instance.can_read_files,
+            instance.can_write_files,
+        )
+    )
+    role = ProjectMembership.ROLE_OPERATOR if operational else ProjectMembership.ROLE_VIEWER
+    membership, _created = ProjectMembership.objects.get_or_create(
+        project_id=instance.server.project_id,
+        user_id=instance.user_id,
+        defaults={"role": role},
+    )
+    if operational and membership.role == ProjectMembership.ROLE_VIEWER:
+        membership.role = ProjectMembership.ROLE_OPERATOR
+        membership.save(update_fields=["role", "updated_at"])
+    from core_ui.projects import activate_first_shared_project_if_personal_empty
+
+    activate_first_shared_project_if_personal_empty(instance.user, instance.server.project)
+
+
+@receiver(m2m_changed, sender=ServerAgent.servers.through)
+def enforce_agent_server_project(sender, instance, action: str, reverse: bool, pk_set, **kwargs):
+    if action != "pre_add" or not pk_set:
+        return
+    if reverse:
+        mismatched = ServerAgent.objects.filter(pk__in=pk_set).exclude(project_id=instance.project_id).exists()
+    else:
+        mismatched = instance.servers.model.objects.filter(pk__in=pk_set).exclude(project_id=instance.project_id).exists()
+    if mismatched:
+        raise ValidationError("Agent and servers must belong to the same project")
 
 
 def _deferred_ingest_command_history(pk: int):

@@ -22,6 +22,7 @@ from .chat import (
     ChatTurnState,
 )
 from .preferences import DashboardLayout, TerminalPreference
+from .projects import Project, ProjectMembership
 from .secrets import ManagedSecret
 
 __all__ = [
@@ -41,4 +42,6 @@ __all__ = [
     "ManagedSecret",
     "TerminalPreference",
     "DashboardLayout",
+    "Project",
+    "ProjectMembership",
 ]

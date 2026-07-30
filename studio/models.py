@@ -62,6 +62,11 @@ class MCPServerPool(models.Model):
     )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mcp_pool")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="studio_mcp_servers",
+    )
     is_shared = models.BooleanField(default=False, help_text="Visible to all users")
     shared_with = models.ManyToManyField(
         User,
@@ -82,12 +87,19 @@ class MCPServerPool(models.Model):
         verbose_name = "MCP Server"
         verbose_name_plural = "MCP Servers"
         indexes = [
+            models.Index(fields=["project", "name"], name="studio_mcps_project_33029c_idx"),
             models.Index(fields=["owner", "name"]),
             models.Index(fields=["is_shared"]),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.transport})"
+
+    def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="owner")
+        return super().save(*args, **kwargs)
 
     def to_mcp_config(self) -> dict:
         """Return dict for Claude/Cursor MCP config format."""
@@ -170,6 +182,11 @@ class AgentConfig(models.Model):
     )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="agent_configs")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="studio_agent_configs",
+    )
     is_shared = models.BooleanField(default=False)
     shared_with = models.ManyToManyField(
         User,
@@ -184,11 +201,18 @@ class AgentConfig(models.Model):
         verbose_name = "Agent Config"
         verbose_name_plural = "Agent Configs"
         indexes = [
+            models.Index(fields=["project", "-updated_at"], name="studio_agen_project_c2a26d_idx"),
             models.Index(fields=["owner", "-updated_at"]),
         ]
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="owner")
+        return super().save(*args, **kwargs)
 
     def to_dict(self) -> dict:
         return agent_config_to_dict(self)
@@ -219,6 +243,11 @@ class Pipeline(models.Model):
     )
 
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="pipelines")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="studio_pipelines",
+    )
     is_shared = models.BooleanField(default=False)
     shared_with = models.ManyToManyField(
         User,
@@ -235,6 +264,7 @@ class Pipeline(models.Model):
         verbose_name = "Pipeline"
         verbose_name_plural = "Pipelines"
         indexes = [
+            models.Index(fields=["project", "-updated_at"], name="studio_pipe_project_850157_idx"),
             models.Index(fields=["owner", "-updated_at"]),
             models.Index(fields=["is_shared"]),
         ]
@@ -243,6 +273,9 @@ class Pipeline(models.Model):
         return self.name
 
     def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="owner")
         update_fields = kwargs.get("update_fields")
         touches_nodes = self._state.adding or update_fields is None or "nodes" in set(update_fields)
         if not touches_nodes:
@@ -378,6 +411,11 @@ class PipelineRun(models.Model):
     ]
 
     pipeline = models.ForeignKey(Pipeline, on_delete=models.CASCADE, related_name="runs")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="studio_pipeline_runs",
+    )
     triggered_by = models.ForeignKey(
         User,
         null=True,
@@ -439,6 +477,7 @@ class PipelineRun(models.Model):
         verbose_name = "Pipeline Run"
         verbose_name_plural = "Pipeline Runs"
         indexes = [
+            models.Index(fields=["project", "-created_at"], name="studio_run_project_78f340_idx"),
             models.Index(fields=["pipeline", "status"]),
             models.Index(fields=["pipeline", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
@@ -446,6 +485,11 @@ class PipelineRun(models.Model):
 
     def __str__(self):
         return f"{self.pipeline.name} run #{self.pk} [{self.status}]"
+
+    def save(self, *args, **kwargs):
+        if not self.project_id:
+            self.project_id = self.pipeline.project_id
+        return super().save(*args, **kwargs)
 
     @property
     def duration_seconds(self) -> float | None:
