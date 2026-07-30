@@ -16,9 +16,9 @@ from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from django.contrib.auth.models import User
 
 from core_ui.context_processors import user_can_feature
-from servers.agent_run_lifecycle import mark_agent_run_stopped
-from servers.agent_run_report import record_run_event_and_refresh_report
-from servers.agent_runtime import get_engine_for_run, update_runtime_control
+from servers.agents.agent_run_lifecycle import mark_agent_run_stopped
+from servers.agents.agent_run_report import record_run_event_and_refresh_report
+from servers.agents.agent_runtime import get_engine_for_run, update_runtime_control
 from servers.models import AgentRun
 
 

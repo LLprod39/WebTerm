@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand
 
-from servers.agent_budgets import (
+from servers.agents.agent_budgets import (
     FULL_DEFAULT_MAX_ITERATIONS,
     FULL_DEFAULT_SESSION_TIMEOUT_SEC,
 )

@@ -26,8 +26,8 @@ class DjangoAgentRunLimitProvider:
         if stale_seconds <= 0:
             return 0
 
-        from servers.agent_dispatch import cancel_agent_dispatches_for_run
-        from servers.agent_run_report import refresh_agent_run_report_payload
+        from servers.agents.agent_dispatch import cancel_agent_dispatches_for_run
+        from servers.agents.agent_run_report import refresh_agent_run_report_payload
         from servers.run_events import record_run_event
 
         now = timezone.now()

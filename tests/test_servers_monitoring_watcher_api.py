@@ -263,7 +263,7 @@ def test_watcher_launch_endpoint_creates_run_and_updates_draft(monkeypatch):
             }
         )
 
-    monkeypatch.setattr("servers.agent_launch.launch_agent_run_background", fake_launch)
+    monkeypatch.setattr("servers.agents.agent_launch.launch_agent_run_background", fake_launch)
 
     response = client.post(f"/servers/api/watchers/drafts/{draft.id}/launch/")
     assert response.status_code == 200

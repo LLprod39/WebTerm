@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from servers.agent_runtime_guidance import (
+from servers.agents.agent_runtime_guidance import (
     FULL_BUDGET_PROFILES,
     count_consecutive_tool_failures,
     mid_run_replan_message,
@@ -79,7 +79,7 @@ def test_budget_profiles_complex_above_standard():
 def test_agent_engine_runner_wires_mid_run_replan():
     import inspect
 
-    from servers import agent_engine_runner
+    from servers.agents import agent_engine_runner
 
     src = inspect.getsource(agent_engine_runner.run_agent_engine)
     assert "should_inject_mid_run_replan" in src

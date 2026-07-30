@@ -1,6 +1,6 @@
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.plugins.agent_tools import plugin_agent_tool_specs
-from servers import agent_tools
+from servers.agents import agent_tools
 
 
 def test_builtin_agent_tools_declare_policy_metadata():

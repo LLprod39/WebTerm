@@ -1,4 +1,4 @@
-from servers.agent_inputs import build_agent_materials_prompt
+from servers.agents.agent_inputs import build_agent_materials_prompt
 
 
 def test_script_material_adds_runtime_protocol():

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from servers.agent_inputs import (
+from servers.agents.agent_inputs import (
     build_agent_materials_prompt,
     get_material_by_ref,
     materials_catalog,
     normalize_input_artifacts,
 )
-from servers.agent_sessions import AgentSessionManager
-from servers.agent_tools import (
+from servers.agents.agent_sessions import AgentSessionManager
+from servers.agents.agent_tools import (
     tool_list_materials,
     tool_read_material,
     tool_run_script_material,

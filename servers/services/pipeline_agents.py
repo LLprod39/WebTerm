@@ -5,9 +5,9 @@ from typing import Any
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.outcomes import outcome_from_report_payload
 from app.pipeline_agent_provider import AgentRunSnapshot
-from servers.agent_engine import AgentEngine
+from servers.agents.agent_engine import AgentEngine
+from servers.agents.multi_agent_engine import MultiAgentEngine
 from servers.models import ServerAgent
-from servers.multi_agent_engine import MultiAgentEngine
 
 
 def _snapshot_from_agent_run(agent_run) -> AgentRunSnapshot:

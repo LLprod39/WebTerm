@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods
 from app.core.llm import LLMProvider
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
-from servers.agent_service import launch_watcher_draft_for_user
+from servers.agents.agent_service import launch_watcher_draft_for_user
 from servers.models import Server, ServerAlert, ServerHealthCheck
 from servers.monitoring.watcher_service import WatcherService
 from servers.views.server_helpers import _accessible_servers_queryset

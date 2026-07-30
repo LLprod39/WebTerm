@@ -6,8 +6,8 @@ from asgiref.sync import async_to_sync
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
-from servers.agent_run_report import build_agent_run_report_response
-from servers.agent_service import (
+from servers.agents.agent_run_report import build_agent_run_report_response
+from servers.agents.agent_service import (
     approve_agent_plan_for_user,
     reply_to_agent_run_for_user,
     start_agent_run_for_user,

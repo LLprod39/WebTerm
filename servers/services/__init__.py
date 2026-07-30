@@ -10,12 +10,12 @@ Modules:
   alert_query.py    — get_alert_snapshot(), get_open_alert_snapshot() — public API
   server_query.py    — get_server(), get_servers_for_user() — public API
   tool_catalog.py   — list_agent_tool_names() — public API
-  agent_service.py   — re-exports from servers.agent_service (existing)
+  agent_service.py   — re-exports from servers.agents.agent_service (existing)
   memory_service.py  — run_dreams(), purge_memory(), get_overview()
   monitor_service.py — check_health(), resolve_alert()
 """
 
-from servers.agent_service import (  # noqa: F401
+from servers.agents.agent_service import (  # noqa: F401
     approve_agent_plan_for_user,
     dispatch_scheduled_agents_for_user,
     launch_watcher_draft_for_user,

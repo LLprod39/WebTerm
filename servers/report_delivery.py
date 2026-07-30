@@ -6,7 +6,7 @@ import httpx
 from asgiref.sync import sync_to_async
 
 from core_ui.services.notification_config import load_notification_config
-from servers.agent_inputs import format_telegram_report_message, normalize_report_delivery
+from servers.agents.agent_inputs import format_telegram_report_message, normalize_report_delivery
 from servers.run_events import record_run_event_async
 
 
@@ -20,7 +20,7 @@ def _redacted_chat_id(chat_id: str) -> str:
 
 
 def _refresh_report_payload(run_id: int) -> None:
-    from servers.agent_run_report import refresh_agent_run_report_payload
+    from servers.agents.agent_run_report import refresh_agent_run_report_payload
     from servers.models import AgentRun
 
     run = AgentRun.objects.select_related("agent", "server").get(id=run_id)

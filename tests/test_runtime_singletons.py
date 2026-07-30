@@ -6,7 +6,7 @@ from app.core.provider_registry import (
     reset_provider_registry,
     set_provider_registry,
 )
-from servers.agent_runtime import (
+from servers.agents.agent_runtime import (
     clear_registered_engines,
     get_engine_for_agent,
     get_engine_for_run,

@@ -8,7 +8,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.test import Client
 
-from servers.agent_run_report import refresh_agent_run_report_payload
+from servers.agents.agent_run_report import refresh_agent_run_report_payload
 from servers.models import (
     AgentRun,
     AgentRunArtifact,

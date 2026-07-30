@@ -2,7 +2,7 @@
 studio/skill_adapter.py
 
 Concrete implementation of app.agent_kernel.domain.specs.SkillProvider.
-Wraps studio.skill_* functions so that servers.agent_engine does NOT need to
+Wraps studio.skill_* functions so that servers.agents.agent_engine does NOT need to
 import from studio directly (ARCHITECTURE_CONTRACT §5.2 / TASK-007).
 
 Usage in servers/views/server_agents.py (or agent dispatch):

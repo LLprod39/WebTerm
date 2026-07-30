@@ -1,8 +1,8 @@
 from types import SimpleNamespace
 
-from servers.agent_engine_prompts import build_fallback_final_report
-from servers.multi_agent_plan_helpers import build_tasks_table
-from servers.multi_agent_planning import _fallback_multi_agent_report
+from servers.agents.agent_engine_prompts import build_fallback_final_report
+from servers.agents.multi_agent_plan_helpers import build_tasks_table
+from servers.agents.multi_agent_planning import _fallback_multi_agent_report
 
 
 def test_full_agent_fallback_report_keeps_required_sections():

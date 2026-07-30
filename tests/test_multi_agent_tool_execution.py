@@ -4,12 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
-import servers.multi_agent_tool_execution as tool_execution
+import servers.agents.multi_agent_tool_execution as tool_execution
 from app.agent_kernel.domain.specs import ToolSpec
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
-from servers.multi_agent_tool_execution import MultiAgentToolExecutionContext, execute_multi_agent_tool
+from servers.agents.multi_agent_tool_execution import MultiAgentToolExecutionContext, execute_multi_agent_tool
 
 
 class FakeHookManager:

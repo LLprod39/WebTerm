@@ -153,7 +153,7 @@ class SubagentSpec:
 @runtime_checkable
 class SkillProvider(Protocol):
     """
-    Decouples servers.agent_engine from studio.skill_* imports.
+    Decouples servers.agents.agent_engine from studio.skill_* imports.
     Concrete implementation: studio.skill_adapter.StudioSkillProvider.
     (ARCHITECTURE_CONTRACT §5.2 / TASK-007)
     """

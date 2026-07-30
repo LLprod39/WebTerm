@@ -10,7 +10,7 @@ from django.test import Client
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from servers.agent_engine import AgentEngine
+from servers.agents.agent_engine import AgentEngine
 from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
 
 
@@ -151,8 +151,8 @@ def test_agent_control_paths_do_not_require_live_engine(monkeypatch):
     )
     AgentRun.objects.filter(pk=running_run.pk).update(started_at=timezone.now() - timedelta(seconds=42))
 
-    monkeypatch.setattr("servers.agent_service.get_engine_for_run", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr("servers.agent_service.get_engine_for_agent", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("servers.agents.agent_service.get_engine_for_run", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("servers.agents.agent_service.get_engine_for_agent", lambda *_args, **_kwargs: None)
 
     reply = client.post(
         f"/servers/api/agents/runs/{waiting_run.id}/reply/",

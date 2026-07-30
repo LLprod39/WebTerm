@@ -7,7 +7,7 @@ without importing from studio.* directly.
 
 Lifecycle:
   1. studio.apps.StudioConfig.ready() calls register(StudioSkillProvider())
-  2. servers.agent_background (and any other caller) calls get() to obtain
+  2. servers.agents.agent_background (and any other caller) calls get() to obtain
      the provider and injects it into AgentEngine / MultiAgentEngine.
 
 This is the Service-Locator pattern used specifically to break the

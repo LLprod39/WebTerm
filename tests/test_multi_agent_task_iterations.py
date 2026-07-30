@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from servers.multi_agent_task_iterations import (
+from servers.agents.multi_agent_task_iterations import (
     ITERATION_EVENT_OBSERVATION_LIMIT,
     ITERATION_OBSERVATION_LIMIT,
     append_observation_history,

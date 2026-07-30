@@ -4,8 +4,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from servers.agent_engine_tools import execute_agent_tool
-from servers.multi_agent_task_runner import _ask_user_for_task
+from servers.agents.agent_engine_tools import execute_agent_tool
+from servers.agents.multi_agent_task_runner import _ask_user_for_task
 
 
 class _FakeRegistry:

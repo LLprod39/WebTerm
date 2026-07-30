@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import servers.multi_agent_run_state as run_state
-from servers.multi_agent_run_state import (
+import servers.agents.multi_agent_run_state as run_state
+from servers.agents.multi_agent_run_state import (
     SESSION_TIMEOUT_RETRY_SECONDS,
     STOPPED_REASON,
     TIMEOUT_REASON,

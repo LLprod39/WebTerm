@@ -6,12 +6,12 @@ import asyncio
 
 import pytest
 
-from servers.multi_agent_parallel import (
+from servers.agents.multi_agent_parallel import (
     can_run_parallel,
     select_next_execution_batch,
     task_is_read_only,
 )
-from servers.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
+from servers.agents.multi_agent_plan_executor import PlanExecutionCallbacks, execute_plan_tasks
 
 
 def test_task_is_read_only_roles():

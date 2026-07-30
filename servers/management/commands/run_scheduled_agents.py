@@ -14,8 +14,8 @@ import time
 
 from django.core.management.base import BaseCommand
 
+from servers.agents.scheduled_agents import dispatch_scheduled_agents
 from servers.models import BackgroundWorkerState
-from servers.scheduled_agents import dispatch_scheduled_agents
 from servers.worker_state import (
     claim_background_worker,
     cleanup_stale_background_workers,

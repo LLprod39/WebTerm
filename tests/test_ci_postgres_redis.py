@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.db import close_old_connections, connection
 
-from servers.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
+from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.models import AgentRun, PlaybookRun, ServerAgent
 from servers.playbook_dispatch import claim_next_playbook_dispatch, enqueue_playbook_run_dispatch
 
@@ -72,8 +72,8 @@ def test_agent_dispatch_claims_four_rows_without_head_of_line_blocking(monkeypat
     def slow_record_event(*_args, **_kwargs):
         time.sleep(0.25)
 
-    monkeypatch.setattr("servers.agent_dispatch.record_run_event", slow_record_event)
-    monkeypatch.setattr("servers.agent_dispatch._refresh_run_report_payload", lambda *_args: None)
+    monkeypatch.setattr("servers.agents.agent_dispatch.record_run_event", slow_record_event)
+    monkeypatch.setattr("servers.agents.agent_dispatch._refresh_run_report_payload", lambda *_args: None)
 
     def claim(index: int) -> int:
         close_old_connections()

@@ -63,8 +63,8 @@ def test_parse_final_answer_without_action():
 def test_engines_delegate_to_shared_parse_response():
     import inspect
 
-    from servers.agent_engine import AgentEngine
-    from servers.multi_agent_engine import MultiAgentEngine
+    from servers.agents.agent_engine import AgentEngine
+    from servers.agents.multi_agent_engine import MultiAgentEngine
 
     assert "parse_response" in inspect.getsource(AgentEngine._parse_response)
     assert "parse_response" in inspect.getsource(MultiAgentEngine._parse_response)

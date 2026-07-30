@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.command_execution_gate import evaluate_command_execution_gate
-from servers.agent_tools import tool_ssh_execute
+from servers.agents.agent_tools import tool_ssh_execute
 from servers.operator_mutate_exec import _execute_on_server
 
 BYPASS_CORPUS = [
