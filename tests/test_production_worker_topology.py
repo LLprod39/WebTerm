@@ -131,9 +131,20 @@ def test_compose_production_studio_workers_are_declared():
     services = compose["services"]
 
     assert "scheduled-pipelines" in services
+    assert "history-pruner" in services
     assert "monitor" in services
     assert "telegram-bot" in services
     assert "python manage.py run_scheduled_pipelines --daemon" in " ".join(services["scheduled-pipelines"]["command"])
+    assert services["history-pruner"]["command"] == [
+        "python",
+        "manage.py",
+        "prune_history",
+        "--daemon",
+        "--interval-seconds",
+        "${HISTORY_PRUNE_INTERVAL_SECONDS:-86400}",
+        "--batch-size",
+        "${HISTORY_PRUNE_BATCH_SIZE:-1000}",
+    ]
     assert "python manage.py run_monitor" in " ".join(services["monitor"]["command"])
     assert services["telegram-bot"]["command"] == ["sh", "-lc", "python manage.py run_telegram_bot"]
     assert services["telegram-bot"]["profiles"] == ["telegram-bot"]

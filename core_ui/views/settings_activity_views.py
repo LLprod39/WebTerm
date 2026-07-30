@@ -13,7 +13,6 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 from loguru import logger
 
-from core_ui.audit import maybe_apply_log_retention
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 
@@ -117,8 +116,6 @@ def api_settings_activity_logs(request):
     try:
         if not request.user.is_staff:
             return JsonResponse({"success": False, "error": "Forbidden"}, status=403)
-        maybe_apply_log_retention()
-
         limit = max(1, min(_parse_int_query(request, "limit", 50), 200))
         offset = max(0, _parse_int_query(request, "offset", 0))
         days = max(1, min(_parse_int_query(request, "days", 14), 365))
