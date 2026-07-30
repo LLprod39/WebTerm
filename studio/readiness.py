@@ -9,9 +9,9 @@ from plugin_marketplace.services.install_service import enabled_plugin_ids_for_u
 from studio import readiness_issues as ri
 from studio.models import Pipeline, PipelineTrigger
 from studio.node_manifest import node_manifest_payload
-from studio.pipeline_branch_scope import entry_branch_node_ids
-from studio.pipeline_runtime_context import get_pipeline_runtime_context_fields, validate_pipeline_entry_branch
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_branch_scope import entry_branch_node_ids
+from studio.pipeline.pipeline_runtime_context import get_pipeline_runtime_context_fields, validate_pipeline_entry_branch
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.readiness_requirements import integration_requirements as build_integration_requirements
 
 _MONITORING_CONTEXT_FIELDS = {

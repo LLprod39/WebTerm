@@ -18,13 +18,13 @@ from app.agent_kernel.memory.redaction import redact_payload
 from app.outbound_http import request_outbound_http
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
 )
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redacted_execution_context as _redacted_context,
 )
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redacted_node_outputs_payload as _redacted_node_outputs_payload,
 )
 

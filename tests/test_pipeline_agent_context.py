@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from studio.pipeline_context import (
+from studio.pipeline.pipeline_context import (
     build_agent_upstream_context,
     inject_upstream_into_goal,
     require_agent_goal,

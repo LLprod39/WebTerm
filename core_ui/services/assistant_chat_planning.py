@@ -151,7 +151,7 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
     if any(word in lower for word in pipeline_words) and any(word in lower for word in create_words):
         actions.append(
             {
-                "action_type": "studio.pipeline_draft.create",
+                "action_type": "studio.pipeline.pipeline_draft.create",
                 "title": "Собрать черновик пайплайна",
                 "description": "Создать Studio draft из сообщения и пройти встроенную validation/risk проверку.",
                 "input": {

@@ -11,8 +11,9 @@ from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.server_cards import render_server_cards_prompt
 from app.core.model_utils import resolve_provider_and_model
 from app.pipeline_memory_provider import build_pipeline_operational_recipes, get_pipeline_server_card
+from studio.models import PipelineRun
+from studio.services import get_owned_servers_by_ids
 
-from .models import PipelineRun
 from .pipeline_context import (
     build_pipeline_ops_context,
     compact_node_outputs_context,
@@ -20,7 +21,6 @@ from .pipeline_context import (
     pipeline_role_slug,
     render_template_value,
 )
-from .services import get_owned_servers_by_ids
 
 logger = logging.getLogger(__name__)
 

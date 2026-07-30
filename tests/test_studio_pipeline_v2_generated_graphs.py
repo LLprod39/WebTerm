@@ -7,8 +7,8 @@ from django.test import Client
 
 from studio.mcp_showcase import build_showcase_edges, build_showcase_nodes
 from studio.models import MCPServerPool, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.webhook_smoke import (
     WEBHOOK_SMOKE_CRITICAL_PAYLOAD,
     WEBHOOK_SMOKE_NORMAL_PAYLOAD,

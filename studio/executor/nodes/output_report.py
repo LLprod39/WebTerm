@@ -17,10 +17,10 @@ from asgiref.sync import sync_to_async
 
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
 )
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redacted_execution_context as _redacted_pipeline_context,
 )
 

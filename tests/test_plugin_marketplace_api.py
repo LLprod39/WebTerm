@@ -16,7 +16,7 @@ from plugin_marketplace.models import (
 )
 from plugin_marketplace.services.package_service import install_local_package
 from plugin_marketplace.services.signing_service import sign_package
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
 
 def _json(payload: dict) -> str:

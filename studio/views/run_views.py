@@ -21,8 +21,8 @@ from studio.approval_service import (
     record_approval_decision,
 )
 from studio.models import PipelineRun
-from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
-from studio.pipeline_secrets import hydrate_pipeline_node_data
+from studio.pipeline.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline.pipeline_secrets import hydrate_pipeline_node_data
 from studio.views.notification_views import _load_notif_config
 
 STUDIO_FEATURE_RUNS = "studio_runs"

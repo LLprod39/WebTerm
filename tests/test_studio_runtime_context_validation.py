@@ -9,8 +9,8 @@ from django.test import Client
 
 from core_ui.models import UserAppPermission
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
-from studio.pipeline_runtime_context import (
+from studio.pipeline.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_runtime_context import (
     get_missing_pipeline_runtime_context_fields,
     get_pipeline_runtime_context_fields,
     validate_pipeline_entry_branch,

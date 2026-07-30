@@ -12,9 +12,9 @@ from app.runtime_limits import get_pipeline_run_limit_error
 from app.server_alert_provider import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
 
 from .models import PipelineRun, PipelineTrigger
-from .pipeline_preflight import pipeline_integration_diagnostics
-from .pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
-from .pipeline_validation import validate_pipeline_definition
+from .pipeline.pipeline_preflight import pipeline_integration_diagnostics
+from .pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
+from .pipeline.pipeline_validation import validate_pipeline_definition
 
 
 def _clone_json_snapshot(value: Any):
@@ -122,7 +122,7 @@ def launch_pipeline_run_async(run: PipelineRun) -> None:
             async def _main():
                 from asgiref.sync import sync_to_async
 
-                from studio.pipeline_executor import PipelineExecutor
+                from studio.pipeline.pipeline_executor import PipelineExecutor
 
                 run_obj = await sync_to_async(
                     lambda: PipelineRun.objects.select_related(

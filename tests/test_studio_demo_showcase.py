@@ -16,7 +16,7 @@ from studio.demo_showcase import (
     ensure_all_demo_showcase_pipelines,
 )
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
 pytestmark = pytest.mark.django_db
 

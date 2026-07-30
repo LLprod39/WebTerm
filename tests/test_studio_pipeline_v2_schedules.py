@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from studio.management.commands.run_scheduled_pipelines import Command as RunScheduledPipelinesCommand
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from tests.studio_pipeline_v2_harness import disable_activity_logging, report_node
 
 

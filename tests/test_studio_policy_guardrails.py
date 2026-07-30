@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth.models import User
 
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
 pytestmark = pytest.mark.django_db
 

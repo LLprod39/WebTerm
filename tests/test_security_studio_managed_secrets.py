@@ -14,7 +14,7 @@ from django.test import Client
 from core_ui.managed_secrets import get_studio_pipeline_secrets
 from core_ui.models import ManagedSecret
 from studio.models import Pipeline, PipelineDraftRevision, PipelineDraftSession, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 from tests.studio_api_smoke_harness import grant_feature, json_payload
 from tests.studio_pipeline_v2_harness import build_run
 

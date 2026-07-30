@@ -1391,7 +1391,7 @@ from pathlib import Path
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "web_ui.settings.development")
 import django
 django.setup()
-from studio.pipeline_validation import KNOWN_NODE_TYPES
+from studio.pipeline.pipeline_validation import KNOWN_NODE_TYPES
 
 doc = Path('docs/PIPELINE_NODES_SPEC.md').read_text(encoding='utf-8')
 missing = sorted(t for t in KNOWN_NODE_TYPES if f'`{t}`' not in doc)

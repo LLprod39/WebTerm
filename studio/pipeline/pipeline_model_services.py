@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from .model_helpers import collect_monitoring_filters
+from studio.model_helpers import collect_monitoring_filters
 
 
 def sync_pipeline_triggers_from_nodes(pipeline) -> None:
-    from .models import PipelineTrigger
+    from studio.models import PipelineTrigger
 
     trigger_type_map = {
         "trigger/manual": PipelineTrigger.TYPE_MANUAL,
@@ -66,7 +66,7 @@ def sync_pipeline_triggers_from_nodes(pipeline) -> None:
 
 
 def instantiate_template_for_user(template, user):
-    from .models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline
+    from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline
 
     nodes = list(template.nodes)
     edges = list(template.edges)

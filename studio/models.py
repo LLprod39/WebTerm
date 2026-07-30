@@ -15,8 +15,8 @@ from .model_serializers import (
     pipeline_to_detail_dict,
     pipeline_to_list_dict,
 )
-from .pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
-from .pipeline_model_services import instantiate_template_for_user, sync_pipeline_triggers_from_nodes
+from .pipeline.pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
+from .pipeline.pipeline_model_services import instantiate_template_for_user, sync_pipeline_triggers_from_nodes
 from .skill_access_models import StudioSkillAccess  # noqa: F401
 
 CURRENT_PIPELINE_GRAPH_VERSION = 2
@@ -248,7 +248,7 @@ class Pipeline(models.Model):
         if not touches_nodes:
             return super().save(*args, **kwargs)
 
-        from studio.pipeline_secrets import persist_pipeline_secrets, secure_pipeline_nodes_for_storage
+        from studio.pipeline.pipeline_secrets import persist_pipeline_secrets, secure_pipeline_nodes_for_storage
 
         with transaction.atomic():
             if self.pk and not self._state.adding:

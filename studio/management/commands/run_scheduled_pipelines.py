@@ -23,8 +23,8 @@ from app.worker_state import claim_background_worker, heartbeat_background_worke
 from studio import cron_schedule
 from studio.models import PipelineTrigger
 from studio.ops_controls import assert_schedulers_not_paused
-from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
 croniter = cron_schedule.croniter
 _IMPORTED_CRONITER = croniter

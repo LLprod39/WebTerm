@@ -86,7 +86,7 @@ def register_assistant_actions() -> None:
             handler=get_pipeline,
         ),
         AssistantActionSpec(
-            action_type="studio.pipeline_draft.create",
+            action_type="studio.pipeline.pipeline_draft.create",
             label="Create pipeline draft",
             description="Create a Studio pipeline AI draft from a chat request (natural language goal).",
             required_feature="studio_pipelines",
@@ -96,7 +96,7 @@ def register_assistant_actions() -> None:
             handler=create_pipeline_draft,
         ),
         AssistantActionSpec(
-            action_type="studio.pipeline_draft.list",
+            action_type="studio.pipeline.pipeline_draft.list",
             label="List pipeline drafts",
             description="List open Studio pipeline drafts for the operator.",
             required_feature="studio_pipelines",
@@ -104,7 +104,7 @@ def register_assistant_actions() -> None:
             handler=list_pipeline_drafts,
         ),
         AssistantActionSpec(
-            action_type="studio.pipeline_draft.revise",
+            action_type="studio.pipeline.pipeline_draft.revise",
             label="Revise pipeline draft",
             description="Continue configuring a draft with a natural-language instruction (add nodes, change SSH, schedule, etc.).",
             required_feature="studio_pipelines",
@@ -114,7 +114,7 @@ def register_assistant_actions() -> None:
             handler=revise_pipeline_draft,
         ),
         AssistantActionSpec(
-            action_type="studio.pipeline_draft.validate",
+            action_type="studio.pipeline.pipeline_draft.validate",
             label="Validate pipeline draft",
             description="Dry-run validate a Studio pipeline draft without runtime actions.",
             required_feature="studio_pipelines",
@@ -123,7 +123,7 @@ def register_assistant_actions() -> None:
             handler=validate_pipeline_draft,
         ),
         AssistantActionSpec(
-            action_type="studio.pipeline_draft.apply",
+            action_type="studio.pipeline.pipeline_draft.apply",
             label="Apply pipeline draft",
             description="Apply a validated Studio draft to create/update a pipeline.",
             required_feature="studio_pipelines",

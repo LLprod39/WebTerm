@@ -11,7 +11,7 @@ from plugin_marketplace.models import (
     PluginInstallEvent,
 )
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 
 
 def _json(payload: dict) -> str:

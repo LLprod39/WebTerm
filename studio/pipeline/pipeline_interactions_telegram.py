@@ -8,7 +8,8 @@ from threading import Event
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
-from .models import PipelineRun
+from studio.models import PipelineRun
+
 from .pipeline_notifications import (
     _send_telegram_message,
 )

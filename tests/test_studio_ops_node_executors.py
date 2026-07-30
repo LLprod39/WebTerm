@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 
 from servers.models import Server
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import _execute_registry_node
+from studio.pipeline.pipeline_executor import _execute_registry_node
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -46,9 +46,9 @@ def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.get_channel_layer", lambda: None)
 
 
 def test_ops_server_snapshot_node_uses_context_server_id(monkeypatch):

@@ -7,7 +7,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async as _s2a
 
-from .models import PipelineRun
+from studio.models import PipelineRun
 
 logger = logging.getLogger(__name__)
 

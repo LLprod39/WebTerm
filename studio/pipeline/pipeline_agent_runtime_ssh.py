@@ -5,8 +5,9 @@ from typing import Any
 
 from app.shell_commands import is_read_only_command
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
+from studio.models import PipelineRun
+from studio.services import get_owned_server
 
-from .models import PipelineRun
 from .pipeline_agent_runtime_helpers import (
     _coerce_optional_int,
     _resolve_context_value,
@@ -17,7 +18,6 @@ from .pipeline_context import (
     pipeline_permission_mode,
     render_template_value,
 )
-from .services import get_owned_server
 
 
 async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> dict:
@@ -25,7 +25,7 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
     import asyncssh
 
     # Resolve through the facade so existing monkeypatches on pipeline_agent_runtime keep working.
-    from studio import pipeline_agent_runtime as runtime
+    from studio.pipeline import pipeline_agent_runtime as runtime
 
     config = node.get("data", {})
     raw_server_id = _resolve_context_value(config, context, "server_id", "server_id")

@@ -5,7 +5,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 from tests.studio_pipeline_v2_harness import build_run, disable_activity_logging, report_node
 
 

@@ -11,7 +11,7 @@ from studio.mcp_tool_runtime import (
     load_mcp_tool_bindings,
 )
 from studio.models import AgentConfig, Pipeline, PipelineTrigger
-from studio.pipeline_executor import _coerce_mcp_arguments
+from studio.pipeline.pipeline_executor import _coerce_mcp_arguments
 from studio.skill_registry import get_skill, list_skills, normalise_skill_slugs, resolve_skills
 from studio.views._views_all import _normalise_related_ids
 

@@ -9,10 +9,10 @@ from django.utils import timezone
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from studio.assistant_actions_common import _int_payload, _pipeline_for_user, _run_for_user
 from studio.models import Pipeline, PipelineRun, PipelineTrigger
-from studio.pipeline_preflight import pipeline_integration_diagnostics
-from studio.pipeline_runtime import get_executor_for_run, update_runtime_control
-from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
-from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
+from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
+from studio.pipeline.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
+from studio.pipeline.pipeline_validation import ensure_json_object, validate_pipeline_definition
 from studio.readiness_issues import runtime_limit_issue, validation_issues
 from studio.trigger_dispatch import get_pipeline_run_limit_error, pipeline_run_creation_error_details
 from studio.views.pipeline_assistant_preview import pipeline_assistant_risk

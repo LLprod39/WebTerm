@@ -8,7 +8,7 @@ from django.test import Client, override_settings
 from app.plugins.catalog import DEMO_PLUGIN_ID, DEMO_PLUGIN_MANIFEST
 from core_ui.models import UserAppPermission
 from plugin_marketplace.models import MarketplaceCatalogItem, PluginInstallEvent, PluginPackage
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
 PLUGIN_STUDIO_NODE_TYPE = "plugin/webtrerm.demo-dashboard/demo-connector-ping"
 

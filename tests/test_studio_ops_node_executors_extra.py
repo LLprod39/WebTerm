@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 
 from servers.models import Server, ServerAlert
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import _execute_registry_node
+from studio.pipeline.pipeline_executor import _execute_registry_node
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -51,9 +51,9 @@ def _disable_activity_logging(monkeypatch):
     async def _public_resolver(_host: str, _port: int) -> list[str]:
         return ["93.184.216.34"]
 
-    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.get_channel_layer", lambda: None)
     monkeypatch.setattr("app.outbound_http._resolve_host_addresses", _public_resolver)
 
 

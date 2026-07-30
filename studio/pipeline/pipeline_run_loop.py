@@ -8,7 +8,8 @@ from typing import Any
 
 from django.utils import timezone
 
-from .models import PipelineRun
+from studio.models import PipelineRun
+
 from .pipeline_routing import result_routing_ports, route_from_node
 from .pipeline_run_setup import PreparedPipelineRun
 from .pipeline_run_state import persist_routing_state, update_node_state, update_run_status

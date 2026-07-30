@@ -266,7 +266,7 @@ def test_assistant_chat_mutating_action_waits_for_confirmation(monkeypatch):
             "reply": "Подготовил черновик.",
             "actions": [
                 {
-                    "action_type": "studio.pipeline_draft.create",
+                    "action_type": "studio.pipeline.pipeline_draft.create",
                     "title": "Создать черновик",
                     "description": "Создать draft без запуска runtime.",
                     "input": {
@@ -287,7 +287,7 @@ def test_assistant_chat_mutating_action_waits_for_confirmation(monkeypatch):
 
     assert response.status_code == 201
     action = response.json()["actions"][0]
-    assert action["action_type"] == "studio.pipeline_draft.create"
+    assert action["action_type"] == "studio.pipeline.pipeline_draft.create"
     assert action["status"] == AssistantAction.STATUS_REQUIRES_CONFIRMATION
     assert action["requires_confirmation"] is True
     assert action["input"]["pipeline_name"] == "Daily backup"

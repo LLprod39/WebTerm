@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 
 from app.outbound_http import OutboundHTTPPolicyError, request_outbound_http
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 
 
 def _make_executor(username: str) -> PipelineExecutor:

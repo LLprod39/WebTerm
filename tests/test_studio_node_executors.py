@@ -5,8 +5,8 @@ from asgiref.sync import async_to_sync
 
 from servers.models import Server
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
-from studio.pipeline_validation import KNOWN_NODE_TYPES
+from studio.pipeline.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_validation import KNOWN_NODE_TYPES
 from tests.studio_node_executor_harness import (
     RUNTIME_COVERED_NODE_TYPES,
     disable_activity_logging,

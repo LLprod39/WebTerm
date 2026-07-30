@@ -13,8 +13,8 @@ from django.conf import settings
 
 from app.agent_kernel.memory.redaction import redact_payload
 from app.outbound_http import request_outbound_http
+from studio.models import PipelineRun
 
-from .models import PipelineRun
 from .pipeline_context import render_template_value
 from .pipeline_notifications import (
     _global_email_defaults,

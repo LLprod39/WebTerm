@@ -7,7 +7,7 @@ from pathlib import Path
 from django.utils import timezone
 
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline, PipelineRun
-from .pipeline_executor import PipelineExecutor
+from .pipeline.pipeline_executor import PipelineExecutor
 from .trigger_dispatch import create_pipeline_run
 
 DEMO_SERVER_NAME = "Studio Local MCP Demo"

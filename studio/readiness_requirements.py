@@ -7,7 +7,7 @@ from django.conf import settings
 
 from app.core.model_utils import resolve_provider_and_model
 from studio.models import AgentConfig, MCPServerPool, Pipeline
-from studio.pipeline_notifications import _load_notif_cfg
+from studio.pipeline.pipeline_notifications import _load_notif_cfg
 
 _LLM_PROVIDER_KEYS = {
     "gemini": ("GEMINI_API_KEY",),
@@ -240,7 +240,7 @@ def _agent_unattended_ask_user_requirement(
     data: dict[str, Any],
     unattended_graph: bool,
 ) -> None:
-    from studio.pipeline_agent_config import agent_node_allows_ask_user, resolve_interaction_mode
+    from studio.pipeline.pipeline_agent_config import agent_node_allows_ask_user, resolve_interaction_mode
 
     mode = resolve_interaction_mode(data, trigger_type="schedule" if unattended_graph else "manual")
     if mode != "unattended":
@@ -304,7 +304,7 @@ def integration_requirements(pipeline: Pipeline, *, node_ids: set[str] | None = 
                 unattended_graph=unattended_graph,
             )
             # tools_mode=allowlist empty
-            from studio.pipeline_agent_config import resolve_tools_config
+            from studio.pipeline.pipeline_agent_config import resolve_tools_config
 
             _tools, tools_error = resolve_tools_config(data)
             if tools_error:

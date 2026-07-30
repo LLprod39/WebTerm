@@ -52,4 +52,4 @@ def disable_activity_logging(monkeypatch) -> None:
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.log_user_activity_async", _noop)
