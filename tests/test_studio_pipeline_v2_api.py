@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from studio.assistant_action_registry import register_assistant_actions
 from studio.models import ApprovalRequest, Pipeline, PipelineRun
-from studio.pipeline_run_state import update_node_state
+from studio.pipeline.pipeline_run_state import update_node_state
 from tests.studio_pipeline_v2_harness import (
     build_run,
     disable_activity_logging,
@@ -240,8 +240,8 @@ def test_live_run_updates_expose_only_allowlisted_node_state_fields(monkeypatch)
     async def no_activity_log(**_kwargs) -> None:
         return None
 
-    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: FakeChannelLayer())
-    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", no_activity_log)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.get_channel_layer", lambda: FakeChannelLayer())
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.log_user_activity_async", no_activity_log)
 
     async_to_sync(update_node_state)(
         run,

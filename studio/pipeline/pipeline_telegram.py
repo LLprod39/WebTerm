@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
 from studio.models import PipelineRun
-from studio.pipeline_secrets import get_pipeline_node_secret
+from studio.pipeline.pipeline_secrets import get_pipeline_node_secret
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +225,7 @@ def store_telegram_operator_reply(bot_token: str, message: dict[str, Any]) -> bo
             )
             legacy_token = str(state.get("bot_token") or "").strip()
             if not managed_token and not legacy_token:
-                from studio.pipeline_notifications import _global_tg_defaults
+                from studio.pipeline.pipeline_notifications import _global_tg_defaults
 
                 managed_token = _global_tg_defaults()[0]
             expected_token = managed_token or legacy_token

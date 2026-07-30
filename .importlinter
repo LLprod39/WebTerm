@@ -189,3 +189,21 @@ forbidden_modules =
     servers.views
     studio
     web_ui
+
+
+# ─── Contract 14: Studio pipeline core is independent from delivery ─────────
+# Goal: Validation and execution can run in workers and tests without loading
+# HTTP views, websocket consumers, URL routing, or server feature code.
+[importlinter:contract:studio-pipeline-no-delivery-entry-points]
+name = studio.pipeline must not import HTTP, websocket, or server entry points
+type = forbidden
+source_modules =
+    studio.pipeline
+forbidden_modules =
+    core_ui.views
+    servers
+    studio.consumers
+    studio.routing
+    studio.urls
+    studio.views
+    web_ui

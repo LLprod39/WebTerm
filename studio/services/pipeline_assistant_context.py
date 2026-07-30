@@ -4,7 +4,7 @@ import json
 from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
-from studio.pipeline_secrets import redact_pipeline_secret_values
+from studio.pipeline.pipeline_secrets import redact_pipeline_secret_values
 
 
 def _extract_json_object(raw_text: str) -> dict[str, Any]:

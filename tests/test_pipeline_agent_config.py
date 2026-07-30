@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from studio.ops_controls import assert_agents_not_paused, get_ops_control_status, set_ops_paused
-from studio.pipeline_agent_config import (
+from studio.pipeline.pipeline_agent_config import (
     INTERACTION_UNATTENDED,
     agent_node_allows_ask_user,
     default_max_iterations,

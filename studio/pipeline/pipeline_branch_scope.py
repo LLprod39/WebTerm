@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from studio.pipeline_routing import build_execution_graph, reachable_nodes_from_entry
+from studio.pipeline.pipeline_routing import build_execution_graph, reachable_nodes_from_entry
 
 
 def entry_branch_node_ids(pipeline, entry_node_id: str | None) -> set[str] | None:

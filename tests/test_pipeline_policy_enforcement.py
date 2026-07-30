@@ -6,8 +6,8 @@ from django.contrib.auth.models import User
 
 from servers.models import Server
 from studio.models import MCPServerPool, Pipeline, PipelineRun
-from studio.pipeline_agent_runtime import execute_agent_ssh_cmd
-from studio.pipeline_executor import _execute_agent_llm_query, _execute_agent_mcp_call
+from studio.pipeline.pipeline_agent_runtime import execute_agent_ssh_cmd
+from studio.pipeline.pipeline_executor import _execute_agent_llm_query, _execute_agent_mcp_call
 
 
 @pytest.mark.django_db(transaction=True)
@@ -46,7 +46,7 @@ def test_pipeline_direct_mcp_node_enforces_skill_policy_preflight_and_pinned_arg
         seen["arguments"] = dict(arguments)
         return {"isError": False, "content": [{"type": "text", "text": "ok"}]}
 
-    monkeypatch.setattr("studio.pipeline_agent_mcp.call_mcp_tool", fake_call_mcp_tool)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_mcp.call_mcp_tool", fake_call_mcp_tool)
 
     allowed = async_to_sync(_execute_agent_mcp_call)(
         node=node,
@@ -112,7 +112,7 @@ def test_pipeline_direct_ssh_node_requires_preflight_and_verification(monkeypatc
 
     monkeypatch.setattr("servers.monitoring.monitor._build_connect_kwargs", fake_build_connect_kwargs)
     monkeypatch.setattr("asyncssh.connect", lambda **_kwargs: _FakeConnection())
-    monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
 
     allowed = async_to_sync(execute_agent_ssh_cmd)(
         node={

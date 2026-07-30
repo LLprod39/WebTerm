@@ -6,7 +6,7 @@ from django.contrib.auth.models import User
 from servers.models import Server
 from studio.all_nodes_smoke import build_all_nodes_smoke_edges, ensure_all_nodes_smoke_pipeline
 from studio.models import MCPServerPool
-from studio.pipeline_validation import KNOWN_NODE_TYPES, validate_pipeline_definition
+from studio.pipeline.pipeline_validation import KNOWN_NODE_TYPES, validate_pipeline_definition
 from studio.readiness import build_studio_readiness_report
 
 pytestmark = pytest.mark.django_db

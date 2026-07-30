@@ -11,7 +11,7 @@ from studio.docker_service_recovery import (
     ensure_docker_service_recovery_pipeline,
 )
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.trigger_dispatch import launch_monitoring_triggers_for_alert, monitoring_trigger_matches_alert
 
 pytestmark = pytest.mark.django_db(transaction=True)

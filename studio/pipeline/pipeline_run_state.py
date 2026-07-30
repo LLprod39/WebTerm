@@ -8,8 +8,8 @@ from asgiref.sync import sync_to_async as _s2a
 from channels.layers import get_channel_layer
 
 from core_ui.activity import log_user_activity_async
+from studio.models import PipelineRun
 
-from .models import PipelineRun
 from .pipeline_context import pipeline_actor_context
 from .pipeline_routing import serialize_routing_state
 from .pipeline_secrets import serialize_pipeline_node_state

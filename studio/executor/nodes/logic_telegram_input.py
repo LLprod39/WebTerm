@@ -7,7 +7,7 @@ from asgiref.sync import sync_to_async
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
 from studio.models import PipelineRun
-from studio.pipeline_interactions import execute_logic_telegram_input
+from studio.pipeline.pipeline_interactions import execute_logic_telegram_input
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext

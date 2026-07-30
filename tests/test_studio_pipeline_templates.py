@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, PipelineTemplate
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_template_recommendations import (
     build_template_graph_patch,
     get_pilot_pipeline_template,

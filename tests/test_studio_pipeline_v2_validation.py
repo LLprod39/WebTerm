@@ -1,10 +1,26 @@
 from __future__ import annotations
 
+import importlib
+
 import pytest
 from django.contrib.auth.models import User
 
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from tests.studio_pipeline_v2_harness import disable_activity_logging, report_node
+
+
+def test_legacy_pipeline_modules_alias_domain_implementations():
+    for module_name in (
+        "pipeline_agent_runtime",
+        "pipeline_context",
+        "pipeline_executor",
+        "pipeline_runtime",
+        "pipeline_secrets",
+        "pipeline_validation",
+    ):
+        legacy = importlib.import_module(f"studio.{module_name}")
+        current = importlib.import_module(f"studio.pipeline.{module_name}")
+        assert legacy is current
 
 
 @pytest.fixture(autouse=True)

@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync
 
 from servers.models import Server
 from studio.models import MCPServerPool
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 from tests.studio_node_executor_harness import (
     HookManager,
     PermissionEngine,
@@ -52,11 +52,11 @@ def test_ssh_cmd_node_runs_preflight_command_and_verification(monkeypatch):
         connect_kwargs_seen.update(kwargs)
         return FakeConnectContext()
 
-    monkeypatch.setattr("studio.pipeline_agent_runtime.PermissionEngine", PermissionEngine)
-    monkeypatch.setattr("studio.pipeline_agent_runtime.SandboxManager", SandboxManager)
-    monkeypatch.setattr("studio.pipeline_agent_runtime.HookManager", HookManager)
-    monkeypatch.setattr("studio.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
-    monkeypatch.setattr("studio.pipeline_agent_runtime.get_server_connect_kwargs", fake_get_server_connect_kwargs)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.PermissionEngine", PermissionEngine)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.SandboxManager", SandboxManager)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.HookManager", HookManager)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.get_server_connect_kwargs", fake_get_server_connect_kwargs)
     monkeypatch.setattr("asyncssh.connect", fake_connect)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -118,8 +118,8 @@ def test_llm_query_node_streams_response_with_context(monkeypatch):
             for chunk in ["part-1 ", "part-2"]:
                 yield chunk
 
-    monkeypatch.setattr("studio.pipeline_agent_llm._load_pipeline_server_memory", fake_load_server_memory)
-    monkeypatch.setattr("studio.pipeline_agent_llm._load_pipeline_operational_recipes", fake_load_operational_recipes)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_llm._load_pipeline_server_memory", fake_load_server_memory)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_llm._load_pipeline_operational_recipes", fake_load_operational_recipes)
     monkeypatch.setattr("app.core.llm.LLMProvider", FakeLLMProvider)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -162,10 +162,10 @@ def test_mcp_call_node_executes_tool_and_tracks_execution(monkeypatch):
         captured["arguments"] = arguments
         return {"content": [{"type": "text", "text": "pong"}]}
 
-    monkeypatch.setattr("studio.pipeline_agent_mcp.PermissionEngine", PermissionEngine)
-    monkeypatch.setattr("studio.pipeline_agent_mcp.SandboxManager", SandboxManager)
-    monkeypatch.setattr("studio.pipeline_agent_mcp.HookManager", HookManager)
-    monkeypatch.setattr("studio.pipeline_agent_mcp.call_mcp_tool", fake_call_mcp_tool)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_mcp.PermissionEngine", PermissionEngine)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_mcp.SandboxManager", SandboxManager)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_mcp.HookManager", HookManager)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_mcp.call_mcp_tool", fake_call_mcp_tool)
 
     result = async_to_sync(executor._execute_node)(
         {

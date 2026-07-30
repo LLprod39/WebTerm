@@ -6,7 +6,7 @@ import json
 import re
 
 from studio.execution_policy import build_execution_policy_decisions
-from studio.pipeline_secrets import redact_pipeline_secret_values
+from studio.pipeline.pipeline_secrets import redact_pipeline_secret_values
 
 
 def _clone_json_snapshot(value):

@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import _execute_registry_node
+from studio.pipeline.pipeline_executor import _execute_registry_node
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

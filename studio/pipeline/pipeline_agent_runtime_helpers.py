@@ -6,10 +6,10 @@ from typing import Any
 from asgiref.sync import sync_to_async as _s2a
 
 from app.command_history_provider import save_command_history_entry
+from studio.models import PipelineRun
+from studio.services import get_owned_servers_by_ids
 
-from .models import PipelineRun
 from .pipeline_context import pipeline_actor_context, render_template_value
-from .services import get_owned_servers_by_ids
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ async def _log_pipeline_ssh_command(
     error: str = "",
 ) -> None:
     # Prefer facade attribute so monkeypatches on pipeline_agent_runtime.log_user_activity_async apply.
-    from studio import pipeline_agent_runtime as runtime
+    from studio.pipeline import pipeline_agent_runtime as runtime
 
     log_user_activity_async = getattr(runtime, "log_user_activity_async", None)
     if log_user_activity_async is None:

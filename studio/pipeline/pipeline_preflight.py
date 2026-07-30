@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from studio.pipeline_branch_scope import entry_branch_node_ids
+from studio.pipeline.pipeline_branch_scope import entry_branch_node_ids
 from studio.readiness_issues import integration_issue
 from studio.readiness_requirements import integration_requirements
 

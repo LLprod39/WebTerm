@@ -17,7 +17,7 @@ class AgentReactNode(BaseNode):
     node_type = "agent/react"
 
     async def execute(self, ctx: ExecutionContext) -> NodeResult:
-        from studio.pipeline_agent_runtime import execute_agent_react
+        from studio.pipeline.pipeline_agent_runtime import execute_agent_react
 
         run = ctx.extra.get("run")
         if not isinstance(run, PipelineRun):

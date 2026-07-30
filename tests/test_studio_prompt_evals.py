@@ -13,7 +13,7 @@ from django.test import Client
 from core_ui.models import UserAppPermission
 from servers.models import Server
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_template_recommendations import (
     PILOT_TEMPLATE_SLUGS,
     build_template_graph_patch,

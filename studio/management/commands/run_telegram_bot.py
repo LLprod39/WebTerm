@@ -60,7 +60,7 @@ class Command(BaseCommand):
         parser.add_argument("--max-polls", type=int, default=0, help="Stop after N polls, mainly for smoke tests")
 
     def handle(self, *args, **options):
-        from studio.pipeline_notifications import _load_notif_cfg
+        from studio.pipeline.pipeline_notifications import _load_notif_cfg
 
         bot_token = (options.get("bot_token") or "").strip() or _load_notif_cfg().get("telegram_bot_token", "")
         if not bot_token:
@@ -205,7 +205,7 @@ class Command(BaseCommand):
             return "ignored"
 
         if message.get("reply_to_message"):
-            from studio.pipeline_telegram import store_telegram_operator_reply
+            from studio.pipeline.pipeline_telegram import store_telegram_operator_reply
 
             if store_telegram_operator_reply(bot_token, message):
                 ts = timezone.now().strftime("%H:%M:%S")
@@ -236,7 +236,7 @@ class Command(BaseCommand):
             self.stderr.write(f"Run limit exceeded: {limit_error.get('error')}")
             return "ignored"
 
-        from studio.pipeline_validation import validate_pipeline_definition
+        from studio.pipeline.pipeline_validation import validate_pipeline_definition
 
         errors = validate_pipeline_definition(
             nodes=pipeline.nodes,
@@ -248,7 +248,10 @@ class Command(BaseCommand):
             self.stderr.write(f"Pipeline validation failed — fix it in Studio: {errors[:2]}")
             return "ignored"
 
-        from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
+        from studio.pipeline.pipeline_runtime_context import (
+            validate_pipeline_entry_branch,
+            validate_pipeline_runtime_context,
+        )
 
         branch_errors = validate_pipeline_entry_branch(pipeline.nodes, pipeline.edges, trigger.node_id)
         if branch_errors:

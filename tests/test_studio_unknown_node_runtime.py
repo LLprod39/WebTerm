@@ -2,7 +2,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 
 
 def test_unknown_pipeline_node_type_fails_instead_of_skipping(db):

@@ -8,7 +8,7 @@ This is the versioned human-readable contract enforced by `.importlinter`,
 
 ## Import boundaries
 
-The thirteen contracts in `.importlinter` are authoritative. Shared `app` layers
+The fourteen contracts in `.importlinter` are authoritative. Shared `app` layers
 must not depend on Django ORM or feature applications; `core_ui`, `servers`,
 `studio` and `plugin_marketplace` communicate across domain boundaries through
 typed providers, registries or events. Adding an exception to hide a new edge
@@ -34,6 +34,10 @@ Durable playbook leasing and execution live in `servers.playbooks`, below HTTP,
 websocket and orchestration layers. The historical `servers.playbook_dispatch`
 and `servers.playbook_execution_worker` names are module aliases, preserving
 both ordinary imports and monkeypatch behavior.
+
+Studio validation, execution, runtime state and interaction services live in
+`studio.pipeline`, independent from HTTP/websocket delivery and the `servers`
+feature app. Six established pipeline module names remain compatibility aliases.
 
 ## Complexity and coupling rules
 
@@ -61,9 +65,9 @@ python scripts/check_architecture_sizes.py --strict-new
 
 **Architecture fitness (2026-07-30): complexity/coupling gate green.**
 
-- All thirteen import contracts kept; 0 forbidden import edges.
+- All fourteen import contracts kept; 0 forbidden import edges.
 - `python scripts/check_architecture_sizes.py --strict-new` → **SUCCESS**
-  (111 frozen complexity/coupling violations, 0 new or grown violations).
+  (110 frozen complexity/coupling violations, 0 new or grown violations).
 - `python scripts/check_architecture_no_regression.py` → **0 frozen size
   violations**, 0 frozen import edges.
 - Product/app/frontend/tests modules are under the 500-line review target. The

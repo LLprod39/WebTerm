@@ -12,8 +12,8 @@ from studio.capability_registry import build_studio_capability_registry
 from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
 )
-from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services import (
     PipelineAssistantError,
     build_pipeline_assistant_response,

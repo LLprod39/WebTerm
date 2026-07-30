@@ -9,7 +9,7 @@ from django.utils import timezone
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from studio.assistant_actions_common import _draft_for_user, _int_payload, _request_like
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_assistant_interview import (
     build_revision_interview_message,
     merge_revision_goal,

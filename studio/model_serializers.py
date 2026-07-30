@@ -94,7 +94,7 @@ def pipeline_to_list_dict(pipeline) -> dict:
 
 
 def pipeline_to_detail_dict(pipeline) -> dict:
-    from studio.pipeline_secrets import redact_pipeline_nodes
+    from studio.pipeline.pipeline_secrets import redact_pipeline_nodes
 
     payload = pipeline.to_list_dict()
     payload["nodes"] = redact_pipeline_nodes(pipeline.nodes)
@@ -104,7 +104,7 @@ def pipeline_to_detail_dict(pipeline) -> dict:
 
 
 def pipeline_run_to_dict(run) -> dict:
-    from studio.pipeline_secrets import redact_pipeline_nodes, serialize_pipeline_node_states
+    from studio.pipeline.pipeline_secrets import redact_pipeline_nodes, serialize_pipeline_node_states
 
     trigger = getattr(run, "trigger", None)
     return {

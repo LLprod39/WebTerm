@@ -7,7 +7,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 
 from studio.models import Pipeline, PipelineRun
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -91,9 +91,9 @@ def _disable_activity_logging(monkeypatch):
     async def _noop(*args, **kwargs):
         return None
 
-    monkeypatch.setattr("studio.pipeline_agent_runtime.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.log_user_activity_async", _noop)
-    monkeypatch.setattr("studio.pipeline_run_state.get_channel_layer", lambda: None)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.log_user_activity_async", _noop)
+    monkeypatch.setattr("studio.pipeline.pipeline_run_state.get_channel_layer", lambda: None)
 
 
 def _plain_text_parts(message: str) -> list[str]:

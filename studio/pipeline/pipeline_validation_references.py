@@ -3,8 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .cron_schedule import validate_cron_expression
-from .models import AgentConfig, MCPServerPool
+from studio.cron_schedule import validate_cron_expression
+from studio.models import AgentConfig, MCPServerPool
+from studio.services import get_owned_server_id_set, has_owned_server
+from studio.skill_registry import normalise_skill_slugs, resolve_skills
+
 from .pipeline_validation_schema import (
     PLACEHOLDER_RE,
 )
@@ -17,8 +20,6 @@ from .pipeline_validation_schema import (
 from .pipeline_validation_schema import (
     validate_mcp_arguments_schema as _validate_mcp_arguments_schema,
 )
-from .services import get_owned_server_id_set, has_owned_server
-from .skill_registry import normalise_skill_slugs, resolve_skills
 
 PACKAGE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9+._:@~/-]{0,127}$")
 SUDO_POLICY_VALUES = {"inherit", "disabled", "ask", "approved"}

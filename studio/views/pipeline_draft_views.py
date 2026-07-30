@@ -8,7 +8,7 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_assistant_interview import (
     build_revision_interview_message,
     merge_revision_goal,

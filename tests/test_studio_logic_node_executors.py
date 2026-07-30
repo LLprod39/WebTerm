@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from asgiref.sync import async_to_sync
 
-from studio.pipeline_executor import PipelineExecutor
+from studio.pipeline.pipeline_executor import PipelineExecutor
 from tests.studio_node_executor_harness import disable_activity_logging, make_run
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -99,7 +99,7 @@ def test_wait_node_completes_after_sleep_loop(monkeypatch):
     async def fake_sleep(seconds: float) -> None:
         sleep_calls.append(seconds)
 
-    monkeypatch.setattr("studio.pipeline_logic.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline.pipeline_logic.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(executor._execute_node)(
         {"id": "wait", "type": "logic/wait", "data": {"wait_minutes": 0.1}},
@@ -120,7 +120,7 @@ def test_wait_node_respects_executor_stop_event(monkeypatch):
     async def fake_sleep(seconds: float) -> None:
         raise AssertionError("wait should stop before sleeping")
 
-    monkeypatch.setattr("studio.pipeline_logic.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("studio.pipeline.pipeline_logic.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(executor._execute_node)(
         {"id": "wait", "type": "logic/wait", "data": {"wait_minutes": 0.1}},

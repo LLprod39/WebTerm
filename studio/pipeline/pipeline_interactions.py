@@ -10,9 +10,10 @@ from threading import Event
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
-from .approval_models import ApprovalRequest
-from .approval_service import ApprovalAccessError, arm_approval_request, resolve_approval_approver
-from .models import PipelineRun
+from studio.approval_models import ApprovalRequest
+from studio.approval_service import ApprovalAccessError, arm_approval_request, resolve_approval_approver
+from studio.models import PipelineRun
+
 from .pipeline_interactions_telegram import (
     execute_logic_telegram_input,
     resolve_telegram_target,

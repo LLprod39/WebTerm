@@ -127,7 +127,7 @@ class PipelineDraftRevision(models.Model):
         return f"{self.session_id} revision #{self.pk}"
 
     def to_dict(self) -> dict:
-        from studio.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
+        from studio.pipeline.pipeline_secrets import redact_pipeline_nodes, redact_pipeline_secret_values
 
         response = dict(self.response_payload or {})
         response.setdefault("reply", self.assistant_reply)

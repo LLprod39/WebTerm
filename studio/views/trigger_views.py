@@ -11,9 +11,9 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
 from studio.models import PipelineTrigger
-from studio.pipeline_preflight import pipeline_integration_diagnostics
-from studio.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
-from studio.pipeline_validation import ensure_json_object, validate_pipeline_definition
+from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
+from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
+from studio.pipeline.pipeline_validation import ensure_json_object, validate_pipeline_definition
 from studio.readiness_issues import validation_issues
 from studio.trigger_dispatch import get_pipeline_run_limit_error, pipeline_run_creation_error_details
 from studio.views.common import _err, _json_body, _limit_err, _ok, _validation_err

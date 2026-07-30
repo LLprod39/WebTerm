@@ -4,16 +4,16 @@ from typing import TYPE_CHECKING, Any
 
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
-from studio.pipeline_notifications import (
+from studio.pipeline.pipeline_notifications import (
     _global_tg_defaults,
     _load_notif_cfg,  # noqa: F401  (re-export: tests patch it on this module)
     _send_telegram_message,
     httpx,  # noqa: F401  (re-export: tests patch httpx.AsyncClient on this module)
 )
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
 )
-from studio.pipeline_redaction import (
+from studio.pipeline.pipeline_redaction import (
     redacted_execution_context as _redacted_context,
 )
 

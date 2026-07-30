@@ -15,7 +15,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
-from .pipeline_runtime import get_executor_for_run
+from .pipeline.pipeline_runtime import get_executor_for_run
 
 
 class PipelineRunConsumer(AsyncWebsocketConsumer):
@@ -93,7 +93,7 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _mark_run_stopped(self, run_id: int) -> None:
         from studio.models import PipelineRun
-        from studio.pipeline_runtime import update_runtime_control
+        from studio.pipeline.pipeline_runtime import update_runtime_control
 
         run = PipelineRun.objects.filter(pk=run_id).first()
         if run is None:

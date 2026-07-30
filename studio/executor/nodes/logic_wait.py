@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.registry import registry
-from studio.pipeline_logic import execute_logic_wait_node
+from studio.pipeline.pipeline_logic import execute_logic_wait_node
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext

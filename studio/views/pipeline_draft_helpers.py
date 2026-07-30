@@ -3,7 +3,7 @@ from studio.models import (
     PipelineDraftRevision,
     PipelineDraftSession,
 )
-from studio.pipeline_validation import validate_pipeline_definition
+from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services import list_owned_server_payloads
 from studio.services.pipeline_template_recommendations import (
     build_template_graph_patch,
