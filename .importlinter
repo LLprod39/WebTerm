@@ -171,3 +171,21 @@ forbidden_modules =
     servers.consumers
     studio
     web_ui
+
+
+# ─── Contract 13: playbook execution plane is a leaf domain ─────────────────
+# Goal: Queue leasing and worker execution stay reusable outside delivery and
+# orchestration layers, with no reverse dependency on agents or monitoring.
+[importlinter:contract:servers-playbooks-leaf-domain]
+name = servers.playbooks must not import delivery or orchestration domains
+type = forbidden
+source_modules =
+    servers.playbooks
+forbidden_modules =
+    servers.agents
+    servers.consumers
+    servers.monitoring
+    servers.operator
+    servers.views
+    studio
+    web_ui

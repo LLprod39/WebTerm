@@ -197,7 +197,7 @@ def test_run_snapshot_variables_and_dispatch_are_one_transaction(monkeypatch):
     def fail_enqueue(**_kwargs):
         raise RuntimeError("dispatch insert failed")
 
-    monkeypatch.setattr("servers.playbook_dispatch.enqueue_playbook_run_dispatch", fail_enqueue)
+    monkeypatch.setattr("servers.playbooks.dispatch.enqueue_playbook_run_dispatch", fail_enqueue)
     with pytest.raises(RuntimeError, match="dispatch insert failed"):
         prepare_playbook_run(
             user=user,

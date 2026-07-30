@@ -16,7 +16,7 @@ from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import BackgroundWorkerState, Playbook, PlaybookRevision
-from servers.playbook_dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
+from servers.playbooks.dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
 from servers.services.ansible_engine import (
     detect_ansible,
     generate_from_recipe,

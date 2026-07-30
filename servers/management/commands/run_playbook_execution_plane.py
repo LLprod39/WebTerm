@@ -11,7 +11,7 @@ from loguru import logger
 
 from app.core.redacted_logging import redacted_log_text
 from servers.models import PlaybookRunDispatch
-from servers.playbook_dispatch import (
+from servers.playbooks.dispatch import (
     DEFAULT_PLAYBOOK_LEASE_SECONDS,
     PLAYBOOK_EXECUTION_WORKER_KIND,
     claim_next_playbook_dispatch,

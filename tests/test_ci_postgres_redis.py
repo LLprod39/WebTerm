@@ -12,7 +12,7 @@ from django.db import close_old_connections, connection
 
 from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.models import AgentRun, PlaybookRun, ServerAgent
-from servers.playbook_dispatch import claim_next_playbook_dispatch, enqueue_playbook_run_dispatch
+from servers.playbooks.dispatch import claim_next_playbook_dispatch, enqueue_playbook_run_dispatch
 
 pytestmark = pytest.mark.skipif(
     os.getenv("WEBTERM_REQUIRE_EXTERNAL_TEST_SERVICES") != "1",
@@ -112,8 +112,8 @@ def test_playbook_dispatch_validates_four_skip_locked_candidates_concurrently(mo
         time.sleep(0.25)
         return True
 
-    monkeypatch.setattr("servers.playbook_dispatch._targets_still_authorized", slow_authorization)
-    monkeypatch.setattr("servers.playbook_dispatch.recover_expired_playbook_dispatches", lambda **_kwargs: {})
+    monkeypatch.setattr("servers.playbooks.dispatch._targets_still_authorized", slow_authorization)
+    monkeypatch.setattr("servers.playbooks.dispatch.recover_expired_playbook_dispatches", lambda **_kwargs: {})
 
     def claim(index: int) -> int:
         close_old_connections()
@@ -151,7 +151,7 @@ def test_playbook_concurrent_claims_preserve_the_global_capacity_limit(monkeypat
         enqueue_playbook_run_dispatch(run=run)
 
     barrier = threading.Barrier(4)
-    monkeypatch.setattr("servers.playbook_dispatch.recover_expired_playbook_dispatches", lambda **_kwargs: {})
+    monkeypatch.setattr("servers.playbooks.dispatch.recover_expired_playbook_dispatches", lambda **_kwargs: {})
 
     def claim(index: int) -> int | None:
         close_old_connections()
