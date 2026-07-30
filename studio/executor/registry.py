@@ -113,3 +113,17 @@ def restore_node_registry(snapshot: Mapping[str, type[BaseNode]]) -> None:
 def clear_node_registry() -> None:
     """Clear the process-global node registry without replacing the singleton."""
     registry.clear()
+
+
+def mutation_preview_required(node_type: str, node_data: dict) -> bool:
+    """Evaluate the built-in mutation-preview contract without coupling the executor to its implementation."""
+    from studio.executor.change_preview import node_requires_change_preview
+
+    return node_requires_change_preview(node_type, node_data)
+
+
+def mutation_preview_valid(value) -> bool:
+    """Validate a mutation preview at the registry/executor boundary."""
+    from studio.executor.change_preview import valid_change_preview
+
+    return valid_change_preview(value)

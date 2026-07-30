@@ -89,12 +89,13 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "path": _str(description="Remote text file path."),
                 "content": _str(description="UTF-8 content for write action. Supports templates."),
                 "allow_empty_content": _bool(default=False),
+                "dry_run": _bool(default=False, description="Preview a write and return a diff without changing the file."),
                 "max_bytes": _int(minimum=1024, maximum=1048576, default=131072),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
             required=("path", "action"),
         ),
-        output_schema=_schema({"output": _str(), "file": _obj()}),
+        output_schema=_schema({"output": _str(), "file": _obj(), "change_preview": _obj()}),
     ),
     "ops/package_action": _manifest(
         "ops/package_action",
@@ -112,12 +113,15 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 **SERVER_ID_FIELDS,
                 "action": _str(enum=("list_updates", "install", "update", "remove"), default="list_updates"),
                 "packages": _array(_str(), description="Explicit package names for install/update/remove."),
+                "dry_run": _bool(default=False, description="Preview the package delta without invoking the package manager."),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
             required=("action",),
         ),
-        output_schema=_schema({"output": _str(), "packages": _obj(), "package_action": _obj()}),
+        output_schema=_schema(
+            {"output": _str(), "packages": _obj(), "package_action": _obj(), "change_preview": _obj()}
+        ),
     ),
     "ops/disk_cleanup": _manifest(
         "ops/disk_cleanup",
@@ -144,7 +148,9 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
             },
             required=("action",),
         ),
-        output_schema=_schema({"output": _str(), "disk": _obj(), "disk_cleanup": _obj()}),
+        output_schema=_schema(
+            {"output": _str(), "disk": _obj(), "disk_cleanup": _obj(), "change_preview": _obj()}
+        ),
     ),
     "ops/backup_restore_check": _manifest(
         "ops/backup_restore_check",
@@ -187,12 +193,13 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                     description="systemd service name. Falls back to service_name runtime context when empty."
                 ),
                 "action": _str(enum=("start", "stop", "restart", "reload"), default="restart"),
+                "dry_run": _bool(default=False, description="Preview the desired service state without calling systemctl."),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
             required=("service", "action"),
         ),
-        output_schema=_schema({"output": _str(), "action_result": _obj()}),
+        output_schema=_schema({"output": _str(), "action_result": _obj(), "change_preview": _obj()}),
     ),
     "ops/docker_action": _manifest(
         "ops/docker_action",
@@ -210,6 +217,7 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 **SERVER_ID_FIELDS,
                 "container": _str(description="Docker container name or id."),
                 "action": _str(enum=("start", "stop", "restart"), default="restart"),
+                "dry_run": _bool(default=False, description="Preview the desired container state without changing it."),
                 "include_logs": _bool(default=True),
                 "verify": _bool(default=True),
                 "lines": _int(minimum=20, maximum=240, default=80),
@@ -217,7 +225,7 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
             },
             required=("container", "action"),
         ),
-        output_schema=_schema({"output": _str(), "action_result": _obj()}),
+        output_schema=_schema({"output": _str(), "action_result": _obj(), "change_preview": _obj()}),
     ),
     "ops/process_action": _manifest(
         "ops/process_action",
@@ -236,11 +244,12 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "pid": _int(description="Explicit process id."),
                 "pid_context_key": _str(default="pid", description="Context key to resolve PID from."),
                 "action": _str(enum=("terminate", "kill_force"), default="terminate"),
+                "dry_run": _bool(default=False, description="Preview the process signal without sending it."),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
             required=("action",),
         ),
-        output_schema=_schema({"output": _str(), "action_result": _obj()}),
+        output_schema=_schema({"output": _str(), "action_result": _obj(), "change_preview": _obj()}),
     ),
     "ops/http_check": _manifest(
         "ops/http_check",
@@ -270,16 +279,19 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
         ("success", "error", "out"),
         risk_level="mutating",
         mutates_state=True,
+        supports_dry_run=True,
+        requires_approval_by_default=True,
         tags=("monitoring", "alert"),
         input_schema=_schema(
             {
                 "alert_id": _int(description="Explicit monitoring alert id."),
                 "alert_id_context_key": _str(default="alert_id", description="Context key to resolve alert_id from."),
                 "action": _str(enum=("resolve",), default="resolve"),
+                "dry_run": _bool(default=False, description="Preview the alert transition without updating it."),
                 "note": _str(description="Operator note stored in output."),
                 "on_failure": ON_FAILURE_SCHEMA,
             }
         ),
-        output_schema=_schema({"output": _str(), "alert": _obj()}),
+        output_schema=_schema({"output": _str(), "alert": _obj(), "change_preview": _obj()}),
     ),
 }

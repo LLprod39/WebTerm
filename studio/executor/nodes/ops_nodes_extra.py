@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
+from studio.executor.change_preview import build_change_preview
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.nodes.ops_alert_update import execute_alert_update as _execute_alert_update
 from studio.executor.nodes.ops_context import load_owned_server as _load_owned_server
@@ -87,7 +88,19 @@ class OpsDiskCleanupNode(BaseNode):
             action_exit = int(exit_match.group(1))
         plan_text = combined_output.partition("__PLAN__\n")[2].partition("__ACTION__\n")[0].strip()
         action_text = combined_output.partition("__ACTION__\n")[2].partition("__ACTION_EXIT__=")[0].strip()
-        after = await ops.get_linux_ui_disk(server, secret=secret) if verify else {}
+        after = await ops.get_linux_ui_disk(server, secret=secret) if verify and not dry_run else {}
+        planned_after = {
+            "requested_action": action,
+            "plan_excerpt": plan_text[:2000],
+            "candidate_paths": [line for line in plan_text.splitlines() if line.startswith(("/tmp/", "/var/tmp/"))],
+        }
+        change_preview = build_change_preview(
+            operation=f"disk.{action}",
+            target={"server_id": server.id, "paths": ["/tmp", "/var/tmp"] if action == "tmp_cleanup" else ["journal"]},
+            before={"summary": before.get("summary"), "cleanup_candidates": before.get("cleanup_candidates")},
+            after=after or planned_after,
+            dry_run=dry_run,
+        )
         payload = {
             "server": {"id": server.id, "name": server.name, "host": server.host},
             "action": action,
@@ -104,11 +117,14 @@ class OpsDiskCleanupNode(BaseNode):
             "vacuum_size_mb": vacuum_size_mb,
         }
         status_text = "dry-run" if dry_run else "completed" if payload["success"] else "failed"
-        text = f"Disk cleanup {action} on {server.name}: {status_text}\n\n```text\n{payload['action_excerpt'] or payload['plan_excerpt']}\n```"
+        text = f"Disk cleanup {action} on {server.name}: {status_text}\n\n```diff\n{change_preview['diff']}\n```"
         if payload["success"]:
-            return NodeResult(output={"output": text, "disk_cleanup": payload})
+            return NodeResult(
+                output={"output": text, "disk_cleanup": payload, "change_preview": change_preview}
+            )
         return NodeResult(
-            error=payload["action_excerpt"] or "Disk cleanup failed", output={"output": text, "disk_cleanup": payload}
+            error=payload["action_excerpt"] or "Disk cleanup failed",
+            output={"output": text, "disk_cleanup": payload, "change_preview": change_preview},
         )
 
 

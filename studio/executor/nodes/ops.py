@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from typing import TYPE_CHECKING, Any
 
 import httpx  # noqa: F401 — re-exported for OpsHttpCheckNode monkeypatches
 
+from studio.executor.change_preview import build_change_preview
 from studio.executor.nodes.base import BaseNode, NodeResult
 from studio.executor.nodes.ops_actions import (
     execute_docker_action as _execute_docker_action,
@@ -67,6 +69,9 @@ from studio.executor.registry import registry
 
 if TYPE_CHECKING:
     from studio.executor.context import ExecutionContext
+
+
+logger = logging.getLogger(__name__)
 
 
 @registry.register
@@ -161,8 +166,44 @@ class OpsFileActionNode(BaseNode):
         content = ctx.resolve_template(str(config.get("content") or ""))
         if not content and not _coerce_bool(config.get("allow_empty_content"), default=False):
             return NodeResult(error="content is required for write action")
-        result = await write_text_file(server, secret=secret, path=path, content=content, max_bytes=max_bytes)
+        dry_run = _coerce_bool(config.get("dry_run"), default=False)
+        if dry_run:
+            try:
+                existing = await read_text_file(server, secret=secret, path=path, max_bytes=max_bytes)
+            except Exception as exc:
+                logger.info(
+                    "File dry-run could not read existing target on server %s (%s); treating it as unavailable",
+                    server.id,
+                    type(exc).__name__,
+                )
+                existing = {"path": path, "size": None, "exists": None}
+            result = {
+                "path": existing.get("path") or path,
+                "filename": existing.get("filename") or path.rsplit("/", 1)[-1],
+                "size": len(content.encode("utf-8")),
+                "encoding": "utf-8",
+                "previous_content": existing.get("content") if "content" in existing else None,
+                "previous_size": existing.get("size"),
+                "existed": existing.get("exists", True),
+            }
+        else:
+            result = await write_text_file(server, secret=secret, path=path, content=content, max_bytes=max_bytes)
         content_hash = hashlib.sha256(str(content).encode("utf-8")).hexdigest()
+        previous_content = result.get("previous_content")
+        before = (
+            previous_content
+            if isinstance(previous_content, str)
+            else ""
+            if result.get("existed") is False
+            else {"state": "unavailable"}
+        )
+        change_preview = build_change_preview(
+            operation="file.write",
+            target={"server_id": server.id, "path": result.get("path") or path},
+            before=before,
+            after=content,
+            dry_run=dry_run,
+        )
         payload = {
             "server": {"id": server.id, "name": server.name, "host": server.host},
             "action": "write",
@@ -171,9 +212,15 @@ class OpsFileActionNode(BaseNode):
             "size": result.get("size"),
             "encoding": result.get("encoding"),
             "content_sha256": content_hash,
+            "dry_run": dry_run,
+            "existed": bool(result.get("existed")),
         }
-        text = f"File write on {server.name}: {payload['path']} ({payload['size']} bytes, sha256={content_hash[:12]})"
-        return NodeResult(output={"output": text, "file": payload})
+        status_text = "preview" if dry_run else "completed"
+        text = (
+            f"File write {status_text} on {server.name}: {payload['path']} "
+            f"({payload['size']} bytes, sha256={content_hash[:12]})\n\n```diff\n{change_preview['diff']}\n```"
+        )
+        return NodeResult(output={"output": text, "file": payload, "change_preview": change_preview})
 
 
 @registry.register
@@ -220,38 +267,63 @@ class OpsPackageActionNode(BaseNode):
         except ValueError as exc:
             return NodeResult(error=str(exc))
 
-        result = await _run_command_result(
-            server,
-            secret=secret,
-            command=(f"{command} 2>&1\naction_exit=$?\nprintf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"),
-        )
-        combined_output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
-        action_exit = _coerce_int(result.get("exit_code")) or 0
-        exit_match = re.search(r"__ACTION_EXIT__=(\d+)", combined_output)
-        if exit_match:
-            action_exit = int(exit_match.group(1))
-        verification = (
-            await get_linux_ui_packages(server, secret=secret)
-            if _coerce_bool(config.get("verify"), default=True)
-            else {}
+        dry_run = _coerce_bool(config.get("dry_run"), default=False)
+        before = await get_linux_ui_packages(server, secret=secret)
+        if dry_run:
+            combined_output = ""
+            action_exit: int | None = None
+            verification: dict[str, Any] = {}
+        else:
+            result = await _run_command_result(
+                server,
+                secret=secret,
+                command=(f"{command} 2>&1\naction_exit=$?\nprintf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"),
+            )
+            combined_output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
+            action_exit = _coerce_int(result.get("exit_code")) or 0
+            exit_match = re.search(r"__ACTION_EXIT__=(\d+)", combined_output)
+            if exit_match:
+                action_exit = int(exit_match.group(1))
+            verification = (
+                await get_linux_ui_packages(server, secret=secret)
+                if _coerce_bool(config.get("verify"), default=True)
+                else {}
+            )
+        planned_after = {
+            "package_manager": package_manager,
+            "requested_action": action,
+            "requested_packages": package_names,
+        }
+        change_preview = build_change_preview(
+            operation=f"package.{action}",
+            target={"server_id": server.id, "packages": package_names},
+            before=before,
+            after=verification or planned_after,
+            dry_run=dry_run,
         )
         payload = {
             "server": {"id": server.id, "name": server.name, "host": server.host},
             "action": action,
             "package_manager": package_manager,
             "packages": package_names,
-            "success": action_exit == 0,
+            "success": dry_run or action_exit == 0,
             "exit_code": action_exit,
             "output_excerpt": combined_output[:3000],
             "verification_summary": verification.get("summary") if isinstance(verification, dict) else {},
+            "dry_run": dry_run,
         }
-        status_text = "completed" if payload["success"] else "failed"
-        text = f"Package action {action} on {server.name}: {status_text} ({', '.join(package_names)})\n\n```text\n{payload['output_excerpt']}\n```"
+        status_text = "preview" if dry_run else "completed" if payload["success"] else "failed"
+        text = (
+            f"Package action {action} on {server.name}: {status_text} ({', '.join(package_names)})"
+            f"\n\n```diff\n{change_preview['diff']}\n```"
+        )
         if payload["success"]:
-            return NodeResult(output={"output": text, "package_action": payload})
+            return NodeResult(
+                output={"output": text, "package_action": payload, "change_preview": change_preview}
+            )
         return NodeResult(
             error=payload["output_excerpt"] or "Package action failed",
-            output={"output": text, "package_action": payload},
+            output={"output": text, "package_action": payload, "change_preview": change_preview},
         )
 
 

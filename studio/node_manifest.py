@@ -127,6 +127,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
             {
                 **SERVER_ID_FIELDS,
                 "command": _str(description="Command template to execute over SSH."),
+                "dry_run": _bool(default=False, description="Preview a changing command without executing it."),
                 "preflight_commands": _array(_str(), description="Read-only checks to run before command execution."),
                 "verification_commands": _array(_str(), description="Checks to run after command execution."),
                 "permission_mode": PERMISSION_MODE_SCHEMA,
@@ -136,7 +137,13 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
             required=("command",),
         ),
         output_schema=_schema(
-            {"output": _str(), "command": _obj(), "preflight": _array(_obj()), "verification": _array(_obj())}
+            {
+                "output": _str(),
+                "command": _obj(),
+                "preflight": _array(_obj()),
+                "verification": _array(_obj()),
+                "change_preview": _obj(),
+            }
         ),
     ),
     "agent/llm_query": _manifest(
