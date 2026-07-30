@@ -176,6 +176,7 @@ docs/architecture/*
 !docs/architecture/README.md
 !docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md
 !docs/architecture/WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md
+!docs/architecture/AGENT_COMMAND_SANDBOX.md
 !docs/architecture/adr/
 docs/architecture/adr/*
 !docs/architecture/adr/0001-primary-runtime-and-toolchain.md

@@ -22,6 +22,7 @@ from typing import Any
 import asyncssh
 from loguru import logger
 
+from app.agent_kernel.sandbox.ephemeral_runner import agent_command_uses_docker
 from app.sudo_policy import normalize_sudo_policy
 from servers.agents.agent_sessions_exec import AgentSessionExecMixin
 from servers.monitoring.monitor import _build_connect_kwargs
@@ -117,6 +118,23 @@ class AgentSessionManager(AgentSessionExecMixin):
 
         forbidden = self._collect_forbidden(server)
         session = _ServerSession(server.id, server.name, forbidden)
+
+        if agent_command_uses_docker():
+            session.connected_at = time.monotonic()
+            self.connections[server.id] = session
+            self._name_to_id[server.name.lower()] = server.id
+            if self.event_callback:
+                await self.event_callback(
+                    "agent_console",
+                    {
+                        "server_id": server.id,
+                        "server_name": server.name,
+                        "event": "connected",
+                        "runtime": "ephemeral_container",
+                    },
+                )
+            logger.info("Agent isolated session ready: {} ({})", server.name, server.host)
+            return
 
         kwargs = await _build_connect_kwargs(server)
         host = kwargs.get("host") or getattr(server, "host", "") or "?"

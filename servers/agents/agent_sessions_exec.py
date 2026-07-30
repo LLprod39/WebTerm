@@ -9,6 +9,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
+from app.agent_kernel.sandbox.ephemeral_runner import agent_command_uses_docker
 from app.sudo_policy import (
     SUDO_AUTH_MODE_NONE,
     SUDO_POLICY_APPROVED,
@@ -21,6 +22,7 @@ from app.sudo_policy import (
     wrap_command_for_controlled_sudo,
 )
 from servers.secret_utils import get_server_sudo_secret
+from servers.services.agent_command_runner import run_agent_command
 
 
 class AgentSessionExecMixin:
@@ -33,10 +35,14 @@ class AgentSessionExecMixin:
     async def execute(self, server_id: int, command: str) -> dict[str, Any]:
         """Execute command via PTY stdin/stdout, wait for prompt marker."""
         session = self.connections.get(server_id)
-        if session is None or session.proc is None:
+        if session is None:
             raise RuntimeError(f"Server {server_id} not connected.")
 
         server_obj = self.allowed_servers.get(server_id)
+        if agent_command_uses_docker():
+            return await self._execute_isolated(session, server_obj, command)
+        if session.proc is None:
+            raise RuntimeError(f"Server {server_id} not connected.")
         if (
             command_uses_sudo(command)
             and getattr(server_obj, "sudo_auth_mode", "none") == "stored_password"
@@ -67,6 +73,71 @@ class AgentSessionExecMixin:
             )
 
         return result
+
+    async def _execute_isolated(self, session: Any, server_obj: Any, command: str) -> dict[str, Any]:
+        if command_uses_sudo(command) and getattr(server_obj, "sudo_auth_mode", "none") == "stored_password":
+            return await self._execute_with_sudo_password(session, server_obj, command)
+        if self._can_use_controlled_sudo(server_obj) and command_prefers_controlled_sudo(command):
+            return await self._execute_controlled_sudo(
+                session,
+                server_obj,
+                command,
+                reason="auto_sudo_privileged_read",
+            )
+
+        result = await self._run_isolated_once(session, server_obj, command)
+        if (
+            self._can_use_controlled_sudo(server_obj)
+            and not command_uses_sudo(command)
+            and output_indicates_privilege_error(result.get("stdout", ""), result.get("stderr", ""))
+        ):
+            return await self._execute_controlled_sudo(
+                session,
+                server_obj,
+                command,
+                reason="auto_sudo_after_permission_denied",
+                original_result=result,
+            )
+        return result
+
+    async def _run_isolated_once(
+        self,
+        session: Any,
+        server_obj: Any,
+        command: str,
+        *,
+        input_text: str | None = None,
+    ) -> dict[str, Any]:
+        result = await run_agent_command(
+            server_obj,
+            command,
+            input_text=input_text,
+            timeout_seconds=self.command_timeout,
+        )
+        stdout = result.stdout or ""
+        stderr = result.stderr or ""
+        for character in stdout + (("\n" + stderr) if stderr else ""):
+            session.output_buffer.append(character)
+        if self.event_callback:
+            await self.event_callback(
+                "agent_console",
+                {
+                    "server_id": session.server_id,
+                    "server_name": session.server_name,
+                    "event": "command_done",
+                    "command": command,
+                    "exit_code": result.exit_status,
+                    "output_preview": stdout[:500],
+                    "runtime": result.runtime,
+                },
+            )
+        return {
+            "stdout": stdout,
+            "stderr": stderr,
+            "exit_code": result.exit_status,
+            "duration_ms": result.duration_ms,
+            "runtime": result.runtime,
+        }
 
     async def _execute_via_pty(self, session: Any, command: str) -> dict[str, Any]:
         """Execute a plain command through the interactive PTY."""
@@ -150,13 +221,20 @@ class AgentSessionExecMixin:
             sudo_auth_mode=getattr(server_obj, "sudo_auth_mode", "none"),
             sudo_password=sudo_password,
         )
+        if agent_command_uses_docker():
+            isolated = await self._run_isolated_once(
+                session,
+                server_obj,
+                prepared.command,
+                input_text=prepared.input_text,
+            )
+            if prepared.notes:
+                isolated["stdout"] = "\n".join(prepared.notes) + "\n" + (isolated.get("stdout") or "")
+            return isolated
         run_kwargs: dict[str, Any] = {"check": False}
         if prepared.input_text is not None:
             run_kwargs["input"] = prepared.input_text
-        result = await asyncio.wait_for(
-            session.conn.run(prepared.command, **run_kwargs),
-            timeout=self.command_timeout,
-        )
+        result = await asyncio.wait_for(session.conn.run(prepared.command, **run_kwargs), timeout=self.command_timeout)
         duration = int((time.monotonic() - t0) * 1000)
         stdout = result.stdout or ""
         if prepared.notes:

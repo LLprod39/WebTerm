@@ -17,6 +17,9 @@ services:
   playbook-docker-proxy:
     container_name: mini-prod-playbook-docker-proxy-smoke
 
+  agent-command-docker-proxy:
+    container_name: mini-prod-agent-command-docker-proxy-smoke
+
   ssh-target:
     build:
       context: .

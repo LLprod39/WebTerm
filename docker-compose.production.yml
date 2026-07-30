@@ -8,11 +8,11 @@ x-proxy-env: &proxy-env
   http_proxy: ${http_proxy:-}
   https_proxy: ${https_proxy:-}
   ftp_proxy: ${ftp_proxy:-}
-  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner,playbook-docker-proxy
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
   FTP_PROXY: ${FTP_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner,playbook-docker-proxy
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-demo,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy
 
 x-json-logging: &json-logging
   driver: json-file
@@ -49,6 +49,15 @@ x-backend-worker-environment: &backend-worker-environment
   # stdio MCP through the shared runner instead of spawning on the host.
   STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
   STUDIO_MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
+  DOCKER_HOST: tcp://agent-command-docker-proxy:2375
+  AGENT_COMMAND_RUNTIME: docker
+  AGENT_COMMAND_RUNNER_IMAGE: "${AGENT_COMMAND_RUNNER_IMAGE:?AGENT_COMMAND_RUNNER_IMAGE is required}"
+  AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
+  AGENT_COMMAND_DOCKER_CPUS: ${AGENT_COMMAND_DOCKER_CPUS:-0.5}
+  AGENT_COMMAND_DOCKER_MEMORY: ${AGENT_COMMAND_DOCKER_MEMORY:-256m}
+  AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
+  AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
+  AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
   WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
   WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
   WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
@@ -75,12 +84,17 @@ x-backend-worker: &backend-worker
     - mini_prod_logs:/workspace/logs
     - ./docker/ldap:/etc/webtrerm/ldap:ro
     - playbook_validator_socket:/run/playbook-validator
+  networks:
+    - default
+    - docker-control
   depends_on:
     backend:
       condition: service_healthy
     postgres:
       condition: service_healthy
     redis:
+      condition: service_healthy
+    agent-command-docker-proxy:
       condition: service_healthy
   restart: unless-stopped
   stop_grace_period: 45s
@@ -267,8 +281,17 @@ services:
       # to a strong shared secret so only the backend can reach the runner.
       STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
       STUDIO_MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
-      # Production HTTP processes intentionally have no Docker socket. Runtime
-      # execution is owned by the durable playbook worker below.
+      # Production HTTP processes have no Docker socket. Agent commands use a
+      # separate filtered API which permits only the pinned hardened runner.
+      DOCKER_HOST: tcp://agent-command-docker-proxy:2375
+      AGENT_COMMAND_RUNTIME: docker
+      AGENT_COMMAND_RUNNER_IMAGE: "${AGENT_COMMAND_RUNNER_IMAGE:?AGENT_COMMAND_RUNNER_IMAGE is required}"
+      AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
+      AGENT_COMMAND_DOCKER_CPUS: ${AGENT_COMMAND_DOCKER_CPUS:-0.5}
+      AGENT_COMMAND_DOCKER_MEMORY: ${AGENT_COMMAND_DOCKER_MEMORY:-256m}
+      AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
+      AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
+      AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
       WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
       WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
       WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
@@ -283,6 +306,9 @@ services:
       - mini_prod_logs:/workspace/logs
       - ./docker/ldap:/etc/webtrerm/ldap:ro
       - playbook_validator_socket:/run/playbook-validator
+    networks:
+      - default
+      - docker-control
     depends_on:
       volume-permissions:
         condition: service_completed_successfully
@@ -295,6 +321,8 @@ services:
       mcp-runner:
         condition: service_healthy
       playbook-validator:
+        condition: service_healthy
+      agent-command-docker-proxy:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
@@ -349,6 +377,51 @@ services:
         "--batch-size",
         "${HISTORY_PRUNE_BATCH_SIZE:-1000}",
       ]
+
+  agent-command-docker-proxy:
+    image: ${WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE:-webterm-agent-command-docker-proxy:latest}
+    build:
+      context: .
+      dockerfile: docker/playbook-socket-proxy.Dockerfile
+    container_name: mini-prod-agent-command-docker-proxy
+    user: "10002:10002"
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    environment:
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_PROXY_POLICY: agent-command
+      AGENT_COMMAND_RUNNER_IMAGE: "${AGENT_COMMAND_RUNNER_IMAGE:?AGENT_COMMAND_RUNNER_IMAGE is required}"
+      AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
+      AGENT_COMMAND_SSH_AUTH_SOCK: ${AGENT_COMMAND_SSH_AUTH_SOCK:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    networks:
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10002,gid=10002,mode=1770
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2375/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *json-logging
 
   playbook-docker-proxy:
     image: ${WEBTERM_PLAYBOOK_DOCKER_PROXY_IMAGE:-webterm-playbook-docker-proxy:latest}

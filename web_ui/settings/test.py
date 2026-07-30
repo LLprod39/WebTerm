@@ -35,6 +35,8 @@ LLM_USAGE_SKIP_DETACHED_SQLITE_LOGGING = False
 PIPELINE_RUNS_DISABLE_BACKGROUND = True
 MARS_AGENT_RUNTIME = "host"
 MARS_ALLOW_UNSAFE_HOST_RUNTIME_FOR_TESTS = True
+AGENT_COMMAND_RUNTIME = "host"
+AGENT_COMMAND_ALLOW_UNSAFE_HOST_RUNTIME_FOR_TESTS = True
 # Admin Mode is disabled by default in every runtime. Tests opt in explicitly
 # so the existing guarded Admin contracts remain covered without widening v0.1.
 KUBERNETES_ADMIN_MODE_ENABLED = True

@@ -7,7 +7,7 @@ from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.outcomes import map_agent_outcome_to_pipeline_state
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.pipeline_agent_provider import run_pipeline_multi_agent, run_pipeline_react_agent
-from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password
+from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password, run_agent_command
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from core_ui.activity import log_user_activity_async
 from studio.models import MCPServerPool, PipelineRun
@@ -65,6 +65,7 @@ __all__ = [
     "execute_agent_ssh_cmd",
     "get_server_connect_kwargs",
     "get_server_sudo_password",
+    "run_agent_command",
     "log_user_activity_async",
     "prepare_sudo_command",
     "resolve_sudo_policy",

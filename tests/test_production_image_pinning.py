@@ -28,3 +28,13 @@ def test_mars_profile_has_no_mutable_fallback_image() -> None:
     assert "MARS_AGENT_DOCKER_IMAGE" in image
     assert ":latest" not in image
     assert "@sha256:" in image
+
+
+def test_agent_command_runtime_has_no_mutable_fallback_image() -> None:
+    compose = yaml.safe_load((ROOT / "docker-compose.production.yml").read_text(encoding="utf-8"))
+
+    environment = compose["x-backend-worker-environment"]
+    image = environment["AGENT_COMMAND_RUNNER_IMAGE"]
+    assert "AGENT_COMMAND_RUNNER_IMAGE" in image
+    assert ":latest" not in image
+    assert "required" in image

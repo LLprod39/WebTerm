@@ -5,6 +5,7 @@ RUN addgroup -g 10002 socketproxy \
 
 WORKDIR /proxy
 COPY app/playbook_socket_proxy_policy.py ./playbook_socket_proxy_policy.py
+COPY app/agent_command_socket_proxy_policy.py ./agent_command_socket_proxy_policy.py
 COPY docker/playbook_socket_proxy.py ./playbook_socket_proxy.py
 
 USER 10002:10002
