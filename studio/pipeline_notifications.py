@@ -79,7 +79,7 @@ def _global_site_url() -> str:
 
 
 def _resolve_from_email(from_email: str, smtp_user: str, smtp_host: str) -> str:
-    if not from_email or "weuai.site" in from_email or "noreply@" in (from_email or "").lower():
+    if not from_email or "noreply@" in (from_email or "").lower():
         if not smtp_user:
             return from_email or "pipeline@noreply.local"
         user = (smtp_user or "").strip()

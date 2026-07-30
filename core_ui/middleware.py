@@ -92,12 +92,6 @@ def _extract_request_payload(request):
     return metadata
 
 
-# CSRF trust for rotating ngrok hostnames is handled statically via wildcard
-# entries in CSRF_TRUSTED_ORIGINS (see web_ui/settings/security.py,
-# CSRF_TRUST_NGROK env flag). The former CsrfTrustNgrokMiddleware mutated
-# settings at runtime and matched hosts by substring, which was spoofable.
-
-
 class AdminRussianMiddleware:
     """Включает русский интерфейс для страниц /admin/."""
 
