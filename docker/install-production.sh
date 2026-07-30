@@ -656,6 +656,7 @@ main() {
     generate_secret_if_needed "MANAGED_SECRET_KEY" 64
     generate_secret_if_needed "MASTER_PASSWORD" 48
     generate_secret_if_needed "POSTGRES_PASSWORD" 32
+    generate_secret_if_needed "STUDIO_MCP_RUNNER_TOKEN" 64
   fi
 
   ensure_agent_command_runner_image

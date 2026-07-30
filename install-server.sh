@@ -465,6 +465,9 @@ prepare_env() {
   if [[ -z "$(env_get POSTGRES_PASSWORD)" || "$(env_get POSTGRES_PASSWORD)" == change-* ]]; then
     env_set POSTGRES_PASSWORD "$(random_string 32)"
   fi
+  if [[ -z "$(env_get STUDIO_MCP_RUNNER_TOKEN)" ]]; then
+    env_set STUDIO_MCP_RUNNER_TOKEN "$(random_string 64)"
+  fi
 
   # Worker / runtime defaults so first boot is complete without hand-editing env.
   [[ -n "$(env_get POSTGRES_DB)" ]] || env_set POSTGRES_DB "weu_platform"

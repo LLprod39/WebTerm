@@ -75,6 +75,14 @@ def test_production_installer_does_not_ignore_deploy_check_failure() -> None:
     assert "check --deploy || true" not in installer
 
 
+def test_production_installers_generate_the_required_mcp_runner_token() -> None:
+    internal = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+    outer = (ROOT / "install-server.sh").read_text(encoding="utf-8")
+
+    assert 'generate_secret_if_needed "STUDIO_MCP_RUNNER_TOKEN" 64' in internal
+    assert 'env_set STUDIO_MCP_RUNNER_TOKEN "$(random_string 64)"' in outer
+
+
 def test_production_installer_starts_the_playbook_execution_plane() -> None:
     installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
 
