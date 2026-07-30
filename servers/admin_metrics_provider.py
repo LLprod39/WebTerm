@@ -1,8 +1,49 @@
 from __future__ import annotations
 
-from django.db.models import Avg, Max
+from datetime import timedelta
 
-from servers.models import Server, ServerAlert, ServerConnection, ServerHealthCheck
+from django.db.models import Avg, Count, F, Max, Min, Q
+from django.utils import timezone
+
+from servers.models import (
+    AgentRunDispatch,
+    BackgroundWorkerState,
+    PlaybookRunDispatch,
+    Server,
+    ServerAlert,
+    ServerConnection,
+    ServerHealthCheck,
+)
+
+
+def _queue_snapshot(model, *, queue_id: str, label: str, now, exhausted_filter: Q | None = None) -> dict:
+    active_statuses = [model.STATUS_QUEUED, model.STATUS_CLAIMED]
+    since = now - timedelta(hours=24)
+    aggregates = model.objects.aggregate(
+        depth=Count("id", filter=Q(status=model.STATUS_QUEUED)),
+        in_flight=Count("id", filter=Q(status=model.STATUS_CLAIMED)),
+        lease_expired=Count(
+            "id",
+            filter=Q(status=model.STATUS_CLAIMED) & (Q(lease_expires_at__isnull=True) | Q(lease_expires_at__lte=now)),
+        ),
+        retrying=Count("id", filter=Q(status__in=active_statuses, attempt_count__gt=1)),
+        retried_24h=Count(
+            "id",
+            filter=Q(attempt_count__gt=1) & (Q(status__in=active_statuses) | Q(completed_at__gte=since)),
+        ),
+        oldest_queued_at=Min("queued_at", filter=Q(status=model.STATUS_QUEUED)),
+        attempts_exhausted_24h=Count(
+            "id",
+            filter=(exhausted_filter or Q(pk__in=[])) & Q(completed_at__gte=since),
+        ),
+    )
+    oldest = aggregates.pop("oldest_queued_at")
+    return {
+        "id": queue_id,
+        "label": label,
+        **{key: int(value or 0) for key, value in aggregates.items()},
+        "oldest_queued_seconds": max(0, int((now - oldest).total_seconds())) if oldest else 0,
+    }
 
 
 class DjangoAdminServerMetricsProvider:
@@ -67,6 +108,47 @@ class DjangoAdminServerMetricsProvider:
             "fleet_health": fleet_health,
             "active_alerts_count": ServerAlert.objects.filter(is_resolved=False).count(),
             "alerts": alerts,
+        }
+
+    def execution_queue_summary(self) -> dict:
+        now = timezone.now()
+        queues = [
+            _queue_snapshot(
+                AgentRunDispatch,
+                queue_id="agents",
+                label="Agent runs",
+                now=now,
+                exhausted_filter=Q(
+                    status=AgentRunDispatch.STATUS_FAILED,
+                    attempt_count__gte=F("max_attempts"),
+                ),
+            ),
+            _queue_snapshot(
+                PlaybookRunDispatch,
+                queue_id="playbooks",
+                label="Playbook runs",
+                now=now,
+            ),
+        ]
+        stale_workers = BackgroundWorkerState.objects.filter(status=BackgroundWorkerState.STATUS_RUNNING).filter(
+            Q(lease_expires_at__isnull=True) | Q(lease_expires_at__lte=now)
+        )
+        return {
+            "observed_at": now.isoformat(),
+            **{
+                key: sum(queue[key] for queue in queues)
+                for key in (
+                    "depth",
+                    "in_flight",
+                    "lease_expired",
+                    "retrying",
+                    "retried_24h",
+                    "attempts_exhausted_24h",
+                )
+            },
+            "stale_workers": stale_workers.count(),
+            "oldest_queued_seconds": max((queue["oldest_queued_seconds"] for queue in queues), default=0),
+            "queues": queues,
         }
 
     def active_terminal_count_for_user(self, user_id: int) -> int:

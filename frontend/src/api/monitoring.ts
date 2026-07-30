@@ -130,10 +130,13 @@ export async function fetchMonitoringStatus() {
  *  - default → lite TCP reachability only
  */
 export async function refreshMonitoringFleet(options?: { metrics?: boolean }) {
-  return apiFetch<MonitoringStatusResponse & { mode?: string }>("/servers/api/monitoring/refresh/", {
-    method: "POST",
-    body: JSON.stringify({ metrics: Boolean(options?.metrics) }),
-  });
+  return apiFetch<MonitoringStatusResponse & { mode?: string }>(
+    "/servers/api/monitoring/refresh/",
+    {
+      method: "POST",
+      body: JSON.stringify({ metrics: Boolean(options?.metrics) }),
+    },
+  );
 }
 
 export interface HealthCheck {
@@ -157,30 +160,47 @@ export interface HealthCheck {
 }
 
 export async function fetchServerHealth(serverId: number, hours = 24) {
-  return apiFetch<{ success: boolean; server_id: number; server_name: string; checks: HealthCheck[] }>(
-    `/servers/api/${serverId}/health/?hours=${hours}`,
-  );
+  return apiFetch<{
+    success: boolean;
+    server_id: number;
+    server_name: string;
+    checks: HealthCheck[];
+  }>(`/servers/api/${serverId}/health/?hours=${hours}`);
 }
 
 export async function triggerHealthCheck(serverId: number, deep = false) {
-  return apiFetch<{ success: boolean; check: HealthCheck }>(`/servers/api/${serverId}/health/check/`, {
-    method: "POST",
-    body: JSON.stringify({ deep }),
-  });
+  return apiFetch<{ success: boolean; check: HealthCheck }>(
+    `/servers/api/${serverId}/health/check/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ deep }),
+    },
+  );
 }
 
-export async function fetchAlerts(params?: { server_id?: number; severity?: string; resolved?: boolean; limit?: number }) {
+export async function fetchAlerts(params?: {
+  server_id?: number;
+  severity?: string;
+  resolved?: boolean;
+  limit?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.server_id) q.set("server_id", String(params.server_id));
   if (params?.severity) q.set("severity", params.severity);
-  if (params?.resolved !== undefined) q.set("resolved", String(params.resolved));
+  if (params?.resolved !== undefined)
+    q.set("resolved", String(params.resolved));
   if (params?.limit) q.set("limit", String(params.limit));
   const qs = q.toString();
-  return apiFetch<{ success: boolean; alerts: ServerAlertItem[] }>(`/servers/api/alerts/${qs ? `?${qs}` : ""}`);
+  return apiFetch<{ success: boolean; alerts: ServerAlertItem[] }>(
+    `/servers/api/alerts/${qs ? `?${qs}` : ""}`,
+  );
 }
 
 export async function resolveAlert(alertId: number) {
-  return apiFetch<{ success: boolean }>(`/servers/api/alerts/${alertId}/resolve/`, { method: "POST" });
+  return apiFetch<{ success: boolean }>(
+    `/servers/api/alerts/${alertId}/resolve/`,
+    { method: "POST" },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -188,9 +208,16 @@ export async function resolveAlert(alertId: number) {
 // ---------------------------------------------------------------------------
 
 export interface AdminDashboardData {
-  online_users: { count: number; total_registered: number; users: Array<{ username: string; action: string; time: string }> };
+  online_users: {
+    count: number;
+    total_registered: number;
+    users: Array<{ username: string; action: string; time: string }>;
+  };
   ai: { requests_today: number };
-  terminals: { active: number; connections: Array<{ server: string; user: string; connected_at: string }> };
+  terminals: {
+    active: number;
+    connections: Array<{ server: string; user: string; connected_at: string }>;
+  };
   agents: {
     running: number;
     today: number;
@@ -199,22 +226,79 @@ export interface AdminDashboardData {
     success_rate: number;
     daily?: Array<{ date: string; succeeded: number; failed: number }>;
   };
-  api_usage: Record<string, { calls: number; input_tokens: number; output_tokens: number; errors: number; cost_usd: number }>;
+  execution_queues: {
+    observed_at: string | null;
+    depth: number;
+    in_flight: number;
+    lease_expired: number;
+    retrying: number;
+    retried_24h: number;
+    attempts_exhausted_24h: number;
+    stale_workers: number;
+    oldest_queued_seconds: number;
+    queues: Array<{
+      id: "agents" | "playbooks";
+      label: string;
+      depth: number;
+      in_flight: number;
+      lease_expired: number;
+      retrying: number;
+      retried_24h: number;
+      attempts_exhausted_24h: number;
+      oldest_queued_seconds: number;
+    }>;
+  };
+  api_usage: Record<
+    string,
+    {
+      calls: number;
+      input_tokens: number;
+      output_tokens: number;
+      errors: number;
+      cost_usd: number;
+    }
+  >;
   api_calls_today: number;
   providers: Record<string, { enabled: boolean; model: string }>;
   servers: { total: number; active: number };
   tasks: { total: number; in_progress: number };
   hourly_activity: Array<{ hour: string; count: number }>;
-  top_users: Array<{ username: string; total: number; ai_requests: number; terminal_sessions: number }>;
-  recent_activity: Array<{ user: string; category: string; action: string; time: string }>;
-  fleet_health: { avg_cpu: number; avg_memory: number; avg_disk: number; healthy: number; warning: number; critical: number; unreachable: number };
+  top_users: Array<{
+    username: string;
+    total: number;
+    ai_requests: number;
+    terminal_sessions: number;
+  }>;
+  recent_activity: Array<{
+    user: string;
+    category: string;
+    action: string;
+    time: string;
+  }>;
+  fleet_health: {
+    avg_cpu: number;
+    avg_memory: number;
+    avg_disk: number;
+    healthy: number;
+    warning: number;
+    critical: number;
+    unreachable: number;
+  };
   active_alerts_count: number;
-  alerts: Array<{ server: string; type: string; severity: string; title: string; time: string }>;
+  alerts: Array<{
+    server: string;
+    type: string;
+    severity: string;
+    title: string;
+    time: string;
+  }>;
   app_version: string;
 }
 
 export async function fetchAdminDashboard() {
-  return apiFetch<{ success: boolean; data: AdminDashboardData }>("/api/admin/dashboard/");
+  return apiFetch<{ success: boolean; data: AdminDashboardData }>(
+    "/api/admin/dashboard/",
+  );
 }
 
 export interface AdminUserActivity {
@@ -231,7 +315,14 @@ export interface AdminUserActivity {
   created_at: string;
 }
 
-export async function fetchAdminUsersActivity(params?: { user_id?: number; category?: string; search?: string; limit?: number; offset?: number; days?: number }) {
+export async function fetchAdminUsersActivity(params?: {
+  user_id?: number;
+  category?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+  days?: number;
+}) {
   const q = new URLSearchParams();
   if (params?.user_id) q.set("user_id", String(params.user_id));
   if (params?.category) q.set("category", params.category);
@@ -240,7 +331,11 @@ export async function fetchAdminUsersActivity(params?: { user_id?: number; categ
   if (params?.offset) q.set("offset", String(params.offset));
   if (params?.days) q.set("days", String(params.days));
   const qs = q.toString();
-  return apiFetch<{ success: boolean; total: number; events: AdminUserActivity[] }>(`/api/admin/users/activity/${qs ? `?${qs}` : ""}`);
+  return apiFetch<{
+    success: boolean;
+    total: number;
+    events: AdminUserActivity[];
+  }>(`/api/admin/users/activity/${qs ? `?${qs}` : ""}`);
 }
 
 export interface AdminUserSession {
@@ -256,9 +351,13 @@ export interface AdminUserSession {
 }
 
 export async function fetchAdminUsersSessions() {
-  return apiFetch<{ success: boolean; online_count: number; total_registered: number; active_today: number; sessions: AdminUserSession[] }>(
-    "/api/admin/users/sessions/",
-  );
+  return apiFetch<{
+    success: boolean;
+    online_count: number;
+    total_registered: number;
+    active_today: number;
+    sessions: AdminUserSession[];
+  }>("/api/admin/users/sessions/");
 }
 
 // ---------------------------------------------------------------------------
@@ -280,14 +379,22 @@ export interface DashboardLayoutData {
 }
 
 export async function fetchDashboardLayout(type: "admin" | "user") {
-  return apiFetch<{ success: boolean; layout: DashboardLayoutData | null }>(`/api/dashboard-custom/layout/${type}/`);
+  return apiFetch<{ success: boolean; layout: DashboardLayoutData | null }>(
+    `/api/dashboard-custom/layout/${type}/`,
+  );
 }
 
-export async function saveDashboardLayout(type: "admin" | "user", layout: DashboardLayoutData) {
-  return apiFetch<{ success: boolean; created: boolean }>(`/api/dashboard-custom/layout/${type}/`, {
-    method: "POST",
-    body: JSON.stringify({ layout }),
-  });
+export async function saveDashboardLayout(
+  type: "admin" | "user",
+  layout: DashboardLayoutData,
+) {
+  return apiFetch<{ success: boolean; created: boolean }>(
+    `/api/dashboard-custom/layout/${type}/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ layout }),
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -324,7 +431,10 @@ export async function saveMonitoringConfig(thresholds: Record<string, number>) {
 }
 
 export async function aiAnalyzeServer(serverId: number) {
-  return apiFetch<{ success: boolean; analysis: string; server_name: string }>(`/servers/api/${serverId}/ai-analyze/`, {
-    method: "POST",
-  });
+  return apiFetch<{ success: boolean; analysis: string; server_name: string }>(
+    `/servers/api/${serverId}/ai-analyze/`,
+    {
+      method: "POST",
+    },
+  );
 }
