@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from django.conf import settings
@@ -23,7 +22,7 @@ def build_kubernetes_security_review() -> dict[str, Any]:
     cors_origins = _setting_list("CORS_ALLOWED_ORIGINS")
     cors_credentials = bool(getattr(settings, "CORS_ALLOW_CREDENTIALS", False))
     debug = bool(getattr(settings, "DEBUG", False))
-    test_settings = os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith(".test")
+    test_settings = bool(getattr(settings, "TESTING", False))
     checks = [
         _check(
             "csrf_middleware",

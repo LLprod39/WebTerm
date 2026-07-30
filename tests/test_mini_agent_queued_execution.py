@@ -21,7 +21,7 @@ def _create_server(user: User) -> Server:
     )
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_mini_agent_dispatch_executes_via_run_agent(monkeypatch):
     user = User.objects.create_user(username="mini-queue-user", password="x")
     server = _create_server(user)

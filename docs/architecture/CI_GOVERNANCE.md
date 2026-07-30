@@ -17,7 +17,7 @@ Exact GitHub check-run names (job `name:` fields):
 - `Runtime Contract`
 - `Python Quality`
 - `Django Checks`
-- `Backend Unit and Coverage`
+- `Backend Unit and Coverage` (the full backend suite runs on PostgreSQL 16 and Redis)
 - `PostgreSQL and Redis Integration`
 - `Production Checks`
 - `Documentation Contract`
@@ -42,6 +42,15 @@ Exact GitHub check-run names (job `name:` fields):
 - `Secrets-never and security unit tests`
 
 Versioned source of truth: `config/github-governance.json`.
+
+SQLite is supported only for the fast local test loop. It does not implement
+PostgreSQL row-locking semantics (`SELECT FOR UPDATE`, `SKIP LOCKED`) or advisory
+locks, so it cannot be used as release evidence for queue/concurrency changes.
+The focused integration job remains as a short failure-localization gate; the
+full `Backend Unit and Coverage` job is the authoritative PostgreSQL suite.
+The PostgreSQL test settings keep the test-runner connection open for the full
+transactional suite; production connections use a 60-second maximum age plus
+health checks.
 
 ## Branch protection rules
 

@@ -210,7 +210,7 @@ def test_run_snapshot_variables_and_dispatch_are_one_transaction(monkeypatch):
     assert not ManagedSecret.objects.filter(namespace=PLAYBOOK_RUN_VARIABLES_NAMESPACE).exists()
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_ansible_source_in_auto_mode_never_falls_back_to_shell(monkeypatch):
     from servers.services import playbook_runner
     from servers.services.playbooks.target_identity import target_connection_identity_hashes
@@ -254,7 +254,7 @@ def test_ansible_source_in_auto_mode_never_falls_back_to_shell(monkeypatch):
     assert shell_calls == []
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_worker_uses_frozen_server_ids_and_never_reexpands_snapshot_groups(monkeypatch):
     from servers.services import playbook_runner
     from servers.services.playbooks.target_identity import target_connection_identity_hashes
@@ -300,7 +300,7 @@ def test_worker_uses_frozen_server_ids_and_never_reexpands_snapshot_groups(monke
     assert late_server.id not in executed_ids
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_isolated_worker_uses_validated_digest_and_exact_dispatch_attempt(monkeypatch):
     from datetime import timedelta
 
@@ -378,7 +378,7 @@ def test_isolated_worker_uses_validated_digest_and_exact_dispatch_attempt(monkey
     assert captured[0].slug == f"pb-r{run.id}-d{dispatch.id}-a3"
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_isolated_worker_fails_closed_when_runtime_digest_changed(monkeypatch):
     from datetime import timedelta
 

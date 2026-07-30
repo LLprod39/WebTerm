@@ -80,7 +80,35 @@ jobs:
   backend-unit:
     name: Backend Unit and Coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: webterm_ci
+          POSTGRES_USER: webterm_ci
+          POSTGRES_PASSWORD: webterm_ci_password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U webterm_ci -d webterm_ci"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      DJANGO_SETTINGS_MODULE: web_ui.settings.test_postgres
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: webterm_ci
+      POSTGRES_USER: webterm_ci
+      POSTGRES_PASSWORD: webterm_ci_password
+      CHANNEL_REDIS_URL: redis://127.0.0.1:6379/1
+      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
+      WEBTERM_REQUIRE_EXTERNAL_TEST_SERVICES: "1"
+      DJANGO_SECRET_KEY: ci-only-backend-suite-secret-key-please-replace-0123456789
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -94,7 +122,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
       - name: Install locked development dependencies
         run: python -m pip install --require-hashes -r requirements-dev.lock
-      - name: Run backend suite and enforce the coverage ratchet
+      - name: Run backend suite on PostgreSQL and enforce the coverage ratchet
         # Frozen F-06 baseline: 71.95% in the locked runtime. --cov-fail-under
         # mirrors [tool.coverage.report].fail_under in pyproject.toml so the
         # ratchet is enforced regardless of pytest-cov config handling. Raise

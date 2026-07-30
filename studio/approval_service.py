@@ -142,7 +142,7 @@ def record_approval_decision(
     if decision not in {ApprovalRequest.STATUS_APPROVED, ApprovalRequest.STATUS_REJECTED}:
         raise ApprovalAccessError("Decision must be approved or rejected.")
     approval = (
-        ApprovalRequest.objects.select_for_update()
+        ApprovalRequest.objects.select_for_update(of=("self",))
         .select_related("run", "run__pipeline", "approver")
         .filter(run_id=run_id, node_id=node_id)
         .first()
