@@ -246,8 +246,8 @@ def main() -> None:
     if socket_path.exists() or socket_path.is_socket():
         socket_path.unlink()
     with ThreadingUnixServer(str(socket_path), ValidationHandler) as server:
-        os.chown(socket_path, RUNNER_UID, RUNNER_GID)
         os.chmod(socket_path, 0o600)
+        os.chown(socket_path, RUNNER_UID, RUNNER_GID)
         server.serve_forever(poll_interval=0.25)
 
 

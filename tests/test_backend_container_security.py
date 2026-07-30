@@ -43,6 +43,9 @@ def test_validator_socket_is_owned_by_backend_runtime_user():
     validator = (ROOT / "docker" / "ansible-runner" / "validator.py").read_text(encoding="utf-8")
 
     assert "os.chown(socket_path, RUNNER_UID, RUNNER_GID)" in validator
+    assert validator.index("os.chmod(socket_path, 0o600)") < validator.index(
+        "os.chown(socket_path, RUNNER_UID, RUNNER_GID)"
+    )
 
 
 def test_installer_detects_host_docker_socket_group():
