@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
-from servers.operator_tools_common import _int_arg, _server_for_user
+from servers.operator.tools_common import _int_arg, _server_for_user
 from servers.services.server_query import user_has_server_capability
 
 

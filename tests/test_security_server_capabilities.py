@@ -16,8 +16,8 @@ from servers.agents.agent_background import execute_agent_dispatch
 from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.agents.agent_launch import launch_queued_agent_run
 from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent, ServerShare
-from servers.operator_mutate_exec import run_command, run_fanout
-from servers.operator_tools_actions import server_memory
+from servers.operator.mutate_exec import run_command, run_fanout
+from servers.operator.tools_actions import server_memory
 from servers.services.server_query import get_servers_for_user
 
 

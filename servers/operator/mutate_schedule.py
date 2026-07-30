@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
-from servers.operator_mutate_exec import run_command
-from servers.operator_tools_common import _int_arg
+from servers.operator.mutate_exec import run_command
+from servers.operator.tools_common import _int_arg
 
 
 def _hhmm_or_none(value: Any) -> str | None:

@@ -137,6 +137,7 @@ type = forbidden
 source_modules =
     servers.monitoring
 forbidden_modules =
+    servers.operator
     servers.consumers
     servers.views
     studio
@@ -151,6 +152,22 @@ type = forbidden
 source_modules =
     servers.agents
 forbidden_modules =
+    servers.operator
     servers.consumers
     servers.views
     studio
+
+
+# ─── Contract 12: operator domain is an application-service layer ────────────
+# Goal: Operator tools may call agent, monitoring, inventory, and legacy shared
+# query helpers, but must not depend on websocket/UI routing or Studio.
+[importlinter:contract:servers-operator-no-websocket-or-cross-feature-entry-points]
+name = servers.operator must not import websocket, UI, or studio entry points
+type = forbidden
+source_modules =
+    servers.operator
+forbidden_modules =
+    core_ui.views
+    servers.consumers
+    studio
+    web_ui

@@ -7,7 +7,7 @@ from typing import Any
 from django.utils import timezone
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
-from servers.operator_tools_common import _int_arg
+from servers.operator.tools_common import _int_arg
 from servers.services.playbook_run_preparation import (
     PlaybookRunPreparationError,
     prepare_playbook_run,

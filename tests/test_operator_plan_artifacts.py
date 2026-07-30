@@ -104,7 +104,7 @@ def test_artifacts_api():
 
 @pytest.mark.django_db
 def test_propose_plan_registered():
-    from servers.operator_tools import register_operator_tools
+    from servers.operator.tools import register_operator_tools
 
     register_operator_tools()
     assert get_action_spec("operator.propose_plan") is not None

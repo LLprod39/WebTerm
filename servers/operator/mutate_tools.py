@@ -10,9 +10,9 @@ from __future__ import annotations
 import contextlib
 
 from app.assistant_actions import AssistantActionSpec, register_action
-from servers.operator_mutate_exec import run_command, run_fanout
-from servers.operator_mutate_playbooks import create_playbook, resolve_alert, run_playbook, save_runbook
-from servers.operator_mutate_schedule import schedule_agent, undo_last_action
+from servers.operator.mutate_exec import run_command, run_fanout
+from servers.operator.mutate_playbooks import create_playbook, resolve_alert, run_playbook, save_runbook
+from servers.operator.mutate_schedule import schedule_agent, undo_last_action
 
 __all__ = [
     "create_playbook",

@@ -47,7 +47,7 @@ def _server(user: User, *, name: str = "web-01") -> Server:
 
 @pytest.mark.django_db
 def test_http_and_operator_use_the_same_validated_run_snapshot(monkeypatch):
-    from servers.operator_mutate_playbooks import run_playbook
+    from servers.operator.mutate_playbooks import run_playbook
 
     user = User.objects.create_user(username="run-parity", password="x")
     server = _server(user)
@@ -82,7 +82,7 @@ def test_http_and_operator_use_the_same_validated_run_snapshot(monkeypatch):
         lambda _yaml: syntax_ok,
     )
     monkeypatch.setattr("servers.views.server_playbook_run_views.start_playbook_run_async", lambda *_a, **_k: None)
-    monkeypatch.setattr("servers.operator_mutate_playbooks.start_playbook_run_async", lambda *_a, **_k: None)
+    monkeypatch.setattr("servers.operator.mutate_playbooks.start_playbook_run_async", lambda *_a, **_k: None)
 
     client = Client()
     client.force_login(user)
@@ -154,7 +154,7 @@ def test_skipped_syntax_and_missing_bindings_are_distinct_run_blockers(monkeypat
 
 @pytest.mark.django_db
 def test_operator_surfaces_preparation_readiness_details(monkeypatch):
-    from servers.operator_mutate_playbooks import run_playbook
+    from servers.operator.mutate_playbooks import run_playbook
 
     user = User.objects.create_user(username="run-operator-blocked", password="x")
     server = _server(user)

@@ -8,7 +8,7 @@ This is the versioned human-readable contract enforced by `.importlinter`,
 
 ## Import boundaries
 
-The eleven contracts in `.importlinter` are authoritative. Shared `app` layers
+The twelve contracts in `.importlinter` are authoritative. Shared `app` layers
 must not depend on Django ORM or feature applications; `core_ui`, `servers`,
 `studio` and `plugin_marketplace` communicate across domain boundaries through
 typed providers, registries or events. Adding an exception to hide a new edge
@@ -24,6 +24,11 @@ Agent execution, scheduling, reporting and multi-agent orchestration live in
 `servers.agents`. The package is independent from HTTP views and websocket
 consumers; the historical `servers.agents` mini-agent API is preserved through
 lazy package exports so importing an agent submodule has no startup side effects.
+
+Operator read tools, mutating actions and the server-side provider live in
+`servers.operator`. Operator may call agent and monitoring services, while the
+reverse dependency is forbidden. Its historical `servers.operator_tools` and
+`servers.operator_provider` imports remain compatibility facades.
 
 ## Complexity and coupling rules
 
@@ -51,7 +56,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 **Architecture fitness (2026-07-30): complexity/coupling gate green.**
 
-- All eleven import contracts kept; 0 forbidden import edges.
+- All twelve import contracts kept; 0 forbidden import edges.
 - `python scripts/check_architecture_sizes.py --strict-new` → **SUCCESS**
   (111 frozen complexity/coupling violations, 0 new or grown violations).
 - `python scripts/check_architecture_no_regression.py` → **0 frozen size

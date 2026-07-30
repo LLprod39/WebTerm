@@ -6,8 +6,8 @@ from typing import Any
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from core_ui.access import feature_allowed_for_user
-from servers.operator_tools_common import _int_arg, _server_for_user
-from servers.operator_tools_hints import normalize_host_hint, server_matches_query
+from servers.operator.tools_common import _int_arg, _server_for_user
+from servers.operator.tools_hints import normalize_host_hint, server_matches_query
 from servers.views.server_helpers import _accessible_servers_queryset
 
 
