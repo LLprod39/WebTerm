@@ -4,7 +4,10 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from servers.services.terminal_ai.active_command import append_active_output
+from servers.services.terminal_ai.active_command import (
+    TerminalAiActiveCommandState,
+    append_active_output,
+)
 from servers.services.terminal_ai.session_context import apply_successful_command_context
 from servers.services.terminal_stream_state import append_clean_output
 
@@ -44,8 +47,8 @@ def append_terminal_tail(consumer: Any, text: str) -> None:
     consumer._terminal_tail = append_clean_output(consumer._terminal_tail, text, limit=8000)
 
 
-def append_ai_output(consumer: Any, text: str) -> None:
-    append_active_output(consumer, text)
+def append_ai_output(state: TerminalAiActiveCommandState, text: str) -> None:
+    append_active_output(state, text)
 
 
 def append_manual_output(state: ManualCommandState, text: str) -> None:

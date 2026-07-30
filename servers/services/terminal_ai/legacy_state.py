@@ -12,6 +12,10 @@ def sync_legacy_ai_queue_state(
     session_cls: type[TerminalAiSession] = TerminalAiSession,
 ) -> TerminalAiSession:
     """Mirror historical consumer request-state attributes into a session."""
+    explicit_state = getattr(owner, "_ai_state", None)
+    if explicit_state is not None:
+        return explicit_state.session
+
     ai_session = getattr(owner, "_ai_session", None)
     if ai_session is None:
         ai_session = session_cls()
@@ -34,6 +38,11 @@ def sync_legacy_ai_queue_state(
 
 def apply_legacy_ai_queue_state(owner: Any, ai_session: TerminalAiSession) -> None:
     """Mirror a TerminalAiSession request-state back into historical attrs."""
+    explicit_state = getattr(owner, "_ai_state", None)
+    if explicit_state is not None:
+        explicit_state.session = ai_session
+        return
+
     owner._ai_plan, owner._ai_plan_index = ai_session.plan, ai_session.plan_index
     owner._ai_next_id, owner._ai_step_extra_count = ai_session.next_id, ai_session.step_extra_count
     owner._ai_forbidden_patterns = list(ai_session.forbidden_patterns)

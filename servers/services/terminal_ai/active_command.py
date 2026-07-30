@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from servers.services.terminal_stream_state import append_clean_output, set_exit_future_result
@@ -9,60 +10,71 @@ from servers.services.terminal_stream_state import append_clean_output, set_exit
 ACTIVE_OUTPUT_LIMIT = 6000
 
 
-def initialize_active_command_state(owner: Any) -> None:
-    owner._ai_exit_futures = {}
-    owner._ai_active_cmd_id = None
-    owner._ai_active_output = ""
+@dataclass
+class TerminalAiActiveCommandState:
+    """Mutable PTY marker/output state for the currently running AI command."""
+
+    exit_futures: dict[int, Any] = field(default_factory=dict)
+    command_id: int | None = None
+    output: str = ""
+
+    def reset(self) -> None:
+        self.exit_futures.clear()
+        self.command_id = None
+        self.output = ""
 
 
-def register_active_command(owner: Any, cmd_id: int, future: Any) -> None:
-    owner._ai_exit_futures[int(cmd_id)] = future
-    owner._ai_active_cmd_id = int(cmd_id)
-    owner._ai_active_output = ""
+def initialize_active_command_state(state: TerminalAiActiveCommandState) -> None:
+    state.reset()
 
 
-def active_command_id(owner: Any) -> int | None:
-    cmd_id = getattr(owner, "_ai_active_cmd_id", None)
-    return int(cmd_id) if cmd_id is not None else None
+def register_active_command(state: TerminalAiActiveCommandState, cmd_id: int, future: Any) -> None:
+    state.exit_futures[int(cmd_id)] = future
+    state.command_id = int(cmd_id)
+    state.output = ""
 
 
-def exit_future(owner: Any, cmd_id: int | None) -> Any | None:
+def active_command_id(state: TerminalAiActiveCommandState) -> int | None:
+    return int(state.command_id) if state.command_id is not None else None
+
+
+def exit_future(state: TerminalAiActiveCommandState, cmd_id: int | None) -> Any | None:
     if cmd_id is None:
         return None
-    return (getattr(owner, "_ai_exit_futures", {}) or {}).get(int(cmd_id))
+    return state.exit_futures.get(int(cmd_id))
 
 
-def resolve_exit_future(owner: Any, cmd_id: int, exit_code: int) -> None:
-    set_exit_future_result(getattr(owner, "_ai_exit_futures", None), cmd_id, exit_code)
+def resolve_exit_future(state: TerminalAiActiveCommandState, cmd_id: int, exit_code: int) -> None:
+    set_exit_future_result(state.exit_futures, cmd_id, exit_code)
 
 
-def pop_exit_future(owner: Any, cmd_id: int) -> None:
-    (getattr(owner, "_ai_exit_futures", {}) or {}).pop(int(cmd_id), None)
+def pop_exit_future(state: TerminalAiActiveCommandState, cmd_id: int) -> None:
+    state.exit_futures.pop(int(cmd_id), None)
 
 
-def cancel_exit_futures(owner: Any) -> None:
-    for future in (getattr(owner, "_ai_exit_futures", {}) or {}).values():
+def cancel_exit_futures(state: TerminalAiActiveCommandState) -> None:
+    for future in state.exit_futures.values():
         if not future.done():
             future.cancel()
-    owner._ai_exit_futures = {}
+    state.exit_futures.clear()
 
 
-def clear_active_command(owner: Any, cmd_id: int | None = None) -> None:
-    active_id = active_command_id(owner)
+def clear_active_command(state: TerminalAiActiveCommandState, cmd_id: int | None = None) -> None:
+    active_id = active_command_id(state)
     if cmd_id is None or active_id == int(cmd_id):
-        owner._ai_active_cmd_id = None
-        owner._ai_active_output = ""
+        state.command_id = None
+        state.output = ""
 
 
-def append_active_output(owner: Any, text: str, *, limit: int = ACTIVE_OUTPUT_LIMIT) -> None:
-    if not text or active_command_id(owner) is None:
+def append_active_output(state: TerminalAiActiveCommandState, text: str, *, limit: int = ACTIVE_OUTPUT_LIMIT) -> None:
+    if not text or active_command_id(state) is None:
         return
-    owner._ai_active_output = append_clean_output(
-        getattr(owner, "_ai_active_output", ""),
+    state.output = append_clean_output(
+        state.output,
         text,
         limit=limit,
     )
 
 
-def active_output_tail(owner: Any, *, limit: int = ACTIVE_OUTPUT_LIMIT) -> str:
-    return str(getattr(owner, "_ai_active_output", "") or "")[-limit:]
+def active_output_tail(state: TerminalAiActiveCommandState, *, limit: int = ACTIVE_OUTPUT_LIMIT) -> str:
+    return state.output[-limit:]

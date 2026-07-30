@@ -73,9 +73,9 @@ class SSHTerminalIoMixin:
 
         # Nova: tear down any cached extra-target connections so we
         # don't leak SSH sessions when the user closes the terminal.
-        for conn in list(getattr(self, "_agent_extra_conns", {}).values()):
+        for conn in list(self._ai_state.extra_connections.values()):
             await close_ssh_handle(conn)
-        self._agent_extra_conns = {}
+        self._ai_state.extra_connections.clear()
 
         if was_connected and self.scope.get("user") and getattr(self.scope["user"], "is_authenticated", False):
             await self._safe_send_json({"type": "status", "status": "disconnected"})
@@ -142,13 +142,13 @@ class SSHTerminalIoMixin:
         )
 
     def _set_ai_exit_code(self, cmd_id: int, exit_code: int):
-        resolve_exit_future(self, cmd_id, exit_code)
+        resolve_exit_future(self._ai_state.active_command, cmd_id, exit_code)
 
     def _append_terminal_tail(self, text: str):
         append_terminal_tail(self, text)
 
     def _append_ai_output(self, text: str):
-        append_ai_output(self, text)
+        append_ai_output(self._ai_state.active_command, text)
 
     def _append_manual_output(self, text: str):
         append_manual_output(self._manual_state, text)

@@ -21,8 +21,8 @@ from servers.services.terminal_ai.reporter import (
 
 async def handle_queue_completion(owner: Any) -> None:
     """Generate the final report/history/memory side effects for a command queue."""
-    user_message = str(getattr(owner, "_ai_user_message", "") or "")
-    async with owner._ai_lock:
+    user_message = owner._ai_state.session.user_message
+    async with owner._ai_state.lock:
         ai_session = sync_legacy_ai_queue_state(owner, owner._TerminalAiSessionCls)
         done_items = ai_session.snapshot_done_items()
         apply_legacy_ai_queue_state(owner, ai_session)
@@ -32,10 +32,10 @@ async def handle_queue_completion(owner: Any) -> None:
         return
 
     report = await _maybe_generate_report(owner, user_message=user_message, done_items=done_items)
-    async with owner._ai_lock:
-        owner._ai_last_report = report
+    async with owner._ai_state.lock:
+        owner._ai_state.session.last_report = report
 
-    memory_enabled = bool((getattr(owner, "_ai_settings", {}) or {}).get("memory_enabled", True))
+    memory_enabled = bool(owner._ai_state.settings.get("memory_enabled", True))
     if memory_enabled:
         owner._add_to_history("assistant", build_execution_summary(done_items))
         if report:
@@ -52,8 +52,8 @@ async def handle_queue_completion(owner: Any) -> None:
 
 
 async def _maybe_generate_report(owner: Any, *, user_message: str, done_items: list[dict[str, Any]]) -> str:
-    settings = getattr(owner, "_ai_settings", {}) or {}
-    if not owner._is_auto_report_enabled(settings, getattr(owner, "_ai_execution_mode", "agent")):
+    settings = owner._ai_state.settings
+    if not owner._is_auto_report_enabled(settings, owner._ai_state.session.execution_mode):
         return ""
 
     await owner._send_ai_event(terminal_events.ai_status("generating_report"))
@@ -91,5 +91,5 @@ def _maybe_spawn_memory_extraction(
             report=report,
             user_id=int(owner._user_id),
             server_id=int(owner.server.id),
-            audit_ctx=dict(getattr(owner, "_ai_audit_context", {}) or {}),
+            audit_ctx=dict(owner._ai_state.audit_context),
         )

@@ -306,7 +306,7 @@ class SSHTerminalSessionOpsMixin:
             session_id=self._server_connection_id or "",
             session_context=getattr(self, "_nova_session_context", None),
             live_activity=getattr(self, "_nova_recent_activity", None),
-            ai_settings=self._ai_settings,
+            ai_settings=self._ai_state.settings,
         )
 
     async def _handle_resize(self, content: dict[str, Any]):
@@ -323,9 +323,9 @@ class SSHTerminalSessionOpsMixin:
         Try to interrupt active command with Ctrl+C and unblock waiter with exit=130.
         Returns active cmd_id if interrupted.
         """
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             cmd_id = active_command_id(self)
-            fut = exit_future(self, cmd_id)
+            fut = exit_future(self._ai_state.active_command, cmd_id)
 
         if cmd_id is None:
             return None
@@ -336,7 +336,7 @@ class SSHTerminalSessionOpsMixin:
         except Exception:
             pass
 
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             if fut and not fut.done():
                 with contextlib.suppress(Exception):
                     fut.set_result(130)

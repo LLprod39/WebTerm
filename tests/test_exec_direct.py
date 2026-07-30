@@ -14,6 +14,19 @@ from types import SimpleNamespace
 import pytest
 
 from servers.consumers.ssh_terminal import SSHTerminalConsumer
+from servers.services.terminal_ai.run_controller import TerminalAiRunController
+from servers.services.terminal_ai.session import TerminalAiSession
+from servers.services.terminal_ai.state import TerminalAiState
+
+
+def _terminal_ai_state(*, execution_mode: str = "step") -> TerminalAiState:
+    state = TerminalAiState.create(
+        run_controller_factory=TerminalAiRunController,
+        session_factory=TerminalAiSession,
+        settings=SSHTerminalConsumer._default_ai_settings(),
+    )
+    state.session.execution_mode = execution_mode
+    return state
 
 
 class _FakeConn:
@@ -43,6 +56,7 @@ class _FakeConn:
 def _make_consumer(conn: _FakeConn | None) -> tuple[SSHTerminalConsumer, list[dict]]:
     """Build a bare consumer with enough state for direct-exec tests."""
     cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+    cons._ai_state = _terminal_ai_state()
     cons._ssh_conn = conn  # type: ignore[attr-defined]
     cons._ssh_proc = None  # PTY not used in direct path  # type: ignore[attr-defined]
     sent: list[dict] = []
@@ -61,13 +75,13 @@ def _run(coro):
 class TestLegacyDirectExecModeGate:
     def test_fast_mode_disables_legacy_direct_exec(self):
         cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
-        cons._ai_execution_mode = "fast"  # type: ignore[attr-defined]
+        cons._ai_state = _terminal_ai_state(execution_mode="fast")
 
         assert cons._legacy_direct_exec_enabled() is False
 
     def test_step_mode_keeps_legacy_direct_exec_available(self):
         cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
-        cons._ai_execution_mode = "step"  # type: ignore[attr-defined]
+        cons._ai_state = _terminal_ai_state(execution_mode="step")
 
         assert cons._legacy_direct_exec_enabled() is True
 

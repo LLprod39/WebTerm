@@ -18,10 +18,6 @@ from servers.models import Server
 from servers.secret_utils import has_saved_server_secret
 from servers.services import terminal_input, terminal_nova_context
 from servers.services.terminal_ai import preferences as ai_preferences
-from servers.services.terminal_ai.active_command import (
-    initialize_active_command_state,
-)
-from servers.services.terminal_manual_command_state import ManualCommandState
 
 _TermSize = terminal_input.TerminalSize
 
@@ -38,7 +34,11 @@ class SSHTerminalLifecycleMixin:
 
     async def connect(self):
         self._connect_lock = asyncio.Lock()
-        self._manual_state = ManualCommandState()
+        self._manual_state.reset()
+        self._ai_state.run = self._TerminalAiRunControllerCls()
+        self._ai_state.session = self._TerminalAiSessionCls()
+        self._ai_state.reset_connection_state()
+        self._ai_state.settings = self._default_ai_settings()
 
         user = self.scope.get("user")
 
@@ -53,32 +53,11 @@ class SSHTerminalLifecycleMixin:
             return
 
         self._user_id = int(user.id)
-        self._ai_run = self._TerminalAiRunControllerCls()
-        self._ai_lock = self._ai_run.lock
-        self._ai_session = self._TerminalAiSessionCls()
-        self._ai_forbidden_patterns = []
-        initialize_active_command_state(self)
-        self._ai_settings = self._default_ai_settings()
-        self._ai_allowlist_patterns = []
         self._terminal_tail = ""
-        self._ai_history = []
-        self._unavailable_cmds: set[str] = set()
-        self._ai_error_retries: dict[int, int] = {}
-        self._ai_run_id = ""
-        self._ai_marker_token = ""
-        self._ai_stop_requested = False
-        # Nova: cached SSH connections to authorised extra targets for
-        # the agent loop. Keys: target name (e.g. ``srv-42``) → live
-        # asyncssh.SSHClientConnection. Closed in ``_disconnect_ssh``.
-        self._agent_extra_conns: dict[str, Any] = {}
         self._marker_suppress = {"stdout": False, "stderr": False}
         self._marker_line_buf = {"stdout": "", "stderr": ""}
-        self._ai_audit_context: dict[str, Any] = {}
         self._server_connection_id: str | None = None
         self._connection_heartbeat_task = None
-        # Fire-and-forget tasks spawned outside _ai_process_queue (F1-7),
-        # tracked so disconnect/cancel can drain them without leaks.
-        self._ai_background_tasks: set[asyncio.Task[Any]] = set()
         self._nova_session_context = {}
         self._nova_recent_activity = []
 
@@ -135,7 +114,7 @@ class SSHTerminalLifecycleMixin:
         # a user who turned memory off still sees an empty context on the
         # next connect, even if the DB hasn't been wiped yet (e.g. they
         # flipped the setting through another client).
-        memory_enabled_now = bool((self._ai_settings or {}).get("memory_enabled", True))
+        memory_enabled_now = bool((self._ai_state.settings or {}).get("memory_enabled", True))
         if memory_enabled_now:
             try:
                 from servers.services.terminal_ai import load_recent as _load_history
@@ -146,7 +125,7 @@ class SSHTerminalLifecycleMixin:
                     limit=40,
                 )
                 if restored:
-                    self._ai_history = list(restored)
+                    self._ai_state.history = list(restored)
             except Exception as hist_exc:  # pragma: no cover — non-fatal
                 logger.warning("terminal-ai chat history restore failed: %s", hist_exc)
 
@@ -159,7 +138,7 @@ class SSHTerminalLifecycleMixin:
                 "auth_method": self.server.auth_method,
                 "has_encrypted_secret": has_encrypted_secret,
                 # F2-9: signal the client that prior messages are available.
-                "restored_history_count": len(self._ai_history or []),
+                "restored_history_count": len(self._ai_state.history or []),
             }
         )
 
@@ -170,7 +149,7 @@ class SSHTerminalLifecycleMixin:
 
     async def _drain_ai_background_tasks(self) -> None:
         """Cancel and drain any fire-and-forget AI background tasks (F1-7)."""
-        tasks = list(getattr(self, "_ai_background_tasks", ()) or ())
+        tasks = list(self._ai_state.background_tasks)
         for t in tasks:
             if not t.done():
                 t.cancel()
@@ -178,8 +157,7 @@ class SSHTerminalLifecycleMixin:
             # Best-effort drain — never raise out of disconnect().
             with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError, Exception):
                 await asyncio.wait_for(t, timeout=2.0)
-        if hasattr(self, "_ai_background_tasks"):
-            self._ai_background_tasks.clear()
+        self._ai_state.background_tasks.clear()
 
     async def receive_json(self, content: Any, **kwargs):
         msg_type = (content or {}).get("type")
@@ -214,7 +192,7 @@ class SSHTerminalLifecycleMixin:
             # User replied to an ai_question card
             q_id = str((content or {}).get("q_id") or "")
             text = str((content or {}).get("text") or "").strip()
-            self._ai_run.resolve_reply(q_id, text)
+            self._ai_state.run.resolve_reply(q_id, text)
             return
         if msg_type == "ai_clear_memory":
             await self._handle_ai_clear_memory()
@@ -242,16 +220,16 @@ class SSHTerminalLifecycleMixin:
         return uuid.uuid4().hex[:10]
 
     def _marker_prefix(self) -> str:
-        token = str(getattr(self, "_ai_marker_token", "") or "").strip()
+        token = self._ai_state.session.marker_token.strip()
         if token:
             return f"{_WEUAI_MARKER_PREFIX}{token}_"
         return _WEUAI_MARKER_PREFIX
 
     def _with_ai_run_id(self, payload: dict[str, Any]) -> dict[str, Any]:
         msg_type = str((payload or {}).get("type") or "")
-        if msg_type.startswith("ai_") and self._ai_run_id:
+        if msg_type.startswith("ai_") and self._ai_state.session.run_id:
             out = dict(payload)
-            out.setdefault("run_id", self._ai_run_id)
+            out.setdefault("run_id", self._ai_state.session.run_id)
             return out
         return payload
 
