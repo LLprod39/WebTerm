@@ -87,7 +87,7 @@ require_command() {
 assert_fresh_host() {
   local reserved_names=(
     mini-prod-postgres mini-prod-redis mini-prod-backend mini-prod-frontend mini-prod-nginx
-    mini-prod-mcp-demo mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-scheduled-agents
+    mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-scheduled-agents
     mini-prod-history-pruner mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
     mini-prod-playbook-docker-proxy-smoke
     mini-prod-ssh-target-smoke
@@ -166,8 +166,6 @@ values = {
     "POSTGRES_HOST_PORT": "15432",
     "REDIS_BIND_HOST": "127.0.0.1",
     "REDIS_HOST_PORT": "16379",
-    "MCP_BIND_HOST": "127.0.0.1",
-    "STUDIO_MCP_DEMO_PORT": "18765",
     "SITE_URL": f"https://127.0.0.1:{https_port}",
     "FRONTEND_APP_URL": f"https://127.0.0.1:{https_port}",
     "ALLOWED_HOSTS": "127.0.0.1,localhost,nginx,backend",

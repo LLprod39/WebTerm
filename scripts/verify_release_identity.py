@@ -9,7 +9,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.1.0"
+EXPECTED_VERSION = "0.2.0"
 TEXT_SUFFIXES = {
     ".css",
     ".example",
@@ -90,8 +90,8 @@ def _version_errors(root: Path) -> list[str]:
             errors.append(f"{relative} does not label the container version")
 
     public_api = json.loads(_read(root, "config/public-api-v0.1.json"))
-    if public_api.get("version") != version:
-        errors.append("public API inventory version does not match VERSION")
+    if public_api.get("version") != "0.1.0":
+        errors.append("public API v0.1 inventory must remain version 0.1.0")
     return errors
 
 
