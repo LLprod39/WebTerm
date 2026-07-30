@@ -24,7 +24,6 @@ def _age(model, row, field: str, *, days: int) -> None:
 def test_prune_history_deletes_old_terminal_rows_and_preserves_active_rows(monkeypatch):
     monkeypatch.setenv("HISTORY_RETENTION_PIPELINE_RUN_DAYS", "30")
     monkeypatch.setenv("HISTORY_RETENTION_AGENT_RUN_DAYS", "30")
-    monkeypatch.setenv("HISTORY_RETENTION_AGENT_RUN_EVENT_DAYS", "30")
     monkeypatch.setenv("HISTORY_RETENTION_SERVER_COMMAND_HISTORY_DAYS", "30")
     monkeypatch.setenv("HISTORY_RETENTION_CHAT_ARTIFACT_DAYS", "30")
 
@@ -41,8 +40,6 @@ def test_prune_history_deletes_old_terminal_rows_and_preserves_active_rows(monke
     active_event = AgentRunEvent.objects.create(run=active_agent, event_type="heartbeat")
     _age(AgentRun, old_agent, "started_at", days=45)
     _age(AgentRun, active_agent, "started_at", days=45)
-    _age(AgentRunEvent, old_event, "created_at", days=45)
-    _age(AgentRunEvent, active_event, "created_at", days=45)
 
     server = Server.objects.create(user=user, name="retention-server", host="127.0.0.1", username="root")
     command = ServerCommandHistory.objects.create(server=server, user=user, command="uptime")
@@ -54,12 +51,14 @@ def test_prune_history_deletes_old_terminal_rows_and_preserves_active_rows(monke
     report = prune_history(batch_size=1)
 
     assert report["pipeline_run"]["deleted"] == 1
-    assert report["agent_run_event"]["deleted"] == 1
     assert report["agent_run"]["deleted"] == 1
     assert not PipelineRun.objects.filter(pk=old_pipeline.pk).exists()
     assert PipelineRun.objects.filter(pk=active_pipeline.pk).exists()
     assert not AgentRun.objects.filter(pk=old_agent.pk).exists()
     assert AgentRun.objects.filter(pk=active_agent.pk).exists()
+    old_event.refresh_from_db()
+    assert old_event.run_id is None
+    assert old_event.run_ref == old_agent.pk
     assert AgentRunEvent.objects.filter(pk=active_event.pk).exists()
     assert not ServerCommandHistory.objects.filter(pk=command.pk).exists()
     assert not ChatArtifact.objects.filter(pk=artifact.pk).exists()
