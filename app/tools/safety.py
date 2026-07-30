@@ -244,7 +244,7 @@ def _decode_ansi_c_quote(match: re.Match[str]) -> str:
     raw = match.group(1)
     try:
         return codecs.decode(raw, "unicode_escape")
-    except Exception:  # noqa: BLE001
+    except (UnicodeDecodeError, ValueError):
         return raw
 
 

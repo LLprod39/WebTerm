@@ -136,8 +136,8 @@ def _should_brief_now(session: ChatSession, *, now=None, force: bool = False) ->
                     last_dt = timezone.make_aware(last_dt, timezone.get_current_timezone())
                 if now - last_dt < timedelta(hours=MIN_HOURS_BETWEEN_BRIEFINGS):
                     return False
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("operator duty briefing timestamp ignored: {}", exc)
     return True
 
 

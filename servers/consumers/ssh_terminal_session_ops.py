@@ -333,8 +333,8 @@ class SSHTerminalSessionOpsMixin:
         try:
             if self._transport_state.ssh_proc:
                 self._transport_state.ssh_proc.stdin.write("\x03")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("failed to interrupt active SSH command: {}", exc)
 
         async with self._ai_state.lock:
             if fut and not fut.done():

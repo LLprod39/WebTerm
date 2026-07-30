@@ -73,8 +73,8 @@ def _grok_reasoning_effort(model: str, *, purpose: str = "") -> str | None:
             return "medium"
         if override in {"low", "medium", "high"}:
             return override
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Grok thinking-mode override unavailable: {}", exc)
 
     default = "medium" if (purpose or "").strip().lower() == "orchestrator" else "none"
     value = _setting_str("LLM_GROK_REASONING_EFFORT", default).lower()

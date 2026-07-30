@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from mcp_runner.config import RunnerConfig
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_PROTOCOL_VERSION = "2025-06-18"
 
@@ -253,7 +256,7 @@ class SessionManager:
                 except ProcessLookupError:
                     pass
         except Exception:
-            pass
+            logger.warning("MCP subprocess termination failed", exc_info=True)
 
     async def reap_idle(self) -> int:
         now = time.monotonic()

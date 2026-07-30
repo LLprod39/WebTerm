@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from loguru import logger
+
 # Roles that primarily inspect / verify without mutating production state.
 READ_ONLY_ROLES: frozenset[str] = frozenset(
     {
@@ -56,8 +58,8 @@ def task_is_read_only(task: dict[str, Any] | None) -> bool:
 
         if plan_mentions_mutation([task]):
             return False
-    except Exception:  # noqa: BLE001 — keep scheduler pure-fail-closed for tests
-        pass
+    except Exception as exc:  # noqa: BLE001 — keep scheduler pure-fail-closed for tests
+        logger.warning("multi-agent mutation classifier unavailable; forcing sequential execution: {}", exc)
     if role in READ_ONLY_ROLES:
         return True
     # Explicit PLAN mode on non-mutating custom work may inspect in parallel.

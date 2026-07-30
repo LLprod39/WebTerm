@@ -167,8 +167,8 @@ async def stream_ollama_tools(
                     from app.core.ollama_config import remember_ollama_url
 
                     remember_ollama_url(base_url)
-                except Exception:  # noqa: BLE001
-                    pass
+                except Exception as persist_exc:  # noqa: BLE001
+                    logger.debug("Ollama URL persistence skipped: {}", persist_exc)
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             has_next = base_index < len(request_targets) - 1

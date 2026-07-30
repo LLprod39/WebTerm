@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.utils import timezone
+from loguru import logger
 
 from app.assistant_actions import AssistantActionContext
 from servers.operator.tools_common import _int_arg, _server_for_user
@@ -456,6 +457,6 @@ def fleet_ai_insights(ctx: AssistantActionContext) -> dict[str, Any]:
                     "created_at": row.created_at.isoformat() if row.created_at else None,
                 }
             )
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("operator server AI insight lookup skipped: {}", exc)
     return {"insights": rows, "count": len(rows), "target_url": "/monitoring"}

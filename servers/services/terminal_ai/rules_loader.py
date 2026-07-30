@@ -22,6 +22,7 @@ from typing import Any
 from channels.db import database_sync_to_async
 from django.db.models import Q
 from django.utils import timezone
+from loguru import logger
 
 
 @dataclass(frozen=True)
@@ -140,8 +141,8 @@ def _load_terminal_rules_sync(*, user_id: int, server_id: int) -> TerminalRulesC
             server_ctx = server.get_network_context_summary()
             if server_ctx:
                 parts.append("=== КОНТЕКСТ СЕРВЕРА ===\n" + server_ctx)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("terminal server context unavailable: {}", exc)
 
         # Compact knowledge context so AI continuity between runs works.
         try:
@@ -159,8 +160,8 @@ def _load_terminal_rules_sync(*, user_id: int, server_id: int) -> TerminalRulesC
                         k_lines.append(f"- [{category}] {t}: {c[:220]}")
                 if k_lines:
                     parts.append("=== НАКОПЛЕННЫЕ ЗНАНИЯ О СЕРВЕРЕ ===\n" + "\n".join(k_lines))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("terminal server memory context unavailable: {}", exc)
 
         if server.group_id:
             try:
@@ -178,8 +179,8 @@ def _load_terminal_rules_sync(*, user_id: int, server_id: int) -> TerminalRulesC
                             gk_lines.append(f"- [{category}] {t}: {c[:220]}")
                     if gk_lines:
                         parts.append("=== ГРУППОВЫЕ ЗНАНИЯ ===\n" + "\n".join(gk_lines))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("terminal group memory context unavailable: {}", exc)
 
         # Server-level env vars from network_config have highest priority.
         if isinstance(server.network_config, dict):

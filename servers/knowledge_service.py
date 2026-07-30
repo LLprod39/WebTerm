@@ -147,8 +147,8 @@ class ServerKnowledgeService:
             global_rules = GlobalServerRules.objects.filter(user=user).first()
             if global_rules and global_rules.forbidden_commands:
                 forbidden.update(global_rules.forbidden_commands)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("global forbidden-command knowledge unavailable: {}", exc)
 
         # Group
         if server.group and server.group.forbidden_commands:
@@ -171,8 +171,8 @@ class ServerKnowledgeService:
             global_rules = GlobalServerRules.objects.filter(user=user).first()
             if global_rules and global_rules.environment_vars:
                 env_vars.update(global_rules.environment_vars)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("global environment knowledge unavailable: {}", exc)
 
         # Group
         if server.group and server.group.environment_vars:
@@ -351,8 +351,8 @@ class ServerKnowledgeService:
             if global_rules and (global_rules.rules or global_rules.forbidden_commands):
                 summary["has_global_rules"] = True
                 summary["forbidden_commands_count"] += len(global_rules.forbidden_commands or [])
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("global knowledge summary unavailable: {}", exc)
 
         # Group
         if server.group:

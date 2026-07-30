@@ -330,8 +330,8 @@ async def run_operator_loop(
                 from core_ui.services.operator_artifacts import compress_inventory_assistant_content
 
                 await sync_to_async(compress_inventory_assistant_content)(assistant_message)
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator inventory artifact compression skipped: {}", exc)
             await _ensure_visible_answer(assistant_message.pk)
         await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages)
         await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
@@ -346,8 +346,8 @@ async def run_operator_loop(
 
             await sync_to_async(compress_inventory_assistant_content)(assistant_message)
             assistant_message = await sync_to_async(ChatMessage.objects.get)(pk=assistant_message.pk)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("operator final artifact compression skipped: {}", exc)
     return OperatorTurnResult(
         user_message=user_message,
         assistant_message=assistant_message,

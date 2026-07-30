@@ -6,11 +6,14 @@ legacy pin without behavior changes.
 
 from __future__ import annotations
 
+import logging
 import tempfile
 
 from django.http import JsonResponse
 
 from servers.elevated_files import ElevatedFileError
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_bool(value) -> bool:
@@ -20,8 +23,8 @@ def _parse_bool(value) -> bool:
 def _materialize_uploaded_file(uploaded_file) -> tuple[str, bool]:
     try:
         return uploaded_file.temporary_file_path(), False
-    except Exception:
-        pass
+    except (AttributeError, OSError):
+        logger.debug("uploaded file has no usable temporary path", exc_info=True)
 
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         for chunk in uploaded_file.chunks():

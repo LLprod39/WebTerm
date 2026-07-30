@@ -12,6 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
+from loguru import logger
 
 from core_ui.decorators import require_feature
 from servers.adapters.memory_store import DjangoServerMemoryStore
@@ -136,8 +137,8 @@ def server_knowledge_update(request, server_id, knowledge_id):
             try:
                 confidence = float(data.get("confidence"))
                 knowledge.confidence = max(0.0, min(1.0, confidence))
-            except Exception:
-                pass
+            except (TypeError, ValueError) as exc:
+                logger.debug("invalid knowledge confidence ignored: {}", exc)
 
         knowledge.save()
         DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)

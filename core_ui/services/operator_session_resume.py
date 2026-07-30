@@ -7,6 +7,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from django.db import transaction
+from loguru import logger
 
 from app.egress_redaction import redact_egress_payload
 from core_ui.models import AssistantAction, ChatTurnState
@@ -202,8 +203,8 @@ async def resume_after_action(
                             "version": art.version,
                         },
                     )
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator resumed artifact extraction skipped: {}", exc)
         if action.undo_payload:
             await _emit(
                 on_event,

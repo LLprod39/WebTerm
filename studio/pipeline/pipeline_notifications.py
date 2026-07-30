@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from typing import Any
 
 import httpx
 
 from core_ui.services.notification_config import load_notification_config
+
+logger = logging.getLogger(__name__)
 
 
 def _load_notif_cfg() -> dict[str, Any]:
@@ -14,7 +17,7 @@ def _load_notif_cfg() -> dict[str, Any]:
         cfg = load_notification_config()
         return cfg if isinstance(cfg, dict) else {}
     except Exception:
-        pass
+        logger.warning("Studio notification config unavailable; using settings fallback", exc_info=True)
 
     try:
         from django.conf import settings

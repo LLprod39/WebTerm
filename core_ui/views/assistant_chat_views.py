@@ -4,6 +4,7 @@ import json
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
+from loguru import logger
 
 from app.assistant_actions import AssistantActionError
 from core_ui.decorators import require_feature
@@ -264,8 +265,8 @@ def _resume_operator_if_parked(action: AssistantAction, *, request=None, cancell
                 loop.run_until_complete(_run())
         except RuntimeError:
             asyncio.run(_run())
-    except Exception:  # noqa: BLE001 — confirm must still return action result
-        pass
+    except Exception as exc:  # noqa: BLE001 — confirm must still return action result
+        logger.warning("assistant action resume failed action_id={}: {}", action.pk, exc)
 
 
 @require_feature("orchestrator")

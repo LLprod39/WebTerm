@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from django.db.models import Avg, Count, F, Max, Min, Q
@@ -14,6 +15,8 @@ from servers.models import (
     ServerConnection,
     ServerHealthCheck,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _queue_snapshot(model, *, queue_id: str, label: str, now, exhausted_filter: Q | None = None) -> dict:
@@ -89,7 +92,7 @@ class DjangoAdminServerMetricsProvider:
                 for status in ServerHealthCheck.objects.filter(id__in=latest_ids).values_list("status", flat=True):
                     fleet_health[status] = fleet_health.get(status, 0) + 1
         except Exception:
-            pass
+            logger.debug("fleet health aggregation unavailable", exc_info=True)
 
         recent_alerts = list(
             ServerAlert.objects.filter(is_resolved=False).select_related("server").order_by("-created_at")[:10]

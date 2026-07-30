@@ -453,9 +453,9 @@ class MultiAgentEngine:
             await self._sync_runtime_control()
             try:
                 return await asyncio.wait_for(self.session.user_reply_future, timeout=timeout)
-            except (TimeoutError, asyncio.CancelledError):
+            except (TimeoutError, asyncio.CancelledError) as exc:
                 if self._stop_requested:
-                    raise RuntimeError("Stopped by user")
+                    raise RuntimeError("Stopped by user") from exc
                 return "Нет ответа (таймаут)"
         return "Нет сессии"
 

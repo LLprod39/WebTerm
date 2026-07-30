@@ -31,14 +31,13 @@ select = [
     "F",      # Pyflakes
     "I",      # isort
     "B",      # flake8-bugbear
+    "S110",   # forbid silent try/except/pass
     "C4",     # flake8-comprehensions
     "UP",     # pyupgrade
     "SIM",    # flake8-simplify
 ]
 ignore = [
     "E501",   # line too long (временно)
-    "E722",   # bare except (временно, будем исправлять постепенно)
-    "B904",   # raise without from (временно)
 ]
 
 [tool.ruff.lint.isort]

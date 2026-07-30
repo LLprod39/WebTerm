@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from loguru import logger
 
 from app.assistant_actions import get_action_spec
 from app.egress_redaction import redact_egress_payload
@@ -174,8 +175,8 @@ def _enrich_agent_create_arguments(
                 ids = _server_ids_from_user_text(user, str(content or ""))
                 if ids:
                     break
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("operator recent server context lookup skipped: {}", exc)
     if ids:
         args["server_ids"] = ids
     return args
@@ -208,8 +209,8 @@ def _create_pending_action(
                 names = operator_provider_registry.server_names_for_ids([int(arguments["server_id"])])
                 if names:
                     blast["server_names"] = names
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator typed-confirm server name lookup skipped: {}", exc)
         elif isinstance(arguments.get("server_ids"), list):
             ids = list(arguments.get("server_ids") or [])
             blast = {"server_ids": ids}
@@ -219,8 +220,8 @@ def _create_pending_action(
                 names = operator_provider_registry.server_names_for_ids(ids)
                 if names:
                     blast["server_names"] = names
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator typed-confirm server names lookup skipped: {}", exc)
         cmd = arguments.get("command") or arguments.get("cmd")
         if cmd:
             dry_run = {"command": str(cmd)[:2000]}
