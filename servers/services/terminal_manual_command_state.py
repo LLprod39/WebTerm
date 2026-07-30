@@ -10,6 +10,7 @@ from servers.services.terminal_ai.active_command import (
 )
 from servers.services.terminal_ai.session_context import apply_successful_command_context
 from servers.services.terminal_stream_state import append_clean_output
+from servers.services.terminal_transport_state import TerminalTransportState
 
 
 @dataclass
@@ -43,8 +44,8 @@ PersistResult = Callable[..., Awaitable[Any]]
 AppendRecentActivity = Callable[..., None]
 
 
-def append_terminal_tail(consumer: Any, text: str) -> None:
-    consumer._terminal_tail = append_clean_output(consumer._terminal_tail, text, limit=8000)
+def append_terminal_tail(state: TerminalTransportState, text: str) -> None:
+    state.terminal_tail = append_clean_output(state.terminal_tail, text, limit=8000)
 
 
 def append_ai_output(state: TerminalAiActiveCommandState, text: str) -> None:

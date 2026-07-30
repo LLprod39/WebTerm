@@ -9,6 +9,7 @@ from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_ai.state import TerminalAiState
 from servers.services.terminal_manual_command_state import ManualCommandState
+from servers.services.terminal_transport_state import TerminalTransportState
 
 
 class DummyStdin:
@@ -39,8 +40,10 @@ def _build_consumer() -> SSHTerminalConsumer:
     consumer = SSHTerminalConsumer()
     consumer.server = SimpleNamespace(id=20, name="lunix")
     consumer._user_id = 1
-    consumer._ssh_proc = DummyProc()
-    consumer._server_connection_id = "term-manual-test"
+    consumer._transport_state = TerminalTransportState(
+        ssh_proc=DummyProc(),
+        server_connection_id="term-manual-test",
+    )
     consumer._ai_state = TerminalAiState.create(
         run_controller_factory=TerminalAiRunController,
         session_factory=TerminalAiSession,
@@ -48,9 +51,6 @@ def _build_consumer() -> SSHTerminalConsumer:
     )
     consumer._ai_state.session.marker_token = "manualtest"
     consumer._manual_state = ManualCommandState()
-    consumer._nova_session_context = {}
-    consumer._nova_recent_activity = []
-    consumer._intercept_editors = True
     return consumer
 
 
@@ -72,7 +72,10 @@ def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypat
     async_to_sync(consumer._handle_input)("systemctl status nginx\r")
 
     assert consumer._manual_state.active_command_id == 1_000_000
-    assert any("__WEUAI_EXIT_manualtest_1000000" in item for item in consumer._ssh_proc.stdin.writes)
+    assert any(
+        "__WEUAI_EXIT_manualtest_1000000" in item
+        for item in consumer._transport_state.ssh_proc.stdin.writes
+    )
 
     consumer._append_manual_output("systemctl status nginx\nnginx.service - active (running)\n")
     async_to_sync(consumer._finalize_manual_terminal_command)(1_000_000, 0)
@@ -91,7 +94,10 @@ def test_manual_terminal_multiline_block_skips_marker_injection(monkeypatch):
     async_to_sync(consumer._handle_input)("if true; then\r")
 
     assert consumer._manual_state.active_command_id is None
-    assert not any("__WEUAI_EXIT_" in item for item in consumer._ssh_proc.stdin.writes)
+    assert not any(
+        "__WEUAI_EXIT_" in item
+        for item in consumer._transport_state.ssh_proc.stdin.writes
+    )
     assert len(persisted) == 1
     assert persisted[0]["command"] == "if true; then"
     assert persisted[0]["output"] == ""

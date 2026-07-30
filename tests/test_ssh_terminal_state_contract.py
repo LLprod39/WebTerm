@@ -6,6 +6,7 @@ from pathlib import Path
 
 from servers.services.terminal_ai.state import TerminalAiState
 from servers.services.terminal_manual_command_state import ManualCommandState
+from servers.services.terminal_transport_state import TerminalTransportState
 
 ROOT = Path(__file__).resolve().parents[1]
 CONSUMER_DIR = ROOT / "servers" / "consumers"
@@ -37,12 +38,26 @@ LEGACY_SHARED_STATE = {
     "_ai_stop_requested",
     "_ai_user_message",
     "_input_capture_suppress",
+    "_connection_heartbeat_task",
+    "_connect_lock",
+    "_intercept_editors",
     "_manual_active_cmd_id",
     "_manual_active_output",
     "_manual_input_buffer",
     "_manual_next_cmd_id",
     "_manual_pending_commands",
+    "_marker_line_buf",
+    "_marker_suppress",
+    "_nova_recent_activity",
+    "_nova_session_context",
+    "_server_connection_id",
+    "_ssh_conn",
+    "_ssh_proc",
+    "_stderr_task",
+    "_stdout_task",
+    "_terminal_tail",
     "_unavailable_cmds",
+    "_wait_task",
 }
 
 
@@ -60,6 +75,7 @@ def _self_attributes(path: Path) -> set[str]:
 def test_terminal_state_is_explicit_and_legacy_shared_attrs_are_not_used() -> None:
     assert is_dataclass(TerminalAiState)
     assert is_dataclass(ManualCommandState)
+    assert is_dataclass(TerminalTransportState)
 
     offenders: dict[str, list[str]] = {}
     for path in CONSUMER_DIR.glob("ssh_terminal*.py"):

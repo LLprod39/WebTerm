@@ -33,7 +33,7 @@ class SSHTerminalLifecycleMixin:
     _normalize_ai_chat_mode = staticmethod(ai_preferences.normalize_ai_chat_mode)
 
     async def connect(self):
-        self._connect_lock = asyncio.Lock()
+        self._transport_state.reset_for_connect()
         self._manual_state.reset()
         self._ai_state.run = self._TerminalAiRunControllerCls()
         self._ai_state.session = self._TerminalAiSessionCls()
@@ -53,13 +53,6 @@ class SSHTerminalLifecycleMixin:
             return
 
         self._user_id = int(user.id)
-        self._terminal_tail = ""
-        self._marker_suppress = {"stdout": False, "stderr": False}
-        self._marker_line_buf = {"stdout": "", "stderr": ""}
-        self._server_connection_id: str | None = None
-        self._connection_heartbeat_task = None
-        self._nova_session_context = {}
-        self._nova_recent_activity = []
 
         can_servers = await self._user_can_servers(user.id)
         logger.debug("WS connect: user={} can_servers={}", user, can_servers)
@@ -201,11 +194,11 @@ class SSHTerminalLifecycleMixin:
             await self._handle_ai_explain_output(content or {})
             return
         if msg_type == "set_editor_intercept":
-            self._intercept_editors = bool((content or {}).get("enabled", True))
+            self._transport_state.intercept_editors = bool((content or {}).get("enabled", True))
             return
         if msg_type == "ping":
-            if self._server_connection_id:
-                await self._touch_server_connection(self._server_connection_id)
+            if self._transport_state.server_connection_id:
+                await self._touch_server_connection(self._transport_state.server_connection_id)
             await self._safe_send_json({"type": "pong"})
             return
 
@@ -260,7 +253,7 @@ class SSHTerminalLifecycleMixin:
 
     async def _emit_terminal_session(self) -> None:
         await self._safe_send_json(
-            terminal_nova_context.terminal_session_payload(getattr(self, "_nova_session_context", None))
+            terminal_nova_context.terminal_session_payload(self._transport_state.nova_session_context)
         )
 
     @staticmethod
@@ -272,18 +265,18 @@ class SSHTerminalLifecycleMixin:
         return max(interval, 0)
 
     def _start_connection_heartbeat(self) -> None:
-        if not self._server_connection_id:
+        if not self._transport_state.server_connection_id:
             return
         interval = self._terminal_session_heartbeat_interval()
         if interval <= 0:
             return
-        if self._connection_heartbeat_task and not self._connection_heartbeat_task.done():
-            self._connection_heartbeat_task.cancel()
-        self._connection_heartbeat_task = asyncio.create_task(self._run_connection_heartbeat(interval))
+        if self._transport_state.heartbeat_task and not self._transport_state.heartbeat_task.done():
+            self._transport_state.heartbeat_task.cancel()
+        self._transport_state.heartbeat_task = asyncio.create_task(self._run_connection_heartbeat(interval))
 
     async def _stop_connection_heartbeat(self) -> None:
-        task = self._connection_heartbeat_task
-        self._connection_heartbeat_task = None
+        task = self._transport_state.heartbeat_task
+        self._transport_state.heartbeat_task = None
         if not task or task.done():
             return
         task.cancel()
@@ -292,11 +285,11 @@ class SSHTerminalLifecycleMixin:
 
     async def _run_connection_heartbeat(self, interval: int) -> None:
         try:
-            while self._server_connection_id:
+            while self._transport_state.server_connection_id:
                 await asyncio.sleep(interval)
-                if not self._server_connection_id or not (self._ssh_conn or self._ssh_proc):
+                if not self._transport_state.server_connection_id or not (self._transport_state.ssh_conn or self._transport_state.ssh_proc):
                     return
-                await self._touch_server_connection(self._server_connection_id)
+                await self._touch_server_connection(self._transport_state.server_connection_id)
         except asyncio.CancelledError:
             raise
         except Exception:

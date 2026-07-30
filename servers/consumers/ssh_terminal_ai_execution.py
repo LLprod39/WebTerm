@@ -45,7 +45,7 @@ class SSHTerminalAiExecutionMixin:
         direct_exec_enabled = self._legacy_direct_exec_enabled()
         try:
             while True:
-                if not self._ssh_proc:
+                if not self._transport_state.ssh_proc:
                     break
                 if not self.server or not self._user_id:
                     break
@@ -56,7 +56,7 @@ class SSHTerminalAiExecutionMixin:
                     parallel_batch = ai_session.prepare_parallel_batch(
                         direct_exec_enabled=direct_exec_enabled,
                         step_mode=step_mode,
-                        has_ssh_connection=bool(self._ssh_conn),
+                        has_ssh_connection=bool(self._transport_state.ssh_conn),
                     )
 
                 if parallel_batch.is_ready:
@@ -118,7 +118,7 @@ class SSHTerminalAiExecutionMixin:
                 dry_run_active = bool((self._ai_state.settings or {}).get("dry_run", False))
 
                 # 2.4: capture pre-execution snapshot for file-modifying cmds.
-                if not dry_run_active and self._ssh_conn:
+                if not dry_run_active and self._transport_state.ssh_conn:
                     await self._maybe_snapshot_file(cmd, item_id)
 
                 try:
@@ -230,7 +230,7 @@ class SSHTerminalAiExecutionMixin:
         For streaming/interactive commands: auto-interrupts with Ctrl+C after 8 s.
         Returns (exit_code, output_snippet).
         """
-        if not self._ssh_proc:
+        if not self._transport_state.ssh_proc:
             raise RuntimeError("SSH process not connected")
 
         clean_cmd = self._normalize_command_text(cmd)
@@ -247,13 +247,13 @@ class SSHTerminalAiExecutionMixin:
 
         with self._suppress_terminal_input_capture():
             await self._ai_type_text(clean_cmd)
-            self._ssh_proc.stdin.write("\n")
+            self._transport_state.ssh_proc.stdin.write("\n")
 
             # Marker line to capture exit status (filtered from UI output)
             marker_prefix = self._marker_prefix()
             marker_var = f"{marker_prefix}{cmd_id}"
             marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
-            self._ssh_proc.stdin.write(marker_cmd + "\n")
+            self._transport_state.ssh_proc.stdin.write(marker_cmd + "\n")
 
         return await wait_for_pty_command_completion(
             self._ai_state.active_command,
@@ -291,7 +291,7 @@ class SSHTerminalAiExecutionMixin:
         logging and memory-ingestion flows all keep working.
         """
         return await execute_direct_terminal_command(
-            ssh_conn=self._ssh_conn,
+            ssh_conn=self._transport_state.ssh_conn,
             command=cmd,
             item_id=cmd_id,
             send_event=self._send_ai_event,
@@ -311,12 +311,12 @@ class SSHTerminalAiExecutionMixin:
         """
         from servers.services.terminal_snapshotting import capture_pre_execution_snapshot
 
-        if not self._ssh_conn or not self.server:
+        if not self._transport_state.ssh_conn or not self.server:
             return
         await capture_pre_execution_snapshot(
             command=cmd,
             cmd_id=cmd_id,
-            ssh_conn=self._ssh_conn,
+            ssh_conn=self._transport_state.ssh_conn,
             server_id=int(self.server.id),
             user_id=self._user_id,
             timeout_seconds=self.SNAPSHOT_READ_TIMEOUT_SEC,
@@ -348,7 +348,7 @@ class SSHTerminalAiExecutionMixin:
             items=items,
             plan_indices=plan_indices,
             dry_run=bool((self._ai_state.settings or {}).get("dry_run", False)),
-            has_ssh_connection=bool(self._ssh_conn),
+            has_ssh_connection=bool(self._transport_state.ssh_conn),
             user_id=self._user_id,
             server_id=self.server.id if self.server else 0,
             send_event=self._send_ai_event,
@@ -366,8 +366,8 @@ class SSHTerminalAiExecutionMixin:
             self._write_interrupt_to_pty()
 
     def _write_interrupt_to_pty(self) -> None:
-        if self._ssh_proc:
-            self._ssh_proc.stdin.write("\x03")
+        if self._transport_state.ssh_proc:
+            self._transport_state.ssh_proc.stdin.write("\x03")
 
     @staticmethod
     def _is_streaming_command(cmd: str) -> bool:
@@ -446,12 +446,12 @@ class SSHTerminalAiExecutionMixin:
         )
 
     async def _ai_type_text(self, text: str):
-        if not self._ssh_proc or not text:
+        if not self._transport_state.ssh_proc or not text:
             return
         step = 1 if len(text) <= 80 else 4
         delay = 0.01 if step == 1 else 0.006
         for i in range(0, len(text), step):
-            self._ssh_proc.stdin.write(text[i : i + step])
+            self._transport_state.ssh_proc.stdin.write(text[i : i + step])
             await asyncio.sleep(delay)
 
     # ── Nova agent entry point ─────────────────────────────────────────────

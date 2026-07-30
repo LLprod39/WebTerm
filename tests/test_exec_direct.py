@@ -17,6 +17,7 @@ from servers.consumers.ssh_terminal import SSHTerminalConsumer
 from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_ai.state import TerminalAiState
+from servers.services.terminal_transport_state import TerminalTransportState
 
 
 def _terminal_ai_state(*, execution_mode: str = "step") -> TerminalAiState:
@@ -57,8 +58,7 @@ def _make_consumer(conn: _FakeConn | None) -> tuple[SSHTerminalConsumer, list[di
     """Build a bare consumer with enough state for direct-exec tests."""
     cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
     cons._ai_state = _terminal_ai_state()
-    cons._ssh_conn = conn  # type: ignore[attr-defined]
-    cons._ssh_proc = None  # PTY not used in direct path  # type: ignore[attr-defined]
+    cons._transport_state = TerminalTransportState(ssh_conn=conn)
     sent: list[dict] = []
 
     async def _capture(event):
@@ -186,7 +186,7 @@ class TestExecDirectDoesNotTouchPTY:
 
         conn = _FakeConn(stdout="ok", exit_status=0)
         cons, _ = _make_consumer(conn)
-        cons._ssh_proc = _FakeProc()  # type: ignore[assignment]
+        cons._transport_state.ssh_proc = _FakeProc()
 
         _run(cons._ai_execute_command_direct("ls", 1))
 
