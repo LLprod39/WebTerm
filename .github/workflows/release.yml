@@ -299,7 +299,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "WebTerm $GITHUB_REF_NAME" \
-            --notes-file docs/releases/V0_2_0_RELEASE_NOTES.md \
+            --notes-file docs/releases/V0_2_1_RELEASE_NOTES.md \
             --verify-tag \
             --latest \
             release-assets/upload/*

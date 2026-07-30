@@ -363,8 +363,20 @@ validate_required_env() {
 ensure_agent_command_runner_image() {
   local configured image_id
   configured="${AGENT_COMMAND_RUNNER_IMAGE:-$(read_env_value "AGENT_COMMAND_RUNNER_IMAGE")}"
-  if [[ "$configured" =~ ^(sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64})$ ]]; then
+  if [[ "$configured" =~ ^[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64}$ ]]; then
     upsert_env_value "AGENT_COMMAND_RUNNER_IMAGE" "$configured"
+    if [[ "$VALIDATE_ONLY" -eq 0 ]] && ! docker image inspect "$configured" >/dev/null 2>&1; then
+      echo "==> Pulling the pinned ephemeral agent command runner"
+      docker pull "$configured"
+    fi
+    return 0
+  fi
+  if [[ "$configured" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    upsert_env_value "AGENT_COMMAND_RUNNER_IMAGE" "$configured"
+    if [[ "$VALIDATE_ONLY" -eq 0 ]] && ! docker image inspect "$configured" >/dev/null 2>&1; then
+      echo "Error: AGENT_COMMAND_RUNNER_IMAGE references a local image ID that is not present" >&2
+      exit 1
+    fi
     return 0
   fi
   if [[ "$DO_BUILD" -ne 1 ]]; then

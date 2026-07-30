@@ -1,6 +1,6 @@
 [project]
 name = "webterm"
-version = "0.2.0"
+version = "0.2.1"
 description = "WebTerm self-hosted infrastructure operations platform"
 requires-python = ">=3.11,<3.13"
 license = { text = "Apache License 2.0" }

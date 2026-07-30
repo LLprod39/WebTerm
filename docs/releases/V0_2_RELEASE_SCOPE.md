@@ -1,6 +1,6 @@
 # WebTerm v0.2 release-scope matrix
 
-Status: v0.2.0 release candidate; publication requires every gate in `V0_2_RELEASE_CHECKLIST.md`
+Status: v0.2.1 release candidate; publication requires every gate in `V0_2_RELEASE_CHECKLIST.md`
 Last reviewed: 2026-07-30
 
 `GA` means supported inside the controlled single-host pilot boundary. `preview` means opt-in and outside the availability promise. `disabled` means the backend fails closed in the production profile.

@@ -44,7 +44,7 @@ def test_release_tag_must_match_the_canonical_version() -> None:
     assert "Verify release tag and contracts" in workflow
     assert 'expected="v$(tr -d' in workflow
     assert 'test "$GITHUB_REF_NAME" = "$expected"' in workflow
-    assert "docs/releases/V0_2_0_RELEASE_NOTES.md" in workflow
+    assert "docs/releases/V0_2_1_RELEASE_NOTES.md" in workflow
 
 
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
@@ -81,6 +81,17 @@ def test_production_installer_starts_the_playbook_execution_plane() -> None:
     service_block = installer.split("local services=(", 1)[1].split(")", 1)[0]
     assert "playbook-docker-proxy" in service_block
     assert "playbook-execution-worker" in service_block
+
+
+def test_production_installer_pulls_the_pinned_agent_command_runner() -> None:
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+
+    runner_block = installer.split("ensure_agent_command_runner_image()", 1)[1].split(
+        "configure_agent_command_network()", 1
+    )[0]
+    assert 'docker image inspect "$configured"' in runner_block
+    assert 'docker pull "$configured"' in runner_block
+    assert "Pulling the pinned ephemeral agent command runner" in runner_block
 
 
 def test_https_runtime_smoke_matches_browser_csrf_and_websocket_origin() -> None:

@@ -1,6 +1,6 @@
-# WebTerm v0.2.0
+# WebTerm v0.2.1
 
-WebTerm v0.2.0 hardens command execution, approvals, secrets, queues and production isolation while adding project boundaries, durable Playbook execution, dry-run previews and end-to-end observability.
+WebTerm v0.2.1 hardens command execution, approvals, secrets, queues and production isolation while adding project boundaries, durable Playbook execution, dry-run previews and end-to-end observability. It also guarantees that an immutable agent-command runner is pulled before the isolated runtime is used.
 
 ## Highlights
 
@@ -14,7 +14,7 @@ WebTerm v0.2.0 hardens command execution, approvals, secrets, queues and product
 
 ## Install or upgrade
 
-For a new installation, download and unpack `webterm-v0.2.0-install.tar.gz` or `.zip`, copy `.env.production.example` to `.env.production`, configure the required secrets and hosts, then append the exact contents of `release-images.env`.
+For a new installation, download and unpack `webterm-v0.2.1-install.tar.gz` or `.zip`, copy `.env.production.example` to `.env.production`, configure the required secrets and hosts, then append the exact contents of `release-images.env`.
 
 For an upgrade from v0.1.0, first create and verify a PostgreSQL backup. Follow `docs-releases/OPERATIONS_RUNBOOK.md`, use the immutable image references from this release, run migrations, and keep the v0.1.0 images plus backup until the post-upgrade readiness and guarded-action checks pass.
 
@@ -23,7 +23,7 @@ For an upgrade from v0.1.0, first create and verify a PostgreSQL backup. Follow 
 ```bash
 sha256sum --check SHA256SUMS.txt
 gh attestation verify release-manifest.json --repo LLprod39/WebTerm
-gh attestation verify webterm-v0.2.0-install.tar.gz --repo LLprod39/WebTerm
+gh attestation verify webterm-v0.2.1-install.tar.gz --repo LLprod39/WebTerm
 ```
 
 Repeat attestation verification for every image digest in `release-manifest.json`. CycloneDX SBOMs for Python, frontend, the container inventory and every published image are attached to the GitHub Release.

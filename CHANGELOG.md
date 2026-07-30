@@ -4,7 +4,7 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-07-30
+## [0.2.1] - 2026-07-30
 
 ### Added
 
@@ -23,6 +23,7 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 - Production containers run as non-root with bounded CPU, memory, PIDs and request sizes.
 - Kubernetes Ops is explicitly frozen to the reviewed v0.1 read-only release boundary.
 - The production release no longer builds, starts or publishes the local `mcp-demo` fixture.
+- The production installer now pulls the pinned ephemeral agent-command runner before isolated pipeline execution.
 
 - Pinned production runtime and registry images to immutable digests.
 - Tightened the frontend dependency-audit gate to an exact, reviewed React Router RSC-only exception for the SPA build.
@@ -54,5 +55,5 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 - Production deploy checks and supply-chain policy are required release evidence.
 
 [0.1.0]: https://github.com/LLprod39/WebTerm/releases/tag/v0.1.0
-[0.2.0]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.0
-[Unreleased]: https://github.com/LLprod39/WebTerm/compare/v0.2.0...HEAD
+[0.2.1]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.1
+[Unreleased]: https://github.com/LLprod39/WebTerm/compare/v0.2.1...HEAD

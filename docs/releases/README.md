@@ -1,6 +1,6 @@
 # Releases
 
-WebTerm v0.2.0 is the security, isolation and operations hardening release built on the v0.1.0 Stage 1 foundation. Release artifacts use immutable container digests, signed attestations, SBOMs, checksums, install bundles, and automated runtime/Playwright proof on the published images. The support matrix and explicit capability exclusions remain authoritative.
+WebTerm v0.2.1 is the security, isolation and operations hardening release built on the v0.1.0 Stage 1 foundation. Release artifacts use immutable container digests, signed attestations, SBOMs, checksums, install bundles, and automated runtime/Playwright proof on the published images. The support matrix and explicit capability exclusions remain authoritative.
 
 Authoritative release documents:
 
@@ -17,6 +17,6 @@ Authoritative release documents:
 - [Pilot UX script](../pilot/PILOT_UX_SCRIPT_V1.md) — versioned participant task and evidence rules.
 - [CI and Git governance](../architecture/CI_GOVERNANCE.md) — check rollout, promotion and branch-protection policy.
 - [v0.1.0 release notes](V0_1_0_RELEASE_NOTES.md) — install and verification commands for the published release.
-- [v0.2.0 release notes](V0_2_0_RELEASE_NOTES.md) — upgrade, scope and verification notes for the current release.
+- [v0.2.1 release notes](V0_2_1_RELEASE_NOTES.md) — upgrade, scope and verification notes for the current release.
 
 A green local command is not a release. A release candidate requires a clean commit, pinned tools, all mandatory artifacts, an explicit reviewer decision and a traceable CI run. `scripts/collect_release_evidence.py` records those inputs but deliberately never approves a release itself.
