@@ -69,7 +69,9 @@ async def execute_agent_ssh_cmd(node: dict, context: dict, run: PipelineRun) -> 
         return {"status": "failed", "error": f"Server not found: {server_id}"}
     commands_to_check = [command, *preflight_commands, *verification_commands]
     if getattr(server, "ai_read_only", False) and any(
-        not is_read_only_command(str(candidate or "")) for candidate in commands_to_check if str(candidate or "").strip()
+        not is_read_only_command(str(candidate or ""))
+        for candidate in commands_to_check
+        if str(candidate or "").strip()
     ):
         return {
             "status": "failed",

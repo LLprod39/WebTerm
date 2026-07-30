@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 from typing import Any
@@ -71,10 +72,8 @@ class LoginBruteForceProtectionMiddleware:
 
         response = self.get_response(request)
         if getattr(getattr(request, "user", None), "is_authenticated", False):
-            try:
+            with contextlib.suppress(Exception):
                 cache.delete(key)
-            except Exception:
-                pass
             return response
 
         try:
