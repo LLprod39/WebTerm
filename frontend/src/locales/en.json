@@ -175,6 +175,7 @@
   "srv.notes_placeholder": "Short server note",
   "srv.ai_read_only": "AI read-only",
   "srv.ai_read_only_hint": "AI agent can only read; write commands are blocked",
+  "srv.ai_write_enabled_hint": "AI can change the server after you approve the command",
   "srv.no_group": "No group",
   "srv.advanced": "Advanced",
   "srv.sharing": "Sharing, AI memory, contexts, secrets and command execution",

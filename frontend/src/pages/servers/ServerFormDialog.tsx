@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { FrontendGroup, FrontendServer } from "@/lib/api";
@@ -307,6 +308,23 @@ export function ServerFormDialog({
             icon={<ServerIcons.security className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
             <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-secondary/25 px-4 py-3">
+                <div className="min-w-0">
+                  <Label htmlFor="server-ai-read-only" className="text-sm font-medium text-foreground">
+                    {t("srv.ai_read_only")}
+                  </Label>
+                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                    {t(form.ai_read_only ? "srv.ai_read_only_hint" : "srv.ai_write_enabled_hint")}
+                  </p>
+                </div>
+                <Switch
+                  id="server-ai-read-only"
+                  checked={form.ai_read_only}
+                  onCheckedChange={(checked) =>
+                    setForm((state) => ({ ...state, ai_read_only: Boolean(checked) }))
+                  }
+                />
+              </div>
               <div className="space-y-2">
                 <FieldLabel>{t("srv.sudo_auth")}</FieldLabel>
                 <p className="text-sm leading-5 text-muted-foreground">{t("srv.sudo_auth_hint")}</p>
