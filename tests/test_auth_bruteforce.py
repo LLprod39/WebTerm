@@ -60,9 +60,7 @@ def test_admin_login_uses_same_backend_throttle(client, django_user_model):
 
 
 def test_production_nginx_limits_login_admin_and_webhooks():
-    config = (Path(__file__).resolve().parents[1] / "docker" / "nginx" / "production.conf").read_text(
-        encoding="utf-8"
-    )
+    config = (Path(__file__).resolve().parents[1] / "docker" / "nginx" / "production.conf").read_text(encoding="utf-8")
 
     assert "limit_req_zone $binary_remote_addr zone=auth_limit:10m rate=10r/m;" in config
     assert config.count("location ^~ /api/auth/") == 2

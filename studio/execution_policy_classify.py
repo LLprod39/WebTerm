@@ -211,9 +211,7 @@ def _classify_ssh_cmd(
             continue
         reasons = list(verdict.reasons)
         if not reasons:
-            reasons.append(
-                "SSH command is outside the built-in read-only allowlist or cannot be classified safely."
-            )
+            reasons.append("SSH command is outside the built-in read-only allowlist or cannot be classified safely.")
         if has_approved_approval_path is False:
             reasons.append("Missing approved human approval path.")
         decisions.append(

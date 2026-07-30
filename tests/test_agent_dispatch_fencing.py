@@ -45,9 +45,7 @@ def test_expired_agent_dispatch_stops_after_three_attempts():
         assert claimed is not None
         assert claimed.id == dispatch.id
         assert claimed.attempt_count == attempt
-        AgentRunDispatch.objects.filter(pk=dispatch.id).update(
-            lease_expires_at=timezone.now() - timedelta(seconds=1)
-        )
+        AgentRunDispatch.objects.filter(pk=dispatch.id).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
 
     assert claim_next_agent_dispatch(worker_name="worker-4", lease_seconds=30) is None
 
@@ -68,9 +66,7 @@ def test_stale_agent_worker_cannot_heartbeat_complete_or_fail_reclaimed_attempt(
     first = claim_next_agent_dispatch(worker_name="worker-old", lease_seconds=30)
     assert first is not None
     first_attempt = first.attempt_count
-    AgentRunDispatch.objects.filter(pk=dispatch.id).update(
-        lease_expires_at=timezone.now() - timedelta(seconds=1)
-    )
+    AgentRunDispatch.objects.filter(pk=dispatch.id).update(lease_expires_at=timezone.now() - timedelta(seconds=1))
     second = claim_next_agent_dispatch(worker_name="worker-new", lease_seconds=30)
     assert second is not None
     second_attempt = second.attempt_count

@@ -79,8 +79,7 @@ def _node_execution_approval_granted(run: PipelineRun, node_id: str) -> bool:
         edges=list(run.edges_snapshot or []),
     )
     return any(
-        decision.node_id == str(node_id) and decision.requires_approval and decision.allowed
-        for decision in decisions
+        decision.node_id == str(node_id) and decision.requires_approval and decision.allowed for decision in decisions
     )
 
 

@@ -59,15 +59,11 @@ def managed_secret_key_source() -> str:
 
 
 def _current_seed() -> str:
-    return str(
-        os.getenv("MANAGED_SECRET_KEY")
-        or os.getenv("APP_SECRET_ENCRYPTION_KEY")
-        or settings.SECRET_KEY
-    )
+    return str(os.getenv("MANAGED_SECRET_KEY") or os.getenv("APP_SECRET_ENCRYPTION_KEY") or settings.SECRET_KEY)
 
 
 def _derived_key_id(seed: str) -> str:
-    digest = hashlib.sha256(f"{seed}:managed-secret:key-id:v2".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{seed}:managed-secret:key-id:v2".encode()).hexdigest()
     return digest[:16]
 
 
@@ -106,7 +102,7 @@ def _parse_previous_keys() -> list[tuple[str, str]]:
 
 
 def _legacy_fernet(seed: str) -> Fernet:
-    digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode("utf-8")).digest()
+    digest = hashlib.sha256(f"{seed}:managed-secret:v1".encode()).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
 
