@@ -246,6 +246,21 @@ services:
         "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
       ]
 
+  history-pruner:
+    <<: *backend-worker
+    container_name: mini-prod-history-pruner
+    command:
+      [
+        "python",
+        "manage.py",
+        "prune_history",
+        "--daemon",
+        "--interval-seconds",
+        "${HISTORY_PRUNE_INTERVAL_SECONDS:-86400}",
+        "--batch-size",
+        "${HISTORY_PRUNE_BATCH_SIZE:-1000}",
+      ]
+
   playbook-execution-worker:
     <<: *backend-worker
     stop_grace_period: 4m

@@ -5,7 +5,6 @@ from pathlib import Path
 import yaml
 from django.conf import settings
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -32,6 +31,7 @@ def test_backend_and_every_worker_have_runtime_resource_limits():
     worker_names = (
         "scheduled-pipelines",
         "scheduled-agents",
+        "history-pruner",
         "playbook-execution-worker",
         "monitor",
         "ops-supervisor",

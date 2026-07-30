@@ -16,7 +16,7 @@ def record_llm_usage(event: LLMUsageEvent) -> None:
     from django.db import close_old_connections
 
     from core_ui.activity import log_llm_activity
-    from core_ui.audit import audit_context, get_audit_context, maybe_apply_log_retention, should_log_llm
+    from core_ui.audit import audit_context, get_audit_context, should_log_llm
     from core_ui.models import LLMUsageLog
 
     try:
@@ -25,7 +25,6 @@ def record_llm_usage(event: LLMUsageEvent) -> None:
             if not should_log_llm():
                 return
 
-            maybe_apply_log_retention()
             audit_ctx = get_audit_context()
             LLMUsageLog.objects.create(
                 provider=event.provider,

@@ -5,15 +5,10 @@ Audit configuration, context and retention helpers.
 from __future__ import annotations
 
 import contextlib
-import time
 from collections.abc import Iterator
 from contextvars import ContextVar
-from datetime import timedelta
 from threading import Lock
 from typing import Any
-
-from django.utils import timezone
-from loguru import logger
 
 from app.core.model_config import model_manager
 
@@ -36,9 +31,6 @@ _CONFIG_LOADED = False
 _CONFIG_LOCK = Lock()
 # No mutable default: a shared dict default would leak state between contexts.
 _AUDIT_CONTEXT: ContextVar[dict[str, Any] | None] = ContextVar("weu_audit_context", default=None)
-_RETENTION_LOCK = Lock()
-_LAST_RETENTION_RUN_TS = 0.0
-_RETENTION_INTERVAL_SECONDS = 3600.0
 
 
 def _ensure_config_loaded() -> None:
@@ -211,26 +203,3 @@ def should_log_activity(
 
 def should_log_llm() -> bool:
     return bool(get_logging_config().get("log_ai_assistant", True))
-
-
-def maybe_apply_log_retention(force: bool = False) -> None:
-    global _LAST_RETENTION_RUN_TS
-
-    config = get_logging_config()
-    retention_days = _coerce_int(config.get("retention_days"), 90, min_value=1, max_value=3650)
-    now_ts = time.monotonic()
-    if not force and (now_ts - _LAST_RETENTION_RUN_TS) < _RETENTION_INTERVAL_SECONDS:
-        return
-
-    with _RETENTION_LOCK:
-        if not force and (now_ts - _LAST_RETENTION_RUN_TS) < _RETENTION_INTERVAL_SECONDS:
-            return
-        cutoff = timezone.now() - timedelta(days=retention_days)
-        try:
-            from core_ui.models import LLMUsageLog, UserActivityLog
-
-            UserActivityLog.objects.filter(created_at__lt=cutoff).delete()
-            LLMUsageLog.objects.filter(created_at__lt=cutoff).delete()
-            _LAST_RETENTION_RUN_TS = now_ts
-        except Exception as exc:
-            logger.debug("audit retention cleanup failed: {}", exc)

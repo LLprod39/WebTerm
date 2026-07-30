@@ -4,7 +4,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON_IMAGE = "python:3.11.15-slim-bookworm"
 
@@ -40,6 +39,7 @@ def test_production_compose_prepares_volumes_for_non_root_backend():
     for worker_name in (
         "scheduled-pipelines",
         "scheduled-agents",
+        "history-pruner",
         "playbook-execution-worker",
         "monitor",
         "ops-supervisor",

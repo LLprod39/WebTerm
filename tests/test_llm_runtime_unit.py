@@ -46,7 +46,6 @@ async def test_log_llm_usage_background_path_avoids_asgiref_executor_leak(monkey
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ensure_future should not be used here")),
     )
     monkeypatch.setattr("core_ui.audit.should_log_llm", lambda: True)
-    monkeypatch.setattr("core_ui.audit.maybe_apply_log_retention", lambda: None)
     monkeypatch.setattr(
         "core_ui.models.LLMUsageLog.objects.create",
         lambda **kwargs: created_payload.update(kwargs),

@@ -88,7 +88,7 @@ assert_fresh_host() {
   local reserved_names=(
     mini-prod-postgres mini-prod-redis mini-prod-backend mini-prod-frontend mini-prod-nginx
     mini-prod-mcp-demo mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-scheduled-agents
-    mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
+    mini-prod-history-pruner mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
     mini-prod-ssh-target-smoke
   )
   local existing_names

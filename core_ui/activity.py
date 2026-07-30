@@ -14,7 +14,7 @@ from asgiref.sync import sync_to_async
 from loguru import logger
 
 from app.egress_redaction import redact_egress_payload, redact_egress_text
-from core_ui.audit import get_audit_context, maybe_apply_log_retention, should_log_activity
+from core_ui.audit import get_audit_context, should_log_activity
 from core_ui.models import UserActivityLog
 
 
@@ -133,7 +133,6 @@ def log_user_activity(
         if not should_log_activity(category=category, action=action, metadata=normalized_metadata):
             return
 
-        maybe_apply_log_retention()
         resolved_user = user or getattr(request, "user", None)
         resolved_user_id = user_id or (
             resolved_user.id if resolved_user and getattr(resolved_user, "id", None) else audit_ctx.get("user_id")
