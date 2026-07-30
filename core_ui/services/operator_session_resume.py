@@ -34,7 +34,7 @@ async def resume_after_action(
     def _claim_turn():
         with transaction.atomic():
             claimed = (
-                ChatTurnState.objects.select_for_update()
+                ChatTurnState.objects.select_for_update(of=("self",))
                 .filter(
                     pending_action=action,
                     status=ChatTurnState.STATUS_AWAITING_CONFIRM,

@@ -13,7 +13,7 @@ from app.assistant_actions import AssistantActionContext, AssistantActionError
 from core_ui.models import UserAppPermission
 from core_ui.services.operator_memory import save_lesson_from_operator
 from servers.agent_background import execute_agent_dispatch
-from servers.agent_dispatch import enqueue_agent_run_dispatch
+from servers.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.agent_launch import launch_queued_agent_run
 from servers.models import AgentRun, AgentRunDispatch, Server, ServerAgent, ServerShare
 from servers.operator_mutate_exec import run_command, run_fanout
@@ -144,6 +144,9 @@ def test_agent_worker_reauthorizes_execute_command_before_engine(monkeypatch):
     )
     share.can_execute_command = False
     share.save(update_fields=["can_execute_command", "updated_at"])
+    claimed = claim_next_agent_dispatch(worker_name="capability-test", lease_seconds=60)
+    assert claimed is not None
+    assert claimed.pk == dispatch.pk
 
     async def forbidden_engine_run(*_args, **_kwargs):
         pytest.fail("agent engine must not run after execute_command is revoked")

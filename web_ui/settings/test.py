@@ -18,6 +18,7 @@ from pathlib import Path
 from web_ui.settings.development import *  # noqa: F401, F403
 
 TEST_ARTIFACT_ROOT = Path(tempfile.mkdtemp(prefix="weu_test_"))
+TESTING = True
 
 # Speed up password hashing in tests
 PASSWORD_HASHERS = [

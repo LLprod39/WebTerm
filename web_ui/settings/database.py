@@ -76,6 +76,7 @@ def build_database_settings(*, base_dir: Path) -> dict[str, object]:
     use_postgres = os.getenv("POSTGRES_HOST") or os.getenv("POSTGRES_DB")
     if use_postgres:
         statement_timeout_ms = max(env_int("POSTGRES_STATEMENT_TIMEOUT_MS", 30000), 0)
+        connection_max_age = max(env_int("POSTGRES_CONN_MAX_AGE_SECONDS", 60), 0)
         database = {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.getenv("POSTGRES_DB", "weu_platform"),
@@ -83,7 +84,8 @@ def build_database_settings(*, base_dir: Path) -> dict[str, object]:
             "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
             "HOST": os.getenv("POSTGRES_HOST", "localhost"),
             "PORT": os.getenv("POSTGRES_PORT", "5432"),
-            "CONN_MAX_AGE": 0,
+            "CONN_MAX_AGE": connection_max_age,
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "connect_timeout": 10,
                 "options": f"-c statement_timeout={statement_timeout_ms}",

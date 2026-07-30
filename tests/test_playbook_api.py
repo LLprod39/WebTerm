@@ -192,7 +192,7 @@ def test_playbook_create_still_rejects_empty_executable_content(auth_client):
     assert "YAML" in response.json()["error"]
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_playbook_run_dry_run(auth_client, user, server, monkeypatch):
     pb = Playbook.objects.create(
         user=user,
@@ -245,7 +245,7 @@ def test_playbook_run_dry_run(auth_client, user, server, monkeypatch):
     assert "dry-run" in (hosts[0]["task_results"][0]["output"] or "").lower()
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 def test_playbook_run_shell_live_progress(auth_client, user, server, monkeypatch):
     """Shell engine persists live_log and per-task progress while executing."""
     from servers.services import playbook_runner

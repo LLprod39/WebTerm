@@ -70,6 +70,7 @@ def test_pipeline_direct_ssh_node_requires_preflight_and_verification(monkeypatc
         port=22,
         username="root",
         auth_method="password",
+        ai_read_only=False,
     )
     pipeline = Pipeline.objects.create(name="SSH Policy Pipeline", owner=owner, nodes=[], edges=[])
     run = PipelineRun.objects.create(pipeline=pipeline, status=PipelineRun.STATUS_PENDING, context={})

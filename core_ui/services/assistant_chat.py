@@ -219,7 +219,9 @@ def execute_action(
     # returns without executing it again.
     with transaction.atomic():
         action = (
-            AssistantAction.objects.select_for_update().select_related("user", "session", "message").get(pk=action.pk)
+            AssistantAction.objects.select_for_update(of=("self",))
+            .select_related("user", "session", "message")
+            .get(pk=action.pk)
         )
         spec = get_action_spec(action.action_type)
         if action.status in {

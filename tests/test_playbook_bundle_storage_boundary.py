@@ -65,7 +65,7 @@ def test_production_compose_mounts_private_bundles_only_where_required():
         service = services[service_name]
         assert service["environment"]["PLAYBOOK_BUNDLE_STORAGE_ROOT"] == _volume_target(service, "playbook_bundles")
     for service_name, service in services.items():
-        if service_name not in {"backend", "playbook-execution-worker"}:
+        if service_name not in {"backend", "playbook-execution-worker", "volume-permissions"}:
             assert "playbook_bundles" not in _volume_sources(service), service_name
 
     assert "playbook_bundles" in compose["volumes"]
