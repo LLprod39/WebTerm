@@ -7,7 +7,7 @@ from .all_nodes_smoke_branches import (
     build_probe_nodes,
 )
 from .all_nodes_smoke_flow import build_collector_nodes, build_entry_nodes, build_smoke_edges
-from .mcp_showcase import ensure_demo_mcp_server
+from .mcp.mcp_showcase import ensure_demo_mcp_server
 from .models import CURRENT_PIPELINE_GRAPH_VERSION, MCPServerPool, Pipeline
 from .services import get_first_owned_server_id, list_owned_server_ids
 
