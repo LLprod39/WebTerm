@@ -12,6 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
 from servers.models import Playbook, PlaybookCompatibilityRevision
 from servers.services.playbook_compatibility_ai import PlaybookAdaptationError, adapt_playbook_with_ai
 from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility, compare_semantics
@@ -107,7 +108,9 @@ def playbook_compatibility_analyze(request, playbook_id: int):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_compatibility_adapt(request, playbook_id: int):
-    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
+    playbook = get_object_or_404(
+        Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user)
+    )
     data = _json_body(request)
     bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
     source = (playbook.source_yaml or "").strip()
@@ -129,7 +132,9 @@ def playbook_compatibility_adapt(request, playbook_id: int):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_compatibility_apply(request, playbook_id: int):
-    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
+    playbook = get_object_or_404(
+        Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user)
+    )
     # Establish the legacy source as the published origin before activating a
     # newly accepted compatibility record. Otherwise lazy workspace migration
     # could mistake this new proposal for historical published state.

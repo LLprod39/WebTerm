@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
+from core_ui.projects import active_project_for_user
 from servers.models import Playbook, PlaybookGrant
 
 
@@ -50,6 +51,9 @@ def _active_grants_q(now=None, *, prefix: str = "") -> Q:
 def playbooks_visible_to(user) -> QuerySet[Playbook]:
     if not getattr(user, "is_authenticated", False):
         return Playbook.objects.none()
+    project = active_project_for_user(user)
+    if project is None:
+        return Playbook.objects.none()
     group_ids = list(user.groups.values_list("id", flat=True))
     principal_q = Q(grants__user=user) | Q(grants__workspace_shared=True)
     if group_ids:
@@ -58,6 +62,7 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
     workspace_policy = PlaybookGrant.objects.filter(playbook_id=OuterRef("pk"), workspace_shared=True)
     return (
         Playbook.objects.annotate(_has_workspace_policy=Exists(workspace_policy))
+        .filter(project=project)
         .filter(
             Q(user=user)
             | grant_q
@@ -75,6 +80,8 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
 
 def capabilities_for(playbook: Playbook, user) -> PlaybookCapabilities:
     if not getattr(user, "is_authenticated", False):
+        return PlaybookCapabilities()
+    if playbook.project_id != getattr(active_project_for_user(user), "id", None):
         return PlaybookCapabilities()
     if playbook.user_id == user.id:
         return OWNER_CAPABILITIES

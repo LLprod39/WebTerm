@@ -16,6 +16,7 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
+from core_ui.projects import active_project_for_user
 from servers.models import PlaybookRun
 from servers.services.playbook_compatibility_validation import validate_playbook_syntax
 from servers.services.playbook_run_preparation import (
@@ -72,7 +73,9 @@ def playbook_run(request, playbook_id: int):
 @require_feature("servers")
 @require_http_methods(["GET"])
 def playbook_run_list(request):
-    qs = PlaybookRun.objects.filter(user=request.user).order_by("-created_at")[:50]
+    qs = PlaybookRun.objects.filter(user=request.user, project=active_project_for_user(request.user)).order_by(
+        "-created_at"
+    )[:50]
     return JsonResponse(
         {
             "success": True,
@@ -85,7 +88,9 @@ def playbook_run_list(request):
 @require_feature("servers")
 @require_http_methods(["GET"])
 def playbook_run_detail(request, run_id: int):
-    run = get_object_or_404(PlaybookRun, id=run_id, user=request.user)
+    run = get_object_or_404(
+        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
+    )
     return JsonResponse({"success": True, "run": _serialize_run(run, include_hosts=True)})
 
 
@@ -93,7 +98,9 @@ def playbook_run_detail(request, run_id: int):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_run_cancel(request, run_id: int):
-    run = get_object_or_404(PlaybookRun, id=run_id, user=request.user)
+    run = get_object_or_404(
+        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
+    )
     if run.status in (
         PlaybookRun.STATUS_COMPLETED,
         PlaybookRun.STATUS_FAILED,
@@ -113,7 +120,9 @@ def playbook_run_cancel(request, run_id: int):
 @require_http_methods(["POST"])
 def playbook_run_rerun_failed(request, run_id: int):
     """Re-run failed targets through the same exact-revision preflight."""
-    prev = get_object_or_404(PlaybookRun, id=run_id, user=request.user)
+    prev = get_object_or_404(
+        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
+    )
     host_results = prev.host_results if isinstance(prev.host_results, list) else []
     failed_ids = [
         int(h["server_id"])

@@ -49,8 +49,8 @@ def get_owned_servers_by_ids(user, server_ids: list[int] | None, *, order_by: st
     return _get_owned_servers_by_ids(user, server_ids, order_by=order_by)
 
 
-def get_owned_server(user, server_id: int | None):
-    return _get_owned_server(user, server_id)
+def get_owned_server(user, server_id: int | None, *, project_id: int | None = None):
+    return _get_owned_server(user, server_id, project_id=project_id)
 
 
 def get_owned_server_id_set(user, server_ids: list[int] | None) -> set[int]:

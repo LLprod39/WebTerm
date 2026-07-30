@@ -7,6 +7,7 @@ from pathlib import Path, PurePosixPath
 
 from django.contrib.auth.models import User
 
+from core_ui.projects import active_project_for_user
 from studio.models import StudioSkillAccess
 from studio.skill_authoring import validate_skill_dir
 from studio.skill_registry import SkillNotFoundError, get_skill, normalise_skill_slugs
@@ -44,15 +45,19 @@ def _can_read_skill(user, access: StudioSkillAccess | None) -> bool:
         return True
     if access is None or not user or not getattr(user, "is_authenticated", False):
         return False
+    if access.project_id != getattr(active_project_for_user(user), "id", None):
+        return False
     if access.owner_id == user.id or access.is_shared:
         return True
     return any(shared_user.id == user.id for shared_user in access.shared_with.all())
 
 
 def _can_edit_skill(user, access: StudioSkillAccess | None) -> bool:
+    if not access or access.project_id != getattr(active_project_for_user(user), "id", None):
+        return False
     if _is_admin(user):
         return True
-    return bool(access and user and getattr(user, "is_authenticated", False) and access.owner_id == user.id)
+    return bool(user and getattr(user, "is_authenticated", False) and access.owner_id == user.id)
 
 
 def _skill_to_summary_dict(skill, viewer, access: StudioSkillAccess | None) -> dict:

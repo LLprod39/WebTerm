@@ -16,6 +16,8 @@ from django.views.decorators.http import require_http_methods
 from app.outbound_http import request_outbound_http
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
+from core_ui.models.projects import ProjectMembership
+from core_ui.projects import active_project_for_user
 from studio.mcp.mcp_client import MCPClientError, inspect_mcp_server
 from studio.mcp.mcp_runner_client import _mcp_runner_url
 from studio.mcp.mcp_security import (
@@ -158,18 +160,31 @@ def _apply_shared_users(instance, shared_user_ids: list[int]):
     if instance.owner_id:
         shared_user_ids = [user_id for user_id in shared_user_ids if user_id != instance.owner_id]
     users = User.objects.filter(id__in=shared_user_ids, is_active=True).order_by("username")
+    from core_ui.projects import activate_first_shared_project_if_personal_empty
+
+    for user in users:
+        ProjectMembership.objects.get_or_create(
+            project_id=instance.project_id,
+            user=user,
+            defaults={"role": ProjectMembership.ROLE_VIEWER},
+        )
+        activate_first_shared_project_if_personal_empty(user, instance.project)
     instance.shared_with.set(users)
 
 
 def _mcp_read_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = MCPServerPool.objects.select_related("owner").prefetch_related("shared_with")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs.order_by("name")
     return qs.filter(Q(owner=user) | Q(is_shared=True) | Q(shared_with=user)).distinct().order_by("name")
 
 
 def _mcp_write_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = MCPServerPool.objects.select_related("owner").prefetch_related("shared_with")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs
     return qs.filter(owner=user)

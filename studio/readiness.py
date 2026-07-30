@@ -5,6 +5,7 @@ from typing import Any
 
 from app.background_workers import STUDIO_WORKER_SPECS
 from app.worker_state import serialize_background_worker_state
+from core_ui.projects import active_project_for_user
 from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio import readiness_issues as ri
 from studio.models import Pipeline, PipelineTrigger
@@ -38,7 +39,10 @@ def _is_admin(user) -> bool:
 
 def _pipeline_queryset_for_user(user, *, pipeline_ids: list[int] | None = None, active_only: bool = False):
     qs = Pipeline.objects.select_related("owner").prefetch_related("triggers")
-    scoped = qs if _is_admin(user) else qs.filter(owner=user)
+    project = active_project_for_user(user)
+    scoped = qs.filter(project=project) if project else qs.none()
+    if not _is_admin(user):
+        scoped = scoped.filter(owner=user)
     if pipeline_ids:
         scoped = scoped.filter(id__in=pipeline_ids)
     if active_only:

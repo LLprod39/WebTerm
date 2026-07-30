@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from django.db.models import Q
 from django.utils import timezone
 
+from core_ui.projects import active_project_for_user
 from servers.models import Server, ServerShare
 
 if TYPE_CHECKING:
@@ -49,6 +50,9 @@ def get_servers_for_user(user) -> QuerySet[Server]:
 
 def get_servers_for_user_capability(user, capability: str) -> QuerySet[Server]:
     """Return active SSH servers on which ``user`` holds the exact capability."""
+    project = active_project_for_user(user)
+    if project is None:
+        return Server.objects.none()
     now = timezone.now()
     active_share_q = Q(shares__user=user, shares__is_revoked=False) & (
         Q(shares__expires_at__isnull=True) | Q(shares__expires_at__gt=now)
@@ -62,6 +66,7 @@ def get_servers_for_user_capability(user, capability: str) -> QuerySet[Server]:
         share_q = active_share_q & Q(**{f"shares__{field}": True}) if field else Q(pk__in=[])
     return (
         Server.objects.select_related("group", "user")
+        .filter(project=project)
         .filter(is_active=True)
         .filter(server_type="ssh")
         .filter(Q(user=user) | share_q)
@@ -100,12 +105,21 @@ def get_server(server_id: int, user) -> Server | None:
     return get_servers_for_user(user).filter(pk=server_id).first()
 
 
-def get_owned_server(server_id: int, user) -> Server | None:
+def get_owned_server(server_id: int, user, *, project_id: int | None = None) -> Server | None:
     """
     Return a single active server owned by the user, or None.
     """
     try:
-        return Server.objects.get(pk=server_id, user=user, is_active=True, server_type="ssh")
+        resolved_project_id = project_id
+        if resolved_project_id is None:
+            resolved_project_id = getattr(active_project_for_user(user), "id", None)
+        return Server.objects.get(
+            pk=server_id,
+            user=user,
+            project_id=resolved_project_id,
+            is_active=True,
+            server_type="ssh",
+        )
     except (Server.DoesNotExist, TypeError, ValueError):
         return None
 
@@ -115,6 +129,8 @@ def get_active_share(server: Server, user) -> ServerShare | None:
     Return the active ServerShare for a shared server, or None if the user owns it.
     """
     if not server or server.user_id == user.id:
+        return None
+    if server.project_id != getattr(active_project_for_user(user), "id", None):
         return None
     now = timezone.now()
     return (

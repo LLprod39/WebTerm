@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse
 
 from core_ui.access import feature_allowed_for_user
+from core_ui.models.projects import ProjectMembership
 from studio.readiness_issues import runtime_limit_issue, validation_issues
 from studio.skill_authoring import parse_csv_items
 
@@ -83,6 +84,15 @@ def _apply_shared_users(instance, shared_user_ids: list[int]):
     if instance.owner_id:
         shared_user_ids = [user_id for user_id in shared_user_ids if user_id != instance.owner_id]
     users = User.objects.filter(id__in=shared_user_ids, is_active=True).order_by("username")
+    from core_ui.projects import activate_first_shared_project_if_personal_empty
+
+    for user in users:
+        ProjectMembership.objects.get_or_create(
+            project_id=instance.project_id,
+            user=user,
+            defaults={"role": ProjectMembership.ROLE_VIEWER},
+        )
+        activate_first_shared_project_if_personal_empty(user, instance.project)
     instance.shared_with.set(users)
 
 

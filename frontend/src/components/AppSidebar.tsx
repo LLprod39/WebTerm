@@ -1,4 +1,5 @@
-import { Languages, LogOut, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import { FolderKanban, Languages, LogOut, PanelLeftClose, PanelLeftOpen, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
 import {
@@ -12,7 +13,7 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { authLogout, fetchAuthSession, fetchKubernetesReadiness } from "@/lib/api";
+import { activateProject, authLogout, fetchAuthSession, fetchKubernetesReadiness, fetchProjects } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { localize, useI18n } from "@/lib/i18n";
 import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
@@ -40,6 +41,7 @@ export function AppSidebar() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
+  const [projectSwitching, setProjectSwitching] = useState(false);
   const { data } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
@@ -47,6 +49,14 @@ export function AppSidebar() {
     retry: false,
   });
   const isStaff = Boolean(data?.user?.is_staff);
+  const showProjectSwitcher = Boolean(data?.authenticated && (data.user?.project_count || 0) > 1);
+  const { data: projectData } = useQuery({
+    queryKey: ["projects"],
+    queryFn: fetchProjects,
+    enabled: showProjectSwitcher,
+    staleTime: 60_000,
+    retry: false,
+  });
   const hasKubernetesFeature = hasFeatureAccess(data?.user, "kubernetes");
   const { data: kubernetesReadiness } = useQuery({
     queryKey: ["kubernetes", "readiness", "sidebar"],
@@ -100,6 +110,18 @@ export function AppSidebar() {
     navigate("/login", { replace: true });
   };
 
+  const handleProjectChange = async (projectId: string) => {
+    if (!projectId || projectId === data?.user?.active_project?.id) return;
+    setProjectSwitching(true);
+    try {
+      await activateProject(projectId);
+      await queryClient.invalidateQueries();
+      navigate(0);
+    } finally {
+      setProjectSwitching(false);
+    }
+  };
+
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border/80 bg-sidebar">
       {/* Logo — compact, no heavy chrome */}
@@ -128,6 +150,42 @@ export function AppSidebar() {
           </div>
         )}
       </div>
+
+      {showProjectSwitcher && (
+        <div className="border-b border-sidebar-border/70 px-2.5 py-2">
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="mx-auto flex h-8 w-8 items-center justify-center rounded-md text-sidebar-foreground/80 hover:bg-sidebar-accent/70"
+              aria-label={localize(lang, "Выбрать проект", "Choose project")}
+              title={data?.user?.active_project?.name || localize(lang, "Проект", "Project")}
+            >
+              <FolderKanban className="h-3.5 w-3.5" strokeWidth={1.5} />
+            </button>
+          ) : (
+            <label className="block">
+              <span className="mb-1 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-sidebar-foreground/70">
+                <FolderKanban className="h-3 w-3" strokeWidth={1.5} />
+                {localize(lang, "Проект", "Project")}
+              </span>
+              <select
+                value={projectData?.active_project_id || data?.user?.active_project?.id || ""}
+                disabled={projectSwitching}
+                onChange={(event) => void handleProjectChange(event.target.value)}
+                className="h-8 w-full rounded-md border border-sidebar-border bg-sidebar-accent/30 px-2 text-[12px] text-sidebar-foreground outline-none focus:border-sidebar-ring disabled:opacity-60"
+                aria-label={localize(lang, "Активный проект", "Active project")}
+              >
+                {(projectData?.projects || []).map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       {/* Navigation — same language as Settings sidebar: icon tile + label row */}
       <SidebarContent className="px-2 py-3">

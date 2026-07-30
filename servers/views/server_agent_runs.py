@@ -13,6 +13,7 @@ from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
 from servers.agents.agent_dispatch import serialize_agent_dispatch
 from servers.agents.agent_run_report import (
     build_agent_run_events_payload,
@@ -31,10 +32,11 @@ from servers.views.server_helpers import _accessible_servers_queryset
 
 
 def _owned_agent_run(user, run_id: int) -> AgentRun | None:
-    run = AgentRun.objects.filter(id=run_id, user=user).select_related("agent", "server").first()
+    project = active_project_for_user(user)
+    run = AgentRun.objects.filter(project=project, id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
-    return AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
+    return AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
 
 
 def _run_agent_name(run: AgentRun) -> str:
@@ -54,7 +56,9 @@ def _run_agent_mode(run: AgentRun) -> str:
 @require_http_methods(["GET"])
 def agent_runs(request, agent_id):
     """History of runs for an agent."""
-    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).first()
+    agent = ServerAgent.objects.filter(
+        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+    ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
 

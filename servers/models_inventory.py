@@ -26,6 +26,11 @@ class Server(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="servers")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="servers",
+    )
     group = models.ForeignKey(ServerGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name="servers")
 
     name = models.CharField(max_length=200)  # Display name
@@ -101,12 +106,19 @@ class Server(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         indexes = [
+            models.Index(fields=["project", "-updated_at"], name="servers_ser_project_7c37ec_idx"),
             models.Index(fields=["user", "-updated_at"]),
             models.Index(fields=["group", "user"]),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.host}:{self.port})"
+
+    def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="user")
+        return super().save(*args, **kwargs)
 
     def is_ssh(self) -> bool:
         return (self.server_type or "ssh") == "ssh"

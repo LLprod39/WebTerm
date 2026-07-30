@@ -13,6 +13,7 @@ from app.agent_kernel import skill_provider_registry
 from app.sudo_policy import normalize_sudo_policy
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
 from servers.agents import get_all_templates, get_template
 from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
@@ -282,7 +283,9 @@ def agent_create(request):
 @require_http_methods(["POST"])
 def agent_update(request, agent_id):
     """Update agent configuration."""
-    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).first()
+    agent = ServerAgent.objects.filter(
+        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+    ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
 
@@ -373,7 +376,9 @@ def agent_update(request, agent_id):
 @require_http_methods(["POST"])
 def agent_delete(request, agent_id):
     """Delete an agent."""
-    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).first()
+    agent = ServerAgent.objects.filter(
+        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+    ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
     agent.delete()
@@ -385,7 +390,11 @@ def agent_delete(request, agent_id):
 @require_http_methods(["POST"])
 def agent_run(request, agent_id):
     """Run agent on its configured servers (or a specific one)."""
-    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).prefetch_related("servers").first()
+    agent = (
+        ServerAgent.objects.filter(id=agent_id, user=request.user, project=active_project_for_user(request.user))
+        .prefetch_related("servers")
+        .first()
+    )
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
 

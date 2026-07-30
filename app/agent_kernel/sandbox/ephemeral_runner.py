@@ -106,7 +106,7 @@ def build_agent_command_docker_command(*, ssh_agent_socket: str = "", runner_id:
 
 def _bounded(value: Any, limit: int) -> str:
     text = str(value or "")
-    return text if len(text) <= limit else text[:limit] + "\n...[truncated by WebTrerm]"
+    return text if len(text) <= limit else text[:limit] + "\n...[truncated by WebTerm]"
 
 
 async def _execute_on_host_for_tests(

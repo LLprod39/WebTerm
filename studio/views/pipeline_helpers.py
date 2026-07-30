@@ -2,6 +2,7 @@
 Shared helpers for Studio pipeline endpoints.
 """
 
+from core_ui.projects import active_project_for_user
 from studio.models import Pipeline, PipelineRun, PipelineTrigger
 from studio.trigger_dispatch import create_pipeline_run as _dispatch_create_pipeline_run
 from studio.trigger_dispatch import launch_pipeline_run_async as _dispatch_launch_pipeline_run_async
@@ -9,7 +10,9 @@ from studio.views.common import _is_admin
 
 
 def _pipeline_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = Pipeline.objects.select_related("owner")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs.order_by("-updated_at")
     return qs.filter(owner=user).order_by("-updated_at")

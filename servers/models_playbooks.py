@@ -39,6 +39,11 @@ class Playbook(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="playbooks")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="playbooks",
+    )
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True, default="")
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_RUNBOOK)
@@ -96,6 +101,7 @@ class Playbook(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         indexes = [
+            models.Index(fields=["project", "-updated_at"], name="servers_pla_project_0f003a_idx"),
             models.Index(fields=["user", "-updated_at"]),
             models.Index(fields=["user", "category"]),
             models.Index(fields=["visibility", "-updated_at"]),
@@ -103,6 +109,12 @@ class Playbook(models.Model):
 
     def __str__(self) -> str:
         return f"{self.name} ({self.kind})"
+
+    def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="user")
+        return super().save(*args, **kwargs)
 
     @property
     def task_count(self) -> int:
@@ -184,6 +196,11 @@ class PlaybookRun(models.Model):
         blank=True,
         related_name="runs",
     )
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="playbook_runs",
+    )
     revision = models.ForeignKey(
         "PlaybookRevision",
         on_delete=models.SET_NULL,
@@ -243,6 +260,7 @@ class PlaybookRun(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
+            models.Index(fields=["project", "-created_at"], name="servers_pbr_project_1a80ab_idx"),
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["status", "-created_at"]),
             models.Index(fields=["playbook", "-created_at"]),
@@ -253,6 +271,16 @@ class PlaybookRun(models.Model):
         if isinstance(self.playbook_snapshot, dict):
             name = str(self.playbook_snapshot.get("name") or "")
         return f"Run #{self.pk} {name} ({self.status})"
+
+    def save(self, *args, **kwargs):
+        if not self.project_id:
+            if self.playbook_id:
+                self.project_id = self.playbook.project_id
+            else:
+                from core_ui.projects import active_project_for_user
+
+                self.project = active_project_for_user(self.user)
+        return super().save(*args, **kwargs)
 
 
 class PlaybookRunDispatch(models.Model):

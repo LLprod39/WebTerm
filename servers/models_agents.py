@@ -53,6 +53,11 @@ class ServerAgent(models.Model):
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="server_agents")
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="server_agents",
+    )
     name = models.CharField(max_length=200)
     mode = models.CharField(max_length=10, choices=MODE_CHOICES, default=MODE_MINI)
     agent_type = models.CharField(max_length=30, choices=TYPE_CHOICES, default=TYPE_CUSTOM)
@@ -110,12 +115,19 @@ class ServerAgent(models.Model):
     class Meta:
         ordering = ["-updated_at"]
         indexes = [
+            models.Index(fields=["project", "-updated_at"], name="servers_ser_project_5fd502_idx"),
             models.Index(fields=["user", "-updated_at"]),
             models.Index(fields=["user", "mode"]),
         ]
 
     def __str__(self):
         return f"{self.name} ({self.get_mode_display()} / {self.get_agent_type_display()})"
+
+    def save(self, *args, **kwargs):
+        from core_ui.projects import assign_active_project
+
+        assign_active_project(self, user_field="user")
+        return super().save(*args, **kwargs)
 
     @property
     def is_full(self) -> bool:
@@ -149,6 +161,13 @@ class AgentRun(models.Model):
     ]
 
     agent = models.ForeignKey(ServerAgent, on_delete=models.CASCADE, related_name="runs", null=True, blank=True)
+    project = models.ForeignKey(
+        "core_ui.Project",
+        on_delete=models.CASCADE,
+        related_name="agent_runs",
+        null=True,
+        blank=True,
+    )
     server = models.ForeignKey(
         Server,
         on_delete=models.SET_NULL,
@@ -215,6 +234,7 @@ class AgentRun(models.Model):
     class Meta:
         ordering = ["-started_at"]
         indexes = [
+            models.Index(fields=["project", "-started_at"], name="servers_run_project_ae7621_idx"),
             models.Index(fields=["agent", "-started_at"]),
             models.Index(fields=["server", "-started_at"]),
             models.Index(fields=["status", "-started_at"]),
@@ -224,6 +244,18 @@ class AgentRun(models.Model):
         agent_name = self.agent.name if self.agent_id and self.agent else "Agent"
         server_name = self.server.name if self.server_id and self.server else "no-server"
         return f"{agent_name} on {server_name} [{self.status}]"
+
+    def save(self, *args, **kwargs):
+        if not self.project_id:
+            if self.agent_id:
+                self.project_id = self.agent.project_id
+            elif self.server_id:
+                self.project_id = self.server.project_id
+            elif self.user_id:
+                from core_ui.projects import active_project_for_user
+
+                self.project = active_project_for_user(self.user)
+        return super().save(*args, **kwargs)
 
 
 class AgentRunArtifact(models.Model):

@@ -1,8 +1,19 @@
 from __future__ import annotations
 
+import asyncio
+import sys
+
 import pytest
 
 pytest_plugins = ("tests.playbook_workspace_support",)
+
+
+if sys.platform == "win32":
+
+    @pytest.fixture(scope="session")
+    def event_loop_policy():
+        """Keep subprocess support when Daphne selects Windows' selector loop."""
+        return asyncio.WindowsProactorEventLoopPolicy()
 
 _RELEASE_EVIDENCE_TEST_MODULES = frozenset(
     {

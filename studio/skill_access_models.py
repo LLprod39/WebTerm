@@ -13,6 +13,13 @@ class StudioSkillAccess(models.Model):
         on_delete=models.SET_NULL,
         related_name="owned_studio_skills",
     )
+    project = models.ForeignKey(
+        "core_ui.Project",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="studio_skill_access",
+    )
     is_shared = models.BooleanField(default=False, help_text="Visible to all users with skill access")
     shared_with = models.ManyToManyField(
         User,
@@ -29,3 +36,10 @@ class StudioSkillAccess(models.Model):
 
     def __str__(self):
         return self.slug
+
+    def save(self, *args, **kwargs):
+        if self.owner_id:
+            from core_ui.projects import assign_active_project
+
+            assign_active_project(self, user_field="owner")
+        return super().save(*args, **kwargs)

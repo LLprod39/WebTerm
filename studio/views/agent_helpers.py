@@ -4,6 +4,7 @@ Shared helpers for Studio agent endpoints.
 
 from django.db.models import Q
 
+from core_ui.projects import active_project_for_user
 from studio.models import AgentConfig
 from studio.services import get_owned_servers_by_ids
 from studio.skill_policy import compile_skill_policies
@@ -21,14 +22,18 @@ from studio.views.skill_helpers import _get_skill_access, _skill_to_summary_dict
 
 
 def _agent_read_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = AgentConfig.objects.select_related("owner").prefetch_related("mcp_servers", "server_scope", "shared_with")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs.order_by("-updated_at")
     return qs.filter(Q(owner=user) | Q(is_shared=True) | Q(shared_with=user)).distinct().order_by("-updated_at")
 
 
 def _agent_write_queryset_for_user(user):
+    project = active_project_for_user(user)
     qs = AgentConfig.objects.select_related("owner").prefetch_related("mcp_servers", "server_scope", "shared_with")
+    qs = qs.filter(project=project) if project else qs.none()
     if _is_admin(user):
         return qs
     return qs.filter(owner=user)

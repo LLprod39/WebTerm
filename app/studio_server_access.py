@@ -23,7 +23,13 @@ class StudioServerAccessProvider(Protocol):
         order_by: str = "name",
     ) -> list[Any]: ...
 
-    def get_owned_server(self, user: Any, server_id: int | None) -> Any | None: ...
+    def get_owned_server(
+        self,
+        user: Any,
+        server_id: int | None,
+        *,
+        project_id: int | None = None,
+    ) -> Any | None: ...
 
     def get_owned_server_id_set(self, user: Any, server_ids: list[int] | None) -> set[int]: ...
 
@@ -90,8 +96,17 @@ def get_owned_servers_by_ids(user: Any, server_ids: list[int] | None, *, order_b
     )
 
 
-def get_owned_server(user: Any, server_id: int | None) -> Any | None:
-    return _require_studio_server_access_provider().get_owned_server(user, server_id)
+def get_owned_server(
+    user: Any,
+    server_id: int | None,
+    *,
+    project_id: int | None = None,
+) -> Any | None:
+    return _require_studio_server_access_provider().get_owned_server(
+        user,
+        server_id,
+        project_id=project_id,
+    )
 
 
 def get_owned_server_id_set(user: Any, server_ids: list[int] | None) -> set[int]:
