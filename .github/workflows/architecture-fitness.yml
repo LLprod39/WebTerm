@@ -68,7 +68,7 @@ jobs:
       - name: Verify runtime contract
         run: python scripts/verify_runtime_contract.py
 
-      - name: Check god-file size limits + import boundaries
-        # --strict-new: any NEW file above the 500-line standard limit blocks the build.
-        # Import boundaries are enforced via enforce_import_boundaries=true in pyproject.toml.
+      - name: Check complexity, coupling, size signals + import boundaries
+        # Line count is diagnostic. Complexity/fan-in/fan-out and import
+        # boundaries are the blocking architecture signals.
         run: python scripts/check_architecture_sizes.py --strict-new

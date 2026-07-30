@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from architecture_guard_config import ArchitectureConfig, FileMetric
+from architecture_guard_quality import QualityCheckResult
 
 
 class GuardReport:
@@ -9,16 +10,27 @@ class GuardReport:
     def __init__(self, config: ArchitectureConfig) -> None:
         self._config = config
 
-    def display(self, metrics: list[FileMetric], import_ok: bool) -> bool:
+    def display(
+        self,
+        metrics: list[FileMetric],
+        import_ok: bool,
+        quality: QualityCheckResult,
+    ) -> bool:
         size_failures = [m for m in metrics if not m.passed]
-        size_warnings = [m for m in metrics if m.passed and not m.is_legacy and m.error_message]
-        overall_ok = not size_failures and import_ok
+        size_warnings = [m for m in metrics if m.error_message]
+        overall_ok = not size_failures and import_ok and quality.passed
 
-        print("\n=== Architecture Fitness Check: God-File Prevention ===")
+        print("\n=== Architecture Fitness Check: Complexity & Coupling ===")
         print(f"Total files scanned: {len(metrics)}")
+        print(
+            "Python quality scan: "
+            f"{quality.snapshot.modules_scanned} modules, "
+            f"{quality.snapshot.functions_scanned} functions, "
+            f"{quality.frozen_violations} frozen violations"
+        )
 
         if size_warnings:
-            print(f"\nWARNING: {len(size_warnings)} file(s) exceed the standard limit (non-blocking):")
+            print(f"\nWARNING: {len(size_warnings)} line-count signal(s) (non-blocking):")
             for metric in size_warnings:
                 print(f"  [WARNING] {metric.path}")
                 print(f"            {metric.error_message}")
@@ -33,6 +45,11 @@ class GuardReport:
                 tag = "[LEGACY GROWTH]" if metric.is_legacy else "[GOD-FILE]"
                 print(f"  {tag} {metric.path}")
                 print(f"          {metric.error_message}")
+
+        if quality.errors:
+            print(f"FAILURE: {len(quality.errors)} complexity/coupling violation(s):\n")
+            for error in quality.errors:
+                print(f"  [QUALITY] {error}")
 
         if not import_ok:
             print(

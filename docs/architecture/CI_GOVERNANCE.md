@@ -30,7 +30,9 @@ Exact GitHub check-run names (job `name:` fields):
 
 ### Architecture Fitness
 - `Architecture No Regression`
-- `God-file & Import Boundary Checks`
+- `God-file & Import Boundary Checks` (the stable required-check name; it now
+  enforces complexity, fan-in/fan-out and import boundaries, while line count
+  is warning-only)
 
 ### Playwright Smoke
 - `Playwright Smoke` (runs on every PR/push to `test`/`main` — no path filter — so the required context always appears)

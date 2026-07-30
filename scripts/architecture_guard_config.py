@@ -66,6 +66,10 @@ class ArchitectureConfig:
     strict_limit: int = 1000
     enforce_import_boundaries: bool = False
     strict_new_files: bool = False
+    complexity_limit: int = 30
+    fan_out_limit: int = 20
+    fan_in_limit: int = 40
+    metrics_baseline_file: str = "config/architecture-metrics-baseline.json"
     contract_file: str = "docs/architecture/ARCHITECTURE_CONTRACT.md"
     legacy_baselines: dict[str, int] = field(default_factory=dict)
     exclude_dirs: frozenset[str] = field(default_factory=lambda: _DEFAULT_EXCLUDE_DIRS)
@@ -87,6 +91,13 @@ class ArchitectureConfig:
                 strict_limit=arch.get("strict_limit", 1000),
                 enforce_import_boundaries=arch.get("enforce_import_boundaries", False),
                 strict_new_files=arch.get("strict_new_files", False),
+                complexity_limit=arch.get("complexity_limit", 30),
+                fan_out_limit=arch.get("fan_out_limit", 20),
+                fan_in_limit=arch.get("fan_in_limit", 40),
+                metrics_baseline_file=arch.get(
+                    "metrics_baseline_file",
+                    "config/architecture-metrics-baseline.json",
+                ),
                 contract_file=arch.get("contract_file", "docs/architecture/ARCHITECTURE_CONTRACT.md"),
                 legacy_baselines={PathNormalizer.normalize(k): v for k, v in arch.get("legacy_baselines", {}).items()},
             )
