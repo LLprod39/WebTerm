@@ -53,7 +53,7 @@ class SSHTerminalAgentRunnerMixin:
         )
         from servers.services.terminal_ai.agent.tools import ServerTarget, UserPromptRequest
 
-        if not self._ssh_conn or not self.server:
+        if not self._transport_state.ssh_conn or not self.server:
             await self._send_ai_event(terminal_events.ai_error("SSH connection required for agent mode"))
             return
 
@@ -64,7 +64,7 @@ class SSHTerminalAgentRunnerMixin:
             server_id=int(self.server.id),
             display_name=str(self.server.name or ""),
             host=str(getattr(self.server, "host", "") or ""),
-            ssh_conn=self._ssh_conn,
+            ssh_conn=self._transport_state.ssh_conn,
             read_only=bool(getattr(self.server, "ai_read_only", False)),
             sudo_auth_mode=str(getattr(self.server, "sudo_auth_mode", "none") or "none"),
             is_primary=True,
@@ -123,7 +123,7 @@ class SSHTerminalAgentRunnerMixin:
                 raise
 
         def _stop_requested() -> bool:
-            return self._ai_state.session.stop_requested or not self._ssh_proc
+            return self._ai_state.session.stop_requested or not self._transport_state.ssh_proc
 
         # Event emitter — redacts secrets + tags run_id, same pipeline
         # the legacy ai_* events use.

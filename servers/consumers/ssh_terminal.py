@@ -4,10 +4,8 @@ WebSocket consumers for interactive SSH terminal sessions.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-import asyncssh
 from channels.db import database_sync_to_async as database_sync_to_async
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 
@@ -26,6 +24,7 @@ from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_ai.state import TerminalAiState
 from servers.services.terminal_manual_command_state import ManualCommandState
+from servers.services.terminal_transport_state import TerminalTransportState
 
 _TermSize = terminal_input.TerminalSize
 
@@ -51,23 +50,9 @@ class SSHTerminalConsumer(
     server: Server | None = None
     _user_id: int | None = None
 
-    _ssh_conn: asyncssh.SSHClientConnection | None = None
-    _ssh_proc: asyncssh.SSHClientProcess[str] | None = None
-    _stdout_task: asyncio.Task[None] | None = None
-    _stderr_task: asyncio.Task[None] | None = None
-    _wait_task: asyncio.Task[None] | None = None
-    _connection_heartbeat_task: asyncio.Task[None] | None = None
-    _connect_lock: asyncio.Lock
-
     _ai_state: TerminalAiState
-    _terminal_tail: str
     _manual_state: ManualCommandState
-
-    _marker_suppress: dict[str, bool]
-    _marker_line_buf: dict[str, str]
-
-    _nova_session_context: dict[str, Any]
-    _nova_recent_activity: list[dict[str, Any]]
+    _transport_state: TerminalTransportState
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -77,3 +62,4 @@ class SSHTerminalConsumer(
             settings=self._default_ai_settings(),
         )
         self._manual_state = ManualCommandState()
+        self._transport_state = TerminalTransportState()

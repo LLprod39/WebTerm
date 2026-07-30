@@ -108,8 +108,8 @@ class SSHTerminalSessionOpsMixin:
             await self._safe_send_json({"type": "error", "message": "Server not loaded"})
             return
 
-        async with self._connect_lock:
-            if self._ssh_conn and self._ssh_proc:
+        async with self._transport_state.connect_lock:
+            if self._transport_state.ssh_conn and self._transport_state.ssh_proc:
                 # Already connected
                 return
 
@@ -153,8 +153,8 @@ class SSHTerminalSessionOpsMixin:
                     term_type=term_type,
                     term_size=term_size,
                 )
-                self._ssh_conn = opened.conn
-                self._ssh_proc = opened.proc
+                self._transport_state.ssh_conn = opened.conn
+                self._transport_state.ssh_proc = opened.proc
 
                 # Apply merged environment variables (global/group/server) into shell session.
                 merged_env: dict[str, Any] = {}
@@ -167,7 +167,7 @@ class SSHTerminalSessionOpsMixin:
                     merged_env = dict(network_config.get("environment") or {})
                 exports = self._build_exports(merged_env)
                 if exports:
-                    self._ssh_proc.stdin.write(exports + "\n")
+                    self._transport_state.ssh_proc.stdin.write(exports + "\n")
 
                 await self._safe_send_json({"type": "status", "status": "connected"})
                 await log_activity_async(
@@ -185,20 +185,20 @@ class SSHTerminalSessionOpsMixin:
                         "auth_method": self.server.auth_method,
                     },
                 )
-                self._server_connection_id = f"term-{uuid.uuid4().hex}"
+                self._transport_state.server_connection_id = f"term-{uuid.uuid4().hex}"
                 await self._register_server_connection(
                     user_id=self._user_id,
                     server_id=self.server.id,
-                    connection_id=self._server_connection_id,
+                    connection_id=self._transport_state.server_connection_id,
                 )
                 self._start_connection_heartbeat()
 
-                self._stdout_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stdout, "stdout"))
-                self._stderr_task = asyncio.create_task(self._stream_reader(self._ssh_proc.stderr, "stderr"))
-                self._wait_task = asyncio.create_task(self._wait_for_process_exit())
+                self._transport_state.stdout_task = asyncio.create_task(self._stream_reader(self._transport_state.ssh_proc.stdout, "stdout"))
+                self._transport_state.stderr_task = asyncio.create_task(self._stream_reader(self._transport_state.ssh_proc.stderr, "stderr"))
+                self._transport_state.wait_task = asyncio.create_task(self._wait_for_process_exit())
 
-                self._nova_session_context = await self._probe_nova_session_context(merged_env)
-                self._nova_recent_activity = []
+                self._transport_state.nova_session_context = await self._probe_nova_session_context(merged_env)
+                self._transport_state.nova_recent_activity = []
                 await self._emit_terminal_session()
 
             except Exception as e:
@@ -227,11 +227,11 @@ class SSHTerminalSessionOpsMixin:
             data,
             server=self.server,
             user_id=self._user_id,
-            ssh_proc=self._ssh_proc,
-            server_connection_id=self._server_connection_id,
-            session_context=self._nova_session_context,
+            ssh_proc=self._transport_state.ssh_proc,
+            server_connection_id=self._transport_state.server_connection_id,
+            session_context=self._transport_state.nova_session_context,
             marker_prefix=self._marker_prefix(),
-            intercept_editors=self._intercept_editors,
+            intercept_editors=self._transport_state.intercept_editors,
             send_json=self._safe_send_json,
             append_recent_activity=self._append_nova_recent_activity,
             log_activity=log_activity_async,
@@ -279,7 +279,7 @@ class SSHTerminalSessionOpsMixin:
     async def _probe_nova_session_context(self, merged_env: dict[str, Any]) -> dict[str, Any]:
         fallback_host = str(getattr(self.server, "host", "") or "") if self.server else ""
         return await terminal_nova_context.probe_nova_session_context(
-            self._ssh_conn,
+            self._transport_state.ssh_conn,
             merged_env=merged_env,
             fallback_host=fallback_host,
         )
@@ -292,8 +292,8 @@ class SSHTerminalSessionOpsMixin:
         exit_code: int | None,
         source: str,
     ) -> None:
-        self._nova_recent_activity = terminal_nova_context.append_nova_recent_activity(
-            getattr(self, "_nova_recent_activity", None),
+        self._transport_state.nova_recent_activity = terminal_nova_context.append_nova_recent_activity(
+            self._transport_state.nova_recent_activity,
             command=command,
             cwd=cwd,
             exit_code=exit_code,
@@ -303,18 +303,18 @@ class SSHTerminalSessionOpsMixin:
     async def _collect_nova_context_bundle(self):
         return await terminal_nova_context.collect_nova_context_bundle(
             server_id=self.server.id if self.server else None,
-            session_id=self._server_connection_id or "",
-            session_context=getattr(self, "_nova_session_context", None),
-            live_activity=getattr(self, "_nova_recent_activity", None),
+            session_id=self._transport_state.server_connection_id or "",
+            session_context=self._transport_state.nova_session_context,
+            live_activity=self._transport_state.nova_recent_activity,
             ai_settings=self._ai_state.settings,
         )
 
     async def _handle_resize(self, content: dict[str, Any]):
-        if not self._ssh_proc:
+        if not self._transport_state.ssh_proc:
             return
         try:
             term_size = self._parse_term_size(content)
-            resize_terminal_ssh_session(self._ssh_proc, term_size)
+            resize_terminal_ssh_session(self._transport_state.ssh_proc, term_size)
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"resize failed: {e}"})
 
@@ -324,15 +324,15 @@ class SSHTerminalSessionOpsMixin:
         Returns active cmd_id if interrupted.
         """
         async with self._ai_state.lock:
-            cmd_id = active_command_id(self)
+            cmd_id = active_command_id(self._ai_state.active_command)
             fut = exit_future(self._ai_state.active_command, cmd_id)
 
         if cmd_id is None:
             return None
 
         try:
-            if self._ssh_proc:
-                self._ssh_proc.stdin.write("\x03")
+            if self._transport_state.ssh_proc:
+                self._transport_state.ssh_proc.stdin.write("\x03")
         except Exception:
             pass
 

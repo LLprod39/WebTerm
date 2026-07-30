@@ -42,34 +42,34 @@ class SSHTerminalIoMixin:
     async def _disconnect_ssh(self):
         log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
 
-        was_connected = bool(self._ssh_conn or self._ssh_proc)
+        was_connected = bool(self._transport_state.ssh_conn or self._transport_state.ssh_proc)
 
         await self._stop_connection_heartbeat()
 
         # Cancel streaming tasks first to avoid sending on closed socket
         await self._cancel_ai()
         current = asyncio.current_task()
-        for t in (self._stdout_task, self._stderr_task, self._wait_task):
+        for t in (self._transport_state.stdout_task, self._transport_state.stderr_task, self._transport_state.wait_task):
             if t and not t.done():
                 if current is not None and t is current:
                     continue
                 t.cancel()
 
-        self._stdout_task = None
-        self._stderr_task = None
-        self._wait_task = None
+        self._transport_state.stdout_task = None
+        self._transport_state.stderr_task = None
+        self._transport_state.wait_task = None
 
         try:
-            if self._ssh_proc:
-                await close_ssh_handle(self._ssh_proc)
+            if self._transport_state.ssh_proc:
+                await close_ssh_handle(self._transport_state.ssh_proc)
         finally:
-            self._ssh_proc = None
+            self._transport_state.ssh_proc = None
 
         try:
-            if self._ssh_conn:
-                await close_ssh_handle(self._ssh_conn)
+            if self._transport_state.ssh_conn:
+                await close_ssh_handle(self._transport_state.ssh_conn)
         finally:
-            self._ssh_conn = None
+            self._transport_state.ssh_conn = None
 
         # Nova: tear down any cached extra-target connections so we
         # don't leak SSH sessions when the user closes the terminal.
@@ -92,12 +92,11 @@ class SSHTerminalIoMixin:
                 entity_name=self.server.name,
             )
 
-        if self._server_connection_id:
-            await self._mark_server_connection_closed(self._server_connection_id)
-            self._server_connection_id = None
+        if self._transport_state.server_connection_id:
+            await self._mark_server_connection_closed(self._transport_state.server_connection_id)
+            self._transport_state.server_connection_id = None
         self._manual_state.reset()
-        self._nova_session_context = {}
-        self._nova_recent_activity = []
+        self._transport_state.reset_after_disconnect()
 
     async def _stream_reader(self, reader: asyncssh.SSHReader[str], stream: str):
         try:
@@ -129,23 +128,19 @@ class SSHTerminalIoMixin:
         Hide internal marker lines (used by AI to capture exit codes) from terminal output,
         but keep newline(s) to preserve terminal layout. Returns (filtered_text, markers).
         """
-        if not hasattr(self, "_marker_suppress"):
-            self._marker_suppress = {"stdout": False, "stderr": False}
-        if not hasattr(self, "_marker_line_buf"):
-            self._marker_line_buf = {"stdout": "", "stderr": ""}
         return filter_internal_markers(
             stream=stream,
             data=data,
             marker_prefix=self._marker_prefix(),
-            marker_suppress=self._marker_suppress,
-            marker_line_buf=self._marker_line_buf,
+            marker_suppress=self._transport_state.marker_suppress,
+            marker_line_buf=self._transport_state.marker_line_buffer,
         )
 
     def _set_ai_exit_code(self, cmd_id: int, exit_code: int):
         resolve_exit_future(self._ai_state.active_command, cmd_id, exit_code)
 
     def _append_terminal_tail(self, text: str):
-        append_terminal_tail(self, text)
+        append_terminal_tail(self._transport_state, text)
 
     def _append_ai_output(self, text: str):
         append_ai_output(self._ai_state.active_command, text)
@@ -160,7 +155,7 @@ class SSHTerminalIoMixin:
             self._manual_state,
             cmd_id,
             exit_code,
-            session_context=self._nova_session_context,
+            session_context=self._transport_state.nova_session_context,
             normalize_output=self._normalize_manual_command_output,
             persist_result=sync_to_async(
                 self._persist_manual_terminal_command_result,
@@ -169,7 +164,7 @@ class SSHTerminalIoMixin:
             append_recent_activity=self._append_nova_recent_activity,
         )
         if result.matched:
-            self._nova_session_context = result.session_context
+            self._transport_state.nova_session_context = result.session_context
             if result.cwd_changed:
                 await self._emit_terminal_session()
 
@@ -177,7 +172,7 @@ class SSHTerminalIoMixin:
     _strip_ansi_and_controls = staticmethod(terminal_input.strip_ansi_and_controls)
 
     async def _wait_for_process_exit(self):
-        proc = self._ssh_proc
+        proc = self._transport_state.ssh_proc
         if not proc:
             return
         try:

@@ -17,6 +17,7 @@ from servers.services.terminal_ai import (
 from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_ai.state import TerminalAiState
+from servers.services.terminal_transport_state import TerminalTransportState
 
 
 def _run(coro):
@@ -115,8 +116,10 @@ class TestDryRunShortCircuit:
     def test_dry_run_emits_direct_output_and_skips_execution(self, monkeypatch):
         """A5 contract: when dry_run is on, neither PTY nor exec_direct is used."""
         cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
-        cons._ssh_proc = _FakeProc()  # type: ignore[attr-defined]
-        cons._ssh_conn = _FakeConn()  # type: ignore[attr-defined]
+        cons._transport_state = TerminalTransportState(
+            ssh_proc=_FakeProc(),
+            ssh_conn=_FakeConn(),
+        )
         cons._ai_state = TerminalAiState.create(
             run_controller_factory=TerminalAiRunController,
             session_factory=TerminalAiSession,
@@ -166,7 +169,7 @@ class TestDryRunShortCircuit:
         out, _mode = _run(_scenario())
         assert "[DRY-RUN]" in out
         # No SSH.run and no PTY writes occurred.
-        assert cons._ssh_conn.run_calls == []
-        assert cons._ssh_proc.stdin.writes == []
+        assert cons._transport_state.ssh_conn.run_calls == []
+        assert cons._transport_state.ssh_proc.stdin.writes == []
         assert sent and sent[0]["type"] == "ai_direct_output"
         assert sent[0]["dry_run"] is True

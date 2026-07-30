@@ -132,7 +132,7 @@ class SSHTerminalAiControlsMixin:
             getattr(self.server, "id", None),
             self._ai_state.session.run_id,
         )
-        if not self._ssh_proc:
+        if not self._transport_state.ssh_proc:
             await self._send_ai_event(terminal_events.ai_error("SSH не подключён. Сначала нажмите Connect."))
             return
         if not self.server or not self._user_id:
@@ -203,7 +203,7 @@ class SSHTerminalAiControlsMixin:
                 plan_obj = await self._ai_plan_commands(
                     user_message=msg,
                     rules_context=rules_context,
-                    terminal_tail=(self._terminal_tail or "")[-2000:],
+                    terminal_tail=(self._transport_state.terminal_tail or "")[-2000:],
                     history=list(self._ai_state.history) if bool(self._ai_state.settings.get("memory_enabled", True)) else [],
                     unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
                     chat_mode=requested_chat_mode,
