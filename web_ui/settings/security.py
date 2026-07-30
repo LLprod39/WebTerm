@@ -7,15 +7,6 @@ from django.core.exceptions import ImproperlyConfigured
 from .env_helpers import append_unique, env_bool, env_int, env_list, hostname_from_value, origin_from_url
 
 _DEV_SECRET_KEY_FALLBACK = "django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$qs&@7r2sqfn*1#)z5_i%my"
-_DEFAULT_ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "weuai.site",
-    "www.weuai.site",
-    "188.137.241.228",
-    "8c56-46-42-238-129.ngrok-free.app",
-    ".ngrok-free.app",
-]
 _DEFAULT_FRONTEND_ORIGINS = [
     "http://127.0.0.1:8080",
     "http://localhost:8080",
@@ -83,8 +74,6 @@ def build_security_settings(
         hostname_from_value(frontend_app_url),
         hostname_from_value(render_external_url),
     )
-    if debug:
-        append_unique(allowed_hosts, *_DEFAULT_ALLOWED_HOSTS)
     if not debug and not allowed_hosts:
         raise ImproperlyConfigured(
             "ALLOWED_HOSTS must be set explicitly or derivable from SITE_URL/FRONTEND_APP_URL in production."
@@ -94,19 +83,6 @@ def build_security_settings(
     append_unique(csrf_trusted_origins, frontend_origin, site_origin, render_origin)
     if debug:
         append_unique(csrf_trusted_origins, *_DEFAULT_FRONTEND_ORIGINS)
-    # Ngrok tunnels rotate hostnames on restart. Django natively supports
-    # wildcard subdomains in CSRF_TRUSTED_ORIGINS, so a static entry replaces
-    # the former runtime middleware (which mutated settings per request and
-    # matched by substring — spoofable via x.ngrok-free.app.evil.com).
-    if env_bool("CSRF_TRUST_NGROK", debug):
-        append_unique(
-            csrf_trusted_origins,
-            "https://*.ngrok-free.app",
-            "http://*.ngrok-free.app",
-            "https://*.ngrok.io",
-            "http://*.ngrok.io",
-        )
-
     cors_allowed_origins = env_list(
         "CORS_ALLOWED_ORIGINS",
         ([frontend_origin] if frontend_origin else []),
