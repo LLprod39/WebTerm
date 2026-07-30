@@ -85,6 +85,37 @@ x-backend-worker: &backend-worker
   logging: *json-logging
 
 services:
+  volume-permissions:
+    image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
+    build: *backend-build
+    user: "0:0"
+    entrypoint: ["sh", "-lc"]
+    command:
+      - >-
+        chown -R 10001:10001
+        /workspace/media
+        /workspace/staticfiles
+        /workspace/config_runtime
+        /workspace/logs
+        /workspace/private/playbook_bundles
+        /playbook-runtime
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    restart: "no"
+    healthcheck:
+      disable: true
+    volumes:
+      - mini_prod_media:/workspace/media
+      - mini_prod_staticfiles:/workspace/staticfiles
+      - mini_prod_config:/workspace/config_runtime
+      - mini_prod_logs:/workspace/logs
+      - playbook_bundles:/workspace/private/playbook_bundles
+      - playbook_runtime:/playbook-runtime
+
   postgres:
     image: postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777
     container_name: mini-prod-postgres
@@ -244,6 +275,8 @@ services:
       - ./docker/ldap:/etc/webtrerm/ldap:ro
       - playbook_validator_socket:/run/playbook-validator
     depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -293,6 +326,8 @@ services:
   playbook-execution-worker:
     <<: *backend-worker
     stop_grace_period: 4m
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
     volumes:
       - mini_prod_media:/workspace/media
       - playbook_bundles:/workspace/private/playbook_bundles
