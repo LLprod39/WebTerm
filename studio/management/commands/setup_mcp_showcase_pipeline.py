@@ -6,8 +6,8 @@ import sys
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 
-from studio.mcp_client import MCPClientError, inspect_mcp_server
-from studio.mcp_showcase import (
+from studio.mcp.mcp_client import MCPClientError, inspect_mcp_server
+from studio.mcp.mcp_showcase import (
     DEMO_ARTIFACT_MANIFEST,
     DEMO_ARTIFACT_PLAN,
     create_showcase_run,

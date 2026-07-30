@@ -46,7 +46,7 @@ from kubernetes_ops.services.release_scope import build_kubernetes_release_scope
 from kubernetes_ops.services.release_secret_read_controls import build_kubernetes_release_secret_read_controls_evidence
 from kubernetes_ops.services.sync import KubernetesSyncResult, sync_kubernetes_providers
 from kubernetes_ops.studio_integration import owned_kubernetes_mcp_server
-from studio.mcp_client import call_mcp_tool
+from studio.mcp.mcp_client import call_mcp_tool
 
 # Public/test re-exports (helpers resolve monkeypatches through this facade).
 __all__ = [

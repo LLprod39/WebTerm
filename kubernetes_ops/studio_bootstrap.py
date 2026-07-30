@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
-from studio.mcp_client import list_mcp_tools
+from studio.mcp.mcp_client import list_mcp_tools
 from studio.models import MCPServerPool
 
 DEFAULT_KUBERNETES_MCP_NAME = "Kubernetes MCP"

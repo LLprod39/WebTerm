@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from studio.mcp_tool_runtime import build_mcp_tools_description, execute_bound_mcp_tool, load_mcp_tool_bindings
+from studio.mcp.mcp_tool_runtime import build_mcp_tools_description, execute_bound_mcp_tool, load_mcp_tool_bindings
 
 
 class StudioMCPRuntimeProvider:

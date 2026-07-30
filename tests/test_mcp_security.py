@@ -4,20 +4,28 @@ Split out of test_tools_and_policy_units.py to keep that file under the
 architecture size budget.
 """
 
+import importlib
 import json
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from studio.mcp_client import MCPClientError, _HttpMCPClient
-from studio.mcp_runner_client import _ManagedMCPClient
-from studio.mcp_security import (
+from studio.mcp.mcp_client import MCPClientError, _HttpMCPClient
+from studio.mcp.mcp_runner_client import _ManagedMCPClient
+from studio.mcp.mcp_security import (
     build_mcp_subprocess_env,
     validate_sse_mcp_policy,
     validate_stdio_mcp_policy,
 )
 from studio.views.mcp_views import _default_test_mcp_connection
+
+
+def test_legacy_mcp_modules_alias_domain_implementations():
+    for module_name in ("mcp_client", "mcp_runner_client", "mcp_security", "mcp_tool_runtime"):
+        legacy = importlib.import_module(f"studio.{module_name}")
+        current = importlib.import_module(f"studio.mcp.{module_name}")
+        assert legacy is current
 
 
 def test_build_mcp_subprocess_env_drops_platform_secrets(monkeypatch):
@@ -102,7 +110,7 @@ class _FakeRpcClient:
 
 @pytest.mark.asyncio
 async def test_managed_client_routes_through_runner(monkeypatch):
-    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
+    monkeypatch.setattr("studio.mcp.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
     server = SimpleNamespace(id=1, command="python", args=["srv.py"], env={"A": "1"}, transport="stdio")
     client = _ManagedMCPClient(server, "http://runner:9000/")
     client.client = _FakeRpcClient(
@@ -129,7 +137,7 @@ async def test_managed_client_routes_through_runner(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_managed_client_refuses_runner_without_token(monkeypatch):
-    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "")
+    monkeypatch.setattr("studio.mcp.mcp_runner_client._mcp_runner_token", lambda: "")
     server = SimpleNamespace(id=1, command="python", args=[], env={}, transport="stdio")
     client = _ManagedMCPClient(server, "http://runner:9000")
     try:
@@ -141,7 +149,7 @@ async def test_managed_client_refuses_runner_without_token(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_managed_client_propagates_runner_error(monkeypatch):
-    monkeypatch.setattr("studio.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
+    monkeypatch.setattr("studio.mcp.mcp_runner_client._mcp_runner_token", lambda: "runner-test-secret")
     server = SimpleNamespace(id=2, command="python", args=[], env={}, transport="stdio")
     client = _ManagedMCPClient(server, "http://runner:9000")
     client.client = _FakeRpcClient([_FakeRpcResponse({"error": {"message": "boom"}})])

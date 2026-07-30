@@ -16,9 +16,9 @@ from django.views.decorators.http import require_http_methods
 from app.outbound_http import request_outbound_http
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import get_mcp_secret_env, get_mcp_secret_env_keys
-from studio.mcp_client import MCPClientError, inspect_mcp_server
-from studio.mcp_runner_client import _mcp_runner_url
-from studio.mcp_security import (
+from studio.mcp.mcp_client import MCPClientError, inspect_mcp_server
+from studio.mcp.mcp_runner_client import _mcp_runner_url
+from studio.mcp.mcp_security import (
     build_mcp_subprocess_env,
     mcp_sse_allows_private_url,
     validate_mcp_runtime_policy,

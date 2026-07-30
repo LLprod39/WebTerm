@@ -11,8 +11,8 @@ from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.execution_policy import safe_payload_preview
 from core_ui.activity import log_user_activity_async
-from studio.mcp_client import call_mcp_tool
-from studio.mcp_tool_runtime import MCPBoundTool
+from studio.mcp.mcp_client import call_mcp_tool
+from studio.mcp.mcp_tool_runtime import MCPBoundTool
 from studio.models import MCPServerPool, PipelineRun
 from studio.skill_policy import apply_skill_policies, compile_skill_policies
 from studio.skill_registry import normalise_skill_slugs, resolve_skills

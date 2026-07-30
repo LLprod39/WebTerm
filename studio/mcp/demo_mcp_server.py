@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 try:
-    from studio.demo_mcp_tools import TOOL_HANDLERS, TOOLS, ToolError
+    from studio.mcp.demo_mcp_tools import TOOL_HANDLERS, TOOLS, ToolError
 except ModuleNotFoundError:  # pragma: no cover - supports `python studio/demo_mcp_server.py`.
     from demo_mcp_tools import TOOL_HANDLERS, TOOLS, ToolError
 
