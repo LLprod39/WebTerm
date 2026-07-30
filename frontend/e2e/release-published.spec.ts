@@ -108,6 +108,6 @@ test("published digest serves the authenticated operator golden path", async ({ 
   }, { timeout: 30_000 }).toBe(true);
 
   await page.goto("/automation");
-  await expect(page.locator("body")).toContainText(/Playbooks|Плейбуки/i);
+  await expect(page.locator("body")).toContainText(/Ansible|Playbooks|Плейбуки/i);
   await expect(page.locator("body")).not.toContainText(/Internal Server Error/i);
 });
