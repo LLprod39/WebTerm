@@ -37,6 +37,17 @@ def test_production_compose_prepares_volumes_for_non_root_backend():
     assert permissions["cap_drop"] == ["ALL"]
     assert services["backend"]["depends_on"]["volume-permissions"]["condition"] == "service_completed_successfully"
     assert services["playbook-execution-worker"]["group_add"] == ["${DOCKER_SOCKET_GID:-0}"]
+    for worker_name in (
+        "scheduled-pipelines",
+        "scheduled-agents",
+        "playbook-execution-worker",
+        "monitor",
+        "ops-supervisor",
+        "kubernetes-ops-sync",
+        "celery-worker",
+        "telegram-bot",
+    ):
+        assert services[worker_name]["healthcheck"] == {"disable": True}
 
 
 def test_validator_socket_is_owned_by_backend_runtime_user():
