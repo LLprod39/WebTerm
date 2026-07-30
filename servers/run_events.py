@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
@@ -66,7 +67,7 @@ def record_run_event(run_id: int, event_type: str, payload: dict | None = None) 
             message=message,
             payload=data,
         )
-    except IntegrityError:
+    except (IntegrityError, ObjectDoesNotExist):
         return None
 
 
@@ -77,10 +78,16 @@ async def record_run_event_async(run_id: int, event_type: str, payload: dict | N
 def serialize_run_event(event: AgentRunEvent) -> dict:
     return {
         "id": event.id,
-        "run_id": event.run_id,
+        "run_id": event.run_ref,
+        "sequence_no": event.sequence_no,
         "event_type": event.event_type,
         "task_id": event.task_id,
         "message": event.message,
         "payload": event.payload or {},
         "created_at": event.created_at.isoformat() if event.created_at else None,
+        "integrity": {
+            "algorithm": event.hash_algorithm,
+            "previous_hash": event.previous_hash,
+            "event_hash": event.event_hash,
+        },
     }

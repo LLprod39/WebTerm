@@ -9,7 +9,7 @@ from urllib.parse import quote
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
@@ -26,6 +26,7 @@ from servers.agents.agent_service import (
 )
 from servers.models import AgentRun, AgentRunArtifact, AgentRunEvent, ServerAgent
 from servers.report_delivery import deliver_agent_report_async
+from servers.services.agent_audit import iter_agent_audit_export, verify_agent_audit_chain
 from servers.views.server_helpers import _accessible_servers_queryset
 
 
@@ -309,8 +310,38 @@ def agent_run_events(request, run_id):
             "success": True,
             "events": events,
             "total": total,
+            "integrity": verify_agent_audit_chain(run.id),
         }
     )
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_audit_export(request, run_id):
+    """Export a verified agent audit chain as portable newline-delimited JSON."""
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+
+    verification = verify_agent_audit_chain(run.id)
+    if not verification["valid"]:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Agent audit integrity verification failed",
+                "integrity": verification,
+            },
+            status=409,
+        )
+
+    response = StreamingHttpResponse(
+        iter_agent_audit_export(run.id, verification),
+        content_type="application/x-ndjson",
+    )
+    response["Content-Disposition"] = f'attachment; filename="agent-run-{run.id}-audit.jsonl"'
+    response["X-Agent-Audit-Final-Hash"] = verification["final_event_hash"]
+    return response
 
 
 @login_required

@@ -1,8 +1,11 @@
 """Server agent and agent-run models."""
 
 from django.contrib.auth.models import User
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
+from django.utils import timezone
 
+from app.agent_audit_integrity import GENESIS_HASH, HASH_ALGORITHM, calculate_event_hash
 from app.sudo_policy import (
     SUDO_POLICY_CHOICES,
     SUDO_POLICY_DISABLED,
@@ -316,22 +319,91 @@ class AgentRunDispatch(models.Model):
         return f"run={self.run_id} {self.dispatch_kind} [{self.status}]"
 
 
-class AgentRunEvent(models.Model):
-    """Persistent event log for long-running agent runs."""
+class ImmutableAgentRunEventQuerySet(models.QuerySet):
+    """Reject application-level mutation of persisted audit entries."""
 
-    run = models.ForeignKey(AgentRun, on_delete=models.CASCADE, related_name="events")
+    def update(self, **kwargs):
+        # Django uses this exact update when a retained event's parent run is deleted.
+        if set(kwargs) == {"run"} and kwargs["run"] is None:
+            return super().update(**kwargs)
+        raise ValidationError("Agent audit events are append-only and cannot be updated.")
+
+    def delete(self):
+        raise ValidationError("Agent audit events are append-only and cannot be deleted.")
+
+    def bulk_create(self, objs, **kwargs):
+        raise ValidationError("Agent audit events must be appended individually to preserve their hash chain.")
+
+    def bulk_update(self, objs, fields, **kwargs):
+        raise ValidationError("Agent audit events are append-only and cannot be updated.")
+
+
+class AgentRunEvent(models.Model):
+    """Append-only, hash-chained audit event for a long-running agent run."""
+
+    run = models.ForeignKey(AgentRun, on_delete=models.SET_NULL, related_name="events", null=True, blank=True)
+    run_ref = models.PositiveBigIntegerField()
+    owner_user_ref = models.PositiveBigIntegerField(null=True, blank=True)
+    sequence_no = models.PositiveBigIntegerField()
     event_type = models.CharField(max_length=80)
     task_id = models.IntegerField(null=True, blank=True)
     message = models.TextField(blank=True)
     payload = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    previous_hash = models.CharField(max_length=64)
+    event_hash = models.CharField(max_length=64)
+    hash_algorithm = models.CharField(max_length=20, default=HASH_ALGORITHM, editable=False)
+
+    objects = ImmutableAgentRunEventQuerySet.as_manager()
 
     class Meta:
-        ordering = ["created_at", "id"]
+        ordering = ["run_ref", "sequence_no"]
+        base_manager_name = "objects"
+        default_manager_name = "objects"
+        constraints = [
+            models.UniqueConstraint(fields=["run_ref", "sequence_no"], name="agent_event_run_sequence_unique"),
+        ]
         indexes = [
-            models.Index(fields=["run", "created_at"]),
-            models.Index(fields=["event_type", "created_at"]),
+            models.Index(fields=["run_ref", "sequence_no"], name="agent_evt_run_seq_idx"),
+            models.Index(fields=["event_type", "created_at"], name="agent_evt_type_time_idx"),
+            models.Index(fields=["event_hash"], name="agent_evt_hash_idx"),
         ]
 
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValidationError("Agent audit events are append-only and cannot be updated.")
+        if not self.run_id:
+            raise ValidationError("A live agent run is required when appending an audit event.")
+
+        with transaction.atomic():
+            run = AgentRun.objects.select_for_update().get(pk=self.run_id)
+            latest = AgentRunEvent.objects.filter(run_ref=run.pk).order_by("-sequence_no").first()
+            self.run_ref = run.pk
+            self.owner_user_ref = run.user_id
+            if self.owner_user_ref is None and run.agent_id:
+                self.owner_user_ref = ServerAgent.objects.values_list("user_id", flat=True).get(pk=run.agent_id)
+            self.sequence_no = (latest.sequence_no + 1) if latest else 1
+            self.previous_hash = latest.event_hash if latest else GENESIS_HASH
+            self.hash_algorithm = HASH_ALGORITHM
+            self.created_at = timezone.now()
+            self.event_hash = calculate_event_hash(
+                run_ref=self.run_ref,
+                owner_user_ref=self.owner_user_ref,
+                sequence_no=self.sequence_no,
+                event_type=self.event_type,
+                task_id=self.task_id,
+                message=self.message,
+                payload=self.payload or {},
+                created_at=self.created_at,
+                previous_hash=self.previous_hash,
+            )
+            kwargs.pop("force_insert", None)
+            if kwargs.pop("force_update", False) or kwargs.get("update_fields"):
+                raise ValidationError("Agent audit events are append-only and cannot be updated.")
+            return super().save(*args, force_insert=True, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Agent audit events are append-only and cannot be deleted.")
+
     def __str__(self):
-        return f"run={self.run_id} {self.event_type}"
+        return f"run={self.run_ref} seq={self.sequence_no} {self.event_type}"

@@ -258,6 +258,11 @@ urlpatterns = [
     ),
     path("api/agents/runs/<int:run_id>/log/", server_agent_runs.agent_run_log, name="agent_run_log"),
     path("api/agents/runs/<int:run_id>/events/", server_agent_runs.agent_run_events, name="agent_run_events"),
+    path(
+        "api/agents/runs/<int:run_id>/audit-export/",
+        server_agent_runs.agent_run_audit_export,
+        name="agent_run_audit_export",
+    ),
     path("api/agents/runs/<int:run_id>/reply/", server_agent_runs.agent_run_reply, name="agent_run_reply"),
     path("api/agents/dashboard/", server_agent_dashboard.agent_dashboard_runs, name="agent_dashboard_runs"),
     # Pipeline task editing

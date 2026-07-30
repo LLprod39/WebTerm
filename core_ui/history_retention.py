@@ -36,7 +36,6 @@ def configured_retention_policies() -> tuple[RetentionPolicy, ...]:
     audit_days = int(get_logging_config().get("retention_days") or 90)
     PipelineRun = apps.get_model("studio", "PipelineRun")
     AgentRun = apps.get_model("servers", "AgentRun")
-    AgentRunEvent = apps.get_model("servers", "AgentRunEvent")
     ServerCommandHistory = apps.get_model("servers", "ServerCommandHistory")
     ChatArtifact = apps.get_model("core_ui", "ChatArtifact")
     UserActivityLog = apps.get_model("core_ui", "UserActivityLog")
@@ -68,13 +67,6 @@ def configured_retention_policies() -> tuple[RetentionPolicy, ...]:
             "created_at",
             days=90,
             rows=100_000,
-        ),
-        policy(
-            "agent_run_event",
-            AgentRunEvent.objects.filter(run__status__in=terminal_agent_statuses),
-            "created_at",
-            days=90,
-            rows=1_000_000,
         ),
         policy(
             "agent_run",
