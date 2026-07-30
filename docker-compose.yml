@@ -63,6 +63,14 @@ x-backend-worker: &backend-worker
     MARS_GEMINI_HOME: ${MARS_GEMINI_HOME:-/mars-gemini-home}
     MARS_DOCKER_CONTAINER_PATH_PREFIX: ${MARS_DOCKER_CONTAINER_PATH_PREFIX:-/workspace}
     MARS_DOCKER_HOST_PATH_PREFIX: ${MARS_DOCKER_HOST_PATH_PREFIX:-}
+    AGENT_COMMAND_RUNTIME: ${AGENT_COMMAND_RUNTIME:-docker}
+    AGENT_COMMAND_RUNNER_IMAGE: ${AGENT_COMMAND_RUNNER_IMAGE:-}
+    AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
+    AGENT_COMMAND_DOCKER_CPUS: ${AGENT_COMMAND_DOCKER_CPUS:-0.5}
+    AGENT_COMMAND_DOCKER_MEMORY: ${AGENT_COMMAND_DOCKER_MEMORY:-256m}
+    AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
+    AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
+    AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -185,6 +193,14 @@ services:
       MARS_GEMINI_HOME: ${MARS_GEMINI_HOME:-/mars-gemini-home}
       MARS_DOCKER_CONTAINER_PATH_PREFIX: ${MARS_DOCKER_CONTAINER_PATH_PREFIX:-/workspace}
       MARS_DOCKER_HOST_PATH_PREFIX: ${MARS_DOCKER_HOST_PATH_PREFIX:-}
+      AGENT_COMMAND_RUNTIME: ${AGENT_COMMAND_RUNTIME:-docker}
+      AGENT_COMMAND_RUNNER_IMAGE: ${AGENT_COMMAND_RUNNER_IMAGE:-}
+      AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
+      AGENT_COMMAND_DOCKER_CPUS: ${AGENT_COMMAND_DOCKER_CPUS:-0.5}
+      AGENT_COMMAND_DOCKER_MEMORY: ${AGENT_COMMAND_DOCKER_MEMORY:-256m}
+      AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
+      AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
+      AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -430,6 +446,17 @@ services:
       dockerfile: docker/ansible-runner/Dockerfile
     entrypoint: ["ansible-playbook"]
     command: ["--version"]
+    restart: "no"
+
+  # Build-only, single-shot image. The application starts one hardened
+  # container for each agent SSH command and sends credentials only on stdin.
+  agent-command-runner:
+    profiles: ["agent-runner"]
+    image: ${AGENT_COMMAND_RUNNER_BUILD_IMAGE:-webterm-agent-command-runner:latest}
+    build:
+      context: .
+      dockerfile: docker/agent-command-runner/Dockerfile
+    command: []
     restart: "no"
 
   playbook-validator:

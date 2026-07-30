@@ -11,18 +11,34 @@ from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote
 
-from playbook_socket_proxy_policy import ProxyPolicyConfig, authorize_docker_request
-
 SOCKET_PATH = os.getenv("DOCKER_SOCKET_PATH", "/var/run/docker.sock")
-LISTEN_HOST = os.getenv("PLAYBOOK_DOCKER_PROXY_HOST", "0.0.0.0")
-LISTEN_PORT = int(os.getenv("PLAYBOOK_DOCKER_PROXY_PORT", "2375"))
+POLICY_KIND = os.getenv("DOCKER_PROXY_POLICY", "playbook").strip().lower()
+LISTEN_HOST = os.getenv("DOCKER_PROXY_HOST", os.getenv("PLAYBOOK_DOCKER_PROXY_HOST", "0.0.0.0"))
+LISTEN_PORT = int(os.getenv("DOCKER_PROXY_PORT", os.getenv("PLAYBOOK_DOCKER_PROXY_PORT", "2375")))
 MAX_REQUEST_BODY = 1024 * 1024
-POLICY_CONFIG = ProxyPolicyConfig(
-    runtime_volume=os.environ["PLAYBOOK_RUNTIME_VOLUME_NAME"],
-    network=os.getenv("WEBTERM_ANSIBLE_DOCKER_NETWORK", "bridge"),
-    host_alias=os.getenv("WEBTERM_ANSIBLE_DOCKER_HOST_ALIAS", "host.docker.internal"),
-    runner_image=os.getenv("WEBTERM_ANSIBLE_IMAGE", "webterm-ansible:latest"),
-)
+if POLICY_KIND == "agent-command":
+    from agent_command_socket_proxy_policy import (
+        AgentCommandProxyPolicyConfig,
+        authorize_agent_command_docker_request,
+    )
+
+    POLICY_CONFIG = AgentCommandProxyPolicyConfig(
+        runner_image=os.environ["AGENT_COMMAND_RUNNER_IMAGE"],
+        network=os.getenv("AGENT_COMMAND_DOCKER_NETWORK", "bridge"),
+        ssh_agent_socket=os.getenv("AGENT_COMMAND_SSH_AUTH_SOCK", ""),
+    )
+    authorize_docker_request = authorize_agent_command_docker_request
+elif POLICY_KIND == "playbook":
+    from playbook_socket_proxy_policy import ProxyPolicyConfig, authorize_docker_request
+
+    POLICY_CONFIG = ProxyPolicyConfig(
+        runtime_volume=os.environ["PLAYBOOK_RUNTIME_VOLUME_NAME"],
+        network=os.getenv("WEBTERM_ANSIBLE_DOCKER_NETWORK", "bridge"),
+        host_alias=os.getenv("WEBTERM_ANSIBLE_DOCKER_HOST_ALIAS", "host.docker.internal"),
+        runner_image=os.getenv("WEBTERM_ANSIBLE_IMAGE", "webterm-ansible:latest"),
+    )
+else:
+    raise RuntimeError(f"Unsupported Docker proxy policy: {POLICY_KIND}")
 
 
 class UnixHTTPConnection(http.client.HTTPConnection):
@@ -75,7 +91,7 @@ def _relay_bidirectional(client: socket.socket, backend: socket.socket) -> None:
 
 class ProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "WebTermPlaybookDockerProxy/1"
+    server_version = "WebTermFilteredDockerProxy/1"
 
     def _body(self) -> bytes:
         if self.headers.get("Transfer-Encoding"):
@@ -175,7 +191,7 @@ class ProxyHandler(BaseHTTPRequestHandler):
     do_POST = _proxy
 
     def log_message(self, format: str, *args) -> None:
-        print(f"playbook-docker-proxy client={self.client_address[0]} {format % args}", flush=True)
+        print(f"filtered-docker-proxy policy={POLICY_KIND} client={self.client_address[0]} {format % args}", flush=True)
 
 
 if __name__ == "__main__":

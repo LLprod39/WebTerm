@@ -342,6 +342,7 @@ validate_required_env() {
     POSTGRES_DB
     POSTGRES_USER
     POSTGRES_PASSWORD
+    AGENT_COMMAND_RUNNER_IMAGE
   )
   local key value
   for key in "${required_keys[@]}"; do
@@ -351,6 +352,48 @@ validate_required_env() {
       exit 1
     fi
   done
+  local runner_image
+  runner_image="$(read_env_value "AGENT_COMMAND_RUNNER_IMAGE")"
+  if [[ ! "$runner_image" =~ ^(sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64})$ ]]; then
+    echo "Error: AGENT_COMMAND_RUNNER_IMAGE must be an immutable sha256 image ID or repository digest" >&2
+    exit 1
+  fi
+}
+
+ensure_agent_command_runner_image() {
+  local configured image_id
+  configured="${AGENT_COMMAND_RUNNER_IMAGE:-$(read_env_value "AGENT_COMMAND_RUNNER_IMAGE")}"
+  if [[ "$configured" =~ ^(sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64})$ ]]; then
+    upsert_env_value "AGENT_COMMAND_RUNNER_IMAGE" "$configured"
+    return 0
+  fi
+  if [[ "$DO_BUILD" -ne 1 ]]; then
+    echo "Error: --no-build requires AGENT_COMMAND_RUNNER_IMAGE pinned by sha256 digest" >&2
+    exit 1
+  fi
+  echo "==> Building the ephemeral agent command runner"
+  docker build \
+    --tag webterm-agent-command-runner:installer \
+    --file "$ROOT_DIR/docker/agent-command-runner/Dockerfile" \
+    "$ROOT_DIR"
+  image_id="$(docker image inspect --format '{{.Id}}' webterm-agent-command-runner:installer)"
+  if [[ ! "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "Error: built agent command runner did not produce an immutable image ID" >&2
+    exit 1
+  fi
+  upsert_env_value "AGENT_COMMAND_RUNNER_IMAGE" "$image_id"
+  echo "[ok] pinned agent command runner: $image_id"
+}
+
+configure_agent_command_network() {
+  local configured
+  configured="${AGENT_COMMAND_DOCKER_NETWORK:-$(read_env_value "AGENT_COMMAND_DOCKER_NETWORK")}"
+  if [[ -z "$configured" || "$configured" == "bridge" ]]; then
+    upsert_env_value "AGENT_COMMAND_DOCKER_NETWORK" "${PROJECT_NAME}_default"
+    echo "[ok] agent command runner network: ${PROJECT_NAME}_default"
+  else
+    upsert_env_value "AGENT_COMMAND_DOCKER_NETWORK" "$configured"
+  fi
 }
 
 configure_docker_socket_gid() {
@@ -461,6 +504,7 @@ wait_for_stack() {
   wait_for_service postgres 180
   wait_for_service redis 120
   wait_for_service mcp-demo 120
+  wait_for_service agent-command-docker-proxy 120
   wait_for_service backend 300
   wait_for_service frontend 240
   wait_for_service nginx 180
@@ -602,6 +646,8 @@ main() {
     generate_secret_if_needed "POSTGRES_PASSWORD" 32
   fi
 
+  ensure_agent_command_runner_image
+  configure_agent_command_network
   validate_required_env
   configure_docker_socket_gid
 
@@ -631,6 +677,7 @@ main() {
     postgres
     redis
     mcp-demo
+    agent-command-docker-proxy
     backend
     scheduled-pipelines
     scheduled-agents

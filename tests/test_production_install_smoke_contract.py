@@ -19,6 +19,13 @@ def test_release_publishes_and_smokes_the_socket_proxy_image() -> None:
     assert "name: playbook-docker-proxy" in workflow
     assert "dockerfile: docker/playbook-socket-proxy.Dockerfile" in workflow
     assert workflow.count('"playbook-docker-proxy": "WEBTERM_PLAYBOOK_DOCKER_PROXY_IMAGE"') == 2
+    assert "name: agent-command-runner" in workflow
+    assert "dockerfile: docker/agent-command-runner/Dockerfile" in workflow
+    assert workflow.count('"agent-command-runner": "AGENT_COMMAND_RUNNER_IMAGE"') == 2
+    assert "name: agent-command-docker-proxy" in workflow
+    assert workflow.count(
+        '"agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE"'
+    ) == 2
 
 
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
@@ -33,6 +40,7 @@ def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
         "worker-heartbeats.json",
         "celery -A web_ui inspect ping",
         "PLAYBOOK_DOCKER_PROXY_PRIVILEGED_BLOCK_OK",
+        "AGENT_COMMAND_DOCKER_PROXY_PRIVILEGED_BLOCK_OK",
         "docker run --pull=never --rm --name webterm-pb-r999-d999-a1 --privileged",
         "--terminal-sessions-per-user 1",
         "--pipeline-runs-per-user 1",

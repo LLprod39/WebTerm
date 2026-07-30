@@ -4,6 +4,8 @@ Last reviewed: 2026-07-29
 
 This folder is the public architecture entry point. The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
 
+Production agent SSH isolation is defined in [AGENT_COMMAND_SANDBOX.md](AGENT_COMMAND_SANDBOX.md).
+
 ## Current Shape
 
 ```mermaid

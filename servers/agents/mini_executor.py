@@ -9,7 +9,6 @@ import asyncio
 import time
 from typing import Any
 
-import asyncssh
 from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
@@ -24,9 +23,9 @@ from servers.agents.agent_run_report import build_agent_run_report_payload
 from servers.agents.agent_templates import get_all_templates as get_all_templates
 from servers.agents.agent_templates import get_template
 from servers.models import AgentRun, Server, ServerAgent
-from servers.monitoring.monitor import _build_connect_kwargs
 from servers.report_delivery import deliver_agent_report_async
 from servers.secret_utils import get_server_sudo_secret
+from servers.services.agent_command_runner import run_agent_command
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -126,112 +125,106 @@ async def _run_agent_body(
     outputs: list[dict[str, Any]] = []
 
     try:
-        kwargs = await _build_connect_kwargs(server)
-    except Exception as exc:
-        return await _finalize_failed_run(run, message=f"Cannot connect to server: {exc}", t0=t0)
-
-    try:
         sudo_password = await sync_to_async(get_server_sudo_secret)(server)
     except Exception:
         sudo_password = ""
 
     try:
-        async with asyncssh.connect(**kwargs) as conn:
-            for cmd in commands:
-                if getattr(server, "ai_read_only", False) and not is_read_only_command(cmd):
-                    outputs.append(
-                        {
-                            "cmd": cmd,
-                            "stdout": "",
-                            "stderr": "BLOCKED: server allows read-only AI commands only",
-                            "exit_code": -1,
-                            "duration_ms": 0,
-                        }
-                    )
-                    continue
-                if is_dangerous_command(cmd):
-                    outputs.append(
-                        {
-                            "cmd": cmd,
-                            "stdout": "",
-                            "stderr": "BLOCKED: dangerous command detected",
-                            "exit_code": -1,
-                            "duration_ms": 0,
-                        }
-                    )
-                    continue
-                sudo_decision = evaluate_sudo_command(cmd, agent.sudo_policy)
-                if not sudo_decision.allowed:
-                    outputs.append(
-                        {
-                            "cmd": cmd,
-                            "stdout": "",
-                            "stderr": f"BLOCKED: {sudo_decision.reason}",
-                            "exit_code": -1,
-                            "duration_ms": 0,
-                        }
-                    )
-                    continue
-                try:
-                    prepared_sudo = prepare_sudo_command(
-                        cmd,
-                        agent.sudo_policy,
-                        sudo_auth_mode=getattr(server, "sudo_auth_mode", "none"),
-                        sudo_password=sudo_password,
-                    )
-                except ValueError as exc:
-                    outputs.append(
-                        {
-                            "cmd": cmd,
-                            "stdout": "",
-                            "stderr": f"BLOCKED: {exc}",
-                            "exit_code": -1,
-                            "duration_ms": 0,
-                        }
-                    )
-                    continue
-                executable_cmd = prepared_sudo.command
-                sudo_notes = prepared_sudo.notes
+        for cmd in commands:
+            if getattr(server, "ai_read_only", False) and not is_read_only_command(cmd):
+                outputs.append(
+                    {
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": "BLOCKED: server allows read-only AI commands only",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    }
+                )
+                continue
+            if is_dangerous_command(cmd):
+                outputs.append(
+                    {
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": "BLOCKED: dangerous command detected",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    }
+                )
+                continue
+            sudo_decision = evaluate_sudo_command(cmd, agent.sudo_policy)
+            if not sudo_decision.allowed:
+                outputs.append(
+                    {
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": f"BLOCKED: {sudo_decision.reason}",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    }
+                )
+                continue
+            try:
+                prepared_sudo = prepare_sudo_command(
+                    cmd,
+                    agent.sudo_policy,
+                    sudo_auth_mode=getattr(server, "sudo_auth_mode", "none"),
+                    sudo_password=sudo_password,
+                )
+            except ValueError as exc:
+                outputs.append(
+                    {
+                        "cmd": cmd,
+                        "stdout": "",
+                        "stderr": f"BLOCKED: {exc}",
+                        "exit_code": -1,
+                        "duration_ms": 0,
+                    }
+                )
+                continue
+            executable_cmd = prepared_sudo.command
+            sudo_notes = prepared_sudo.notes
 
-                cmd_t0 = time.monotonic()
-                try:
-                    run_kwargs: dict[str, Any] = {"check": False}
-                    if prepared_sudo.input_text is not None:
-                        run_kwargs["input"] = prepared_sudo.input_text
-                    result = await asyncio.wait_for(
-                        conn.run(executable_cmd, **run_kwargs),
-                        timeout=COMMAND_TIMEOUT,
-                    )
-                    sudo_note_text = ("\n".join(sudo_notes) + "\n") if sudo_notes else ""
-                    outputs.append(
-                        {
-                            "cmd": executable_cmd,
-                            "stdout": (sudo_note_text + (result.stdout or ""))[:5000],
-                            "stderr": (result.stderr or "")[:2000],
-                            "exit_code": result.exit_status,
-                            "duration_ms": int((time.monotonic() - cmd_t0) * 1000),
-                        }
-                    )
-                except TimeoutError:
-                    outputs.append(
-                        {
-                            "cmd": executable_cmd,
-                            "stdout": "",
-                            "stderr": f"TIMEOUT after {COMMAND_TIMEOUT}s",
-                            "exit_code": -1,
-                            "duration_ms": COMMAND_TIMEOUT * 1000,
-                        }
-                    )
-                except Exception as exc:
-                    outputs.append(
-                        {
-                            "cmd": executable_cmd,
-                            "stdout": "",
-                            "stderr": str(exc)[:500],
-                            "exit_code": -1,
-                            "duration_ms": int((time.monotonic() - cmd_t0) * 1000),
-                        }
-                    )
+            cmd_t0 = time.monotonic()
+            try:
+                result = await run_agent_command(
+                    server,
+                    executable_cmd,
+                    input_text=prepared_sudo.input_text,
+                    timeout_seconds=COMMAND_TIMEOUT,
+                )
+                sudo_note_text = ("\n".join(sudo_notes) + "\n") if sudo_notes else ""
+                outputs.append(
+                    {
+                        "cmd": executable_cmd,
+                        "stdout": (sudo_note_text + (result.stdout or ""))[:5000],
+                        "stderr": (result.stderr or "")[:2000],
+                        "exit_code": result.exit_status,
+                        "duration_ms": result.duration_ms,
+                        "runtime": result.runtime,
+                    }
+                )
+            except TimeoutError:
+                outputs.append(
+                    {
+                        "cmd": executable_cmd,
+                        "stdout": "",
+                        "stderr": f"TIMEOUT after {COMMAND_TIMEOUT}s",
+                        "exit_code": -1,
+                        "duration_ms": COMMAND_TIMEOUT * 1000,
+                    }
+                )
+            except Exception as exc:
+                outputs.append(
+                    {
+                        "cmd": executable_cmd,
+                        "stdout": "",
+                        "stderr": str(exc)[:500],
+                        "exit_code": -1,
+                        "duration_ms": int((time.monotonic() - cmd_t0) * 1000),
+                    }
+                )
     except Exception as exc:
         return await _finalize_failed_run(
             run,

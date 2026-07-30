@@ -149,6 +149,7 @@ write_environment() {
 from __future__ import annotations
 
 import secrets
+import os
 import sys
 from pathlib import Path
 
@@ -178,6 +179,7 @@ values = {
     "MASTER_PASSWORD": secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
     "STUDIO_MCP_RUNNER_TOKEN": secrets.token_urlsafe(48),
+    "AGENT_COMMAND_RUNNER_IMAGE": os.environ.get("AGENT_COMMAND_RUNNER_IMAGE", ""),
     "PLUGIN_MARKETPLACE_RELEASE_MODE": "disabled",
     "SMOKE_SSH_USERNAME": "smoke",
     "SMOKE_SSH_PASSWORD": "smoke-password",
@@ -367,6 +369,38 @@ if [[ "$RELEASE_IMAGES" == "1" ]]; then
   install_args+=(--pull --no-build)
 fi
 printf '%s\n' "$ADMIN_PASSWORD" | bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
+
+echo "==> Verifying agent commands have only the filtered Docker API"
+compose exec -T backend sh -lc \
+  'test "$DOCKER_HOST" = "tcp://agent-command-docker-proxy:2375" && test ! -S /var/run/docker.sock'
+set +e
+agent_privileged_output="$(
+  compose exec -T backend sh -lc '
+    docker run --pull=never --rm \
+      --name webterm-agent-command-00000000000000000000000000000000 \
+      --user 10001:10001 \
+      --read-only \
+      --cgroupns private \
+      --network "$AGENT_COMMAND_DOCKER_NETWORK" \
+      --cap-drop ALL \
+      --security-opt no-new-privileges:true \
+      --tmpfs /tmp:rw,noexec,nosuid,nodev,size=32m \
+      --label webtrerm.runtime=agent-command \
+      --cpus "$AGENT_COMMAND_DOCKER_CPUS" \
+      --memory "$AGENT_COMMAND_DOCKER_MEMORY" \
+      --pids-limit "$AGENT_COMMAND_DOCKER_PIDS_LIMIT" \
+      --privileged \
+      "$AGENT_COMMAND_RUNNER_IMAGE"
+' 2>&1
+)"
+agent_privileged_status=$?
+set -e
+printf '%s\n' "$agent_privileged_output" | tee "$ARTIFACT_DIR/agent-command-proxy-privileged-denial.txt"
+if [[ "$agent_privileged_status" -eq 0 ]] || ! grep -Fq "privileged containers are forbidden" <<<"$agent_privileged_output"; then
+  echo "Agent command filtered Docker API did not reject a privileged container" >&2
+  exit 1
+fi
+echo "AGENT_COMMAND_DOCKER_PROXY_PRIVILEGED_BLOCK_OK"
 
 echo "==> Verifying the playbook worker has only the filtered Docker API"
 compose exec -T playbook-execution-worker sh -lc \

@@ -48,6 +48,7 @@ def _minimal_internal_project(tmp_path: Path) -> Path:
                 "POSTGRES_DB=webterm",
                 "POSTGRES_USER=webterm",
                 f"POSTGRES_PASSWORD={'p' * 32}",
+                f"AGENT_COMMAND_RUNNER_IMAGE=sha256:{'a' * 64}",
             )
         )
         + "\n",

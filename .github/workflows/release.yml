@@ -29,6 +29,10 @@ jobs:
             dockerfile: docker/ansible-runner/Dockerfile
           - name: playbook-docker-proxy
             dockerfile: docker/playbook-socket-proxy.Dockerfile
+          - name: agent-command-runner
+            dockerfile: docker/agent-command-runner/Dockerfile
+          - name: agent-command-docker-proxy
+            dockerfile: docker/playbook-socket-proxy.Dockerfile
           - name: mcp-demo
             dockerfile: docker/demo-mcp.Dockerfile
           - name: mcp-runner
@@ -108,6 +112,8 @@ jobs:
               "frontend": "WEBTERM_FRONTEND_IMAGE",
               "ansible": "WEBTERM_ANSIBLE_IMAGE",
               "playbook-docker-proxy": "WEBTERM_PLAYBOOK_DOCKER_PROXY_IMAGE",
+              "agent-command-runner": "AGENT_COMMAND_RUNNER_IMAGE",
+              "agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE",
               "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
@@ -204,6 +210,8 @@ jobs:
               "frontend",
               "ansible",
               "playbook-docker-proxy",
+              "agent-command-runner",
+              "agent-command-docker-proxy",
               "mcp-demo",
               "mcp-runner",
               "mars-agent",
@@ -225,6 +233,8 @@ jobs:
               "frontend": "WEBTERM_FRONTEND_IMAGE",
               "ansible": "WEBTERM_ANSIBLE_IMAGE",
               "playbook-docker-proxy": "WEBTERM_PLAYBOOK_DOCKER_PROXY_IMAGE",
+              "agent-command-runner": "AGENT_COMMAND_RUNNER_IMAGE",
+              "agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE",
               "mcp-demo": "WEBTERM_MCP_DEMO_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
