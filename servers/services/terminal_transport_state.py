@@ -22,12 +22,8 @@ class TerminalTransportState:
     connect_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     server_connection_id: str | None = None
     terminal_tail: str = ""
-    marker_suppress: dict[str, bool] = field(
-        default_factory=lambda: {"stdout": False, "stderr": False}
-    )
-    marker_line_buffer: dict[str, str] = field(
-        default_factory=lambda: {"stdout": "", "stderr": ""}
-    )
+    marker_suppress: dict[str, bool] = field(default_factory=lambda: {"stdout": False, "stderr": False})
+    marker_line_buffer: dict[str, str] = field(default_factory=lambda: {"stdout": "", "stderr": ""})
     intercept_editors: bool = True
     nova_session_context: dict[str, Any] = field(default_factory=dict)
     nova_recent_activity: list[dict[str, Any]] = field(default_factory=list)

@@ -49,7 +49,11 @@ class SSHTerminalIoMixin:
         # Cancel streaming tasks first to avoid sending on closed socket
         await self._cancel_ai()
         current = asyncio.current_task()
-        for t in (self._transport_state.stdout_task, self._transport_state.stderr_task, self._transport_state.wait_task):
+        for t in (
+            self._transport_state.stdout_task,
+            self._transport_state.stderr_task,
+            self._transport_state.wait_task,
+        ):
             if t and not t.done():
                 if current is not None and t is current:
                     continue

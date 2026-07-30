@@ -79,7 +79,9 @@ def test_react_agent_node_executes_with_rendered_goal(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -118,7 +120,9 @@ def test_react_agent_node_partial_defaults_to_failed(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -154,7 +158,9 @@ def test_react_agent_node_partial_can_continue_as_success(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -201,7 +207,9 @@ def test_multi_agent_node_executes_with_rendered_goal(monkeypatch):
             plan_summary={"total": 2, "done": 2, "failed": 0, "skipped": 0, "pending": 0},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -231,7 +239,9 @@ def test_react_agent_empty_allowlist_fails(monkeypatch):
         called["value"] = True
         return SimpleNamespace(agent_run_id=1, status="completed", final_report="x", ai_analysis="", outcome="success")
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -274,7 +284,9 @@ def test_react_agent_passes_unattended_for_schedule_trigger(monkeypatch):
             disconnected_servers=[],
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
     monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime._pipeline_trigger_type", lambda _run: "schedule")
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -313,7 +325,9 @@ def test_multi_agent_passes_instructions(monkeypatch):
             disconnected_servers=[],
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -352,7 +366,9 @@ def test_react_agent_requires_non_empty_goal(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -389,7 +405,9 @@ def test_react_agent_injects_upstream_outputs_into_goal(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -430,7 +448,9 @@ def test_react_agent_can_disable_upstream_injection(monkeypatch):
             plan_summary={},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_react_agent", fake_run_pipeline_react_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {
@@ -470,7 +490,9 @@ def test_multi_agent_node_failed_tasks_map_to_partial_failed(monkeypatch):
             plan_summary={"total": 2, "done": 1, "failed": 1, "skipped": 0, "pending": 0},
         )
 
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime.run_pipeline_multi_agent", fake_run_pipeline_multi_agent
+    )
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
         {

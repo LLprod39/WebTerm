@@ -237,7 +237,11 @@ def test_disk_cleanup_dry_run_executes_only_guarded_preview_command(monkeypatch)
 
     async def fake_command(_server, *, secret="", command=""):
         captured["command"] = command
-        return {"stdout": "__PLAN__\n/tmp/old\n__ACTION__\ndry_run=true\n__ACTION_EXIT__=0\n", "stderr": "", "exit_code": 0}
+        return {
+            "stdout": "__PLAN__\n/tmp/old\n__ACTION__\ndry_run=true\n__ACTION_EXIT__=0\n",
+            "stderr": "",
+            "exit_code": 0,
+        }
 
     monkeypatch.setattr("studio.executor.nodes.ops._server_secret", fake_secret)
     monkeypatch.setattr("studio.executor.nodes.ops.get_linux_ui_disk", fake_disk)

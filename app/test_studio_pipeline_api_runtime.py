@@ -238,7 +238,9 @@ def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
 
     monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.get_server_connect_kwargs", fake_build_connect_kwargs)
     monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime.get_server_sudo_password", lambda _server: "")
-    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command)
+    monkeypatch.setattr(
+        "studio.pipeline.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command
+    )
     monkeypatch.setattr(Server.objects, "get", lambda *args, **kwargs: server)
     monkeypatch.setattr(asyncssh, "connect", fake_connect)
 

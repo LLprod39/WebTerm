@@ -70,7 +70,12 @@ def permission_fallbacks() -> dict[str, bool]:
         owner = node.args[0]
         name = _constant(node.args[1])
         fallback = _constant(node.args[2])
-        if isinstance(owner, ast.Name) and owner.id == "settings" and isinstance(name, str) and isinstance(fallback, bool):
+        if (
+            isinstance(owner, ast.Name)
+            and owner.id == "settings"
+            and isinstance(name, str)
+            and isinstance(fallback, bool)
+        ):
             fallbacks[name] = fallback
     return fallbacks
 

@@ -119,9 +119,7 @@ class OpsDiskCleanupNode(BaseNode):
         status_text = "dry-run" if dry_run else "completed" if payload["success"] else "failed"
         text = f"Disk cleanup {action} on {server.name}: {status_text}\n\n```diff\n{change_preview['diff']}\n```"
         if payload["success"]:
-            return NodeResult(
-                output={"output": text, "disk_cleanup": payload, "change_preview": change_preview}
-            )
+            return NodeResult(output={"output": text, "disk_cleanup": payload, "change_preview": change_preview})
         return NodeResult(
             error=payload["action_excerpt"] or "Disk cleanup failed",
             output={"output": text, "disk_cleanup": payload, "change_preview": change_preview},

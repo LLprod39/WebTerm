@@ -24,7 +24,8 @@ WORKDIR /workspace
 
 RUN mkdir -p /workspace/studio
 
-COPY studio/demo_mcp_server.py studio/demo_mcp_tools.py studio/demo_mcp_kubernetes_tools.py /workspace/studio/
+COPY studio/demo_mcp_server.py /workspace/studio/demo_mcp_server.py
+COPY studio/mcp /workspace/studio/mcp
 
 EXPOSE 8765
 

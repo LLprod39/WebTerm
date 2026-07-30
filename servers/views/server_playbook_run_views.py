@@ -88,9 +88,7 @@ def playbook_run_list(request):
 @require_feature("servers")
 @require_http_methods(["GET"])
 def playbook_run_detail(request, run_id: int):
-    run = get_object_or_404(
-        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
-    )
+    run = get_object_or_404(PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user))
     return JsonResponse({"success": True, "run": _serialize_run(run, include_hosts=True)})
 
 
@@ -98,9 +96,7 @@ def playbook_run_detail(request, run_id: int):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_run_cancel(request, run_id: int):
-    run = get_object_or_404(
-        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
-    )
+    run = get_object_or_404(PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user))
     if run.status in (
         PlaybookRun.STATUS_COMPLETED,
         PlaybookRun.STATUS_FAILED,
@@ -120,9 +116,7 @@ def playbook_run_cancel(request, run_id: int):
 @require_http_methods(["POST"])
 def playbook_run_rerun_failed(request, run_id: int):
     """Re-run failed targets through the same exact-revision preflight."""
-    prev = get_object_or_404(
-        PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user)
-    )
+    prev = get_object_or_404(PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user))
     host_results = prev.host_results if isinstance(prev.host_results, list) else []
     failed_ids = [
         int(h["server_id"])

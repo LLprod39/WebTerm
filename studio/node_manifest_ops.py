@@ -89,7 +89,9 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 "path": _str(description="Remote text file path."),
                 "content": _str(description="UTF-8 content for write action. Supports templates."),
                 "allow_empty_content": _bool(default=False),
-                "dry_run": _bool(default=False, description="Preview a write and return a diff without changing the file."),
+                "dry_run": _bool(
+                    default=False, description="Preview a write and return a diff without changing the file."
+                ),
                 "max_bytes": _int(minimum=1024, maximum=1048576, default=131072),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
@@ -113,7 +115,9 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                 **SERVER_ID_FIELDS,
                 "action": _str(enum=("list_updates", "install", "update", "remove"), default="list_updates"),
                 "packages": _array(_str(), description="Explicit package names for install/update/remove."),
-                "dry_run": _bool(default=False, description="Preview the package delta without invoking the package manager."),
+                "dry_run": _bool(
+                    default=False, description="Preview the package delta without invoking the package manager."
+                ),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,
             },
@@ -148,9 +152,7 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
             },
             required=("action",),
         ),
-        output_schema=_schema(
-            {"output": _str(), "disk": _obj(), "disk_cleanup": _obj(), "change_preview": _obj()}
-        ),
+        output_schema=_schema({"output": _str(), "disk": _obj(), "disk_cleanup": _obj(), "change_preview": _obj()}),
     ),
     "ops/backup_restore_check": _manifest(
         "ops/backup_restore_check",
@@ -193,7 +195,9 @@ OPS_NODE_MANIFESTS: dict[str, NodeManifest] = {
                     description="systemd service name. Falls back to service_name runtime context when empty."
                 ),
                 "action": _str(enum=("start", "stop", "restart", "reload"), default="restart"),
-                "dry_run": _bool(default=False, description="Preview the desired service state without calling systemctl."),
+                "dry_run": _bool(
+                    default=False, description="Preview the desired service state without calling systemctl."
+                ),
                 "verify": _bool(default=True),
                 "on_failure": ON_FAILURE_SCHEMA,
             },

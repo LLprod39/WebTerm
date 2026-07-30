@@ -66,9 +66,7 @@ def _self_attributes(path: Path) -> set[str]:
     return {
         node.attr
         for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute)
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "self"
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "self"
     }
 
 
@@ -89,11 +87,7 @@ def test_terminal_state_is_explicit_and_legacy_shared_attrs_are_not_used() -> No
 def test_terminal_consumer_declares_fewer_than_twenty_state_fields() -> None:
     path = CONSUMER_DIR / "ssh_terminal.py"
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    consumer = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SSHTerminalConsumer"
-    )
+    consumer = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "SSHTerminalConsumer")
     declared_fields = {
         node.target.id
         for node in consumer.body

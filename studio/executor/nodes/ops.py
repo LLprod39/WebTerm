@@ -318,9 +318,7 @@ class OpsPackageActionNode(BaseNode):
             f"\n\n```diff\n{change_preview['diff']}\n```"
         )
         if payload["success"]:
-            return NodeResult(
-                output={"output": text, "package_action": payload, "change_preview": change_preview}
-            )
+            return NodeResult(output={"output": text, "package_action": payload, "change_preview": change_preview})
         return NodeResult(
             error=payload["output_excerpt"] or "Package action failed",
             output={"output": text, "package_action": payload, "change_preview": change_preview},

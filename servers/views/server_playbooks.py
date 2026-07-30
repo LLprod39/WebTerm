@@ -221,9 +221,7 @@ def playbook_update(request, playbook_id: int):
 @require_feature("servers")
 @require_http_methods(["POST"])
 def playbook_delete(request, playbook_id: int):
-    pb = get_object_or_404(
-        Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user)
-    )
+    pb = get_object_or_404(Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user))
     name = pb.name
     pid = pb.id
     record_playbook_event(

@@ -143,7 +143,9 @@ def _run_for_user(user, run_id: int) -> AgentRun:
     run = AgentRun.objects.filter(project=project, id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
-    run = AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
+    run = (
+        AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
+    )
     if run is None:
         raise AssistantActionError("Agent run not found", status=404)
     return run

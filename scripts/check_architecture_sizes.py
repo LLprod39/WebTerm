@@ -42,10 +42,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--strict-new",
         action="store_true",
-        help=(
-            "Deprecated compatibility flag. Line count is diagnostic; "
-            "complexity and coupling metrics are enforced."
-        ),
+        help=("Deprecated compatibility flag. Line count is diagnostic; complexity and coupling metrics are enforced."),
     )
     parser.add_argument(
         "--update-metrics-baseline",
