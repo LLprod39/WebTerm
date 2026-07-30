@@ -74,7 +74,7 @@ BLOCKED_CAPABILITIES = (
 
 
 def kubernetes_admin_mode_enabled() -> bool:
-    return bool(getattr(settings, "KUBERNETES_ADMIN_MODE_ENABLED", True))
+    return bool(getattr(settings, "KUBERNETES_ADMIN_MODE_ENABLED", False))
 
 
 def kubernetes_permission_policy(user) -> dict[str, Any]:

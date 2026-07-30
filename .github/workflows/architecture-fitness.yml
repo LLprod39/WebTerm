@@ -68,6 +68,9 @@ jobs:
       - name: Verify runtime contract
         run: python scripts/verify_runtime_contract.py
 
+      - name: Verify frozen Kubernetes Ops v0.1 scope
+        run: python scripts/check_kubernetes_ops_v01_scope.py
+
       - name: Check complexity, coupling, size signals + import boundaries
         # Line count is diagnostic. Complexity/fan-in/fan-out and import
         # boundaries are the blocking architecture signals.
