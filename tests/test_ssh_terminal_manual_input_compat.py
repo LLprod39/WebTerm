@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from asgiref.sync import async_to_sync
 
 from servers.consumers import SSHTerminalConsumer
+from servers.services.terminal_manual_command_state import ManualCommandState
 
 
 class DummyStdin:
@@ -38,12 +39,10 @@ def _build_consumer() -> SSHTerminalConsumer:
     consumer._ssh_proc = DummyProc()
     consumer._server_connection_id = "term-manual-test"
     consumer._ai_marker_token = "manualtest"
-    consumer._manual_input_buffer = ""
-    consumer._input_capture_suppress = 0
-    consumer._manual_next_cmd_id = 1_000_000
-    consumer._manual_pending_commands = []
-    consumer._manual_active_cmd_id = None
-    consumer._manual_active_output = ""
+    consumer._manual_state = ManualCommandState()
+    consumer._nova_session_context = {}
+    consumer._nova_recent_activity = []
+    consumer._intercept_editors = True
     return consumer
 
 
@@ -64,7 +63,7 @@ def test_manual_terminal_command_capture_persists_output_and_exit_code(monkeypat
 
     async_to_sync(consumer._handle_input)("systemctl status nginx\r")
 
-    assert consumer._manual_active_cmd_id == 1_000_000
+    assert consumer._manual_state.active_command_id == 1_000_000
     assert any("__WEUAI_EXIT_manualtest_1000000" in item for item in consumer._ssh_proc.stdin.writes)
 
     consumer._append_manual_output("systemctl status nginx\nnginx.service - active (running)\n")
@@ -83,7 +82,7 @@ def test_manual_terminal_multiline_block_skips_marker_injection(monkeypatch):
 
     async_to_sync(consumer._handle_input)("if true; then\r")
 
-    assert consumer._manual_active_cmd_id is None
+    assert consumer._manual_state.active_command_id is None
     assert not any("__WEUAI_EXIT_" in item for item in consumer._ssh_proc.stdin.writes)
     assert len(persisted) == 1
     assert persisted[0]["command"] == "if true; then"

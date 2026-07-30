@@ -24,6 +24,7 @@ from servers.models import Server
 from servers.services import terminal_input
 from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
+from servers.services.terminal_manual_command_state import ManualCommandState
 
 _TermSize = terminal_input.TerminalSize
 
@@ -79,10 +80,7 @@ class SSHTerminalConsumer(
     _ai_run_id: str
     _ai_marker_token: str
     _ai_stop_requested: bool
-    _manual_next_cmd_id: int
-    _manual_pending_commands: list[dict[str, Any]]
-    _manual_active_cmd_id: int | None
-    _manual_active_output: str
+    _manual_state: ManualCommandState
 
     _marker_suppress: dict[str, bool]
     _marker_line_buf: dict[str, str]

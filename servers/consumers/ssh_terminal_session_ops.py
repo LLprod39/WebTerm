@@ -223,8 +223,17 @@ class SSHTerminalSessionOpsMixin:
         sync_to_async = consumer_module_attr("database_sync_to_async", database_sync_to_async)
 
         await handle_terminal_input(
-            self,
+            self._manual_state,
             data,
+            server=self.server,
+            user_id=self._user_id,
+            ssh_proc=self._ssh_proc,
+            server_connection_id=self._server_connection_id,
+            session_context=self._nova_session_context,
+            marker_prefix=self._marker_prefix(),
+            intercept_editors=self._intercept_editors,
+            send_json=self._safe_send_json,
+            append_recent_activity=self._append_nova_recent_activity,
             log_activity=log_activity_async,
             persist_result=sync_to_async(
                 self._persist_manual_terminal_command_result,
@@ -237,11 +246,14 @@ class SSHTerminalSessionOpsMixin:
 
     @contextlib.contextmanager
     def _suppress_terminal_input_capture(self):
-        self._input_capture_suppress = int(getattr(self, "_input_capture_suppress", 0) or 0) + 1
+        self._manual_state.capture_suppression += 1
         try:
             yield
         finally:
-            self._input_capture_suppress = max(0, int(getattr(self, "_input_capture_suppress", 1) or 1) - 1)
+            self._manual_state.capture_suppression = max(
+                0,
+                self._manual_state.capture_suppression - 1,
+            )
 
     @staticmethod
     def _persist_manual_terminal_command_result(

@@ -21,6 +21,7 @@ from servers.services.terminal_ai import preferences as ai_preferences
 from servers.services.terminal_ai.active_command import (
     initialize_active_command_state,
 )
+from servers.services.terminal_manual_command_state import ManualCommandState
 
 _TermSize = terminal_input.TerminalSize
 
@@ -37,6 +38,7 @@ class SSHTerminalLifecycleMixin:
 
     async def connect(self):
         self._connect_lock = asyncio.Lock()
+        self._manual_state = ManualCommandState()
 
         user = self.scope.get("user")
 
@@ -71,12 +73,6 @@ class SSHTerminalLifecycleMixin:
         self._agent_extra_conns: dict[str, Any] = {}
         self._marker_suppress = {"stdout": False, "stderr": False}
         self._marker_line_buf = {"stdout": "", "stderr": ""}
-        self._manual_input_buffer = ""
-        self._input_capture_suppress = 0
-        self._manual_next_cmd_id = 1_000_000
-        self._manual_pending_commands: list[dict[str, Any]] = []
-        self._manual_active_cmd_id = None
-        self._manual_active_output = ""
         self._ai_audit_context: dict[str, Any] = {}
         self._server_connection_id: str | None = None
         self._connection_heartbeat_task = None
