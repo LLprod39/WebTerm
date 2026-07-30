@@ -26,7 +26,7 @@ class SSHTerminalAiControlsMixin:
     async def _handle_ai_stop(self):
         active_cmd_id = await self._interrupt_active_command()
 
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             pending_to_skip = ai_session.request_stop(active_cmd_id)
             apply_legacy_ai_queue_state(self, ai_session)
@@ -45,22 +45,20 @@ class SSHTerminalAiControlsMixin:
 
     async def _cancel_ai(self):
         # Can be called from disconnect/cleanup paths
-        if not hasattr(self, "_ai_lock"):
-            return
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             await self._cancel_ai_locked()
 
     async def _cancel_ai_locked(self):
-        self._ai_run.cancel_task(current=asyncio.current_task())
+        self._ai_state.run.cancel_task(current=asyncio.current_task())
 
-        cancel_exit_futures(self)
+        cancel_exit_futures(self._ai_state.active_command)
 
-        self._ai_run.cancel_reply_futures()
+        self._ai_state.run.cancel_reply_futures()
 
         ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
         ai_session.clear()
         apply_legacy_ai_queue_state(self, ai_session)
-        clear_active_command(self)
+        clear_active_command(self._ai_state.active_command)
 
     @staticmethod
     def _normalize_execution_mode(mode: str) -> str:
@@ -92,17 +90,17 @@ class SSHTerminalAiControlsMixin:
         if not msg:
             return
 
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             await self._cancel_ai_locked()
             # A3: detect memory_enabled transition True → False so we can
             # wipe both in-memory and persisted chat history in one shot.
             # Capture the *previous* value before overwriting ``_ai_settings``.
-            prev_memory_enabled = bool((self._ai_settings or {}).get("memory_enabled", True))
+            prev_memory_enabled = bool((self._ai_state.settings or {}).get("memory_enabled", True))
             new_memory_enabled = bool(ai_settings.get("memory_enabled", True))
             memory_disabled_now = prev_memory_enabled and not new_memory_enabled
 
-            self._ai_settings = self._clone_ai_settings(ai_settings)
-            self._ai_allowlist_patterns = list(self._ai_settings.get("allowlist_patterns") or [])
+            self._ai_state.settings = self._clone_ai_settings(ai_settings)
+            self._ai_state.allowlist_patterns = list(self._ai_state.settings.get("allowlist_patterns") or [])
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             ai_session.reset_for_new_request(
                 user_message=msg,
@@ -112,8 +110,8 @@ class SSHTerminalAiControlsMixin:
                 marker_token=self._new_marker_token(),
             )
             apply_legacy_ai_queue_state(self, ai_session)
-            if not bool(self._ai_settings.get("memory_enabled", True)):
-                self._ai_history = []
+            if not bool(self._ai_state.settings.get("memory_enabled", True)):
+                self._ai_state.history = []
 
         # A3: persist the wipe to the DB when the user just flipped
         # memory_enabled from True → False. Doing this *outside* the lock
@@ -132,7 +130,7 @@ class SSHTerminalAiControlsMixin:
         logger.debug(
             "Terminal AI request: server_id=%s run_id=%s",
             getattr(self.server, "id", None),
-            self._ai_run_id,
+            self._ai_state.session.run_id,
         )
         if not self._ssh_proc:
             await self._send_ai_event(terminal_events.ai_error("SSH не подключён. Сначала нажмите Connect."))
@@ -141,7 +139,7 @@ class SSHTerminalAiControlsMixin:
             await self._send_ai_event(terminal_events.ai_error("Server not loaded"))
             return
 
-        self._ai_audit_context = {
+        self._ai_state.audit_context = {
             "user_id": self._user_id,
             "channel": "ws",
             "path": f"/ws/servers/{self.server.id}/terminal/",
@@ -165,8 +163,8 @@ class SSHTerminalAiControlsMixin:
                 "message_length": len(msg),
                 "chat_mode": requested_chat_mode,
                 "execution_mode": requested_mode,
-                "memory_enabled": bool(self._ai_settings.get("memory_enabled", True)),
-                "auto_report": str(self._ai_settings.get("auto_report") or "auto"),
+                "memory_enabled": bool(self._ai_state.settings.get("memory_enabled", True)),
+                "auto_report": str(self._ai_state.settings.get("auto_report") or "auto"),
             },
         )
         await self._send_ai_event(
@@ -177,13 +175,13 @@ class SSHTerminalAiControlsMixin:
             )
         )
 
-        with audit_context(**self._ai_audit_context):
+        with audit_context(**self._ai_state.audit_context):
             # Nova: branch into the ReAct agent loop when requested. It
             # is a full alternative to the plan-then-execute pipeline —
             # no `_ai_plan`, no `_ai_process_queue`, no per-step planner.
             if requested_mode == "agent":
-                async with self._ai_lock:
-                    self._ai_run.start_task(
+                async with self._ai_state.lock:
+                    self._ai_state.run.start_task(
                         self._run_ai_agent_background(
                             user_message=msg,
                             chat_mode=requested_chat_mode,
@@ -197,7 +195,7 @@ class SSHTerminalAiControlsMixin:
                     self.server.id,
                 )
                 merged_forbidden = list(forbidden_patterns or [])
-                for pattern in list(self._ai_settings.get("blocklist_patterns") or []):
+                for pattern in list(self._ai_state.settings.get("blocklist_patterns") or []):
                     if str(pattern or "").strip() and str(pattern).strip().lower() not in {
                         p.lower() for p in merged_forbidden
                     }:
@@ -206,14 +204,14 @@ class SSHTerminalAiControlsMixin:
                     user_message=msg,
                     rules_context=rules_context,
                     terminal_tail=(self._terminal_tail or "")[-2000:],
-                    history=list(self._ai_history) if bool(self._ai_settings.get("memory_enabled", True)) else [],
+                    history=list(self._ai_state.history) if bool(self._ai_state.settings.get("memory_enabled", True)) else [],
                     unavailable_cmds=set(getattr(self, "_unavailable_cmds", set())),
                     chat_mode=requested_chat_mode,
                     execution_mode=requested_mode,
                     # A5: forward dry-run state so the planner prompt can
                     # adapt (no hard behaviour change — the short-circuit
                     # in _ai_process_queue is authoritative).
-                    dry_run=bool(self._ai_settings.get("dry_run", False)),
+                    dry_run=bool(self._ai_state.settings.get("dry_run", False)),
                 )
             except Exception as e:
                 err_msg = str(e).strip() or "Unknown error"
@@ -240,8 +238,8 @@ class SSHTerminalAiControlsMixin:
 
             fast_policy = (
                 str(
-                    (self._ai_settings or {}).get("fast_complex_policy")
-                    or (self._ai_settings or {}).get("complex_policy")
+                    (self._ai_state.settings or {}).get("fast_complex_policy")
+                    or (self._ai_state.settings or {}).get("complex_policy")
                     or "ask"
                 )
                 .strip()
@@ -268,9 +266,9 @@ class SSHTerminalAiControlsMixin:
                             requested_execution_mode=requested_mode,
                         )
                     )
-                async with self._ai_lock:
-                    self._ai_execution_mode = "agent"
-                    self._ai_run.start_task(
+                async with self._ai_state.lock:
+                    self._ai_state.session.execution_mode = "agent"
+                    self._ai_state.run.start_task(
                         self._run_ai_agent_background(
                             user_message=msg,
                             chat_mode=requested_chat_mode,
@@ -297,8 +295,8 @@ class SSHTerminalAiControlsMixin:
             if routed_mode in ("step", "fast"):
                 selected_mode = routed_mode
 
-        async with self._ai_lock:
-            self._ai_execution_mode = selected_mode
+        async with self._ai_state.lock:
+            self._ai_state.session.execution_mode = selected_mode
 
         # --- answer / ask mode: just reply, no commands needed ---
         if mode in ("answer", "ask"):
@@ -350,8 +348,8 @@ class SSHTerminalAiControlsMixin:
                     cmd=check,
                     why="Обязательная preflight-проверка перед выполнением задачи",
                     forbidden_patterns=merged_forbidden,
-                    allowlist_patterns=list(self._ai_allowlist_patterns or []),
-                    confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+                    allowlist_patterns=list(self._ai_state.allowlist_patterns or []),
+                    confirm_dangerous_commands=bool(self._ai_state.settings.get("confirm_dangerous_commands", True)),
                 )
             )
 
@@ -370,8 +368,8 @@ class SSHTerminalAiControlsMixin:
                     cmd=cmd,
                     why=why,
                     forbidden_patterns=merged_forbidden,
-                    allowlist_patterns=list(self._ai_allowlist_patterns or []),
-                    confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+                    allowlist_patterns=list(self._ai_state.allowlist_patterns or []),
+                    confirm_dangerous_commands=bool(self._ai_state.settings.get("confirm_dangerous_commands", True)),
                     # F2-8: forward LLM-provided exec_mode hint when present.
                     exec_mode=c.get("exec_mode"),
                 )
@@ -384,7 +382,7 @@ class SSHTerminalAiControlsMixin:
             ask_prefix = "Режим Ask активен: команды ниже предложены для ручного запуска и не выполнятся без вашего подтверждения."
             assistant_text = f"{ask_prefix}\n\n{assistant_text}" if assistant_text else ask_prefix
 
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             ai_session.load_plan(plan_items, next_id=next_id, forbidden_patterns=merged_forbidden)
             apply_legacy_ai_queue_state(self, ai_session)
@@ -406,9 +404,9 @@ class SSHTerminalAiControlsMixin:
             return
 
         await self._send_ai_event(terminal_events.ai_status("running"))
-        with audit_context(**self._ai_audit_context):
-            async with self._ai_lock:
-                self._ai_run.start_task(self._ai_process_queue())
+        with audit_context(**self._ai_state.audit_context):
+            async with self._ai_state.lock:
+                self._ai_state.run.start_task(self._ai_process_queue())
 
     async def _handle_ai_confirm(self, content: dict[str, Any]):
         try:
@@ -418,7 +416,7 @@ class SSHTerminalAiControlsMixin:
             return
 
         should_start = False
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             transition = ai_session.confirm_current(cmd_id)
             apply_legacy_ai_queue_state(self, ai_session)
@@ -427,15 +425,15 @@ class SSHTerminalAiControlsMixin:
                 return
             if not transition.changed:
                 return
-            if not self._ai_run.has_active_task():
+            if not self._ai_state.run.has_active_task():
                 should_start = True
 
         await self._send_ai_event(terminal_events.ai_command_status(item_id=cmd_id, status=transition.status))
         if should_start:
             await self._send_ai_event(terminal_events.ai_status("running"))
-            with audit_context(**getattr(self, "_ai_audit_context", {})):
-                async with self._ai_lock:
-                    self._ai_run.start_task(self._ai_process_queue())
+            with audit_context(**self._ai_state.audit_context):
+                async with self._ai_state.lock:
+                    self._ai_state.run.start_task(self._ai_process_queue())
 
     async def _handle_ai_cancel(self, content: dict[str, Any]):
         try:
@@ -445,7 +443,7 @@ class SSHTerminalAiControlsMixin:
             return
 
         should_start = False
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             transition = ai_session.cancel_current(cmd_id)
             apply_legacy_ai_queue_state(self, ai_session)
@@ -454,21 +452,21 @@ class SSHTerminalAiControlsMixin:
                 return
             if not transition.changed:
                 return
-            if not self._ai_run.has_active_task():
+            if not self._ai_state.run.has_active_task():
                 should_start = True
 
         await self._send_ai_event(terminal_events.ai_command_status(item_id=cmd_id, status=transition.status))
         if should_start:
             await self._send_ai_event(terminal_events.ai_status("running"))
-            with audit_context(**getattr(self, "_ai_audit_context", {})):
-                async with self._ai_lock:
-                    self._ai_run.start_task(self._ai_process_queue())
+            with audit_context(**self._ai_state.audit_context):
+                async with self._ai_state.lock:
+                    self._ai_state.run.start_task(self._ai_process_queue())
 
     async def _handle_ai_clear_memory(self):
-        async with self._ai_lock:
-            self._ai_history = []
-            self._ai_last_done_items = []
-            self._ai_last_report = ""
+        async with self._ai_state.lock:
+            self._ai_state.history = []
+            self._ai_state.session.last_done_items = []
+            self._ai_state.session.last_report = ""
         # F2-9: also wipe the persistent DB copy so a page reload does not
         # restore the history the user just cleared.
         try:
@@ -483,6 +481,6 @@ class SSHTerminalAiControlsMixin:
         await self._send_ai_event(
             terminal_events.ai_response(
                 assistant_text="🧹 Память текущего чата очищена.",
-                execution_mode=str(getattr(self, "_ai_execution_mode", "agent")),
+                execution_mode=self._ai_state.session.execution_mode,
             )
         )

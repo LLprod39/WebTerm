@@ -17,7 +17,9 @@ from servers.services.terminal_ai.recovery import (
     retry_candidate_from_decision,
     should_attempt_error_recovery,
 )
+from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
+from servers.services.terminal_ai.state import TerminalAiState
 
 
 def test_should_attempt_error_recovery_only_for_fast_mode_failures_under_retry_limit():
@@ -88,9 +90,12 @@ def test_recovery_text_helpers_use_defaults_for_empty_decisions():
 
 def test_reserved_retry_plan_item_marks_no_recovery_flag():
     consumer = object.__new__(SSHTerminalConsumer)
-    consumer._ai_allowlist_patterns = []
-    consumer._ai_settings = SSHTerminalConsumer._default_ai_settings()
-    consumer._ai_chat_mode = "agent"
+    consumer._ai_state = TerminalAiState.create(
+        run_controller_factory=TerminalAiRunController,
+        session_factory=TerminalAiSession,
+        settings=SSHTerminalConsumer._default_ai_settings(),
+    )
+    consumer._ai_state.session.chat_mode = "agent"
 
     item = consumer._build_reserved_plan_item(
         TerminalAiPlanReservation(item_id=3, forbidden_patterns=[]),
@@ -283,8 +288,8 @@ async def test_handle_step_post_command_adds_next_adaptive_command():
 @pytest.mark.asyncio
 async def test_handle_step_post_command_done_skips_remaining_commands():
     owner = _FastRecoveryOwner([{"action": "done", "assistant_text": "Готово"}])
-    owner._ai_plan[0]["status"] = "done"
-    owner._ai_plan_index = 1
+    owner._ai_state.session.plan[0]["status"] = "done"
+    owner._ai_state.session.plan_index = 1
 
     should_stop = await handle_step_post_command(
         owner,
@@ -320,6 +325,7 @@ async def test_handle_step_post_command_abort_stops_queue():
 class _FakeAiRun:
     def __init__(self, reply: str):
         self.reply = reply
+        self.lock = asyncio.Lock()
 
     async def ask_user(self, *, event: dict, send_event, **_kwargs):
         await send_event(event)
@@ -336,23 +342,15 @@ class _FastRecoveryOwner:
         self.history: list[tuple[str, str]] = []
         self.inserted: list[tuple[dict, bool]] = []
         self.step_decision_calls: list[dict] = []
-        self._ai_error_retries: dict[int, int] = {}
-        self._ai_lock = asyncio.Lock()
-        self._ai_plan = [{"id": 1, "cmd": "apt update"}, {"id": 2, "cmd": "next"}]
-        self._ai_plan_index = 0
-        self._ai_next_id = 5
-        self._ai_step_extra_count = 0
-        self._ai_forbidden_patterns: list[str] = []
-        self._ai_user_message = ""
-        self._ai_chat_mode = "agent"
-        self._ai_execution_mode = "fast"
-        self._ai_run_id = ""
-        self._ai_marker_token = ""
-        self._ai_last_done_items: list[dict] = []
-        self._ai_last_report = ""
-        self._ai_stop_requested = False
-        self._ai_session = TerminalAiSession()
-        self._ai_run = _FakeAiRun(user_reply)
+        self._ai_state = TerminalAiState(
+            run=_FakeAiRun(user_reply),
+            session=TerminalAiSession(
+                plan=[{"id": 1, "cmd": "apt update"}, {"id": 2, "cmd": "next"}],
+                next_id=5,
+                execution_mode="fast",
+            ),
+            settings={},
+        )
 
     async def _send_ai_event(self, event: dict):
         self.events.append(event)
@@ -400,13 +398,16 @@ class _FastRecoveryOwner:
 
     async def _reserve_ai_retry_item(self, retries: int):
         item_id = 20 + retries
-        self._ai_error_retries[item_id] = retries + 1
+        self._ai_state.error_retries[item_id] = retries + 1
         return TerminalAiPlanReservation(item_id=item_id, forbidden_patterns=[])
 
     async def _reserve_ai_adaptive_item(self, extra_limit: int):
         assert extra_limit == 20
-        self._ai_step_extra_count += 1
-        return TerminalAiPlanReservation(item_id=40 + self._ai_step_extra_count, forbidden_patterns=[])
+        self._ai_state.session.step_extra_count += 1
+        return TerminalAiPlanReservation(
+            item_id=40 + self._ai_state.session.step_extra_count,
+            forbidden_patterns=[],
+        )
 
     def _build_reserved_plan_item(self, reservation, *, cmd: str, why: str, no_recovery: bool = False):
         return {

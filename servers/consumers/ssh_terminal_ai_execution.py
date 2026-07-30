@@ -40,7 +40,7 @@ class SSHTerminalAiExecutionMixin:
         Pauses when a command requires confirmation.
         """
         send_idle = True
-        execution_mode = self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "agent"))
+        execution_mode = self._normalize_execution_mode(self._ai_state.session.execution_mode)
         step_mode = execution_mode == "step"
         direct_exec_enabled = self._legacy_direct_exec_enabled()
         try:
@@ -51,7 +51,7 @@ class SSHTerminalAiExecutionMixin:
                     break
 
                 # 4.2: parallel batch detection ──────────────────────────
-                async with self._ai_lock:
+                async with self._ai_state.lock:
                     ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
                     parallel_batch = ai_session.prepare_parallel_batch(
                         direct_exec_enabled=direct_exec_enabled,
@@ -61,14 +61,14 @@ class SSHTerminalAiExecutionMixin:
 
                 if parallel_batch.is_ready:
                     await self._execute_parallel_batch(parallel_batch.items, parallel_batch.indices)
-                    async with self._ai_lock:
+                    async with self._ai_state.lock:
                         ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
                         ai_session.advance_after_parallel_batch(parallel_batch.indices)
                         apply_legacy_ai_queue_state(self, ai_session)
                     continue
                 # ── end parallel batch ─────────────────────────────────────
 
-                async with self._ai_lock:
+                async with self._ai_state.lock:
                     ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
                     queue_step = ai_session.prepare_next_step()
                     apply_legacy_ai_queue_state(self, ai_session)
@@ -115,7 +115,7 @@ class SSHTerminalAiExecutionMixin:
                 # fake output makes downstream history/report/memory work
                 # exactly as on a real run so the user can preview the
                 # plan end-to-end.
-                dry_run_active = bool((self._ai_settings or {}).get("dry_run", False))
+                dry_run_active = bool((self._ai_state.settings or {}).get("dry_run", False))
 
                 # 2.4: capture pre-execution snapshot for file-modifying cmds.
                 if not dry_run_active and self._ssh_conn:
@@ -156,7 +156,7 @@ class SSHTerminalAiExecutionMixin:
                 )
 
                 if unavailable_cmd := unavailable_command_name(cmd, exit_code):
-                    self._unavailable_cmds.add(unavailable_cmd)
+                    self._ai_state.unavailable_commands.add(unavailable_cmd)
 
                 # ── Adaptive error recovery ─────────────────────────────────
                 # For non-trivial failures (not success, not interrupted, not skipped):
@@ -181,7 +181,7 @@ class SSHTerminalAiExecutionMixin:
                     break
                 # ── End adaptive error recovery ─────────────────────────────
 
-                async with self._ai_lock:
+                async with self._ai_state.lock:
                     ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
                     ai_session.mark_current_done(item_id, exit_code, output_snippet or "")
                     apply_legacy_ai_queue_state(self, ai_session)
@@ -242,8 +242,8 @@ class SSHTerminalAiExecutionMixin:
 
         loop = asyncio.get_running_loop()
         fut: asyncio.Future[int] = loop.create_future()
-        async with self._ai_lock:
-            register_active_command(self, cmd_id, fut)
+        async with self._ai_state.lock:
+            register_active_command(self._ai_state.active_command, cmd_id, fut)
 
         with self._suppress_terminal_input_capture():
             await self._ai_type_text(clean_cmd)
@@ -256,13 +256,13 @@ class SSHTerminalAiExecutionMixin:
             self._ssh_proc.stdin.write(marker_cmd + "\n")
 
         return await wait_for_pty_command_completion(
-            self,
+            self._ai_state.active_command,
             cmd_id=cmd_id,
             command=clean_cmd,
             future=fut,
             is_streaming=is_streaming,
             is_install=is_install,
-            lock=self._ai_lock,
+            lock=self._ai_state.lock,
             send_ai_event=self._send_ai_event,
             interrupt_streaming_after=self._interrupt_streaming_after,
             write_interrupt=self._write_interrupt_to_pty,
@@ -339,7 +339,7 @@ class SSHTerminalAiExecutionMixin:
         """
 
         async def mark_plan_index_done(plan_idx: int, exit_code: int, output_snippet: str) -> None:
-            async with self._ai_lock:
+            async with self._ai_state.lock:
                 ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
                 ai_session.mark_plan_index_done(plan_idx, exit_code, output_snippet)
                 apply_legacy_ai_queue_state(self, ai_session)
@@ -347,7 +347,7 @@ class SSHTerminalAiExecutionMixin:
         await execute_terminal_parallel_batch(
             items=items,
             plan_indices=plan_indices,
-            dry_run=bool((self._ai_settings or {}).get("dry_run", False)),
+            dry_run=bool((self._ai_state.settings or {}).get("dry_run", False)),
             has_ssh_connection=bool(self._ssh_conn),
             user_id=self._user_id,
             server_id=self.server.id if self.server else 0,
@@ -356,7 +356,7 @@ class SSHTerminalAiExecutionMixin:
             execute_direct=self._ai_execute_command_direct,
             log_command_history=self._log_ai_command_history,
             mark_plan_index_done=mark_plan_index_done,
-            record_unavailable=self._unavailable_cmds.add,
+            record_unavailable=self._ai_state.unavailable_commands.add,
         )
 
     async def _interrupt_streaming_after(self, delay: float) -> None:

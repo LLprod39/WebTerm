@@ -11,6 +11,7 @@ from loguru import logger
 
 from servers.services import terminal_events
 from servers.services.terminal_ai.active_command import (
+    TerminalAiActiveCommandState,
     active_output_tail,
     clear_active_command,
     exit_future,
@@ -29,7 +30,7 @@ InterruptStreamingAfter = Callable[[float], Awaitable[None]]
 
 
 async def wait_for_pty_command_completion(
-    owner: Any,
+    active_state: TerminalAiActiveCommandState,
     *,
     cmd_id: int,
     command: str,
@@ -53,7 +54,7 @@ async def wait_for_pty_command_completion(
     if is_install and not is_streaming:
         monitor_task = asyncio.create_task(
             monitor_install_progress(
-                owner,
+                active_state,
                 cmd_id=cmd_id,
                 command=command,
                 send_ai_event=send_ai_event,
@@ -76,17 +77,17 @@ async def wait_for_pty_command_completion(
         await _cancel_task(interrupt_task)
         await _cancel_task(monitor_task)
         async with lock:
-            pop_exit_future(owner, cmd_id)
+            pop_exit_future(active_state, cmd_id)
 
     await asyncio.sleep(output_drain_delay)
-    output_snippet = active_output_tail(owner)
+    output_snippet = active_output_tail(active_state)
     async with lock:
-        clear_active_command(owner, cmd_id)
+        clear_active_command(active_state, cmd_id)
     return exit_code, output_snippet
 
 
 async def monitor_install_progress(
-    owner: Any,
+    active_state: TerminalAiActiveCommandState,
     *,
     cmd_id: int,
     command: str,
@@ -102,11 +103,11 @@ async def monitor_install_progress(
     try:
         while True:
             await asyncio.sleep(interval)
-            future = exit_future(owner, cmd_id)
+            future = exit_future(active_state, cmd_id)
             if not future or future.done():
                 return
 
-            output_so_far = active_output_tail(owner, limit=3000)
+            output_so_far = active_output_tail(active_state, limit=3000)
             elapsed = int(now() - start)
             last_line = (output_so_far.strip().split("\n")[-1] or "").strip()
 

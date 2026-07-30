@@ -5,6 +5,9 @@ from types import SimpleNamespace
 from asgiref.sync import async_to_sync
 
 from servers.consumers import SSHTerminalConsumer
+from servers.services.terminal_ai.run_controller import TerminalAiRunController
+from servers.services.terminal_ai.session import TerminalAiSession
+from servers.services.terminal_ai.state import TerminalAiState
 from servers.services.terminal_manual_command_state import ManualCommandState
 
 
@@ -38,7 +41,12 @@ def _build_consumer() -> SSHTerminalConsumer:
     consumer._user_id = 1
     consumer._ssh_proc = DummyProc()
     consumer._server_connection_id = "term-manual-test"
-    consumer._ai_marker_token = "manualtest"
+    consumer._ai_state = TerminalAiState.create(
+        run_controller_factory=TerminalAiRunController,
+        session_factory=TerminalAiSession,
+        settings={},
+    )
+    consumer._ai_state.session.marker_token = "manualtest"
     consumer._manual_state = ManualCommandState()
     consumer._nova_session_context = {}
     consumer._nova_recent_activity = []

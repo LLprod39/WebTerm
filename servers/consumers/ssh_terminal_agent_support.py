@@ -35,7 +35,7 @@ class SSHTerminalAgentSupportMixin:
         from servers.services.terminal_agent_context import build_agent_extra_targets
 
         return await build_agent_extra_targets(
-            ai_settings=self._ai_settings,
+            ai_settings=self._ai_state.settings,
             user_id=self._user_id,
             primary_server_id=int(self.server.id) if self.server else None,
         )
@@ -98,7 +98,7 @@ class SSHTerminalAgentSupportMixin:
         logger.debug(
             "Terminal AI plan_commands: server_id=%s run_id=%s",
             getattr(self.server, "id", None),
-            getattr(self, "_ai_run_id", ""),
+            self._ai_state.session.run_id,
         )
 
         return await plan_terminal_commands(
@@ -173,8 +173,8 @@ class SSHTerminalAgentSupportMixin:
             ),
             name=f"terminal-ai-memory-{getattr(self, '_ai_run_id', '')}",
         )
-        self._ai_background_tasks.add(task)
-        task.add_done_callback(self._ai_background_tasks.discard)
+        self._ai_state.background_tasks.add(task)
+        task.add_done_callback(self._ai_state.background_tasks.discard)
 
     async def _run_memory_extraction_background(
         self,

@@ -21,7 +21,7 @@ class SSHTerminalAgentRunnerMixin:
         chat_mode: str,
     ) -> None:
         try:
-            with audit_context(**getattr(self, "_ai_audit_context", {})):
+            with audit_context(**self._ai_state.audit_context):
                 await self._ai_run_agent(
                     user_message=user_message,
                     chat_mode=chat_mode,
@@ -29,8 +29,8 @@ class SSHTerminalAgentRunnerMixin:
         except asyncio.CancelledError:
             raise
         finally:
-            async with self._ai_lock:
-                self._ai_run.clear_task_if_current()
+            async with self._ai_state.lock:
+                self._ai_state.run.clear_task_if_current()
             await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _ai_run_agent(
@@ -58,7 +58,7 @@ class SSHTerminalAgentRunnerMixin:
             return
 
         # Primary target = this session's server.
-        nova_sudo_policy = str((self._ai_settings or {}).get("nova_sudo_policy") or "disabled")
+        nova_sudo_policy = str((self._ai_state.settings or {}).get("nova_sudo_policy") or "disabled")
         primary = ServerTarget(
             name="primary",
             server_id=int(self.server.id),
@@ -81,7 +81,7 @@ class SSHTerminalAgentRunnerMixin:
             rules_context = ""
 
         memory_context = ""
-        memory_enabled = bool((self._ai_settings or {}).get("memory_enabled", True))
+        memory_enabled = bool((self._ai_state.settings or {}).get("memory_enabled", True))
         if memory_enabled:
             server_ids = [int(self.server.id)] + [int(t.server_id) for t in extras.values() if t.server_id]
             memory_context = await self._ai_build_agent_memory_context(server_ids)
@@ -95,7 +95,7 @@ class SSHTerminalAgentRunnerMixin:
         async def _prompt_user(request: UserPromptRequest) -> str | None:
             q_id = f"q_agent_{self._new_run_id()}"
             try:
-                return await self._ai_run.ask_user(
+                return await self._ai_state.run.ask_user(
                     q_id=q_id,
                     event={
                         "type": "ai_question",
@@ -123,7 +123,7 @@ class SSHTerminalAgentRunnerMixin:
                 raise
 
         def _stop_requested() -> bool:
-            return bool(getattr(self, "_ai_stop_requested", False)) or not self._ssh_proc
+            return self._ai_state.session.stop_requested or not self._ssh_proc
 
         # Event emitter — redacts secrets + tags run_id, same pipeline
         # the legacy ai_* events use.
@@ -137,7 +137,7 @@ class SSHTerminalAgentRunnerMixin:
         extras_meta = dict(extras)
 
         async def _open_target(target_name: str) -> Any | None:
-            cached = self._agent_extra_conns.get(target_name)
+            cached = self._ai_state.extra_connections.get(target_name)
             if cached is not None:
                 return cached
             target = extras_meta.get(target_name)
@@ -145,7 +145,7 @@ class SSHTerminalAgentRunnerMixin:
                 return None
             conn = await self._open_agent_target_conn(target.server_id)
             if conn is not None:
-                self._agent_extra_conns[target_name] = conn
+                self._ai_state.extra_connections[target_name] = conn
             return conn
 
         ctx = AgentContext(
@@ -162,7 +162,7 @@ class SSHTerminalAgentRunnerMixin:
             session_context=nova_context.session_context,
             recent_activity_context=nova_context.recent_activity_context,
             ui_context_payload=nova_context.ui_payload,
-            dry_run=bool((self._ai_settings or {}).get("dry_run", False)),
+            dry_run=bool((self._ai_state.settings or {}).get("dry_run", False)),
             sudo_policy=nova_sudo_policy,
         )
 

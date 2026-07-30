@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
 from servers.services.terminal_ai.active_command import (
+    TerminalAiActiveCommandState,
     active_command_id,
     active_output_tail,
     append_active_output,
@@ -20,15 +20,15 @@ from servers.services.terminal_ai.pty_command import (
 
 @pytest.mark.asyncio
 async def test_wait_for_pty_command_completion_returns_tail_and_cleans_state():
-    owner = SimpleNamespace()
-    initialize_active_command_state(owner)
+    state = TerminalAiActiveCommandState()
+    initialize_active_command_state(state)
     future = asyncio.get_running_loop().create_future()
-    register_active_command(owner, 5, future)
-    append_active_output(owner, "first\nsecond")
+    register_active_command(state, 5, future)
+    append_active_output(state, "first\nsecond")
     future.set_result(0)
 
     result = await wait_for_pty_command_completion(
-        owner,
+        state,
         cmd_id=5,
         command="echo ok",
         future=future,
@@ -43,18 +43,18 @@ async def test_wait_for_pty_command_completion_returns_tail_and_cleans_state():
     )
 
     assert result == (0, "first\nsecond")
-    assert active_command_id(owner) is None
-    assert active_output_tail(owner) == ""
-    assert owner._ai_exit_futures == {}
+    assert active_command_id(state) is None
+    assert active_output_tail(state) == ""
+    assert state.exit_futures == {}
 
 
 @pytest.mark.asyncio
 async def test_monitor_install_progress_sends_last_line_until_future_is_done():
-    owner = SimpleNamespace()
-    initialize_active_command_state(owner)
+    state = TerminalAiActiveCommandState()
+    initialize_active_command_state(state)
     future = asyncio.get_running_loop().create_future()
-    register_active_command(owner, 7, future)
-    append_active_output(owner, "fetching\ninstalling package")
+    register_active_command(state, 7, future)
+    append_active_output(state, "fetching\ninstalling package")
     events: list[dict] = []
 
     async def send_event(event: dict) -> None:
@@ -62,7 +62,7 @@ async def test_monitor_install_progress_sends_last_line_until_future_is_done():
         future.set_result(0)
 
     await monitor_install_progress(
-        owner,
+        state,
         cmd_id=7,
         command="apt install nginx",
         send_ai_event=send_event,
@@ -84,15 +84,15 @@ async def test_monitor_install_progress_sends_last_line_until_future_is_done():
 
 @pytest.mark.asyncio
 async def test_monitor_install_progress_interrupts_when_error_is_detected():
-    owner = SimpleNamespace()
-    initialize_active_command_state(owner)
+    state = TerminalAiActiveCommandState()
+    initialize_active_command_state(state)
     future = asyncio.get_running_loop().create_future()
-    register_active_command(owner, 8, future)
-    append_active_output(owner, "E: unable to locate package")
+    register_active_command(state, 8, future)
+    append_active_output(state, "E: unable to locate package")
     interrupts: list[str] = []
 
     await monitor_install_progress(
-        owner,
+        state,
         cmd_id=8,
         command="apt install missing",
         send_ai_event=_noop_send,

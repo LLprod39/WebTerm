@@ -14,6 +14,9 @@ from servers.services.terminal_ai import (
     build_dry_run_block,
     build_planner_prompt,
 )
+from servers.services.terminal_ai.run_controller import TerminalAiRunController
+from servers.services.terminal_ai.session import TerminalAiSession
+from servers.services.terminal_ai.state import TerminalAiState
 
 
 def _run(coro):
@@ -114,7 +117,11 @@ class TestDryRunShortCircuit:
         cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
         cons._ssh_proc = _FakeProc()  # type: ignore[attr-defined]
         cons._ssh_conn = _FakeConn()  # type: ignore[attr-defined]
-        cons._ai_settings = {"dry_run": True, "memory_enabled": False}
+        cons._ai_state = TerminalAiState.create(
+            run_controller_factory=TerminalAiRunController,
+            session_factory=TerminalAiSession,
+            settings={"dry_run": True, "memory_enabled": False},
+        )
 
         sent: list[dict[str, Any]] = []
 
@@ -141,7 +148,7 @@ class TestDryRunShortCircuit:
             cmd = "df -h"
             item_id = 1
             item_exec_mode = "direct"
-            dry_run_active = bool((cons._ai_settings or {}).get("dry_run", False))
+            dry_run_active = bool(cons._ai_state.settings.get("dry_run", False))
             assert dry_run_active
             output_snippet = f"[DRY-RUN] Would execute: {cmd}"
             await cons._send_ai_event(

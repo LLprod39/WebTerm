@@ -115,7 +115,7 @@ async def handle_fast_error_recovery(
     step_mode: bool,
 ) -> str | None:
     """Run fast-mode recovery after a failed command and return the chosen action."""
-    retries = (getattr(owner, "_ai_error_retries", {}) or {}).get(int(item_id), 0)
+    retries = owner._ai_state.error_retries.get(int(item_id), 0)
     if not should_attempt_error_recovery(
         exit_code=exit_code,
         item=item,
@@ -132,7 +132,7 @@ async def handle_fast_error_recovery(
         )
     )
     try:
-        async with owner._ai_lock:
+        async with owner._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(owner, owner._TerminalAiSessionCls)
             remaining_cmds = ai_session.remaining_commands_after_current()
         decision = await owner._ai_handle_error(command, exit_code, output, remaining_cmds)
@@ -194,11 +194,10 @@ async def _handle_recovery_question(
 ) -> str:
     action = "ask"
     question = recovery_question(decision, default="Как лучше продолжить?")
-    async with owner._ai_lock:
-        q_id = owner._ai_session.allocate_question_id(f"q_{item_id}")
-        owner._ai_next_id = owner._ai_session.next_id
+    async with owner._ai_state.lock:
+        q_id = owner._ai_state.session.allocate_question_id(f"q_{item_id}")
     try:
-        user_reply = await owner._ai_run.ask_user(
+        user_reply = await owner._ai_state.run.ask_user(
             q_id=q_id,
             event=terminal_events.ai_question(
                 q_id=q_id,
@@ -255,11 +254,11 @@ async def handle_step_post_command(
 ) -> bool:
     """Run the step-mode post-command controller. Returns True when the queue should stop."""
     try:
-        async with owner._ai_lock:
+        async with owner._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(owner, owner._TerminalAiSessionCls)
             remaining_cmds = ai_session.remaining_commands_from_cursor()
         decision = await owner._ai_step_decide_next(
-            user_goal=(getattr(owner, "_ai_user_message", "") or ""),
+            user_goal=owner._ai_state.session.user_message,
             last_cmd=command,
             exit_code=int(exit_code if exit_code is not None else -1),
             output=output or "",
@@ -311,11 +310,10 @@ async def _handle_step_question(
     decision: dict[str, Any],
 ) -> tuple[dict[str, Any], str]:
     question = str(decision.get("question") or "Как продолжить дальше?").strip()
-    async with owner._ai_lock:
-        q_id = owner._ai_session.allocate_question_id(f"q_step_{item_id}")
-        owner._ai_next_id = owner._ai_session.next_id
+    async with owner._ai_state.lock:
+        q_id = owner._ai_state.session.allocate_question_id(f"q_step_{item_id}")
     try:
-        user_reply = await owner._ai_run.ask_user(
+        user_reply = await owner._ai_state.run.ask_user(
             q_id=q_id,
             event=terminal_events.ai_question(
                 q_id=q_id,
@@ -328,7 +326,7 @@ async def _handle_step_question(
         )
         owner._add_to_history("user", f"[Ответ на шаг]: {user_reply}")
         decision = await owner._ai_step_decide_next(
-            user_goal=(getattr(owner, "_ai_user_message", "") or ""),
+            user_goal=owner._ai_state.session.user_message,
             last_cmd=command,
             exit_code=int(exit_code if exit_code is not None else -1),
             output=output or "",
@@ -341,7 +339,7 @@ async def _handle_step_question(
 
 
 async def _handle_step_retry(owner: Any, *, item_id: int, command: str, decision: dict[str, Any]) -> None:
-    retries = (getattr(owner, "_ai_error_retries", {}) or {}).get(int(item_id), 0)
+    retries = owner._ai_state.error_retries.get(int(item_id), 0)
     candidate = retry_candidate_from_decision(
         decision,
         original_command=command,
@@ -363,7 +361,7 @@ async def _handle_step_next(owner: Any, *, decision: dict[str, Any], extra_limit
     next_cmd = str(decision.get("next_cmd") or "").strip()
     if not next_cmd:
         return
-    if int(getattr(owner, "_ai_step_extra_count", 0) or 0) >= int(extra_limit):
+    if owner._ai_state.session.step_extra_count >= int(extra_limit):
         await owner._send_ai_event(
             terminal_events.ai_response(
                 mode="answer",
@@ -409,7 +407,7 @@ async def _handle_step_done(owner: Any, *, decision: dict[str, Any]) -> None:
             execution_mode="step",
         )
     )
-    async with owner._ai_lock:
+    async with owner._ai_state.lock:
         ai_session = sync_legacy_ai_queue_state(owner, owner._TerminalAiSessionCls)
         pending_ids = ai_session.skip_remaining()
         apply_legacy_ai_queue_state(owner, ai_session)

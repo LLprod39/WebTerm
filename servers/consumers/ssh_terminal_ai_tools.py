@@ -71,13 +71,13 @@ class SSHTerminalAiToolsMixin:
 
     async def _handle_ai_generate_report(self, content: dict[str, Any]):
         force_regenerate = self._parse_bool((content or {}).get("force"), False)
-        async with self._ai_lock:
-            if self._ai_run.has_active_task():
+        async with self._ai_state.lock:
+            if self._ai_state.run.has_active_task():
                 await self._send_ai_event(terminal_events.ai_error("Дождитесь завершения текущего запуска ассистента."))
                 return
-            done_items = list(self._ai_last_done_items or [])
-            user_message = str(self._ai_user_message or "")
-            cached_report = "" if force_regenerate else str(self._ai_last_report or "")
+            done_items = list(self._ai_state.session.last_done_items or [])
+            user_message = str(self._ai_state.session.user_message or "")
+            cached_report = "" if force_regenerate else str(self._ai_state.session.last_report or "")
 
         if not done_items:
             await self._send_ai_event(terminal_events.ai_error("Нет завершённых команд для формирования отчёта."))
@@ -88,9 +88,9 @@ class SSHTerminalAiToolsMixin:
             report = cached_report or await self._generate_ai_report_text(user_message, done_items)
             status = self._compute_report_status(done_items)
             await self._send_ai_event(terminal_events.ai_report(report=report, status=status))
-            async with self._ai_lock:
-                self._ai_last_report = report
-            if bool(self._ai_settings.get("memory_enabled", True)):
+            async with self._ai_state.lock:
+                self._ai_state.session.last_report = report
+            if bool(self._ai_state.settings.get("memory_enabled", True)):
                 self._add_to_history("assistant", f"[Ручной отчёт]\n{report[:400]}")
         except Exception as exc:
             await self._send_ai_event(terminal_events.ai_error(str(exc) or "Не удалось сформировать отчёт"))
@@ -104,16 +104,14 @@ class SSHTerminalAiToolsMixin:
         we additionally fire-and-forget a DB write so the conversation
         survives WebSocket reconnects and page reloads.
         """
-        if not bool(getattr(self, "_ai_settings", {}).get("memory_enabled", True)):
+        if not bool(self._ai_state.settings.get("memory_enabled", True)):
             return
         entry = {"role": role, "text": (text or "")[:800]}
-        if not hasattr(self, "_ai_history"):
-            self._ai_history = []
-        self._ai_history.append(entry)
-        ttl_requests = int(getattr(self, "_ai_settings", {}).get("memory_ttl_requests", 6) or 6)
+        self._ai_state.history.append(entry)
+        ttl_requests = int(self._ai_state.settings.get("memory_ttl_requests", 6) or 6)
         max_entries = max(4, min(ttl_requests, 20) * 6)
-        if len(self._ai_history) > max_entries:
-            self._ai_history = self._ai_history[-max_entries:]
+        if len(self._ai_state.history) > max_entries:
+            self._ai_state.history = self._ai_state.history[-max_entries:]
 
         # F2-9: persist to DB in a tracked background task so UX is not
         # slowed down by the extra INSERT + pruning queries.
@@ -132,8 +130,8 @@ class SSHTerminalAiToolsMixin:
                         max_entries=max_entries * 2,
                     )
                 )
-                self._ai_background_tasks.add(task)
-                task.add_done_callback(self._ai_background_tasks.discard)
+                self._ai_state.background_tasks.add(task)
+                task.add_done_callback(self._ai_state.background_tasks.discard)
         except RuntimeError:
             # No running event loop (e.g. synchronous test harness) — skip.
             pass
@@ -156,7 +154,7 @@ class SSHTerminalAiToolsMixin:
             item_id=item_id,
             command=cmd,
             why=why,
-            chat_mode=getattr(self, "_ai_chat_mode", "agent"),
+            chat_mode=self._ai_state.session.chat_mode,
             forbidden_patterns=forbidden_patterns,
             allowlist_patterns=allowlist_patterns,
             confirm_dangerous_commands=confirm_dangerous_commands,
@@ -166,7 +164,7 @@ class SSHTerminalAiToolsMixin:
 
     def _legacy_direct_exec_enabled(self) -> bool:
         """Whether legacy Terminal AI may use the non-PTY direct executor."""
-        return self._normalize_execution_mode(getattr(self, "_ai_execution_mode", "agent")) != "fast"
+        return self._normalize_execution_mode(self._ai_state.session.execution_mode) != "fast"
 
     @staticmethod
     def _normalize_command_text(cmd: str) -> str:
@@ -175,14 +173,14 @@ class SSHTerminalAiToolsMixin:
         return normalize_command_text(cmd)
 
     async def _reserve_ai_retry_item(self, retries: int) -> TerminalAiPlanReservation:
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
-            reservation = reserve_retry_plan_item(ai_session, self._ai_error_retries, retries=retries)
+            reservation = reserve_retry_plan_item(ai_session, self._ai_state.error_retries, retries=retries)
             apply_legacy_ai_queue_state(self, ai_session)
             return reservation
 
     async def _reserve_ai_adaptive_item(self, extra_limit: int) -> TerminalAiPlanReservation | None:
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             reservation = reserve_adaptive_step_plan_item(ai_session, extra_limit=extra_limit)
             apply_legacy_ai_queue_state(self, ai_session)
@@ -201,15 +199,15 @@ class SSHTerminalAiToolsMixin:
             cmd=cmd,
             why=why,
             forbidden_patterns=reservation.forbidden_patterns,
-            allowlist_patterns=list(self._ai_allowlist_patterns or []),
-            confirm_dangerous_commands=bool(self._ai_settings.get("confirm_dangerous_commands", True)),
+            allowlist_patterns=list(self._ai_state.allowlist_patterns or []),
+            confirm_dangerous_commands=bool(self._ai_state.settings.get("confirm_dangerous_commands", True)),
         )
         if no_recovery:
             item["_no_recovery"] = True
         return item
 
     async def _insert_ai_plan_item(self, item: dict[str, Any], *, at_cursor: bool) -> None:
-        async with self._ai_lock:
+        async with self._ai_state.lock:
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             if at_cursor:
                 ai_session.insert_at_cursor(item)
