@@ -58,3 +58,13 @@ def test_https_runtime_smoke_has_an_outer_process_deadline() -> None:
 
     assert "require_command timeout" in script
     assert "timeout --signal=TERM --kill-after=15s 300s" in script
+
+
+def test_f13a_smoke_pins_and_confirms_one_ssh_host_key() -> None:
+    script = (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
+    sshd_config = (ROOT / "docker/sshd_smoke_config").read_text(encoding="utf-8")
+
+    host_key_lines = [line for line in sshd_config.splitlines() if line.startswith("HostKey ")]
+    assert host_key_lines == ["HostKey /etc/ssh/ssh_host_ed25519_key"]
+    assert "ssh-keygen -lf //etc/ssh/ssh_host_ed25519_key.pub -E sha256" in script
+    assert "--ssh-host-key-fingerprint '$SMOKE_SSH_FINGERPRINT'" in script
