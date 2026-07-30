@@ -13,6 +13,19 @@ This runbook defines the operator procedure for the controlled v0.1 pilot. Comma
 
 The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a fresh Ubuntu CI runner. It refuses hosts that already contain WebTerm containers, executes the real production installer, requires migration/deploy checks, verifies authenticated readiness and fail-closed Plugins, checks scheduler/worker heartbeats plus Celery, and exercises terminal, pipeline and agent runtime paths over HTTPS/WebSocket. The workflow uploads the exact SHA, host/tool versions, Compose state/images/logs and probe results from every run.
 
+### Managed-secret key rotation
+
+Managed secrets use `v2:<key_id>:<ciphertext>` envelopes. New writes use `MANAGED_SECRET_KEY`; `MANAGED_SECRET_PREVIOUS_KEYS` is a JSON object containing only the old keys needed during a bounded rotation window. Never pass encryption keys as command arguments.
+
+1. With the old configuration still active, record its non-secret key id: `docker compose --env-file .env.production -f docker-compose.production.yml exec backend python manage.py rotate_managed_secrets --dry-run`.
+2. Generate a new random `MANAGED_SECRET_KEY` and choose a unique `MANAGED_SECRET_KEY_ID`. Set the new values as current and set `MANAGED_SECRET_PREVIOUS_KEYS={"<old-key-id>":"<old-key>"}` in the protected environment.
+3. Recreate backend and every worker with that same keyring. Confirm readiness before rotating data; mixed process keyrings are not allowed.
+4. Run `docker compose --env-file .env.production -f docker-compose.production.yml exec backend python manage.py rotate_managed_secrets --expect-key-id <new-key-id>`.
+5. Run the command again with `--dry-run`; require `rotate=0`, then confirm authenticated readiness reports no undecryptable secrets.
+6. After all old processes are gone and the new-key backup is protected, remove `MANAGED_SECRET_PREVIOUS_KEYS`, recreate backend/workers and verify readiness again.
+
+The command preflights every row, locks updates in bounded batches and verifies that no stale or undecryptable envelope remains. If preflight fails, restore the complete prior keyring; do not overwrite or delete the affected rows.
+
 ### Playbook execution worker
 
 Ansible runs are claimed from a durable database queue by `playbook-execution-worker`; the web process only validates and enqueues them. Syntax checks go through the networkless `playbook-validator` Unix-socket service, so the production web process never receives the Docker socket. Actual runs use one hardened, read-only runner container per claim and a per-run subdirectory in `PLAYBOOK_RUNTIME_VOLUME_NAME`.
