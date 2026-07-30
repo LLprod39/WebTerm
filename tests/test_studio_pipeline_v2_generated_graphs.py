@@ -5,7 +5,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
 from django.test import Client
 
-from studio.mcp_showcase import build_showcase_edges, build_showcase_nodes
+from studio.mcp.mcp_showcase import build_showcase_edges, build_showcase_nodes
 from studio.models import MCPServerPool, PipelineRun
 from studio.pipeline.pipeline_executor import PipelineExecutor
 from studio.pipeline.pipeline_validation import validate_pipeline_definition

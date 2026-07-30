@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
-from studio.mcp_tool_runtime import MCPBoundTool
+from studio.mcp.mcp_tool_runtime import MCPBoundTool
 
 from .skill_registry import SkillDefinition
 

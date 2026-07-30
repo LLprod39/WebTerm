@@ -207,3 +207,21 @@ forbidden_modules =
     studio.urls
     studio.views
     web_ui
+
+
+# ─── Contract 15: Studio MCP runtime is delivery-independent ────────────────
+# Goal: MCP clients and policy can run in workers without importing feature
+# delivery adapters or the servers app.
+[importlinter:contract:studio-mcp-no-delivery-entry-points]
+name = studio.mcp must not import HTTP, websocket, or server entry points
+type = forbidden
+source_modules =
+    studio.mcp
+forbidden_modules =
+    core_ui.views
+    servers
+    studio.consumers
+    studio.routing
+    studio.urls
+    studio.views
+    web_ui

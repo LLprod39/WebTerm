@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth.models import User
 
 from servers.agents.agent_tools import tool_list_skills, tool_read_skill
-from studio.mcp_tool_runtime import (
+from studio.mcp.mcp_tool_runtime import (
     MCPBoundTool,
     build_mcp_tools_description,
     execute_bound_mcp_tool,
@@ -163,7 +163,7 @@ async def test_load_mcp_tool_bindings_builds_safe_aliases_and_collects_errors(mo
             {"name": "assign-client-roles", "description": "Assign client roles"},
         ]
 
-    monkeypatch.setattr("studio.mcp_tool_runtime.list_mcp_tools", fake_list_mcp_tools)
+    monkeypatch.setattr("studio.mcp.mcp_tool_runtime.list_mcp_tools", fake_list_mcp_tools)
 
     bindings, errors = await load_mcp_tool_bindings([good_server, bad_server])  # type: ignore[arg-type]
 
@@ -182,7 +182,7 @@ async def test_execute_bound_mcp_tool_returns_error_text(monkeypatch):
         assert arguments == {"username": "alice"}
         return {"isError": True, "content": [{"type": "text", "text": "User already exists"}]}
 
-    monkeypatch.setattr("studio.mcp_tool_runtime.call_mcp_tool", fake_call_mcp_tool)
+    monkeypatch.setattr("studio.mcp.mcp_tool_runtime.call_mcp_tool", fake_call_mcp_tool)
 
     bindings = {
         "mcp_gitlab_mcp_create_user": MCPBoundTool(

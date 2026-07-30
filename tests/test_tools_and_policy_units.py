@@ -13,7 +13,7 @@ from app.tools.server_tools import (
     _get_user_id,
 )
 from app.tools.ssh_tools import SSHConnectionManager, SSHExecuteTool
-from studio.mcp_client import (
+from studio.mcp.mcp_client import (
     MCPClientError,
     _extract_json_rpc_result,
     _HttpMCPClient,
@@ -21,7 +21,7 @@ from studio.mcp_client import (
     _json_rpc_payload,
     _normalize_sse_url,
 )
-from studio.mcp_tool_runtime import MCPBoundTool
+from studio.mcp.mcp_tool_runtime import MCPBoundTool
 from studio.skill_policy import CompiledSkillPolicy, apply_skill_policies, compile_skill_policies
 from studio.skill_registry import SkillDefinition
 
@@ -443,7 +443,7 @@ async def test_mcp_http_client_retries_retryable_status(monkeypatch):
     async def _noop_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.mcp_client.asyncio.sleep", _noop_sleep)
+    monkeypatch.setattr("studio.mcp.mcp_client.asyncio.sleep", _noop_sleep)
 
     client = _HttpMCPClient(SimpleNamespace(name="demo", url="http://localhost/sse", transport="sse"))
     client.client = _FakeAsyncHTTPClient(
@@ -471,7 +471,7 @@ async def test_mcp_http_client_does_not_retry_legacy_endpoint(monkeypatch):
     async def _noop_sleep(_seconds: float) -> None:
         return None
 
-    monkeypatch.setattr("studio.mcp_client.asyncio.sleep", _noop_sleep)
+    monkeypatch.setattr("studio.mcp.mcp_client.asyncio.sleep", _noop_sleep)
 
     client = _HttpMCPClient(SimpleNamespace(name="legacy", url="http://localhost/sse", transport="sse"))
     client.client = _FakeAsyncHTTPClient(

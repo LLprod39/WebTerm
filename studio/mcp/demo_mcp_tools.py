@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from studio.demo_mcp_kubernetes_tools import KUBERNETES_TOOLS, kubernetes_describe_workload
+    from studio.mcp.demo_mcp_kubernetes_tools import KUBERNETES_TOOLS, kubernetes_describe_workload
 except ModuleNotFoundError:  # pragma: no cover - supports `python studio/demo_mcp_server.py`.
     from demo_mcp_kubernetes_tools import KUBERNETES_TOOLS, kubernetes_describe_workload
 

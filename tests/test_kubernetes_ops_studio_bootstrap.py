@@ -9,7 +9,7 @@ from django.core.management.base import CommandError
 
 from core_ui.models import UserAppPermission
 from kubernetes_ops.studio_bootstrap import ensure_kubernetes_studio_mcp_binding
-from studio.demo_mcp_tools import TOOL_HANDLERS, TOOLS
+from studio.mcp.demo_mcp_tools import TOOL_HANDLERS, TOOLS
 from studio.models import MCPServerPool
 
 
