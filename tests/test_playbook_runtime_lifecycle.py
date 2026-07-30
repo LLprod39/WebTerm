@@ -9,7 +9,7 @@ from django.core.management import call_command
 from django.utils import timezone
 
 from servers.models import BackgroundWorkerState, PlaybookRun, PlaybookRunDispatch
-from servers.playbook_dispatch import (
+from servers.playbooks.dispatch import (
     cancel_playbook_dispatch_for_run,
     claim_next_playbook_dispatch,
     complete_playbook_dispatch,
@@ -108,7 +108,7 @@ def test_worker_shutdown_event_cancels_foreground_execution_without_stale_writes
     def fake_execute(_run_id: int, *, lease_check, **_kwargs) -> None:
         observed.append(lease_check())
 
-    monkeypatch.setattr("servers.playbook_execution_worker.execute_playbook_run", fake_execute)
+    monkeypatch.setattr("servers.playbooks.worker.execute_playbook_run", fake_execute)
 
     execute_playbook_dispatch(
         dispatch.id,

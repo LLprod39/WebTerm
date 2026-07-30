@@ -494,7 +494,7 @@ def execute_playbook_run(
 
 def start_playbook_run_async(run_id: int, *, master_password: str = "") -> None:
     """Compatibility facade: enqueue for the durable execution plane."""
-    from servers.playbook_dispatch import enqueue_playbook_run_dispatch
+    from servers.playbooks.dispatch import enqueue_playbook_run_dispatch
 
     run = PlaybookRun.objects.get(pk=run_id)
     enqueue_playbook_run_dispatch(run=run, master_password=master_password)

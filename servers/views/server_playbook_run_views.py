@@ -101,7 +101,7 @@ def playbook_run_cancel(request, run_id: int):
         PlaybookRun.STATUS_CANCELLED,
     ):
         return JsonResponse({"success": True, "run": _serialize_run(run), "message": "Run already finished"})
-    from servers.playbook_dispatch import cancel_playbook_dispatch_for_run
+    from servers.playbooks.dispatch import cancel_playbook_dispatch_for_run
 
     cancel_playbook_dispatch_for_run(run.id, reason="user_requested")
     run.refresh_from_db()

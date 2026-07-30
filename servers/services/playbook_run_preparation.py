@@ -486,7 +486,7 @@ def prepare_playbook_run(
         )
         set_playbook_run_variables(run.id, runtime_variables)
         if enqueue_master_password is not None:
-            from servers.playbook_dispatch import enqueue_playbook_run_dispatch
+            from servers.playbooks.dispatch import enqueue_playbook_run_dispatch
 
             enqueue_playbook_run_dispatch(
                 run=run,

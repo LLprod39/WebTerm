@@ -19,7 +19,7 @@ from core_ui.managed_secrets import (
 )
 from core_ui.models import ManagedSecret
 from servers.models import PlaybookRun, PlaybookRunDispatch
-from servers.playbook_dispatch import (
+from servers.playbooks.dispatch import (
     cancel_playbook_dispatch_for_run,
     claim_next_playbook_dispatch,
     complete_playbook_dispatch,
@@ -29,6 +29,16 @@ from servers.playbook_dispatch import (
     recover_expired_playbook_dispatches,
 )
 from servers.services.playbook_runner_support import _persist_run
+
+
+def test_legacy_playbook_modules_alias_domain_implementations():
+    legacy_dispatch = importlib.import_module("servers.playbook_dispatch")
+    current_dispatch = importlib.import_module("servers.playbooks.dispatch")
+    legacy_worker = importlib.import_module("servers.playbook_execution_worker")
+    current_worker = importlib.import_module("servers.playbooks.worker")
+
+    assert legacy_dispatch is current_dispatch
+    assert legacy_worker is current_worker
 
 
 def _run(user: User, *, options: dict | None = None) -> PlaybookRun:
@@ -374,7 +384,7 @@ def test_lost_lease_stops_stale_worker_and_fences_terminal_writes(monkeypatch):
             is False
         )
 
-    monkeypatch.setattr("servers.playbook_execution_worker.execute_playbook_run", lose_claim)
+    monkeypatch.setattr("servers.playbooks.worker.execute_playbook_run", lose_claim)
 
     execute_playbook_dispatch(dispatch.id, worker_name="stale-worker", lease_seconds=60)
 
@@ -442,7 +452,7 @@ def test_worker_executes_claimed_run_with_jit_secret_and_cleans_it(monkeypatch):
         received.append((run_id, master_password))
         transition_playbook_run(run_id, PlaybookRun.STATUS_COMPLETED, summary={"hosts_ok": 1})
 
-    monkeypatch.setattr("servers.playbook_execution_worker.execute_playbook_run", fake_execute)
+    monkeypatch.setattr("servers.playbooks.worker.execute_playbook_run", fake_execute)
     monkeypatch.setattr(
         "core_ui.services.operator_async.schedule_async_resume_on_commit",
         lambda **_kwargs: None,
@@ -469,7 +479,7 @@ def test_worker_failure_redacts_jit_secrets_from_dispatch_error(monkeypatch):
     def fail_with_secrets(run_id: int, *, master_password: str = "", **_kwargs) -> None:
         raise RuntimeError(f"failed with {master_password} and runtime-variable-secret")
 
-    monkeypatch.setattr("servers.playbook_execution_worker.execute_playbook_run", fail_with_secrets)
+    monkeypatch.setattr("servers.playbooks.worker.execute_playbook_run", fail_with_secrets)
     monkeypatch.setattr(
         "core_ui.services.operator_async.schedule_async_resume_on_commit",
         lambda **_kwargs: None,
