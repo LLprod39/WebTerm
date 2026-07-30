@@ -47,6 +47,7 @@ def test_seed_multi_user_smoke_creates_domain_objects_through_providers():
     assert server.username == "smoke"
     assert server.auth_method == "password"
     assert server.server_type == "ssh"
+    assert server.ai_read_only is False
     assert server.trusted_host_keys == []
 
     pipeline = Pipeline.objects.get(pk=seeded_user["pipeline_id"])

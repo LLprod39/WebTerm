@@ -29,6 +29,7 @@ class DjangoSmokeServerSeedProvider:
         server.auth_method = "password"
         server.server_type = "ssh"
         server.is_active = True
+        server.ai_read_only = False
         server.trusted_host_keys = []
         server.save()
         store_server_auth_secret(server, secret_value=target.password)
