@@ -5,6 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 
 from app.agent_kernel.memory.redaction import sanitize_observation_text
+from app.observability import current_trace_identifiers
 from servers.models import AgentRunEvent
 
 MAX_STRING_LENGTH = 1200
@@ -53,6 +54,8 @@ def _derive_message(event_type: str, payload: dict) -> str:
 
 def record_run_event(run_id: int, event_type: str, payload: dict | None = None) -> AgentRunEvent | None:
     data = _compact_value(payload or {}) or {}
+    for key, value in current_trace_identifiers().items():
+        data.setdefault(key, value)
     task_id = data.get("task_id")
     try:
         task_id = int(task_id) if task_id is not None else None

@@ -71,6 +71,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "core_ui.telemetry_middleware.OpenTelemetryMiddleware",
     "core_ui.auth_throttle.LoginBruteForceProtectionMiddleware",
     "core_ui.domain_auth.DomainAutoLoginMiddleware",
     "core_ui.middleware.RequestAuditMiddleware",

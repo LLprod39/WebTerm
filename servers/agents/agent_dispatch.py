@@ -7,7 +7,9 @@ from typing import Any
 from django.db import transaction
 from django.db.models import F, Q
 from django.utils import timezone
+from opentelemetry.trace import SpanKind
 
+from app.observability import capture_trace_context, start_span
 from servers.models import AgentRun, AgentRunDispatch
 from servers.run_events import record_run_event
 
@@ -39,12 +41,13 @@ def enqueue_agent_run_dispatch(
     dispatch_kind: str = AgentRunDispatch.KIND_LAUNCH,
     metadata: dict[str, Any] | None = None,
 ) -> AgentRunDispatch:
+    dispatch_metadata = dict(metadata or {})
     payload = {
         "server_ids": [int(server_id) for server_id in server_ids],
         "plan_only": bool(plan_only),
         "dispatch_kind": dispatch_kind,
         "status": AgentRunDispatch.STATUS_QUEUED,
-        "metadata": dict(metadata or {}),
+        "metadata": dispatch_metadata,
         "claimed_at": None,
         "heartbeat_at": None,
         "lease_expires_at": None,
@@ -52,25 +55,38 @@ def enqueue_agent_run_dispatch(
         "claimed_by": "",
         "error": "",
     }
-    dispatch = AgentRunDispatch.objects.create(
-        run=run,
-        agent_id=agent_id,
-        user_id=user_id,
-        **payload,
-    )
-    record_run_event(
-        run.id,
-        "agent_dispatch_enqueued",
-        {
-            "dispatch_id": dispatch.id,
-            "dispatch_kind": dispatch_kind,
-            "plan_only": bool(plan_only),
-            "server_ids": list(server_ids),
-            "message": f"Queued for {dispatch_kind.replace('_', ' ')} worker execution",
+    with start_span(
+        "agent.dispatch.enqueue",
+        kind=SpanKind.PRODUCER,
+        attributes={
+            "agent.run.id": run.id,
+            "agent.id": agent_id,
+            "dispatch.kind": dispatch_kind,
         },
-    )
-    _refresh_run_report_payload(run.id)
-    return dispatch
+    ) as span:
+        trace_context = capture_trace_context()
+        if trace_context:
+            dispatch_metadata["otel_context"] = trace_context
+        dispatch = AgentRunDispatch.objects.create(
+            run=run,
+            agent_id=agent_id,
+            user_id=user_id,
+            **payload,
+        )
+        span.set_attribute("agent.dispatch.id", dispatch.id)
+        record_run_event(
+            run.id,
+            "agent_dispatch_enqueued",
+            {
+                "dispatch_id": dispatch.id,
+                "dispatch_kind": dispatch_kind,
+                "plan_only": bool(plan_only),
+                "server_ids": list(server_ids),
+                "message": f"Queued for {dispatch_kind.replace('_', ' ')} worker execution",
+            },
+        )
+        _refresh_run_report_payload(run.id)
+        return dispatch
 
 
 def _fail_one_exhausted_dispatch(now) -> AgentRunDispatch | None:
