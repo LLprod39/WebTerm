@@ -211,8 +211,8 @@ AGENT_PROJECTS_DIR = BASE_DIR / "agent_projects"
 AGENT_PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # File upload settings
-FILE_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
-DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024  # 50MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # spool larger uploads to disk
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024  # reject oversized JSON/form bodies
 
 globals().update(
     build_runtime_service_settings(

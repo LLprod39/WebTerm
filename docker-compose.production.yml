@@ -82,6 +82,9 @@ x-backend-worker: &backend-worker
       condition: service_healthy
   restart: unless-stopped
   stop_grace_period: 45s
+  mem_limit: ${WEBTERM_BACKEND_WORKER_MEMORY:-768m}
+  cpus: ${WEBTERM_BACKEND_WORKER_CPUS:-1.0}
+  pids_limit: ${WEBTERM_BACKEND_WORKER_PIDS_LIMIT:-256}
   logging: *json-logging
 
 services:
@@ -105,6 +108,8 @@ services:
     cap_add: ["CHOWN", "DAC_OVERRIDE"]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 64
+    mem_limit: 256m
+    cpus: 0.5
     restart: "no"
     healthcheck:
       disable: true
@@ -289,6 +294,9 @@ services:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
+    mem_limit: ${WEBTERM_BACKEND_MEMORY:-1g}
+    cpus: ${WEBTERM_BACKEND_CPUS:-2.0}
+    pids_limit: ${WEBTERM_BACKEND_PIDS_LIMIT:-512}
     healthcheck:
       test:
         [
