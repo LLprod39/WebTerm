@@ -95,10 +95,7 @@ class SSHTerminalIoMixin:
         if self._server_connection_id:
             await self._mark_server_connection_closed(self._server_connection_id)
             self._server_connection_id = None
-        self._manual_pending_commands = []
-        self._manual_active_cmd_id = None
-        self._manual_active_output = ""
-        self._manual_input_buffer = ""
+        self._manual_state.reset()
         self._nova_session_context = {}
         self._nova_recent_activity = []
 
@@ -154,20 +151,27 @@ class SSHTerminalIoMixin:
         append_ai_output(self, text)
 
     def _append_manual_output(self, text: str):
-        append_manual_output(self, text)
+        append_manual_output(self._manual_state, text)
 
     async def _finalize_manual_terminal_command(self, cmd_id: int, exit_code: int) -> None:
         sync_to_async = consumer_module_attr("database_sync_to_async", database_sync_to_async)
 
-        await finalize_manual_terminal_command(
-            self,
+        result = await finalize_manual_terminal_command(
+            self._manual_state,
             cmd_id,
             exit_code,
+            session_context=self._nova_session_context,
+            normalize_output=self._normalize_manual_command_output,
             persist_result=sync_to_async(
                 self._persist_manual_terminal_command_result,
                 thread_sensitive=True,
             ),
+            append_recent_activity=self._append_nova_recent_activity,
         )
+        if result.matched:
+            self._nova_session_context = result.session_context
+            if result.cwd_changed:
+                await self._emit_terminal_session()
 
     _normalize_manual_command_output = staticmethod(terminal_input.normalize_manual_command_output)
     _strip_ansi_and_controls = staticmethod(terminal_input.strip_ansi_and_controls)

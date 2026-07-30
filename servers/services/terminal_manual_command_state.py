@@ -1,10 +1,43 @@
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 from servers.services.terminal_ai.active_command import append_active_output
 from servers.services.terminal_ai.session_context import apply_successful_command_context
 from servers.services.terminal_stream_state import append_clean_output
+
+
+@dataclass
+class ManualCommandState:
+    """Mutable state owned by interactive, non-AI terminal commands."""
+
+    input_buffer: str = ""
+    capture_suppression: int = 0
+    next_command_id: int = 1_000_000
+    pending_commands: list[dict[str, Any]] = field(default_factory=list)
+    active_command_id: int | None = None
+    active_output: str = ""
+
+    def reset(self) -> None:
+        self.input_buffer = ""
+        self.capture_suppression = 0
+        self.next_command_id = 1_000_000
+        self.pending_commands.clear()
+        self.active_command_id = None
+        self.active_output = ""
+
+
+@dataclass(frozen=True)
+class ManualCommandFinalizeResult:
+    session_context: dict[str, Any]
+    cwd_changed: bool = False
+    matched: bool = False
+
+
+PersistResult = Callable[..., Awaitable[Any]]
+AppendRecentActivity = Callable[..., None]
 
 
 def append_terminal_tail(consumer: Any, text: str) -> None:
@@ -15,27 +48,36 @@ def append_ai_output(consumer: Any, text: str) -> None:
     append_active_output(consumer, text)
 
 
-def append_manual_output(consumer: Any, text: str) -> None:
+def append_manual_output(state: ManualCommandState, text: str) -> None:
     if not text:
         return
-    if getattr(consumer, "_manual_active_cmd_id", None) is None:
+    if state.active_command_id is None:
         return
-    consumer._manual_active_output = append_clean_output(consumer._manual_active_output, text, limit=12000)
+    state.active_output = append_clean_output(state.active_output, text, limit=12000)
 
 
-async def finalize_manual_terminal_command(consumer: Any, cmd_id: int, exit_code: int, *, persist_result: Any) -> None:
-    pending = list(getattr(consumer, "_manual_pending_commands", []) or [])
+async def finalize_manual_terminal_command(
+    state: ManualCommandState,
+    cmd_id: int,
+    exit_code: int,
+    *,
+    session_context: dict[str, Any] | None,
+    normalize_output: Callable[[str, str], str],
+    persist_result: PersistResult,
+    append_recent_activity: AppendRecentActivity,
+) -> ManualCommandFinalizeResult:
+    """Persist a completed manual command without reaching through a consumer."""
+    current_context = dict(session_context or {})
+    pending = list(state.pending_commands)
     if not pending:
-        return
+        return ManualCommandFinalizeResult(session_context=current_context)
 
     item = next((entry for entry in pending if int(entry.get("id") or 0) == int(cmd_id)), None)
     if item is None:
-        return
+        return ManualCommandFinalizeResult(session_context=current_context)
 
-    raw_output = (
-        consumer._manual_active_output if int(getattr(consumer, "_manual_active_cmd_id", 0) or 0) == int(cmd_id) else ""
-    )
-    clean_output = consumer._normalize_manual_command_output(str(item.get("command") or ""), raw_output)
+    raw_output = state.active_output if int(state.active_command_id or 0) == int(cmd_id) else ""
+    clean_output = normalize_output(str(item.get("command") or ""), raw_output)
     await persist_result(
         user_id=int(item.get("user_id") or 0),
         server_id=int(item.get("server_id") or 0),
@@ -45,27 +87,31 @@ async def finalize_manual_terminal_command(consumer: Any, cmd_id: int, exit_code
         exit_code=int(exit_code),
         cwd=str(item.get("cwd") or ""),
     )
-    consumer._append_nova_recent_activity(
+    append_recent_activity(
         command=str(item.get("command") or ""),
         cwd=str(item.get("cwd") or ""),
         exit_code=int(exit_code),
         source="live_session",
     )
-    context_before = getattr(consumer, "_nova_session_context", {}) or dict(item.get("context_before") or {})
+    context_before = current_context or dict(item.get("context_before") or {})
     old_cwd = str(context_before.get("cwd") or item.get("cwd") or "")
-    consumer._nova_session_context = apply_successful_command_context(
+    updated_context = apply_successful_command_context(
         context_before,
         command=str(item.get("command") or ""),
         exit_code=int(exit_code),
     )
-    new_cwd = str((consumer._nova_session_context or {}).get("cwd") or "")
-    if new_cwd and new_cwd != old_cwd:
-        await consumer._emit_terminal_session()
+    new_cwd = str(updated_context.get("cwd") or "")
 
-    consumer._manual_pending_commands = [entry for entry in pending if int(entry.get("id") or 0) != int(cmd_id)]
-    if int(getattr(consumer, "_manual_active_cmd_id", 0) or 0) == int(cmd_id):
-        consumer._manual_active_cmd_id = None
-        consumer._manual_active_output = ""
-    if consumer._manual_active_cmd_id is None and consumer._manual_pending_commands:
-        consumer._manual_active_cmd_id = int(consumer._manual_pending_commands[0].get("id") or 0) or None
-        consumer._manual_active_output = ""
+    state.pending_commands = [entry for entry in pending if int(entry.get("id") or 0) != int(cmd_id)]
+    if int(state.active_command_id or 0) == int(cmd_id):
+        state.active_command_id = None
+        state.active_output = ""
+    if state.active_command_id is None and state.pending_commands:
+        state.active_command_id = int(state.pending_commands[0].get("id") or 0) or None
+        state.active_output = ""
+
+    return ManualCommandFinalizeResult(
+        session_context=updated_context,
+        cwd_changed=bool(new_cwd and new_cwd != old_cwd),
+        matched=True,
+    )

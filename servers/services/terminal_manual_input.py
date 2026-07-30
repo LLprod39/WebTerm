@@ -6,40 +6,47 @@ from typing import Any
 
 from servers.services import terminal_input
 from servers.services.editor_intercept import detect_editor_command
+from servers.services.terminal_manual_command_state import ManualCommandState
 
 ActivityLogger = Callable[..., Awaitable[Any]]
 PersistManualCommandResult = Callable[..., Awaitable[Any]]
 
 
-def _current_cwd(owner: Any) -> str:
-    return str((getattr(owner, "_nova_session_context", None) or {}).get("cwd") or "")
+def _current_cwd(session_context: dict[str, Any] | None) -> str:
+    return str((session_context or {}).get("cwd") or "")
 
 
-async def capture_terminal_input(owner: Any, data: str) -> list[str]:
-    if int(getattr(owner, "_input_capture_suppress", 0) or 0) > 0:
+async def capture_terminal_input(state: ManualCommandState, data: str) -> list[str]:
+    if state.capture_suppression > 0:
         return []
 
     captured = terminal_input.capture_completed_terminal_commands(
         data,
-        buffer=str(getattr(owner, "_manual_input_buffer", "") or ""),
+        buffer=state.input_buffer,
     )
-    owner._manual_input_buffer = captured.buffer
+    state.input_buffer = captured.buffer
     return captured.commands
 
 
-async def log_manual_terminal_command(owner: Any, command: str, *, log_activity: ActivityLogger) -> None:
-    if not command or not getattr(owner, "server", None) or not getattr(owner, "_user_id", None):
+async def log_manual_terminal_command(
+    command: str,
+    *,
+    server: Any,
+    user_id: int | None,
+    log_activity: ActivityLogger,
+) -> None:
+    if not command or not server or not user_id:
         return
 
     await log_activity(
-        user_id=owner._user_id,
+        user_id=user_id,
         category="terminal",
         action="terminal_command",
         status="success",
         description=command[:4000],
         entity_type="server",
-        entity_id=owner.server.id,
-        entity_name=owner.server.name,
+        entity_id=server.id,
+        entity_name=server.name,
         metadata={
             "source": "interactive_shell",
             "command_length": len(command),
@@ -48,63 +55,77 @@ async def log_manual_terminal_command(owner: Any, command: str, *, log_activity:
 
 
 async def enqueue_manual_terminal_command_capture(
-    owner: Any,
+    state: ManualCommandState,
     command: str,
     *,
+    server: Any,
+    user_id: int | None,
+    ssh_proc: Any,
+    server_connection_id: str | None,
+    session_context: dict[str, Any] | None,
+    marker_prefix: str,
     log_activity: ActivityLogger,
 ) -> None:
-    if (
-        not command
-        or not getattr(owner, "server", None)
-        or not getattr(owner, "_user_id", None)
-        or not getattr(owner, "_ssh_proc", None)
-    ):
+    if not command or not server or not user_id or not ssh_proc:
         return
 
-    await log_manual_terminal_command(owner, command, log_activity=log_activity)
+    await log_manual_terminal_command(
+        command,
+        server=server,
+        user_id=user_id,
+        log_activity=log_activity,
+    )
 
-    cmd_id = int(getattr(owner, "_manual_next_cmd_id", 1_000_000) or 1_000_000)
-    owner._manual_next_cmd_id = cmd_id + 1
-    owner._manual_pending_commands.append(
+    cmd_id = state.next_command_id
+    state.next_command_id = cmd_id + 1
+    state.pending_commands.append(
         {
             "id": cmd_id,
             "command": command,
-            "session_id": getattr(owner, "_server_connection_id", None) or "",
-            "user_id": owner._user_id,
-            "server_id": owner.server.id,
-            "cwd": _current_cwd(owner),
-            "context_before": dict(getattr(owner, "_nova_session_context", None) or {}),
+            "session_id": server_connection_id or "",
+            "user_id": user_id,
+            "server_id": server.id,
+            "cwd": _current_cwd(session_context),
+            "context_before": dict(session_context or {}),
         }
     )
-    if owner._manual_active_cmd_id is None:
-        owner._manual_active_cmd_id = cmd_id
-        owner._manual_active_output = ""
+    if state.active_command_id is None:
+        state.active_command_id = cmd_id
+        state.active_output = ""
 
-    marker_prefix = owner._marker_prefix()
     marker_var = f"{marker_prefix}{cmd_id}"
     marker_cmd = f'{marker_var}=$?; echo "{marker_prefix}{cmd_id}:${{{marker_var}}}__"'
-    owner._ssh_proc.stdin.write(marker_cmd + "\n")
+    ssh_proc.stdin.write(marker_cmd + "\n")
 
 
 async def persist_uncaptured_manual_command(
-    owner: Any,
     command: str,
     *,
+    server: Any,
+    user_id: int | None,
+    server_connection_id: str | None,
+    session_context: dict[str, Any] | None,
+    append_recent_activity: Callable[..., None],
     log_activity: ActivityLogger,
     persist_result: PersistManualCommandResult,
 ) -> None:
-    current_cwd = _current_cwd(owner)
-    await log_manual_terminal_command(owner, command, log_activity=log_activity)
+    current_cwd = _current_cwd(session_context)
+    await log_manual_terminal_command(
+        command,
+        server=server,
+        user_id=user_id,
+        log_activity=log_activity,
+    )
     await persist_result(
-        user_id=getattr(owner, "_user_id", None) or 0,
-        server_id=owner.server.id if getattr(owner, "server", None) else 0,
-        session_id=getattr(owner, "_server_connection_id", None) or "",
+        user_id=user_id or 0,
+        server_id=server.id if server else 0,
+        session_id=server_connection_id or "",
         command=command,
         output="",
         exit_code=None,
         cwd=current_cwd,
     )
-    owner._append_nova_recent_activity(
+    append_recent_activity(
         command=command,
         cwd=current_cwd,
         exit_code=None,
@@ -113,28 +134,37 @@ async def persist_uncaptured_manual_command(
 
 
 async def handle_terminal_input(
-    owner: Any,
+    state: ManualCommandState,
     data: str,
     *,
+    server: Any,
+    user_id: int | None,
+    ssh_proc: Any,
+    server_connection_id: str | None,
+    session_context: dict[str, Any] | None,
+    marker_prefix: str,
+    intercept_editors: bool,
+    send_json: Callable[[dict[str, Any]], Awaitable[Any]],
+    append_recent_activity: Callable[..., None],
     log_activity: ActivityLogger,
     persist_result: PersistManualCommandResult,
 ) -> None:
     if not data:
         return
-    if not getattr(owner, "_ssh_proc", None):
+    if not ssh_proc:
         return
 
     try:
-        completed_commands = await capture_terminal_input(owner, data)
+        completed_commands = await capture_terminal_input(state, data)
         if not completed_commands:
-            owner._ssh_proc.stdin.write(data)
+            ssh_proc.stdin.write(data)
             return
 
-        if len(completed_commands) == 1 and getattr(owner, "_intercept_editors", True):
+        if len(completed_commands) == 1 and intercept_editors:
             editor_info = detect_editor_command(completed_commands[0])
             if editor_info:
-                owner._ssh_proc.stdin.write("\x15\x03")
-                await owner._safe_send_json(
+                ssh_proc.stdin.write("\x15\x03")
+                await send_json(
                     {
                         "type": "editor_intercept",
                         "path": editor_info["path"],
@@ -151,11 +181,15 @@ async def handle_terminal_input(
             and terminal_input.should_use_manual_command_marker(completed_commands[0])
         )
         if not can_capture_result:
-            owner._ssh_proc.stdin.write(data)
+            ssh_proc.stdin.write(data)
             for command in completed_commands:
                 await persist_uncaptured_manual_command(
-                    owner,
                     command,
+                    server=server,
+                    user_id=user_id,
+                    server_connection_id=server_connection_id,
+                    session_context=session_context,
+                    append_recent_activity=append_recent_activity,
                     log_activity=log_activity,
                     persist_result=persist_result,
                 )
@@ -165,13 +199,19 @@ async def handle_terminal_input(
         for chunk in re.split(r"(\r\n|\r|\n)", data):
             if not chunk:
                 continue
-            owner._ssh_proc.stdin.write(chunk)
+            ssh_proc.stdin.write(chunk)
             if chunk in ("\r\n", "\r", "\n") and command_index < len(completed_commands):
                 await enqueue_manual_terminal_command_capture(
-                    owner,
+                    state,
                     completed_commands[command_index],
+                    server=server,
+                    user_id=user_id,
+                    ssh_proc=ssh_proc,
+                    server_connection_id=server_connection_id,
+                    session_context=session_context,
+                    marker_prefix=marker_prefix,
                     log_activity=log_activity,
                 )
                 command_index += 1
     except Exception as exc:  # noqa: BLE001
-        await owner._safe_send_json({"type": "error", "message": f"stdin write failed: {exc}"})
+        await send_json({"type": "error", "message": f"stdin write failed: {exc}"})
