@@ -85,6 +85,8 @@ x-backend-worker: &backend-worker
   mem_limit: ${WEBTERM_BACKEND_WORKER_MEMORY:-768m}
   cpus: ${WEBTERM_BACKEND_WORKER_CPUS:-1.0}
   pids_limit: ${WEBTERM_BACKEND_WORKER_PIDS_LIMIT:-256}
+  healthcheck:
+    disable: true
   logging: *json-logging
 
 services:
