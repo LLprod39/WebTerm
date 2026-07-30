@@ -61,7 +61,10 @@ def test_validator_healthcheck_performs_live_request_and_pool_is_bounded(tmp_pat
     thread.start()
     try:
         assert validator.healthcheck() == 0
-        assert server._request_slots.acquire(blocking=False) is True
+        # The client can observe EOF just before process_request_thread runs its
+        # final semaphore release. Wait for that deterministic hand-off instead
+        # of racing the worker thread immediately after the healthcheck.
+        assert server._request_slots.acquire(timeout=1.0) is True
         assert server._request_slots.acquire(blocking=False) is False
         server._request_slots.release()
     finally:
