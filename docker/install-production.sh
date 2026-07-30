@@ -353,6 +353,23 @@ validate_required_env() {
   done
 }
 
+configure_docker_socket_gid() {
+  local configured
+  configured="$(read_env_value "DOCKER_SOCKET_GID")"
+  if [[ "$configured" =~ ^[0-9]+$ ]]; then
+    export DOCKER_SOCKET_GID="$configured"
+    return 0
+  fi
+  if [[ -S /var/run/docker.sock ]]; then
+    export DOCKER_SOCKET_GID
+    DOCKER_SOCKET_GID="$(stat -c '%g' /var/run/docker.sock)"
+    echo "[ok] detected Docker socket group id: $DOCKER_SOCKET_GID"
+    return 0
+  fi
+  export DOCKER_SOCKET_GID=0
+  echo "[warn] /var/run/docker.sock is unavailable; playbook execution worker may not start" >&2
+}
+
 ensure_superuser_args() {
   if [[ "$CREATE_SUPERUSER" -eq 0 ]]; then
     return 0
@@ -586,6 +603,7 @@ main() {
   fi
 
   validate_required_env
+  configure_docker_socket_gid
 
   echo "==> Validating docker compose config"
   compose config >/dev/null

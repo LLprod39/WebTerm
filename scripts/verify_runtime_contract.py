@@ -83,8 +83,10 @@ def verify(root: Path = ROOT) -> list[str]:
         backend_docker = _read("docker/backend.Dockerfile")
         frontend_docker = _read("docker/frontend.Dockerfile")
         workflow = _read(".github/workflows/playwright-smoke.yml")
-        if not backend_docker.startswith(f"FROM {PYTHON_IMAGE}\n"):
-            errors.append(f"backend image must start from {PYTHON_IMAGE}")
+        if not backend_docker.startswith(f"FROM {PYTHON_IMAGE} AS builder\n"):
+            errors.append(f"backend builder image must start from {PYTHON_IMAGE}")
+        if f"FROM {PYTHON_IMAGE} AS runtime\n" not in backend_docker:
+            errors.append(f"backend runtime image must use {PYTHON_IMAGE}")
         if not frontend_docker.startswith(f"FROM {NODE_IMAGE}\n"):
             errors.append(f"frontend image must start from {NODE_IMAGE}")
         if f'node-version: "{NODE_VERSION}"' not in workflow:
