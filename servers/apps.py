@@ -29,7 +29,7 @@ class ServersConfig(AppConfig):
         from servers.assistant_actions import register_assistant_actions
         from servers.chat_server_provider import DjangoChatServerProvider
         from servers.command_history_provider import DjangoCommandHistoryProvider
-        from servers.operator_provider import ServersOperatorProvider
+        from servers.operator.provider import ServersOperatorProvider
         from servers.ops_runtime_adapter import ServersOpsRuntimeProvider
         from servers.pipeline_agent_provider import DjangoPipelineAgentProvider
         from servers.pipeline_memory_provider import DjangoPipelineMemoryProvider
@@ -69,8 +69,8 @@ class ServersConfig(AppConfig):
             parse_host_port_value=parse_host_port_value,
         )
         register_assistant_actions()
-        from servers.operator_mutate_tools import register_operator_mutate_tools
-        from servers.operator_tools import register_operator_tools
+        from servers.operator.mutate_tools import register_operator_mutate_tools
+        from servers.operator.tools import register_operator_tools
 
         register_operator_tools()
         register_operator_mutate_tools()

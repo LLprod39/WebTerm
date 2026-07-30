@@ -7,7 +7,7 @@ from typing import Any
 from django.utils import timezone
 
 from app.assistant_actions import AssistantActionContext
-from servers.operator_tools_common import _int_arg, _server_for_user
+from servers.operator.tools_common import _int_arg, _server_for_user
 from servers.views.server_helpers import _accessible_servers_queryset
 
 

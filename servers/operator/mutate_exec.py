@@ -11,7 +11,7 @@ from loguru import logger
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from app.shell_commands import is_read_only_command
 from app.tools.safety import evaluate_command_safety
-from servers.operator_tools_common import _int_arg, _server_for_user
+from servers.operator.tools_common import _int_arg, _server_for_user
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,

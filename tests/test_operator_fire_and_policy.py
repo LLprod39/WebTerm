@@ -19,8 +19,8 @@ from core_ui.services.operator_plan import (
 )
 from core_ui.services.operator_policy import filter_tools_for_policy, is_pilot_restricted_operator
 from core_ui.services.operator_tools import specs_to_tools
-from servers.operator_mutate_tools import register_operator_mutate_tools
-from servers.operator_tools import register_operator_tools
+from servers.operator.mutate_tools import register_operator_mutate_tools
+from servers.operator.tools import register_operator_tools
 
 
 def _grant(user: User, *features: str) -> None:

@@ -16,13 +16,22 @@ from core_ui.services.operator_async import (
     park_turn_for_async,
     resume_turns_for_agent_run,
 )
-from servers.operator_mutate_tools import register_operator_mutate_tools
-from servers.operator_tools import register_operator_tools
+from servers.operator.mutate_tools import register_operator_mutate_tools
+from servers.operator.provider import ServersOperatorProvider
+from servers.operator.tools import register_operator_tools
 
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
         UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
+
+
+def test_legacy_operator_modules_reexport_public_api():
+    from servers import operator_provider as legacy_provider
+    from servers import operator_tools as legacy_tools
+
+    assert legacy_tools.register_operator_tools is register_operator_tools
+    assert legacy_provider.ServersOperatorProvider is ServersOperatorProvider
 
 
 @pytest.mark.django_db
@@ -116,7 +125,7 @@ def test_list_servers_lookup_mode_no_ui_table_and_resolve_registered():
     """Connect/diagnose flows must not spam the inventory card; name_index always present."""
     from app.assistant_actions import AssistantActionContext
     from servers.models import Server
-    from servers.operator_tools import list_servers, resolve_server
+    from servers.operator.tools import list_servers, resolve_server
 
     register_operator_tools()
     assert get_action_spec("operator.resolve_server") is not None
@@ -150,7 +159,7 @@ def test_list_servers_lookup_mode_no_ui_table_and_resolve_registered():
 
 
 def test_prepare_list_servers_arguments_policy():
-    from servers.operator_tools import (
+    from servers.operator.tools import (
         extract_server_hint,
         normalize_host_hint,
         prefer_resolve_server_for_message,
@@ -272,7 +281,7 @@ def test_save_runbook_creates_playbook():
     register_operator_mutate_tools()
     from app.assistant_actions import AssistantActionContext
     from servers.models import Playbook
-    from servers.operator_mutate_tools import save_runbook
+    from servers.operator.mutate_tools import save_runbook
 
     user = User.objects.create_user(username="rb-user", password="x")
     _grant(user, "servers")
@@ -300,7 +309,7 @@ def test_create_playbook_accepts_command_steps():
     register_operator_mutate_tools()
     from app.assistant_actions import AssistantActionContext, AssistantActionError
     from servers.models import Playbook
-    from servers.operator_mutate_tools import create_playbook
+    from servers.operator.mutate_tools import create_playbook
 
     user = User.objects.create_user(username="pb-user", password="x")
     _grant(user, "servers")
@@ -374,7 +383,7 @@ def test_schedule_agent_applies_recurrence():
     """schedule_agent must produce a real recurring config, not a silent 'manual'."""
     from app.assistant_actions import AssistantActionContext
     from servers.models import ServerAgent
-    from servers.operator_mutate_tools import schedule_agent
+    from servers.operator.mutate_tools import schedule_agent
 
     user = User.objects.create_user(username="sched-user", password="x")
     _grant(user, "agents")
