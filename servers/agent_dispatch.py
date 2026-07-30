@@ -5,13 +5,17 @@ from datetime import timedelta
 from typing import Any
 
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.utils import timezone
 
 from servers.models import AgentRun, AgentRunDispatch
 from servers.run_events import record_run_event
 
 logger = logging.getLogger(__name__)
+
+
+class AgentDispatchLeaseLost(RuntimeError):
+    """The worker no longer owns the claimed dispatch attempt."""
 
 
 def _refresh_run_report_payload(run_id: int) -> None:
@@ -69,10 +73,54 @@ def enqueue_agent_run_dispatch(
     return dispatch
 
 
+def _fail_one_exhausted_dispatch(now) -> AgentRunDispatch | None:
+    exhausted = (
+        AgentRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
+        .select_related("run")
+        .filter(
+            Q(status=AgentRunDispatch.STATUS_QUEUED)
+            | Q(status=AgentRunDispatch.STATUS_CLAIMED, lease_expires_at__lte=now),
+            attempt_count__gte=F("max_attempts"),
+            run__status__in=[
+                AgentRun.STATUS_PENDING,
+                AgentRun.STATUS_RUNNING,
+                AgentRun.STATUS_PLAN_REVIEW,
+            ],
+        )
+        .order_by("queued_at", "id")
+        .first()
+    )
+    if exhausted is None:
+        return None
+    error = f"Agent dispatch exhausted its {int(exhausted.max_attempts)} permitted attempts"
+    exhausted.status = AgentRunDispatch.STATUS_FAILED
+    exhausted.completed_at = now
+    exhausted.lease_expires_at = now
+    exhausted.error = error
+    exhausted.save(update_fields=["status", "completed_at", "lease_expires_at", "error"])
+    AgentRun.objects.filter(
+        pk=exhausted.run_id,
+        status__in=[AgentRun.STATUS_PENDING, AgentRun.STATUS_RUNNING, AgentRun.STATUS_PLAN_REVIEW],
+    ).update(status=AgentRun.STATUS_FAILED, completed_at=now, ai_analysis=error)
+    record_run_event(
+        exhausted.run_id,
+        "agent_dispatch_attempts_exhausted",
+        {
+            "dispatch_id": exhausted.id,
+            "attempt_count": int(exhausted.attempt_count),
+            "max_attempts": int(exhausted.max_attempts),
+            "message": error,
+        },
+    )
+    _refresh_run_report_payload(exhausted.run_id)
+    return exhausted
+
+
 def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> AgentRunDispatch | None:
     now = timezone.now()
     lease_delta = timedelta(seconds=max(int(lease_seconds), 30))
     with transaction.atomic():
+        _fail_one_exhausted_dispatch(now)
         dispatch = (
             AgentRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("run", "agent", "user")
@@ -84,6 +132,7 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
                     AgentRun.STATUS_RUNNING,
                     AgentRun.STATUS_PLAN_REVIEW,
                 ],
+                attempt_count__lt=F("max_attempts"),
             )
             .order_by("queued_at", "id")
             .first()
@@ -132,31 +181,56 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
 
 
 def heartbeat_agent_dispatch(
-    dispatch_id: int, *, worker_name: str, lease_seconds: int = 180
-) -> AgentRunDispatch | None:
-    dispatch = AgentRunDispatch.objects.filter(pk=dispatch_id).select_related("run").first()
-    if dispatch is None or dispatch.status != AgentRunDispatch.STATUS_CLAIMED:
-        return None
+    dispatch_id: int,
+    *,
+    worker_name: str,
+    attempt_count: int,
+    lease_seconds: int = 180,
+) -> bool:
     now = timezone.now()
-    dispatch.heartbeat_at = now
-    dispatch.lease_expires_at = now + timedelta(seconds=max(int(lease_seconds), 30))
-    if worker_name:
-        dispatch.claimed_by = worker_name[:120]
-    dispatch.save(update_fields=["heartbeat_at", "lease_expires_at", "claimed_by"])
-    return dispatch
+    updated = AgentRunDispatch.objects.filter(
+        pk=dispatch_id,
+        status=AgentRunDispatch.STATUS_CLAIMED,
+        claimed_by=str(worker_name or "default")[:120],
+        attempt_count=int(attempt_count),
+        lease_expires_at__gt=now,
+    ).update(
+        heartbeat_at=now,
+        lease_expires_at=now + timedelta(seconds=max(int(lease_seconds), 30)),
+    )
+    return bool(updated)
 
 
-def complete_agent_dispatch(dispatch_id: int, *, summary: dict[str, Any] | None = None) -> AgentRunDispatch | None:
-    dispatch = AgentRunDispatch.objects.filter(pk=dispatch_id).select_related("run").first()
-    if dispatch is None:
-        return None
-    dispatch.status = AgentRunDispatch.STATUS_COMPLETED
-    dispatch.completed_at = timezone.now()
-    metadata = dict(dispatch.metadata or {})
-    if summary:
-        metadata["completion_summary"] = summary
-    dispatch.metadata = metadata
-    dispatch.save(update_fields=["status", "completed_at", "metadata"])
+def complete_agent_dispatch(
+    dispatch_id: int,
+    *,
+    worker_name: str,
+    attempt_count: int,
+    summary: dict[str, Any] | None = None,
+) -> AgentRunDispatch | None:
+    now = timezone.now()
+    with transaction.atomic():
+        dispatch = (
+            AgentRunDispatch.objects.select_for_update()
+            .select_related("run")
+            .filter(
+                pk=dispatch_id,
+                status=AgentRunDispatch.STATUS_CLAIMED,
+                claimed_by=str(worker_name or "default")[:120],
+                attempt_count=int(attempt_count),
+                lease_expires_at__gt=now,
+            )
+            .first()
+        )
+        if dispatch is None:
+            return None
+        dispatch.status = AgentRunDispatch.STATUS_COMPLETED
+        dispatch.completed_at = now
+        metadata = dict(dispatch.metadata or {})
+        if summary:
+            metadata["completion_summary"] = summary
+        dispatch.metadata = metadata
+        dispatch.save(update_fields=["status", "completed_at", "metadata"])
     record_run_event(
         dispatch.run_id,
         "agent_dispatch_completed",
@@ -170,14 +244,33 @@ def complete_agent_dispatch(dispatch_id: int, *, summary: dict[str, Any] | None 
     return dispatch
 
 
-def fail_agent_dispatch(dispatch_id: int, *, error: str) -> AgentRunDispatch | None:
-    dispatch = AgentRunDispatch.objects.filter(pk=dispatch_id).select_related("run").first()
-    if dispatch is None:
-        return None
-    dispatch.status = AgentRunDispatch.STATUS_FAILED
-    dispatch.completed_at = timezone.now()
-    dispatch.error = str(error)[:4000]
-    dispatch.save(update_fields=["status", "completed_at", "error"])
+def fail_agent_dispatch(
+    dispatch_id: int,
+    *,
+    worker_name: str,
+    attempt_count: int,
+    error: str,
+) -> AgentRunDispatch | None:
+    now = timezone.now()
+    with transaction.atomic():
+        dispatch = (
+            AgentRunDispatch.objects.select_for_update()
+            .select_related("run")
+            .filter(
+                pk=dispatch_id,
+                status=AgentRunDispatch.STATUS_CLAIMED,
+                claimed_by=str(worker_name or "default")[:120],
+                attempt_count=int(attempt_count),
+                lease_expires_at__gt=now,
+            )
+            .first()
+        )
+        if dispatch is None:
+            return None
+        dispatch.status = AgentRunDispatch.STATUS_FAILED
+        dispatch.completed_at = now
+        dispatch.error = str(error)[:4000]
+        dispatch.save(update_fields=["status", "completed_at", "error"])
     record_run_event(
         dispatch.run_id,
         "agent_dispatch_failed",
@@ -235,6 +328,7 @@ def serialize_agent_dispatch(dispatch: AgentRunDispatch | None) -> dict[str, Any
         "completed_at": dispatch.completed_at.isoformat() if dispatch.completed_at else None,
         "claimed_by": dispatch.claimed_by,
         "attempt_count": int(dispatch.attempt_count or 0),
+        "max_attempts": int(dispatch.max_attempts or 0),
         "error": dispatch.error or "",
         "metadata": dispatch.metadata or {},
     }
