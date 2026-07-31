@@ -20,7 +20,7 @@
           // Last style applied for this browser session/user (FOUC guard).
           // Per-user map is applied after auth loads in the app.
           var style = localStorage.getItem("webterm.ui-style.active");
-          var allowed = { catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1, flow: 1, "flow-dark": 1 };
+          var allowed = { catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1, flow: 1, "flow-dark": 1, ashita: 1 };
           if (style === "nocturne" || style === "haze") style = "flow-dark";
           if (!allowed[style]) {
             style = localStorage.getItem("webterm.ui-style");

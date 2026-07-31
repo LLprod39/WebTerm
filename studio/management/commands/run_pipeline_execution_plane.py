@@ -44,7 +44,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING(f"Pipeline worker {worker_key!r} is already leased"))
             return
 
-        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0}
+        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0, "claim_errors": 0}
         fatal_error = ""
         try:
             if once:
@@ -58,6 +58,8 @@ class Command(BaseCommand):
                     )
                 )
                 self.stdout.write(self.style.SUCCESS(self._format_summary(summary)))
+                if summary["claim_errors"]:
+                    raise CommandError(f"Pipeline dispatch claim failed: {summary['claim_errors']}")
                 if summary["failed"]:
                     raise CommandError(f"Pipeline execution dispatches failed: {summary['failed']}")
                 return
@@ -96,7 +98,7 @@ class Command(BaseCommand):
         global_concurrency: int,
         per_user_concurrency: int,
     ) -> dict[str, int]:
-        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0}
+        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0, "claim_errors": 0}
         for _index in range(limit):
             await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
                 STUDIO_PIPELINE_EXECUTION_WORKER,
@@ -104,12 +106,21 @@ class Command(BaseCommand):
                 lease_seconds=lease_seconds,
                 cycle_started=True,
             )
-            dispatch = await sync_to_async(claim_next_pipeline_dispatch, thread_sensitive=True)(
-                worker_name=worker_key,
-                lease_seconds=lease_seconds,
-                global_concurrency=global_concurrency,
-                per_user_concurrency=per_user_concurrency,
-            )
+            try:
+                dispatch = await sync_to_async(claim_next_pipeline_dispatch, thread_sensitive=True)(
+                    worker_name=worker_key,
+                    lease_seconds=lease_seconds,
+                    global_concurrency=global_concurrency,
+                    per_user_concurrency=per_user_concurrency,
+                )
+            except Exception as exc:
+                # A failing claim (database outage, unsupported query, lock timeout)
+                # must not kill the container: restart:unless-stopped would turn it
+                # into a crash loop that never drains the queue. Surface it and let
+                # the caller back off instead.
+                logger.exception("Pipeline dispatch claim failed: {}", exc)
+                summary["claim_errors"] += 1
+                break
             if dispatch is None:
                 summary["empty_polls"] += 1
                 break

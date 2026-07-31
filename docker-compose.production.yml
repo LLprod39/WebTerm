@@ -702,7 +702,11 @@ services:
     command: ["sh", "-lc", "python manage.py run_telegram_bot"]
     environment:
       <<: *backend-worker-environment
-      TELEGRAM_BOT_POLL_TOKEN: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required for telegram-bot}"
+      # Must stay a soft default. Compose interpolates every service before it
+      # filters by profile, so a `:?` guard here makes the whole file unusable
+      # for operators who never enable the telegram-bot profile. The command
+      # itself refuses to start without a token (run_telegram_bot.handle).
+      TELEGRAM_BOT_POLL_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
 
   mars-agent:
     image: ${MARS_AGENT_DOCKER_IMAGE:-registry.invalid/webterm-mars-agent@sha256:0000000000000000000000000000000000000000000000000000000000000000}

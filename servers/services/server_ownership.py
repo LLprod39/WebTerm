@@ -36,7 +36,12 @@ def _broadcast_access_revoked(server_id: int) -> None:
 
 @transaction.atomic
 def transfer_server_ownership(*, server_id: int, actor, target_user_id: int) -> dict:
-    server = Server.objects.select_for_update().select_related("group", "project").filter(pk=server_id).first()
+    # of=("self",) is required: Server.group is nullable, so select_related emits a
+    # LEFT OUTER JOIN and PostgreSQL refuses a bare FOR UPDATE over it. The transfer
+    # only needs the server row locked.
+    server = (
+        Server.objects.select_for_update(of=("self",)).select_related("group", "project").filter(pk=server_id).first()
+    )
     if server is None:
         raise ServerOwnershipTransferError("server not found")
     if not (getattr(actor, "is_staff", False) or server.user_id == getattr(actor, "id", None)):

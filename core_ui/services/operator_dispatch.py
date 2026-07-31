@@ -81,7 +81,10 @@ def claim_next_operator_dispatch(*, worker_name: str, lease_seconds: int = 180) 
             dispatch.save(update_fields=["status", "completed_at", "error"])
 
         dispatch = (
-            OperatorTurnDispatch.objects.select_for_update(skip_locked=True)
+            # of=("self",) is required: action is nullable for KIND_MESSAGE turns, so
+            # select_related emits a LEFT OUTER JOIN and PostgreSQL refuses a bare
+            # FOR UPDATE over it. Only the dispatch row needs the claim lock.
+            OperatorTurnDispatch.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("session", "session__user", "action")
             .filter(
                 Q(status=OperatorTurnDispatch.STATUS_QUEUED)

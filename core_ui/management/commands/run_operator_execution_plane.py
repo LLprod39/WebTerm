@@ -35,7 +35,7 @@ class Command(BaseCommand):
         if state is None:
             self.stdout.write(self.style.WARNING(f"Operator worker {worker_key!r} is already leased"))
             return
-        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0}
+        summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0, "claim_errors": 0}
         fatal_error = ""
         try:
             asyncio.run(
@@ -72,10 +72,21 @@ class Command(BaseCommand):
                 summary=summary,
                 cycle_started=True,
             )
-            dispatch = await sync_to_async(claim_next_operator_dispatch, thread_sensitive=True)(
-                worker_name=worker_key,
-                lease_seconds=lease_seconds,
-            )
+            try:
+                dispatch = await sync_to_async(claim_next_operator_dispatch, thread_sensitive=True)(
+                    worker_name=worker_key,
+                    lease_seconds=lease_seconds,
+                )
+            except Exception as exc:
+                # A failing claim (database outage, unsupported query, lock timeout)
+                # must not kill the container: restart:unless-stopped would turn it
+                # into a crash loop that never drains the queue. Back off and retry.
+                logger.exception("Operator dispatch claim failed: {}", exc)
+                summary["claim_errors"] += 1
+                if once:
+                    raise
+                await asyncio.sleep(interval)
+                continue
             if dispatch is None:
                 summary["empty_polls"] += 1
                 if once:

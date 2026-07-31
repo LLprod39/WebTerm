@@ -13,6 +13,7 @@ import { prefetchCoreRoutes } from "@/lib/route-prefetch";
 import { SkeletonMetrics, SkeletonList } from "@/components/ui/list-state";
 import { fetchMonitoringDashboard } from "@/lib/api";
 import { writeMonitoringDashboardCache } from "@/lib/monitoring-cache";
+import { AshitaAtmosphere } from "@/components/AshitaAtmosphere";
 
 const immersiveMeta: Array<{ match: RegExp; titleRu: string; titleEn: string; backTo: string; hideHeader?: boolean }> = [
   { match: /^\/servers\/hub$/, titleRu: "Терминалы", titleEn: "Terminal Hub", backTo: "/servers", hideHeader: true },
@@ -37,6 +38,7 @@ export default function AppLayout() {
   const { style } = useUiStyle();
   const queryClient = useQueryClient();
   const isFlow = isFlowStyle(style);
+  const isAshita = style === "ashita";
   const immersive = immersiveMeta.find(({ match }) => match.test(location.pathname));
   const openNavigationLabel = localize(lang, "Открыть навигацию", "Open navigation");
 
@@ -79,6 +81,7 @@ export default function AppLayout() {
     return (
       <SidebarProvider>
         <FlowChrome>
+          {isAshita ? <AshitaAtmosphere /> : null}
           {mobileSidebarTrigger}
           <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
             <AppSidebar />
@@ -115,6 +118,7 @@ export default function AppLayout() {
   return (
     <SidebarProvider>
       <FlowChrome>
+        {isAshita ? <AshitaAtmosphere /> : null}
         {mobileSidebarTrigger}
         <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
           <AppSidebar />

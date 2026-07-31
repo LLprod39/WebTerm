@@ -11,7 +11,9 @@
   - pulse       — violet night ops (Outfit + DM Sans, aurora glow, soft glass)
   - signal      — brutal ops (carbon black, amber alarm, zero radius, mono)
   - folio       — mid-gray stone desk (Inter + terracotta; not bright white)
-  - folio-dark  — Folio night desk (default product skin; Inter + terracotta)
+  - folio-dark  — Folio night desk (Inter + terracotta)
+  - flow / flow-dark — AI-native SaaS (default product skin: flow-dark)
+  - ashita      — night sakura ops (Manrope + Space Grotesk, moon blue + controlled glitch)
   Applied via <html data-ui-style="...">
   New skins only add their own html[data-ui-style="…"] blocks — never rewrite other skins.
 */
@@ -675,6 +677,100 @@
       radial-gradient(ellipse 60% 35% at 90% 105%, hsl(145 40% 20% / 0.08), transparent 55%);
     --shell-glow-size: auto;
   }
+
+  /*
+   * ── ASHITA // Sakura Rift
+   * Deep night · wet temple roof · moon light · sakura hush.
+   * 90% matte navy silence; 10% sakura + cyan + controlled glitch.
+   * Working DevOps console — not anime chrome.
+   */
+  html[data-ui-style="ashita"] {
+    --background: 225 33% 5%;
+    --foreground: 222 38% 95%;
+
+    --card: 222 37% 11%;
+    --card-foreground: 222 38% 95%;
+
+    --popover: 221 38% 13%;
+    --popover-foreground: 222 38% 95%;
+
+    --primary: 318 57% 63%;
+    --primary-foreground: 225 33% 6%;
+    --primary-hover: 317 63% 68%;
+    --primary-subtle: 318 57% 63%;
+
+    --secondary: 221 38% 15%;
+    --secondary-foreground: 216 28% 86%;
+
+    --muted: 219 28% 14%;
+    --muted-foreground: 218 18% 65%;
+
+    --accent: 318 57% 63%;
+    --accent-foreground: 225 33% 6%;
+
+    --destructive: 352 71% 59%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 218 30% 23%;
+    --border-strong: 218 29% 36%;
+    --input: 218 30% 23%;
+    --ring: 179 62% 56%;
+
+    --radius: 0.625rem;
+
+    --surface-0: 225 33% 5%;
+    --surface-1: 222 37% 11%;
+    --surface-2: 221 38% 15%;
+    --surface-3: 219 38% 18%;
+
+    --ai: 179 62% 56%;
+    --ai-foreground: 225 33% 6%;
+
+    --success: 153 54% 53%;
+    --warning: 31 71% 62%;
+    --info: 211 47% 68%;
+
+    --terminal-bg: 225 38% 4%;
+    --terminal-fg: 212 38% 86%;
+    --terminal-cursor: 179 62% 56%;
+
+    --sidebar-background: 224 35% 6%;
+    --sidebar-foreground: 215 22% 76%;
+    --sidebar-primary: 318 57% 63%;
+    --sidebar-primary-foreground: 225 33% 6%;
+    --sidebar-accent: 221 34% 14%;
+    --sidebar-accent-foreground: 222 38% 95%;
+    --sidebar-border: 218 30% 18%;
+    --sidebar-ring: 179 62% 56%;
+
+    --shadow-1:
+      0 1px 0 hsl(210 40% 90% / 0.03) inset,
+      0 6px 18px hsl(230 50% 2% / 0.32);
+    --shadow-2:
+      0 0 0 1px hsl(318 57% 63% / 0.04),
+      0 14px 36px hsl(230 50% 2% / 0.46);
+    --shadow-3:
+      0 0 0 1px hsl(179 62% 56% / 0.06),
+      0 28px 72px hsl(230 60% 1% / 0.64);
+
+    --ease-standard: cubic-bezier(0.16, 1, 0.3, 1);
+
+    --font-ui: "Manrope", "Inter", system-ui, sans-serif;
+    --font-display: "Space Grotesk", "Manrope", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+    --dot-radius: 999px;
+    --focus-radius: calc(var(--radius) - 0.125rem);
+
+    --selection-bg: hsl(var(--primary) / 0.32);
+    --selection-fg: hsl(var(--foreground));
+
+    --shell-glow:
+      radial-gradient(ellipse 75% 55% at 82% -8%, hsl(211 37% 75% / 0.15), transparent 58%),
+      radial-gradient(ellipse 65% 50% at 12% 6%, hsl(318 57% 63% / 0.12), transparent 58%),
+      radial-gradient(ellipse 55% 40% at 65% 110%, hsl(179 62% 56% / 0.055), transparent 60%);
+    --shell-glow-size: auto;
+  }
 }
 
 @layer base {
@@ -781,8 +877,25 @@
     font-weight: 600;
   }
 
+  html[data-ui-style="ashita"] body {
+    font-feature-settings: "ss01", "cv11", "tnum";
+    letter-spacing: 0.005em;
+  }
 
+  html[data-ui-style="ashita"] h1,
+  html[data-ui-style="ashita"] h2,
+  html[data-ui-style="ashita"] h3,
+  html[data-ui-style="ashita"] h4,
+  html[data-ui-style="ashita"] .font-display {
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
 
+  html[data-ui-style="ashita"] *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--focus-radius);
+  }
 
   html[data-ui-style="signal"] ::-webkit-scrollbar {
     width: 8px;
@@ -950,6 +1063,26 @@
 
   html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .tabular-nums,
   html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-ui-style="ashita"] .type-display,
+  html[data-ui-style="ashita"] .type-h1,
+  html[data-ui-style="ashita"] .type-h2 {
+    font-weight: 600;
+    letter-spacing: -0.025em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-ui-style="ashita"] .type-label {
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    font-family: var(--font-mono);
+  }
+
+  html[data-ui-style="ashita"] .tabular-nums,
+  html[data-ui-style="ashita"] .font-mono {
     font-variant-numeric: tabular-nums;
   }
 
@@ -1765,6 +1898,445 @@
     color: hsl(145 62% 30%);
   }
 
+  /*
+   * ── ASHITA // Sakura Rift chrome
+   * All rules scoped under html[data-ui-style="ashita"].
+   * Matte navy silence + rare sakura/cyan glitch accents.
+   */
+  html[data-ui-style="ashita"] .app-shell-bg {
+    background: var(--shell-glow), hsl(var(--background));
+    background-size: var(--shell-glow-size, auto);
+  }
+
+  html[data-ui-style="ashita"] .enterprise-panel,
+  html[data-ui-style="ashita"] .workspace-panel,
+  html[data-ui-style="ashita"] .corp-card {
+    position: relative;
+    border-radius: var(--radius);
+    border: 1px solid hsl(var(--border));
+    background:
+      linear-gradient(
+        165deg,
+        hsl(var(--surface-1)) 0%,
+        hsl(var(--surface-2) / 0.92) 100%
+      );
+    box-shadow: var(--shadow-1);
+    transition:
+      border-color 180ms var(--ease-standard),
+      box-shadow 200ms var(--ease-standard),
+      transform 180ms var(--ease-standard);
+  }
+
+  html[data-ui-style="ashita"] .enterprise-panel {
+    box-shadow: var(--shadow-2);
+  }
+
+  html[data-ui-style="ashita"] .enterprise-panel::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 1px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--primary) / 0.55) 28%,
+      hsl(var(--primary) / 0.7) 48%,
+      hsl(var(--ai) / 0.5) 72%,
+      transparent 100%
+    );
+    opacity: 0.85;
+    pointer-events: none;
+  }
+
+  html[data-ui-style="ashita"] .corp-card:hover,
+  html[data-ui-style="ashita"] .workspace-panel:hover,
+  html[data-ui-style="ashita"] .enterprise-panel:hover {
+    border-color: hsl(var(--border-strong));
+    box-shadow: var(--shadow-2);
+    transform: translateY(-1px);
+  }
+
+  html[data-ui-style="ashita"] .workspace-empty {
+    border-radius: var(--radius);
+    border-style: dashed;
+    border-color: hsl(var(--border-strong));
+    background: hsl(var(--surface-1) / 0.55);
+    box-shadow: inset 0 1px 0 hsl(210 40% 90% / 0.03);
+  }
+
+  html[data-ui-style="ashita"] .enterprise-kicker {
+    letter-spacing: 0.14em;
+    font-weight: 600;
+    color: hsl(var(--primary) / 0.9);
+    font-family: var(--font-mono);
+  }
+
+  html[data-ui-style="ashita"] .accent-gradient {
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--primary)),
+      hsl(var(--primary)),
+      hsl(var(--ai)),
+      transparent
+    );
+  }
+
+  html[data-ui-style="ashita"] .icon-box {
+    border-radius: calc(var(--radius) - 0.15rem);
+  }
+
+  html[data-ui-style="ashita"] .icon-box-primary {
+    border-color: hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.12);
+    color: hsl(var(--primary));
+    box-shadow: none;
+  }
+
+  html[data-ui-style="ashita"] .data-row {
+    border-bottom-color: hsl(var(--border) / 0.75);
+    transition:
+      background-color 160ms var(--ease-standard),
+      box-shadow 160ms var(--ease-standard);
+  }
+
+  html[data-ui-style="ashita"] .data-row:hover {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.1) 0%,
+      hsl(var(--surface-2) / 0.45) 42%,
+      transparent 100%
+    );
+    box-shadow: inset 2px 0 0 hsl(var(--primary) / 0.65);
+  }
+
+  html[data-ui-style="ashita"] .data-row[aria-selected="true"],
+  html[data-ui-style="ashita"] .data-row[data-selected="true"] {
+    background: hsl(var(--primary) / 0.08);
+    box-shadow: inset 2px 0 0 hsl(var(--ai) / 0.8);
+  }
+
+  /* Buttons */
+  html[data-ui-style="ashita"] button,
+  html[data-ui-style="ashita"] input,
+  html[data-ui-style="ashita"] textarea,
+  html[data-ui-style="ashita"] select {
+    border-radius: calc(var(--radius) - 0.05rem);
+  }
+
+  html[data-ui-style="ashita"] button,
+  html[data-ui-style="ashita"] a {
+    transition:
+      background-color 160ms var(--ease-standard),
+      border-color 160ms var(--ease-standard),
+      color 160ms var(--ease-standard),
+      box-shadow 180ms var(--ease-standard),
+      transform 160ms var(--ease-standard);
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-primary"],
+  html[data-ui-style="ashita"] a[class~="bg-primary"] {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: hsl(var(--primary-foreground));
+    background: hsl(var(--primary));
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.12) inset,
+      0 8px 18px hsl(230 50% 2% / 0.35);
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-primary"]:hover,
+  html[data-ui-style="ashita"] a[class~="bg-primary"]:hover {
+    background: hsl(var(--primary-hover));
+    transform: translateY(-1px);
+    /* controlled chromatic split — hover only */
+    box-shadow:
+      -1px 0 0 hsl(179 62% 56% / 0.55),
+      1px 0 0 hsl(352 71% 59% / 0.45),
+      0 1px 0 hsl(0 0% 100% / 0.14) inset,
+      0 10px 22px hsl(230 50% 2% / 0.42);
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-primary"]:active,
+  html[data-ui-style="ashita"] a[class~="bg-primary"]:active {
+    transform: translateY(0);
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.08) inset,
+      0 4px 10px hsl(230 50% 2% / 0.3);
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-secondary"],
+  html[data-ui-style="ashita"] a[class~="bg-secondary"] {
+    background: hsl(var(--surface-2));
+    border-color: hsl(var(--border));
+    color: hsl(var(--secondary-foreground));
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-secondary"]:hover,
+  html[data-ui-style="ashita"] a[class~="bg-secondary"]:hover {
+    background: hsl(211 28% 18%);
+    border-color: hsl(var(--border-strong));
+  }
+
+  html[data-ui-style="ashita"] button[class~="bg-destructive"],
+  html[data-ui-style="ashita"] a[class~="bg-destructive"] {
+    background: hsl(var(--destructive));
+    color: hsl(var(--destructive-foreground));
+  }
+
+  /* Sidebar — temple corridor */
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"],
+  html[data-ui-style="ashita"] aside {
+    border-right: 1px solid hsl(var(--sidebar-border));
+    background: hsl(var(--sidebar-background));
+  }
+
+  html[data-ui-style="ashita"] .nav-icon-tile {
+    border-color: transparent !important;
+    background: transparent !important;
+  }
+
+  html[data-ui-style="ashita"] [data-sidebar="menu-button"] a,
+  html[data-ui-style="ashita"] [data-sidebar="menu-button"] {
+    border-radius: calc(var(--radius) - 0.15rem);
+  }
+
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"] a:hover {
+    background: hsl(var(--sidebar-accent) / 0.75);
+  }
+
+  html[data-ui-style="ashita"] [data-sidebar="menu-button"][data-active="true"],
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"] a[aria-current="page"],
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"] a.active {
+    position: relative;
+    background: hsl(var(--surface-2));
+    color: hsl(var(--sidebar-accent-foreground));
+    font-weight: 600;
+    box-shadow:
+      inset 2px 0 0 hsl(var(--primary) / 0.9),
+      -1px 0 0 hsl(var(--ai) / 0.18),
+      1px 0 0 hsl(var(--primary) / 0.12);
+  }
+
+  html[data-ui-style="ashita"] [data-sidebar="menu-button"][data-active="true"] svg.lucide,
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"] a[aria-current="page"] svg.lucide,
+  html[data-ui-style="ashita"] [data-sidebar="sidebar"] a.active svg.lucide {
+    color: hsl(var(--ai));
+  }
+
+  /* Inputs */
+  html[data-ui-style="ashita"] input:not([type="checkbox"]):not([type="radio"]),
+  html[data-ui-style="ashita"] textarea,
+  html[data-ui-style="ashita"] select {
+    background-color: hsl(var(--surface-0));
+    border-color: hsl(var(--border));
+    box-shadow: inset 0 1px 0 hsl(230 40% 2% / 0.35);
+  }
+
+  html[data-ui-style="ashita"] input:not([type="checkbox"]):not([type="radio"]):focus-visible,
+  html[data-ui-style="ashita"] textarea:focus-visible,
+  html[data-ui-style="ashita"] select:focus-visible {
+    border-color: hsl(var(--ring) / 0.75);
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--primary) / 0.18),
+      0 0 0 2px hsl(var(--ring) / 0.22);
+  }
+
+  html[data-ui-style="ashita"] input::placeholder,
+  html[data-ui-style="ashita"] textarea::placeholder {
+    color: hsl(var(--muted-foreground) / 0.78);
+  }
+
+  /* Dialogs / popovers */
+  html[data-ui-style="ashita"] [role="dialog"],
+  html[data-ui-style="ashita"] [data-radix-popper-content-wrapper] [role="menu"],
+  html[data-ui-style="ashita"] [class*="bg-popover"] {
+    border-color: hsl(var(--border-strong)) !important;
+    background: hsl(var(--popover) / 0.98) !important;
+    box-shadow: var(--shadow-3) !important;
+    border-radius: var(--radius);
+  }
+
+  html[data-ui-style="ashita"] [role="dialog"] {
+    animation: ashita-dialog-edge 120ms var(--ease-standard) both;
+  }
+
+  @keyframes ashita-dialog-edge {
+    0% {
+      box-shadow:
+        -1px 0 0 hsl(179 62% 56% / 0.35),
+        1px 0 0 hsl(352 71% 59% / 0.3),
+        var(--shadow-3);
+    }
+    100% {
+      box-shadow: var(--shadow-3);
+    }
+  }
+
+  /* Terminal: keep clean — no atmosphere inside xterm host */
+  html[data-ui-style="ashita"] .xterm,
+  html[data-ui-style="ashita"] .xterm-viewport,
+  html[data-ui-style="ashita"] .xterm-screen {
+    background: hsl(var(--terminal-bg)) !important;
+  }
+
+  /* Atmosphere layer (AshitaAtmosphere component) */
+  html[data-ui-style="ashita"] .ashita-atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  html[data-ui-style="ashita"] .ashita-atmosphere__grain {
+    position: absolute;
+    inset: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+    background-size: 180px 180px;
+  }
+
+  html[data-ui-style="ashita"] .ashita-atmosphere__scanlines {
+    position: absolute;
+    inset: 0;
+    opacity: 0.02;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 2px,
+      hsl(210 40% 90% / 0.35) 2px,
+      hsl(210 40% 90% / 0.35) 3px
+    );
+  }
+
+  html[data-ui-style="ashita"] .ashita-atmosphere__roof {
+    position: absolute;
+    top: 8%;
+    left: -8%;
+    width: 55%;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(211 30% 70% / 0.12) 30%,
+      hsl(318 40% 55% / 0.08) 70%,
+      transparent
+    );
+    transform: rotate(-18deg);
+    transform-origin: left center;
+  }
+
+  html[data-ui-style="ashita"] .ashita-atmosphere__petals {
+    position: absolute;
+    inset: 0;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal {
+    position: absolute;
+    width: 10px;
+    height: 14px;
+    border-radius: 70% 0 70% 0;
+    background: radial-gradient(
+      ellipse at 30% 30%,
+      hsl(318 57% 70% / 0.22),
+      hsl(318 50% 45% / 0.06) 70%,
+      transparent
+    );
+    opacity: 0.28;
+    will-change: transform, opacity;
+    animation: ashita-petal-drift 42s var(--ease-standard) infinite;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal--1 {
+    top: 18%;
+    left: 12%;
+    animation-duration: 46s;
+    animation-delay: -4s;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal--2 {
+    top: 42%;
+    left: 78%;
+    width: 8px;
+    height: 11px;
+    opacity: 0.2;
+    animation-duration: 38s;
+    animation-delay: -12s;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal--3 {
+    top: 68%;
+    left: 28%;
+    width: 7px;
+    height: 10px;
+    opacity: 0.18;
+    animation-duration: 50s;
+    animation-delay: -22s;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal--4 {
+    top: 28%;
+    left: 58%;
+    width: 9px;
+    height: 12px;
+    opacity: 0.22;
+    animation-duration: 44s;
+    animation-delay: -8s;
+  }
+
+  html[data-ui-style="ashita"] .ashita-petal--5 {
+    top: 76%;
+    left: 88%;
+    width: 6px;
+    height: 9px;
+    opacity: 0.16;
+    animation-duration: 40s;
+    animation-delay: -18s;
+  }
+
+  @keyframes ashita-petal-drift {
+    0%,
+    100% {
+      transform: translate3d(0, 0, 0) rotate(0deg);
+      opacity: 0.22;
+    }
+    50% {
+      transform: translate3d(18px, 28px, 0) rotate(12deg);
+      opacity: 0.32;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html[data-ui-style="ashita"] .ashita-petal {
+      animation: none;
+    }
+
+    html[data-ui-style="ashita"] button[class~="bg-primary"]:hover,
+    html[data-ui-style="ashita"] a[class~="bg-primary"]:hover {
+      transform: none;
+      box-shadow:
+        0 1px 0 hsl(0 0% 100% / 0.12) inset,
+        0 8px 18px hsl(230 50% 2% / 0.35);
+    }
+
+    html[data-ui-style="ashita"] .corp-card:hover,
+    html[data-ui-style="ashita"] .workspace-panel:hover,
+    html[data-ui-style="ashita"] .enterprise-panel:hover {
+      transform: none;
+    }
+
+    html[data-ui-style="ashita"] [role="dialog"] {
+      animation: none;
+    }
+  }
+
+  /* Ensure shell content sits above atmosphere */
+  html[data-ui-style="ashita"] .app-shell-bg {
+    position: relative;
+    z-index: 1;
+  }
 
   .corp-surface {
     @apply transition-colors duration-150 hover:bg-secondary/70;

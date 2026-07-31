@@ -20,7 +20,8 @@ export type UiStyleId =
   | "folio"
   | "folio-dark"
   | "flow"
-  | "flow-dark";
+  | "flow-dark"
+  | "ashita";
 
 /** Map of userKey → style */
 export const UI_STYLE_BY_USER_KEY = "webterm.ui-style.by-user";
@@ -55,6 +56,7 @@ const UI_STYLE_ID_SET = new Set<UiStyleId>([
   "folio-dark",
   "flow",
   "flow-dark",
+  "ashita",
 ]);
 
 export const UI_STYLE_OPTIONS: Array<{
@@ -128,6 +130,14 @@ export const UI_STYLE_OPTIONS: Array<{
     blurbRu: "Ночной Flow: графитовые карточки, белые кнопки, тот же язык.",
     blurbEn: "Flow at night: graphite cards, white CTAs, same language.",
     swatches: ["#101013", "#f7f7f8", "#3ec777", "#5b8ef7"],
+  },
+  {
+    id: "ashita",
+    labelRu: "ASHITA",
+    labelEn: "ASHITA",
+    blurbRu: "Ночная сакура, лунный синий и контролируемый digital glitch.",
+    blurbEn: "Night sakura, moonlit blue and controlled digital glitch.",
+    swatches: ["#080A10", "#D66AB5", "#49D4D1", "#E14B5F"],
   },
 ];
 

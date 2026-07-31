@@ -114,9 +114,13 @@ class LoginBruteForceProtectionMiddleware:
             username_failures = _increment_counter(username_key, timeout=username_window)
         except Exception:
             return _blocked_response(retry_after=30, status=503)
+        # Reject first, then slow down. The soft delay only makes sense for attempts
+        # that still reach the authentication backend; sleeping before a response we
+        # are going to reject anyway just pins a worker thread for up to
+        # AUTH_LOGIN_USERNAME_MAX_DELAY_MS with no effect on the caller.
+        if failures >= limit:
+            return _blocked_response(retry_after=window)
         delay = _username_failure_delay_seconds(username_failures)
         if delay:
             time.sleep(delay)
-        if failures >= limit:
-            return _blocked_response(retry_after=window)
         return response

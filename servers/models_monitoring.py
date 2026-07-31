@@ -47,6 +47,9 @@ class ServerHealthCheck(models.Model):
         indexes = [
             models.Index(fields=["server", "-checked_at"]),
             models.Index(fields=["status", "-checked_at"]),
+            # core_ui.history_retention prunes this table by checked_at across all
+            # servers; without a leading index that degrades into a sequential scan.
+            models.Index(fields=["checked_at"], name="srv_health_checked_idx"),
         ]
 
     def __str__(self):

@@ -173,6 +173,7 @@ docs/architecture/*
 !docs/architecture/PLUGIN_AUTHOR_GUIDE.md
 !docs/architecture/PLUGIN_MARKETPLACE_IMPLEMENTATION_PLAN.md
 !docs/architecture/ANSIBLE_PLAYBOOK_WORKSPACE_PLAN.md
+!docs/architecture/AI_SUBSCRIPTION_CLI_PROVIDERS_IMPLEMENTATION_PLAN.md
 !docs/architecture/README.md
 !docs/architecture/WEBTERM_ROUTINEOPS_COMPETITIVE_PLAN.md
 !docs/architecture/WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md

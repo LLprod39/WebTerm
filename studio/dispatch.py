@@ -122,7 +122,11 @@ def requeue_pipeline_run_dispatch(
 
 def _fail_exhausted_dispatches(now) -> int:
     exhausted = list(
-        PipelineRunDispatch.objects.select_for_update(skip_locked=True)
+        # of=("self",) is required: run__triggered_by is nullable, so select_related
+        # emits a LEFT OUTER JOIN and PostgreSQL refuses a bare FOR UPDATE over it
+        # ("FOR UPDATE cannot be applied to the nullable side of an outer join").
+        # Locking only the dispatch row is also the correct semantics here.
+        PipelineRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
         .select_related("run", "run__pipeline", "run__pipeline__owner", "run__triggered_by")
         .filter(
             Q(status=PipelineRunDispatch.STATUS_QUEUED)
@@ -173,7 +177,7 @@ def claim_next_pipeline_dispatch(
             return None
         claims_by_user = Counter(active_claims)
         candidates = list(
-            PipelineRunDispatch.objects.select_for_update(skip_locked=True)
+            PipelineRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("run", "run__pipeline", "run__pipeline__owner", "run__triggered_by")
             .filter(
                 Q(status=PipelineRunDispatch.STATUS_QUEUED)
@@ -242,7 +246,7 @@ def complete_pipeline_dispatch(
 ) -> PipelineRunDispatch | None:
     now = timezone.now()
     dispatch = (
-        PipelineRunDispatch.objects.select_for_update()
+        PipelineRunDispatch.objects.select_for_update(of=("self",))
         .select_related("run", "run__pipeline", "run__pipeline__owner", "run__triggered_by")
         .filter(
             pk=dispatch_id,
@@ -272,7 +276,7 @@ def retry_or_fail_pipeline_dispatch(
 ) -> PipelineRunDispatch | None:
     now = timezone.now()
     dispatch = (
-        PipelineRunDispatch.objects.select_for_update()
+        PipelineRunDispatch.objects.select_for_update(of=("self",))
         .select_related("run", "run__pipeline", "run__pipeline__owner", "run__triggered_by")
         .filter(
             pk=dispatch_id,

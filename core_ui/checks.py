@@ -2,7 +2,7 @@ import os
 from urllib.parse import urlparse
 
 from django.conf import settings
-from django.core.checks import Error, Tags, register
+from django.core.checks import Error, Tags, Warning, register
 
 
 @register(Tags.security, deploy=True)
@@ -31,6 +31,34 @@ def production_database_deploy_check(app_configs, **kwargs):
             "SQLite is not supported when DEBUG=False.",
             hint="Configure POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD.",
             id="core_ui.E006",
+        ),
+    ]
+
+
+@register(Tags.security, deploy=True)
+def trusted_proxy_hops_deploy_check(app_configs, **kwargs):
+    """Catch a deployment that trusts a proxy for scheme but not for client IP.
+
+    With TRUSTED_PROXY_HOPS=0 behind a reverse proxy every request reports the
+    proxy's address, so the audit log loses the real client and the login
+    throttle collapses into a single shared counter — ten failed attempts by
+    anyone lock out every user. Trusting X-Forwarded-Proto while ignoring
+    X-Forwarded-For is the signature of that misconfiguration.
+    """
+    if settings.DEBUG or not getattr(settings, "SECURE_PROXY_SSL_HEADER", None):
+        return []
+    if int(getattr(settings, "TRUSTED_PROXY_HOPS", 0) or 0) > 0:
+        return []
+
+    return [
+        Warning(
+            "TRUST_X_FORWARDED_PROTO is enabled but TRUSTED_PROXY_HOPS is 0.",
+            hint=(
+                "Set TRUSTED_PROXY_HOPS to the number of reverse proxies in front of the app "
+                "(1 for the bundled nginx). Otherwise audit records and the login throttle "
+                "see the proxy address for every user."
+            ),
+            id="core_ui.W001",
         ),
     ]
 

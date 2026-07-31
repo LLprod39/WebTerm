@@ -145,7 +145,10 @@ def request_pipeline_run_resume(
     confirm_non_idempotent: bool = False,
 ) -> PipelineRun:
     run = (
-        PipelineRun.objects.select_for_update()
+        # of=("self",) is required: triggered_by is nullable, so select_related emits a
+        # LEFT OUTER JOIN and PostgreSQL refuses a bare FOR UPDATE over it. Only the run
+        # row needs the resume lock.
+        PipelineRun.objects.select_for_update(of=("self",))
         .select_related("pipeline", "pipeline__owner", "triggered_by")
         .get(pk=run_id)
     )

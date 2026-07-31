@@ -260,7 +260,11 @@ jobs:
       - name: Prepare the example production environment for Compose parsing
         run: cp .env.production.example .env.production
       - name: Validate production Compose model
-        run: docker compose -f docker-compose.production.yml config --quiet
+        # --env-file mirrors the documented operator invocation. Without it the
+        # example file is never read and `${VAR:?}` guards on variables the
+        # example leaves empty (e.g. optional integrations) go unnoticed here
+        # and only break the production smoke jobs.
+        run: docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
 
   docs-contract:
     name: Documentation Contract

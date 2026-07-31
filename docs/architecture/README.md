@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-07-31
 
 This folder is the public architecture entry point. The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
 
@@ -58,6 +58,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 ## Current Architecture Plans
 
+- [AI providers through user subscriptions and CLI](AI_SUBSCRIPTION_CLI_PROVIDERS_IMPLEMENTATION_PLAN.md) defines personal Codex/Grok/Claude connections, official login flows, per-user credential isolation, a normalized provider event contract, scoped WebTerm tools, phased implementation, and separate self-hosted pilot versus public multi-user gates.
 - [Ansible Playbook Workspace plan](ANSIBLE_PLAYBOOK_WORKSPACE_PLAN.md) defines the standalone Playbooks section, canonical YAML editor, immutable drafts/revisions, compatibility and runtime fingerprints, target bindings, sharing roles, project bundles, exact-revision execution, migration, tests, and the durable-worker production gate.
 - [ADR-0001: primary runtime and toolchain](adr/0001-primary-runtime-and-toolchain.md) freezes the supported Python/Django/Node/npm contract and the boundary between WSL release evidence and native Windows compatibility.
 - [ADR-0003: Kubernetes Ops and MARS boundary](adr/0003-kubernetes-ops-and-mars-boundary.md) keeps both domains fail-closed and optional until a concrete extraction trigger requires a separate package and release cycle.

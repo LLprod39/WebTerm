@@ -315,6 +315,9 @@ class ChatArtifact(models.Model):
         ordering = ["-updated_at"]
         indexes = [
             models.Index(fields=["session", "-updated_at"], name="cu_art_session_updated_idx"),
+            # core_ui.history_retention prunes this table by created_at across all
+            # sessions; without a leading index that degrades into a sequential scan.
+            models.Index(fields=["created_at"], name="cu_art_created_idx"),
         ]
 
     def __str__(self):

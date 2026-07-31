@@ -264,6 +264,9 @@ class ServerCommandHistory(models.Model):
         ordering = ["-executed_at"]
         indexes = [
             models.Index(fields=["server", "-executed_at"]),
+            # core_ui.history_retention prunes this table by executed_at across all
+            # servers; without a leading index that degrades into a sequential scan.
+            models.Index(fields=["executed_at"], name="srv_cmdhist_executed_idx"),
         ]
 
     def __str__(self):
@@ -346,6 +349,9 @@ class CommandSnapshot(models.Model):
             models.Index(fields=["server", "-created_at"]),
             models.Index(fields=["user", "-created_at"]),
             models.Index(fields=["server", "file_path", "-created_at"]),
+            # core_ui.history_retention prunes this table by created_at across all
+            # servers; without a leading index that degrades into a sequential scan.
+            models.Index(fields=["created_at"], name="srv_snapshot_created_idx"),
         ]
 
     def __str__(self):
