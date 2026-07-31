@@ -20,6 +20,7 @@ from .chat import (
     ChatMessage,
     ChatSession,
     ChatTurnState,
+    OperatorTurnDispatch,
 )
 from .preferences import DashboardLayout, TerminalPreference
 from .projects import Project, ProjectMembership
@@ -34,6 +35,7 @@ __all__ = [
     "ChatMessage",
     "AssistantAction",
     "ChatTurnState",
+    "OperatorTurnDispatch",
     "ChatArtifact",
     "UserAppPermission",
     "GroupAppPermission",

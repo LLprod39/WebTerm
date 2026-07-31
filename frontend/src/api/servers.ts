@@ -269,6 +269,58 @@ export async function bulkUpdateServers(payload: {
   });
 }
 
+export type ServerBulkAction = "set_active" | "set_ai_read_only" | "set_tags";
+
+export interface ServerBulkOperation {
+  id: number;
+  group_id: number;
+  action: ServerBulkAction;
+  parameters: { value: boolean | string };
+  status: "queued" | "running" | "completed" | "failed";
+  total_count: number;
+  processed_count: number;
+  succeeded_count: number;
+  failed_count: number;
+  progress_percent: number;
+  failures: Array<{ server_id: number; error: string }>;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export async function createServerGroupBulkAction(
+  groupId: number,
+  action: ServerBulkAction,
+  value: boolean | string,
+) {
+  return apiFetch<{ success: boolean; operation: ServerBulkOperation }>(
+    `/servers/api/groups/${groupId}/bulk-actions/`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action, parameters: { value } }),
+    },
+  );
+}
+
+export async function getServerBulkOperation(operationId: number) {
+  return apiFetch<{ success: boolean; operation: ServerBulkOperation }>(
+    `/servers/api/bulk-actions/${operationId}/`,
+  );
+}
+
+export async function transferServerOwner(serverId: number, targetUserId: number) {
+  return apiFetch<{
+    success: boolean;
+    server_id: number;
+    old_owner_id: number;
+    new_owner_id: number;
+    closed_connection_count: number;
+  }>(`/servers/api/${serverId}/transfer-owner/`, {
+    method: "POST",
+    body: JSON.stringify({ target_user_id: targetUserId }),
+  });
+}
+
 export async function setMasterPassword(masterPassword: string) {
   return apiFetch<{ success: boolean; error?: string }>("/servers/api/master-password/set/", {
     method: "POST",

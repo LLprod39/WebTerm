@@ -4,6 +4,14 @@ import ast
 from dataclasses import is_dataclass
 from pathlib import Path
 
+from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+from servers.consumers.ssh_terminal import (
+    SSHTerminalConsumer,
+    TerminalAgentBridge,
+    TerminalAiRunner,
+    TerminalTransport,
+)
 from servers.services.terminal_ai.state import TerminalAiState
 from servers.services.terminal_manual_command_state import ManualCommandState
 from servers.services.terminal_transport_state import TerminalTransportState
@@ -95,3 +103,14 @@ def test_terminal_consumer_declares_fewer_than_twenty_state_fields() -> None:
     }
 
     assert len(declared_fields) < 20, sorted(declared_fields)
+
+
+def test_terminal_consumer_is_a_thin_adapter_with_explicit_collaborators() -> None:
+    assert SSHTerminalConsumer.__bases__ == (AsyncJsonWebsocketConsumer,)
+    consumer = SSHTerminalConsumer()
+    assert isinstance(consumer.terminal_transport, TerminalTransport)
+    assert isinstance(consumer.terminal_ai_runner, TerminalAiRunner)
+    assert isinstance(consumer.terminal_agent_bridge, TerminalAgentBridge)
+
+    source = "\n".join(path.read_text(encoding="utf-8") for path in CONSUMER_DIR.glob("ssh_terminal*.py"))
+    assert "Mixin" not in source

@@ -8,7 +8,10 @@ from plugin_marketplace.release_profile import (
     PLUGIN_MARKETPLACE_RELEASE_MODES,
     plugin_marketplace_release_mode,
 )
+from plugin_marketplace.services.backend_container_runner_service import is_immutable_plugin_backend_image
 from plugin_marketplace.services.backend_sandbox_runner_service import (
+    BACKEND_SANDBOX_PROVIDER_DISABLED,
+    BACKEND_SANDBOX_PROVIDER_DOCKER,
     BACKEND_SANDBOX_PROVIDER_EXTERNAL,
     BACKEND_SANDBOX_PROVIDERS,
 )
@@ -16,6 +19,77 @@ from plugin_marketplace.services.compatibility_matrix_service import COMPATIBILI
 from plugin_marketplace.services.dependency_policy_service import invalid_dependency_allowlist_entries
 from plugin_marketplace.services.frontend_bundle_policy_service import FRONTEND_BUNDLE_REVIEW_ATTESTATION_KIND
 from plugin_marketplace.services.package_attestation_policy_service import invalid_required_attestation_kinds
+
+
+def _docker_backend_runner_errors(*, provider: str, runner_image: str, docker_host: str) -> list[Error]:
+    if provider != BACKEND_SANDBOX_PROVIDER_DOCKER:
+        return []
+    errors: list[Error] = []
+    if not is_immutable_plugin_backend_image(runner_image):
+        errors.append(
+            Error(
+                "Plugin Marketplace Docker runner image is not immutable.",
+                hint="Set PLUGIN_BACKEND_RUNNER_IMAGE to a repository@sha256 digest or sha256 image ID.",
+                id="plugin_marketplace.E032",
+            )
+        )
+    if not docker_host.startswith("tcp://"):
+        errors.append(
+            Error(
+                "Plugin Marketplace Docker runner is not routed through a filtered TCP proxy.",
+                hint="Set PLUGIN_BACKEND_DOCKER_HOST to the dedicated plugin backend Docker proxy.",
+                id="plugin_marketplace.E033",
+            )
+        )
+    return errors
+
+
+def _backend_sandbox_provider_errors(
+    *,
+    provider: str,
+    external_endpoint: str,
+    runner_image: str,
+    docker_host: str,
+    allow_sandboxed_code: bool,
+    backend_sandbox: bool,
+    frontend_sandbox: bool,
+) -> list[Error]:
+    errors: list[Error] = []
+    if provider not in BACKEND_SANDBOX_PROVIDERS:
+        errors.append(
+            Error(
+                "Plugin Marketplace backend sandbox provider is unknown.",
+                hint=f"Set PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER to one of {', '.join(sorted(BACKEND_SANDBOX_PROVIDERS))}.",
+                id="plugin_marketplace.E021",
+            )
+        )
+    if provider == BACKEND_SANDBOX_PROVIDER_EXTERNAL and not external_endpoint.startswith("https://"):
+        errors.append(
+            Error(
+                "Plugin Marketplace external backend sandbox endpoint must be HTTPS.",
+                hint="Set PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT to the trusted sandbox worker pool endpoint.",
+                id="plugin_marketplace.E022",
+            )
+        )
+    if (
+        not settings.DEBUG
+        and allow_sandboxed_code
+        and backend_sandbox
+        and frontend_sandbox
+        and provider not in {BACKEND_SANDBOX_PROVIDER_EXTERNAL, BACKEND_SANDBOX_PROVIDER_DOCKER}
+    ):
+        errors.append(
+            Error(
+                "Plugin Marketplace production backend code must use an isolated runner provider.",
+                hint=(
+                    "Set PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER to external_worker with an HTTPS endpoint "
+                    "or docker_runner with the filtered Docker proxy."
+                ),
+                id="plugin_marketplace.E023",
+            )
+        )
+    errors.extend(_docker_backend_runner_errors(provider=provider, runner_image=runner_image, docker_host=docker_host))
+    return errors
 
 
 @register(Tags.security, deploy=True)
@@ -53,11 +127,13 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
     ).strip()
     frontend_bundle_hosts = getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_BUNDLE_ALLOWED_HOSTS", []) or []
     backend_sandbox_provider = str(
-        getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", "local_subprocess") or ""
+        getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", BACKEND_SANDBOX_PROVIDER_DISABLED) or ""
     ).strip()
     external_backend_sandbox_endpoint = str(
         getattr(settings, "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT", "") or ""
     ).strip()
+    plugin_backend_runner_image = str(getattr(settings, "PLUGIN_BACKEND_RUNNER_IMAGE", "") or "").strip()
+    plugin_backend_docker_host = str(getattr(settings, "PLUGIN_BACKEND_DOCKER_HOST", "") or "").strip()
     compatibility_isolation_mode = str(
         getattr(settings, "PLUGIN_MARKETPLACE_COMPATIBILITY_JOB_ISOLATION_MODE", "in_process_no_code") or ""
     ).strip()
@@ -246,39 +322,17 @@ def plugin_marketplace_deploy_check(app_configs, **kwargs):
                 id="plugin_marketplace.E029",
             )
         )
-    if backend_sandbox_provider not in BACKEND_SANDBOX_PROVIDERS:
-        errors.append(
-            Error(
-                "Plugin Marketplace backend sandbox provider is unknown.",
-                hint=f"Set PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER to one of {', '.join(sorted(BACKEND_SANDBOX_PROVIDERS))}.",
-                id="plugin_marketplace.E021",
-            )
+    errors.extend(
+        _backend_sandbox_provider_errors(
+            provider=backend_sandbox_provider,
+            external_endpoint=external_backend_sandbox_endpoint,
+            runner_image=plugin_backend_runner_image,
+            docker_host=plugin_backend_docker_host,
+            allow_sandboxed_code=allow_sandboxed_code,
+            backend_sandbox=backend_sandbox,
+            frontend_sandbox=frontend_sandbox,
         )
-    if (
-        backend_sandbox_provider == BACKEND_SANDBOX_PROVIDER_EXTERNAL
-        and not external_backend_sandbox_endpoint.startswith("https://")
-    ):
-        errors.append(
-            Error(
-                "Plugin Marketplace external backend sandbox endpoint must be HTTPS.",
-                hint="Set PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT to the trusted sandbox worker pool endpoint.",
-                id="plugin_marketplace.E022",
-            )
-        )
-    if (
-        not settings.DEBUG
-        and allow_sandboxed_code
-        and backend_sandbox
-        and frontend_sandbox
-        and backend_sandbox_provider != BACKEND_SANDBOX_PROVIDER_EXTERNAL
-    ):
-        errors.append(
-            Error(
-                "Plugin Marketplace production backend sandbox must use an external worker provider.",
-                hint="Set PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER=external_worker and configure the HTTPS worker endpoint.",
-                id="plugin_marketplace.E023",
-            )
-        )
+    )
     invalid_dependencies = invalid_dependency_allowlist_entries(dependency_allowlist)
     if invalid_dependencies:
         errors.append(

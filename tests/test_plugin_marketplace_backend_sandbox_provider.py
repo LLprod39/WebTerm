@@ -55,6 +55,17 @@ def _sandbox_manifest(*, plugin_id: str = "acme.external-sandbox", slug: str = "
     return manifest
 
 
+@override_settings(DEBUG=False, PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER="disabled")
+def test_production_disabled_provider_never_executes_plugin_code():
+    result = execute_sandbox_package(
+        package_bytes=b"unused",
+        executor_ref="sandbox:backend/plugin.py:handle",
+        payload={},
+    )
+
+    assert result == {"success": False, "error": "Plugin backend code execution is disabled."}
+
+
 def _install_enabled_package(tmp_path, manifest: dict) -> PluginInstallation:
     package_path = tmp_path / f"{manifest['slug']}.wtp"
     with zipfile.ZipFile(package_path, "w") as archive:

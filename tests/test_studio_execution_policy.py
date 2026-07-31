@@ -1,13 +1,14 @@
 import importlib
 
+import pytest
+
 from studio.policy.execution_policy import build_execution_policy_decisions, summarize_execution_policy_decisions
 
 
-def test_legacy_execution_policy_modules_alias_domain_implementations():
+def test_legacy_execution_policy_alias_modules_are_removed():
     for module_name in ("execution_policy", "execution_policy_types"):
-        legacy = importlib.import_module(f"studio.{module_name}")
-        current = importlib.import_module(f"studio.policy.{module_name}")
-        assert legacy is current
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(f"studio.{module_name}")
 
 
 def _node(node_id: str, node_type: str, data: dict | None = None) -> dict:

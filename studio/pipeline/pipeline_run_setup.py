@@ -31,9 +31,16 @@ class PreparedPipelineRun:
     id_to_node: dict[str, dict[str, Any]]
     outgoing_edges: dict[str, list[dict[str, Any]]]
     incoming_edges: dict[str, list[dict[str, Any]]]
+    resumed: bool = False
 
 
-async def prepare_pipeline_run_start(run: PipelineRun, context: dict | None) -> PreparedPipelineRun | None:
+async def prepare_pipeline_run_start(
+    run: PipelineRun,
+    context: dict | None,
+    *,
+    resume: bool = False,
+    non_idempotent_confirmed: bool = False,
+) -> PreparedPipelineRun | None:
     if context is None:
         context = {}
     if not isinstance(context, dict):
@@ -128,6 +135,64 @@ async def prepare_pipeline_run_start(run: PipelineRun, context: dict | None) -> 
         )
         return None
 
+    if resume:
+        from .pipeline_resume import build_resume_checkpoint
+
+        checkpoint = build_resume_checkpoint(run)
+        if checkpoint.confirmation_nodes and not non_idempotent_confirmed:
+            trigger_data = run.trigger_data if isinstance(run.trigger_data, dict) else {}
+            run.trigger_data = {
+                **trigger_data,
+                "resume_confirmation_required": checkpoint.confirmation_nodes,
+            }
+            await _s2a_fn(run.save)(update_fields=["trigger_data"])
+            await update_run_status(
+                run,
+                PipelineRun.STATUS_FAILED,
+                error="Operator confirmation is required before retrying non-idempotent nodes.",
+                finished_at=timezone.now(),
+            )
+            return None
+
+        trigger_data = run.trigger_data if isinstance(run.trigger_data, dict) else {}
+        run.context = context
+        run.node_states = checkpoint.node_states
+        run.routing_state = checkpoint.routing_state
+        run.trigger_data = {
+            **trigger_data,
+            "execution_policy": policy_summary,
+            "resume_execution": {
+                "resumed_at": timezone.now().isoformat(),
+                "retry_node_ids": checkpoint.retry_node_ids,
+                "confirmed_non_idempotent": bool(non_idempotent_confirmed),
+            },
+        }
+        run.trigger_data.pop("resume_confirmation_required", None)
+        run.error = ""
+        run.finished_at = None
+        if run.started_at is None:
+            run.started_at = timezone.now()
+        await _s2a_fn(run.save)()
+        await update_run_status(run, PipelineRun.STATUS_RUNNING)
+        logger.info(
+            "pipeline run %s resume: entry=%s completed=%s queued=%s retry=%s",
+            run.pk,
+            entry_node_id,
+            len(checkpoint.routing_state.get("completed_nodes") or []),
+            len(checkpoint.routing_state.get("queued_nodes") or []),
+            checkpoint.retry_node_ids,
+        )
+        return PreparedPipelineRun(
+            context=context,
+            nodes=nodes,
+            edges=edges,
+            entry_node_id=entry_node_id,
+            id_to_node=id_to_node,
+            outgoing_edges=outgoing_edges,
+            incoming_edges=incoming_edges,
+            resumed=True,
+        )
+
     run.nodes_snapshot = nodes
     run.edges_snapshot = edges
     run.context = context
@@ -165,4 +230,5 @@ async def prepare_pipeline_run_start(run: PipelineRun, context: dict | None) -> 
         id_to_node=id_to_node,
         outgoing_edges=outgoing_edges,
         incoming_edges=incoming_edges,
+        resumed=False,
     )

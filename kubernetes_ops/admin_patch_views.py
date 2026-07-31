@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAdminSession, K8sAuditEvent
 from kubernetes_ops.services.admin_patch import patch_kubernetes_resource
@@ -30,7 +31,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes admin patch API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _error_response(error: AdminResourceError) -> JsonResponse:

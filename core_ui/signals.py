@@ -7,6 +7,9 @@ from core_ui.models import UserActivityLog
 
 @receiver(user_logged_in)
 def on_user_logged_in(sender, request, user, **kwargs):
+    from core_ui.projects import ensure_default_project
+
+    ensure_default_project(user)
     log_user_activity(
         user=user,
         request=request,

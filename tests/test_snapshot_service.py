@@ -8,6 +8,7 @@ Covers:
 
 import pytest
 from django.contrib.auth.models import User
+from django.test import override_settings
 
 from servers.models import CommandSnapshot, Server
 from servers.services.snapshot_service import (
@@ -168,6 +169,25 @@ class TestSnapshotCRUD:
 
     def test_build_restore_not_found(self):
         assert build_restore_command(999999) is None
+
+    @override_settings(COMMAND_SNAPSHOT_MAX_CONTENT_BYTES=1024)
+    def test_oversized_snapshot_is_bounded_and_cannot_restore_partial_content(self):
+        content = "x" * 2048
+
+        pk = save_snapshot(
+            server_id=self.server.id,
+            user_id=self.user.id,
+            command="sed -i s/a/b/ /etc/large.conf",
+            file_path="/etc/large.conf",
+            content=content,
+        )
+
+        snapshot = CommandSnapshot.objects.get(pk=pk)
+        assert snapshot.content_truncated is True
+        assert len(snapshot.content.encode("utf-8")) <= 1024
+        assert snapshot.byte_size == 2048
+        assert get_snapshot_detail(pk)["content_truncated"] is True
+        assert build_restore_command(pk) is None
 
     def test_list_respects_limit(self):
         for i in range(5):

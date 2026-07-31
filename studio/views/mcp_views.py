@@ -4,7 +4,6 @@ Studio MCP pool endpoints.
 
 import asyncio
 import subprocess
-import sys
 
 from asgiref.sync import async_to_sync
 from django.contrib.auth.models import User
@@ -311,17 +310,11 @@ def _default_test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
 
 
 def _test_mcp_connection(mcp: MCPServerPool) -> tuple[bool, str | None]:
-    package = sys.modules.get("studio.views")
-    tester = getattr(package, "_test_mcp_connection", _default_test_mcp_connection)
-    if tester is _test_mcp_connection:
-        tester = _default_test_mcp_connection
-    return tester(mcp)
+    return _default_test_mcp_connection(mcp)
 
 
 def _inspect_mcp_server(mcp: MCPServerPool):
-    package = sys.modules.get("studio.views")
-    inspector = getattr(package, "inspect_mcp_server", inspect_mcp_server)
-    return inspector(mcp)
+    return inspect_mcp_server(mcp)
 
 
 @require_feature(STUDIO_FEATURE_MCP)

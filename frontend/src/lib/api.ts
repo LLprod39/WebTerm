@@ -144,11 +144,8 @@ async function ensureCsrfToken(forceBackend = false): Promise<string | null> {
 
 async function parseErrorMessage(res: Response): Promise<string> {
   try {
-    const data = await res.json();
-    if (typeof data?.error === "string" && data.error) return data.error;
-    if (typeof data?.error?.message === "string" && data.error.message) return data.error.message;
-    if (typeof data?.error_message === "string" && data.error_message) return data.error_message;
-    if (typeof data?.message === "string" && data.message) return data.message;
+    const data = (await res.json()) as { error?: unknown };
+    if (typeof data.error === "string" && data.error) return data.error;
   } catch {
     // noop
   }
@@ -201,7 +198,18 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new Error(await parseErrorMessage(response));
   }
 
-  return response.json();
+  const payload = (await response.json()) as unknown;
+  if (
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    typeof (payload as { success?: unknown }).success === "boolean" &&
+    typeof (payload as { code?: unknown }).code === "string" &&
+    Object.prototype.hasOwnProperty.call(payload, "data")
+  ) {
+    return (payload as { data: T }).data;
+  }
+  return payload as T;
 }
 
 function normalizeWsOrigin(rawValue: string): string {

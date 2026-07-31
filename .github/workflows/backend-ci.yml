@@ -32,6 +32,8 @@ jobs:
           python-version: "3.11.15"
       - name: Verify frozen runtime contract
         run: python scripts/verify_runtime_contract.py
+      - name: Verify production environment contract
+        run: python scripts/env_contract.py --check
 
   python-quality:
     name: Python Quality
@@ -76,6 +78,8 @@ jobs:
         run: python manage.py check --settings=web_ui.settings.test
       - name: Migration drift
         run: python manage.py makemigrations --check --dry-run --settings=web_ui.settings.test
+      - name: OpenAPI route and schema drift
+        run: python manage.py generate_openapi --check --settings=web_ui.settings.test
 
   backend-unit:
     name: Backend Unit and Coverage
@@ -239,6 +243,20 @@ jobs:
           echo "STUDIO_MCP_RUNNER_TOKEN=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> "$GITHUB_ENV"
       - name: Django production deploy check
         run: python manage.py check --deploy --settings=web_ui.settings.production
+      - name: Prove production deploy check rejects SQLite fallback
+        env:
+          POSTGRES_DB: ""
+          POSTGRES_USER: ""
+          POSTGRES_PASSWORD: ""
+          POSTGRES_HOST: ""
+        run: |
+          set +e
+          output=$(python manage.py check --deploy --settings=web_ui.settings.production 2>&1)
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          test "$status" -ne 0
+          grep -q "core_ui.E006" <<<"$output"
       - name: Prepare the example production environment for Compose parsing
         run: cp .env.production.example .env.production
       - name: Validate production Compose model

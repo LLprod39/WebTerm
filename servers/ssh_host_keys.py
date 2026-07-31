@@ -175,9 +175,7 @@ def build_server_connect_kwargs(
 
     if server.auth_method == "password":
         if not secret:
-            raise ValueError(
-                "Не удалось получить пароль сервера. Проверь сохранённый пароль сервера и MASTER_PASSWORD в .env."
-            )
+            raise ValueError("Не удалось получить пароль сервера. Проверь Managed Secret сервера.")
         kwargs["password"] = secret
     elif server.auth_method == "key":
         if not (server.key_path or "").strip():
@@ -187,9 +185,7 @@ def build_server_connect_kwargs(
         if not (server.key_path or "").strip():
             raise ValueError("Не указан путь к SSH ключу (key+password auth)")
         if not secret:
-            raise ValueError(
-                "Не удалось получить пасфразу ключа. Проверь сохранённый секрет сервера и MASTER_PASSWORD в .env."
-            )
+            raise ValueError("Не удалось получить пасфразу ключа. Проверь Managed Secret сервера.")
         kwargs["client_keys"] = [server.key_path]
         kwargs["passphrase"] = secret
     else:

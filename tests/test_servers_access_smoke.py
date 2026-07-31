@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.test import Client
 
 from servers.models import Server
+from servers.secret_utils import store_server_auth_secret
 
 
 def _json(payload: dict) -> str:
@@ -23,12 +24,10 @@ def _create_server(user: User, **kwargs) -> Server:
 
 
 @pytest.mark.django_db
-def test_reveal_password_requires_master_password_or_session():
+def test_reveal_password_uses_managed_secret_without_master_password():
     owner = User.objects.create_user(username="reveal-owner", password="x")
     server = _create_server(owner, name="reveal-srv", auth_method="password")
-    server.encrypted_password = "ciphertext"
-    server.salt = b"12345678"
-    server.save(update_fields=["encrypted_password", "salt"])
+    store_server_auth_secret(server, secret_value="managed-password")
 
     client = Client()
     client.force_login(owner)
@@ -38,8 +37,8 @@ def test_reveal_password_requires_master_password_or_session():
         content_type="application/json",
     )
 
-    assert response.status_code == 400
-    assert "Master password is required" in response.json()["error"]
+    assert response.status_code == 200
+    assert response.json()["password"] == "managed-password"
 
 
 @pytest.mark.django_db

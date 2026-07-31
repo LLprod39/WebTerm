@@ -26,6 +26,7 @@ from core_ui.access import (
     load_group_permission_sources,
     load_user_explicit_permissions,
 )
+from core_ui.api_errors import internal_error_response
 from core_ui.context_processors import user_can_feature
 from core_ui.decorators import require_feature
 from core_ui.models import GroupAppPermission, UserAppPermission
@@ -282,7 +283,7 @@ def api_access_users(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_users POST error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -385,7 +386,7 @@ def api_access_user_detail(request, user_id):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as exc:
             logger.exception("api_access_user_detail PUT error: %s", exc)
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
     if user.id == request.user.id:
         return JsonResponse({"error": "Cannot delete yourself"}, status=400)
@@ -425,7 +426,7 @@ def api_access_user_password(request, user_id):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_user_password error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -477,4 +478,4 @@ def api_access_user_profile(request, user_id):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_user_profile error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

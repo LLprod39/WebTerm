@@ -12,13 +12,13 @@ from django.views.decorators.http import require_http_methods
 
 from app.sudo_policy import SUDO_AUTH_MODE_STORED_PASSWORD, normalize_sudo_auth_mode
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import Server, ServerGroup
 from servers.secret_utils import (
     clear_server_sudo_secret,
     get_server_auth_secret,
-    has_managed_server_secret,
     has_saved_server_secret,
     has_saved_server_sudo_secret,
     server_secret_storage_mode,
@@ -26,12 +26,12 @@ from servers.secret_utils import (
     store_server_auth_secret,
     store_server_sudo_secret,
 )
+from servers.services.server_ownership import ServerOwnershipTransferError, transfer_server_ownership
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
 from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _active_server_share,
-    _effective_master_password,
     _get_group_role,
     _server_capabilities,
     _shared_server_context_allowed,
@@ -91,7 +91,6 @@ def server_create(request):
         if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and not sudo_password:
             return JsonResponse({"error": "sudo_password is required when sudo_auth_mode=stored_password"}, status=400)
 
-        master_password = _effective_master_password(request, data)
         private_key = str(data.get("ssh_private_key") or "")
         with transaction.atomic():
             server = Server.objects.create(
@@ -114,10 +113,10 @@ def server_create(request):
                 server.key_path = store_uploaded_private_key(server, private_key, passphrase=password)
                 server.save(update_fields=["key_path"])
             if password:
-                store_server_auth_secret(server, secret_value=password, master_password=master_password)
+                store_server_auth_secret(server, secret_value=password)
                 server.save()
             if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and sudo_password:
-                store_server_sudo_secret(server, secret_value=sudo_password, master_password=master_password)
+                store_server_sudo_secret(server, secret_value=sudo_password)
                 server.save()
 
         log_user_activity(
@@ -156,10 +155,10 @@ def server_create(request):
             category="servers",
             action="server_create",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Server create failed: {e}",
+            description="Server create failed (internal_error)",
             entity_type="server",
         )
-        return JsonResponse({"error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required
@@ -228,16 +227,14 @@ def server_update(request, server_id):
 
         if "password" in data:
             password = str(data.get("password") or "").strip()
-            master_password = _effective_master_password(request, data)
             if password:
-                store_server_auth_secret(server, secret_value=password, master_password=master_password)
+                store_server_auth_secret(server, secret_value=password)
 
         if "sudo_auth_mode" in data or "sudo_password" in data:
             sudo_password = str(data.get("sudo_password") or "").strip()
-            master_password = _effective_master_password(request, data)
             if server.sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD:
                 if sudo_password:
-                    store_server_sudo_secret(server, secret_value=sudo_password, master_password=master_password)
+                    store_server_sudo_secret(server, secret_value=sudo_password)
                 elif not has_saved_server_sudo_secret(server):
                     return JsonResponse(
                         {"error": "sudo_password is required when sudo_auth_mode=stored_password"},
@@ -293,11 +290,11 @@ def server_update(request, server_id):
             category="servers",
             action="server_update",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Server update failed: {e}",
+            description="Server update failed (internal_error)",
             entity_type="server",
             entity_id=server_id,
         )
-        return JsonResponse({"error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required
@@ -328,11 +325,59 @@ def server_delete(request, server_id):
             category="servers",
             action="server_delete",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Server delete failed: {e}",
+            description="Server delete failed (internal_error)",
             entity_type="server",
             entity_id=server_id,
         )
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def server_transfer_owner(request, server_id):
+    """Transfer a server inside its existing project tenant."""
+    try:
+        data = json.loads(request.body or b"{}")
+        target_user_id = int(data.get("target_user_id"))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return JsonResponse({"error": "target_user_id is required"}, status=400)
+
+    try:
+        result = transfer_server_ownership(
+            server_id=server_id,
+            actor=request.user,
+            target_user_id=target_user_id,
+        )
+    except ServerOwnershipTransferError as exc:
+        message = str(exc)
+        status = 403 if message.startswith("only the current owner") else 400
+        if message == "server not found":
+            status = 404
+        return JsonResponse({"error": message}, status=status)
+
+    server = result["server"]
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="servers",
+        action="server_owner_transfer",
+        status=UserActivityLog.STATUS_SUCCESS,
+        description=f'Transferred server "{server.name}" to user {result["new_owner_id"]}',
+        entity_type="server",
+        entity_id=server.pk,
+        entity_name=server.name,
+        metadata={key: value for key, value in result.items() if key != "server"},
+    )
+    return JsonResponse(
+        {
+            "success": True,
+            "server_id": server.pk,
+            "old_owner_id": result["old_owner_id"],
+            "new_owner_id": result["new_owner_id"],
+            "closed_connection_count": result["closed_connection_count"],
+        }
+    )
 
 
 @login_required
@@ -399,28 +444,10 @@ def server_reveal_password(request, server_id):
         if not has_saved_server_secret(server):
             return JsonResponse({"success": False, "error": "Saved password is not available"}, status=400)
 
-        data = json.loads(request.body or "{}")
-        master_password = str(data.get("master_password") or "").strip()
-        requires_master_password = not has_managed_server_secret(server)
-        if requires_master_password and not master_password:
-            master_password = str(request.session.get("_mp") or "").strip()
-        if requires_master_password and not master_password:
-            return JsonResponse(
-                {
-                    "success": False,
-                    "error": "Master password is required to reveal the saved password",
-                },
-                status=400,
-            )
         try:
-            password = get_server_auth_secret(
-                server,
-                master_password=master_password,
-            )
+            password = get_server_auth_secret(server)
         except ValueError:
-            return JsonResponse(
-                {"success": False, "error": "Failed to decrypt password. Check MASTER_PASSWORD"}, status=400
-            )
+            return JsonResponse({"success": False, "error": "Failed to read managed server secret"}, status=400)
 
         log_user_activity(
             user=request.user,
@@ -440,4 +467,4 @@ def server_reveal_password(request, server_id):
         )
         return JsonResponse({"success": True, "password": password})
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)

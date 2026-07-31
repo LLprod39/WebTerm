@@ -56,7 +56,7 @@ class _FakeConn:
 
 def _make_consumer(conn: _FakeConn | None) -> tuple[SSHTerminalConsumer, list[dict]]:
     """Build a bare consumer with enough state for direct-exec tests."""
-    cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+    cons = SSHTerminalConsumer()
     cons._ai_state = _terminal_ai_state()
     cons._transport_state = TerminalTransportState(ssh_conn=conn)
     sent: list[dict] = []
@@ -74,13 +74,13 @@ def _run(coro):
 
 class TestLegacyDirectExecModeGate:
     def test_fast_mode_disables_legacy_direct_exec(self):
-        cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        cons = SSHTerminalConsumer()
         cons._ai_state = _terminal_ai_state(execution_mode="fast")
 
         assert cons._legacy_direct_exec_enabled() is False
 
     def test_step_mode_keeps_legacy_direct_exec_available(self):
-        cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        cons = SSHTerminalConsumer()
         cons._ai_state = _terminal_ai_state(execution_mode="step")
 
         assert cons._legacy_direct_exec_enabled() is True
@@ -135,7 +135,7 @@ class TestExecDirectEdgeCases:
                 return SimpleNamespace(stdout="", stderr="", exit_status=0)
 
         cons, _ = _make_consumer(_SlowConn())
-        cons.DIRECT_EXEC_TIMEOUT_SEC = 0.05  # force timeout
+        cons.terminal_ai_runner.DIRECT_EXEC_TIMEOUT_SEC = 0.05  # force timeout
 
         exit_code, output = _run(cons._ai_execute_command_direct("sleep 5", 99))
 

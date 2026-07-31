@@ -12,7 +12,6 @@ from servers.monitoring.monitor import (
     QUICK_COMMANDS,
     check_all_servers,
     check_server,
-    cleanup_old_data,
     probe_server_lite,
     schedule_health_check_for_server_ids,
 )
@@ -29,7 +28,6 @@ __all__ = [
     "QUICK_COMMANDS",
     "check_all_servers",
     "check_server",
-    "cleanup_old_data",
     "probe_server_lite",
     "schedule_health_check_for_server_ids",
 ]

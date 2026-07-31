@@ -32,7 +32,7 @@ def test_terminal_websocket_rejects_query_token_without_resolving_it(monkeypatch
         rejections.append(kwargs)
 
     monkeypatch.setattr(consumer, "_resolve_ws_token_user", record_token, raising=False)
-    monkeypatch.setattr(consumer, "_reject_with_error", record_rejection)
+    monkeypatch.setattr(consumer.terminal_transport, "_reject_with_error", record_rejection)
 
     async_to_sync(consumer.connect)()
 

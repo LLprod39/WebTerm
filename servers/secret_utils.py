@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-
 from core_ui.managed_secrets import (
     get_server_auth_secret as get_managed_server_auth_secret,
 )
@@ -18,15 +16,21 @@ from core_ui.managed_secrets import (
 from core_ui.managed_secrets import (
     set_server_sudo_secret as set_managed_server_sudo_secret,
 )
-from servers.encryption import PasswordEncryption
+
+
+def _invalidate_server_pool(server) -> None:
+    from servers.services.ssh_pool import invalidate_ssh_connections
+
+    if getattr(server, "pk", None):
+        invalidate_ssh_connections(server.pk)
 
 
 def has_saved_server_secret(server) -> bool:
-    return bool(has_server_auth_secret(server.id) or server.encrypted_password)
+    return bool(has_server_auth_secret(server.id))
 
 
 def has_saved_server_sudo_secret(server) -> bool:
-    return bool(has_server_sudo_secret(server.id) or getattr(server, "encrypted_sudo_password", ""))
+    return bool(has_server_sudo_secret(server.id))
 
 
 def has_managed_server_secret(server) -> bool:
@@ -38,47 +42,17 @@ def has_managed_server_sudo_secret(server) -> bool:
 
 
 def server_secret_storage_mode(server) -> str:
-    if has_managed_server_secret(server):
-        return "managed"
-    if server.encrypted_password:
-        return "legacy_master_password"
-    return "none"
+    return "managed" if has_managed_server_secret(server) else "none"
 
 
 def server_sudo_secret_storage_mode(server) -> str:
-    if has_managed_server_sudo_secret(server):
-        return "managed"
-    if getattr(server, "encrypted_sudo_password", ""):
-        return "legacy_master_password"
-    return "none"
+    return "managed" if has_managed_server_sudo_secret(server) else "none"
 
 
 def get_server_auth_secret(server, *, master_password: str = "", fallback_plain: str = "") -> str:
     managed_secret = get_managed_server_auth_secret(server.id)
     if managed_secret:
         return managed_secret
-
-    if server.auth_method not in ("password", "key_password"):
-        return ""
-
-    if server.encrypted_password:
-        resolved_master_password = (master_password or "").strip() or (os.environ.get("MASTER_PASSWORD") or "").strip()
-        if not resolved_master_password:
-            return fallback_plain or ""
-        if not server.salt:
-            raise ValueError("У сервера есть encrypted_password, но отсутствует salt — расшифровка невозможна")
-        try:
-            return PasswordEncryption.decrypt_password(
-                server.encrypted_password,
-                resolved_master_password,
-                bytes(server.salt),
-            )
-        except Exception as exc:
-            if fallback_plain:
-                return fallback_plain
-            msg = (str(exc) or "").strip() or "Неверный MASTER_PASSWORD или повреждённый секрет"
-            raise ValueError(msg) from exc
-
     return fallback_plain or ""
 
 
@@ -87,30 +61,6 @@ def get_server_sudo_secret(server, *, master_password: str = "", fallback_plain:
     if managed_secret:
         return managed_secret
 
-    if getattr(server, "sudo_auth_mode", "none") != "stored_password":
-        return ""
-
-    encrypted = getattr(server, "encrypted_sudo_password", "") or ""
-    if encrypted:
-        resolved_master_password = (master_password or "").strip() or (os.environ.get("MASTER_PASSWORD") or "").strip()
-        if not resolved_master_password:
-            return fallback_plain or ""
-        if not getattr(server, "sudo_salt", None):
-            raise ValueError(
-                "У сервера есть encrypted_sudo_password, но отсутствует sudo_salt — расшифровка невозможна"
-            )
-        try:
-            return PasswordEncryption.decrypt_password(
-                encrypted,
-                resolved_master_password,
-                bytes(server.sudo_salt),
-            )
-        except Exception as exc:
-            if fallback_plain:
-                return fallback_plain
-            msg = (str(exc) or "").strip() or "Неверный MASTER_PASSWORD или повреждённый sudo-секрет"
-            raise ValueError(msg) from exc
-
     return fallback_plain or ""
 
 
@@ -118,53 +68,29 @@ def store_server_auth_secret(server, *, secret_value: str, master_password: str 
     if server.auth_method not in ("password", "key_password"):
         return
     secret = (secret_value or "").strip()
-    if not secret:
-        set_managed_server_auth_secret(server.id, "")
-        server.salt = None
-        server.encrypted_password = ""
-        return
-
     set_managed_server_auth_secret(server.id, secret)
-    if master_password:
-        server.salt = PasswordEncryption.generate_salt()
-        server.encrypted_password = PasswordEncryption.encrypt_password(
-            secret,
-            master_password,
-            server.salt,
-        )
-    elif not server.encrypted_password:
-        server.salt = None
-        server.encrypted_password = ""
+    server.salt = None
+    server.encrypted_password = ""
+    _invalidate_server_pool(server)
 
 
 def store_server_sudo_secret(server, *, secret_value: str, master_password: str = "") -> None:
     secret = (secret_value or "").strip()
-    if not secret:
-        set_managed_server_sudo_secret(server.id, "")
-        server.sudo_salt = None
-        server.encrypted_sudo_password = ""
-        return
-
     set_managed_server_sudo_secret(server.id, secret)
-    if master_password:
-        server.sudo_salt = PasswordEncryption.generate_salt()
-        server.encrypted_sudo_password = PasswordEncryption.encrypt_password(
-            secret,
-            master_password,
-            server.sudo_salt,
-        )
-    elif not server.encrypted_sudo_password:
-        server.sudo_salt = None
-        server.encrypted_sudo_password = ""
+    server.sudo_salt = None
+    server.encrypted_sudo_password = ""
+    _invalidate_server_pool(server)
 
 
 def clear_server_auth_secret(server) -> None:
     set_managed_server_auth_secret(server.id, "")
     server.salt = None
     server.encrypted_password = ""
+    _invalidate_server_pool(server)
 
 
 def clear_server_sudo_secret(server) -> None:
     set_managed_server_sudo_secret(server.id, "")
     server.sudo_salt = None
     server.encrypted_sudo_password = ""
+    _invalidate_server_pool(server)

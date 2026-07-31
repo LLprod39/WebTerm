@@ -10,11 +10,13 @@ class StudioConfig(AppConfig):
 
     def ready(self) -> None:
         from app.agent_kernel import mcp_runtime_registry, skill_promotion_registry, skill_provider_registry
+        from app.prometheus_registry import register_prometheus_provider
         from app.runtime_limits import register_pipeline_run_limit_provider
         from app.smoke_seed_provider import register_smoke_pipeline_seed_provider
         from studio import signals as _signals  # noqa: F401
         from studio.assistant_action_registry import register_assistant_actions
         from studio.mcp.mcp_runtime_adapter import StudioMCPRuntimeProvider
+        from studio.prometheus_metrics import studio_prometheus_lines
         from studio.runtime_limit_provider import DjangoPipelineRunLimitProvider
         from studio.skill_adapter import StudioSkillProvider
         from studio.skill_promotion import StudioSkillPromotionGateway
@@ -22,6 +24,7 @@ class StudioConfig(AppConfig):
 
         mcp_runtime_registry.register(StudioMCPRuntimeProvider())
         register_pipeline_run_limit_provider(DjangoPipelineRunLimitProvider())
+        register_prometheus_provider("studio", studio_prometheus_lines)
         skill_provider_registry.register(StudioSkillProvider())
         skill_promotion_registry.register(StudioSkillPromotionGateway())
         register_smoke_pipeline_seed_provider(DjangoSmokePipelineSeedProvider())

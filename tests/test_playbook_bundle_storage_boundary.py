@@ -73,10 +73,10 @@ def test_production_compose_mounts_private_bundles_only_where_required():
 
 
 def test_nginx_explicitly_denies_legacy_playbook_media_paths():
-    production = (ROOT / "docker" / "nginx" / "production.conf").read_text(encoding="utf-8")
+    production = (ROOT / "docker" / "nginx" / "webterm-server-common.conf").read_text(encoding="utf-8")
     development = (ROOT / "docker" / "nginx" / "default.conf").read_text(encoding="utf-8")
 
-    assert production.count("location ^~ /media/playbook_bundles/") == 2
+    assert production.count("location ^~ /media/playbook_bundles/") == 1
     assert "location = /media/playbook_bundles" in production
     assert "location ^~ /media/playbook_bundles/" in development
 

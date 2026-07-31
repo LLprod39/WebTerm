@@ -56,6 +56,16 @@ SERVER_ID_FIELDS = {
     "server_id_context_key": _str(default="server_id", description="Context key to resolve server_id from."),
 }
 COMMON_SUCCESS_OUTPUT = _schema({"output": _str(description="Human-readable node result.")})
+NODE_RETRY_INPUTS = {
+    "retry_max_attempts": _int(minimum=1, maximum=10, default=1),
+    "retry_initial_delay_seconds": _int(minimum=0, maximum=300, default=1),
+    "retry_backoff_multiplier": _int(minimum=1, maximum=10, default=2),
+    "retry_max_delay_seconds": _int(minimum=1, maximum=3600, default=60),
+    "retry_non_idempotent": _bool(
+        default=False,
+        description="Explicitly permit retry of a node that can repeat external side effects.",
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +75,7 @@ class NodeManifest:
     purpose: str
     source_handles: tuple[str, ...]
     risk_level: str = "read_only"
+    idempotency: str = "idempotent"
     mutates_state: bool = False
     supports_dry_run: bool = False
     requires_approval_by_default: bool = False
@@ -80,6 +91,7 @@ class NodeManifest:
             "purpose": self.purpose,
             "source_handles": list(self.source_handles),
             "risk_level": self.risk_level,
+            "idempotency": self.idempotency,
             "mutates_state": self.mutates_state,
             "supports_dry_run": self.supports_dry_run,
             "requires_approval_by_default": self.requires_approval_by_default,
@@ -103,6 +115,15 @@ def _manifest(
     source_handles: tuple[str, ...],
     **kwargs: Any,
 ) -> NodeManifest:
+    if "idempotency" not in kwargs and bool(kwargs.get("mutates_state")):
+        kwargs["idempotency"] = "non_idempotent"
+    if category != "Triggers" and isinstance(kwargs.get("input_schema"), dict):
+        input_schema = deepcopy(kwargs["input_schema"])
+        properties = input_schema.setdefault("properties", {})
+        if isinstance(properties, dict):
+            for key, value in NODE_RETRY_INPUTS.items():
+                properties.setdefault(key, deepcopy(value))
+        kwargs["input_schema"] = input_schema
     return NodeManifest(
         node_type=node_type,
         category=category,

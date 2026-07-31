@@ -89,7 +89,7 @@ def test_recovery_text_helpers_use_defaults_for_empty_decisions():
 
 
 def test_reserved_retry_plan_item_marks_no_recovery_flag():
-    consumer = object.__new__(SSHTerminalConsumer)
+    consumer = SSHTerminalConsumer()
     consumer._ai_state = TerminalAiState.create(
         run_controller_factory=TerminalAiRunController,
         session_factory=TerminalAiSession,

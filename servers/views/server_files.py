@@ -79,6 +79,7 @@ def server_file_list(request, server_id):
             server,
             secret=password or "",
             path=request.GET.get("path") or ".",
+            user_id=request.user.id,
         )
         return JsonResponse({"success": True, **result})
     except Exception as exc:
@@ -111,12 +112,14 @@ def server_file_read_text(request, server_id):
                 secret=password or "",
                 path=path,
                 sudo_password=sudo_password,
+                user_id=request.user.id,
             )
         else:
             result = async_to_sync(read_text_file)(
                 server,
                 secret=password or "",
                 path=path,
+                user_id=request.user.id,
             )
         log_user_activity(
             user=request.user,
@@ -161,6 +164,7 @@ def server_file_write_text(request, server_id):
                 path=path,
                 content=content,
                 sudo_password=sudo_password,
+                user_id=request.user.id,
             )
         else:
             result = async_to_sync(write_text_file)(
@@ -168,6 +172,7 @@ def server_file_write_text(request, server_id):
                 secret=password or "",
                 path=path,
                 content=content,
+                user_id=request.user.id,
             )
         log_user_activity(
             user=request.user,
@@ -206,6 +211,7 @@ def server_file_chmod(request, server_id):
             secret=password or "",
             path=str(data.get("path") or ""),
             mode=str(data.get("mode") or ""),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -248,6 +254,7 @@ def server_file_chown(request, server_id):
             owner=owner_name or None,
             group=group_name or None,
             recursive=bool(data.get("recursive")),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -298,6 +305,7 @@ def server_file_upload(request, server_id):
                     local_path=local_path,
                     remote_name=uploaded_file.name,
                     overwrite=overwrite,
+                    user_id=request.user.id,
                 )
                 current_path = result["path"]
                 uploaded_entries.append(result["entry"])
@@ -326,7 +334,7 @@ def server_file_upload(request, server_id):
             category="servers",
             action="server_file_upload",
             status=UserActivityLog.STATUS_ERROR,
-            description=f'File upload failed for "{server.name}": {exc}',
+            description=f'File upload failed for "{server.name}" (internal_error)',
             entity_type="server",
             entity_id=server.id,
             entity_name=server.name,
@@ -349,7 +357,7 @@ def server_file_download(request, server_id):
         if not target_path:
             return JsonResponse({"success": False, "error": "Не указан путь к файлу"}, status=400)
 
-        result = async_to_sync(download_file)(server, secret=password or "", path=target_path)
+        result = async_to_sync(download_file)(server, secret=password or "", path=target_path, user_id=request.user.id)
         log_user_activity(
             user=request.user,
             request=request,
@@ -373,7 +381,7 @@ def server_file_download(request, server_id):
             category="servers",
             action="server_file_download",
             status=UserActivityLog.STATUS_ERROR,
-            description=f'File download failed for "{server.name}": {exc}',
+            description=f'File download failed for "{server.name}" (internal_error)',
             entity_type="server",
             entity_id=server.id,
             entity_name=server.name,
@@ -397,7 +405,13 @@ def server_file_rename(request, server_id):
         if not source_path or not new_name:
             return JsonResponse({"success": False, "error": "Нужны path и new_name"}, status=400)
 
-        result = async_to_sync(rename_path)(server, secret=password or "", path=source_path, new_name=new_name)
+        result = async_to_sync(rename_path)(
+            server,
+            secret=password or "",
+            path=source_path,
+            new_name=new_name,
+            user_id=request.user.id,
+        )
         log_user_activity(
             user=request.user,
             request=request,
@@ -436,6 +450,7 @@ def server_file_delete(request, server_id):
             secret=password or "",
             path=target_path,
             recursive=recursive,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -475,6 +490,7 @@ def server_file_mkdir(request, server_id):
             secret=password or "",
             parent_path=parent_path,
             name=folder_name,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,

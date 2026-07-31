@@ -63,7 +63,7 @@ class TestBuildExplainOutputPrompt:
 
 
 def _make_consumer() -> tuple[SSHTerminalConsumer, list[dict]]:
-    cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+    cons = SSHTerminalConsumer()
     sent: list[dict] = []
 
     async def _capture(event: dict[str, Any]) -> None:

@@ -13,6 +13,7 @@ from django.utils import timezone
 from studio.approval_models import ApprovalRequest
 from studio.approval_service import ApprovalAccessError, arm_approval_request, resolve_approval_approver
 from studio.models import PipelineRun
+from studio.telegram_delivery_service import telegram_approval_callback_data
 
 from .pipeline_interactions_telegram import (
     execute_logic_telegram_input,
@@ -121,6 +122,8 @@ async def execute_logic_human_approval(
             approver=approver,
             raw_token=approval_token,
             expires_at=expires_at,
+            telegram_bot_token=preview_tg_bot_token,
+            telegram_chat_id=preview_tg_chat_id,
         ),
         thread_sensitive=True,
     )()
@@ -235,10 +238,20 @@ async def execute_logic_human_approval(
                     "inline_keyboard": [
                         [
                             {
-                                "text": "Review approval request",
+                                "text": "✅ Одобрить",
+                                "callback_data": telegram_approval_callback_data("approved", approval_token),
+                            },
+                            {
+                                "text": "❌ Отклонить",
+                                "callback_data": telegram_approval_callback_data("rejected", approval_token),
+                            },
+                        ],
+                        [
+                            {
+                                "text": "Открыть в WebTerm",
                                 "url": confirmation_url,
-                            }
-                        ]
+                            },
+                        ],
                     ]
                 },
             },

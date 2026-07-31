@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import async_login_required, async_require_feature, require_feature
 from core_ui.views.runtime import get_rag_engine
 
@@ -71,7 +72,7 @@ def api_disk_usage(request):
                 entry["free_human"] = _format_bytes(free)
         return JsonResponse({"paths": report})
     except Exception as exc:
-        return JsonResponse({"paths": [], "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -85,7 +86,7 @@ def api_agents_list(request):
         agents = agent_manager.list_agents()
         return JsonResponse({"agents": agents})
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @async_login_required
@@ -110,7 +111,7 @@ async def api_agent_execute(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -158,4 +159,4 @@ def api_upload_file(request):
             }
         )
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

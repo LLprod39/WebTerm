@@ -11,6 +11,7 @@ import tempfile
 
 from django.http import JsonResponse
 
+from core_ui.api_failure import internal_error_response
 from servers.elevated_files import ElevatedFileError
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ def _sftp_error_response(exc: Exception) -> JsonResponse:
     import asyncssh as _asyncssh
 
     if isinstance(exc, ElevatedFileError):
+        if exc.status >= 500:
+            return internal_error_response(None, exc, status=exc.status)
         return JsonResponse(
             {"success": False, "error": str(exc) or "Elevated file operation failed", "code": exc.code},
             status=exc.status,
@@ -63,9 +66,7 @@ def _sftp_error_response(exc: Exception) -> JsonResponse:
         )
     if isinstance(exc, ValueError):
         return JsonResponse({"success": False, "error": str(exc), "code": "invalid_request"}, status=400)
-    return JsonResponse(
-        {"success": False, "error": str(exc) or "SFTP operation failed", "code": "sftp_error"}, status=500
-    )
+    return internal_error_response(None, exc)
 
 
 def _missing_capability_response(capability: str) -> JsonResponse:

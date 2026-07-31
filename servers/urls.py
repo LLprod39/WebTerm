@@ -107,6 +107,11 @@ urlpatterns = [
     path("api/<int:server_id>/files/delete/", server_files.server_file_delete, name="server_file_delete"),
     path("api/<int:server_id>/files/mkdir/", server_files.server_file_mkdir, name="server_file_mkdir"),
     path("api/<int:server_id>/delete/", server_crud.server_delete, name="server_delete"),
+    path(
+        "api/<int:server_id>/transfer-owner/",
+        server_crud.server_transfer_owner,
+        name="server_transfer_owner",
+    ),
     path("api/<int:server_id>/shares/", server_shares.server_share_list, name="server_share_list"),
     path("api/<int:server_id>/share/", server_shares.server_share_create, name="server_share_create"),
     path(
@@ -120,6 +125,16 @@ urlpatterns = [
     path("api/groups/<int:group_id>/add-member/", server_groups.group_add_member, name="group_add_member"),
     path("api/groups/<int:group_id>/remove-member/", server_groups.group_remove_member, name="group_remove_member"),
     path("api/groups/<int:group_id>/subscribe/", server_groups.group_subscribe, name="group_subscribe"),
+    path(
+        "api/groups/<int:group_id>/bulk-actions/",
+        server_groups.group_bulk_action_create,
+        name="group_bulk_action_create",
+    ),
+    path(
+        "api/bulk-actions/<int:operation_id>/",
+        server_groups.group_bulk_action_detail,
+        name="group_bulk_action_detail",
+    ),
     path("api/bulk-update/", server_groups.bulk_update_servers, name="bulk_update_servers"),
     path("api/global-context/", server_context.global_context_get, name="global_context_get"),
     path("api/global-context/save/", server_context.global_context_save, name="global_context_save"),

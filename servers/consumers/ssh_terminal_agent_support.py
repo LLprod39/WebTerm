@@ -24,7 +24,7 @@ from servers.services.terminal_ai.reporter import (
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalAgentSupportMixin:
+class TerminalAgentSupportOperations:
     async def _ai_build_agent_extras(self) -> dict[str, Any]:
         """Return the opt-in extra targets the user authorised for this session.
 

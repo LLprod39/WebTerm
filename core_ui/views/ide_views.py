@@ -12,6 +12,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 
 
@@ -90,12 +91,12 @@ def api_ide_list_files(request):
             return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as exc:
             logger.error(f"Error listing directory {target_path}: {exc}")
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
         return JsonResponse({"files": files})
     except Exception as exc:
         logger.error(f"api_ide_list_files error: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -130,12 +131,12 @@ def api_ide_read_file(request):
             return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as exc:
             logger.error(f"Error reading file {file_path}: {exc}")
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
         return HttpResponse(content, content_type="text/plain; charset=utf-8")
     except Exception as exc:
         logger.error(f"api_ide_read_file error: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -170,7 +171,7 @@ def api_ide_write_file(request):
             return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as exc:
             logger.error(f"Error creating parent directories for {file_path}: {exc}")
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
         try:
             with open(file_path, "w", encoding="utf-8") as file_obj:
@@ -179,7 +180,7 @@ def api_ide_write_file(request):
             return JsonResponse({"error": "Permission denied"}, status=403)
         except Exception as exc:
             logger.error(f"Error writing file {file_path}: {exc}")
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
         return JsonResponse(
             {
@@ -192,7 +193,7 @@ def api_ide_write_file(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.error(f"api_ide_write_file error: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required

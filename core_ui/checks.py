@@ -21,6 +21,21 @@ def channels_redis_deploy_check(app_configs, **kwargs):
 
 
 @register(Tags.security, deploy=True)
+def production_database_deploy_check(app_configs, **kwargs):
+    engine = str(settings.DATABASES.get("default", {}).get("ENGINE", "") or "")
+    if settings.DEBUG or "sqlite3" not in engine:
+        return []
+
+    return [
+        Error(
+            "SQLite is not supported when DEBUG=False.",
+            hint="Configure POSTGRES_HOST, POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD.",
+            id="core_ui.E006",
+        ),
+    ]
+
+
+@register(Tags.security, deploy=True)
 def opentelemetry_deploy_check(app_configs, **kwargs):
     required = str(os.getenv("WEBTERM_OTEL_REQUIRED", "") or "").strip().lower() in {"1", "true", "yes", "on"}
     if not required:

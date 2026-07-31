@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import errno
-import os
 import uuid
 from typing import Any
 
@@ -14,7 +13,6 @@ from channels.db import database_sync_to_async
 from loguru import logger
 
 from core_ui.activity import log_user_activity_async
-from servers.consumers.ssh_terminal_compat import consumer_module_attr
 from servers.services import terminal_input, terminal_nova_context
 from servers.services.terminal_ai.active_command import (
     active_command_id,
@@ -32,7 +30,7 @@ from servers.services.terminal_ssh_lifecycle import (
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalSessionOpsMixin:
+class TerminalSessionOperations:
     @staticmethod
     def _format_ssh_connect_error(exc: Exception) -> str:
         """Map SSH/network connect failures to a short user-facing message."""
@@ -102,8 +100,6 @@ class SSHTerminalSessionOpsMixin:
         return text
 
     async def _handle_connect(self, content: dict[str, Any]):
-        log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
-
         if not self.server:
             await self._safe_send_json({"type": "error", "message": "Server not loaded"})
             return
@@ -119,8 +115,6 @@ class SSHTerminalSessionOpsMixin:
             # Auto-connect: if master_password not provided, try to get from session
             if not master_password:
                 master_password = await self._get_session_master_password()
-            if not master_password:
-                master_password = (os.environ.get("MASTER_PASSWORD") or "").strip()
             plain_password = (content.get("password") or "").strip()
             term_type = (content.get("term_type") or "xterm-256color").strip() or "xterm-256color"
             term_size = self._parse_term_size(content)
@@ -170,7 +164,7 @@ class SSHTerminalSessionOpsMixin:
                     self._transport_state.ssh_proc.stdin.write(exports + "\n")
 
                 await self._safe_send_json({"type": "status", "status": "connected"})
-                await log_activity_async(
+                await log_user_activity_async(
                     user_id=self._user_id,
                     category="servers",
                     action="terminal_connect",
@@ -208,7 +202,7 @@ class SSHTerminalSessionOpsMixin:
             except Exception as e:
                 logger.exception("SSH terminal connect failed")
                 error_message = self._format_ssh_connect_error(e)
-                await log_activity_async(
+                await log_user_activity_async(
                     user_id=self._user_id,
                     category="servers",
                     action="terminal_connect",
@@ -223,9 +217,6 @@ class SSHTerminalSessionOpsMixin:
                 await self._disconnect_ssh()
 
     async def _handle_input(self, data: str):
-        log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
-        sync_to_async = consumer_module_attr("database_sync_to_async", database_sync_to_async)
-
         await handle_terminal_input(
             self._manual_state,
             data,
@@ -238,8 +229,8 @@ class SSHTerminalSessionOpsMixin:
             intercept_editors=self._transport_state.intercept_editors,
             send_json=self._safe_send_json,
             append_recent_activity=self._append_nova_recent_activity,
-            log_activity=log_activity_async,
-            persist_result=sync_to_async(
+            log_activity=log_user_activity_async,
+            persist_result=database_sync_to_async(
                 self._persist_manual_terminal_command_result,
                 thread_sensitive=True,
             ),

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import json
-import threading
 from typing import Any
 
-from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from app.runtime_limits import get_pipeline_run_limit_error
@@ -94,56 +92,31 @@ def create_pipeline_run(
     if preflight_errors:
         raise ValueError(f"Pipeline is not runnable: {'; '.join(preflight_errors)}")
 
-    return PipelineRun.objects.create(
-        pipeline=pipeline,
-        triggered_by=triggered_by,
-        trigger=trigger,
-        status=PipelineRun.STATUS_PENDING,
-        nodes_snapshot=_clone_json_snapshot(pipeline.nodes or []),
-        edges_snapshot=_clone_json_snapshot(pipeline.edges or []),
-        context=dict(context or {}),
-        trigger_data=dict(trigger_data or {}),
-        entry_node_id=entry,
-        routing_state=_initial_routing_state(entry),
-    )
+    from studio.dispatch import enqueue_pipeline_run_dispatch
+
+    with transaction.atomic():
+        run = PipelineRun.objects.create(
+            pipeline=pipeline,
+            triggered_by=triggered_by,
+            trigger=trigger,
+            status=PipelineRun.STATUS_PENDING,
+            nodes_snapshot=_clone_json_snapshot(pipeline.nodes or []),
+            edges_snapshot=_clone_json_snapshot(pipeline.edges or []),
+            context=dict(context or {}),
+            trigger_data=dict(trigger_data or {}),
+            entry_node_id=entry,
+            routing_state=_initial_routing_state(entry),
+        )
+        enqueue_pipeline_run_dispatch(run)
+    return run
 
 
 def launch_pipeline_run_async(run: PipelineRun) -> None:
-    """Launch pipeline execution in a background thread."""
+    """Compatibility facade: ensure the run is present in the durable queue."""
 
-    if getattr(settings, "PIPELINE_RUNS_DISABLE_BACKGROUND", False):
-        return
+    from studio.dispatch import enqueue_pipeline_run_dispatch
 
-    run_pk = run.pk
-
-    def _run_in_thread():
-        try:
-
-            async def _main():
-                from asgiref.sync import sync_to_async
-
-                from studio.pipeline.pipeline_executor import PipelineExecutor
-
-                run_obj = await sync_to_async(
-                    lambda: PipelineRun.objects.select_related(
-                        "pipeline",
-                        "pipeline__owner",
-                        "triggered_by",
-                        "trigger",
-                    ).get(pk=run_pk)
-                )()
-                executor = PipelineExecutor(run_obj)
-                await executor.execute(context=run_obj.context)
-
-            asyncio.run(_main())
-        except Exception as exc:
-            PipelineRun.objects.filter(pk=run_pk).update(
-                status=PipelineRun.STATUS_FAILED,
-                error=str(exc),
-                finished_at=timezone.now(),
-            )
-
-    threading.Thread(target=_run_in_thread, daemon=True).start()
+    enqueue_pipeline_run_dispatch(run)
 
 
 def build_monitoring_alert_context(alert: ServerAlertSnapshot) -> dict[str, Any]:

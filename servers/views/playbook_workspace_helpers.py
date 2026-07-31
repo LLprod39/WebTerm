@@ -30,21 +30,18 @@ def workspace_error(
     retryable: bool = False,
     details: dict | None = None,
 ) -> JsonResponse:
-    return JsonResponse(
-        {
-            "success": False,
-            "error": {
-                "code": code,
-                "message": message,
-                "stage": stage or None,
-                "field": field,
-                "retryable": retryable,
-                "details": details or {},
-            },
-            "error_message": message,
-        },
-        status=status,
-    )
+    payload = {
+        "success": False,
+        "error": message,
+        "code": code,
+        "details": details or {},
+        "retryable": retryable,
+    }
+    if stage:
+        payload["stage"] = stage
+    if field:
+        payload["field"] = field
+    return JsonResponse(payload, status=status)
 
 
 def get_playbook_for_action(user, playbook_id: int, capability: str):

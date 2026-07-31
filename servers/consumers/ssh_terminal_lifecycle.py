@@ -22,7 +22,7 @@ from servers.services.terminal_ai import preferences as ai_preferences
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalLifecycleMixin:
+class TerminalLifecycleOperations:
     _default_ai_settings = staticmethod(ai_preferences.default_ai_settings)
     _parse_bool = staticmethod(ai_preferences.parse_bool)
     _normalize_pattern_list = staticmethod(ai_preferences.normalize_pattern_list)
@@ -96,6 +96,11 @@ class SSHTerminalLifecycleMixin:
             )
             return
 
+        from servers.services.server_ownership import server_access_group_name
+
+        self._transport_state.access_group_name = server_access_group_name(self.server.id)
+        await self.channel_layer.group_add(self._transport_state.access_group_name, self.channel_name)
+
         has_encrypted_secret = await database_sync_to_async(has_saved_server_secret, thread_sensitive=True)(self.server)
 
         # F2-9: restore persisted chat history so the conversation survives
@@ -136,9 +141,28 @@ class SSHTerminalLifecycleMixin:
         )
 
     async def disconnect(self, code):
+        access_group_name = self._transport_state.access_group_name
+        if access_group_name:
+            with contextlib.suppress(Exception):
+                await self.channel_layer.group_discard(access_group_name, self.channel_name)
+            self._transport_state.access_group_name = ""
         await self._cancel_ai()
         await self._drain_ai_background_tasks()
         await self._disconnect_ssh()
+
+    async def server_access_revoked(self, event):
+        """Close a live terminal when server ownership or capability changes."""
+        if int(event.get("server_id") or 0) != int(getattr(self.server, "id", 0) or 0):
+            return
+        await self._safe_send_json(
+            {
+                "type": "error",
+                "code": "server_access_revoked",
+                "message": "Доступ к серверу был изменён. Терминальная сессия закрыта.",
+            }
+        )
+        await self._disconnect_ssh()
+        await self.close(code=4403)
 
     async def _drain_ai_background_tasks(self) -> None:
         """Cancel and drain any fire-and-forget AI background tasks (F1-7)."""

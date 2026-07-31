@@ -361,7 +361,9 @@ def test_compatibility_api_apply_and_run_binding(monkeypatch):
         content_type="application/json",
     )
     assert publish_before_validation.status_code == 400
-    assert "must pass standard revision validation" in publish_before_validation.json()["error"]["message"]
+    publish_error = publish_before_validation.json()
+    assert publish_error["code"] == "playbook_publish_failed"
+    assert "must pass standard revision validation" in publish_error["error"]
     validation = client.post(
         f"/servers/api/playbooks/{playbook.id}/revisions/{revision.result_revision_id}/validate/",
         data=json.dumps(

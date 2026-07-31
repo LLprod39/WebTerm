@@ -15,7 +15,7 @@ import asyncssh
 from asyncssh import sftp as asyncssh_sftp
 
 from servers.models import Server
-from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
+from servers.services.ssh_pool import PooledSFTPClient, ssh_connection_pool
 
 TEXT_FILE_MAX_BYTES = 256 * 1024
 OWNER_GROUP_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -80,11 +80,17 @@ def _serialize_entry(path: str, name: str, attrs: asyncssh.SFTPAttrs) -> dict[st
 
 
 @asynccontextmanager
-async def open_server_sftp(server: Server, *, secret: str = "") -> AsyncIterator[asyncssh_sftp.SFTPClient]:
-    known_hosts = await ensure_server_known_hosts(server)
-    connect_kwargs = build_server_connect_kwargs(server, secret=secret, known_hosts=known_hosts)
-    async with asyncssh.connect(**connect_kwargs) as conn, conn.start_sftp_client() as sftp:
+async def open_server_sftp(
+    server: Server,
+    *,
+    secret: str = "",
+    user_id: int | None = None,
+) -> AsyncIterator[PooledSFTPClient]:
+    sftp = await ssh_connection_pool.open_sftp(server, secret=secret, user_id=user_id)
+    try:
         yield sftp
+    finally:
+        await sftp.close()
 
 
 async def resolve_remote_path(sftp: asyncssh_sftp.SFTPClient, path: str | None) -> str:
@@ -131,8 +137,10 @@ def normalize_owner_group(value: str | None, *, label: str) -> str | None:
     return normalized
 
 
-async def get_directory_listing(server: Server, *, secret: str = "", path: str | None = None) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+async def get_directory_listing(
+    server: Server, *, secret: str = "", path: str | None = None, user_id: int | None = None
+) -> dict[str, Any]:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         current_path = await resolve_remote_path(sftp, path)
         attrs = await sftp.stat(current_path)
         if _entry_kind(attrs) != "dir":
@@ -161,8 +169,10 @@ async def get_directory_listing(server: Server, *, secret: str = "", path: str |
         }
 
 
-async def create_directory(server: Server, *, secret: str = "", parent_path: str | None, name: str) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+async def create_directory(
+    server: Server, *, secret: str = "", parent_path: str | None, name: str, user_id: int | None = None
+) -> dict[str, Any]:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         base_path = await resolve_remote_path(sftp, parent_path)
         target_path = join_remote_path(base_path, name)
         await sftp.mkdir(target_path)
@@ -173,8 +183,10 @@ async def create_directory(server: Server, *, secret: str = "", parent_path: str
         }
 
 
-async def rename_path(server: Server, *, secret: str = "", path: str, new_name: str) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+async def rename_path(
+    server: Server, *, secret: str = "", path: str, new_name: str, user_id: int | None = None
+) -> dict[str, Any]:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         source_path = await resolve_remote_path(sftp, path)
         parent_path = posixpath.dirname(source_path.rstrip("/")) or "/"
         target_name = normalize_remote_name(new_name)
@@ -217,8 +229,15 @@ async def _walk_tree_paths(sftp: asyncssh_sftp.SFTPClient, target_path: str) -> 
     return paths
 
 
-async def delete_path(server: Server, *, secret: str = "", path: str, recursive: bool = False) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+async def delete_path(
+    server: Server,
+    *,
+    secret: str = "",
+    path: str,
+    recursive: bool = False,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_path(sftp, path)
         parent_path = posixpath.dirname(target_path.rstrip("/")) or "/"
         attrs = await sftp.lstat(target_path)
@@ -243,8 +262,9 @@ async def upload_local_file(
     local_path: str,
     remote_name: str,
     overwrite: bool = False,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_dir = await resolve_remote_path(sftp, remote_dir)
         target_name = normalize_remote_name(remote_name)
         remote_path = join_remote_path(target_dir, target_name)
@@ -265,8 +285,9 @@ async def download_file(
     secret: str = "",
     path: str,
     spool_max_size: int = 8 * 1024 * 1024,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_path(sftp, path)
         attrs = await sftp.stat(target_path)
         if _entry_kind(attrs) == "dir":
@@ -296,8 +317,9 @@ async def read_text_file(
     secret: str = "",
     path: str,
     max_bytes: int = TEXT_FILE_MAX_BYTES,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_path(sftp, path)
         attrs = await sftp.stat(target_path)
         if _entry_kind(attrs) == "dir":
@@ -334,8 +356,9 @@ async def write_text_file(
     path: str,
     content: str,
     max_bytes: int = TEXT_FILE_MAX_BYTES,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_file_path(sftp, path)
         attrs = None
         previous_content: str | None = None
@@ -401,9 +424,10 @@ async def change_permissions(
     secret: str = "",
     path: str,
     mode: str | int,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     normalized_mode = normalize_permission_mode(mode)
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_path(sftp, path)
         await sftp.chmod(target_path, normalized_mode)
         attrs = await sftp.stat(target_path)
@@ -421,13 +445,14 @@ async def change_owner(
     owner: str | None = None,
     group: str | None = None,
     recursive: bool = False,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     normalized_owner = normalize_owner_group(owner, label="owner")
     normalized_group = normalize_owner_group(group, label="group")
     if not normalized_owner and not normalized_group:
         raise ValueError("Укажите owner, group или оба значения")
 
-    async with open_server_sftp(server, secret=secret) as sftp:
+    async with open_server_sftp(server, secret=secret, user_id=user_id) as sftp:
         target_path = await resolve_remote_path(sftp, path)
         targets = await _walk_tree_paths(sftp, target_path) if recursive else [target_path]
         for item_path in targets:

@@ -107,6 +107,7 @@ def pipeline_run_to_dict(run) -> dict:
     from studio.pipeline.pipeline_secrets import redact_pipeline_nodes, serialize_pipeline_node_states
 
     trigger = getattr(run, "trigger", None)
+    trigger_data = run.trigger_data if isinstance(run.trigger_data, dict) else {}
     return {
         "id": run.pk,
         "pipeline_id": run.pipeline_id,
@@ -127,6 +128,8 @@ def pipeline_run_to_dict(run) -> dict:
         "trigger_type": trigger.trigger_type if trigger else "manual",
         "trigger_name": trigger.name if trigger else "",
         "trigger_node_id": trigger.node_id if trigger else run.entry_node_id,
+        "can_resume": run.status in {run.STATUS_FAILED, run.STATUS_STOPPED},
+        "resume_confirmation_required": list(trigger_data.get("resume_confirmation_required") or []),
     }
 
 

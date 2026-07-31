@@ -70,7 +70,7 @@
             "modal.server.key_path": "SSH Key Path",
             "modal.server.save": "Save Server",
             "modal.cancel": "Cancel",
-            "modal.server.crypto_info": "Passwords are encrypted with AES-256. Set your master password via the lock icon in the terminal or via MASTER_PASSWORD env variable.",
+            "modal.server.crypto_info": "Passwords are stored in the encrypted Managed Secret store.",
 
             // Network tab
             "modal.network.proxy": "HTTP Proxy",
@@ -244,7 +244,7 @@
             "modal.server.key_path": "\u041f\u0443\u0442\u044c \u043a SSH-\u043a\u043b\u044e\u0447\u0443",
             "modal.server.save": "\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u0441\u0435\u0440\u0432\u0435\u0440",
             "modal.cancel": "\u041e\u0442\u043c\u0435\u043d\u0430",
-            "modal.server.crypto_info": "\u041f\u0430\u0440\u043e\u043b\u0438 \u0437\u0430\u0448\u0438\u0444\u0440\u043e\u0432\u0430\u043d\u044b AES-256. \u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u0435 \u043c\u0430\u0441\u0442\u0435\u0440-\u043f\u0430\u0440\u043e\u043b\u044c \u0447\u0435\u0440\u0435\u0437 \u0438\u043a\u043e\u043d\u043a\u0443 \u0437\u0430\u043c\u043a\u0430 \u0432 \u0442\u0435\u0440\u043c\u0438\u043d\u0430\u043b\u0435 \u0438\u043b\u0438 \u0447\u0435\u0440\u0435\u0437 \u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u0443\u044e MASTER_PASSWORD.",
+            "modal.server.crypto_info": "\u041f\u0430\u0440\u043e\u043b\u0438 \u0445\u0440\u0430\u043d\u044f\u0442\u0441\u044f \u0432 \u0437\u0430\u0448\u0438\u0444\u0440\u043e\u0432\u0430\u043d\u043d\u043e\u043c \u0445\u0440\u0430\u043d\u0438\u043b\u0438\u0449\u0435 Managed Secret.",
 
             // Network tab
             "modal.network.proxy": "HTTP \u041f\u0440\u043e\u043a\u0441\u0438",

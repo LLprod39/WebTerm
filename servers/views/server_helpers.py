@@ -1,11 +1,9 @@
 """
 Shared server view helpers.
 
-These helpers are intentionally kept out of the legacy `_views_all.py` module so
+These helpers are imported directly by focused view and operator modules so
 focused view modules can depend on explicit names.
 """
-
-import os
 
 from django.contrib.auth.models import User
 from django.db.models import Q
@@ -74,37 +72,24 @@ def _server_has_capability(server: Server, user: User, capability: str, share: S
 
 
 def _effective_master_password(request, data: dict | None = None) -> str:
-    """Resolve master password from payload, session, or env."""
+    """Legacy request compatibility only; environment fallback is intentionally forbidden."""
     data = data or {}
     from_payload = str(data.get("master_password") or "").strip()
     if from_payload:
         return from_payload
-
     try:
-        from_session = str(request.session.get("_mp") or "").strip()
+        return str(request.session.get("_mp") or "").strip()
     except Exception:
-        from_session = ""
-    if from_session:
-        return from_session
-
-    return str(os.environ.get("MASTER_PASSWORD") or "").strip()
+        return ""
 
 
 def _resolve_server_secret(server: Server, request, data: dict) -> str | None:
-    """Resolve server password/passphrase from encrypted secret or direct payload."""
+    """Resolve a server password/passphrase from ManagedSecret or direct payload."""
     if server.auth_method not in ["password", "key_password"]:
         return None
 
     direct_secret = str(data.get("password") or "").strip()
-    master_password = _effective_master_password(request, data)
-    try:
-        secret = get_server_auth_secret(
-            server,
-            master_password=master_password,
-            fallback_plain=direct_secret,
-        )
-    except ValueError as exc:
-        raise ValueError("Не удалось расшифровать пароль сервера. Проверь MASTER_PASSWORD в .env.") from exc
+    secret = get_server_auth_secret(server, fallback_plain=direct_secret)
     return secret or None
 
 
@@ -114,15 +99,7 @@ def _resolve_server_sudo_secret(server: Server, request, data: dict) -> str:
         return ""
 
     direct_secret = str(data.get("sudo_password") or "").strip()
-    master_password = _effective_master_password(request, data)
-    try:
-        return get_server_sudo_secret(
-            server,
-            master_password=master_password,
-            fallback_plain=direct_secret,
-        )
-    except ValueError as exc:
-        raise ValueError("Не удалось расшифровать sudo-пароль сервера. Проверь MASTER_PASSWORD в .env.") from exc
+    return get_server_sudo_secret(server, fallback_plain=direct_secret)
 
 
 def _require_ssh_server(server: Server) -> None:

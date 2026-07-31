@@ -15,6 +15,7 @@ from loguru import logger
 
 from app.core.model_config import model_manager
 from core_ui.activity import log_user_activity
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import async_login_required, async_require_feature, require_feature
 from core_ui.models import ChatMessage, ChatSession, UserActivityLog
 from core_ui.views.chat_helpers import (
@@ -72,7 +73,7 @@ def api_chats_list(request):
         return JsonResponse({"chats": items})
     except Exception as exc:
         logger.error(f"api_chats_list: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -89,7 +90,7 @@ def api_chats_create(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.error(f"api_chats_create: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -116,7 +117,7 @@ def api_chat_detail(request, chat_id):
         )
     except Exception as exc:
         logger.error(f"api_chat_detail: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @async_login_required
@@ -280,7 +281,7 @@ async def chat_api(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 def _build_task_context_prompt(task_context: dict) -> str:
@@ -343,7 +344,7 @@ def api_clear_history(request):
             category="assistant",
             action="chat_history_clear",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Failed to clear chat history: {exc}",
+            description="Failed to clear chat history (internal_error)",
             entity_type="chat",
         )
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

@@ -6,6 +6,7 @@ from typing import Any
 from django.http import JsonResponse
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from kubernetes_ops.models import K8sActionRequest, K8sAuditEvent
 from kubernetes_ops.serializers import serialize_action_request
 from kubernetes_ops.services.action_requests import (
@@ -34,7 +35,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes ops action API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _staff_required(request) -> JsonResponse | None:

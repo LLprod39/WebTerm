@@ -9,6 +9,7 @@ from django.utils import timezone
 from loguru import logger
 
 from app.egress_redaction import redact_egress_text
+from core_ui.api_errors import internal_error_response
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sAuditEvent
 from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.serializers import serialize_admin_action, serialize_admin_session
@@ -80,7 +81,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes admin action API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _visible_actions_for_user(user, *, include_all: bool = False):

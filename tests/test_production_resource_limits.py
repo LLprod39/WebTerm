@@ -15,14 +15,15 @@ def test_django_rejects_large_data_and_spools_large_files():
 
 def test_nginx_has_small_default_and_explicit_upload_exceptions():
     config = (ROOT / "docker" / "nginx" / "production.conf").read_text(encoding="utf-8")
+    common = (ROOT / "docker" / "nginx" / "webterm-server-common.conf").read_text(encoding="utf-8")
 
     assert config.count("client_max_body_size 2m;") == 1
-    assert config.count("location = /servers/api/playbooks/import/preview/") == 2
-    assert config.count("location = /servers/api/playbooks/import/commit/") == 2
-    assert config.count("location = /api/plugins/packages/install-local-upload/") == 2
-    assert config.count("client_max_body_size 12m;") == 6
-    assert config.count("location ~ ^/servers/api/[0-9]+/files/upload/$") == 2
-    assert config.count("client_max_body_size 52m;") == 2
+    assert common.count("location = /servers/api/playbooks/import/preview/") == 1
+    assert common.count("location = /servers/api/playbooks/import/commit/") == 1
+    assert common.count("location = /api/plugins/packages/install-local-upload/") == 1
+    assert common.count("client_max_body_size 12m;") == 3
+    assert common.count("location ~ ^/servers/api/[0-9]+/files/upload/$") == 1
+    assert common.count("client_max_body_size 52m;") == 1
 
 
 def test_backend_and_every_worker_have_runtime_resource_limits():

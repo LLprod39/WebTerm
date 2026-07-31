@@ -36,15 +36,15 @@ def server_secret_storage_check() -> dict[str, Any]:
         return readiness_check(
             "server_secret_storage",
             "Server secret storage",
-            "warning",
-            "Есть legacy server-секреты, завязанные на MASTER_PASSWORD. Новые секреты уже пишутся в ManagedSecret.",
+            "error",
+            "Legacy server-секреты ещё не перенесены. Запустите migrate_legacy_server_secrets --apply --clear-legacy.",
             details=details,
         )
     return readiness_check(
         "server_secret_storage",
         "Server secret storage",
         "ready",
-        "Legacy MASTER_PASSWORD server secrets не найдены; текущие секреты хранятся через ManagedSecret.",
+        "Legacy server secrets не найдены; текущие секреты хранятся только через ManagedSecret.",
         details=details,
     )
 

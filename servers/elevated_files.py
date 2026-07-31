@@ -17,8 +17,10 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
+from app.tools.ssh_tools import _build_env_exports
 from servers.models import Server
 from servers.secret_utils import get_server_sudo_secret
+from servers.services.ssh_pool import ssh_connection_pool
 from servers.sftp import TEXT_FILE_MAX_BYTES
 
 SUDO_AUTH_MODE_STORED_PASSWORD = "stored_password"
@@ -75,68 +77,48 @@ async def _run_elevated(
     command: str,
     sudo_password: str = "",
     input_text: str | None = None,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     password = await _resolve_sudo_password(server, sudo_password)
     sudo_prefix = _build_sudo_prefix(has_password=bool(password))
     # Inject sudo prefix once at the start of the remote command.
     full_command = f"{sudo_prefix} {command}"
 
-    # Prefer ssh_manager path via linux_ui runtime but pass password through execute.
-    from app.tools.ssh_tools import ssh_manager
+    # Feed password (+ optional payload) on stdin without double-wrapping sudo.
+    run_input = None
+    if password:
+        run_input = f"{password}\n"
+        if input_text is not None:
+            run_input = f"{run_input}{input_text}"
+    elif input_text is not None:
+        run_input = input_text
 
-    conn_id = await ssh_manager.connect(
-        host=server.host,
-        username=server.username,
-        password=secret or None,
-        key_path=server.key_path if server.auth_method in ["key", "key_password"] else None,
-        port=server.port,
-        network_config=server.network_config or {},
-        server=server,
+    final_command = full_command
+    environment = (server.network_config or {}).get("environment")
+    if environment:
+        if not isinstance(environment, dict):
+            raise ValueError("network_config.environment must be an object")
+        exports = _build_env_exports(environment)
+        if exports:
+            final_command = "; ".join(exports) + "; " + full_command
+
+    run_kwargs: dict[str, Any] = {"check": False}
+    if run_input is not None:
+        run_kwargs["input"] = run_input
+    result = await ssh_connection_pool.run_command(
+        server,
+        final_command,
+        secret=secret,
+        user_id=user_id,
+        **run_kwargs,
     )
-    try:
-        # When password is provided we already baked `sudo -S` into the command.
-        # Feed password (+ optional payload) on stdin without going through prepare_sudo_command
-        # double-wrapping (command already contains sudo).
-        run_input = None
-        if password:
-            run_input = f"{password}\n"
-            if input_text is not None:
-                run_input = f"{run_input}{input_text}"
-        elif input_text is not None:
-            run_input = input_text
-
-        conn_data = ssh_manager.connections.get(conn_id)
-        if isinstance(conn_data, dict):
-            conn = conn_data["connection"]
-            network_config = conn_data.get("network_config") or {}
-        else:
-            conn = conn_data
-            network_config = {}
-
-        final_command = full_command
-        if network_config.get("environment"):
-            env_vars = network_config["environment"]
-            if isinstance(env_vars, dict):
-                exports = []
-                for key, value in env_vars.items():
-                    exports.append(f"export {shlex.quote(str(key))}={shlex.quote(str(value))}")
-                if exports:
-                    final_command = "; ".join(exports) + "; " + full_command
-
-        run_kwargs: dict[str, Any] = {"check": False}
-        if run_input is not None:
-            run_kwargs["input"] = run_input
-
-        result = await conn.run(final_command, **run_kwargs)
-        return {
-            "stdout": result.stdout or "",
-            "stderr": result.stderr or "",
-            "exit_code": result.exit_status if result.exit_status is not None else -1,
-            "success": result.exit_status == 0,
-            "used_password": bool(password),
-        }
-    finally:
-        await ssh_manager.disconnect(conn_id)
+    return {
+        "stdout": result.stdout or "",
+        "stderr": result.stderr or "",
+        "exit_code": result.exit_status if result.exit_status is not None else -1,
+        "success": result.exit_status == 0,
+        "used_password": bool(password),
+    }
 
 
 def _classify_sudo_failure(stderr: str, exit_code: int, *, had_password: bool) -> ElevatedFileError:
@@ -173,6 +155,7 @@ async def read_text_file_elevated(
     path: str,
     sudo_password: str = "",
     max_bytes: int = TEXT_FILE_MAX_BYTES,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     target = _validate_remote_path(path)
     quoted = shlex.quote(target)
@@ -183,6 +166,7 @@ async def read_text_file_elevated(
         secret=secret,
         command=command,
         sudo_password=sudo_password,
+        user_id=user_id,
     )
     if not result.get("success"):
         raise _classify_sudo_failure(
@@ -214,6 +198,7 @@ async def write_text_file_elevated(
     content: str,
     sudo_password: str = "",
     max_bytes: int = TEXT_FILE_MAX_BYTES,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     target = _validate_remote_path(path)
     payload = str(content or "").encode("utf-8")
@@ -231,6 +216,7 @@ async def write_text_file_elevated(
         command=shell_cmd,
         sudo_password=sudo_password,
         input_text=f"{b64}\n",
+        user_id=user_id,
     )
     if not result.get("success"):
         raise _classify_sudo_failure(

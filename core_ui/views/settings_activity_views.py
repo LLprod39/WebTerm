@@ -13,6 +13,7 @@ from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 
@@ -233,4 +234,4 @@ def api_settings_activity_logs(request):
         )
     except Exception as exc:
         logger.exception("api_settings_activity_logs error: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

@@ -14,6 +14,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.models import Server, ServerKnowledge
@@ -100,7 +101,7 @@ def server_knowledge_create(request, server_id):
         DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         return JsonResponse({"success": True, "id": knowledge.id})
     except Exception as exc:
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -144,7 +145,7 @@ def server_knowledge_update(request, server_id, knowledge_id):
         DjangoServerMemoryStore()._sync_manual_knowledge_snapshot_sync(knowledge.id)
         return JsonResponse({"success": True})
     except Exception as exc:
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -159,4 +160,4 @@ def server_knowledge_delete(request, server_id, knowledge_id):
         knowledge.delete()
         return JsonResponse({"success": True})
     except Exception as exc:
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

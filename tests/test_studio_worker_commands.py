@@ -6,6 +6,7 @@ from app.background_workers import STUDIO_MONITOR_WORKER, STUDIO_TELEGRAM_BOT_WO
 from servers.models import BackgroundWorkerState
 from studio.management.commands.run_telegram_bot import Command as TelegramBotCommand
 from studio.models import Pipeline
+from studio.telegram_delivery_service import telegram_worker_key
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -68,7 +69,7 @@ def test_telegram_bot_max_polls_updates_worker_state(monkeypatch):
 
     state = BackgroundWorkerState.objects.get(
         worker_kind=STUDIO_TELEGRAM_BOT_WORKER,
-        worker_key="pytest-telegram",
+        worker_key=telegram_worker_key("123456789:TESTTOKEN"),
     )
     assert state.status == BackgroundWorkerState.STATUS_IDLE
     assert state.last_started_at is not None

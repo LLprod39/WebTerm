@@ -60,6 +60,7 @@ python scripts/check_architecture_sizes.py --strict-new
 
 - [Ansible Playbook Workspace plan](ANSIBLE_PLAYBOOK_WORKSPACE_PLAN.md) defines the standalone Playbooks section, canonical YAML editor, immutable drafts/revisions, compatibility and runtime fingerprints, target bindings, sharing roles, project bundles, exact-revision execution, migration, tests, and the durable-worker production gate.
 - [ADR-0001: primary runtime and toolchain](adr/0001-primary-runtime-and-toolchain.md) freezes the supported Python/Django/Node/npm contract and the boundary between WSL release evidence and native Windows compatibility.
+- [ADR-0003: Kubernetes Ops and MARS boundary](adr/0003-kubernetes-ops-and-mars-boundary.md) keeps both domains fail-closed and optional until a concrete extraction trigger requires a separate package and release cycle.
 - [CI and Git governance](CI_GOVERNANCE.md) defines independent product gates, the no-regression rollout, `test -> main` promotion and safe branch-protection bootstrap.
 - [Release documentation](../releases/README.md) contains the v0.1 support matrix, frozen capability scope and evidence-driven release checklist.
 - [Operations control plane roadmap](WEBTERM_OPERATIONS_CONTROL_PLANE_ROADMAP.md) is the active three-release product plan: Pilot Hardening, Daily Operations and Infrastructure Cockpit, centered on the existing server and Playbooks lifecycle.

@@ -64,8 +64,8 @@ __all__ = [
 ]
 
 
-async def get_linux_ui_settings(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=SETTINGS_COMMAND)
+async def get_linux_ui_settings(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=SETTINGS_COMMAND, user_id=user_id)
     sections = _parse_marked_sections(raw)
 
     user_accounts = []
@@ -121,8 +121,8 @@ async def get_linux_ui_settings(server: Server, *, secret: str = "") -> dict[str
     }
 
 
-async def get_linux_ui_overview(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=OVERVIEW_COMMAND)
+async def get_linux_ui_overview(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=OVERVIEW_COMMAND, user_id=user_id)
     parsed = _parse_key_value_lines(raw)
 
     load_parts = (parsed.get("loadavg") or "").split()
@@ -179,7 +179,9 @@ async def get_linux_ui_overview(server: Server, *, secret: str = "") -> dict[str
     }
 
 
-async def get_linux_ui_services(server: Server, *, secret: str = "", limit: int = 120) -> dict[str, Any]:
+async def get_linux_ui_services(
+    server: Server, *, secret: str = "", limit: int = 120, user_id: int | None = None
+) -> dict[str, Any]:
     normalized_limit = _normalize_service_limit(limit)
     raw = await _run_command(
         server,
@@ -188,6 +190,7 @@ async def get_linux_ui_services(server: Server, *, secret: str = "", limit: int 
             "systemctl list-units --type=service --all --plain --no-legend --no-pager 2>/dev/null "
             f"| sed '/^[[:space:]]*$/d' | head -n {normalized_limit}"
         ),
+        user_id=user_id,
     )
     _ensure_systemd_output(raw)
 
@@ -243,6 +246,7 @@ async def get_linux_ui_service_logs(
     secret: str = "",
     service: str,
     lines: int = 80,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     unit = _validate_service_name(service)
     normalized_lines = _normalize_service_limit(lines, default=80, minimum=20, maximum=200)
@@ -257,6 +261,7 @@ async def get_linux_ui_service_logs(
             f"systemctl status {service_arg} --no-pager --lines={normalized_lines} 2>&1 || true; "
             "fi"
         ),
+        user_id=user_id,
     )
     output = str(result.get("stdout") or "") or str(result.get("stderr") or "")
     _ensure_systemd_output(output)
@@ -279,6 +284,7 @@ async def run_linux_ui_service_action(
     secret: str = "",
     service: str,
     action: str,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     unit = _validate_service_name(service)
     normalized_action = str(action or "").strip().lower()
@@ -293,7 +299,7 @@ async def run_linux_ui_service_action(
         "printf '__STATUS__\\n'\n"
         f"systemctl status {service_arg} --no-pager --lines=18 2>&1 || true\n"
     )
-    result = await _run_command_result(server, secret=secret, command=command)
+    result = await _run_command_result(server, secret=secret, command=command, user_id=user_id)
     output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
     _ensure_systemd_output(output)
 
@@ -316,7 +322,9 @@ async def run_linux_ui_service_action(
     }
 
 
-async def get_linux_ui_processes(server: Server, *, secret: str = "", limit: int = 80) -> dict[str, Any]:
+async def get_linux_ui_processes(
+    server: Server, *, secret: str = "", limit: int = 80, user_id: int | None = None
+) -> dict[str, Any]:
     normalized_limit = _normalize_service_limit(limit, default=80, minimum=20, maximum=160)
     raw = await _run_command(
         server,
@@ -328,6 +336,7 @@ async def get_linux_ui_processes(server: Server, *, secret: str = "", limit: int
             "printf '__MEM__\\n'\n"
             f"ps -eo pid=,user=,%cpu=,%mem=,etime=,comm=,args= --sort=-%mem 2>/dev/null | head -n {normalized_limit}\n"
         ),
+        user_id=user_id,
     )
     parsed_meta = _parse_key_value_lines(raw.partition("__CPU__\n")[0])
     _, _, cpu_and_rest = raw.partition("__CPU__\n")
@@ -354,6 +363,7 @@ async def run_linux_ui_process_action(
     secret: str = "",
     pid: int | str,
     action: str,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     process_id = _validate_pid(pid)
     normalized_action = str(action or "").strip().lower()
@@ -368,7 +378,7 @@ async def run_linux_ui_process_action(
         "printf '__PROCESS__\\n'\n"
         f"ps -p {process_id} -o pid=,user=,%cpu=,%mem=,etime=,comm=,args= 2>/dev/null || true\n"
     )
-    result = await _run_command_result(server, secret=secret, command=command)
+    result = await _run_command_result(server, secret=secret, command=command, user_id=user_id)
     output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
     action_exit = 1
     process_excerpt = ""

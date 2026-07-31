@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import builtins
 import importlib.util
+import io
 import json
+import os
 import socket
+import subprocess
 import sys
 import tempfile
 import traceback
@@ -118,9 +122,11 @@ def _address_host_port(address: Any) -> tuple[str, int | None]:
 
 
 def _install_egress_guard(manifest: dict[str, Any]) -> None:
+    import _socket
+
     allowed = _declared_egress(manifest)
     original_create_connection = socket.create_connection
-    original_socket_connect = socket.socket.connect
+    original_socket_type = _socket.socket
 
     def check_address(address: Any) -> None:
         host, port = _address_host_port(address)
@@ -136,12 +142,80 @@ def _install_egress_guard(manifest: dict[str, Any]) -> None:
         check_address(address)
         return original_create_connection(address, *args, **kwargs)
 
-    def guarded_socket_connect(self, address):
-        check_address(address)
-        return original_socket_connect(self, address)
+    class GuardedSocket:
+        def __init__(self, *args, **kwargs):
+            self._socket = original_socket_type(*args, **kwargs)
+
+        def connect(self, address):
+            check_address(address)
+            return self._socket.connect(address)
+
+        def connect_ex(self, address):
+            check_address(address)
+            return self._socket.connect_ex(address)
+
+        def sendto(self, data, *args):
+            address = args[-1] if args else None
+            check_address(address)
+            return self._socket.sendto(data, *args)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return self._socket.__exit__(*args)
+
+        def __getattr__(self, name):
+            return getattr(self._socket, name)
 
     socket.create_connection = guarded_create_connection
-    socket.socket.connect = guarded_socket_connect
+    socket.socket = GuardedSocket
+    _socket.socket = GuardedSocket
+
+
+def _install_process_and_file_guards(package_root: Path, *, allowed_paths: tuple[Path, ...] = ()) -> None:
+    root = package_root.resolve()
+    original_open = builtins.open
+    original_io_open = io.open
+    original_os_open = os.open
+    resolved_allowed = {path.resolve() for path in allowed_paths}
+
+    def checked_path(file) -> None:
+        if isinstance(file, int):
+            return
+        try:
+            candidate = Path(file).expanduser().resolve()
+            if candidate in resolved_allowed:
+                return
+            candidate.relative_to(root)
+        except (OSError, TypeError, ValueError) as exc:
+            raise PermissionError("Sandbox file access is restricted to the extracted plugin package.") from exc
+
+    def guarded_open(file, *args, **kwargs):
+        checked_path(file)
+        return original_open(file, *args, **kwargs)
+
+    def guarded_io_open(file, *args, **kwargs):
+        checked_path(file)
+        return original_io_open(file, *args, **kwargs)
+
+    def guarded_os_open(file, *args, **kwargs):
+        checked_path(file)
+        return original_os_open(file, *args, **kwargs)
+
+    def denied_process(*_args, **_kwargs):
+        raise PermissionError("Sandbox process creation is denied.")
+
+    builtins.open = guarded_open
+    io.open = guarded_io_open
+    os.open = guarded_os_open
+    for name in ("Popen", "run", "call", "check_call", "check_output", "getoutput", "getstatusoutput"):
+        setattr(subprocess, name, denied_process)
+    for name in ("system", "popen"):
+        setattr(os, name, denied_process)
+    for name in dir(os):
+        if name.startswith(("exec", "spawn")) and callable(getattr(os, name, None)):
+            setattr(os, name, denied_process)
 
 
 def _load_handler(root: Path, relative_path: str, function_name: str):
@@ -188,6 +262,7 @@ def main() -> int:
             root = Path(temp_dir)
             _extract_package(Path(args.package), root)
             _install_egress_guard(_load_manifest(root))
+            _install_process_and_file_guards(root, allowed_paths=(Path(args.output),))
             handler = _load_handler(root, relative_path, function_name)
             if args.smoke_only:
                 result = {"executor_ref": args.executor_ref, "loaded": callable(handler)}

@@ -338,7 +338,6 @@ validate_required_env() {
     FRONTEND_APP_URL
     ALLOWED_HOSTS
     CSRF_TRUSTED_ORIGINS
-    MASTER_PASSWORD
     POSTGRES_DB
     POSTGRES_USER
     POSTGRES_PASSWORD
@@ -489,11 +488,7 @@ wait_for_service() {
 }
 
 run_backend_bootstrap() {
-  echo "==> Applying migrations and platform templates"
-  compose exec -T backend python manage.py migrate --noinput
-  compose exec -T backend python manage.py load_pipeline_templates --force || true
-  compose exec -T backend python manage.py collectstatic --noinput || true
-  echo "==> Django system checks"
+  echo "==> Validating the migrated backend"
   compose exec -T backend python manage.py check
   compose exec -T backend python manage.py check --deploy
 }
@@ -524,6 +519,7 @@ wait_for_stack() {
   echo "==> Waiting for background workers"
   # Workers usually have no Docker HEALTHCHECK — State.Status=running is enough.
   wait_for_service scheduled-pipelines 180
+  wait_for_service operator-execution 180
   wait_for_service scheduled-agents 180
   wait_for_service monitor 180
   wait_for_service ops-supervisor 180
@@ -597,6 +593,7 @@ Background workers (agents / studio / monitoring):
   ops-supervisor          # full/multi agent execution + watchers + memory dreams
   scheduled-agents        # cron/interval agent dispatch
   scheduled-pipelines     # Studio pipeline schedules
+  operator-execution      # durable Operator Chat turns
   monitor                 # server monitoring cycles
   kubernetes-ops-sync       # Kubernetes inventory sync
   celery-worker           # async memory/tasks queue
@@ -654,7 +651,6 @@ main() {
   if [[ "$GENERATE_SECRETS" -eq 1 ]]; then
     generate_secret_if_needed "DJANGO_SECRET_KEY" 64
     generate_secret_if_needed "MANAGED_SECRET_KEY" 64
-    generate_secret_if_needed "MASTER_PASSWORD" 48
     generate_secret_if_needed "POSTGRES_PASSWORD" 32
     generate_secret_if_needed "STUDIO_MCP_RUNNER_TOKEN" 64
   fi
@@ -695,6 +691,7 @@ main() {
     backend
     playbook-execution-worker
     scheduled-pipelines
+    operator-execution
     scheduled-agents
     monitor
     ops-supervisor

@@ -41,6 +41,7 @@ async def get_linux_ui_logs(
     source: str = "journal",
     lines: int = 120,
     service: str = "",
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     normalized_source = str(source or "journal").strip().lower()
     if normalized_source not in LOG_SOURCES:
@@ -66,6 +67,7 @@ async def get_linux_ui_logs(
         server,
         secret=secret,
         command="\n".join(meta_script_lines) + "\nprintf '__CONTENT__\\n'\n" + content_command + "\n",
+        user_id=user_id,
     )
 
     meta_raw, _, content = raw.partition("__CONTENT__\n")
@@ -95,8 +97,8 @@ async def get_linux_ui_logs(
     }
 
 
-async def get_linux_ui_disk(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=DISK_COMMAND)
+async def get_linux_ui_disk(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=DISK_COMMAND, user_id=user_id)
     _, _, mounts_and_rest = raw.partition("__MOUNTS__\n")
     mounts_raw, _, dirs_and_rest = mounts_and_rest.partition("__DIRS__\n")
     dirs_raw, _, logs_and_rest = dirs_and_rest.partition("__LOGS__\n")
@@ -124,8 +126,8 @@ async def get_linux_ui_disk(server: Server, *, secret: str = "") -> dict[str, An
     }
 
 
-async def get_linux_ui_packages(server: Server, *, secret: str = "") -> dict[str, Any]:
-    capabilities = await get_linux_ui_capabilities(server, secret=secret)
+async def get_linux_ui_packages(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    capabilities = await get_linux_ui_capabilities(server, secret=secret, user_id=user_id)
     package_manager = capabilities.get("package_manager") or ""
     if package_manager not in {"apt", "dnf", "yum"}:
         return {
@@ -158,7 +160,7 @@ async def get_linux_ui_packages(server: Server, *, secret: str = "") -> dict[str
             f"{update_command} | awk 'NF >= 2 && $1 !~ /^Last/ && $1 !~ /^Obsoleting/ {{print $1\"\\t\"$2}}' | head -n 15\n"
         )
 
-    raw = await _run_command(server, secret=secret, command=command)
+    raw = await _run_command(server, secret=secret, command=command, user_id=user_id)
     _, _, installed_and_rest = raw.partition("__INSTALLED__\n")
     installed_raw, _, updates_raw = installed_and_rest.partition("__UPDATES__\n")
 
@@ -176,8 +178,8 @@ async def get_linux_ui_packages(server: Server, *, secret: str = "") -> dict[str
     }
 
 
-async def get_linux_ui_docker(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=DOCKER_COMMAND)
+async def get_linux_ui_docker(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=DOCKER_COMMAND, user_id=user_id)
     meta_raw, _, error_and_rest = raw.partition("__ERROR__\n")
     error_raw, _, containers_and_rest = error_and_rest.partition("__CONTAINERS__\n")
     containers_raw, _, stats_raw = containers_and_rest.partition("__STATS__\n")
@@ -207,6 +209,7 @@ async def get_linux_ui_docker_logs(
     secret: str = "",
     container: str,
     lines: int = 80,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     container_ref = _validate_container_ref(container)
     normalized_lines = _normalize_service_limit(lines, default=80, minimum=20, maximum=200)
@@ -214,6 +217,7 @@ async def get_linux_ui_docker_logs(
         server,
         secret=secret,
         command=f"docker logs --tail {normalized_lines} {shlex.quote(container_ref)} 2>&1\n",
+        user_id=user_id,
     )
     return {
         "container": container_ref,
@@ -228,6 +232,7 @@ async def run_linux_ui_docker_action(
     secret: str = "",
     container: str,
     action: str,
+    user_id: int | None = None,
 ) -> dict[str, Any]:
     container_ref = _validate_container_ref(container)
     normalized_action = str(action or "").strip().lower()
@@ -244,6 +249,7 @@ async def run_linux_ui_docker_action(
             "printf '__INSPECT__\\n'\n"
             f"docker inspect --format '{{{{.State.Status}}}}\\t{{{{.Config.Image}}}}\\t{{{{.Name}}}}' {shlex.quote(container_ref)} 2>&1 || true\n"
         ),
+        user_id=user_id,
     )
     output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
     action_exit = 1
@@ -265,8 +271,8 @@ async def run_linux_ui_docker_action(
     }
 
 
-async def get_linux_ui_network(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=NETWORK_COMMAND)
+async def get_linux_ui_network(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=NETWORK_COMMAND, user_id=user_id)
     meta_raw, _, links_and_rest = raw.partition("__LINKS__\n")
     links_raw, _, addrs_and_rest = links_and_rest.partition("__ADDRS__\n")
     addrs_raw, _, routes_and_rest = addrs_and_rest.partition("__ROUTES__\n")

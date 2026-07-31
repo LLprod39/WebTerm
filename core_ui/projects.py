@@ -58,21 +58,33 @@ def ensure_default_project(user) -> Project:
 def projects_for_user(user):
     if not user or not getattr(user, "is_authenticated", False):
         return Project.objects.none()
-    ensure_default_project(user)
     return Project.objects.filter(memberships__user=user, is_archived=False).distinct().order_by("name", "id")
 
 
-def active_project_for_user(user) -> Project | None:
+def active_project_for_user(user, *, request=None) -> Project | None:
     if not user or not getattr(user, "is_authenticated", False):
         return None
+    cache_key = getattr(user, "pk", None)
+    if request is not None:
+        cache = getattr(request, "_webterm_active_project_cache", None)
+        if cache is None:
+            cache = {}
+            request._webterm_active_project_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
     membership = (
         ProjectMembership.objects.select_related("project")
         .filter(user=user, is_active=True, project__is_archived=False)
         .first()
     )
-    if membership:
-        return membership.project
-    return ensure_default_project(user)
+    project = membership.project if membership else None
+    if project is None:
+        # Compatibility fallback for already-provisioned users. Read paths must
+        # never acquire row locks or create tenant rows.
+        project = Project.objects.filter(owner=user, is_default=True, is_archived=False).first()
+    if request is not None:
+        request._webterm_active_project_cache[cache_key] = project
+    return project
 
 
 def membership_for(user, project: Project | None = None) -> ProjectMembership | None:
@@ -185,6 +197,8 @@ def assign_active_project(instance, *, user_field: str) -> None:
         return
     user = getattr(instance, user_field)
     project = active_project_for_user(user)
+    if project is None:
+        project = ensure_default_project(user)
     if project is not None:
         if not user_can_write_project(user, project):
             raise PermissionDenied("Project operator role required")

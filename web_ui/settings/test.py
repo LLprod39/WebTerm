@@ -32,11 +32,16 @@ EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 CELERY_TASK_ALWAYS_EAGER = True
 CELERY_TASK_EAGER_PROPAGATES = True
 LLM_USAGE_SKIP_DETACHED_SQLITE_LOGGING = False
-PIPELINE_RUNS_DISABLE_BACKGROUND = True
 MARS_AGENT_RUNTIME = "host"
 MARS_ALLOW_UNSAFE_HOST_RUNTIME_FOR_TESTS = True
 AGENT_COMMAND_RUNTIME = "host"
 AGENT_COMMAND_ALLOW_UNSAFE_HOST_RUNTIME_FOR_TESTS = True
+# Application limits use a process-wide cache while SQLite test user ids are
+# reused between transactional tests. Contract tests enable explicit limits
+# with override_settings; all other tests must remain isolated.
+APP_RATE_LIMIT_ASSISTANT_PER_MINUTE = 0
+APP_RATE_LIMIT_PIPELINE_RUNS_PER_MINUTE = 0
+APP_RATE_LIMIT_AGENT_RUNS_PER_MINUTE = 0
 # Admin Mode is disabled by default in every runtime. Tests opt in explicitly
 # so the existing guarded Admin contracts remain covered without widening v0.1.
 KUBERNETES_ADMIN_MODE_ENABLED = True

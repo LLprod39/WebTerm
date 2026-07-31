@@ -21,11 +21,10 @@ from studio.mcp.mcp_security import (
 from studio.views.mcp_views import _default_test_mcp_connection
 
 
-def test_legacy_mcp_modules_alias_domain_implementations():
+def test_legacy_mcp_alias_modules_are_removed():
     for module_name in ("mcp_client", "mcp_runner_client", "mcp_security", "mcp_tool_runtime"):
-        legacy = importlib.import_module(f"studio.{module_name}")
-        current = importlib.import_module(f"studio.mcp.{module_name}")
-        assert legacy is current
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(f"studio.{module_name}")
 
 
 def test_build_mcp_subprocess_env_drops_platform_secrets(monkeypatch):

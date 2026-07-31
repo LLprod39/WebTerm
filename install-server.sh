@@ -459,9 +459,6 @@ prepare_env() {
   if [[ -z "$(env_get MANAGED_SECRET_KEY)" || "$(env_get MANAGED_SECRET_KEY)" == replace-* ]]; then
     env_set MANAGED_SECRET_KEY "$(random_string 64)"
   fi
-  if [[ -z "$(env_get MASTER_PASSWORD)" || "$(env_get MASTER_PASSWORD)" == change-* ]]; then
-    env_set MASTER_PASSWORD "$(random_string 48)"
-  fi
   if [[ -z "$(env_get POSTGRES_PASSWORD)" || "$(env_get POSTGRES_PASSWORD)" == change-* ]]; then
     env_set POSTGRES_PASSWORD "$(random_string 32)"
   fi

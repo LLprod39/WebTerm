@@ -22,6 +22,8 @@ def _json_object_env(name: str) -> dict[str, str]:
 
 def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
     signing_keys = _json_object_env("PLUGIN_MARKETPLACE_SIGNING_KEYS")
+    external_backend_endpoint = (os.getenv("PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT", "") or "").strip()
+    backend_provider_default = "local_subprocess" if debug else "disabled"
     return {
         # The first production release keeps plugin execution out of scope until
         # the external signing/scanning/isolation trust stack is provisioned.
@@ -101,11 +103,10 @@ def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
             False,
         ),
         "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER": (
-            os.getenv("PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", "local_subprocess") or "local_subprocess"
+            os.getenv("PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", backend_provider_default)
+            or backend_provider_default
         ).strip(),
-        "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT": (
-            os.getenv("PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT", "") or ""
-        ).strip(),
+        "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_ENDPOINT": external_backend_endpoint,
         "PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_AUTH_TOKEN": (
             os.getenv("PLUGIN_MARKETPLACE_EXTERNAL_BACKEND_SANDBOX_AUTH_TOKEN", "") or ""
         ).strip(),
@@ -117,6 +118,13 @@ def build_plugin_marketplace_settings(*, debug: bool) -> dict[str, object]:
             "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_MAX_OUTPUT_BYTES",
             256 * 1024,
         ),
+        "PLUGIN_BACKEND_RUNNER_IMAGE": (os.getenv("PLUGIN_BACKEND_RUNNER_IMAGE", "") or "").strip(),
+        "PLUGIN_BACKEND_DOCKER_HOST": (os.getenv("PLUGIN_BACKEND_DOCKER_HOST", "") or "").strip(),
+        "PLUGIN_BACKEND_DOCKER_COMMAND": (os.getenv("PLUGIN_BACKEND_DOCKER_COMMAND", "docker") or "docker").strip(),
+        "PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK": (os.getenv("PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK", "") or "").strip(),
+        "PLUGIN_BACKEND_DOCKER_CPUS": (os.getenv("PLUGIN_BACKEND_DOCKER_CPUS", "0.5") or "0.5").strip(),
+        "PLUGIN_BACKEND_DOCKER_MEMORY": (os.getenv("PLUGIN_BACKEND_DOCKER_MEMORY", "128m") or "128m").strip(),
+        "PLUGIN_BACKEND_DOCKER_PIDS_LIMIT": env_int("PLUGIN_BACKEND_DOCKER_PIDS_LIMIT", 32),
         "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED": env_bool(
             "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED",
             False,

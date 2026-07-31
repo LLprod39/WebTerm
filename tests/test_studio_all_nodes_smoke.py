@@ -40,7 +40,7 @@ def test_all_nodes_smoke_pipeline_contains_every_known_node_type_and_validates()
 
 
 def test_all_nodes_smoke_pipeline_has_no_policy_or_integration_errors(monkeypatch, tmp_path):
-    monkeypatch.setattr("studio.views._NOTIF_CONFIG_PATH", tmp_path / "notif.json", raising=False)
+    monkeypatch.setattr("studio.views.notification_views._NOTIF_CONFIG_PATH", tmp_path / "notif.json")
     monkeypatch.setenv("GEMINI_API_KEY", "test-gemini")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "test-telegram-token")
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "12345")

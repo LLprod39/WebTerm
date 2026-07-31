@@ -31,16 +31,6 @@ from servers.playbooks.dispatch import (
 from servers.services.playbook_runner_support import _persist_run
 
 
-def test_legacy_playbook_modules_alias_domain_implementations():
-    legacy_dispatch = importlib.import_module("servers.playbook_dispatch")
-    current_dispatch = importlib.import_module("servers.playbooks.dispatch")
-    legacy_worker = importlib.import_module("servers.playbook_execution_worker")
-    current_worker = importlib.import_module("servers.playbooks.worker")
-
-    assert legacy_dispatch is current_dispatch
-    assert legacy_worker is current_worker
-
-
 def _run(user: User, *, options: dict | None = None) -> PlaybookRun:
     return PlaybookRun.objects.create(
         user=user,

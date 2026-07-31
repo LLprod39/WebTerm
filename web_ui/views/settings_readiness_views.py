@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from loguru import logger
 
+from core_ui.api_failure import internal_error_response
 from core_ui.context_processors import user_can_feature
 from web_ui.services.settings_readiness import build_settings_readiness_report
 
@@ -29,4 +30,4 @@ def api_settings_readiness(request):
         return JsonResponse(build_settings_readiness_report())
     except Exception as exc:
         logger.exception("settings readiness failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

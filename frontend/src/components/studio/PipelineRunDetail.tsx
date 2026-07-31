@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileText,
   Loader2,
+  Play,
   RotateCcw,
   Square,
   Terminal,
@@ -211,6 +212,31 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
     },
   });
 
+  const resumeMutation = useMutation({
+    mutationFn: () => studioRuns.resume(runId, true),
+    onSuccess: () => {
+      refetch();
+      toast({ description: localize(lang, "Запуск продолжен с контрольной точки", "Run resumed from checkpoint") });
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        description: error instanceof Error ? error.message : localize(lang, "Не удалось продолжить запуск", "Failed to resume run"),
+      });
+    },
+  });
+
+  const confirmAndResume = () => {
+    const confirmed = window.confirm(
+      localize(
+        lang,
+        "Продолжить с последнего завершённого шага? Прерванный неидемпотентный шаг может быть выполнен повторно. Подтвердите только после проверки его фактического результата.",
+        "Resume from the last completed step? An interrupted non-idempotent step may run again. Confirm only after checking its actual effects.",
+      ),
+    );
+    if (confirmed) resumeMutation.mutate();
+  };
+
   const navigate = useNavigate();
 
   if (!run) {
@@ -253,6 +279,18 @@ export function PipelineRunDetail({ runId, onClose, lang }: { runId: number; onC
           {(run.status === "running" || run.status === "pending") && (
             <Button size="sm" variant="destructive" className="h-9 gap-1.5" onClick={() => stopMutation.mutate()} disabled={stopMutation.isPending}>
               <Square className="h-3.5 w-3.5" /> {localize(lang, "Стоп", "Stop")}
+            </Button>
+          )}
+          {run.can_resume && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-9 gap-1.5"
+              onClick={confirmAndResume}
+              disabled={resumeMutation.isPending}
+            >
+              {resumeMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              {localize(lang, "Продолжить", "Resume")}
             </Button>
           )}
           <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => navigate(`/studio/pipeline/${run.pipeline_id}`)}>

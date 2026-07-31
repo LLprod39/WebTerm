@@ -33,185 +33,13 @@ from servers.services.terminal_parallel_batch import execute_terminal_parallel_b
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalAiExecutionMixin:
+class TerminalAiExecutionOperations:
     async def _ai_process_queue(self):
-        """
-        Execute queued AI commands sequentially.
-        Pauses when a command requires confirmation.
-        """
         send_idle = True
-        execution_mode = self._normalize_execution_mode(self._ai_state.session.execution_mode)
-        step_mode = execution_mode == "step"
-        direct_exec_enabled = self._legacy_direct_exec_enabled()
         try:
-            while True:
-                if not self._transport_state.ssh_proc:
-                    break
-                if not self.server or not self._user_id:
-                    break
-
-                # 4.2: parallel batch detection ──────────────────────────
-                async with self._ai_state.lock:
-                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
-                    parallel_batch = ai_session.prepare_parallel_batch(
-                        direct_exec_enabled=direct_exec_enabled,
-                        step_mode=step_mode,
-                        has_ssh_connection=bool(self._transport_state.ssh_conn),
-                    )
-
-                if parallel_batch.is_ready:
-                    await self._execute_parallel_batch(parallel_batch.items, parallel_batch.indices)
-                    async with self._ai_state.lock:
-                        ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
-                        ai_session.advance_after_parallel_batch(parallel_batch.indices)
-                        apply_legacy_ai_queue_state(self, ai_session)
-                    continue
-                # ── end parallel batch ─────────────────────────────────────
-
-                async with self._ai_state.lock:
-                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
-                    queue_step = ai_session.prepare_next_step()
-                    apply_legacy_ai_queue_state(self, ai_session)
-
-                if queue_step.action == "empty":
-                    break
-                if queue_step.action == "advance":
-                    continue
-                if queue_step.action == "blocked_skipped":
-                    await self._send_ai_event(
-                        terminal_events.ai_command_status(
-                            item_id=queue_step.command_id or 0,
-                            status="skipped",
-                            reason=queue_step.reason or "forbidden",
-                        )
-                    )
-                    continue
-                if queue_step.action == "waiting_confirm":
-                    # Pause until user confirms/cancels current command
-                    await self._send_ai_event(
-                        terminal_events.ai_status(
-                            "waiting_confirm",
-                            id=queue_step.command_id or 0,
-                            reason=queue_step.reason or "dangerous",
-                        )
-                    )
-                    send_idle = False
-                    return
-
-                item = queue_step.item or {}
-                item_id = int(queue_step.command_id or 0)
-                cmd = queue_step.command
-
-                await self._send_ai_event(terminal_events.ai_command_status(item_id=item_id, status="running"))
-
-                # F2-8 v2: route safe stateless commands through a non-PTY
-                # channel so the interactive shell is not polluted by
-                # diagnostic reads (df -h, ps aux, systemctl status…).
-                item_exec_mode = str(item.get("exec_mode") or "pty").strip().lower()
-                if not direct_exec_enabled and item_exec_mode == "direct":
-                    item_exec_mode = "pty"
-                # A5: dry-run short-circuit. We do NOT touch the remote
-                # host at all — neither via PTY nor via exec_direct. The
-                # fake output makes downstream history/report/memory work
-                # exactly as on a real run so the user can preview the
-                # plan end-to-end.
-                dry_run_active = bool((self._ai_state.settings or {}).get("dry_run", False))
-
-                # 2.4: capture pre-execution snapshot for file-modifying cmds.
-                if not dry_run_active and self._transport_state.ssh_conn:
-                    await self._maybe_snapshot_file(cmd, item_id)
-
-                try:
-                    if dry_run_active:
-                        output_snippet = f"[DRY-RUN] Would execute: {cmd}"
-                        exit_code = 0
-                        # Emit a direct_output-style event so the UI
-                        # renders the preview inline without marker tokens.
-                        await self._send_ai_event(
-                            terminal_events.ai_direct_output(
-                                item_id=item_id,
-                                command=cmd,
-                                output=output_snippet,
-                                exit_code=0,
-                                dry_run=True,
-                            )
-                        )
-                    elif item_exec_mode == "direct":
-                        exit_code, output_snippet = await self._ai_execute_command_direct(cmd, item_id)
-                    else:
-                        exit_code, output_snippet = await self._ai_execute_command(cmd, item_id)
-                except asyncio.CancelledError:
-                    raise
-                except Exception as e:
-                    logger.warning("AI command execution failed (id=%s): %s", item_id, e)
-                    # Do not crash the whole queue on one bad command; let recovery logic decide.
-                    exit_code = 1
-                    output_snippet = f"WEUAI_EXECUTION_ERROR: {type(e).__name__}: {e}"
-                await self._log_ai_command_history(
-                    user_id=self._user_id,
-                    server_id=self.server.id,
-                    command=cmd,
-                    output_snippet=output_snippet,
-                    exit_code=exit_code,
-                )
-
-                if unavailable_cmd := unavailable_command_name(cmd, exit_code):
-                    self._ai_state.unavailable_commands.add(unavailable_cmd)
-
-                # ── Adaptive error recovery ─────────────────────────────────
-                # For non-trivial failures (not success, not interrupted, not skipped):
-                # call the LLM to decide: retry / skip / ask user / abort.
-                #
-                # F1-9: in step-mode we skip this dedicated recovery call and let
-                # the unified post-step controller (_ai_step_decide_next) handle
-                # both success and error cases in a single LLM round-trip
-                # (-30–50% LLM cost in step-mode on errors). In fast-mode the
-                # block below is the only place where errors are handled.
-                recovery_action = await handle_fast_error_recovery(
-                    self,
-                    item=item,
-                    item_id=item_id,
-                    command=cmd,
-                    exit_code=exit_code,
-                    output=output_snippet,
-                    step_mode=step_mode,
-                )
-
-                if recovery_action == "abort":
-                    break
-                # ── End adaptive error recovery ─────────────────────────────
-
-                async with self._ai_state.lock:
-                    ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
-                    ai_session.mark_current_done(item_id, exit_code, output_snippet or "")
-                    apply_legacy_ai_queue_state(self, ai_session)
-
-                is_stream = bool(item.get("streaming", False))
-                await self._send_ai_event(
-                    terminal_events.ai_command_status(
-                        item_id=item_id,
-                        status="done",
-                        exit_code=exit_code,
-                        streaming=is_stream,
-                    )
-                )
-
-                # Step-by-step mode: re-evaluate after each command, not only on errors.
-                if step_mode:
-                    should_stop = await handle_step_post_command(
-                        self,
-                        item_id=item_id,
-                        command=cmd,
-                        exit_code=exit_code,
-                        output=output_snippet or "",
-                    )
-                    if should_stop:
-                        break
-
-            # После выполнения всех команд — сформировать отчёт по выводу (анализ логов, проблем и т.д.)
+            send_idle = await self._run_ai_queue()
             if send_idle:
                 await handle_queue_completion(self)
-
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -223,6 +51,154 @@ class SSHTerminalAiExecutionMixin:
         finally:
             if send_idle:
                 await self._send_ai_event(terminal_events.ai_status("idle"))
+
+    async def _run_ai_queue(self) -> bool:
+        execution_mode = self._normalize_execution_mode(self._ai_state.session.execution_mode)
+        step_mode = execution_mode == "step"
+        direct_exec_enabled = self._legacy_direct_exec_enabled()
+        while self._transport_state.ssh_proc and self.server and self._user_id:
+            if await self._execute_ready_parallel_batch(direct_exec_enabled, step_mode):
+                continue
+            queue_step = await self._prepare_next_queue_step()
+            transition = await self._handle_queue_transition(queue_step)
+            if transition == "continue":
+                continue
+            if transition == "waiting":
+                return False
+            if transition == "complete":
+                return True
+            if await self._execute_queue_item(queue_step, direct_exec_enabled, step_mode):
+                return True
+        return True
+
+    async def _execute_ready_parallel_batch(self, direct_exec_enabled: bool, step_mode: bool) -> bool:
+        async with self._ai_state.lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            parallel_batch = ai_session.prepare_parallel_batch(
+                direct_exec_enabled=direct_exec_enabled,
+                step_mode=step_mode,
+                has_ssh_connection=bool(self._transport_state.ssh_conn),
+            )
+        if not parallel_batch.is_ready:
+            return False
+        await self._execute_parallel_batch(parallel_batch.items, parallel_batch.indices)
+        async with self._ai_state.lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            ai_session.advance_after_parallel_batch(parallel_batch.indices)
+            apply_legacy_ai_queue_state(self, ai_session)
+        return True
+
+    async def _prepare_next_queue_step(self):
+        async with self._ai_state.lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            queue_step = ai_session.prepare_next_step()
+            apply_legacy_ai_queue_state(self, ai_session)
+        return queue_step
+
+    async def _handle_queue_transition(self, queue_step) -> str:
+        if queue_step.action == "empty":
+            return "complete"
+        if queue_step.action == "advance":
+            return "continue"
+        if queue_step.action == "blocked_skipped":
+            await self._send_ai_event(
+                terminal_events.ai_command_status(
+                    item_id=queue_step.command_id or 0,
+                    status="skipped",
+                    reason=queue_step.reason or "forbidden",
+                )
+            )
+            return "continue"
+        if queue_step.action == "waiting_confirm":
+            await self._send_ai_event(
+                terminal_events.ai_status(
+                    "waiting_confirm",
+                    id=queue_step.command_id or 0,
+                    reason=queue_step.reason or "dangerous",
+                )
+            )
+            return "waiting"
+        return "execute"
+
+    async def _execute_queue_item(self, queue_step, direct_exec_enabled: bool, step_mode: bool) -> bool:
+        item = queue_step.item or {}
+        item_id = int(queue_step.command_id or 0)
+        command = queue_step.command
+        await self._send_ai_event(terminal_events.ai_command_status(item_id=item_id, status="running"))
+        item_exec_mode = str(item.get("exec_mode") or "pty").strip().lower()
+        if not direct_exec_enabled and item_exec_mode == "direct":
+            item_exec_mode = "pty"
+        exit_code, output = await self._execute_queue_command(command, item_id, item_exec_mode)
+        await self._log_ai_command_history(
+            user_id=self._user_id,
+            server_id=self.server.id,
+            command=command,
+            output_snippet=output,
+            exit_code=exit_code,
+        )
+        if unavailable_cmd := unavailable_command_name(command, exit_code):
+            self._ai_state.unavailable_commands.add(unavailable_cmd)
+        recovery_action = await handle_fast_error_recovery(
+            self,
+            item=item,
+            item_id=item_id,
+            command=command,
+            exit_code=exit_code,
+            output=output,
+            step_mode=step_mode,
+        )
+        if recovery_action == "abort":
+            return True
+        await self._mark_queue_item_done(item_id, exit_code, output)
+        await self._send_ai_event(
+            terminal_events.ai_command_status(
+                item_id=item_id,
+                status="done",
+                exit_code=exit_code,
+                streaming=bool(item.get("streaming", False)),
+            )
+        )
+        if not step_mode:
+            return False
+        return await handle_step_post_command(
+            self,
+            item_id=item_id,
+            command=command,
+            exit_code=exit_code,
+            output=output or "",
+        )
+
+    async def _execute_queue_command(self, command: str, item_id: int, item_exec_mode: str) -> tuple[int, str]:
+        dry_run_active = bool((self._ai_state.settings or {}).get("dry_run", False))
+        if not dry_run_active and self._transport_state.ssh_conn:
+            await self._maybe_snapshot_file(command, item_id)
+        try:
+            if dry_run_active:
+                output = f"[DRY-RUN] Would execute: {command}"
+                await self._send_ai_event(
+                    terminal_events.ai_direct_output(
+                        item_id=item_id,
+                        command=command,
+                        output=output,
+                        exit_code=0,
+                        dry_run=True,
+                    )
+                )
+                return 0, output
+            if item_exec_mode == "direct":
+                return await self._ai_execute_command_direct(command, item_id)
+            return await self._ai_execute_command(command, item_id)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("AI command execution failed (id=%s): %s", item_id, exc)
+            return 1, f"WEUAI_EXECUTION_ERROR: {type(exc).__name__}: {exc}"
+
+    async def _mark_queue_item_done(self, item_id: int, exit_code: int, output: str) -> None:
+        async with self._ai_state.lock:
+            ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
+            ai_session.mark_current_done(item_id, exit_code, output or "")
+            apply_legacy_ai_queue_state(self, ai_session)
 
     async def _ai_execute_command(self, cmd: str, cmd_id: int) -> tuple[int, str]:
         """

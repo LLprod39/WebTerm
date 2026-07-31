@@ -79,6 +79,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Ops agent that reasons and uses server/tools according to policy.",
         ("success", "error", "out"),
         risk_level="dynamic",
+        idempotency="non_idempotent",
         tags=("ai", "agent", "ops"),
         input_schema=_schema(
             {
@@ -101,6 +102,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Multi-server or multi-agent investigation step.",
         ("success", "error", "out"),
         risk_level="dynamic",
+        idempotency="non_idempotent",
         tags=("ai", "agent", "multi"),
         input_schema=_schema(
             {
@@ -121,6 +123,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Direct SSH command with preflight and verification commands.",
         ("success", "error", "out"),
         risk_level="dynamic",
+        idempotency="non_idempotent",
         supports_dry_run=True,
         tags=("ssh", "command"),
         input_schema=_schema(
@@ -172,6 +175,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Pinned MCP tool call with JSON arguments.",
         ("success", "error", "out"),
         risk_level="dynamic",
+        idempotency="non_idempotent",
         supports_dry_run=True,
         tags=("mcp", "tool"),
         input_schema=_schema(
@@ -239,6 +243,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Pause until an operator approves/rejects/times out.",
         ("approved", "rejected", "timeout"),
         risk_level="control",
+        idempotency="non_idempotent",
         tags=("approval", "human-in-the-loop"),
         input_schema=_schema(
             {
@@ -259,6 +264,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Ask an operator for a plain-text Telegram reply. This is not a trigger.",
         ("received", "timeout"),
         risk_level="control",
+        idempotency="non_idempotent",
         tags=("telegram", "human-in-the-loop"),
         input_schema=_schema(
             {
@@ -291,6 +297,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Send results to an external webhook.",
         ("success", "error", "out"),
         risk_level="egress",
+        idempotency="non_idempotent",
         tags=("http", "egress"),
         input_schema=_schema(
             {
@@ -310,6 +317,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Send an email notification/report.",
         ("success", "error", "out"),
         risk_level="egress",
+        idempotency="non_idempotent",
         tags=("email", "egress"),
         input_schema=_schema(
             {
@@ -326,6 +334,7 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         "Send a Telegram message. This does not wait for a reply.",
         ("success", "error", "out"),
         risk_level="egress",
+        idempotency="non_idempotent",
         tags=("telegram", "egress"),
         input_schema=_schema(
             {
@@ -351,6 +360,7 @@ def _plugin_node_manifest_from_payload(payload: dict[str, Any]) -> NodeManifest:
         purpose=str(payload.get("purpose") or ""),
         source_handles=tuple(str(item) for item in payload.get("source_handles") or ("out",)),
         risk_level=str(payload.get("risk_level") or "read_only"),
+        idempotency=str(payload.get("idempotency") or "non_idempotent"),
         mutates_state=bool(payload.get("mutates_state")),
         supports_dry_run=bool(payload.get("supports_dry_run")),
         requires_approval_by_default=bool(payload.get("requires_approval_by_default")),

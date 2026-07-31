@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent, K8sPodRef
 from kubernetes_ops.services.logs import build_pod_log_snapshot
@@ -15,7 +16,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes ops logs API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 @login_required

@@ -209,6 +209,75 @@ class ChatTurnState(models.Model):
         return f"turn {self.pk} session={self.session_id} [{self.status}]"
 
 
+class OperatorTurnDispatch(models.Model):
+    """Durable, lease-owned request to execute or resume an Operator turn."""
+
+    KIND_MESSAGE = "message"
+    KIND_ACTION = "action"
+    KIND_CHOICES = [(KIND_MESSAGE, "Message"), (KIND_ACTION, "Action")]
+    STATUS_QUEUED = "queued"
+    STATUS_CLAIMED = "claimed"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELED = "canceled"
+    STATUS_CHOICES = [
+        (STATUS_QUEUED, "Queued"),
+        (STATUS_CLAIMED, "Claimed"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_CANCELED, "Canceled"),
+    ]
+
+    session = models.ForeignKey(ChatSession, on_delete=models.CASCADE, related_name="turn_dispatches")
+    action = models.ForeignKey(
+        AssistantAction,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="turn_dispatches",
+    )
+    turn = models.ForeignKey(
+        ChatTurnState,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="dispatches",
+    )
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES)
+    payload = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    queued_at = models.DateTimeField(auto_now_add=True)
+    claimed_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    claimed_by = models.CharField(max_length=120, blank=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    max_attempts = models.PositiveSmallIntegerField(default=3)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["queued_at", "id"]
+        indexes = [
+            models.Index(fields=["status", "queued_at"], name="cu_opdispatch_status_idx"),
+            models.Index(fields=["session", "status"], name="cu_opdispatch_session_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(max_attempts__gte=1),
+                name="cu_opdispatch_attempts_gte_1",
+            ),
+            models.UniqueConstraint(
+                fields=["session"],
+                condition=models.Q(status__in=["queued", "claimed"]),
+                name="cu_opdispatch_one_active_session",
+            ),
+        ]
+
+    def __str__(self):
+        return f"operator session={self.session_id} [{self.status}]"
+
+
 class ChatArtifact(models.Model):
     """Generated artifact (ansible/script/report/chart) attached to a chat session."""
 

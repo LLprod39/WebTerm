@@ -12,6 +12,7 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from core_ui.access import access_feature_labels
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import GroupAppPermission, UserAppPermission
 from core_ui.views.access_views import _access_feature_slugs, _apply_group_explicit_permissions, require_access_admin
@@ -79,7 +80,7 @@ def api_access_groups(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_groups POST error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -149,7 +150,7 @@ def api_access_group_detail(request, group_id):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as exc:
             logger.exception("api_access_group_detail PUT error: %s", exc)
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
     group.delete()
     return JsonResponse({"success": True, "message": "Group deleted"})
@@ -192,7 +193,7 @@ def api_access_group_members(request, group_id):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_group_members error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -279,7 +280,7 @@ def api_access_permissions(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_permissions POST error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -344,7 +345,7 @@ def api_access_group_permissions(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.exception("api_access_group_permissions error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -387,7 +388,7 @@ def api_access_permission_detail(request, perm_id):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as exc:
             logger.exception("api_access_permission_detail PUT error: %s", exc)
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
     permission.delete()
     return JsonResponse({"success": True, "message": "Permission deleted"})
@@ -428,7 +429,7 @@ def api_access_group_permission_detail(request, perm_id):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
         except Exception as exc:
             logger.exception("api_access_group_permission_detail PUT error: %s", exc)
-            return JsonResponse({"error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
     permission.delete()
     return JsonResponse({"success": True, "message": "Permission deleted"})

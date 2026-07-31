@@ -12,6 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.projects import active_project_for_user
 from servers.agents.agent_dispatch import serialize_agent_dispatch
@@ -466,22 +467,18 @@ def agent_run_task_ai_refine(request, run_id, task_id):
         result_text = loop.run_until_complete(_call())
         loop.close()
     except Exception as exc:
-        return JsonResponse({"success": False, "error": f"LLM error: {exc}"}, status=500)
+        return internal_error_response(request, exc)
 
     text = _re.sub(r"```(?:json)?\s*", "", result_text).strip().rstrip("`").strip()
     start = text.find("{")
     end = text.rfind("}")
     if start == -1 or end == -1:
-        return JsonResponse(
-            {"success": False, "error": "LLM did not return valid JSON", "raw": result_text[:500]}, status=500
-        )
+        return internal_error_response(request, ValueError("LLM returned invalid JSON"))
 
     try:
         refined = json.loads(text[start : end + 1])
     except json.JSONDecodeError:
-        return JsonResponse(
-            {"success": False, "error": "Failed to parse LLM JSON", "raw": result_text[:500]}, status=500
-        )
+        return internal_error_response(request, ValueError("Failed to parse LLM JSON"))
 
     if "name" in refined:
         target["name"] = str(refined["name"])[:200]

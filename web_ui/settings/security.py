@@ -131,6 +131,7 @@ def build_security_settings(
         "CORS_ALLOWED_ORIGINS": cors_allowed_origins,
         "CORS_ALLOW_CREDENTIALS": cors_allow_credentials,
         "SERVE_STATIC_FILES": env_bool("SERVE_STATIC_FILES", not debug),
+        "TRUSTED_PROXY_HOPS": max(0, min(env_int("TRUSTED_PROXY_HOPS", 0), 16)),
         "USE_X_FORWARDED_HOST": env_bool("USE_X_FORWARDED_HOST", False),
         "SECURE_PROXY_SSL_HEADER": (
             ("HTTP_X_FORWARDED_PROTO", "https") if env_bool("TRUST_X_FORWARDED_PROTO", False) else None

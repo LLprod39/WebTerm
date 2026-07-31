@@ -14,8 +14,11 @@ from core_ui.access import (
 FEATURE_SLUGS = access_feature_slugs()
 
 
-def user_can_feature(user, feature):
+def user_can_feature(user, feature, *, request=None):
     """Return True if user is allowed to access `feature`. Anonymous => False. Use in views/decorators."""
+    if request is not None:
+        access = build_user_access_payload(user, request=request)
+        return bool(access["effective_permissions"].get(feature, False))
     return _user_can_feature(user, feature)
 
 
@@ -73,20 +76,22 @@ def default_home_url_name(user):
 def app_permissions(request):
     """Add user_can_* flags and shell mode flags to template context."""
     user = getattr(request, "user", None)
-    perms = load_user_explicit_permissions(user)
-    group_perms = (
-        build_user_access_payload(
-            user,
-            explicit_permissions=perms,
-            group_permission_sources=load_group_permission_sources(user),
-        )["group_permissions"]
+    access = (
+        build_user_access_payload(user, request=request)
         if user and getattr(user, "is_authenticated", False)
-        else {}
+        else {"effective_permissions": {}}
     )
+    effective = access["effective_permissions"]
     out = {}
     for f in FEATURE_SLUGS:
-        out[f"user_can_{f}"] = _user_can_feature(user, f, perms, group_perms)
+        out[f"user_can_{f}"] = bool(effective.get(f, False))
     out["is_app_admin"] = bool(user and user.is_authenticated and user.is_staff)
-    out["is_server_only_mode"] = _is_server_only_user(user, perms, group_perms)
+    out["is_server_only_mode"] = bool(
+        user
+        and user.is_authenticated
+        and not user.is_staff
+        and effective.get("servers")
+        and all(not allowed for feature, allowed in effective.items() if feature != "servers")
+    )
     out["default_home_url_name"] = default_home_url_name(user)
     return out

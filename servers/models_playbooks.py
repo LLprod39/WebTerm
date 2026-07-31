@@ -277,9 +277,9 @@ class PlaybookRun(models.Model):
             if self.playbook_id:
                 self.project_id = self.playbook.project_id
             else:
-                from core_ui.projects import active_project_for_user
+                from core_ui.projects import assign_active_project
 
-                self.project = active_project_for_user(self.user)
+                assign_active_project(self, user_field="user")
         return super().save(*args, **kwargs)
 
 

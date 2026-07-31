@@ -8,11 +8,11 @@ x-proxy-env: &proxy-env
   http_proxy: ${http_proxy:-}
   https_proxy: ${https_proxy:-}
   ftp_proxy: ${ftp_proxy:-}
-  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
   FTP_PROXY: ${FTP_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
 
 x-json-logging: &json-logging
   driver: json-file
@@ -58,6 +58,12 @@ x-backend-worker-environment: &backend-worker-environment
   AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
   AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
   AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
+  PLUGIN_BACKEND_DOCKER_HOST: tcp://plugin-backend-docker-proxy:2375
+  PLUGIN_BACKEND_RUNNER_IMAGE: ${PLUGIN_BACKEND_RUNNER_IMAGE:-}
+  PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK: ${PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK:-}
+  PLUGIN_BACKEND_DOCKER_CPUS: ${PLUGIN_BACKEND_DOCKER_CPUS:-0.5}
+  PLUGIN_BACKEND_DOCKER_MEMORY: ${PLUGIN_BACKEND_DOCKER_MEMORY:-128m}
+  PLUGIN_BACKEND_DOCKER_PIDS_LIMIT: ${PLUGIN_BACKEND_DOCKER_PIDS_LIMIT:-32}
   WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
   WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
   WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
@@ -70,6 +76,8 @@ x-backend-worker-environment: &backend-worker-environment
   # Keep this fixed to the private named-volume target. Do not accept an
   # env_file override that could silently send a worker to ephemeral storage.
   PLAYBOOK_BUNDLE_STORAGE_ROOT: /workspace/private/playbook_bundles
+  # Only the telegram-bot service is allowed to consume getUpdates.
+  TELEGRAM_BOT_POLL_TOKEN: ""
 
 x-backend-worker: &backend-worker
   image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
@@ -95,6 +103,8 @@ x-backend-worker: &backend-worker
     redis:
       condition: service_healthy
     agent-command-docker-proxy:
+      condition: service_healthy
+    plugin-backend-docker-proxy:
       condition: service_healthy
   restart: unless-stopped
   stop_grace_period: 45s
@@ -184,7 +194,6 @@ services:
   backend:
     image: ${WEBTERM_BACKEND_IMAGE:-webterm-backend:latest}
     build: *backend-build
-    container_name: mini-prod-backend
     command: ["sh", "-lc", "./docker/render-backend-start.sh"]
     env_file:
       - .env.production
@@ -228,7 +237,6 @@ services:
       SECURE_HSTS_SECONDS: ${SECURE_HSTS_SECONDS:-31536000}
       SECURE_HSTS_INCLUDE_SUBDOMAINS: ${SECURE_HSTS_INCLUDE_SUBDOMAINS:-true}
       SECURE_HSTS_PRELOAD: ${SECURE_HSTS_PRELOAD:-false}
-      MASTER_PASSWORD: ${MASTER_PASSWORD:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       CODEX_API_KEY: ${CODEX_API_KEY:-}
@@ -274,6 +282,7 @@ services:
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
       PIPELINE_NOTIFY_EMAIL: ${PIPELINE_NOTIFY_EMAIL:-}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_POLL_TOKEN: ""
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       # MCP Runner: when set, stdio MCP servers run isolated in the runner (not on
       # this host) and become available to non-admins. Set STUDIO_MCP_RUNNER_TOKEN
@@ -291,12 +300,18 @@ services:
       AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
       AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
       AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
+      PLUGIN_BACKEND_DOCKER_HOST: tcp://plugin-backend-docker-proxy:2375
+      PLUGIN_BACKEND_RUNNER_IMAGE: ${PLUGIN_BACKEND_RUNNER_IMAGE:-}
+      PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK: ${PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK:-}
+      PLUGIN_BACKEND_DOCKER_CPUS: ${PLUGIN_BACKEND_DOCKER_CPUS:-0.5}
+      PLUGIN_BACKEND_DOCKER_MEMORY: ${PLUGIN_BACKEND_DOCKER_MEMORY:-128m}
+      PLUGIN_BACKEND_DOCKER_PIDS_LIMIT: ${PLUGIN_BACKEND_DOCKER_PIDS_LIMIT:-32}
       WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
       WEBTERM_ANSIBLE_REQUIRE_ISOLATED: "true"
       WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
       PLAYBOOK_BUNDLE_STORAGE_ROOT: /workspace/private/playbook_bundles
-    ports:
-      - "${DJANGO_BIND_HOST:-127.0.0.1}:${DJANGO_HOST_PORT:-9000}:9000"
+    expose:
+      - "9000"
     volumes:
       - mini_prod_media:/workspace/media
       - playbook_bundles:/workspace/private/playbook_bundles
@@ -311,6 +326,8 @@ services:
     depends_on:
       volume-permissions:
         condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -320,6 +337,8 @@ services:
       playbook-validator:
         condition: service_healthy
       agent-command-docker-proxy:
+        condition: service_healthy
+      plugin-backend-docker-proxy:
         condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 45s
@@ -340,6 +359,31 @@ services:
       start_period: 30s
     logging: *json-logging
 
+  migrate:
+    <<: *backend-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py migrate --noinput && python manage.py load_pipeline_templates && cp -a /workspace/staticfiles/. /static-target/",
+      ]
+    volumes:
+      - mini_prod_media:/workspace/media
+      - mini_prod_staticfiles:/static-target
+      - mini_prod_config:/workspace/config_runtime
+      - mini_prod_logs:/workspace/logs
+      - ./docker/ldap:/etc/webtrerm/ldap:ro
+    depends_on:
+      volume-permissions:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+    healthcheck:
+      disable: true
+
   scheduled-pipelines:
     <<: *backend-worker
     container_name: mini-prod-scheduled-pipelines
@@ -347,7 +391,26 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_scheduled_pipelines --daemon --interval ${PIPELINE_SCHEDULER_INTERVAL:-60}",
+        "python manage.py reconcile_pipeline_runs && exec python manage.py run_scheduled_pipelines --daemon --interval ${PIPELINE_SCHEDULER_INTERVAL:-60}",
+      ]
+
+  pipeline-execution:
+    <<: *backend-worker
+    container_name: mini-prod-pipeline-execution
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_pipeline_execution_plane --interval ${PIPELINE_EXECUTION_INTERVAL_SECONDS:-5} --lease-seconds ${PIPELINE_EXECUTION_LEASE_SECONDS:-180} --global-concurrency ${PIPELINE_EXECUTION_GLOBAL_CONCURRENCY:-4} --per-user-concurrency ${PIPELINE_EXECUTION_PER_USER_CONCURRENCY:-2} --worker-key \"$${HOSTNAME:-production}\"",
+      ]
+
+  operator-execution:
+    <<: *backend-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_operator_execution_plane --interval ${OPERATOR_EXECUTION_INTERVAL_SECONDS:-2} --lease-seconds ${OPERATOR_EXECUTION_LEASE_SECONDS:-180} --worker-key \"$${HOSTNAME:-production}\"",
       ]
 
   scheduled-agents:
@@ -390,6 +453,50 @@ services:
       AGENT_COMMAND_RUNNER_IMAGE: "${AGENT_COMMAND_RUNNER_IMAGE:?AGENT_COMMAND_RUNNER_IMAGE is required}"
       AGENT_COMMAND_DOCKER_NETWORK: ${AGENT_COMMAND_DOCKER_NETWORK:-bridge}
       AGENT_COMMAND_SSH_AUTH_SOCK: ${AGENT_COMMAND_SSH_AUTH_SOCK:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    networks:
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10002,gid=10002,mode=1770
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2375/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *json-logging
+
+  plugin-backend-docker-proxy:
+    image: ${WEBTERM_PLUGIN_BACKEND_DOCKER_PROXY_IMAGE:-webterm-plugin-backend-docker-proxy:latest}
+    build:
+      context: .
+      dockerfile: docker/playbook-socket-proxy.Dockerfile
+    container_name: mini-prod-plugin-backend-docker-proxy
+    user: "10002:10002"
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    environment:
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_PROXY_POLICY: plugin-backend
+      PLUGIN_BACKEND_RUNNER_IMAGE: ${PLUGIN_BACKEND_RUNNER_IMAGE:-}
+      PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK: ${PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     expose:
@@ -545,7 +652,7 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
+        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --concurrency ${MONITOR_CONCURRENCY:-5}",
       ]
 
   ops-supervisor:
@@ -568,6 +675,16 @@ services:
         "python manage.py run_kubernetes_ops_sync_worker --daemon --interval ${KUBERNETES_OPS_SYNC_INTERVAL_SECONDS:-300} --worker-key production",
       ]
 
+  server-bulk-worker:
+    <<: *backend-worker
+    container_name: mini-prod-server-bulk-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_server_bulk_operations --interval ${SERVER_BULK_WORKER_INTERVAL_SECONDS:-2} --lease-seconds ${SERVER_BULK_WORKER_LEASE_SECONDS:-90} --worker-key \"$${HOSTNAME:-production}\"",
+      ]
+
   celery-worker:
     <<: *backend-worker
     container_name: mini-prod-celery-worker
@@ -583,6 +700,9 @@ services:
     container_name: mini-prod-telegram-bot
     profiles: ["telegram-bot"]
     command: ["sh", "-lc", "python manage.py run_telegram_bot"]
+    environment:
+      <<: *backend-worker-environment
+      TELEGRAM_BOT_POLL_TOKEN: "${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required for telegram-bot}"
 
   mars-agent:
     image: ${MARS_AGENT_DOCKER_IMAGE:-registry.invalid/webterm-mars-agent@sha256:0000000000000000000000000000000000000000000000000000000000000000}
@@ -634,6 +754,7 @@ services:
       - "${PUBLIC_BIND_HOST:-0.0.0.0}:${PUBLIC_HTTPS_PORT:-443}:8443"
     volumes:
       - ./docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./docker/nginx/webterm-server-common.conf:/etc/nginx/webterm-server-common.conf:ro
       - ./docker/nginx/ssl:/etc/nginx/ssl:ro
       - mini_prod_staticfiles:/srv/static:ro
       - mini_prod_media:/srv/media:ro

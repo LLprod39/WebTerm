@@ -5,6 +5,7 @@ services:
     plan: free
     dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
+    preDeployCommand: python manage.py migrate --noinput && python manage.py load_pipeline_templates
     healthCheckPath: /api/health/
     envVars:
       - fromGroup: mini-prod-backend-common
@@ -156,6 +157,96 @@ services:
           envVarKey: TELEGRAM_CHAT_ID
 
   - type: worker
+    name: mini-prod-pipeline-execution
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_pipeline_execution_plane --interval 5 --lease-seconds 180 --global-concurrency 4 --per-user-concurrency 2 --worker-key render
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: MANAGED_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: MANAGED_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: CODEX_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: CODEX_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+      - key: GROK_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GROK_API_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_CHAT_ID
+
+  - type: worker
     name: mini-prod-scheduled-agents
     runtime: docker
     plan: starter
@@ -216,7 +307,7 @@ services:
     plan: starter
     dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
-    dockerCommand: python manage.py run_monitor --quick-interval 300 --deep-interval 600 --cleanup-interval 86400 --concurrency 5
+    dockerCommand: python manage.py run_monitor --quick-interval 300 --deep-interval 600 --concurrency 5
     envVars:
       - fromGroup: mini-prod-backend-common
       - key: DJANGO_SECRET_KEY
@@ -360,6 +451,11 @@ services:
           type: web
           envVarKey: GROK_API_KEY
       - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_BOT_POLL_TOKEN
         fromService:
           name: mini-prod-backend
           type: web
@@ -532,8 +628,6 @@ envVarGroups:
         value: "300"
       - key: MONITOR_DEEP_INTERVAL
         value: "600"
-      - key: MONITOR_CLEANUP_INTERVAL
-        value: "86400"
       - key: MONITOR_CONCURRENCY
         value: "5"
       - key: MEMORY_DREAM_INTERVAL

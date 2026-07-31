@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods
 
 from app.tools.ssh_tools import SSHExecuteTool, ssh_manager
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import ServerCommandHistory
@@ -199,11 +200,11 @@ def server_test_connection(request, server_id):
             category="servers",
             action="server_test_connection",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Server connection test failed: {e}",
+            description="Server connection test failed (internal_error)",
             entity_type="server",
             entity_id=server_id,
         )
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required
@@ -304,11 +305,11 @@ def server_execute_command(request, server_id):
             category="servers",
             action="server_command_execute",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Command execution failed: {e}",
+            description="Command execution failed (internal_error)",
             entity_type="server",
             entity_id=server_id,
         )
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required
@@ -335,7 +336,7 @@ def server_detect_os(request, server_id):
     try:
         result = detect_os_for_server(server.id, force=force)
     except Exception as exc:
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
     server.refresh_from_db(fields=["detected_os", "detected_os_meta", "detected_os_attempted_at"])
     if result.get("success") and not result.get("cached") and not result.get("needs_retry"):
@@ -414,7 +415,7 @@ def server_detect_os_batch(request):
     try:
         results = async_to_sync(detect_os_batch)(servers, concurrency=concurrency)
     except Exception as exc:
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
     finally:
         cache.delete(batch_lock)
 

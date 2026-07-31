@@ -24,8 +24,9 @@ def test_skill_templates_endpoint_returns_built_in_templates():
 
     assert response.status_code == 200
     payload = response.json()
-    assert any(item["slug"] == "gitlab-ops" for item in payload)
-    assert any(item["slug"] == "postgres-ops" for item in payload)
+    assert payload["success"] is True
+    assert any(item["slug"] == "gitlab-ops" for item in payload["data"])
+    assert any(item["slug"] == "postgres-ops" for item in payload["data"])
 
 
 @pytest.mark.django_db

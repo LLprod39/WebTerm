@@ -160,6 +160,17 @@ def test_cleanup_metric_data_respects_retention():
     assert ServerMetricSample.objects.filter(server=server).count() == 1
 
 
+def test_cleanup_metric_data_dry_run_counts_without_deleting():
+    server = _make_server("rollup-clean-dry")
+    now = timezone.now()
+    old = _make_sample(server, now - timedelta(days=20), cpu_percent=10.0)
+
+    summary = cleanup_metric_data(now=now, dry_run=True)
+
+    assert summary["samples"] == 1
+    assert ServerMetricSample.objects.filter(pk=old.pk).exists()
+
+
 def test_fetch_metric_series_returns_oldest_first():
     server = _make_server("rollup-series")
     base = datetime(2026, 7, 16, 0, 0, tzinfo=UTC)

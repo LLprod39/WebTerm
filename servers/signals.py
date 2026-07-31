@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models.signals import m2m_changed, post_save, pre_save
+from django.db.models.signals import m2m_changed, post_delete, post_save, pre_save
 from django.dispatch import receiver
 
 from app.monitoring_events import server_alert_opened
@@ -10,6 +10,7 @@ from servers.memory_heuristics import should_capture_command_history_memory
 from servers.models import (
     AgentRun,
     AgentRunEvent,
+    Server,
     ServerAgent,
     ServerAlert,
     ServerCommandHistory,
@@ -18,6 +19,55 @@ from servers.models import (
     ServerWatcherDraft,
 )
 from servers.tasks import ingest_memory_event_task
+
+SSH_CONNECTION_FIELDS = {
+    "host",
+    "port",
+    "username",
+    "auth_method",
+    "key_path",
+    "network_config",
+    "trusted_host_keys",
+    "is_active",
+}
+
+
+@receiver(pre_save, sender=Server)
+def mark_server_ssh_pool_invalidation(sender, instance: Server, **kwargs):
+    if not instance.pk:
+        instance._ssh_pool_connection_changed = False
+        return
+    previous = sender.objects.filter(pk=instance.pk).values(*SSH_CONNECTION_FIELDS).first()
+    instance._ssh_pool_connection_changed = bool(
+        previous and any(previous[field] != getattr(instance, field) for field in SSH_CONNECTION_FIELDS)
+    )
+
+
+@receiver(post_save, sender=Server)
+def invalidate_server_ssh_pool(sender, instance: Server, created: bool, **kwargs):
+    if created or not getattr(instance, "_ssh_pool_connection_changed", False):
+        return
+    from servers.services.ssh_pool import invalidate_ssh_connections
+
+    transaction.on_commit(lambda: invalidate_ssh_connections(instance.pk))
+
+
+def _invalidate_share_connections(instance: ServerShare) -> None:
+    from servers.services.ssh_pool import invalidate_ssh_connections
+
+    # Close all identities for the server. This is stronger than targeting the
+    # affected user and also protects against ownership/capability transitions.
+    transaction.on_commit(lambda: invalidate_ssh_connections(instance.server_id))
+
+
+@receiver(post_save, sender=ServerShare)
+def invalidate_ssh_pool_on_share_change(sender, instance: ServerShare, **kwargs):
+    _invalidate_share_connections(instance)
+
+
+@receiver(post_delete, sender=ServerShare)
+def invalidate_ssh_pool_on_share_revoke(sender, instance: ServerShare, **kwargs):
+    _invalidate_share_connections(instance)
 
 
 @receiver(pre_save, sender=ServerShare)

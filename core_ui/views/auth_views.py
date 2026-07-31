@@ -84,10 +84,10 @@ def frontend_settings_permissions_redirect(request):
     return redirect(_frontend_app_url("/settings/permissions"))
 
 
-def _auth_user_payload(user):
+def _auth_user_payload(user, *, request=None):
     if not user or not getattr(user, "is_authenticated", False):
         return None
-    access = build_user_access_payload(user)
+    access = build_user_access_payload(user, request=request)
     features = access["effective_permissions"]
     feature_payload = {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()}
     from plugin_marketplace.release_profile import plugin_marketplace_enabled
@@ -97,7 +97,7 @@ def _auth_user_payload(user):
     feature_payload["plugins"] = bool(user.is_staff and plugin_marketplace_enabled())
     from core_ui.projects import active_project_for_user, projects_for_user
 
-    active_project = active_project_for_user(user)
+    active_project = active_project_for_user(user, request=request)
     projects = projects_for_user(user)
     return {
         "id": user.id,
@@ -125,7 +125,7 @@ def api_auth_session(request):
     user = request.user if getattr(request, "user", None) else None
     if not user or not user.is_authenticated:
         return JsonResponse({"authenticated": False, "user": None})
-    return JsonResponse({"authenticated": True, "user": _auth_user_payload(user)})
+    return JsonResponse({"authenticated": True, "user": _auth_user_payload(user, request=request)})
 
 
 @ensure_csrf_cookie
@@ -224,7 +224,7 @@ def api_auth_login(request):
             "success": True,
             "authenticated": True,
             "next_url": next_url,
-            "user": _auth_user_payload(user),
+            "user": _auth_user_payload(user, request=request),
         }
     )
 

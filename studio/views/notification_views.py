@@ -29,7 +29,7 @@ _NOTIF_CONFIG_PATH = _DEFAULT_NOTIF_CONFIG_PATH
 
 
 def _notif_config_path() -> Path:
-    return notif_config_path()
+    return notif_config_path(_NOTIF_CONFIG_PATH)
 
 
 def _json_body(request) -> dict:
@@ -55,12 +55,12 @@ def _require_admin(request, *, message: str = "Admin access required") -> JsonRe
 
 def _load_notif_config() -> dict:
     """Read notification config from file; fall back to Django / env defaults."""
-    return load_notification_config()
+    return load_notification_config(_notif_config_path())
 
 
 def _save_notif_config(data: dict):
     """Persist notification config values."""
-    save_notification_config(data)
+    save_notification_config(data, _notif_config_path())
 
 
 def _resolve_from_email_smtp(from_email: str, smtp_user: str, smtp_host: str) -> str:

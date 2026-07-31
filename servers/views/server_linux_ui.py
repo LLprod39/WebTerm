@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.linux_ui import (
@@ -34,7 +35,7 @@ def _linux_ui_error_response(exc: Exception) -> JsonResponse:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
     if isinstance(exc, PermissionError):
         return JsonResponse({"success": False, "error": "Недостаточно прав для выполнения операции"}, status=403)
-    return JsonResponse({"success": False, "error": str(exc) or "Linux UI request failed"}, status=500)
+    return internal_error_response(None, exc)
 
 
 def _linux_ui_server_payload(server) -> dict:
@@ -60,7 +61,7 @@ def server_linux_ui_capabilities(request, server_id):
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
-        capabilities = async_to_sync(get_linux_ui_capabilities)(server, secret=secret or "")
+        capabilities = async_to_sync(get_linux_ui_capabilities)(server, secret=secret or "", user_id=request.user.id)
         log_user_activity(
             user=request.user,
             request=request,
@@ -94,7 +95,7 @@ def server_linux_ui_settings(request, server_id):
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
-        settings_snapshot = async_to_sync(get_linux_ui_settings)(server, secret=secret or "")
+        settings_snapshot = async_to_sync(get_linux_ui_settings)(server, secret=secret or "", user_id=request.user.id)
         log_user_activity(
             user=request.user,
             request=request,
@@ -128,7 +129,7 @@ def server_linux_ui_overview(request, server_id):
     try:
         _require_ssh_server(server)
         secret = _resolve_server_secret(server, request, {})
-        overview = async_to_sync(get_linux_ui_overview)(server, secret=secret or "")
+        overview = async_to_sync(get_linux_ui_overview)(server, secret=secret or "", user_id=request.user.id)
         log_user_activity(
             user=request.user,
             request=request,
@@ -168,6 +169,7 @@ def server_linux_ui_logs(request, server_id):
             source=str(request.GET.get("source") or "journal"),
             lines=request.GET.get("lines") or 120,
             service=str(request.GET.get("service") or ""),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -206,6 +208,7 @@ def server_linux_ui_disk(request, server_id):
         disk = async_to_sync(get_linux_ui_disk)(
             server,
             secret=secret or "",
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -244,6 +247,7 @@ def server_linux_ui_network(request, server_id):
         network = async_to_sync(get_linux_ui_network)(
             server,
             secret=secret or "",
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -282,6 +286,7 @@ def server_linux_ui_packages(request, server_id):
         packages = async_to_sync(get_linux_ui_packages)(
             server,
             secret=secret or "",
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,

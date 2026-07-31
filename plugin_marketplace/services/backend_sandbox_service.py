@@ -85,7 +85,7 @@ def execute_backend_sandbox(
         return _sandbox_failure(
             installation,
             executor_ref=executor_ref,
-            error="Backend sandbox runtime is not enabled.",
+            error="Plugin backend code execution is not enabled.",
             user=user,
             request=request,
             event_type="plugin_backend_sandbox_blocked",
@@ -95,7 +95,7 @@ def execute_backend_sandbox(
         return _sandbox_failure(
             installation,
             executor_ref=executor_ref,
-            error="; ".join(policy.get("blockers") or ["Sandbox policy blocked execution."]),
+            error="; ".join(policy.get("blockers") or ["Plugin code execution policy blocked execution."]),
             user=user,
             request=request,
             event_type="plugin_backend_sandbox_blocked",

@@ -4,17 +4,222 @@ import asyncio
 import logging
 from collections import deque
 from collections.abc import Awaitable, Callable
+from datetime import timedelta
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from django.utils import timezone
 
 from studio.models import PipelineRun
 
+from .pipeline_dead_letter import record_node_dead_letter
+from .pipeline_retry import node_retry_policy
 from .pipeline_routing import result_routing_ports, route_from_node
 from .pipeline_run_setup import PreparedPipelineRun
 from .pipeline_run_state import persist_routing_state, update_node_state, update_run_status
 
 logger = logging.getLogger(__name__)
+
+
+async def _execute_node_with_retries(
+    *,
+    run: PipelineRun,
+    node: dict[str, Any],
+    context: dict[str, Any],
+    node_outputs: dict[str, dict],
+    execute_node: Callable[[dict[str, Any], dict[str, Any], dict[str, dict]], Awaitable[dict[str, Any]]],
+    sync_stop_state_from_db: Callable[[], Awaitable[bool]],
+) -> dict[str, Any]:
+    node_id = str(node.get("id") or "")
+    policy = node_retry_policy(node)
+    retry_history: list[dict[str, Any]] = []
+    for attempt in range(1, policy.max_attempts + 1):
+        try:
+            result = await execute_node(node, context, node_outputs)
+            state = dict(result)
+        except Exception as exc:
+            logger.exception("pipeline run %s node %s attempt %s raised exception", run.pk, node_id, attempt)
+            state = {"status": "failed", "error": str(exc)}
+
+        state["attempt_count"] = attempt
+        state["max_attempts"] = policy.max_attempts
+        if policy.retry_suppressed_reason:
+            state["retry_suppressed_reason"] = policy.retry_suppressed_reason
+        if str(state.get("status") or "") != "failed":
+            if retry_history:
+                state["retry_history"] = retry_history
+            return state
+
+        if attempt >= policy.max_attempts:
+            if retry_history:
+                state["retry_history"] = retry_history
+            dead_letter = await sync_to_async(record_node_dead_letter, thread_sensitive=True)(
+                run=run,
+                node=node,
+                state=state,
+                attempt_count=attempt,
+                max_attempts=policy.max_attempts,
+            )
+            state["dead_letter_id"] = dead_letter.pk
+            return state
+
+        delay = policy.delay_after_attempt(attempt)
+        retry_at = timezone.now() + timedelta(seconds=delay)
+        retry_history.append(
+            {
+                "attempt": attempt,
+                "error": str(state.get("error") or "")[:1000],
+                "delay_seconds": delay,
+                "retry_at": retry_at.isoformat(),
+            }
+        )
+        await update_node_state(
+            run,
+            node_id,
+            {
+                **state,
+                "status": "retrying",
+                "retry_history": retry_history,
+                "next_retry_at": retry_at.isoformat(),
+            },
+        )
+        if await sync_stop_state_from_db():
+            return {
+                "status": "stopped",
+                "attempt_count": attempt,
+                "max_attempts": policy.max_attempts,
+                "retry_history": retry_history,
+            }
+        if delay:
+            await asyncio.sleep(delay)
+
+    raise AssertionError("node retry loop must return a terminal state")
+
+
+def _restored_pending_merges(raw: Any) -> dict[str, dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return {}
+    restored: dict[str, dict[str, Any]] = {}
+    for node_id, item in raw.items():
+        if not isinstance(item, dict):
+            continue
+        restored[str(node_id)] = {
+            "mode": str(item.get("mode") or "all"),
+            "arrived_sources": {str(value) for value in (item.get("arrived_sources") or [])},
+            "possible_sources": {str(value) for value in (item.get("possible_sources") or [])},
+            "released": bool(item.get("released")),
+        }
+    return restored
+
+
+async def _restore_resume_loop_state(
+    run: PipelineRun,
+    prepared: PreparedPipelineRun,
+) -> tuple[dict[str, dict], deque[str], set[str], set[str], set[str], dict[str, dict[str, Any]]]:
+    routing = run.routing_state if isinstance(run.routing_state, dict) else {}
+    completed_nodes = {
+        str(node_id) for node_id in (routing.get("completed_nodes") or []) if str(node_id) in prepared.id_to_node
+    }
+    activated_nodes = {
+        str(node_id) for node_id in (routing.get("activated_nodes") or []) if str(node_id) in prepared.id_to_node
+    }
+    queued = [str(node_id) for node_id in (routing.get("queued_nodes") or []) if str(node_id) in prepared.id_to_node]
+    ready_queue: deque[str] = deque(dict.fromkeys(queued))
+    ready_nodes = set(ready_queue)
+    pending_merges = _restored_pending_merges(routing.get("pending_merges"))
+    node_outputs = {
+        node_id: dict(state)
+        for node_id, state in (run.node_states or {}).items()
+        if node_id in completed_nodes and isinstance(state, dict)
+    }
+
+    executable_queue: deque[str] = deque()
+    executable_nodes: set[str] = set()
+    while ready_queue:
+        node_id = ready_queue.popleft()
+        ready_nodes.discard(node_id)
+        if node_id in completed_nodes:
+            continue
+        state = (run.node_states or {}).get(node_id)
+        if isinstance(state, dict) and str(state.get("status") or "").lower() == "completed":
+            completed_nodes.add(node_id)
+            activated_nodes.add(node_id)
+            node_outputs[node_id] = dict(state)
+            await route_from_node(
+                source_node_id=node_id,
+                routing_ports=set(
+                    state.get("routing_ports") or result_routing_ports(prepared.id_to_node[node_id], state)
+                ),
+                entry_node_id=prepared.entry_node_id,
+                id_to_node=prepared.id_to_node,
+                outgoing_edges=prepared.outgoing_edges,
+                incoming_edges=prepared.incoming_edges,
+                node_states=run.node_states,
+                ready_queue=ready_queue,
+                ready_nodes=ready_nodes,
+                activated_nodes=activated_nodes,
+                completed_nodes=completed_nodes,
+                pending_merges=pending_merges,
+            )
+            continue
+        if node_id not in executable_nodes:
+            executable_queue.append(node_id)
+            executable_nodes.add(node_id)
+
+    await persist_routing_state(
+        run,
+        entry_node_id=prepared.entry_node_id,
+        activated_nodes=activated_nodes,
+        completed_nodes=completed_nodes,
+        ready_nodes=executable_nodes,
+        pending_merges=pending_merges,
+    )
+    return (
+        node_outputs,
+        executable_queue,
+        executable_nodes,
+        activated_nodes,
+        completed_nodes,
+        pending_merges,
+    )
+
+
+async def _initialize_loop_state(
+    run: PipelineRun,
+    prepared: PreparedPipelineRun,
+) -> tuple[dict[str, dict], deque[str], set[str], set[str], set[str], dict[str, dict[str, Any]]]:
+    if prepared.resumed:
+        return await _restore_resume_loop_state(run, prepared)
+
+    entry_node_id = prepared.entry_node_id
+    ready_queue: deque[str] = deque()
+    ready_nodes: set[str] = set()
+    activated_nodes = {entry_node_id}
+    completed_nodes = {entry_node_id}
+    pending_merges: dict[str, dict[str, Any]] = {}
+    await route_from_node(
+        source_node_id=entry_node_id,
+        routing_ports={"out"},
+        entry_node_id=entry_node_id,
+        id_to_node=prepared.id_to_node,
+        outgoing_edges=prepared.outgoing_edges,
+        incoming_edges=prepared.incoming_edges,
+        node_states=run.node_states,
+        ready_queue=ready_queue,
+        ready_nodes=ready_nodes,
+        activated_nodes=activated_nodes,
+        completed_nodes=completed_nodes,
+        pending_merges=pending_merges,
+    )
+    await persist_routing_state(
+        run,
+        entry_node_id=entry_node_id,
+        activated_nodes=activated_nodes,
+        completed_nodes=completed_nodes,
+        ready_nodes=ready_nodes,
+        pending_merges=pending_merges,
+    )
+    return {}, ready_queue, ready_nodes, activated_nodes, completed_nodes, pending_merges
 
 
 async def execute_pipeline_run_loop(
@@ -32,34 +237,14 @@ async def execute_pipeline_run_loop(
     outgoing_edges = prepared.outgoing_edges
     incoming_edges = prepared.incoming_edges
 
-    node_outputs: dict[str, dict] = {}
-    ready_queue: deque[str] = deque()
-    ready_nodes: set[str] = set()
-    activated_nodes: set[str] = {entry_node_id}
-    completed_nodes: set[str] = {entry_node_id}
-    pending_merges: dict[str, dict[str, Any]] = {}
-    await route_from_node(
-        source_node_id=entry_node_id,
-        routing_ports={"out"},
-        entry_node_id=entry_node_id,
-        id_to_node=id_to_node,
-        outgoing_edges=outgoing_edges,
-        incoming_edges=incoming_edges,
-        node_states=run.node_states,
-        ready_queue=ready_queue,
-        ready_nodes=ready_nodes,
-        activated_nodes=activated_nodes,
-        completed_nodes=completed_nodes,
-        pending_merges=pending_merges,
-    )
-    await persist_routing_state(
-        run,
-        entry_node_id=entry_node_id,
-        activated_nodes=activated_nodes,
-        completed_nodes=completed_nodes,
-        ready_nodes=ready_nodes,
-        pending_merges=pending_merges,
-    )
+    (
+        node_outputs,
+        ready_queue,
+        ready_nodes,
+        activated_nodes,
+        completed_nodes,
+        pending_merges,
+    ) = await _initialize_loop_state(run, prepared)
 
     try:
         batch_index = 0
@@ -96,7 +281,17 @@ async def execute_pipeline_run_loop(
                 )
 
             results = await asyncio.gather(
-                *(execute_node(node, context, node_outputs) for node in exec_nodes),
+                *(
+                    _execute_node_with_retries(
+                        run=run,
+                        node=node,
+                        context=context,
+                        node_outputs=node_outputs,
+                        execute_node=execute_node,
+                        sync_stop_state_from_db=sync_stop_state_from_db,
+                    )
+                    for node in exec_nodes
+                ),
                 return_exceptions=True,
             )
 

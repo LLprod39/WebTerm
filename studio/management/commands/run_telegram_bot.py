@@ -11,13 +11,15 @@ Usage:
 
 Prerequisites:
     1. python manage.py setup_telegram_bot_pipeline
-    2. Set TELEGRAM_BOT_TOKEN in .env  (or Studio → Notifications)
+    2. Set TELEGRAM_BOT_POLL_TOKEN in .env (or Studio → Notifications)
     3. python manage.py run_telegram_bot   ← just run this
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import os
 import time
 
 import httpx
@@ -28,6 +30,13 @@ from app.background_workers import STUDIO_TELEGRAM_BOT_WORKER
 from app.runtime_limits import get_pipeline_run_limit_error
 from app.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 from studio.models import Pipeline, PipelineTrigger
+from studio.telegram_delivery_service import (
+    advance_telegram_update_offset,
+    get_telegram_update_offset,
+    record_telegram_approval_callback,
+    store_telegram_operator_reply,
+    telegram_worker_key,
+)
 
 
 class Command(BaseCommand):
@@ -46,7 +55,7 @@ class Command(BaseCommand):
             type=str,
             default=None,
             dest="bot_token",
-            help="Telegram bot token (default: TELEGRAM_BOT_TOKEN from .env or Studio Notifications).",
+            help="Telegram bot token (default: TELEGRAM_BOT_POLL_TOKEN or Studio Notifications).",
         )
         parser.add_argument(
             "--poll-timeout",
@@ -62,12 +71,16 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         from studio.pipeline.pipeline_notifications import _load_notif_cfg
 
-        bot_token = (options.get("bot_token") or "").strip() or _load_notif_cfg().get("telegram_bot_token", "")
+        bot_token = (
+            (options.get("bot_token") or "").strip()
+            or (os.getenv("TELEGRAM_BOT_POLL_TOKEN") or "").strip()
+            or _load_notif_cfg().get("telegram_bot_token", "")
+        )
         if not bot_token:
             raise CommandError(
                 "No Telegram bot token found.\n\n"
-                "  Option A: add to .env\n"
-                "    TELEGRAM_BOT_TOKEN=<your_bot_token>\n\n"
+                "  Option A: add to the Telegram worker environment\n"
+                "    TELEGRAM_BOT_POLL_TOKEN=<your_bot_token>\n\n"
                 "  Option B: Studio → Notifications → set Telegram bot token\n\n"
                 "  Get a token from @BotFather in Telegram."
             )
@@ -75,7 +88,7 @@ class Command(BaseCommand):
         pipeline, trigger = self._resolve_pipeline(options.get("pipeline_id"))
         poll_timeout = max(5, min(30, int(options.get("poll_timeout") or 25)))
         lease_seconds = max(30, int(options.get("lease_seconds") or 180))
-        worker_key = str(options.get("worker_key") or "default").strip() or "default"
+        worker_key = telegram_worker_key(bot_token)
         max_polls = max(0, int(options.get("max_polls") or 0))
 
         state = claim_background_worker(
@@ -99,8 +112,16 @@ class Command(BaseCommand):
         self.stdout.write("Send any message to your bot in Telegram.")
         self.stdout.write("Press Ctrl+C to stop.\n")
 
-        offset = 0
-        summary = {"polls": 0, "updates": 0, "runs_created": 0, "replies_routed": 0, "ignored": 0, "errors": 0}
+        offset = get_telegram_update_offset(bot_token)
+        summary = {
+            "polls": 0,
+            "updates": 0,
+            "runs_created": 0,
+            "replies_routed": 0,
+            "approvals_routed": 0,
+            "ignored": 0,
+            "errors": 0,
+        }
         try:
             while True:
                 try:
@@ -112,7 +133,7 @@ class Command(BaseCommand):
                         summary=summary,
                         cycle_started=True,
                     )
-                    updates, offset = asyncio.run(self._get_updates(bot_token, offset, poll_timeout))
+                    updates, _next_offset = asyncio.run(self._get_updates(bot_token, offset, poll_timeout))
                     summary["updates"] += len(updates)
                     for update in updates:
                         result = self._handle_update(update, bot_token, pipeline, trigger)
@@ -120,8 +141,13 @@ class Command(BaseCommand):
                             summary["runs_created"] += 1
                         elif result == "reply":
                             summary["replies_routed"] += 1
+                        elif result == "approval":
+                            summary["approvals_routed"] += 1
                         else:
                             summary["ignored"] += 1
+                        update_id = update.get("update_id")
+                        if isinstance(update_id, int):
+                            offset = advance_telegram_update_offset(bot_token, update_id + 1)
                     heartbeat_background_worker(
                         STUDIO_TELEGRAM_BOT_WORKER,
                         worker_key=worker_key,
@@ -182,7 +208,7 @@ class Command(BaseCommand):
                 json={
                     "offset": offset,
                     "timeout": poll_timeout,
-                    "allowed_updates": ["message"],
+                    "allowed_updates": ["message", "callback_query"],
                 },
             )
         if resp.status_code != 200:
@@ -200,20 +226,73 @@ class Command(BaseCommand):
         return updates, new_offset
 
     def _handle_update(self, update: dict, bot_token: str, pipeline: Pipeline, trigger: PipelineTrigger) -> str:
+        callback = update.get("callback_query") or {}
+        if isinstance(callback, dict) and callback:
+            return self._handle_callback(callback, bot_token)
+
         message = update.get("message") or {}
         if not isinstance(message, dict):
             return "ignored"
-
         if message.get("reply_to_message"):
-            from studio.pipeline.pipeline_telegram import store_telegram_operator_reply
+            return self._handle_reply(message, bot_token)
+        return self._launch_message(message, pipeline, trigger)
 
-            if store_telegram_operator_reply(bot_token, message):
-                ts = timezone.now().strftime("%H:%M:%S")
-                chat = message.get("chat") or {}
-                self.stdout.write(f"[{ts}] chat={chat.get('id')}  reply routed to waiting pipeline")
-                return "reply"
+    def _handle_callback(self, callback: dict, bot_token: str) -> str:
+        callback_message = callback.get("message") or {}
+        callback_chat = callback_message.get("chat") or {}
+        callback_from = callback.get("from") or {}
+        accepted, answer = record_telegram_approval_callback(
+            bot_token=bot_token,
+            callback_data=callback.get("data"),
+            chat_id=callback_chat.get("id"),
+            from_username=callback_from.get("username") or callback_from.get("first_name") or "",
+        )
+        callback_id = str(callback.get("id") or "").strip()
+        if callback_id:
+            with contextlib.suppress(Exception):
+                asyncio.run(self._answer_callback_query(bot_token, callback_id, answer))
+        return "approval" if accepted else "ignored"
+
+    def _handle_reply(self, message: dict, bot_token: str) -> str:
+        if not store_telegram_operator_reply(bot_token, message):
             return "ignored"
+        ts = timezone.now().strftime("%H:%M:%S")
+        chat = message.get("chat") or {}
+        self.stdout.write(f"[{ts}] chat={chat.get('id')}  reply routed to waiting pipeline")
+        return "reply"
 
+    def _validate_launch(self, pipeline: Pipeline, trigger: PipelineTrigger, context: dict) -> bool:
+        from studio.pipeline.pipeline_runtime_context import (
+            validate_pipeline_entry_branch,
+            validate_pipeline_runtime_context,
+        )
+        from studio.pipeline.pipeline_validation import validate_pipeline_definition
+
+        errors = validate_pipeline_definition(
+            nodes=pipeline.nodes,
+            edges=pipeline.edges,
+            owner=pipeline.owner,
+            graph_version=pipeline.graph_version,
+        )
+        if errors:
+            self.stderr.write(f"Pipeline validation failed — fix it in Studio: {errors[:2]}")
+            return False
+        branch_errors = validate_pipeline_entry_branch(pipeline.nodes, pipeline.edges, trigger.node_id)
+        if branch_errors:
+            self.stderr.write(f"Pipeline entry branch failed — fix it in Studio: {branch_errors[:2]}")
+            return False
+        context_errors = validate_pipeline_runtime_context(
+            pipeline.nodes,
+            context,
+            edges=pipeline.edges,
+            entry_node_id=trigger.node_id,
+        )
+        if context_errors:
+            self.stderr.write(f"Pipeline runtime context failed — fix it in Studio: {context_errors[:2]}")
+            return False
+        return True
+
+    def _launch_message(self, message: dict, pipeline: Pipeline, trigger: PipelineTrigger) -> str:
         text = str(message.get("text") or "").strip()
         if not text:
             return "ignored"
@@ -235,36 +314,7 @@ class Command(BaseCommand):
         if limit_error:
             self.stderr.write(f"Run limit exceeded: {limit_error.get('error')}")
             return "ignored"
-
-        from studio.pipeline.pipeline_validation import validate_pipeline_definition
-
-        errors = validate_pipeline_definition(
-            nodes=pipeline.nodes,
-            edges=pipeline.edges,
-            owner=pipeline.owner,
-            graph_version=pipeline.graph_version,
-        )
-        if errors:
-            self.stderr.write(f"Pipeline validation failed — fix it in Studio: {errors[:2]}")
-            return "ignored"
-
-        from studio.pipeline.pipeline_runtime_context import (
-            validate_pipeline_entry_branch,
-            validate_pipeline_runtime_context,
-        )
-
-        branch_errors = validate_pipeline_entry_branch(pipeline.nodes, pipeline.edges, trigger.node_id)
-        if branch_errors:
-            self.stderr.write(f"Pipeline entry branch failed — fix it in Studio: {branch_errors[:2]}")
-            return "ignored"
-        context_errors = validate_pipeline_runtime_context(
-            pipeline.nodes,
-            context,
-            edges=pipeline.edges,
-            entry_node_id=trigger.node_id,
-        )
-        if context_errors:
-            self.stderr.write(f"Pipeline runtime context failed — fix it in Studio: {context_errors[:2]}")
+        if not self._validate_launch(pipeline, trigger, context):
             return "ignored"
 
         from studio.trigger_dispatch import (
@@ -298,3 +348,11 @@ class Command(BaseCommand):
         preview = text[:60] + ("…" if len(text) > 60 else "")
         self.stdout.write(f"[{ts}] chat={chat_id}  msg={preview!r}  → run #{run.pk}")
         return "launched"
+
+    async def _answer_callback_query(self, bot_token: str, callback_query_id: str, text: str) -> None:
+        url = f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery"
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(
+                url,
+                json={"callback_query_id": callback_query_id, "text": str(text or "")[:200]},
+            )

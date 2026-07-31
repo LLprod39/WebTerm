@@ -179,6 +179,8 @@ def _worker_requirements(
     pipelines: list[dict[str, Any]], raw_pipelines: list[Pipeline], *, entry_node_id: str = ""
 ) -> list[dict[str, Any]]:
     required = Counter()
+    if raw_pipelines:
+        required["pipeline-execution"] = len(raw_pipelines)
     for pipeline in pipelines:
         for trigger in pipeline["triggers"]:
             worker = trigger.get("worker")

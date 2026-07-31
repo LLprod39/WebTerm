@@ -19,7 +19,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     server = Server.objects.create(user=user, name="studio-srv", host="10.0.0.55", username="root")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     create = client.post(
         "/api/studio/pipelines/",
@@ -55,7 +55,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
     pipelines = client.get("/api/studio/pipelines/")
     assert pipelines.status_code == 200
-    assert any(item["id"] == pipeline_id for item in pipelines.json())
+    assert any(item["id"] == pipeline_id for item in pipelines.json()["data"])
 
     detail = client.get(f"/api/studio/pipelines/{pipeline_id}/")
     assert detail.status_code == 200
@@ -80,11 +80,11 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
     pipeline_runs = client.get(f"/api/studio/pipelines/{pipeline_id}/runs/")
     assert pipeline_runs.status_code == 200
-    assert any(item["id"] == run_id for item in pipeline_runs.json())
+    assert any(item["id"] == run_id for item in pipeline_runs.json()["data"])
 
     runs = client.get("/api/studio/runs/")
     assert runs.status_code == 200
-    assert any(item["id"] == run_id for item in runs.json())
+    assert any(item["id"] == run_id for item in runs.json()["data"])
 
     clone = client.post(f"/api/studio/pipelines/{pipeline_id}/clone/")
     assert clone.status_code == 201
@@ -92,7 +92,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
     triggers = client.get(f"/api/studio/triggers/?pipeline_id={pipeline_id}")
     assert triggers.status_code == 200
-    webhook_trigger = next(item for item in triggers.json() if item["trigger_type"] == "webhook")
+    webhook_trigger = next(item for item in triggers.json()["data"] if item["trigger_type"] == "webhook")
     trigger_id = webhook_trigger["id"]
 
     trigger_update = client.put(
@@ -125,7 +125,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
     )
     templates = client.get("/api/studio/templates/")
     assert templates.status_code == 200
-    assert any(item["slug"] == template.slug for item in templates.json())
+    assert any(item["slug"] == template.slug for item in templates.json()["data"])
 
     use_template = client.post(f"/api/studio/templates/{template.slug}/use/")
     assert use_template.status_code == 201
@@ -133,7 +133,7 @@ def test_studio_pipeline_trigger_template_and_servers_endpoints(monkeypatch):
 
     studio_servers = client.get("/api/studio/servers/")
     assert studio_servers.status_code == 200
-    assert any(item["id"] == server.id for item in studio_servers.json())
+    assert any(item["id"] == server.id for item in studio_servers.json()["data"])
 
     delete = client.delete(f"/api/studio/pipelines/{pipeline_id}/")
     assert delete.status_code == 200
@@ -162,7 +162,7 @@ def test_pipeline_run_enforces_user_active_run_limit(monkeypatch):
     )
 
     monkeypatch.setattr(
-        "studio.views._launch_pipeline_run_async",
+        "studio.views.pipeline_helpers._launch_pipeline_run_async",
         lambda _run: pytest.fail("_launch_pipeline_run_async should not be called when the active-run limit is hit"),
     )
 
@@ -205,7 +205,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
 
     mcp_list = client.get("/api/studio/mcp/")
     assert mcp_list.status_code == 200
-    assert any(item["id"] == mcp_id for item in mcp_list.json())
+    assert any(item["id"] == mcp_id for item in mcp_list.json()["data"])
 
     mcp_detail = client.get(f"/api/studio/mcp/{mcp_id}/")
     assert mcp_detail.status_code == 200
@@ -219,7 +219,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
     assert mcp_update.status_code == 200
     assert mcp_update.json()["name"] == "Demo MCP Updated"
 
-    monkeypatch.setattr("studio.views._test_mcp_connection", lambda _mcp: (True, None))
+    monkeypatch.setattr("studio.views.mcp_views._test_mcp_connection", lambda _mcp: (True, None))
     mcp_test = client.post(f"/api/studio/mcp/{mcp_id}/test/")
     assert mcp_test.status_code == 200
     assert mcp_test.json()["ok"] is True
@@ -227,14 +227,14 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
     async def fake_inspect_mcp_server(_mcp):
         return {"server": {"name": "Demo MCP"}, "tools": [{"name": "ping"}]}
 
-    monkeypatch.setattr("studio.views.inspect_mcp_server", fake_inspect_mcp_server)
+    monkeypatch.setattr("studio.views.mcp_views.inspect_mcp_server", fake_inspect_mcp_server)
     mcp_tools = client.get(f"/api/studio/mcp/{mcp_id}/tools/")
     assert mcp_tools.status_code == 200
     assert mcp_tools.json()["server"]["name"] == "Demo MCP"
 
     mcp_templates = client.get("/api/studio/mcp/templates/")
     assert mcp_templates.status_code == 200
-    assert any(item["slug"] == "filesystem" for item in mcp_templates.json())
+    assert any(item["slug"] == "filesystem" for item in mcp_templates.json()["data"])
 
     agent_create = client.post(
         "/api/studio/agents/",
@@ -255,7 +255,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
 
     agents = client.get("/api/studio/agents/")
     assert agents.status_code == 200
-    assert any(item["id"] == agent_id for item in agents.json())
+    assert any(item["id"] == agent_id for item in agents.json()["data"])
 
     agent_detail = client.get(f"/api/studio/agents/{agent_id}/")
     assert agent_detail.status_code == 200
@@ -272,7 +272,7 @@ def test_studio_agents_skills_and_mcp_crud_endpoints(monkeypatch):
 
     skills = client.get("/api/studio/skills/")
     assert skills.status_code == 200
-    assert any(item["slug"] == "kubernetes-safety" for item in skills.json())
+    assert any(item["slug"] == "kubernetes-safety" for item in skills.json()["data"])
 
     skill_detail = client.get("/api/studio/skills/kubernetes-safety/")
     assert skill_detail.status_code == 200
@@ -295,7 +295,7 @@ def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, setti
 
     temp_config = Path(settings.BASE_DIR) / ".tmp_notif_tests" / f"config_{uuid.uuid4().hex}.json"
     temp_config.parent.mkdir(parents=True, exist_ok=True)
-    monkeypatch.setattr("studio.views._NOTIF_CONFIG_PATH", temp_config)
+    monkeypatch.setattr("studio.views.notification_views._NOTIF_CONFIG_PATH", temp_config)
 
     save = client.post(
         "/api/studio/notifications/",

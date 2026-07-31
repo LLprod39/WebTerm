@@ -118,7 +118,6 @@ values = {
     "CSRF_TRUSTED_ORIGINS": "https://127.0.0.1:38443,https://localhost:38443",
     "DJANGO_SECRET_KEY": secrets.token_urlsafe(64),
     "MANAGED_SECRET_KEY": secrets.token_urlsafe(64),
-    "MASTER_PASSWORD": secrets.token_urlsafe(48),
     "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
     "STUDIO_MCP_RUNNER_TOKEN": secrets.token_urlsafe(48),
     "AGENT_COMMAND_RUNNER_IMAGE": "sha256:" + "0" * 64,

@@ -170,24 +170,34 @@ def run_metric_rollups(now: datetime | None = None) -> dict[str, int]:
     return {"hour_rows": hour_rows, "day_rows": day_rows}
 
 
-def cleanup_metric_data(now: datetime | None = None) -> dict[str, int]:
+def cleanup_metric_data(now: datetime | None = None, *, dry_run: bool = False) -> dict[str, int]:
     """Retention pass for raw samples and rollups (settings-overridable)."""
     now = now or timezone.now()
     sample_days = int(getattr(settings, "METRICS_SAMPLE_RETENTION_DAYS", 14) or 14)
     hour_days = int(getattr(settings, "METRICS_HOUR_ROLLUP_RETENTION_DAYS", 400) or 400)
     day_days = int(getattr(settings, "METRICS_DAY_ROLLUP_RETENTION_DAYS", 1100) or 1100)
 
-    deleted_samples, _ = ServerMetricSample.objects.filter(collected_at__lt=now - timedelta(days=sample_days)).delete()
-    deleted_hours, _ = ServerMetricRollup.objects.filter(
+    sample_rows = ServerMetricSample.objects.filter(collected_at__lt=now - timedelta(days=sample_days))
+    hour_rows = ServerMetricRollup.objects.filter(
         granularity=ServerMetricRollup.GRANULARITY_HOUR,
         bucket_start__lt=now - timedelta(days=hour_days),
-    ).delete()
-    deleted_days, _ = ServerMetricRollup.objects.filter(
+    )
+    day_rows = ServerMetricRollup.objects.filter(
         granularity=ServerMetricRollup.GRANULARITY_DAY,
         bucket_start__lt=now - timedelta(days=day_days),
-    ).delete()
+    )
     insight_days = int(getattr(settings, "AI_INSIGHTS_RETENTION_DAYS", 60) or 60)
-    deleted_insights, _ = ServerAiInsight.objects.filter(created_at__lt=now - timedelta(days=insight_days)).delete()
+    insight_rows = ServerAiInsight.objects.filter(created_at__lt=now - timedelta(days=insight_days))
+    if dry_run:
+        deleted_samples = sample_rows.count()
+        deleted_hours = hour_rows.count()
+        deleted_days = day_rows.count()
+        deleted_insights = insight_rows.count()
+    else:
+        deleted_samples, _ = sample_rows.delete()
+        deleted_hours, _ = hour_rows.delete()
+        deleted_days, _ = day_rows.delete()
+        deleted_insights, _ = insight_rows.delete()
     return {
         "samples": deleted_samples,
         "hour_rollups": deleted_hours,

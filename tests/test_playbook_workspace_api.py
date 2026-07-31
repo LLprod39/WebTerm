@@ -40,8 +40,8 @@ def test_draft_optimistic_lock_revision_and_publish(workspace_users):
         content_type="application/json",
     )
     assert conflict.status_code == 409
-    assert conflict.json()["error"]["code"] == "playbook_draft_conflict"
-    assert conflict.json()["error"]["details"]["current_version"] == 2
+    assert conflict.json()["code"] == "playbook_draft_conflict"
+    assert conflict.json()["details"]["current_version"] == 2
     created = client.post(
         f"/servers/api/playbooks/{playbook.id}/revisions/",
         data=json.dumps({"expected_version": 2, "message": "Use hostname"}),

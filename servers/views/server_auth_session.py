@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 
 
@@ -24,7 +25,7 @@ def set_master_password(request):
             request.session.set_expiry(0)
         return JsonResponse({"success": True})
     except Exception as e:
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required

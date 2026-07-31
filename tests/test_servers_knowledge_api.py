@@ -280,17 +280,13 @@ def test_share_master_password_and_knowledge_endpoints(monkeypatch):
     assert delete_knowledge.json()["success"] is True
 
     server.auth_method = "password"
-    server.encrypted_password = "ciphertext"
-    server.salt = b"12345678"
-    server.save(update_fields=["auth_method", "encrypted_password", "salt"])
+    server.save(update_fields=["auth_method"])
+    from servers.secret_utils import store_server_auth_secret
 
-    monkeypatch.setattr(
-        "servers.views.PasswordEncryption.decrypt_password",
-        lambda *_args, **_kwargs: "plain-password",
-    )
+    store_server_auth_secret(server, secret_value="plain-password")
     reveal = client.post(
         f"/servers/api/{server.id}/reveal-password/",
-        data=_json({"master_password": "master-secret"}),
+        data=_json({}),
         content_type="application/json",
     )
     assert reveal.status_code == 200

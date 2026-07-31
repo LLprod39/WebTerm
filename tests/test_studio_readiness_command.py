@@ -8,6 +8,8 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
+from app.background_workers import STUDIO_PIPELINE_EXECUTION_WORKER
+from app.worker_state import heartbeat_background_worker
 from studio.models import Pipeline
 
 pytestmark = pytest.mark.django_db
@@ -84,6 +86,7 @@ def test_check_studio_readiness_command_can_scope_to_active_pipelines_only():
         edges=[{"id": "e1", "source": "manual", "target": "report", "sourceHandle": "out"}],
     )
     ready.sync_triggers_from_nodes()
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     stdout = io.StringIO()
 
     call_command("check_studio_readiness", "--username", user.username, "--active-only", stdout=stdout)
@@ -155,6 +158,7 @@ def test_check_studio_readiness_command_can_scope_to_entry_node_id(monkeypatch):
         ],
     )
     pipeline.sync_triggers_from_nodes()
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     stdout = io.StringIO()
 
     call_command(

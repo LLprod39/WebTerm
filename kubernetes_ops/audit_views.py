@@ -10,6 +10,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_http_methods
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAppRef, K8sAuditEvent, K8sCluster, K8sWorkloadRef
 from kubernetes_ops.serializers import serialize_audit_event
@@ -20,7 +21,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes ops audit API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _json_body(request) -> tuple[dict[str, Any], JsonResponse | None]:

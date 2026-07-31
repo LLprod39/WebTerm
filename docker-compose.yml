@@ -159,7 +159,6 @@ services:
         HTTPS_PROXY: ${HTTPS_PROXY:-}
         FTP_PROXY: ${FTP_PROXY:-}
         NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1}
-    container_name: mini-prod-backend
     working_dir: /workspace
     command: ["sh", "-lc", "./docker/render-backend-start.sh"]
     environment:
@@ -219,8 +218,8 @@ services:
       WEBTERM_ANSIBLE_DOCKER_CPUS: ${WEBTERM_ANSIBLE_DOCKER_CPUS:-1.0}
       WEBTERM_ANSIBLE_DOCKER_MEMORY: ${WEBTERM_ANSIBLE_DOCKER_MEMORY:-512m}
       WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
-    ports:
-      - "${DJANGO_PORT:-9000}:9000"
+    expose:
+      - "9000"
     volumes:
       - .:/workspace
       - /var/run/docker.sock:/var/run/docker.sock
@@ -231,6 +230,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       playbook-validator:
@@ -247,6 +248,23 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+
+  migrate:
+    <<: *backend-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py migrate --noinput && python manage.py load_pipeline_templates",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+    healthcheck:
+      disable: true
 
   scheduled-pipelines:
     <<: *backend-worker
@@ -266,6 +284,15 @@ services:
         "sh",
         "-lc",
         "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
+      ]
+
+  operator-execution:
+    <<: *backend-worker
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_operator_execution_plane --interval ${OPERATOR_EXECUTION_INTERVAL_SECONDS:-2} --lease-seconds ${OPERATOR_EXECUTION_LEASE_SECONDS:-180} --worker-key \"$${HOSTNAME:-compose}\"",
       ]
 
   history-pruner:
@@ -330,7 +357,7 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --cleanup-interval ${MONITOR_CLEANUP_INTERVAL:-86400} --concurrency ${MONITOR_CONCURRENCY:-5}",
+        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --concurrency ${MONITOR_CONCURRENCY:-5}",
       ]
 
   telegram-bot:

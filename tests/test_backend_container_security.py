@@ -42,6 +42,7 @@ def test_production_compose_prepares_volumes_for_non_root_backend():
     assert not any("/var/run/docker.sock" in volume for volume in worker["volumes"])
     for worker_name in (
         "scheduled-pipelines",
+        "operator-execution",
         "scheduled-agents",
         "history-pruner",
         "playbook-execution-worker",

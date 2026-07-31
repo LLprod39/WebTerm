@@ -7,8 +7,9 @@ from asgiref.sync import async_to_sync, sync_to_async
 from django.contrib.auth.models import User
 
 from studio.models import ApprovalRequest, PipelineRun
-from studio.pipeline.pipeline_executor import PipelineExecutor, _poll_telegram_approval_decision
-from tests.studio_node_executor_harness import FakeHttpResponse, disable_activity_logging, make_run
+from studio.pipeline.pipeline_executor import PipelineExecutor
+from studio.telegram_delivery_service import record_telegram_approval_callback, store_telegram_operator_reply
+from tests.studio_node_executor_harness import disable_activity_logging, make_run
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -82,13 +83,14 @@ def test_human_approval_node_sends_telegram_confirmation_link(monkeypatch):
         return {"status": "completed", "output": "telegram sent"}
 
     async def fake_sleep(_seconds: float) -> None:
-        await sync_to_async(
-            lambda: ApprovalRequest.objects.filter(run=run, node_id="approval_gate").update(
-                status=ApprovalRequest.STATUS_APPROVED,
-                response_text="Подтверждено из Telegram",
-            ),
-            thread_sensitive=True,
-        )()
+        callback_data = captured["data"]["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
+        accepted, _message = await sync_to_async(record_telegram_approval_callback, thread_sensitive=True)(
+            bot_token="bot-123",
+            callback_data=callback_data,
+            chat_id="chat-42",
+            from_username="ops_user",
+        )
+        assert accepted is True
 
     async def fake_send_telegram_message(**_kwargs):
         return {"status": "completed", "output": "decision confirmation sent"}
@@ -106,15 +108,15 @@ def test_human_approval_node_sends_telegram_confirmation_link(monkeypatch):
 
     assert result["status"] == "completed"
     assert result["decision"] == "approved"
-    assert "Подтверждено из Telegram" in result["output"]
+    assert "Telegram button by @ops_user" in result["output"]
     reply_markup = captured["data"]["reply_markup"]
     assert captured["data"]["parse_mode"] == ""
-    assert reply_markup["inline_keyboard"][0][0]["text"] == "Review approval request"
-    assert reply_markup["inline_keyboard"][0][0]["url"].startswith(
+    assert reply_markup["inline_keyboard"][0][0]["text"] == "✅ Одобрить"
+    assert reply_markup["inline_keyboard"][0][1]["text"] == "❌ Отклонить"
+    assert reply_markup["inline_keyboard"][1][0]["url"].startswith(
         f"http://localhost:9000/api/studio/runs/{run.id}/approve/approval_gate/?token="
     )
-    assert "callback_data" not in reply_markup["inline_keyboard"][0][0]
-    raw_token = parse_qs(urlparse(reply_markup["inline_keyboard"][0][0]["url"]).query)["token"][0]
+    raw_token = parse_qs(urlparse(reply_markup["inline_keyboard"][1][0]["url"]).query)["token"][0]
     approval = ApprovalRequest.objects.get(run=run, node_id="approval_gate")
     assert approval.token_matches(raw_token)
     assert raw_token != approval.token_digest
@@ -195,64 +197,6 @@ def test_human_approval_node_fails_closed_without_distinct_approver(monkeypatch)
     assert not ApprovalRequest.objects.filter(run=run).exists()
 
 
-def test_poll_telegram_approval_decision_consumes_callback_updates(monkeypatch):
-    import studio.pipeline.pipeline_executor as executor_module
-
-    executor_module._TELEGRAM_UPDATE_OFFSETS.clear()
-    executor_module._TELEGRAM_UPDATE_LOCKS.clear()
-    executor_module._TELEGRAM_PENDING_CALLBACKS.clear()
-    executor_module._TELEGRAM_PENDING_REPLIES.clear()
-
-    captured: dict[str, object] = {"calls": []}
-
-    class FakeHttpClient:
-        def __init__(self, timeout: int = 15) -> None:
-            self.timeout = timeout
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb) -> None:
-            return None
-
-        async def post(self, url: str, json: dict):
-            captured["calls"].append((url, json))
-            if url.endswith("/getUpdates"):
-                return FakeHttpResponse(
-                    status_code=200,
-                    text='{"ok": true}',
-                )
-            return FakeHttpResponse(status_code=200, text='{"ok": true}')
-
-    monkeypatch.setattr("studio.pipeline.pipeline_telegram.httpx.AsyncClient", FakeHttpClient)
-
-    def fake_json_response(self):
-        return {
-            "ok": True,
-            "result": [
-                {
-                    "update_id": 7001,
-                    "callback_query": {
-                        "id": "cbq-1",
-                        "data": "approval:approved:token-xyz",
-                        "from": {"username": "ops_user"},
-                    },
-                }
-            ],
-        }
-
-    monkeypatch.setattr(FakeHttpResponse, "json", fake_json_response, raising=False)
-
-    result = async_to_sync(_poll_telegram_approval_decision)("bot-123", "token-xyz")
-
-    assert result is not None
-    assert result["decision"] == "approved"
-    assert result["response_text"] == "через кнопку в Telegram"
-    calls = captured["calls"]
-    assert any(url.endswith("/getUpdates") for url, _payload in calls)
-    assert any(url.endswith("/answerCallbackQuery") for url, _payload in calls)
-
-
 def test_telegram_input_node_returns_operator_reply(monkeypatch):
     run = make_run("telegram-input-user")
     node = {
@@ -277,23 +221,22 @@ def test_telegram_input_node_returns_operator_reply(monkeypatch):
             "last_message_id": 111,
         }
 
-    async def fake_poll_reply(_bot_token: str, _chat_id: str, reply_to_message_id: int):
-        assert reply_to_message_id == 111
-        return {
-            "text": "Попробуй docker compose up -d mini-prod-mcp-demo",
-            "chat_id": "chat-42",
-            "message_id": 222,
-            "reply_to_message_id": reply_to_message_id,
-            "from_username": "ops_user",
-        }
-
     async def fake_sleep(_seconds: float) -> None:
-        return None
+        delivered = await sync_to_async(store_telegram_operator_reply, thread_sensitive=True)(
+            "bot-123",
+            {
+                "text": "Попробуй docker compose up -d mini-prod-mcp-demo",
+                "chat": {"id": "chat-42"},
+                "message_id": 222,
+                "reply_to_message": {"message_id": 111},
+                "from": {"username": "ops_user"},
+            },
+        )
+        assert delivered is True
 
     monkeypatch.setattr(
         "studio.pipeline.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message
     )
-    monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
     monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -332,15 +275,11 @@ def test_telegram_input_node_uses_global_telegram_defaults_when_node_fields_blan
             "last_message_id": 111,
         }
 
-    async def fake_poll_reply(*_args, **_kwargs):
+    async def fake_sleep(_seconds: float) -> None:
         await sync_to_async(
             lambda: PipelineRun.objects.filter(pk=run.pk).update(runtime_control={"stop_requested": True}),
             thread_sensitive=True,
         )()
-        return None
-
-    async def fake_sleep(_seconds: float) -> None:
-        return None
 
     monkeypatch.setattr(
         "studio.pipeline.pipeline_notifications._global_tg_defaults", lambda: ("global-bot", "global-chat")
@@ -348,7 +287,6 @@ def test_telegram_input_node_uses_global_telegram_defaults_when_node_fields_blan
     monkeypatch.setattr(
         "studio.pipeline.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message
     )
-    monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
     monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -385,27 +323,26 @@ def test_telegram_input_node_prefers_operator_reply_over_stale_stopped_status(mo
             "last_message_id": 111,
         }
 
-    async def fake_poll_reply(_bot_token: str, _chat_id: str, reply_to_message_id: int):
-        assert reply_to_message_id == 111
+    async def fake_sleep(_seconds: float) -> None:
         await sync_to_async(
             lambda: PipelineRun.objects.filter(pk=run.pk).update(status=PipelineRun.STATUS_STOPPED),
             thread_sensitive=True,
         )()
-        return {
-            "text": "Сделай docker start mini-prod-mcp-demo",
-            "chat_id": "chat-42",
-            "message_id": 222,
-            "reply_to_message_id": reply_to_message_id,
-            "from_username": "ops_user",
-        }
-
-    async def fake_sleep(_seconds: float) -> None:
-        return None
+        delivered = await sync_to_async(store_telegram_operator_reply, thread_sensitive=True)(
+            "bot-123",
+            {
+                "text": "Сделай docker start mini-prod-mcp-demo",
+                "chat": {"id": "chat-42"},
+                "message_id": 222,
+                "reply_to_message": {"message_id": 111},
+                "from": {"username": "ops_user"},
+            },
+        )
+        assert delivered is True
 
     monkeypatch.setattr(
         "studio.pipeline.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message
     )
-    monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
     monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -432,7 +369,7 @@ def test_telegram_input_node_stops_only_on_runtime_stop_request(monkeypatch):
             "parse_mode": "",
         },
     }
-    poll_calls = {"count": 0}
+    sleep_calls = {"count": 0}
 
     async def fake_send_telegram_message(**_kwargs):
         return {
@@ -442,22 +379,16 @@ def test_telegram_input_node_stops_only_on_runtime_stop_request(monkeypatch):
             "last_message_id": 111,
         }
 
-    async def fake_poll_reply(_bot_token: str, _chat_id: str, reply_to_message_id: int):
-        assert reply_to_message_id == 111
-        poll_calls["count"] += 1
+    async def fake_sleep(_seconds: float) -> None:
+        sleep_calls["count"] += 1
         await sync_to_async(
             lambda: PipelineRun.objects.filter(pk=run.pk).update(runtime_control={"stop_requested": True}),
             thread_sensitive=True,
         )()
-        return None
-
-    async def fake_sleep(_seconds: float) -> None:
-        return None
 
     monkeypatch.setattr(
         "studio.pipeline.pipeline_interactions_telegram._send_telegram_message", fake_send_telegram_message
     )
-    monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram._poll_telegram_reply_message", fake_poll_reply)
     monkeypatch.setattr("studio.pipeline.pipeline_interactions_telegram.asyncio.sleep", fake_sleep)
 
     result = async_to_sync(PipelineExecutor(run)._execute_node)(
@@ -466,6 +397,6 @@ def test_telegram_input_node_stops_only_on_runtime_stop_request(monkeypatch):
         {"restart_container": {"status": "failed", "error": "exit 1", "output": "status=exited"}},
     )
 
-    assert poll_calls["count"] == 1
+    assert sleep_calls["count"] == 1
     assert result["status"] == "stopped"
     assert result["stopped"] is True

@@ -28,6 +28,17 @@ if POLICY_KIND == "agent-command":
         ssh_agent_socket=os.getenv("AGENT_COMMAND_SSH_AUTH_SOCK", ""),
     )
     authorize_docker_request = authorize_agent_command_docker_request
+elif POLICY_KIND == "plugin-backend":
+    from plugin_backend_socket_proxy_policy import (
+        PluginBackendProxyPolicyConfig,
+        authorize_plugin_backend_docker_request,
+    )
+
+    POLICY_CONFIG = PluginBackendProxyPolicyConfig(
+        runner_image=os.environ["PLUGIN_BACKEND_RUNNER_IMAGE"],
+        egress_network=os.getenv("PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK", ""),
+    )
+    authorize_docker_request = authorize_plugin_backend_docker_request
 elif POLICY_KIND == "playbook":
     from playbook_socket_proxy_policy import ProxyPolicyConfig, authorize_docker_request
 

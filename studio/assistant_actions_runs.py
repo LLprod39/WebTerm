@@ -10,7 +10,7 @@ from app.assistant_actions import AssistantActionContext, AssistantActionError
 from studio.assistant_actions_common import _int_payload, _pipeline_for_user, _run_for_user
 from studio.models import Pipeline, PipelineRun, PipelineTrigger
 from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
-from studio.pipeline.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline.pipeline_runtime import update_runtime_control
 from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from studio.pipeline.pipeline_validation import ensure_json_object, validate_pipeline_definition
 from studio.readiness_issues import runtime_limit_issue, validation_issues
@@ -156,15 +156,17 @@ def run_pipeline(ctx: AssistantActionContext) -> dict[str, Any]:
 
 def stop_pipeline_run(ctx: AssistantActionContext) -> dict[str, Any]:
     run = _run_for_user(ctx.user, _int_payload(ctx, "run_id"))
-    executor = get_executor_for_run(run.id)
-    control, stop_delivered = update_runtime_control(run, live_executor=executor, stop_requested=True)
-    if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING}:
+    control = update_runtime_control(run, stop_requested=True)
+    from studio.dispatch import cancel_pipeline_dispatch_for_run
+
+    cancel_pipeline_dispatch_for_run(run.pk)
+    if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING, PipelineRun.STATUS_HIBERNATING}:
         run.status = PipelineRun.STATUS_STOPPED
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "finished_at"])
     return {
         "ok": True,
-        "live_executor": stop_delivered,
+        "live_executor": False,
         "runtime_control": control,
         "target_url": f"/studio/runs?run={run.pk}",
     }

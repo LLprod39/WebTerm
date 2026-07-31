@@ -11,7 +11,41 @@ from django.apps import apps
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from app.monitoring_retention_provider import cleanup_monitoring_metric_data
 from core_ui.audit import get_logging_config
+
+RETENTION_ENV_NAMES = {
+    "pipeline_run": ("HISTORY_RETENTION_PIPELINE_RUN_DAYS", "HISTORY_RETENTION_PIPELINE_RUN_MAX_ROWS"),
+    "agent_run": ("HISTORY_RETENTION_AGENT_RUN_DAYS", "HISTORY_RETENTION_AGENT_RUN_MAX_ROWS"),
+    "server_command_history": (
+        "HISTORY_RETENTION_SERVER_COMMAND_HISTORY_DAYS",
+        "HISTORY_RETENTION_SERVER_COMMAND_HISTORY_MAX_ROWS",
+    ),
+    "command_snapshot": (
+        "HISTORY_RETENTION_COMMAND_SNAPSHOT_DAYS",
+        "HISTORY_RETENTION_COMMAND_SNAPSHOT_MAX_ROWS",
+    ),
+    "server_health_check": (
+        "HISTORY_RETENTION_SERVER_HEALTH_CHECK_DAYS",
+        "HISTORY_RETENTION_SERVER_HEALTH_CHECK_MAX_ROWS",
+    ),
+    "resolved_server_alert": (
+        "HISTORY_RETENTION_RESOLVED_SERVER_ALERT_DAYS",
+        "HISTORY_RETENTION_RESOLVED_SERVER_ALERT_MAX_ROWS",
+    ),
+    "chat_artifact": (
+        "HISTORY_RETENTION_CHAT_ARTIFACT_DAYS",
+        "HISTORY_RETENTION_CHAT_ARTIFACT_MAX_ROWS",
+    ),
+    "user_activity_log": (
+        "HISTORY_RETENTION_USER_ACTIVITY_LOG_DAYS",
+        "HISTORY_RETENTION_USER_ACTIVITY_LOG_MAX_ROWS",
+    ),
+    "llm_usage_log": (
+        "HISTORY_RETENTION_LLM_USAGE_LOG_DAYS",
+        "HISTORY_RETENTION_LLM_USAGE_LOG_MAX_ROWS",
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -37,6 +71,9 @@ def configured_retention_policies() -> tuple[RetentionPolicy, ...]:
     PipelineRun = apps.get_model("studio", "PipelineRun")
     AgentRun = apps.get_model("servers", "AgentRun")
     ServerCommandHistory = apps.get_model("servers", "ServerCommandHistory")
+    CommandSnapshot = apps.get_model("servers", "CommandSnapshot")
+    ServerHealthCheck = apps.get_model("servers", "ServerHealthCheck")
+    ServerAlert = apps.get_model("servers", "ServerAlert")
     ChatArtifact = apps.get_model("core_ui", "ChatArtifact")
     UserActivityLog = apps.get_model("core_ui", "UserActivityLog")
     LLMUsageLog = apps.get_model("core_ui", "LLMUsageLog")
@@ -51,13 +88,13 @@ def configured_retention_policies() -> tuple[RetentionPolicy, ...]:
         days: int,
         rows: int,
     ) -> RetentionPolicy:
-        prefix = f"HISTORY_RETENTION_{name.upper()}"
+        days_env, rows_env = RETENTION_ENV_NAMES[name]
         return RetentionPolicy(
             name=name,
             queryset=queryset,
             timestamp_field=timestamp_field,
-            max_age_days=_bounded_env_int(f"{prefix}_DAYS", days, minimum=1, maximum=3650),
-            max_rows=_bounded_env_int(f"{prefix}_MAX_ROWS", rows, minimum=1, maximum=50_000_000),
+            max_age_days=_bounded_env_int(days_env, days, minimum=1, maximum=3650),
+            max_rows=_bounded_env_int(rows_env, rows, minimum=1, maximum=50_000_000),
         )
 
     return (
@@ -80,6 +117,27 @@ def configured_retention_policies() -> tuple[RetentionPolicy, ...]:
             ServerCommandHistory.objects.all(),
             "executed_at",
             days=90,
+            rows=500_000,
+        ),
+        policy(
+            "command_snapshot",
+            CommandSnapshot.objects.all(),
+            "created_at",
+            days=30,
+            rows=50_000,
+        ),
+        policy(
+            "server_health_check",
+            ServerHealthCheck.objects.all(),
+            "checked_at",
+            days=7,
+            rows=1_000_000,
+        ),
+        policy(
+            "resolved_server_alert",
+            ServerAlert.objects.filter(is_resolved=True),
+            "created_at",
+            days=30,
             rows=500_000,
         ),
         policy(
@@ -158,4 +216,14 @@ def prune_history(*, dry_run: bool = False, batch_size: int = 1000) -> dict[str,
             "overflow_candidates": overflow_candidates,
             "deleted": deleted,
         }
+    metric_rows = cleanup_monitoring_metric_data(now=now, dry_run=dry_run)
+    report["monitoring_metric_data"] = {
+        "candidates": sum(metric_rows.values()),
+        "age_candidates": sum(metric_rows.values()),
+        "overflow_candidates": 0,
+        "max_age_days": "per-series policy",
+        "max_rows": 0,
+        "deleted": 0 if dry_run else sum(metric_rows.values()),
+        **metric_rows,
+    }
     return report

@@ -36,11 +36,6 @@ from studio.executor.registry import mutation_preview_required, mutation_preview
 from studio.models import PipelineRun
 
 from .pipeline_agent_llm import (
-    _load_pipeline_operational_recipes,
-    _load_pipeline_server_memory,
-    _resolve_llm_provider_and_model,
-)
-from .pipeline_agent_llm import (
     execute_agent_llm_query as _execute_agent_llm_query,
 )
 from .pipeline_agent_mcp import (
@@ -49,144 +44,29 @@ from .pipeline_agent_mcp import (
 from .pipeline_agent_mcp import (
     execute_agent_mcp_call as _execute_agent_mcp_call,
 )
-from .pipeline_agent_mcp import (
-    mcp_result_to_text as _mcp_result_to_text,
-)
-from .pipeline_agent_runtime import (
-    _log_pipeline_ssh_command,
-)
-from .pipeline_agent_runtime import (
-    execute_agent_multi as _execute_agent_multi,
-)
-from .pipeline_agent_runtime import (
-    execute_agent_react as _execute_agent_react,
-)
-from .pipeline_agent_runtime import (
-    execute_agent_ssh_cmd as _execute_agent_ssh_cmd,
-)
 from .pipeline_context import (
     build_enriched_node_context as _build_enriched_node_context,
 )
 from .pipeline_context import (
     pipeline_actor_context as _pipeline_actor_context,
 )
-from .pipeline_context import (
-    render_template_value as _render_template_value,
-)
-from .pipeline_interactions import (
-    _global_email_defaults,
-    _global_site_url,
-    _global_tg_defaults,
-    _send_telegram_message,
-)
-from .pipeline_interactions import (
-    execute_logic_human_approval as _execute_logic_human_approval,
-)
-from .pipeline_interactions import (
-    execute_logic_telegram_input as _execute_logic_telegram_input,
-)
-from .pipeline_interactions import (
-    resolve_telegram_target as _resolve_telegram_target,
-)
-from .pipeline_logic import (
-    execute_logic_condition as _execute_logic_condition,
-)
-from .pipeline_logic import (
-    execute_logic_merge as _execute_logic_merge,
-)
-from .pipeline_logic import (
-    execute_logic_wait as _execute_logic_wait,
-)
-from .pipeline_outputs import (
-    execute_output_email as _execute_output_email,
-)
-from .pipeline_outputs import (
-    execute_output_report as _execute_output_report,
-)
-from .pipeline_outputs import (
-    execute_output_telegram as _execute_output_telegram,
-)
-from .pipeline_outputs import (
-    execute_output_webhook as _execute_output_webhook,
-)
 from .pipeline_redaction import (
     redact_pipeline_text as _redact_pipeline_text,
-)
-from .pipeline_redaction import (
-    redact_pipeline_value as _redact_pipeline_value,
-)
-from .pipeline_redaction import (
-    redacted_all_outputs_text as _redacted_all_outputs_text,
-)
-from .pipeline_redaction import (
-    redacted_mapping_context as _redacted_pipeline_context,
 )
 from .pipeline_run_loop import execute_pipeline_run_loop as _execute_pipeline_run_loop
 from .pipeline_run_setup import prepare_pipeline_run_start as _prepare_pipeline_run_start
 from .pipeline_run_state import (
-    make_run_event_callback as _make_run_event_callback,
-)
-from .pipeline_run_state import (
     update_run_status as _update_run_status,
 )
-from .pipeline_runtime import is_runtime_stop_requested, register_executor, unregister_executor
+from .pipeline_runtime import is_runtime_stop_requested
 from .pipeline_secrets import hydrate_pipeline_node_data
-from .pipeline_telegram import (
-    _TELEGRAM_PENDING_CALLBACKS,
-    _TELEGRAM_PENDING_REPLIES,
-    _TELEGRAM_UPDATE_LOCKS,
-    _TELEGRAM_UPDATE_OFFSETS,
-    _parse_telegram_approval_callback_data,
-    _poll_telegram_approval_decision,
-    _poll_telegram_reply_message,
-    _poll_telegram_updates,
-    _telegram_approval_callback_data,
-    store_telegram_operator_reply,
-)
 
 __all__ = [
     "PipelineExecutor",
-    "_TELEGRAM_PENDING_CALLBACKS",
-    "_TELEGRAM_PENDING_REPLIES",
-    "_TELEGRAM_UPDATE_LOCKS",
-    "_TELEGRAM_UPDATE_OFFSETS",
     "_coerce_mcp_arguments",
     "_execute_agent_llm_query",
     "_execute_agent_mcp_call",
-    "_execute_agent_multi",
-    "_execute_agent_react",
-    "_execute_agent_ssh_cmd",
-    "_execute_logic_condition",
-    "_execute_logic_human_approval",
-    "_execute_logic_merge",
-    "_execute_logic_telegram_input",
-    "_execute_logic_wait",
-    "_execute_output_email",
-    "_execute_output_report",
-    "_execute_output_telegram",
-    "_execute_output_webhook",
-    "_global_email_defaults",
-    "_global_site_url",
-    "_global_tg_defaults",
-    "_load_pipeline_operational_recipes",
-    "_load_pipeline_server_memory",
-    "_log_pipeline_ssh_command",
-    "_make_run_event_callback",
-    "_mcp_result_to_text",
-    "_parse_telegram_approval_callback_data",
-    "_poll_telegram_approval_decision",
-    "_poll_telegram_reply_message",
-    "_poll_telegram_updates",
-    "_redact_pipeline_text",
-    "_redact_pipeline_value",
-    "_redacted_all_outputs_text",
-    "_redacted_pipeline_context",
-    "_render_template_value",
-    "_resolve_llm_provider_and_model",
-    "_resolve_telegram_target",
-    "_send_telegram_message",
-    "_telegram_approval_callback_data",
-    "store_telegram_operator_reply",
+    "_execute_registry_node",
 ]
 
 logger = logging.getLogger(__name__)
@@ -307,27 +187,34 @@ class PipelineExecutor:
             self.request_stop()
         return self._stop_requested
 
-    async def execute(self, context: dict | None = None) -> PipelineRun:
+    async def execute(
+        self,
+        context: dict | None = None,
+        *,
+        resume: bool = False,
+        non_idempotent_confirmed: bool = False,
+    ) -> PipelineRun:
         run = self.run
-        register_executor(run.pk, self)
-        try:
-            with audit_context(**_pipeline_actor_context(run)):
-                if await self._sync_stop_state_from_db():
-                    await _update_run_status(run, PipelineRun.STATUS_STOPPED, finished_at=timezone.now())
-                    return run
-                prepared = await _prepare_pipeline_run_start(run, context)
-                if prepared is None:
-                    return run
-                return await _execute_pipeline_run_loop(
-                    run,
-                    prepared,
-                    execute_node=self._execute_node,
-                    sync_stop_state_from_db=self._sync_stop_state_from_db,
-                    request_stop=self.request_stop,
-                    is_stop_requested=lambda: self._stop_requested,
-                )
-        finally:
-            unregister_executor(run.pk, self)
+        with audit_context(**_pipeline_actor_context(run)):
+            if await self._sync_stop_state_from_db():
+                await _update_run_status(run, PipelineRun.STATUS_STOPPED, finished_at=timezone.now())
+                return run
+            prepared = await _prepare_pipeline_run_start(
+                run,
+                context,
+                resume=resume,
+                non_idempotent_confirmed=non_idempotent_confirmed,
+            )
+            if prepared is None:
+                return run
+            return await _execute_pipeline_run_loop(
+                run,
+                prepared,
+                execute_node=self._execute_node,
+                sync_stop_state_from_db=self._sync_stop_state_from_db,
+                request_stop=self.request_stop,
+                is_stop_requested=lambda: self._stop_requested,
+            )
 
     async def _execute_node(self, node: dict, context: dict, node_outputs: dict[str, dict]) -> dict:
         node_type = node.get("type", "")

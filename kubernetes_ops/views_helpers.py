@@ -7,6 +7,7 @@ from django.db.models import Count, Max, Q
 from django.http import JsonResponse
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.managed_secrets import delete_kubernetes_provider_token, set_kubernetes_provider_token
 from kubernetes_ops.models import (
     K8sAppRef,
@@ -42,7 +43,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes ops API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _staff_required(request) -> JsonResponse | None:

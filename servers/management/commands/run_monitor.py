@@ -23,7 +23,7 @@ from servers.monitoring.ai_insights import run_ai_insights_for_servers
 from servers.monitoring.cert_collector import collect_certificates_for_all
 from servers.monitoring.forecast_persistence import run_forecast_persistence
 from servers.monitoring.metrics_rollup import run_metric_rollups
-from servers.monitoring.monitor import check_all_servers, cleanup_old_data
+from servers.monitoring.monitor import check_all_servers
 from servers.worker_state import claim_background_worker, heartbeat_background_worker, stop_background_worker
 
 
@@ -36,9 +36,6 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--deep-interval", type=int, default=600, help="Deep check interval in seconds (default 600)"
-        )
-        parser.add_argument(
-            "--cleanup-interval", type=int, default=86400, help="Old data cleanup interval in seconds (default 86400)"
         )
         parser.add_argument(
             "--rollup-interval", type=int, default=3600, help="Metric rollup interval in seconds (default 3600)"
@@ -70,7 +67,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         quick_interval = options["quick_interval"]
         deep_interval = options["deep_interval"]
-        cleanup_interval = options["cleanup_interval"]
         rollup_interval = options["rollup_interval"]
         cert_interval = options["cert_interval"]
         ai_interval = options["ai_interval"]
@@ -134,7 +130,6 @@ class Command(BaseCommand):
                     self._run_loop(
                         quick_interval,
                         deep_interval,
-                        cleanup_interval,
                         concurrency,
                         server_ids,
                         lite_quick,
@@ -154,7 +149,6 @@ class Command(BaseCommand):
         self,
         quick_interval: int,
         deep_interval: int,
-        cleanup_interval: int,
         concurrency: int,
         server_ids: list[int] | None = None,
         lite_quick: bool = True,
@@ -175,8 +169,6 @@ class Command(BaseCommand):
 
         quick_counter = 0
         deep_every_n = max(1, deep_interval // quick_interval)
-        cleanup_counter = 0
-        cleanup_every_n = max(1, cleanup_interval // quick_interval)
         rollup_counter = 0
         rollup_every_n = max(1, rollup_interval // quick_interval)
         cert_counter = 0
@@ -186,11 +178,10 @@ class Command(BaseCommand):
         # Duty briefings: check about once per hour of monitor cycles
         briefing_counter = 0
         briefing_every_n = max(1, 3600 // max(1, quick_interval))
-        summary = {"cycle": 0, "mode": "", "checked": 0, "errors": 0, "cleanup_errors": 0}
+        summary = {"cycle": 0, "mode": "", "checked": 0, "errors": 0}
 
         while not stop.is_set():
             quick_counter += 1
-            cleanup_counter += 1
             is_deep = quick_counter % deep_every_n == 0
 
             try:
@@ -214,7 +205,6 @@ class Command(BaseCommand):
                     "mode": check_type,
                     "checked": len(results),
                     "errors": summary["errors"],
-                    "cleanup_errors": summary["cleanup_errors"],
                 }
                 await sync_to_async(heartbeat_background_worker, thread_sensitive=True)(
                     STUDIO_MONITOR_WORKER,
@@ -234,14 +224,6 @@ class Command(BaseCommand):
                     cycle_finished=True,
                 )
                 logger.error("Monitor: check cycle failed: {}", exc)
-
-            if cleanup_counter >= cleanup_every_n:
-                cleanup_counter = 0
-                try:
-                    await cleanup_old_data(days=7)
-                except Exception as exc:
-                    summary["cleanup_errors"] += 1
-                    logger.error("Monitor: cleanup failed: {}", exc)
 
             rollup_counter += 1
             # First cycle bootstraps rollups/certs so a fresh install sees data immediately.

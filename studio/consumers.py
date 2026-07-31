@@ -15,8 +15,6 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
-from .pipeline.pipeline_runtime import get_executor_for_run
-
 
 class PipelineRunConsumer(AsyncWebsocketConsumer):
     async def _send_event(self, payload: dict):
@@ -53,13 +51,8 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
 
         action = msg.get("action")
         if action == "stop":
-            executor = get_executor_for_run(self.run_id)
-            if executor is not None:
-                executor.request_stop()
             await self._mark_run_stopped(self.run_id)
-            await self._send_event(
-                {"type": "control_ack", "action": "stop", "ok": True, "live_executor": executor is not None}
-            )
+            await self._send_event({"type": "control_ack", "action": "stop", "ok": True})
 
     # ------------------------------------------------------------------
     # Handlers for group messages
@@ -100,7 +93,10 @@ class PipelineRunConsumer(AsyncWebsocketConsumer):
             return
 
         update_runtime_control(run, stop_requested=True)
-        if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING}:
+        from studio.dispatch import cancel_pipeline_dispatch_for_run
+
+        cancel_pipeline_dispatch_for_run(run.pk)
+        if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING, PipelineRun.STATUS_HIBERNATING}:
             run.status = PipelineRun.STATUS_STOPPED
             run.finished_at = timezone.now()
             run.save(update_fields=["status", "finished_at"])

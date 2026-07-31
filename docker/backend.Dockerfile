@@ -95,7 +95,8 @@ RUN chmod 0755 docker/render-backend-start.sh \
         /workspace/data/ssh_keys \
         /workspace/logs \
         /workspace/private/playbook_bundles \
-        /playbook-runtime
+        /playbook-runtime \
+    && DJANGO_SETTINGS_MODULE=web_ui.settings.test python manage.py collectstatic --noinput
 
 USER 10001:10001
 

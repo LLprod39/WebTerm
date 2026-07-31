@@ -9,6 +9,7 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 
 from studio.models import PipelineRun
+from studio.telegram_delivery_service import arm_telegram_reply_request, expire_telegram_reply_request
 
 from .pipeline_notifications import (
     _send_telegram_message,
@@ -24,9 +25,6 @@ from .pipeline_redaction import (
 )
 from .pipeline_run_state import update_node_state as _update_node_state
 from .pipeline_runtime import is_runtime_stop_requested
-from .pipeline_telegram import (
-    _poll_telegram_reply_message,
-)
 
 
 def resolve_telegram_target(
@@ -172,6 +170,23 @@ async def execute_logic_telegram_input(
         )
 
     deadline = started_at + timedelta(minutes=timeout_minutes)
+    if prompt_message_id <= 0:
+        return {
+            "status": "failed",
+            "error": "Telegram reply request has no durable prompt message id.",
+            "decision": "timeout",
+        }
+    await _s2a(
+        lambda: arm_telegram_reply_request(
+            run=run,
+            node_id=node_id,
+            bot_token=bot_token,
+            chat_id=chat_id,
+            prompt_message_id=prompt_message_id,
+            expires_at=deadline,
+        ),
+        thread_sensitive=True,
+    )()
     try:
         poll_interval = max(1, min(int(config.get("poll_interval_seconds") or 2), 30))
     except (TypeError, ValueError):
@@ -190,37 +205,22 @@ async def execute_logic_telegram_input(
             }
 
         if stop_event and stop_event.is_set():
+            await _s2a(
+                lambda: expire_telegram_reply_request(run_id=run.pk, node_id=node_id),
+                thread_sensitive=True,
+            )()
             return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
         if is_runtime_stop_requested(fresh_run):
-            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
-
-        reply = await _poll_telegram_reply_message(bot_token, chat_id, prompt_message_id)
-        if reply:
-            response_text = str(reply.get("text") or "").strip()
-            if response_text:
-                fresh_state.update(
-                    {
-                        "status": "awaiting_operator_reply",
-                        "operator_response": response_text,
-                        "operator_response_message_id": reply.get("message_id"),
-                        "operator_response_from": reply.get("from_username") or "",
-                        "operator_response_received_at": timezone.now().isoformat(),
-                    }
-                )
-                await _update_node_state(fresh_run, node_id, fresh_state)
-                return {
-                    "status": "completed",
-                    "output": response_text,
-                    "decision": "received",
-                    "response_text": response_text,
-                }
-
-        fresh_run = await _s2a(lambda: PipelineRun.objects.get(pk=run.pk), thread_sensitive=False)()
-        if stop_event and stop_event.is_set():
-            return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
-        if is_runtime_stop_requested(fresh_run):
+            await _s2a(
+                lambda: expire_telegram_reply_request(run_id=run.pk, node_id=node_id),
+                thread_sensitive=True,
+            )()
             return {"status": "stopped", "output": "Ожидание ответа оператора отменено", "stopped": True}
         if timezone.now() >= deadline:
+            await _s2a(
+                lambda: expire_telegram_reply_request(run_id=run.pk, node_id=node_id),
+                thread_sensitive=True,
+            )()
             return {
                 "status": "failed",
                 "error": f"Таймаут ожидания ответа оператора — нет ответа в течение {timeout_minutes:.0f} мин.",

@@ -7,7 +7,6 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect
 from django.urls import path
 
-from . import views
 from .context_processors import user_can_feature
 from .views import (
     access_group_views,
@@ -15,11 +14,15 @@ from .views import (
     admin_views,
     assistant_chat_views,
     auth_views,
+    dashboard_layout,
     health_views,
+    metrics_views,
     model_views,
+    openapi_views,
     project_views,
     settings_activity_views,
     settings_config_views,
+    terminal_preferences,
 )
 
 
@@ -32,6 +35,8 @@ def index_redirect(request):
 
 
 urlpatterns = [
+    path("metrics", metrics_views.prometheus_metrics, name="prometheus_metrics"),
+    path("api/openapi.json", openapi_views.api_openapi, name="api_openapi"),
     path("login/", auth_views.frontend_login_redirect, name="login"),
     path("logout/", auth_views.frontend_logout_redirect, name="logout"),
     # Main pages
@@ -121,9 +126,13 @@ urlpatterns = [
         name="api_access_group_permission_detail",
     ),
     # Terminal preferences
-    path("api/terminal/preferences/", views.api_terminal_preferences, name="api_terminal_preferences"),
+    path("api/terminal/preferences/", terminal_preferences.api_terminal_preferences, name="api_terminal_preferences"),
     # Dashboard layout (Distinct path to avoid conflicts)
-    path("api/dashboard-custom/layout/<str:dashboard_type>/", views.api_dashboard_layout, name="api_dashboard_layout"),
+    path(
+        "api/dashboard-custom/layout/<str:dashboard_type>/",
+        dashboard_layout.api_dashboard_layout,
+        name="api_dashboard_layout",
+    ),
     # Assistant chat
     path("api/assistant/chats/", assistant_chat_views.api_assistant_chats, name="api_assistant_chats"),
     path("api/assistant/duty/", assistant_chat_views.api_assistant_duty, name="api_assistant_duty"),

@@ -38,11 +38,6 @@ def _get_user_id(kwargs: dict[str, Any]) -> int | None:
     return user_id
 
 
-def _get_master_password(kwargs: dict[str, Any]) -> str | None:
-    ctx = kwargs.get("_context") or {}
-    return ctx.get("master_password") or os.environ.get("MASTER_PASSWORD")
-
-
 def _get_target_server(kwargs: dict[str, Any]) -> tuple[int | None, str | None]:
     """Получить целевой сервер из контекста или переменных окружения."""
     ctx = kwargs.get("_context") or {}
@@ -208,29 +203,15 @@ class ServerExecuteTool(BaseTool):
         password = None
         sudo_password = ""
         if server.auth_method in ("password", "key_password"):
-            mp = _get_master_password(kwargs)
-            try:
-                password = await sync_to_async(
-                    get_server_auth_secret,
-                    thread_sensitive=True,
-                )(server, master_password=mp or "", fallback_plain=getattr(server, "_plain_password", None) or "")
-            except ValueError:
-                return (
-                    "Сервер требует мастер-пароль для расшифровки. "
-                    "Выполни команду через Servers → Execute в интерфейсе или передай master_password в контексте."
-                )
+            password = await sync_to_async(
+                get_server_auth_secret,
+                thread_sensitive=True,
+            )(server, fallback_plain=getattr(server, "_plain_password", None) or "")
         if getattr(server, "sudo_auth_mode", "none") == "stored_password":
-            mp = _get_master_password(kwargs)
-            try:
-                sudo_password = await sync_to_async(
-                    get_server_sudo_secret,
-                    thread_sensitive=True,
-                )(server, master_password=mp or "")
-            except ValueError:
-                return (
-                    "Сервер требует мастер-пароль для расшифровки sudo-пароля. "
-                    "Передай master_password в контексте или настрой managed secret для sudo."
-                )
+            sudo_password = await sync_to_async(
+                get_server_sudo_secret,
+                thread_sensitive=True,
+            )(server)
         key_path = server.key_path if server.auth_method in ("key", "key_password") else None
         try:
             # Подключение с network_config

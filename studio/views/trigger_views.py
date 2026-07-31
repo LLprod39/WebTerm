@@ -2,15 +2,21 @@
 Studio pipeline trigger endpoints.
 """
 
+import hashlib
+import hmac
 import json
+import time
+from datetime import timedelta
 
+from django.conf import settings
+from django.db import transaction
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from studio.models import PipelineTrigger
+from studio.models import PipelineTrigger, PipelineWebhookDelivery
 from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
 from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
 from studio.pipeline.pipeline_validation import ensure_json_object, validate_pipeline_definition
@@ -47,6 +53,7 @@ _MONITORING_CONTEXT = {
     "container_names_csv",
     "trigger_source",
 }
+WEBHOOK_DELIVERY_WINDOW = timedelta(hours=24)
 
 
 def _activation_context(trigger_type: str, webhook_payload_map) -> dict:
@@ -132,6 +139,8 @@ def api_triggers(request):
             "webhook_payload_map": data.get("webhook_payload_map", {}),
             "monitoring_filters": data.get("monitoring_filters", {}),
         }
+        if "signing_secret" in data:
+            trigger_defaults["signing_secret"] = str(data.get("signing_secret") or "").strip()
         if trigger_defaults["is_active"]:
             errors, issues = _activation_validation(
                 pipeline,
@@ -195,6 +204,7 @@ def api_trigger_detail(request, trigger_id: int):
             "is_active",
             "cron_expression",
             "webhook_payload_map",
+            "signing_secret",
             "monitoring_filters",
         ):
             if field in data:
@@ -209,20 +219,51 @@ def api_trigger_detail(request, trigger_id: int):
     return _err("Method not allowed", 405)
 
 
+def _verify_webhook_signature(request, trigger: PipelineTrigger, body: bytes) -> JsonResponse | None:
+    secret = str(trigger.signing_secret or "")
+    if not secret:
+        return None
+    timestamp_value = str(request.headers.get("X-WebTerm-Timestamp") or "").strip()
+    signature = str(request.headers.get("X-WebTerm-Signature") or "").strip().lower()
+    try:
+        timestamp = int(timestamp_value)
+    except (TypeError, ValueError):
+        return _err("Missing or invalid webhook timestamp", 401)
+    tolerance = max(1, int(getattr(settings, "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS", 300)))
+    if abs(int(time.time()) - timestamp) > tolerance:
+        return _err("Webhook timestamp is outside the allowed window", 401)
+    supplied = signature.removeprefix("sha256=")
+    expected = hmac.new(secret.encode("utf-8"), f"{timestamp}.".encode("ascii") + body, hashlib.sha256).hexdigest()
+    if len(supplied) != len(expected) or not hmac.compare_digest(supplied, expected):
+        return _err("Invalid webhook signature", 401)
+    return None
+
+
 @csrf_exempt
 @require_http_methods(["POST"])
-def api_trigger_receive(request, token: str):
-    """Public webhook endpoint authenticated by token in URL."""
+def api_trigger_receive(request, token: str = ""):
+    """Public webhook endpoint authenticated by a header token or deprecated URL token."""
+    header_token = str(request.headers.get("X-WebTerm-Trigger-Token") or "").strip()
+    path_token = str(token or "").strip()
+    if header_token and path_token and not hmac.compare_digest(header_token, path_token):
+        return _err("Conflicting trigger tokens", 401)
+    resolved_token = header_token or path_token
+    if not resolved_token:
+        return _err("Missing trigger token", 401)
     try:
         trigger = PipelineTrigger.objects.select_related("pipeline").get(
-            webhook_token=token,
+            webhook_token=resolved_token,
             trigger_type=PipelineTrigger.TYPE_WEBHOOK,
             is_active=True,
         )
     except PipelineTrigger.DoesNotExist:
         return _err("Invalid token", 404)
 
-    body = request.body.strip()
+    raw_body = request.body
+    body = raw_body.strip()
+    signature_error = _verify_webhook_signature(request, trigger, raw_body)
+    if signature_error is not None:
+        return signature_error
     if not body:
         payload = {}
     else:
@@ -274,21 +315,45 @@ def api_trigger_receive(request, token: str):
     if limit_error:
         return _limit_err(limit_error)
 
+    supplied_delivery_id = str(request.headers.get("X-WebTerm-Delivery-Id") or "").strip()
+    if len(supplied_delivery_id) > 200:
+        return _err("X-WebTerm-Delivery-Id exceeds 200 characters")
+    body_sha256 = hashlib.sha256(raw_body).hexdigest()
+    delivery_id = supplied_delivery_id or f"sha256:{body_sha256}"
+    cutoff = timezone.now() - WEBHOOK_DELIVERY_WINDOW
     try:
-        run = _create_pipeline_run(
-            pipeline=trigger.pipeline,
-            trigger=trigger,
-            context=context,
-            trigger_data=payload,
-            entry_node_id=trigger.node_id,
-        )
+        with transaction.atomic():
+            PipelineWebhookDelivery.objects.filter(received_at__lt=cutoff).delete()
+            delivery, created = PipelineWebhookDelivery.objects.get_or_create(
+                trigger=trigger,
+                delivery_id=delivery_id,
+                defaults={"body_sha256": body_sha256},
+            )
+            if not created:
+                response = _ok({"ok": True, "run_id": delivery.run_id, "duplicate": True})
+                if path_token:
+                    response["Deprecation"] = "true"
+                return response
+            run = _create_pipeline_run(
+                pipeline=trigger.pipeline,
+                trigger=trigger,
+                context=context,
+                trigger_data=payload,
+                entry_node_id=trigger.node_id,
+            )
+            delivery.run = run
+            delivery.save(update_fields=["run"])
     except ValueError as exc:
         return _validation_err(pipeline_run_creation_error_details(exc), prefix="Pipeline is not runnable")
     trigger.last_triggered_at = timezone.now()
     trigger.save(update_fields=["last_triggered_at"])
 
     _launch_pipeline_run(run)
-    return _ok({"ok": True, "run_id": run.pk})
+    response = _ok({"ok": True, "run_id": run.pk, "duplicate": False})
+    if path_token:
+        response["Deprecation"] = "true"
+        response["Link"] = '</api/studio/triggers/receive/>; rel="successor-version"'
+    return response
 
 
 def _map_payload(payload: dict, mapping: dict) -> dict:

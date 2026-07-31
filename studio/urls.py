@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     agent_views,
     capability_views,
+    dead_letter_views,
     mcp_views,
     notification_views,
     pipeline_assistant_views,
@@ -59,7 +60,14 @@ urlpatterns = [
     path("runs/", run_views.api_runs, name="runs"),
     path("runs/<int:run_id>/", run_views.api_run_detail, name="run_detail"),
     path("runs/<int:run_id>/stop/", run_views.api_run_stop, name="run_stop"),
+    path("runs/<int:run_id>/resume/", run_views.api_run_resume, name="run_resume"),
     path("runs/<int:run_id>/approve/<str:node_id>/", run_views.api_run_approve, name="run_approve"),
+    path("dead-letters/", dead_letter_views.api_dead_letters, name="dead_letters"),
+    path(
+        "dead-letters/<int:item_id>/resolve/",
+        dead_letter_views.api_dead_letter_resolve,
+        name="dead_letter_resolve",
+    ),
     # Agent Configs
     path("agents/", agent_views.api_agents, name="agents"),
     path("agents/<int:agent_id>/", agent_views.api_agent_detail, name="agent_detail"),
@@ -80,6 +88,7 @@ urlpatterns = [
     # Triggers
     path("triggers/", trigger_views.api_triggers, name="triggers"),
     path("triggers/<int:trigger_id>/", trigger_views.api_trigger_detail, name="trigger_detail"),
+    path("triggers/receive/", trigger_views.api_trigger_receive, name="trigger_receive_header"),
     path("triggers/<str:token>/receive/", trigger_views.api_trigger_receive, name="trigger_receive"),
     # Templates
     path("templates/", template_views.api_templates, name="templates"),

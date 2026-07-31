@@ -2,42 +2,73 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.tools.ssh_tools import ssh_manager
+from asgiref.sync import sync_to_async
+
+from app.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
+from app.tools.ssh_tools import _build_env_exports
 from servers.linux_ui_commands import CAPABILITIES_COMMAND
-from servers.linux_ui_parsers import _as_bool, _as_int, _parse_key_value_lines
+from servers.linux_ui_parsers import _as_bool, _parse_key_value_lines
 from servers.models import Server
+from servers.secret_utils import get_server_sudo_secret
+from servers.services.ssh_pool import ssh_connection_pool
 
 
-async def _run_command(server: Server, *, secret: str = "", command: str) -> str:
-    result = await _run_command_result(server, secret=secret, command=command)
+async def _run_command(server: Server, *, secret: str = "", command: str, user_id: int | None = None) -> str:
+    result = await _run_command_result(server, secret=secret, command=command, user_id=user_id)
     stdout = str(result.get("stdout") or "")
     stderr = str(result.get("stderr") or "")
     return stdout if stdout.strip() else stderr
 
 
-async def _run_command_result(server: Server, *, secret: str = "", command: str) -> dict[str, Any]:
-    conn_id = await ssh_manager.connect(
-        host=server.host,
-        username=server.username,
-        password=secret or None,
-        key_path=server.key_path if server.auth_method in ["key", "key_password"] else None,
-        port=server.port,
-        network_config=server.network_config or {},
-        server=server,
-    )
+async def _run_command_result(
+    server: Server, *, secret: str = "", command: str, user_id: int | None = None
+) -> dict[str, Any]:
     try:
-        result = await ssh_manager.execute(conn_id, command)
+        final_command = command
+        environment = (server.network_config or {}).get("environment")
+        if environment:
+            if not isinstance(environment, dict):
+                raise ValueError("network_config.environment must be an object")
+            exports = _build_env_exports(environment)
+            if exports:
+                final_command = "; ".join(exports) + "; " + command
+
+        sudo_mode = getattr(server, "sudo_auth_mode", "none") or "none"
+        sudo_password = ""
+        if sudo_mode == "stored_password":
+            try:
+                sudo_password = await sync_to_async(get_server_sudo_secret, thread_sensitive=True)(server) or ""
+            except Exception:
+                sudo_password = ""
+        prepared = prepare_sudo_command(
+            final_command,
+            SUDO_POLICY_APPROVED,
+            sudo_auth_mode=sudo_mode,
+            sudo_password=sudo_password,
+        )
+        run_kwargs: dict[str, Any] = {"check": False}
+        if prepared.input_text is not None:
+            run_kwargs["input"] = prepared.input_text
+        result = await ssh_connection_pool.run_command(
+            server,
+            prepared.command,
+            secret=secret,
+            user_id=user_id,
+            **run_kwargs,
+        )
         return {
-            "stdout": str(result.get("stdout") or ""),
-            "stderr": str(result.get("stderr") or ""),
-            "exit_code": _as_int(str(result.get("exit_code"))) or 0,
+            "stdout": str(result.stdout or ""),
+            "stderr": str(result.stderr or ""),
+            "exit_code": result.exit_status if result.exit_status is not None else -1,
+            "success": result.exit_status == 0,
+            "sudo_notes": list(prepared.notes),
         }
-    finally:
-        await ssh_manager.disconnect(conn_id)
+    except Exception as exc:
+        return {"stdout": "", "stderr": str(exc), "exit_code": -1, "success": False}
 
 
-async def get_linux_ui_capabilities(server: Server, *, secret: str = "") -> dict[str, Any]:
-    raw = await _run_command(server, secret=secret, command=CAPABILITIES_COMMAND)
+async def get_linux_ui_capabilities(server: Server, *, secret: str = "", user_id: int | None = None) -> dict[str, Any]:
+    raw = await _run_command(server, secret=secret, command=CAPABILITIES_COMMAND, user_id=user_id)
     parsed = _parse_key_value_lines(raw)
 
     commands = {

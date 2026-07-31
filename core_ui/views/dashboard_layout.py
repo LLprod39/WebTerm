@@ -5,6 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from core_ui.api_errors import internal_error_response
 from core_ui.models import DashboardLayout
 
 logger = logging.getLogger(__name__)
@@ -54,4 +55,4 @@ def api_dashboard_layout(request, dashboard_type):
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     except Exception as e:
         logger.exception(f"Error in api_dashboard_layout: {e}")
-        return JsonResponse({"success": False, "error": str(e)}, status=500)
+        return internal_error_response(request, e)

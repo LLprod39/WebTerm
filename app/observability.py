@@ -225,6 +225,14 @@ def record_ssh_command(*, duration_ms: float, success: bool, runtime: str) -> No
     instruments.ssh_command_duration.record(max(float(duration_ms), 0.0), attributes)
 
 
+def prometheus_metrics_text() -> str:
+    """Build a durable-state Prometheus snapshot without requiring an OTLP collector."""
+    from app.prometheus_registry import collect_prometheus_lines
+
+    lines = collect_prometheus_lines()
+    return "\n".join(lines) + "\n"
+
+
 def force_flush_observability(timeout_millis: int = 5000) -> bool:
     state = configure_observability()
     trace_flush = getattr(state.tracer_provider, "force_flush", None)

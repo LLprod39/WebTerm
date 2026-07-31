@@ -61,7 +61,15 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
   const impact = impactQuery.data?.impact;
-  const sandboxPolicy = impact?.package.sandbox_policy as { required?: boolean; allowed?: boolean; blockers?: string[]; requirements?: Array<Record<string, unknown>> } | undefined;
+  const sandboxPolicy = impact?.package.sandbox_policy as {
+    required?: boolean;
+    allowed?: boolean;
+    blockers?: string[];
+    requirements?: Array<Record<string, unknown>>;
+    settings?: { backend_execution_provider?: string };
+  } | undefined;
+  const backendExecutionProvider = sandboxPolicy?.settings?.backend_execution_provider ?? "disabled";
+  const privilegedLocalExecution = backendExecutionProvider === "local_subprocess";
 
   return (
     <SectionCard title="Lifecycle impact" description="Enable blockers, disappearing surfaces, missing permissions, and reversible operations." icon={<History className="h-4 w-4" />}>
@@ -122,12 +130,17 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
                 </div>
               </div>
               <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Sandbox</div>
+                <div className="mb-2 text-xs font-semibold text-muted-foreground">Plugin code execution</div>
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge
-                    label={sandboxPolicy?.required ? (sandboxPolicy.allowed ? "sandbox ready" : "sandbox blocked") : "no sandbox"}
-                    tone={sandboxPolicy?.required ? (sandboxPolicy.allowed ? "success" : "danger") : "neutral"}
+                    label={privilegedLocalExecution
+                      ? "privileged local process — full application access"
+                      : sandboxPolicy?.required
+                        ? (sandboxPolicy.allowed ? "isolated runner ready" : "code execution blocked")
+                        : "no executable code"}
+                    tone={privilegedLocalExecution ? "danger" : sandboxPolicy?.required ? (sandboxPolicy.allowed ? "success" : "danger") : "neutral"}
                   />
+                  <Badge variant="outline">provider: {backendExecutionProvider}</Badge>
                   <Badge variant="outline">requirements: {sandboxPolicy?.requirements?.length ?? 0}</Badge>
                   <Badge variant={sandboxPolicy?.blockers?.length ? "destructive" : "outline"}>blockers: {sandboxPolicy?.blockers?.length ?? 0}</Badge>
                 </div>

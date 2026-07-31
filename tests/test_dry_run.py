@@ -61,7 +61,7 @@ class TestBuildDryRunBlock:
 
 class TestAiSettingsDryRun:
     def _cons(self) -> SSHTerminalConsumer:
-        return SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        return SSHTerminalConsumer()
 
     def test_default_dry_run_is_false(self):
         cons = self._cons()
@@ -115,7 +115,7 @@ class _FakeConn:
 class TestDryRunShortCircuit:
     def test_dry_run_emits_direct_output_and_skips_execution(self, monkeypatch):
         """A5 contract: when dry_run is on, neither PTY nor exec_direct is used."""
-        cons = SSHTerminalConsumer.__new__(SSHTerminalConsumer)
+        cons = SSHTerminalConsumer()
         cons._transport_state = TerminalTransportState(
             ssh_proc=_FakeProc(),
             ssh_conn=_FakeConn(),

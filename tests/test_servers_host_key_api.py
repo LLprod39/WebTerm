@@ -91,8 +91,8 @@ def test_server_test_connection_passes_server_to_ssh_manager(monkeypatch):
     async def fake_probe(_server):
         return dict(trusted_record)
 
-    monkeypatch.setattr("servers.views.ssh_manager.connect", fake_connect)
-    monkeypatch.setattr("servers.views.ssh_manager.disconnect", fake_disconnect)
+    monkeypatch.setattr("servers.views.server_ops.ssh_manager.connect", fake_connect)
+    monkeypatch.setattr("servers.views.server_ops.ssh_manager.disconnect", fake_disconnect)
     monkeypatch.setattr("servers.views.server_ops.probe_server_host_key", fake_probe)
 
     response = client.post(

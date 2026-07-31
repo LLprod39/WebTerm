@@ -15,14 +15,22 @@ from django.conf import settings
 
 BACKEND_SANDBOX_PROVIDER_LOCAL = "local_subprocess"
 BACKEND_SANDBOX_PROVIDER_EXTERNAL = "external_worker"
-BACKEND_SANDBOX_PROVIDERS = frozenset({BACKEND_SANDBOX_PROVIDER_LOCAL, BACKEND_SANDBOX_PROVIDER_EXTERNAL})
+BACKEND_SANDBOX_PROVIDER_DOCKER = "docker_runner"
+BACKEND_SANDBOX_PROVIDER_DISABLED = "disabled"
+BACKEND_SANDBOX_PROVIDERS = frozenset(
+    {
+        BACKEND_SANDBOX_PROVIDER_DISABLED,
+        BACKEND_SANDBOX_PROVIDER_DOCKER,
+        BACKEND_SANDBOX_PROVIDER_LOCAL,
+        BACKEND_SANDBOX_PROVIDER_EXTERNAL,
+    }
+)
 
 
 def backend_sandbox_provider() -> str:
-    provider = str(
-        getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", BACKEND_SANDBOX_PROVIDER_LOCAL) or ""
-    ).strip()
-    return provider or BACKEND_SANDBOX_PROVIDER_LOCAL
+    default_provider = BACKEND_SANDBOX_PROVIDER_LOCAL if settings.DEBUG else BACKEND_SANDBOX_PROVIDER_DISABLED
+    provider = str(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", default_provider) or "").strip()
+    return provider or default_provider
 
 
 def backend_sandbox_timeout_seconds(default: int = 10) -> int:
@@ -82,21 +90,23 @@ def _local_worker(
                 timeout=timeout_seconds,
             )
         except subprocess.TimeoutExpired:
-            return {"success": False, "error": "Backend sandbox execution timed out."}
+            return {"success": False, "error": "Privileged local plugin execution timed out."}
         if completed.returncode != 0:
             return {
                 "success": False,
-                "error": completed.stderr.strip() or completed.stdout.strip() or "Backend sandbox worker failed.",
+                "error": completed.stderr.strip()
+                or completed.stdout.strip()
+                or "Privileged local plugin process failed.",
             }
         if not output_path.exists():
-            return {"success": False, "error": "Backend sandbox worker did not produce output."}
+            return {"success": False, "error": "Privileged local plugin process did not produce output."}
         if output_path.stat().st_size > output_limit_bytes:
-            return {"success": False, "error": "Backend sandbox output exceeded the size limit."}
+            return {"success": False, "error": "Privileged local plugin output exceeded the size limit."}
         parsed = json.loads(output_path.read_text(encoding="utf-8"))
         return (
             parsed
             if isinstance(parsed, dict)
-            else {"success": False, "error": "Backend sandbox output was not an object."}
+            else {"success": False, "error": "Privileged local plugin output was not an object."}
         )
 
 
@@ -158,8 +168,21 @@ def execute_sandbox_package(
     provider = backend_sandbox_provider()
     timeout = timeout_seconds or backend_sandbox_timeout_seconds()
     output_limit = output_limit_bytes or backend_sandbox_output_limit_bytes()
+    if provider == BACKEND_SANDBOX_PROVIDER_DISABLED:
+        return {"success": False, "error": "Plugin backend code execution is disabled."}
     if provider == BACKEND_SANDBOX_PROVIDER_EXTERNAL:
         return _external_worker(
+            package_bytes=package_bytes,
+            executor_ref=executor_ref,
+            payload=payload,
+            smoke_only=smoke_only,
+            timeout_seconds=timeout,
+            output_limit_bytes=output_limit,
+        )
+    if provider == BACKEND_SANDBOX_PROVIDER_DOCKER:
+        from plugin_marketplace.services.backend_container_runner_service import execute_plugin_backend_container
+
+        return execute_plugin_backend_container(
             package_bytes=package_bytes,
             executor_ref=executor_ref,
             payload=payload,

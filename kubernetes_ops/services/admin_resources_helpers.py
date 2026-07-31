@@ -6,7 +6,9 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.db.models import Q
+from loguru import logger
 
+from core_ui.api_errors import INTERNAL_ERROR_MESSAGE, request_id_for
 from kubernetes_ops.models import K8sAdminAction, K8sAdminSession, K8sCluster, K8sProvider
 from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.services.admin_resource_registry import (
@@ -27,6 +29,12 @@ from kubernetes_ops.services.provider_clients import ProviderJsonClient, Provide
 
 class AdminResourceError(ValueError):
     def __init__(self, message: str, *, code: str, status: int = 400, payload: dict[str, Any] | None = None):
+        if int(status) >= 500:
+            logger.bind(request_id=request_id_for(None), channel="http", user_id="-", path="-").opt(
+                exception=True
+            ).error("Kubernetes provider request failed")
+            message = INTERNAL_ERROR_MESSAGE
+            payload = {}
         super().__init__(message)
         self.code, self.status, self.payload = code, status, payload or {}
 

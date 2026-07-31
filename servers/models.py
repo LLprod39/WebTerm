@@ -6,6 +6,7 @@ in focused app-local modules and are imported here to preserve the public
 """
 
 from servers.models_agents import AgentRun, AgentRunArtifact, AgentRunDispatch, AgentRunEvent, ServerAgent
+from servers.models_bulk import ServerBulkOperation
 from servers.models_groups import (
     ServerGroup,
     ServerGroupMember,
@@ -65,6 +66,7 @@ __all__ = [
     "ServerAgent",
     "ServerAiInsight",
     "ServerAlert",
+    "ServerBulkOperation",
     "ServerCertificate",
     "ServerCommandHistory",
     "ServerConnection",

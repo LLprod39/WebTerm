@@ -7,6 +7,8 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.management import call_command
 
+from app.background_workers import STUDIO_PIPELINE_EXECUTION_WORKER
+from app.worker_state import heartbeat_background_worker
 from studio.models import Pipeline
 
 pytestmark = pytest.mark.django_db
@@ -79,6 +81,7 @@ def test_quarantine_studio_triggers_apply_disables_not_ready_active_trigger():
     assert broken.triggers.get(node_id="manual").is_active is False
     assert ready.triggers.get(node_id="manual").is_active is True
 
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     readiness_stdout = io.StringIO()
     call_command("check_studio_readiness", "--username", user.username, "--active-only", stdout=readiness_stdout)
     readiness_output = readiness_stdout.getvalue()

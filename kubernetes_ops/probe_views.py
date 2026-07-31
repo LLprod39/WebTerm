@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent, K8sProvider
 from kubernetes_ops.services.provider_probe import probe_kubernetes_provider, probe_result_payload
@@ -15,7 +16,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes ops provider probe API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _staff_required(request) -> JsonResponse | None:

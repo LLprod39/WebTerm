@@ -81,7 +81,7 @@ def test_api_run_approve_requires_confirmation_post_and_csrf(monkeypatch):
 
         return _Resp()
 
-    monkeypatch.setattr("studio.views.httpx.post", fake_post)
+    monkeypatch.setattr("studio.views.run_views.httpx.post", fake_post)
     client = Client(enforce_csrf_checks=True)
     client.force_login(approver)
 
@@ -216,7 +216,7 @@ def test_run_apis_expose_only_allowlisted_node_state_fields():
 
     assert detail.status_code == 200
     assert listing.status_code == 200
-    for payload in (detail.json(), listing.json()[0]):
+    for payload in (detail.json(), listing.json()["data"][0]):
         serialized = payload["node_states"]["approval"]
         assert set(serialized) == {"status", "output", "started_at"}
         assert serialized["status"] == "awaiting_approval"
@@ -300,7 +300,10 @@ def test_manual_run_validate_only_does_not_create_or_launch_run(monkeypatch):
     client = Client()
     client.force_login(user)
     launch_calls: list[int] = []
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda run: launch_calls.append(run.id))
+    monkeypatch.setattr(
+        "studio.views.pipeline_helpers._launch_pipeline_run_async",
+        lambda run: launch_calls.append(run.id),
+    )
 
     pipeline = Pipeline.objects.create(
         name="Manual validate flow",
@@ -338,7 +341,8 @@ def test_manual_run_validate_only_reports_graph_errors_without_launch(monkeypatc
     client = Client()
     client.force_login(user)
     monkeypatch.setattr(
-        "studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("validate_only must not launch")
+        "studio.views.pipeline_helpers._launch_pipeline_run_async",
+        lambda _run: pytest.fail("validate_only must not launch"),
     )
 
     pipeline = Pipeline.objects.create(
@@ -395,7 +399,7 @@ def test_manual_run_requires_entry_node_when_multiple_manual_triggers(monkeypatc
     grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     pipeline = Pipeline.objects.create(
         name="Multiple manual triggers",
@@ -436,7 +440,7 @@ def test_webhook_trigger_stores_entry_node_id(monkeypatch):
     grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     pipeline = Pipeline.objects.create(
         name="Webhook flow",
@@ -473,7 +477,7 @@ def test_old_graph_version_is_rejected_by_run_api(monkeypatch):
     grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     pipeline = Pipeline.objects.create(
         name="Legacy flow",

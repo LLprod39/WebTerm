@@ -271,11 +271,11 @@ def test_sandbox_policy_blocks_dynamic_plugin_enable_until_sandbox_is_enabled():
     sandbox_policy = impact.json()["impact"]["package"]["sandbox_policy"]
     assert sandbox_policy["required"] is True
     assert sandbox_policy["allowed"] is False
-    assert "Backend sandbox runtime is not enabled." in sandbox_policy["blockers"]
+    assert "Plugin backend code execution is not enabled." in sandbox_policy["blockers"]
 
     blocked = client.post(f"/api/plugins/installed/{installation.id}/enable/")
     assert blocked.status_code == 409
-    assert "Sandbox policy" in blocked.json()["error"]
+    assert "Code execution policy" in blocked.json()["error"]
 
     with override_settings(
         PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES=True,

@@ -23,10 +23,7 @@ from servers.views.server_helpers import (
 def _resolve_secret(ctx: AssistantActionContext, server) -> str:
     """Resolve SSH password/passphrase even without HTTP request (Operator WS).
 
-    Order:
-    1) request-aware path (session MASTER_PASSWORD / payload)
-    2) managed secrets + legacy decrypt with env MASTER_PASSWORD
-    3) empty string for pure key auth
+    Order: request payload, ManagedSecret, then an empty string for pure key auth.
     """
     payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
     if ctx.request is not None:
@@ -43,7 +40,7 @@ def _resolve_secret(ctx: AssistantActionContext, server) -> str:
         from servers.secret_utils import get_server_auth_secret
 
         direct = str(payload.get("password") or "").strip()
-        secret = get_server_auth_secret(server, master_password="", fallback_plain=direct)
+        secret = get_server_auth_secret(server, fallback_plain=direct)
         if secret:
             return secret
     except Exception as exc:  # noqa: BLE001
@@ -54,10 +51,7 @@ def _resolve_secret(ctx: AssistantActionContext, server) -> str:
         return ""
     # password auth without a resolvable secret is a hard error (avoid silent Permission denied)
     if getattr(server, "auth_method", "") in {"password", "key_password"}:
-        raise AssistantActionError(
-            "Не удалось получить пароль сервера. "
-            "Сохрани credentials в Managed Secret или задай MASTER_PASSWORD для legacy-шифрования."
-        )
+        raise AssistantActionError("Не удалось получить пароль сервера. Сохрани credentials в Managed Secret.")
     return ""
 
 

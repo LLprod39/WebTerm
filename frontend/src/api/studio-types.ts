@@ -96,6 +96,13 @@ export interface PipelineRun {
   trigger_type: string;
   trigger_name: string;
   trigger_node_id: string;
+  can_resume: boolean;
+  resume_confirmation_required: Array<{
+    id: string;
+    type: string;
+    label: string;
+    idempotency: "non_idempotent";
+  }>;
 }
 
 export interface PipelineRunValidation {
@@ -335,6 +342,7 @@ export interface StudioCapabilityNode {
   purpose: string;
   source_handles: string[];
   risk_level: string;
+  idempotency: "idempotent" | "non_idempotent";
   mutates_state: boolean;
   supports_dry_run: boolean;
   requires_approval_by_default: boolean;

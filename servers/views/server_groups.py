@@ -13,7 +13,20 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from servers.models import Server, ServerGroup, ServerGroupMember, ServerGroupSubscription, ServerGroupTag
+from core_ui.projects import active_project_for_user, user_can_write_project
+from servers.models import (
+    Server,
+    ServerBulkOperation,
+    ServerGroup,
+    ServerGroupMember,
+    ServerGroupSubscription,
+    ServerGroupTag,
+)
+from servers.services.server_bulk_operations import (
+    ServerBulkOperationError,
+    create_bulk_operation,
+    serialize_bulk_operation,
+)
 from servers.views.server_helpers import _get_group_role
 
 
@@ -204,3 +217,57 @@ def bulk_update_servers(request):
             },
         )
     return JsonResponse({"success": True})
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["POST"])
+def group_bulk_action_create(request, group_id):
+    group = get_object_or_404(ServerGroup, id=group_id)
+    if _get_group_role(group, request.user) not in ["owner", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+    project = active_project_for_user(request.user, request=request)
+    if project is None or not user_can_write_project(request.user, project):
+        return JsonResponse({"error": "Project operator role required"}, status=403)
+    try:
+        data = json.loads(request.body or b"{}")
+        operation = create_bulk_operation(
+            group=group,
+            project=project,
+            requested_by=request.user,
+            action=str(data.get("action") or "").strip(),
+            parameters=data.get("parameters"),
+        )
+    except (json.JSONDecodeError, ServerBulkOperationError) as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
+
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="servers",
+        action="server_group_bulk_action_queued",
+        status=UserActivityLog.STATUS_SUCCESS,
+        description=f'Queued {operation.action} for server group "{group.name}"',
+        entity_type="server_bulk_operation",
+        entity_id=operation.pk,
+        entity_name=group.name,
+        metadata={
+            "group_id": group.pk,
+            "action": operation.action,
+            "target_count": operation.total_count,
+        },
+    )
+    return JsonResponse({"success": True, "operation": serialize_bulk_operation(operation)}, status=202)
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["GET"])
+def group_bulk_action_detail(request, operation_id):
+    operation = get_object_or_404(ServerBulkOperation.objects.select_related("group"), pk=operation_id)
+    if _get_group_role(operation.group, request.user) not in ["owner", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+    project = active_project_for_user(request.user, request=request)
+    if project is None or operation.project_id != project.id:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+    return JsonResponse({"success": True, "operation": serialize_bulk_operation(operation)})

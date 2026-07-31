@@ -15,17 +15,12 @@ from loguru import logger
 
 from app.egress_redaction import redact_egress_payload, redact_egress_text
 from core_ui.audit import get_audit_context, should_log_activity
+from core_ui.client_ip import extract_client_ip
 from core_ui.models import UserActivityLog
 
 
 def _extract_client_ip(request) -> str:
-    if not request:
-        return ""
-    xff = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
-    if xff:
-        # Keep first hop from X-Forwarded-For chain.
-        return xff.split(",")[0].strip()
-    return (request.META.get("REMOTE_ADDR") or "").strip()
+    return extract_client_ip(request)
 
 
 def _normalize_text(value: Any, max_len: int) -> str:

@@ -4,6 +4,7 @@ from django.test import Client
 
 from app.background_workers import (
     STUDIO_MONITOR_WORKER,
+    STUDIO_PIPELINE_EXECUTION_WORKER,
     STUDIO_SCHEDULED_PIPELINES_WORKER,
     STUDIO_TELEGRAM_BOT_WORKER,
 )
@@ -104,6 +105,7 @@ def test_readiness_endpoint_can_scope_to_pipeline_id():
         edges=[{"id": "e1", "source": "manual", "target": "report", "sourceHandle": "out"}],
     )
     ready.sync_triggers_from_nodes()
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     client = Client()
     client.force_login(user)
 
@@ -161,6 +163,7 @@ def test_readiness_endpoint_can_scope_to_entry_node_branch(monkeypatch):
         ],
     )
     pipeline.sync_triggers_from_nodes()
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     client = Client()
     client.force_login(user)
 
@@ -210,15 +213,16 @@ def test_readiness_lists_required_workers_and_runtime_context():
     payload = response.json()
     assert payload["status"] == "not_ready"
     assert payload["summary"]["pipeline_warning_count"] == 1
-    assert payload["summary"]["worker_not_ready_count"] == 3
+    assert payload["summary"]["worker_not_ready_count"] == 4
     workers = {item["worker"]: item for item in payload["worker_requirements"]}
-    assert set(workers) == {"monitor", "scheduled-pipelines", "telegram-bot"}
+    assert set(workers) == {"monitor", "pipeline-execution", "scheduled-pipelines", "telegram-bot"}
     assert workers["monitor"]["command"] == "python manage.py run_monitor"
     assert workers["monitor"]["worker_kind"] == STUDIO_MONITOR_WORKER
     assert workers["monitor"]["ready"] is False
     assert workers["monitor"]["state"]["status"] == "missing"
     assert workers["monitor"]["issues"][0]["code"] == "worker_not_running"
     assert workers["scheduled-pipelines"]["required_by"] == 1
+    assert workers["pipeline-execution"]["command"] == "python manage.py run_pipeline_execution_plane"
     assert workers["telegram-bot"]["command"] == "python manage.py run_telegram_bot"
     item = payload["pipelines"][0]
     assert item["status"] == "warning"
@@ -310,7 +314,12 @@ def test_readiness_marks_required_workers_ready_when_heartbeating():
         ],
     )
     pipeline.sync_triggers_from_nodes()
-    for worker_kind in (STUDIO_MONITOR_WORKER, STUDIO_SCHEDULED_PIPELINES_WORKER, STUDIO_TELEGRAM_BOT_WORKER):
+    for worker_kind in (
+        STUDIO_MONITOR_WORKER,
+        STUDIO_PIPELINE_EXECUTION_WORKER,
+        STUDIO_SCHEDULED_PIPELINES_WORKER,
+        STUDIO_TELEGRAM_BOT_WORKER,
+    ):
         heartbeat_background_worker(worker_kind, lease_seconds=180)
     client = Client()
     client.force_login(user)
@@ -324,8 +333,8 @@ def test_readiness_marks_required_workers_ready_when_heartbeating():
     assert all(item["ready"] is True for item in payload["worker_requirements"])
 
 
-def test_readiness_reports_missing_integration_requirements(monkeypatch, tmp_path):
-    monkeypatch.setattr("studio.views._NOTIF_CONFIG_PATH", tmp_path / "notif.json", raising=False)
+def test_readiness_reports_missing_integration_requirements(monkeypatch):
+    monkeypatch.setattr("studio.pipeline.pipeline_notifications.load_notification_config", lambda: {})
     for key in ("OPENAI_API_KEY", "CODEX_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PIPELINE_NOTIFY_EMAIL"):
         monkeypatch.delenv(key, raising=False)
     user = User.objects.create_user(username="readiness-integrations-missing", password="x")
@@ -377,8 +386,8 @@ def test_readiness_reports_missing_integration_requirements(monkeypatch, tmp_pat
     assert "Select an owner-accessible MCP server" in requirements["MCP server"]["issue"]["next_action"]
 
 
-def test_readiness_marks_configured_integrations_ready(monkeypatch, tmp_path):
-    monkeypatch.setattr("studio.views._NOTIF_CONFIG_PATH", tmp_path / "notif.json", raising=False)
+def test_readiness_marks_configured_integrations_ready(monkeypatch):
+    monkeypatch.setattr("studio.pipeline.pipeline_notifications.load_notification_config", lambda: {})
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     user = User.objects.create_user(username="readiness-integrations-ready", password="x", is_staff=True)
     _grant_feature(user, "studio_pipelines")
@@ -408,6 +417,7 @@ def test_readiness_marks_configured_integrations_ready(monkeypatch, tmp_path):
         ],
     )
     pipeline.sync_triggers_from_nodes()
+    heartbeat_background_worker(STUDIO_PIPELINE_EXECUTION_WORKER, lease_seconds=180)
     client = Client()
     client.force_login(user)
 

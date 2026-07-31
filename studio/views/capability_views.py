@@ -4,13 +4,13 @@ Studio capability registry endpoint.
 
 from django.views.decorators.http import require_GET
 
-from core_ui.decorators import require_feature
 from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio.capability_registry import build_studio_capability_registry
 from studio.node_manifest import node_manifest_payload
 from studio.readiness import build_studio_readiness_report
 from studio.services import list_owned_server_payloads
 from studio.views.common import STUDIO_FEATURE_PIPELINES, _ok
+from studio.views.studio_access import require_studio_access
 
 
 def _truthy_query(value: str | None) -> bool:
@@ -28,21 +28,21 @@ def _pipeline_ids_from_query(request) -> list[int]:
 
 
 @require_GET
-@require_feature(STUDIO_FEATURE_PIPELINES)
+@require_studio_access(STUDIO_FEATURE_PIPELINES)
 def api_capabilities(request):
     servers = list_owned_server_payloads(request.user)
     return _ok(build_studio_capability_registry(request.user, server_count=len(servers)))
 
 
 @require_GET
-@require_feature(STUDIO_FEATURE_PIPELINES)
+@require_studio_access(STUDIO_FEATURE_PIPELINES)
 def api_node_manifests(request):
     nodes = node_manifest_payload(enabled_plugin_ids_for_user(request.user))
     return _ok({"version": 1, "count": len(nodes), "nodes": nodes})
 
 
 @require_GET
-@require_feature(STUDIO_FEATURE_PIPELINES)
+@require_studio_access(STUDIO_FEATURE_PIPELINES)
 def api_readiness(request):
     try:
         pipeline_ids = _pipeline_ids_from_query(request)

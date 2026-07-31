@@ -74,7 +74,7 @@ def api_projects(request):
             return JsonResponse({"error": str(exc)}, status=400)
         return JsonResponse({"project": _project_payload(project, request.user)}, status=201)
 
-    active = active_project_for_user(request.user)
+    active = active_project_for_user(request.user, request=request)
     projects = [_project_payload(project, request.user) for project in projects_for_user(request.user)]
     return JsonResponse({"projects": projects, "active_project_id": str(active.public_id) if active else None})
 

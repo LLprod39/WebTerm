@@ -4,7 +4,6 @@ Studio pipeline run endpoints.
 
 import json
 import re
-import sys
 
 import httpx
 from django.contrib.auth.decorators import login_required
@@ -22,7 +21,12 @@ from studio.approval_service import (
     record_approval_decision,
 )
 from studio.models import PipelineRun
-from studio.pipeline.pipeline_runtime import get_executor_for_run, update_runtime_control
+from studio.pipeline.pipeline_resume import (
+    PipelineResumeConfirmationRequired,
+    PipelineResumeError,
+    request_pipeline_run_resume,
+)
+from studio.pipeline.pipeline_runtime import update_runtime_control
 from studio.pipeline.pipeline_secrets import hydrate_pipeline_node_data
 from studio.views.notification_views import _load_notif_config
 
@@ -84,11 +88,6 @@ def _lookup_run_node_snapshot(run: PipelineRun, node_id: str) -> dict | None:
     return None
 
 
-def _package_attr(name: str, fallback):
-    package = sys.modules.get("studio.views")
-    return getattr(package, name, fallback)
-
-
 def _send_approval_telegram_confirmation(run: PipelineRun, node_id: str, decision: str) -> None:
     node = _lookup_run_node_snapshot(run, node_id) or {}
     node_data = hydrate_pipeline_node_data(run.pipeline_id, node_id, node.get("data") or {})
@@ -108,9 +107,8 @@ def _send_approval_telegram_confirmation(run: PipelineRun, node_id: str, decisio
         f"*Узел:* {label}\n"
         f"*Решение:* {verdict_text}"
     )
-    http_client = _package_attr("httpx", httpx)
     try:
-        http_client.post(
+        httpx.post(
             f"https://api.telegram.org/bot{bot_token}/sendMessage",
             json={
                 "chat_id": chat_id,
@@ -145,16 +143,36 @@ def api_run_stop(request, run_id: int):
     if run is None:
         return _err("Run not found", 404)
 
-    executor_getter = _package_attr("get_executor_for_run", get_executor_for_run)
-    control_updater = _package_attr("update_runtime_control", update_runtime_control)
-    executor = executor_getter(run.id)
-    control, stop_delivered = control_updater(run, live_executor=executor, stop_requested=True)
+    control = update_runtime_control(run, stop_requested=True)
+    from studio.dispatch import cancel_pipeline_dispatch_for_run
 
-    if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING}:
+    cancel_pipeline_dispatch_for_run(run.pk)
+
+    if run.status in {PipelineRun.STATUS_PENDING, PipelineRun.STATUS_RUNNING, PipelineRun.STATUS_HIBERNATING}:
         run.status = PipelineRun.STATUS_STOPPED
         run.finished_at = timezone.now()
         run.save(update_fields=["status", "finished_at"])
-    return _ok({"ok": True, "live_executor": stop_delivered, "runtime_control": control})
+    return _ok({"ok": True, "live_executor": False, "runtime_control": control})
+
+
+@require_feature(STUDIO_FEATURE_RUNS)
+@require_http_methods(["POST"])
+def api_run_resume(request, run_id: int):
+    run = _run_queryset_for_user(request.user).filter(pk=run_id).first()
+    if run is None:
+        return _err("Run not found", 404)
+    body = _json_body(request)
+    try:
+        resumed = request_pipeline_run_resume(
+            run.pk,
+            actor=request.user,
+            confirm_non_idempotent=body.get("confirm_non_idempotent") is True,
+        )
+    except PipelineResumeConfirmationRequired as exc:
+        return _ok({"error": str(exc), "code": exc.code, **exc.details}, 409)
+    except PipelineResumeError as exc:
+        return _ok({"error": str(exc), "code": exc.code, **exc.details}, 400)
+    return _ok({"ok": True, "run": resumed.to_dict()}, 202)
 
 
 @login_required

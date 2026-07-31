@@ -11,6 +11,7 @@ from app.core.model_config import model_manager
 from app.runtime_limit_config import normalize_runtime_limit, runtime_limit_fields, runtime_limits_payload
 from core_ui.access import VALID_ACCESS_PROFILES
 from core_ui.activity import log_user_activity
+from core_ui.api_errors import internal_error_response
 from core_ui.context_processors import user_can_feature
 from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm_api_key
 from core_ui.models import UserActivityLog
@@ -393,7 +394,7 @@ def api_settings(request):
                 }
             )
         except Exception as exc:
-            return JsonResponse({"success": False, "error": str(exc)}, status=500)
+            return internal_error_response(request, exc)
 
     try:
         data = json.loads(request.body)
@@ -465,10 +466,10 @@ def api_settings(request):
             category="settings",
             action="settings_update",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Settings update failed: {exc}",
+            description="Settings update failed (internal_error)",
             entity_type="settings",
         )
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -490,4 +491,4 @@ def api_settings_check(request):
         )
     except Exception as exc:
         logger.exception("api_settings_check error: %s", exc)
-        return JsonResponse({"configured": False, "missing": ["provider_readiness"], "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

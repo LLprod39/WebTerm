@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent, K8sCluster
 from kubernetes_ops.services.namespace_detail import build_namespace_detail, namespace_detail_audit_payload
@@ -16,7 +17,7 @@ def _safe_json(handler):
         return handler()
     except Exception as exc:
         logger.exception("kubernetes namespace API failed: %s", exc)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(None, exc)
 
 
 def _cluster_or_none(cluster_id: str) -> K8sCluster | None:

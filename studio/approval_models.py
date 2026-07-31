@@ -27,6 +27,8 @@ class ApprovalRequest(models.Model):
     )
     node_id = models.CharField(max_length=100)
     token_digest = models.CharField(max_length=64)
+    telegram_bot_token_digest = models.CharField(max_length=64, blank=True, default="")
+    telegram_chat_id = models.CharField(max_length=64, blank=True, default="")
     approver = models.ForeignKey(
         User,
         null=True,
@@ -75,3 +77,57 @@ class ApprovalRequest(models.Model):
 
     def __str__(self) -> str:
         return f"Approval request for run #{self.run_id}/{self.node_id} [{self.status}]"
+
+
+class TelegramBotCursor(models.Model):
+    """Durable getUpdates offset for exactly one consumer per bot token."""
+
+    bot_token_digest = models.CharField(max_length=64, unique=True)
+    update_offset = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f"Telegram bot cursor {self.bot_token_digest[:12]}… @ {self.update_offset}"
+
+
+class TelegramReplyRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_RECEIVED = "received"
+    STATUS_EXPIRED = "expired"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_RECEIVED, "Received"),
+        (STATUS_EXPIRED, "Expired"),
+    ]
+
+    run = models.ForeignKey(
+        "studio.PipelineRun",
+        on_delete=models.CASCADE,
+        related_name="telegram_reply_requests",
+    )
+    node_id = models.CharField(max_length=100)
+    bot_token_digest = models.CharField(max_length=64)
+    chat_id = models.CharField(max_length=64)
+    prompt_message_id = models.BigIntegerField()
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    response_text = models.TextField(blank=True)
+    response_message_id = models.BigIntegerField(null=True, blank=True)
+    response_from = models.CharField(max_length=150, blank=True, default="")
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    received_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bot_token_digest", "chat_id", "prompt_message_id"],
+                name="studio_tg_reply_message_uniq",
+            ),
+            models.UniqueConstraint(fields=["run", "node_id"], name="studio_tg_reply_run_node_uniq"),
+        ]
+        indexes = [
+            models.Index(fields=["status", "expires_at"], name="studio_tg_reply_status_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"Telegram reply for run #{self.run_id}/{self.node_id} [{self.status}]"

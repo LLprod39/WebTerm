@@ -16,6 +16,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 import httpx
 from asgiref.sync import async_to_sync
 from django.core import signing
+from loguru import logger
 
 from app.assistant_actions import (
     AssistantActionContext,
@@ -180,7 +181,8 @@ def web_search(ctx: AssistantActionContext) -> dict[str, Any]:
         with build_opener(_NoRedirect()).open(request, timeout=10) as response:
             raw = response.read(MAX_FETCH_BYTES + 1)
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        raise AssistantActionError(f"Web search failed: {str(exc)[:200]}", status=502) from exc
+        logger.exception("Operator web search failed")
+        raise AssistantActionError("Web search provider failed", status=502) from exc
     if len(raw) > MAX_FETCH_BYTES:
         raise AssistantActionError("Web search response exceeded the size limit", status=502)
     try:
@@ -232,8 +234,12 @@ def _fetch_result_page(url: str) -> tuple[str, str, str]:
                 "User-Agent": "WebTerm-Operator/1.0",
             },
         )
-    except (OutboundHTTPPolicyError, httpx.HTTPError, TimeoutError, OSError) as exc:
-        raise AssistantActionError(f"Could not open source: {str(exc)[:200]}", status=502) from exc
+    except OutboundHTTPPolicyError as exc:
+        logger.warning("Operator web source blocked by outbound policy")
+        raise AssistantActionError("Source blocked by policy", status=400) from exc
+    except (httpx.HTTPError, TimeoutError, OSError) as exc:
+        logger.exception("Operator web source fetch failed")
+        raise AssistantActionError("Could not open the requested source", status=502) from exc
     if not 200 <= response.status_code < 300:
         raise AssistantActionError(f"Source returned HTTP {response.status_code}", status=502)
     content_type = str(response.headers.get("content-type") or "").split(";", 1)[0].strip().lower()

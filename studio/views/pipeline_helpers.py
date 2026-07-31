@@ -97,10 +97,7 @@ def _get_pipeline(request, pipeline_id: int) -> Pipeline | None:
 
 
 def _launch_pipeline_run(run: PipelineRun):
-    from studio import views as studio_views
-
-    launcher = getattr(studio_views, "_launch_pipeline_run_async", _launch_pipeline_run_async)
-    launcher(run)
+    _launch_pipeline_run_async(run)
 
 
 def _launch_pipeline_run_async(run: PipelineRun):

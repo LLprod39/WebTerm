@@ -7,9 +7,14 @@ from .models import (
     Pipeline,
     PipelineDraftRevision,
     PipelineDraftSession,
+    PipelineNodeDeadLetter,
     PipelineRun,
+    PipelineRunDispatch,
     PipelineTemplate,
     PipelineTrigger,
+    PipelineWebhookDelivery,
+    TelegramBotCursor,
+    TelegramReplyRequest,
 )
 
 
@@ -19,6 +24,20 @@ class ApprovalRequestAdmin(admin.ModelAdmin):
     list_filter = ["status", "expires_at"]
     search_fields = ["run__pipeline__name", "node_id", "approver__username"]
     readonly_fields = ["token_digest", "created_at", "decided_at"]
+
+
+@admin.register(TelegramBotCursor)
+class TelegramBotCursorAdmin(admin.ModelAdmin):
+    list_display = ["bot_token_digest", "update_offset", "updated_at"]
+    readonly_fields = ["bot_token_digest", "update_offset", "updated_at"]
+
+
+@admin.register(TelegramReplyRequest)
+class TelegramReplyRequestAdmin(admin.ModelAdmin):
+    list_display = ["run", "node_id", "chat_id", "prompt_message_id", "status", "expires_at"]
+    list_filter = ["status", "expires_at"]
+    search_fields = ["run__pipeline__name", "node_id", "chat_id"]
+    readonly_fields = ["bot_token_digest", "created_at", "received_at"]
 
 
 @admin.register(MCPServerPool)
@@ -56,6 +75,29 @@ class PipelineRunAdmin(admin.ModelAdmin):
     list_display = ["pipeline", "status", "triggered_by", "started_at", "finished_at"]
     list_filter = ["status"]
     readonly_fields = ["started_at", "finished_at", "created_at", "node_states"]
+
+
+@admin.register(PipelineRunDispatch)
+class PipelineRunDispatchAdmin(admin.ModelAdmin):
+    list_display = ["run", "status", "claimed_by", "attempt_count", "max_attempts", "queued_at"]
+    list_filter = ["status", "queued_at"]
+    search_fields = ["run__pipeline__name", "claimed_by"]
+    readonly_fields = ["queued_at", "claimed_at", "heartbeat_at", "lease_expires_at", "completed_at"]
+
+
+@admin.register(PipelineNodeDeadLetter)
+class PipelineNodeDeadLetterAdmin(admin.ModelAdmin):
+    list_display = ["run", "node_id", "node_type", "status", "attempt_count", "max_attempts", "created_at"]
+    list_filter = ["status", "node_type", "created_at"]
+    search_fields = ["run__pipeline__name", "node_id", "last_error"]
+    readonly_fields = ["run", "node_id", "node_type", "attempt_count", "max_attempts", "created_at", "updated_at"]
+
+
+@admin.register(PipelineWebhookDelivery)
+class PipelineWebhookDeliveryAdmin(admin.ModelAdmin):
+    list_display = ["trigger", "delivery_id", "run", "received_at"]
+    search_fields = ["delivery_id", "body_sha256"]
+    readonly_fields = ["trigger", "delivery_id", "body_sha256", "run", "received_at"]
 
 
 @admin.register(PipelineDraftSession)

@@ -55,6 +55,8 @@ def _tracked_text_files(root: Path) -> list[Path]:
         path = Path(raw)
         if path.as_posix() in {BRAND_COMPATIBILITY_DOC, VERIFIER_PATH}:
             continue
+        if not (root / path).is_file():
+            continue
         if path.suffix.lower() in TEXT_SUFFIXES or path.name.endswith("Dockerfile"):
             paths.append(path)
     return paths

@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from app.core.model_config import model_manager
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import has_llm_api_key
 from core_ui.views.runtime import get_unified_orchestrator
@@ -38,7 +39,7 @@ def api_tools_list(request):
         return JsonResponse({"tools": tools, "count": len(tools)})
     except Exception as exc:
         logger.error(f"Error loading tools: {exc}")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -85,7 +86,7 @@ def api_models_list(request):
             }
         )
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -140,4 +141,4 @@ def api_models_refresh(request):
         )
     except Exception as exc:
         logger.exception("api_models_refresh error: %s", exc)
-        return JsonResponse({"error": str(exc)}, status=500)
+        return internal_error_response(request, exc)

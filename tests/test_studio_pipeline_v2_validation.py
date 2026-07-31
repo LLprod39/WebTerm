@@ -9,7 +9,7 @@ from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from tests.studio_pipeline_v2_harness import disable_activity_logging, report_node
 
 
-def test_legacy_pipeline_modules_alias_domain_implementations():
+def test_legacy_pipeline_alias_modules_are_removed():
     for module_name in (
         "pipeline_agent_runtime",
         "pipeline_context",
@@ -18,9 +18,8 @@ def test_legacy_pipeline_modules_alias_domain_implementations():
         "pipeline_secrets",
         "pipeline_validation",
     ):
-        legacy = importlib.import_module(f"studio.{module_name}")
-        current = importlib.import_module(f"studio.pipeline.{module_name}")
-        assert legacy is current
+        with pytest.raises(ModuleNotFoundError):
+            importlib.import_module(f"studio.{module_name}")
 
 
 @pytest.fixture(autouse=True)

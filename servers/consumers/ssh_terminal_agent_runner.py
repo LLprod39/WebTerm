@@ -13,7 +13,7 @@ from servers.services import terminal_events, terminal_input
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalAgentRunnerMixin:
+class TerminalAgentRunOperations:
     async def _run_ai_agent_background(
         self,
         *,

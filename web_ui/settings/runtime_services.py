@@ -118,6 +118,17 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT": env_int("PIPELINE_ACTIVE_RUNS_PER_USER_LIMIT", 8),
         "PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT": env_int("PIPELINE_ACTIVE_RUNS_GLOBAL_LIMIT", 40),
         "PIPELINE_RUN_STALE_SECONDS": env_int("PIPELINE_RUN_STALE_SECONDS", 21600),
+        "PIPELINE_EXECUTION_MAX_ATTEMPTS": max(1, env_int("PIPELINE_EXECUTION_MAX_ATTEMPTS", 3)),
+        "APP_RATE_LIMIT_ASSISTANT_PER_MINUTE": max(0, env_int("APP_RATE_LIMIT_ASSISTANT_PER_MINUTE", 30)),
+        "APP_RATE_LIMIT_PIPELINE_RUNS_PER_MINUTE": max(
+            0,
+            env_int("APP_RATE_LIMIT_PIPELINE_RUNS_PER_MINUTE", 10),
+        ),
+        "APP_RATE_LIMIT_AGENT_RUNS_PER_MINUTE": max(0, env_int("APP_RATE_LIMIT_AGENT_RUNS_PER_MINUTE", 10)),
+        "COMMAND_SNAPSHOT_MAX_CONTENT_BYTES": max(
+            1024,
+            env_int("COMMAND_SNAPSHOT_MAX_CONTENT_BYTES", 1024 * 1024),
+        ),
         "SSH_TERMINAL_SESSIONS_PER_USER_LIMIT": env_int("SSH_TERMINAL_SESSIONS_PER_USER_LIMIT", 12),
         "SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT": env_int("SSH_TERMINAL_SESSIONS_GLOBAL_LIMIT", 120),
         "SSH_TERMINAL_SESSION_STALE_SECONDS": env_int("SSH_TERMINAL_SESSION_STALE_SECONDS", 180),
@@ -128,6 +139,13 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "OS_DETECT_LOCK_SECONDS": env_int("OS_DETECT_LOCK_SECONDS", 30),
         "SSH_KEEPALIVE_INTERVAL_SECONDS": env_int("SSH_KEEPALIVE_INTERVAL_SECONDS", 20),
         "SSH_KEEPALIVE_COUNT_MAX": env_int("SSH_KEEPALIVE_COUNT_MAX", 3),
+        "SSH_POOL_IDLE_TTL_SECONDS": max(1, env_int("SSH_POOL_IDLE_TTL_SECONDS", 60)),
+        "SSH_POOL_MAX_PER_SERVER": max(1, env_int("SSH_POOL_MAX_PER_SERVER", 4)),
+        "SSH_POOL_MAX_CONNECTIONS": max(1, env_int("SSH_POOL_MAX_CONNECTIONS", 50)),
+        "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": max(
+            1,
+            env_int("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS", 300),
+        ),
         # Monitoring freshness is a runtime contract shared by the status and
         # dashboard APIs.  Keep these values in settings instead of duplicating
         # endpoint-local defaults so operators can reason about one policy.

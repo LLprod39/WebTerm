@@ -51,6 +51,7 @@ def server_linux_ui_services(request, server_id):
             server,
             secret=secret or "",
             limit=request.GET.get("limit") or 120,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -92,6 +93,7 @@ def server_linux_ui_service_logs(request, server_id):
             secret=secret or "",
             service=str(request.GET.get("service") or ""),
             lines=request.GET.get("lines") or 80,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -133,6 +135,7 @@ def server_linux_ui_service_action(request, server_id):
             secret=secret or "",
             service=str(data.get("service") or ""),
             action=str(data.get("action") or ""),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -178,6 +181,7 @@ def server_linux_ui_processes(request, server_id):
             server,
             secret=secret or "",
             limit=request.GET.get("limit") or 80,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -218,6 +222,7 @@ def server_linux_ui_process_action(request, server_id):
             secret=secret or "",
             pid=data.get("pid"),
             action=str(data.get("action") or ""),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -260,6 +265,7 @@ def server_linux_ui_docker(request, server_id):
         docker_data = async_to_sync(get_linux_ui_docker)(
             server,
             secret=secret or "",
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -300,6 +306,7 @@ def server_linux_ui_docker_logs(request, server_id):
             secret=secret or "",
             container=str(request.GET.get("container") or ""),
             lines=request.GET.get("lines") or 80,
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,
@@ -341,6 +348,7 @@ def server_linux_ui_docker_action(request, server_id):
             secret=secret or "",
             container=str(data.get("container") or ""),
             action=str(data.get("action") or ""),
+            user_id=request.user.id,
         )
         log_user_activity(
             user=request.user,

@@ -13,7 +13,7 @@ from studio.mcp.mcp_tool_runtime import (
 from studio.models import AgentConfig, Pipeline, PipelineTrigger
 from studio.pipeline.pipeline_executor import _coerce_mcp_arguments
 from studio.skill_registry import get_skill, list_skills, normalise_skill_slugs, resolve_skills
-from studio.views._views_all import _normalise_related_ids
+from studio.views.common import _normalise_related_ids
 
 
 @pytest.mark.django_db

@@ -43,7 +43,7 @@ def async_require_feature(feature, redirect_on_forbidden=False):
                 if redirect_on_forbidden:
                     return redirect("login")
                 return HttpResponseForbidden()
-            can_feature = await sync_to_async(lambda r: user_can_feature(r.user, feature))(request)
+            can_feature = await sync_to_async(lambda r: user_can_feature(r.user, feature, request=r))(request)
             if not can_feature:
                 if redirect_on_forbidden:
                     return redirect("index")
@@ -70,7 +70,7 @@ def require_feature(feature, redirect_on_forbidden=False):
                 if redirect_on_forbidden:
                     return redirect("login")
                 return HttpResponseForbidden()
-            if not user_can_feature(request.user, feature):
+            if not user_can_feature(request.user, feature, request=request):
                 if redirect_on_forbidden:
                     return redirect("index")
                 return JsonResponse({"error": "Forbidden"}, status=403)
@@ -95,7 +95,7 @@ def require_any_feature(*features, redirect_on_forbidden=False):
                 if redirect_on_forbidden:
                     return redirect("login")
                 return HttpResponseForbidden()
-            if not any(user_can_feature(request.user, feature) for feature in normalized_features):
+            if not any(user_can_feature(request.user, feature, request=request) for feature in normalized_features):
                 if redirect_on_forbidden:
                     return redirect("index")
                 return JsonResponse({"error": "Forbidden"}, status=403)

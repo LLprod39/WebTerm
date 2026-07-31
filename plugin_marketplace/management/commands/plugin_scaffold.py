@@ -88,7 +88,7 @@ def _apply_template(manifest: dict, *, template: str, plugin_id: str, slug: str,
                 "id": "run",
                 "type": f"plugin/{plugin_id}/run",
                 "title": f"Run {name}",
-                "description": "Runs the extension logic in the backend sandbox.",
+                "description": "Runs the extension logic with the configured plugin code executor.",
                 "category": "Plugin",
                 "required_permission": permission_scope,
                 "executor_ref": executor_ref,
@@ -273,10 +273,10 @@ class Command(BaseCommand):
         _write(
             target / "backend" / "README.md",
             (
-                "Backend code is disabled by default. This template uses sandboxed executor refs, so validate and run it only "
-                "after enabling the WebTerm plugin sandbox settings.\n"
+                "Backend code is disabled by default. Local subprocess mode runs with full application privileges; "
+                "use it only for trusted development plugins. Production requires an isolated external worker.\n"
                 if sandbox_template
-                else "Backend code is disabled by default. Add sandboxed executor refs only when this extension needs backend logic.\n"
+                else "Backend code is disabled by default. Add executable refs only when this extension needs backend logic.\n"
             ),
             force=force,
         )

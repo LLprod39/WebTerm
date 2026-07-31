@@ -461,23 +461,3 @@ def schedule_health_check_for_server_ids(server_ids: list[int], *, deep: bool = 
             logger.debug("Background health check for servers {} failed: {}", ids, exc)
 
     threading.Thread(target=_worker, daemon=True, name="monitor-server-bootstrap").start()
-
-
-async def cleanup_old_data(days: int = 7) -> None:
-    """Remove health checks, resolved alerts, and expired metric series data."""
-    cutoff = timezone.now() - timedelta(days=days)
-    deleted_hc = await sync_to_async(lambda: ServerHealthCheck.objects.filter(checked_at__lt=cutoff).delete())()
-    deleted_alerts = await sync_to_async(
-        lambda: ServerAlert.objects.filter(is_resolved=True, created_at__lt=cutoff).delete()
-    )()
-
-    from servers.monitoring.metrics_rollup import cleanup_metric_data
-
-    deleted_metrics = await sync_to_async(cleanup_metric_data)()
-    logger.info(
-        "Monitor cleanup: removed {} health checks, {} resolved alerts, {} metric samples, {} rollups",
-        deleted_hc[0],
-        deleted_alerts[0],
-        deleted_metrics["samples"],
-        deleted_metrics["hour_rollups"] + deleted_metrics["day_rollups"],
-    )

@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -27,9 +26,7 @@ _NOTIF_DEFAULTS = {
 }
 
 
-def notif_config_path() -> Path:
-    package = sys.modules.get("studio.views")
-    override = getattr(package, "_NOTIF_CONFIG_PATH", None)
+def notif_config_path(override: str | Path | None = None) -> Path:
     if override:
         return Path(override)
     env_path = (os.getenv("NOTIFICATION_CONFIG_PATH") or "").strip()
@@ -60,8 +57,8 @@ def _base_notification_config() -> dict[str, Any]:
     }
 
 
-def _read_saved_notification_config() -> dict[str, Any]:
-    config_path = notif_config_path()
+def _read_saved_notification_config(config_path: str | Path | None = None) -> dict[str, Any]:
+    config_path = notif_config_path(config_path)
     if config_path.exists():
         with contextlib.suppress(Exception):
             saved = json.loads(config_path.read_text(encoding="utf-8"))
@@ -76,9 +73,9 @@ def _managed_notification_secret(key: str) -> str:
     return ""
 
 
-def load_notification_config() -> dict[str, Any]:
+def load_notification_config(config_path: str | Path | None = None) -> dict[str, Any]:
     base = _base_notification_config()
-    saved = _read_saved_notification_config()
+    saved = _read_saved_notification_config(config_path)
     for key, value in saved.items():
         if key in base and key not in _NOTIF_SECRET_KEYS and value:
             base[key] = value
@@ -93,10 +90,10 @@ def load_notification_config() -> dict[str, Any]:
     return base
 
 
-def save_notification_config(data: dict[str, Any]) -> None:
+def save_notification_config(data: dict[str, Any], config_path: str | Path | None = None) -> None:
     existing = {
         key: value
-        for key, value in _read_saved_notification_config().items()
+        for key, value in _read_saved_notification_config(config_path).items()
         if key in _NOTIF_DEFAULTS and key not in _NOTIF_SECRET_KEYS
     }
     for key in _NOTIF_DEFAULTS:
@@ -105,6 +102,6 @@ def save_notification_config(data: dict[str, Any]) -> None:
                 set_notification_secret(key, str(data.get(key) or ""))
             else:
                 existing[key] = data[key]
-    config_path = notif_config_path()
+    config_path = notif_config_path(config_path)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False), encoding="utf-8")

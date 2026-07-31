@@ -10,7 +10,6 @@ from channels.db import database_sync_to_async
 from loguru import logger
 
 from core_ui.activity import log_user_activity_async
-from servers.consumers.ssh_terminal_compat import consumer_module_attr
 from servers.models import Server
 from servers.services import terminal_input
 from servers.services.terminal_ai.active_command import (
@@ -38,10 +37,8 @@ from servers.services.terminal_stream_state import filter_internal_markers
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalIoMixin:
+class TerminalIoOperations:
     async def _disconnect_ssh(self):
-        log_activity_async = consumer_module_attr("log_user_activity_async", log_user_activity_async)
-
         was_connected = bool(self._transport_state.ssh_conn or self._transport_state.ssh_proc)
 
         await self._stop_connection_heartbeat()
@@ -85,7 +82,7 @@ class SSHTerminalIoMixin:
             await self._safe_send_json({"type": "status", "status": "disconnected"})
 
         if was_connected and self.server and self._user_id:
-            await log_activity_async(
+            await log_user_activity_async(
                 user_id=self._user_id,
                 category="servers",
                 action="terminal_disconnect",
@@ -153,15 +150,13 @@ class SSHTerminalIoMixin:
         append_manual_output(self._manual_state, text)
 
     async def _finalize_manual_terminal_command(self, cmd_id: int, exit_code: int) -> None:
-        sync_to_async = consumer_module_attr("database_sync_to_async", database_sync_to_async)
-
         result = await finalize_manual_terminal_command(
             self._manual_state,
             cmd_id,
             exit_code,
             session_context=self._transport_state.nova_session_context,
             normalize_output=self._normalize_manual_command_output,
-            persist_result=sync_to_async(
+            persist_result=database_sync_to_async(
                 self._persist_manual_terminal_command_result,
                 thread_sensitive=True,
             ),
@@ -242,7 +237,7 @@ class SSHTerminalIoMixin:
         """
         Resolve password/passphrase for server authentication.
 
-        - If server has encrypted_password and master_password provided -> decrypt.
+        - ManagedSecret is the only persisted password source.
         - Else fallback to plain_password provided by user (not stored).
         """
         from servers.services.terminal_access import resolve_server_secret

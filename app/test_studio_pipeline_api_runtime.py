@@ -82,7 +82,8 @@ def test_api_trigger_receive_rejects_non_object_payload(client):
     )
 
     assert response.status_code == 400
-    assert response.json()["error"] == "Webhook payload must be a JSON object"
+    assert response.json()["code"] == "invalid_request"
+    assert response.json()["details"][0]["field"] == "$"
 
 
 @pytest.mark.django_db
@@ -101,7 +102,7 @@ def test_api_runs_list_detail_and_stop_include_webhook_runs_for_pipeline_owner(c
 
     list_response = client.get("/api/studio/runs/")
     assert list_response.status_code == 200
-    listed_ids = {item["id"] for item in list_response.json()}
+    listed_ids = {item["id"] for item in list_response.json()["data"]}
     assert run.id in listed_ids
 
     detail_response = client.get(f"/api/studio/runs/{run.id}/")
@@ -117,7 +118,7 @@ def test_api_runs_list_detail_and_stop_include_webhook_runs_for_pipeline_owner(c
 
 
 @pytest.mark.django_db
-def test_api_run_stop_requests_live_executor(client, monkeypatch):
+def test_api_run_stop_persists_cross_process_stop_request(client):
     user = User.objects.create_user(username="studio-stop-live-user", password="x")
     _grant_feature(user, "studio")
     pipeline = Pipeline.objects.create(name="Run Stop Live", owner=user, nodes=[_llm_node("n1")], edges=[])
@@ -127,24 +128,12 @@ def test_api_run_stop_requests_live_executor(client, monkeypatch):
         context={},
     )
 
-    class DummyExecutor:
-        def __init__(self):
-            self.stop_requested = False
-
-        def request_stop(self):
-            self.stop_requested = True
-
-    executor = DummyExecutor()
-    monkeypatch.setattr("studio.views.get_executor_for_run", lambda run_id: executor if run_id == run.id else None)
-
     client.force_login(user)
     stop_response = client.post(f"/api/studio/runs/{run.id}/stop/")
 
     assert stop_response.status_code == 200
-    assert stop_response.json()["live_executor"] is True
+    assert stop_response.json()["live_executor"] is False
     assert stop_response.json()["runtime_control"]["stop_requested"] is True
-    assert executor.stop_requested is True
-
     run.refresh_from_db()
     assert run.status == PipelineRun.STATUS_STOPPED
     assert run.runtime_control["stop_requested"] is True

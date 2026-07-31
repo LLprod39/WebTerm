@@ -139,12 +139,11 @@ def resolve_server_secret_sync(*, server_id: int, master_password: str, plain_pa
     from servers.models import Server
     from servers.secret_utils import get_server_auth_secret
 
-    server = Server.objects.only("id", "encrypted_password", "salt", "auth_method").get(id=server_id)
+    server = Server.objects.only("id", "auth_method").get(id=server_id)
     if server.auth_method not in ("password", "key_password"):
         return ""
     return get_server_auth_secret(
         server,
-        master_password=(master_password or "").strip(),
         fallback_plain=plain_password or "",
     )
 

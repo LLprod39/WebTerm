@@ -62,6 +62,8 @@ def arm_approval_request(
     approver: User,
     raw_token: str,
     expires_at: datetime,
+    telegram_bot_token: str = "",
+    telegram_chat_id: str = "",
 ) -> ApprovalRequest:
     requested_by = run.triggered_by or run.pipeline.owner
     approval, _created = ApprovalRequest.objects.select_for_update().update_or_create(
@@ -69,6 +71,10 @@ def arm_approval_request(
         node_id=node_id,
         defaults={
             "token_digest": ApprovalRequest.digest_token(raw_token),
+            "telegram_bot_token_digest": (
+                ApprovalRequest.digest_token(telegram_bot_token) if telegram_bot_token else ""
+            ),
+            "telegram_chat_id": str(telegram_chat_id or "").strip()[:64],
             "approver": approver,
             "requested_by": requested_by,
             "status": ApprovalRequest.STATUS_PENDING,

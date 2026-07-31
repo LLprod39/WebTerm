@@ -231,7 +231,7 @@ def test_manual_pipeline_run_rejects_missing_runtime_context(monkeypatch):
     pipeline = _context_pipeline(user)
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     response = client.post(
         f"/api/studio/pipelines/{pipeline.id}/run/",
@@ -273,7 +273,7 @@ def test_manual_pipeline_run_accepts_runtime_context(monkeypatch):
     pipeline = _context_pipeline(user)
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     response = client.post(
         f"/api/studio/pipelines/{pipeline.id}/run/",
@@ -293,7 +293,10 @@ def test_manual_pipeline_run_rejects_trigger_without_downstream_nodes(monkeypatc
     pipeline = _trigger_only_pipeline(user)
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("empty branch launched"))
+    monkeypatch.setattr(
+        "studio.views.pipeline_helpers._launch_pipeline_run_async",
+        lambda _run: pytest.fail("empty branch launched"),
+    )
 
     response = client.post(
         f"/api/studio/pipelines/{pipeline.id}/run/",
@@ -313,7 +316,7 @@ def test_manual_pipeline_run_ignores_runtime_context_from_other_trigger_branch(m
     pipeline = _multi_trigger_context_pipeline(user)
     client = Client()
     client.force_login(user)
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     response = client.post(
         f"/api/studio/pipelines/{pipeline.id}/run/",
@@ -332,7 +335,7 @@ def test_webhook_trigger_rejects_missing_mapped_runtime_context(monkeypatch):
     user = User.objects.create_user(username="runtime-context-webhook", password="x")
     pipeline = _context_pipeline(user, trigger_type="trigger/webhook")
     trigger = pipeline.triggers.get(node_id="webhook")
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     response = Client().post(
         f"/api/studio/triggers/{trigger.webhook_token}/receive/",
@@ -351,7 +354,8 @@ def test_webhook_trigger_rejects_trigger_without_downstream_nodes(monkeypatch):
     pipeline = _trigger_only_pipeline(user, trigger_type="trigger/webhook")
     trigger = pipeline.triggers.get(node_id="webhook")
     monkeypatch.setattr(
-        "studio.views._launch_pipeline_run_async", lambda _run: pytest.fail("empty webhook branch launched")
+        "studio.views.pipeline_helpers._launch_pipeline_run_async",
+        lambda _run: pytest.fail("empty webhook branch launched"),
     )
 
     response = Client().post(
@@ -370,7 +374,7 @@ def test_webhook_trigger_ignores_runtime_context_from_manual_branch(monkeypatch)
     user = User.objects.create_user(username="runtime-context-webhook-branch", password="x")
     pipeline = _multi_trigger_context_pipeline(user)
     trigger = pipeline.triggers.get(node_id="webhook")
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
 
     response = Client().post(
         f"/api/studio/triggers/{trigger.webhook_token}/receive/",

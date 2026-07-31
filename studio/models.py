@@ -5,7 +5,8 @@ from django.db import models, transaction
 
 from app.sudo_policy import SUDO_POLICY_CHOICES, SUDO_POLICY_DISABLED
 
-from .approval_models import ApprovalRequest  # noqa: F401
+from .approval_models import ApprovalRequest, TelegramBotCursor, TelegramReplyRequest  # noqa: F401
+from .dispatch_models import PipelineDispatchControl, PipelineRunDispatch  # noqa: F401
 from .model_serializers import (
     agent_config_to_dict,
     pipeline_get_last_run,
@@ -17,6 +18,7 @@ from .model_serializers import (
 )
 from .pipeline.pipeline_draft_models import PipelineDraftRevision, PipelineDraftSession  # noqa: F401
 from .pipeline.pipeline_model_services import instantiate_template_for_user, sync_pipeline_triggers_from_nodes
+from .retry_models import PipelineNodeDeadLetter  # noqa: F401
 from .skill_access_models import StudioSkillAccess  # noqa: F401
 
 CURRENT_PIPELINE_GRAPH_VERSION = 2
@@ -332,6 +334,11 @@ class PipelineTrigger(models.Model):
 
     # Webhook
     webhook_token = models.CharField(max_length=64, unique=True, blank=True)
+    signing_secret = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Optional HMAC-SHA256 secret used to verify webhook deliveries",
+    )
     webhook_payload_map = models.JSONField(
         default=dict,
         blank=True,
@@ -382,11 +389,39 @@ class PipelineTrigger(models.Model):
             "is_active": self.is_active,
             "webhook_token": self.webhook_token,
             "webhook_url": f"/api/studio/triggers/{self.webhook_token}/receive/",
+            "webhook_header_url": "/api/studio/triggers/receive/",
+            "webhook_token_path_deprecated": True,
+            "has_signing_secret": bool(self.signing_secret),
             "cron_expression": self.cron_expression,
             "webhook_payload_map": self.webhook_payload_map,
             "monitoring_filters": self.monitoring_filters,
             "last_triggered_at": self.last_triggered_at.isoformat() if self.last_triggered_at else None,
         }
+
+
+class PipelineWebhookDelivery(models.Model):
+    """Idempotency record for a webhook delivery within the supported retry window."""
+
+    trigger = models.ForeignKey(PipelineTrigger, on_delete=models.CASCADE, related_name="webhook_deliveries")
+    delivery_id = models.CharField(max_length=200)
+    body_sha256 = models.CharField(max_length=64)
+    run = models.OneToOneField(
+        "studio.PipelineRun",
+        on_delete=models.CASCADE,
+        related_name="webhook_delivery",
+        null=True,
+        blank=True,
+    )
+    received_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-received_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(fields=["trigger", "delivery_id"], name="studio_webhook_delivery_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["received_at"], name="studio_webhook_received_idx"),
+        ]
 
 
 class PipelineRun(models.Model):

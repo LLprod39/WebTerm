@@ -44,7 +44,6 @@ def _minimal_internal_project(tmp_path: Path) -> Path:
                 "FRONTEND_APP_URL=https://webterm.invalid",
                 "ALLOWED_HOSTS=webterm.invalid",
                 "CSRF_TRUSTED_ORIGINS=https://webterm.invalid",
-                f"MASTER_PASSWORD={'a' * 48}",
                 "POSTGRES_DB=webterm",
                 "POSTGRES_USER=webterm",
                 f"POSTGRES_PASSWORD={'p' * 32}",

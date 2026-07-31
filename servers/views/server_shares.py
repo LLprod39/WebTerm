@@ -13,6 +13,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import Server, ServerShare
@@ -169,11 +170,11 @@ def server_share_create(request, server_id):
             category="servers",
             action="server_share_create",
             status=UserActivityLog.STATUS_ERROR,
-            description=f"Server share create failed: {e}",
+            description="Server share create failed (internal_error)",
             entity_type="server",
             entity_id=server_id,
         )
-        return JsonResponse({"error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required

@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from servers.models import GlobalServerRules, ServerGroup
 from servers.views.server_helpers import _get_group_role
@@ -55,7 +56,7 @@ def global_context_save(request):
         rules.save()
         return JsonResponse({"success": True})
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        return internal_error_response(request, e)
 
 
 @login_required
@@ -102,4 +103,4 @@ def group_context_save(request, group_id):
         group.save()
         return JsonResponse({"success": True})
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
+        return internal_error_response(request, e)

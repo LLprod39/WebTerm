@@ -35,7 +35,7 @@ def test_schedule_runner_stores_entry_node_id(monkeypatch):
     pipeline.sync_triggers_from_nodes()
     trigger = pipeline.triggers.get(trigger_type="schedule")
 
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", lambda _run: None)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", lambda _run: None)
     RunScheduledPipelinesCommand()._fire_trigger(trigger)
 
     run = PipelineRun.objects.get(trigger=trigger)

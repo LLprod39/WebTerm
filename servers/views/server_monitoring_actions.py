@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 
 from app.core.llm import LLMProvider
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from servers.agents.agent_service import launch_watcher_draft_for_user
 from servers.models import Server, ServerAlert, ServerHealthCheck
@@ -392,7 +393,7 @@ def ai_analyze_server(request, server_id):
     try:
         result = async_to_sync(_collect)()
     except Exception as exc:
-        return JsonResponse({"success": False, "error": f"AI analysis failed: {exc}"}, status=500)
+        return internal_error_response(request, exc)
 
     log_user_activity(
         user=request.user,

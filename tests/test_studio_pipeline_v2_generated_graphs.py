@@ -61,7 +61,7 @@ def test_webhook_smoke_pipeline_executes_critical_and_normal_branches(monkeypatc
     def _run_now(run):
         async_to_sync(PipelineExecutor(run).execute)(context=run.context)
 
-    monkeypatch.setattr("studio.views._launch_pipeline_run_async", _run_now)
+    monkeypatch.setattr("studio.views.pipeline_helpers._launch_pipeline_run_async", _run_now)
 
     critical_response = client.post(
         f"/api/studio/triggers/{trigger.webhook_token}/receive/",

@@ -17,6 +17,7 @@ from .models import (
     Server,
     ServerAgent,
     ServerAlert,
+    ServerBulkOperation,
     ServerCommandHistory,
     ServerConnection,
     ServerGroup,
@@ -33,6 +34,23 @@ class ServerGroupAdmin(admin.ModelAdmin):
     list_display = ["name", "user", "created_at"]
     list_filter = ["created_at"]
     search_fields = ["name"]
+
+
+@admin.register(ServerBulkOperation)
+class ServerBulkOperationAdmin(admin.ModelAdmin):
+    list_display = [
+        "id",
+        "group",
+        "action",
+        "status",
+        "processed_count",
+        "total_count",
+        "requested_by",
+        "created_at",
+    ]
+    list_filter = ["action", "status", "created_at"]
+    search_fields = ["group__name", "requested_by__username", "claimed_by"]
+    readonly_fields = [field.name for field in ServerBulkOperation._meta.fields]
 
 
 @admin.register(Server)

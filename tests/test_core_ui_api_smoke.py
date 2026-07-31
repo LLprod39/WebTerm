@@ -32,7 +32,12 @@ def test_health_and_anonymous_auth_endpoints():
 
     session = client.get("/api/auth/session/")
     assert session.status_code == 200
-    assert session.json() == {"authenticated": False, "user": None}
+    session_payload = session.json()
+    assert session_payload["success"] is True
+    assert session_payload["code"] == "ok"
+    assert session_payload["data"] == {"authenticated": False, "user": None}
+    assert session_payload["authenticated"] is False
+    assert session_payload["user"] is None
 
     assert client.get("/api/auth/ws-token/").status_code == 404
 

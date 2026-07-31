@@ -17,22 +17,20 @@ from django.utils import timezone
 from loguru import logger
 
 from app.core.llm_context import operator_thinking_mode
-from core_ui.models import ChatTurnState
+from core_ui.models.chat import ChatTurnState, OperatorTurnDispatch
 from core_ui.services.assistant_chat import cancel_action, execute_action, serialize_action
 from core_ui.services.operator_loop import OperatorTurnResult
 from core_ui.services.operator_session import handle_operator_message, resume_after_action
-
-_ACTIVE_TASKS: dict[int, asyncio.Task[Any]] = {}
-_ACTIVE_META: dict[int, dict[str, Any]] = {}
 
 
 def operator_group_name(chat_id: int) -> str:
     return f"operator_chat_{int(chat_id)}"
 
 
-def is_chat_busy(chat_id: int) -> bool:
-    task = _ACTIVE_TASKS.get(int(chat_id))
-    return bool(task and not task.done())
+async def is_chat_busy(chat_id: int) -> bool:
+    from core_ui.services.operator_dispatch import operator_dispatch_busy
+
+    return await sync_to_async(operator_dispatch_busy)(int(chat_id))
 
 
 async def broadcast_operator_event(chat_id: int, event: dict[str, Any]) -> None:
@@ -124,6 +122,15 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
             status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
             updated_at__lt=stale_before,
         ).update(status=ChatTurnState.STATUS_FAILED, error="worker_heartbeat_lost")
+        dispatch = (
+            OperatorTurnDispatch.objects.filter(
+                session_id=chat_id,
+                session__user_id=user_id,
+                status__in={OperatorTurnDispatch.STATUS_QUEUED, OperatorTurnDispatch.STATUS_CLAIMED},
+            )
+            .order_by("-id")
+            .first()
+        )
         turn = (
             ChatTurnState.objects.filter(
                 session_id=chat_id,
@@ -139,8 +146,23 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
             .order_by("-id")
             .first()
         )
-        if turn is None:
+        if turn is None and dispatch is None:
             return None
+        if turn is None:
+            return {
+                "type": "turn_snapshot",
+                "chat_id": chat_id,
+                "turn_id": None,
+                "status": dispatch.status,
+                "iteration": 0,
+                "busy": True,
+                "assistant_message_id": None,
+                "assistant_text": "",
+                "user_message_id": None,
+                "user_text": str((dispatch.payload or {}).get("message") or ""),
+                "pending_action": None,
+                "in_process": dispatch.status == OperatorTurnDispatch.STATUS_CLAIMED,
+            }
         assistant = turn.assistant_message
         user_msg = turn.user_message
         action_payload = None
@@ -158,13 +180,13 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
                 ChatTurnState.STATUS_RESUMING,
                 ChatTurnState.STATUS_AWAITING_ASYNC,
             }
-            or is_chat_busy(chat_id),
+            or dispatch is not None,
             "assistant_message_id": assistant.pk if assistant else None,
             "assistant_text": (assistant.content or "") if assistant else "",
             "user_message_id": user_msg.pk if user_msg else None,
             "user_text": (user_msg.content or "") if user_msg else "",
             "pending_action": action_payload,
-            "in_process": is_chat_busy(chat_id),
+            "in_process": bool(dispatch and dispatch.status == OperatorTurnDispatch.STATUS_CLAIMED),
         }
 
     return await sync_to_async(_load)()
@@ -181,18 +203,9 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
     resolved through the confirm/cancel flow instead.
     """
     chat_id = int(chat_id)
-    task = _ACTIVE_TASKS.pop(chat_id, None)
-    _ACTIVE_META.pop(chat_id, None)
-    cancelled_task = False
-    if task and not task.done():
-        task.cancel()
-        cancelled_task = True
-        try:
-            await asyncio.wait_for(asyncio.shield(task), timeout=5)
-        except (TimeoutError, asyncio.CancelledError) as exc:
-            logger.debug("operator task stop settled with {}", type(exc).__name__)
-        except Exception as exc:  # noqa: BLE001 — task failure still counts as stopped
-            logger.warning("operator task failed while stopping chat_id={}: {}", chat_id, exc)
+    from core_ui.services.operator_dispatch import cancel_operator_dispatches
+
+    canceled_dispatches = await sync_to_async(cancel_operator_dispatches)(chat_id)
 
     def _close_open_turns() -> list[int]:
         qs = ChatTurnState.objects.filter(
@@ -215,7 +228,7 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
         return closed
 
     closed_ids = await sync_to_async(_close_open_turns)()
-    if not (cancelled_task or closed_ids):
+    if not (canceled_dispatches or closed_ids):
         return False
     await broadcast_operator_event(
         chat_id,
@@ -373,8 +386,6 @@ async def _run_message_turn(
             with contextlib.suppress(asyncio.CancelledError):
                 await heartbeat_task
         operator_thinking_mode.reset(token)
-        _ACTIVE_TASKS.pop(int(chat_id), None)
-        _ACTIVE_META.pop(int(chat_id), None)
 
 
 async def _run_action_turn(
@@ -440,11 +451,9 @@ async def _run_action_turn(
         )
     finally:
         operator_thinking_mode.reset(token)
-        _ACTIVE_TASKS.pop(int(chat_id), None)
-        _ACTIVE_META.pop(int(chat_id), None)
 
 
-def start_message_turn(
+async def start_message_turn(
     *,
     chat_id: int,
     session,
@@ -454,25 +463,18 @@ def start_message_turn(
 ) -> bool:
     """Schedule a message turn. Returns False if chat already has a running task."""
     chat_id = int(chat_id)
-    if is_chat_busy(chat_id):
-        return False
     mode = _normalize_thinking(thinking)
-    task = asyncio.create_task(
-        _run_message_turn(
-            chat_id=chat_id,
-            session=session,
-            user=user,
-            message=message,
-            thinking=mode,
-        ),
-        name=f"operator-turn-{chat_id}",
+    from core_ui.services.operator_dispatch import enqueue_operator_message
+
+    dispatch = await sync_to_async(enqueue_operator_message)(
+        session=session,
+        message=message,
+        thinking=mode,
     )
-    _ACTIVE_TASKS[chat_id] = task
-    _ACTIVE_META[chat_id] = {"kind": "message", "thinking": mode}
-    return True
+    return dispatch is not None
 
 
-def start_action_turn(
+async def start_action_turn(
     *,
     chat_id: int,
     action,
@@ -481,19 +483,38 @@ def start_action_turn(
     thinking: Any = None,
 ) -> bool:
     chat_id = int(chat_id)
-    if is_chat_busy(chat_id):
-        return False
     mode = _normalize_thinking(thinking)
-    task = asyncio.create_task(
-        _run_action_turn(
-            chat_id=chat_id,
-            action=action,
-            confirm=confirm,
-            typed_confirm=typed_confirm,
-            thinking=mode,
-        ),
-        name=f"operator-action-{chat_id}",
+    from core_ui.services.operator_dispatch import enqueue_operator_action
+
+    dispatch = await sync_to_async(enqueue_operator_action)(
+        session=action.session,
+        action=action,
+        confirm=confirm,
+        typed_confirm=typed_confirm,
+        thinking=mode,
     )
-    _ACTIVE_TASKS[chat_id] = task
-    _ACTIVE_META[chat_id] = {"kind": "action", "thinking": mode, "confirm": confirm}
-    return True
+    return dispatch is not None
+
+
+async def run_claimed_operator_dispatch(dispatch: OperatorTurnDispatch) -> None:
+    """Execute a lease-owned dispatch without relying on backend-local registries."""
+    payload = dict(dispatch.payload or {})
+    if dispatch.kind == OperatorTurnDispatch.KIND_MESSAGE:
+        await _run_message_turn(
+            chat_id=dispatch.session_id,
+            session=dispatch.session,
+            user=dispatch.session.user,
+            message=str(payload.get("message") or ""),
+            thinking=_normalize_thinking(payload.get("thinking")),
+        )
+        return
+    if dispatch.kind == OperatorTurnDispatch.KIND_ACTION and dispatch.action is not None:
+        await _run_action_turn(
+            chat_id=dispatch.session_id,
+            action=dispatch.action,
+            confirm=bool(payload.get("confirm")),
+            typed_confirm=str(payload.get("typed_confirm") or "").strip() or None,
+            thinking=_normalize_thinking(payload.get("thinking")),
+        )
+        return
+    raise ValueError(f"Unsupported operator dispatch kind: {dispatch.kind}")

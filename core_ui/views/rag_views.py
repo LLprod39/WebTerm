@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from loguru import logger
 
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.views.runtime import get_rag_engine
 
@@ -39,7 +40,7 @@ def rag_add_api(request):
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.error(f"Error in rag_add_api: {exc}")
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -73,10 +74,7 @@ def rag_query_api(request):
             )
         except Exception as exc:
             logger.error(f"Error querying RAG: {exc}")
-            return JsonResponse(
-                {"success": False, "error": f"Query failed: {str(exc)}", "documents": [[]], "metadatas": [[]]},
-                status=500,
-            )
+            return internal_error_response(request, exc)
     except json.JSONDecodeError:
         return JsonResponse(
             {"success": False, "error": "Invalid JSON", "documents": [[]], "metadatas": [[]]},
@@ -84,7 +82,7 @@ def rag_query_api(request):
         )
     except Exception as exc:
         logger.error(f"Error in rag_query_api: {exc}")
-        return JsonResponse({"success": False, "error": str(exc), "documents": [[]], "metadatas": [[]]}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -102,10 +100,10 @@ def rag_reset_api(request):
             return JsonResponse({"success": True, "message": "Database reset successfully"})
         except Exception as exc:
             logger.error(f"Error resetting RAG: {exc}")
-            return JsonResponse({"success": False, "error": f"Reset failed: {str(exc)}"}, status=500)
+            return internal_error_response(request, exc)
     except Exception as exc:
         logger.error(f"Error in rag_reset_api: {exc}")
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required
@@ -129,7 +127,7 @@ def rag_delete_api(request):
         return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     except Exception as exc:
         logger.error(f"Error in rag_delete_api: {exc}")
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
 
 
 @login_required

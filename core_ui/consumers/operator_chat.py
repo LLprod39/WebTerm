@@ -73,7 +73,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             {
                 "type": "ready",
                 "chat_id": self._chat_id,
-                "busy": is_chat_busy(self._chat_id),
+                "busy": await is_chat_busy(self._chat_id),
                 "health": health,
             }
         )
@@ -148,7 +148,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         if self._chat_id is None:
             await self.send_json({"type": "error", "message": "Session not found"})
             return
-        if is_chat_busy(self._chat_id):
+        if await is_chat_busy(self._chat_id):
             await self.send_json({"type": "error", "message": "Turn already in progress"})
             return
 
@@ -161,7 +161,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         # Optimistic ack so UI can show thinking before first model token
         await broadcast_operator_event(self._chat_id, {"type": "turn_started", "chat_id": self._chat_id})
 
-        started = start_message_turn(
+        started = await start_message_turn(
             chat_id=self._chat_id,
             session=session,
             user=user,
@@ -194,7 +194,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         if self._chat_id is None:
             await self.send_json({"type": "error", "message": "Session not found"})
             return
-        if is_chat_busy(self._chat_id):
+        if await is_chat_busy(self._chat_id):
             await self.send_json({"type": "error", "message": "Turn already in progress"})
             return
 
@@ -208,7 +208,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             self._chat_id,
             {"type": "turn_started", "chat_id": self._chat_id, "phase": "action"},
         )
-        started = start_action_turn(
+        started = await start_action_turn(
             chat_id=self._chat_id,
             action=action,
             confirm=confirm,

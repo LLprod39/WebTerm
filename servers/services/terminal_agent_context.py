@@ -8,7 +8,6 @@ used by the terminal flow.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -173,9 +172,6 @@ async def open_agent_target_connection(
             return None
 
         master_password = str(await get_master_password() or "").strip()
-        if not master_password:
-            master_password = (os.environ.get("MASTER_PASSWORD") or "").strip()
-
         secret = await resolve_server_secret(
             server_id=server.id,
             master_password=master_password or "",

@@ -1,5 +1,6 @@
 """Core server inventory and terminal-session models."""
 
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.db import models
 from django.utils import timezone
@@ -45,17 +46,35 @@ class Server(models.Model):
     username = models.CharField(max_length=100)
 
     auth_method = models.CharField(max_length=20, choices=AUTH_METHOD_CHOICES, default="password")
-    encrypted_password = models.TextField(blank=True)  # Encrypted password if using password auth
+    encrypted_password = models.TextField(
+        blank=True,
+        editable=False,
+        help_text="DEPRECATED: migration-only field; remove in the next schema cleanup migration",
+    )
     key_path = models.CharField(max_length=500, blank=True)  # Path to SSH key
-    salt = models.BinaryField(null=True, blank=True)  # For password encryption
+    salt = models.BinaryField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="DEPRECATED: migration-only field; remove in the next schema cleanup migration",
+    )
     sudo_auth_mode = models.CharField(
         max_length=32,
         choices=SUDO_AUTH_MODE_CHOICES,
         default=SUDO_AUTH_MODE_NONE,
         help_text="How backend may satisfy sudo prompts for this server.",
     )
-    encrypted_sudo_password = models.TextField(blank=True)
-    sudo_salt = models.BinaryField(null=True, blank=True)
+    encrypted_sudo_password = models.TextField(
+        blank=True,
+        editable=False,
+        help_text="DEPRECATED: migration-only field; remove in the next schema cleanup migration",
+    )
+    sudo_salt = models.BinaryField(
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="DEPRECATED: migration-only field; remove in the next schema cleanup migration",
+    )
 
     tags = models.CharField(max_length=500, blank=True)  # Comma-separated tags
     notes = models.TextField(blank=True)
@@ -308,6 +327,10 @@ class CommandSnapshot(models.Model):
     command = models.TextField(help_text="Shell command that triggered the snapshot")
     file_path = models.CharField(max_length=1024, help_text="Absolute path on remote server")
     content = models.TextField(blank=True, help_text="File content before modification")
+    content_truncated = models.BooleanField(
+        default=False,
+        help_text="Stored content was truncated at COMMAND_SNAPSHOT_MAX_CONTENT_BYTES and cannot be restored safely",
+    )
     content_hash = models.CharField(
         max_length=64,
         blank=True,
@@ -327,3 +350,15 @@ class CommandSnapshot(models.Model):
 
     def __str__(self):
         return f"snapshot server={self.server_id} {self.file_path} @ {self.created_at}"
+
+    def save(self, *args, **kwargs):
+        content = str(self.content or "")
+        encoded = content.encode("utf-8", errors="replace")
+        max_bytes = max(1024, int(getattr(settings, "COMMAND_SNAPSHOT_MAX_CONTENT_BYTES", 1024 * 1024) or 0))
+        if len(encoded) > max_bytes:
+            self.content = encoded[:max_bytes].decode("utf-8", errors="ignore")
+            self.content_truncated = True
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = set(update_fields) | {"content", "content_truncated"}
+        return super().save(*args, **kwargs)

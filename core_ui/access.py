@@ -185,63 +185,50 @@ def feature_allowed_for_user(
     return feature in DEFAULT_ALLOWED_FEATURES
 
 
-def build_user_access_payload(
-    user,
-    explicit_permissions: dict[str, bool] | None = None,
-    group_permission_sources: dict[str, list[dict[str, Any]]] | None = None,
-) -> dict[str, Any]:
-    features = access_feature_slugs()
-    explicit = explicit_permissions if explicit_permissions is not None else load_user_explicit_permissions(user)
-    group_sources = (
-        group_permission_sources if group_permission_sources is not None else load_group_permission_sources(user)
-    )
-    grouped = summarize_group_permissions(group_sources)
+def _legacy_feature_access(
+    feature: str,
+    explicit: dict[str, bool],
+    grouped: dict[str, bool],
+) -> tuple[bool, str] | None:
+    for legacy_feature in LEGACY_FEATURE_FALLBACKS.get(feature, ()):
+        if legacy_feature in explicit:
+            return bool(explicit[legacy_feature]), f"legacy_{legacy_feature}_user_explicit"
+        if legacy_feature in grouped:
+            return bool(grouped[legacy_feature]), f"legacy_{legacy_feature}_group_explicit"
+    return None
 
+
+def _effective_feature_access(
+    user,
+    features: list[str],
+    explicit: dict[str, bool],
+    grouped: dict[str, bool],
+) -> tuple[dict[str, bool], dict[str, str]]:
     effective: dict[str, bool] = {}
     sources: dict[str, str] = {}
     for feature in features:
         if feature in STAFF_ONLY_FEATURES and not user.is_staff:
-            effective[feature] = False
-            sources[feature] = "staff_required"
+            result = (False, "staff_required")
         elif feature in explicit:
-            effective[feature] = bool(explicit[feature])
-            sources[feature] = "user_explicit"
+            result = (bool(explicit[feature]), "user_explicit")
         elif feature in grouped:
-            effective[feature] = bool(grouped[feature])
-            sources[feature] = "group_explicit"
+            result = (bool(grouped[feature]), "group_explicit")
         else:
-            legacy_features = LEGACY_FEATURE_FALLBACKS.get(feature, ())
-            applied_legacy = False
-            for legacy_feature in legacy_features:
-                if legacy_feature in explicit:
-                    effective[feature] = bool(explicit[legacy_feature])
-                    sources[feature] = f"legacy_{legacy_feature}_user_explicit"
-                    applied_legacy = True
-                    break
-                if legacy_feature in grouped:
-                    effective[feature] = bool(grouped[legacy_feature])
-                    sources[feature] = f"legacy_{legacy_feature}_group_explicit"
-                    applied_legacy = True
-                    break
-            if applied_legacy:
-                continue
-        if feature in effective:
-            continue
-        if feature in EXPLICIT_OPT_IN_FEATURES:
-            effective[feature] = False
-            sources[feature] = "explicit_opt_in"
-            continue
-        if user.is_staff:
-            effective[feature] = True
-            sources[feature] = "staff_default"
-        elif feature == "settings":
-            effective[feature] = False
-            sources[feature] = "settings_opt_in"
-        else:
-            effective[feature] = feature in DEFAULT_ALLOWED_FEATURES
-            sources[feature] = "default_allow" if effective[feature] else "default_deny"
+            result = _legacy_feature_access(feature, explicit, grouped)
+        if result is None and feature in EXPLICIT_OPT_IN_FEATURES:
+            result = (False, "explicit_opt_in")
+        if result is None and user.is_staff:
+            result = (True, "staff_default")
+        if result is None and feature == "settings":
+            result = (False, "settings_opt_in")
+        if result is None:
+            allowed = feature in DEFAULT_ALLOWED_FEATURES
+            result = (allowed, "default_allow" if allowed else "default_deny")
+        effective[feature], sources[feature] = result
+    return effective, sources
 
-    profile = "custom"
+
+def _access_profile_for(user, effective: dict[str, bool]) -> str:
     for profile_name in (
         "pilot_user",
         "operator_server_only",
@@ -250,17 +237,41 @@ def build_user_access_payload(
         "platform_admin",
     ):
         if user.is_staff == PROFILE_STAFF_FLAGS[profile_name] and effective == access_profile_permissions(profile_name):
-            profile = profile_name
-            break
+            return profile_name
+    if effective.get("servers") and all(not allowed for name, allowed in effective.items() if name != "servers"):
+        return "server_only"
+    if user.is_staff and all(effective.values()):
+        return "admin_full"
+    return "custom"
 
-    if profile != "custom":
-        pass
-    elif effective.get("servers") and all(not allowed for name, allowed in effective.items() if name != "servers"):
-        profile = "server_only"
-    elif user.is_staff and all(effective.values()):
-        profile = "admin_full"
 
-    return {
+def build_user_access_payload(
+    user,
+    explicit_permissions: dict[str, bool] | None = None,
+    group_permission_sources: dict[str, list[dict[str, Any]]] | None = None,
+    *,
+    request=None,
+) -> dict[str, Any]:
+    use_request_cache = request is not None and explicit_permissions is None and group_permission_sources is None
+    cache_key = getattr(user, "pk", None)
+    if use_request_cache:
+        cache = getattr(request, "_webterm_access_payload_cache", None)
+        if cache is None:
+            cache = {}
+            request._webterm_access_payload_cache = cache
+        if cache_key in cache:
+            return cache[cache_key]
+    features = access_feature_slugs()
+    explicit = explicit_permissions if explicit_permissions is not None else load_user_explicit_permissions(user)
+    group_sources = (
+        group_permission_sources if group_permission_sources is not None else load_group_permission_sources(user)
+    )
+    grouped = summarize_group_permissions(group_sources)
+
+    effective, sources = _effective_feature_access(user, features, explicit, grouped)
+    profile = _access_profile_for(user, effective)
+
+    payload = {
         "effective_permissions": effective,
         "explicit_permissions": explicit,
         "group_permissions": grouped,
@@ -268,3 +279,6 @@ def build_user_access_payload(
         "permission_sources": sources,
         "access_profile": profile,
     }
+    if use_request_cache:
+        request._webterm_access_payload_cache[cache_key] = payload
+    return payload

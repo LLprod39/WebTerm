@@ -158,6 +158,7 @@ def list_snapshots(
             "file_path": r.file_path,
             "command": r.command,
             "byte_size": r.byte_size,
+            "content_truncated": r.content_truncated,
             "content_hash": r.content_hash,
             "created_at": r.created_at.isoformat(),
             "restored_at": r.restored_at.isoformat() if r.restored_at else None,
@@ -182,6 +183,7 @@ def get_snapshot_detail(snapshot_id: int) -> dict | None:
         "command": r.command,
         "content": r.content,
         "byte_size": r.byte_size,
+        "content_truncated": r.content_truncated,
         "content_hash": r.content_hash,
         "created_at": r.created_at.isoformat(),
         "restored_at": r.restored_at.isoformat() if r.restored_at else None,
@@ -199,6 +201,8 @@ def build_restore_command(snapshot_id: int) -> str | None:
     try:
         snap = CommandSnapshot.objects.get(pk=snapshot_id)
     except CommandSnapshot.DoesNotExist:
+        return None
+    if snap.content_truncated:
         return None
     if not snap.content and not snap.file_path:
         return None

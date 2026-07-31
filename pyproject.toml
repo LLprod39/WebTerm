@@ -95,11 +95,6 @@ contract_file = "docs/architecture/ARCHITECTURE_CONTRACT.md"
 [tool.importlinter]
 config_filename = ".importlinter"
 
-# Legacy baseline pins: files listed here existed before the size limit was
-# introduced.  They are allowed to remain at their current size but must NOT
-# grow.  Remove a file from this list once it has been refactored under the
-# standard limit.
-# F-09 (GER-22): product/app/frontend size debt closed. Only tooling fixture pin
-# remains (not product surface); must not grow.
+# Line count is diagnostic only. Complexity and module coupling are the
+# blocking fitness metrics; no file receives a legacy size exemption.
 [tool.architecture.legacy_baselines]
-".tools/k8s-provider-fixture.py" = 771

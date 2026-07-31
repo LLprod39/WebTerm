@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from asgiref.sync import async_to_sync
 
 from servers.consumers import SSHTerminalConsumer
+from servers.consumers.ssh_terminal import TerminalTransport
 from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 from servers.services.terminal_ai.state import TerminalAiState
@@ -55,10 +56,20 @@ def _build_consumer() -> SSHTerminalConsumer:
 
 
 def _patch_terminal_io(monkeypatch, persisted: list[dict]) -> None:
-    monkeypatch.setattr("servers.consumers.ssh_terminal.log_user_activity_async", _fake_log_user_activity_async)
-    monkeypatch.setattr("servers.consumers.ssh_terminal.database_sync_to_async", _immediate_sync_to_async)
     monkeypatch.setattr(
-        SSHTerminalConsumer,
+        "servers.consumers.ssh_terminal_session_ops.log_user_activity_async",
+        _fake_log_user_activity_async,
+    )
+    monkeypatch.setattr(
+        "servers.consumers.ssh_terminal_session_ops.database_sync_to_async",
+        _immediate_sync_to_async,
+    )
+    monkeypatch.setattr(
+        "servers.consumers.ssh_terminal_io.database_sync_to_async",
+        _immediate_sync_to_async,
+    )
+    monkeypatch.setattr(
+        TerminalTransport,
         "_persist_manual_terminal_command_result",
         staticmethod(lambda **kwargs: persisted.append(kwargs)),
     )

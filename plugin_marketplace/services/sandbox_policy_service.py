@@ -24,9 +24,12 @@ DEPENDENCY_MANIFEST_NAMES = {
 DYNAMIC_RENDERERS = {"html", "javascript", "remote", "iframe", "iframe_sandbox", "web_worker"}
 
 
-def sandbox_settings() -> dict[str, bool]:
+def sandbox_settings() -> dict[str, Any]:
     return {
         "backend_sandbox_enabled": bool(getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_ENABLED", False)),
+        "backend_execution_provider": str(
+            getattr(settings, "PLUGIN_MARKETPLACE_BACKEND_SANDBOX_PROVIDER", "disabled") or "disabled"
+        ).strip(),
         "frontend_sandbox_enabled": bool(getattr(settings, "PLUGIN_MARKETPLACE_FRONTEND_SANDBOX_ENABLED", False)),
         "allow_sandboxed_code_packages": bool(
             getattr(settings, "PLUGIN_MARKETPLACE_ALLOW_SANDBOXED_CODE_PACKAGES", False)
@@ -117,9 +120,9 @@ def sandbox_policy_for_package(package: PluginPackage) -> dict[str, Any]:
         frontend_bundle_policy["required"]
     )
     if (requires_backend or requires_frontend) and not current["allow_sandboxed_code_packages"]:
-        blockers.append("Sandboxed code packages are not allowed by policy.")
+        blockers.append("Executable plugin packages are not allowed by policy.")
     if requires_backend and not current["backend_sandbox_enabled"]:
-        blockers.append("Backend sandbox runtime is not enabled.")
+        blockers.append("Plugin backend code execution is not enabled.")
     if requires_frontend and not current["frontend_sandbox_enabled"]:
         blockers.append("Frontend sandbox runtime is not enabled.")
     dependency_scan = package.dependency_scan if isinstance(package.dependency_scan, dict) else {}
@@ -156,4 +159,4 @@ def sandbox_policy_for_package(package: PluginPackage) -> dict[str, Any]:
 
 
 def sandbox_enable_blockers(package: PluginPackage) -> list[str]:
-    return [f"Sandbox policy: {item}" for item in sandbox_policy_for_package(package)["blockers"]]
+    return [f"Code execution policy: {item}" for item in sandbox_policy_for_package(package)["blockers"]]

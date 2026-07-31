@@ -7,6 +7,7 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from app.assistant_actions import AssistantActionError
+from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import AssistantAction
 from core_ui.services.assistant_chat import (
@@ -195,9 +196,11 @@ def api_assistant_chat_message(request, chat_id: int):
     try:
         result = handle_user_message(session, request.user, message, request=request)
     except AssistantActionError as exc:
+        if exc.status >= 500:
+            return internal_error_response(request, exc, status=exc.status)
         return _err(exc.message, exc.status)
     except Exception as exc:
-        return _err(str(exc), 400)
+        return internal_error_response(request, exc)
 
     return JsonResponse(
         {
@@ -226,9 +229,11 @@ def api_assistant_chat_create_and_message(request):
         result = handle_user_message(session, request.user, message, request=request)
     except AssistantActionError as exc:
         session.delete()
+        if exc.status >= 500:
+            return internal_error_response(request, exc, status=exc.status)
         return _err(exc.message, exc.status)
     except Exception as exc:
-        return _err(str(exc), 400)
+        return internal_error_response(request, exc)
     return JsonResponse(
         {
             "chat": serialize_chat_session(session),

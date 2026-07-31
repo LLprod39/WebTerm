@@ -21,6 +21,7 @@ class TerminalTransportState:
     heartbeat_task: asyncio.Task[None] | None = None
     connect_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     server_connection_id: str | None = None
+    access_group_name: str = ""
     terminal_tail: str = ""
     marker_suppress: dict[str, bool] = field(default_factory=lambda: {"stdout": False, "stderr": False})
     marker_line_buffer: dict[str, str] = field(default_factory=lambda: {"stdout": "", "stderr": ""})
@@ -37,6 +38,7 @@ class TerminalTransportState:
         self.heartbeat_task = None
         self.connect_lock = asyncio.Lock()
         self.server_connection_id = None
+        self.access_group_name = ""
         self.terminal_tail = ""
         self.marker_suppress = {"stdout": False, "stderr": False}
         self.marker_line_buffer = {"stdout": "", "stderr": ""}

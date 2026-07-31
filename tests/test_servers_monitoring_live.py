@@ -17,12 +17,6 @@ from servers.monitoring.monitoring_live import (
 from tests.servers_api_smoke_harness import create_server, grant_feature
 
 
-def test_legacy_monitoring_live_module_reexports_public_api():
-    from servers import monitoring_live as legacy_monitoring_live
-
-    assert legacy_monitoring_live.LiveMetricsManager is LiveMetricsManager
-
-
 def test_parse_live_line_full_sample():
     line = "LIVE|cpu  1230 5 456 7890 100 0 12 3|0.42 0.30 0.25|16384256 8192128|63"
     sample = parse_live_line(line)

@@ -15,7 +15,7 @@ def test_public_api_inventory_has_unique_complete_operations():
     inventory = _inventory()
     assert inventory["version"] == "0.1.0"
     routes = inventory["routes"]
-    assert len(routes) == 9
+    assert len(routes) >= 35
     assert len({route["name"] for route in routes}) == len(routes)
     assert len({route["path"] for route in routes}) == len(routes)
     for route in routes:

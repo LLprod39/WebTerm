@@ -16,9 +16,7 @@ is not an architecture fix.
 
 Monitoring, forecasting, live telemetry and watcher implementations live in
 `servers.monitoring`. That package must not depend on HTTP views, websocket
-consumers, or `studio`. The historical `servers.monitor` and
-`servers.monitoring_live` modules remain compatibility facades for supported
-public imports while internal callers use the domain package directly.
+consumers, or `studio`; callers import the defining domain module directly.
 
 Agent execution, scheduling, reporting and multi-agent orchestration live in
 `servers.agents`. The package is independent from HTTP views and websocket
@@ -27,21 +25,17 @@ lazy package exports so importing an agent submodule has no startup side effects
 
 Operator read tools, mutating actions and the server-side provider live in
 `servers.operator`. Operator may call agent and monitoring services, while the
-reverse dependency is forbidden. Its historical `servers.operator_tools` and
-`servers.operator_provider` imports remain compatibility facades.
+reverse dependency is forbidden.
 
 Durable playbook leasing and execution live in `servers.playbooks`, below HTTP,
-websocket and orchestration layers. The historical `servers.playbook_dispatch`
-and `servers.playbook_execution_worker` names are module aliases, preserving
-both ordinary imports and monkeypatch behavior.
+websocket and orchestration layers.
 
 Studio validation, execution, runtime state and interaction services live in
 `studio.pipeline`, independent from HTTP/websocket delivery and the `servers`
-feature app. Six established pipeline module names remain compatibility aliases.
+feature app.
 
 MCP clients, subprocess/network policy, tool binding and demo adapters live in
-`studio.mcp`, independent from HTTP/websocket delivery and `servers`. The four
-established MCP client/security module names remain compatibility aliases.
+`studio.mcp`, independent from HTTP/websocket delivery and `servers`.
 
 Pipeline action classification, approval decisions and policy audit metadata
 live in the leaf package `studio.policy`. Pipeline execution may depend on this
@@ -76,7 +70,7 @@ Run both views of the gate:
 
 ```bash
 python scripts/check_architecture_no_regression.py
-python scripts/check_architecture_sizes.py --strict-new
+python scripts/check_architecture_sizes.py
 ```
 
 ## Current status
@@ -84,13 +78,12 @@ python scripts/check_architecture_sizes.py --strict-new
 **Architecture fitness (2026-07-30): complexity/coupling gate green.**
 
 - All sixteen import contracts kept; 0 forbidden import edges.
-- `python scripts/check_architecture_sizes.py --strict-new` → **SUCCESS**
+- `python scripts/check_architecture_sizes.py` → **SUCCESS**
   (110 frozen complexity/coupling violations, 0 new or grown violations).
 - `python scripts/check_architecture_no_regression.py` → **0 frozen size
   violations**, 0 frozen import edges.
-- Product/app/frontend/tests modules are under the 500-line review target. The
-  only remaining line baseline pin is `.tools/k8s-provider-fixture.py`; line
-  count no longer decides pass/fail.
+- No file has a legacy size pin. Files over 500 lines remain visible warnings,
+  while line count never decides pass/fail.
 
 Every split must preserve public imports and behavior with characterization
 tests before the extraction, update both debt baselines downward only, and run

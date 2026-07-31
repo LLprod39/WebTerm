@@ -208,12 +208,12 @@ class RequestAuditMiddleware:
         with scope or contextlib.nullcontext(), self._logger_scope(request):
             try:
                 response = self.get_response(request)
-            except Exception as exc:
+            except Exception:
                 self._log_request(
                     request,
                     status_code=500,
                     duration_ms=int((time.monotonic() - start_ts) * 1000),
-                    error_text=str(exc),
+                    error_text="internal_error",
                 )
                 raise
             response = self._attach_request_id(response, request_id)
@@ -232,12 +232,12 @@ class RequestAuditMiddleware:
         with scope or contextlib.nullcontext(), self._logger_scope(request):
             try:
                 response = await self.get_response(request)
-            except Exception as exc:
+            except Exception:
                 self._log_request(
                     request,
                     status_code=500,
                     duration_ms=int((time.monotonic() - start_ts) * 1000),
-                    error_text=str(exc),
+                    error_text="internal_error",
                 )
                 raise
             response = self._attach_request_id(response, request_id)

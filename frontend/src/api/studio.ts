@@ -70,6 +70,11 @@ export const studioRuns = {
   list: () => apiFetch<PipelineRun[]>("/api/studio/runs/"),
   get: (id: number) => apiFetch<PipelineRun>(`/api/studio/runs/${id}/`),
   stop: (id: number) => apiFetch<{ ok: boolean }>(`/api/studio/runs/${id}/stop/`, { method: "POST" }),
+  resume: (id: number, confirmNonIdempotent: boolean) =>
+    apiFetch<{ ok: boolean; run: PipelineRun }>(`/api/studio/runs/${id}/resume/`, {
+      method: "POST",
+      body: JSON.stringify({ confirm_non_idempotent: confirmNonIdempotent }),
+    }),
 };
 
 // Agent Configs

@@ -24,7 +24,7 @@ from servers.services.terminal_ai.plan_insertions import (
 _TermSize = terminal_input.TerminalSize
 
 
-class SSHTerminalAiToolsMixin:
+class TerminalAiToolOperations:
     async def _handle_ai_explain_output(self, content: dict[str, Any]):
         """A6: turn a (command, output, exit_code) triple into a short
         human-readable explanation via the cheap ``terminal_chat`` bucket.

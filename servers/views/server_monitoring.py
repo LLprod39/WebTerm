@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.activity import log_user_activity
+from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import Server, ServerAlert, ServerHealthCheck
@@ -341,12 +342,12 @@ def server_health_check_now(request, server_id):
             health_check = results[0]
     except Exception as exc:
         cache.delete(lock_key)
-        return JsonResponse({"success": False, "error": str(exc)}, status=500)
+        return internal_error_response(request, exc)
     finally:
         cache.delete(lock_key)
 
     if not health_check:
-        return JsonResponse({"success": False, "error": "Check returned no result"}, status=500)
+        return internal_error_response(request, RuntimeError("Health check returned no result"))
 
     cache.set(recent_key, health_check.id, timeout=cooldown_seconds)
 

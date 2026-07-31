@@ -17,21 +17,12 @@ from core_ui.services.operator_async import (
     resume_turns_for_agent_run,
 )
 from servers.operator.mutate_tools import register_operator_mutate_tools
-from servers.operator.provider import ServersOperatorProvider
 from servers.operator.tools import register_operator_tools
 
 
 def _grant(user: User, *features: str) -> None:
     for feature in features:
         UserAppPermission.objects.update_or_create(user=user, feature=feature, defaults={"allowed": True})
-
-
-def test_legacy_operator_modules_reexport_public_api():
-    from servers import operator_provider as legacy_provider
-    from servers import operator_tools as legacy_tools
-
-    assert legacy_tools.register_operator_tools is register_operator_tools
-    assert legacy_provider.ServersOperatorProvider is ServersOperatorProvider
 
 
 @pytest.mark.django_db

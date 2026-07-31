@@ -242,11 +242,14 @@ def test_server_test_and_execute_endpoints_use_mocked_ssh(monkeypatch):
         assert sudo_password == ""
         return {"stdout": "Linux test\n", "stderr": "", "exit_code": 0, "success": True}
 
-    monkeypatch.setattr("servers.views.ssh_manager.connect", fake_connect)
-    monkeypatch.setattr("servers.views.ssh_manager.disconnect", fake_disconnect)
+    monkeypatch.setattr("servers.views.server_ops.ssh_manager.connect", fake_connect)
+    monkeypatch.setattr("servers.views.server_ops.ssh_manager.disconnect", fake_disconnect)
     monkeypatch.setattr("servers.views.server_ops.probe_server_host_key", fake_probe)
     monkeypatch.setattr("app.tools.ssh_tools.SSHExecuteTool.execute", fake_execute)
-    monkeypatch.setattr("servers.views.ServerCommandHistory.objects.create", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        "servers.views.server_ops.ServerCommandHistory.objects.create",
+        lambda *args, **kwargs: None,
+    )
     monkeypatch.setattr("servers.os_detect_service.schedule_os_detect_for_server_ids", lambda *_args, **_kwargs: None)
 
     test_connection = client.post(

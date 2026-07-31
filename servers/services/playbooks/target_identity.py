@@ -108,10 +108,6 @@ def target_connection_identity_hashes(servers: Iterable[Any]) -> dict[str, str]:
             "credential_revision": _hash_payload(
                 {
                     "managed": managed_revisions.get(int(server.id), []),
-                    "legacy_password": _value_fingerprint(getattr(server, "encrypted_password", "")),
-                    "legacy_password_salt": _value_fingerprint(getattr(server, "salt", None)),
-                    "legacy_sudo_password": _value_fingerprint(getattr(server, "encrypted_sudo_password", "")),
-                    "legacy_sudo_salt": _value_fingerprint(getattr(server, "sudo_salt", None)),
                     "key_file": _key_file_revision(getattr(server, "key_path", "")),
                 }
             ),

@@ -1,69 +1,44 @@
 {
   "version": "0.1.0",
-  "policy": "Only the routes listed here are declared stable for the v0.1 lifecycle.",
+  "policy": "The routes listed here use the stable success/data-or-error/code envelope for the v0.1 lifecycle.",
   "routes": [
-    {
-      "name": "api_health",
-      "path": "/api/health/",
-      "methods": ["GET"],
-      "access": "public",
-      "view": "core_ui.views.health_views.api_health"
-    },
-    {
-      "name": "api_auth_csrf",
-      "path": "/api/auth/csrf/",
-      "methods": ["GET"],
-      "access": "public",
-      "view": "core_ui.views.auth_views.api_auth_csrf"
-    },
-    {
-      "name": "api_auth_session",
-      "path": "/api/auth/session/",
-      "methods": ["GET"],
-      "access": "public",
-      "view": "core_ui.views.auth_views.api_auth_session"
-    },
-    {
-      "name": "api_auth_login",
-      "path": "/api/auth/login/",
-      "methods": ["POST"],
-      "access": "public-with-csrf",
-      "view": "core_ui.views.auth_views.api_auth_login"
-    },
-    {
-      "name": "api_auth_logout",
-      "path": "/api/auth/logout/",
-      "methods": ["POST"],
-      "access": "session-with-csrf",
-      "view": "core_ui.views.auth_views.api_auth_logout"
-    },
-    {
-      "name": "api_settings_readiness",
-      "path": "/api/settings/readiness/",
-      "methods": ["GET"],
-      "access": "staff-and-settings-permission",
-      "view": "web_ui.views.settings_readiness_views.api_settings_readiness"
-    },
-    {
-      "name": "servers:server_list",
-      "path": "/servers/",
-      "methods": ["GET"],
-      "access": "session-and-servers-permission",
-      "view": "servers.views.server_pages.server_list"
-    },
-    {
-      "name": "servers:frontend_bootstrap",
-      "path": "/servers/api/frontend/bootstrap/",
-      "methods": ["GET"],
-      "access": "session",
-      "view": "servers.views.server_pages.frontend_bootstrap"
-    },
-    {
-      "name": "servers:monitoring_dashboard",
-      "path": "/servers/api/monitoring/dashboard/",
-      "methods": ["GET"],
-      "access": "session-and-dashboard-permission",
-      "view": "servers.views.server_monitoring.monitoring_dashboard"
-    }
+    {"name":"api_health","path":"/api/health/","methods":["GET"],"access":"public","view":"core_ui.views.health_views.api_health"},
+    {"name":"api_ready","path":"/api/ready/","methods":["GET"],"access":"public","view":"core_ui.views.health_views.api_ready"},
+    {"name":"api_auth_csrf","path":"/api/auth/csrf/","methods":["GET"],"access":"public","view":"core_ui.views.auth_views.api_auth_csrf"},
+    {"name":"api_auth_session","path":"/api/auth/session/","methods":["GET"],"access":"public","view":"core_ui.views.auth_views.api_auth_session"},
+    {"name":"api_auth_login","path":"/api/auth/login/","methods":["POST"],"access":"public-with-csrf","view":"core_ui.views.auth_views.api_auth_login"},
+    {"name":"api_auth_logout","path":"/api/auth/logout/","methods":["POST"],"access":"session-with-csrf","view":"core_ui.views.auth_views.api_auth_logout"},
+    {"name":"api_settings_readiness","path":"/api/settings/readiness/","methods":["GET"],"access":"staff-and-settings-permission","view":"web_ui.views.settings_readiness_views.api_settings_readiness"},
+    {"name":"api_settings","path":"/api/settings/","methods":["GET","POST"],"access":"staff-and-settings-permission","view":"core_ui.views.settings_config_views.api_settings"},
+    {"name":"api_settings_check","path":"/api/settings/check/","methods":["POST"],"access":"staff-and-settings-permission","view":"core_ui.views.settings_config_views.api_settings_check"},
+    {"name":"api_models","path":"/api/models/","methods":["GET"],"access":"session","view":"core_ui.views.model_views.api_models_list"},
+    {"name":"api_projects","path":"/api/projects/","methods":["GET","POST"],"access":"session","view":"core_ui.views.project_views.api_projects"},
+    {"name":"api_access_users","path":"/api/access/users/","methods":["GET","POST"],"access":"staff-and-settings-permission","view":"core_ui.views.access_views.api_access_users"},
+    {"name":"api_access_groups","path":"/api/access/groups/","methods":["GET","POST"],"access":"staff-and-settings-permission","view":"core_ui.views.access_group_views.api_access_groups"},
+    {"name":"api_access_permissions","path":"/api/access/permissions/","methods":["GET"],"access":"staff-and-settings-permission","view":"core_ui.views.access_group_views.api_access_permissions"},
+    {"name":"api_terminal_preferences","path":"/api/terminal/preferences/","methods":["GET","POST"],"access":"session","view":"core_ui.views.terminal_preferences.api_terminal_preferences"},
+    {"name":"api_assistant_chats","path":"/api/assistant/chats/","methods":["GET","POST"],"access":"session","view":"core_ui.views.assistant_chat_views.api_assistant_chats"},
+    {"name":"api_assistant_duty","path":"/api/assistant/duty/","methods":["GET","POST"],"access":"session","view":"core_ui.views.assistant_chat_views.api_assistant_duty"},
+    {"name":"servers:server_list","path":"/servers/","methods":["GET"],"access":"session-and-servers-permission","response":"html","view":"servers.views.server_pages.server_list"},
+    {"name":"servers:frontend_bootstrap","path":"/servers/api/frontend/bootstrap/","methods":["GET"],"access":"session","view":"servers.views.server_pages.frontend_bootstrap"},
+    {"name":"servers:monitoring_dashboard","path":"/servers/api/monitoring/dashboard/","methods":["GET"],"access":"session-and-dashboard-permission","view":"servers.views.server_monitoring.monitoring_dashboard"},
+    {"name":"servers:server_create","path":"/servers/api/create/","methods":["POST"],"access":"session-and-servers-permission","view":"servers.views.server_crud.server_create"},
+    {"name":"servers:server_detect_os_batch","path":"/servers/api/detect-os/batch/","methods":["POST"],"access":"session-and-servers-permission","view":"servers.views.server_ops.server_detect_os_batch"},
+    {"name":"studio:capabilities","path":"/api/studio/capabilities/","methods":["GET"],"access":"session","view":"studio.views.capability_views.api_capabilities"},
+    {"name":"studio:node_manifests","path":"/api/studio/node-manifests/","methods":["GET"],"access":"session","view":"studio.views.capability_views.api_node_manifests"},
+    {"name":"studio:readiness","path":"/api/studio/readiness/","methods":["GET"],"access":"session","view":"studio.views.capability_views.api_readiness"},
+    {"name":"studio:pipelines","path":"/api/studio/pipelines/","methods":["GET","POST"],"access":"session-and-studio-permission","view":"studio.views.pipeline_views.api_pipelines"},
+    {"name":"studio:runs","path":"/api/studio/runs/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.run_views.api_runs"},
+    {"name":"studio:agents","path":"/api/studio/agents/","methods":["GET","POST"],"access":"session-and-studio-permission","view":"studio.views.agent_views.api_agents"},
+    {"name":"studio:skills","path":"/api/studio/skills/","methods":["GET","POST"],"access":"session-and-studio-permission","view":"studio.views.skill_views.api_skills"},
+    {"name":"studio:skill_templates","path":"/api/studio/skills/templates/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.skill_views.api_skill_templates"},
+    {"name":"studio:share_users","path":"/api/studio/share-users/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.share_views.api_share_users"},
+    {"name":"studio:mcp_list","path":"/api/studio/mcp/","methods":["GET","POST"],"access":"session-and-studio-permission","view":"studio.views.mcp_views.api_mcp_list"},
+    {"name":"studio:mcp_templates","path":"/api/studio/mcp/templates/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.mcp_views.api_mcp_templates"},
+    {"name":"studio:triggers","path":"/api/studio/triggers/","methods":["GET","POST"],"access":"session-and-studio-permission","view":"studio.views.trigger_views.api_triggers"},
+    {"name":"studio:trigger_receive_header","path":"/api/studio/triggers/receive/","methods":["POST"],"access":"public-token","view":"studio.views.trigger_views.api_trigger_receive"},
+    {"name":"studio:templates","path":"/api/studio/templates/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.template_views.api_templates"},
+    {"name":"studio:servers","path":"/api/studio/servers/","methods":["GET"],"access":"session-and-studio-permission","view":"studio.views.server_views.api_studio_servers"},
+    {"name":"studio:notifications","path":"/api/studio/notifications/","methods":["GET","PUT"],"access":"session-and-studio-permission","view":"studio.views.notification_views.api_notification_settings"}
   ]
 }
