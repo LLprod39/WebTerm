@@ -4,7 +4,7 @@ from collections import Counter
 from typing import Any
 
 from app.background_workers import STUDIO_WORKER_SPECS
-from app.worker_state import serialize_background_worker_state
+from app.worker_state import serialize_background_worker_kind_state
 from core_ui.projects import active_project_for_user
 from plugin_marketplace.services.install_service import enabled_plugin_ids_for_user
 from studio import readiness_issues as ri
@@ -194,7 +194,7 @@ def _worker_requirements(
     requirements = []
     for worker, count in sorted(required.items()):
         spec = STUDIO_WORKER_SPECS[worker]
-        state = serialize_background_worker_state(spec["worker_kind"])
+        state = serialize_background_worker_kind_state(spec["worker_kind"])
         ready = state["status"] == "running" and not state["is_stale"]
         item = {
             "worker": worker,

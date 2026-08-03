@@ -173,9 +173,8 @@ def cleanup_stale_background_workers(worker_kind: str | None = None) -> int:
     return count
 
 
-def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "default") -> dict[str, Any]:
+def _serialize_background_worker_state(worker_kind: str, worker_key: str, state: Any | None) -> dict[str, Any]:
     model = _worker_state_model()
-    state = model.objects.filter(worker_kind=worker_kind, worker_key=worker_key).first()
     if state is None:
         return {
             "worker_kind": worker_kind,
@@ -214,3 +213,28 @@ def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "de
         "last_summary": state.last_summary or {},
         "last_error": state.last_error or "",
     }
+
+
+def serialize_background_worker_state(worker_kind: str, *, worker_key: str = "default") -> dict[str, Any]:
+    model = _worker_state_model()
+    state = model.objects.filter(worker_kind=worker_kind, worker_key=worker_key).first()
+    return _serialize_background_worker_state(worker_kind, worker_key, state)
+
+
+def serialize_background_worker_kind_state(worker_kind: str) -> dict[str, Any]:
+    """Return the best available replica state for a worker kind."""
+
+    model = _worker_state_model()
+    now = timezone.now()
+    states = list(model.objects.filter(worker_kind=worker_kind).order_by("-updated_at", "worker_key"))
+    state = next(
+        (
+            item
+            for item in states
+            if item.status == model.STATUS_RUNNING
+            and item.lease_expires_at is not None
+            and item.lease_expires_at > now
+        ),
+        states[0] if states else None,
+    )
+    return _serialize_background_worker_state(worker_kind, "*", state)

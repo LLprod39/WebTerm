@@ -320,7 +320,7 @@ def test_readiness_marks_required_workers_ready_when_heartbeating():
         STUDIO_SCHEDULED_PIPELINES_WORKER,
         STUDIO_TELEGRAM_BOT_WORKER,
     ):
-        heartbeat_background_worker(worker_kind, lease_seconds=180)
+        heartbeat_background_worker(worker_kind, worker_key=f"production-{worker_kind}", lease_seconds=180)
     client = Client()
     client.force_login(user)
 
@@ -331,6 +331,7 @@ def test_readiness_marks_required_workers_ready_when_heartbeating():
     assert payload["status"] == "ready"
     assert payload["summary"]["worker_not_ready_count"] == 0
     assert all(item["ready"] is True for item in payload["worker_requirements"])
+    assert all(item["state"]["worker_key"].startswith("production-") for item in payload["worker_requirements"])
 
 
 def test_readiness_reports_missing_integration_requirements(monkeypatch):
