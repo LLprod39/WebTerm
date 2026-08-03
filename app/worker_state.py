@@ -231,9 +231,7 @@ def serialize_background_worker_kind_state(worker_kind: str) -> dict[str, Any]:
         (
             item
             for item in states
-            if item.status == model.STATUS_RUNNING
-            and item.lease_expires_at is not None
-            and item.lease_expires_at > now
+            if item.status == model.STATUS_RUNNING and item.lease_expires_at is not None and item.lease_expires_at > now
         ),
         states[0] if states else None,
     )
