@@ -1,6 +1,6 @@
 ---
 name: Kubernetes Safety Workflow
-description: Safe operating workflow for Kubernetes MCP tasks: read-only evidence first, no direct production mutation without approval, and verification after any approved change.
+description: "Safe operating workflow for Kubernetes MCP tasks: read-only evidence first, no direct production mutation without approval, and verification after any approved change."
 service: kubernetes
 category: Infrastructure and Operations
 safety_level: high

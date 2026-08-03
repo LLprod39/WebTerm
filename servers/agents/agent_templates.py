@@ -101,10 +101,10 @@ AGENT_TEMPLATES: dict[str, dict[str, Any]] = {
     "service_health": {
         "name": "Здоровье сервисов",
         "commands": [
-            "systemctl list-units --type=service --state=running --no-pager --plain 2>/dev/null | head -30",
-            "systemctl list-units --type=service --state=failed --no-pager --plain 2>/dev/null || true",
-            "systemctl list-units --type=service --state=inactive --no-pager --plain 2>/dev/null | head -15 || true",
-            "journalctl -b --no-pager -q -p 3 2>/dev/null | grep -i 'service' | tail -15 || true",
+            "systemctl list-units --type=service --state=running --no-pager --plain | head -30",
+            "systemctl list-units --type=service --state=failed --no-pager --plain || true",
+            "systemctl list-units --type=service --state=inactive --no-pager --plain | head -15 || true",
+            "journalctl -b --no-pager -q -p 3 | grep -i 'service' | tail -15 || true",
         ],
         "ai_prompt": (
             "Ты — системный администратор. Проверь:\n"

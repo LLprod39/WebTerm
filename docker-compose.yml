@@ -98,6 +98,12 @@ x-backend-worker: &backend-worker
     - playbook_validator_socket:/run/playbook-validator
     - mars_codex_home:/mars-codex-home
     - mars_gemini_home:/mars-gemini-home
+  # Контейнер работает под uid 10001, а docker.sock смонтирован как root:root 0660.
+  # Без группы владельца сокета любой `docker image inspect` внутри воркера падает с
+  # permission denied, и изолированный Ansible-образ выглядит как «недоступный».
+  # На Docker Desktop (WSL2) gid сокета = 0; на Linux-хосте задайте DOCKER_SOCKET_GID.
+  group_add:
+    - "${DOCKER_SOCKET_GID:-0}"
   depends_on:
     backend:
       condition: service_healthy
@@ -105,6 +111,10 @@ x-backend-worker: &backend-worker
       condition: service_healthy
     postgres:
       condition: service_healthy
+  # Worker processes do not expose the backend HTTP readiness endpoint.
+  # Disable the image-level web healthcheck for every service using this anchor.
+  healthcheck:
+    disable: true
   restart: unless-stopped
 
 services:
@@ -176,6 +186,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-weu}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-weu_secret_change_me}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-local-compose-only-change-this-secret-before-public-deploy-2026-03-12}
+      # Тот же ключ, что и у воркеров (см. x-backend-worker): production-настройки
+      # требуют MANAGED_SECRET_KEY, и все процессы обязаны шифровать секреты одинаково.
+      MANAGED_SECRET_KEY: ${MANAGED_SECRET_KEY:-${DJANGO_SECRET_KEY:-django-insecure-@b9idj_4skbcph+21q6^bc0qbs*$$qs&@7r2sqfn*1#)z5_i%my}}
       CHANNEL_REDIS_URL: redis://redis:6379/1
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -227,6 +240,10 @@ services:
       - playbook_validator_socket:/run/playbook-validator
       - mars_codex_home:/mars-codex-home
       - mars_gemini_home:/mars-gemini-home
+    # См. комментарий в x-backend-worker: без группы владельца docker.sock
+    # процесс под uid 10001 не видит Docker API.
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
     depends_on:
       postgres:
         condition: service_healthy
