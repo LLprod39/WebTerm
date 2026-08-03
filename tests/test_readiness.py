@@ -8,7 +8,10 @@ import yaml
 from django.test import override_settings
 from django.urls import reverse
 
+from app.background_workers import STUDIO_WORKER_SPECS
+from app.worker_state import heartbeat_background_worker
 from core_ui.views import health_views
+from web_ui.services.settings_readiness_runtime import workers_check
 
 
 @pytest.mark.django_db
@@ -77,3 +80,26 @@ def test_production_backend_healthcheck_uses_readiness():
     assert healthcheck["interval"] == "10s"
     assert healthcheck["timeout"] == "5s"
     assert healthcheck["retries"] == 3
+
+
+@pytest.mark.django_db
+@override_settings(
+    DEBUG=False,
+    CHANNEL_LAYERS={"default": {"BACKEND": "channels_redis.core.RedisChannelLayer"}},
+    CELERY_BROKER_URL="redis://redis:6379/2",
+    CELERY_RESULT_BACKEND="redis://redis:6379/3",
+)
+def test_settings_readiness_accepts_hostname_keyed_worker_replicas():
+    for spec in STUDIO_WORKER_SPECS.values():
+        heartbeat_background_worker(
+            spec["worker_kind"],
+            worker_key=f"production-{spec['worker_kind']}",
+            lease_seconds=180,
+        )
+
+    check = workers_check()
+
+    assert check["severity"] == "ready"
+    workers = check["details"]["workers"]
+    assert all(item["ready"] is True for item in workers)
+    assert all(item["state"]["worker_key"].startswith("production-") for item in workers)

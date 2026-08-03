@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 
 from app.background_workers import STUDIO_WORKER_SPECS
 from app.runtime_limit_config import runtime_limits_payload
-from app.worker_state import serialize_background_worker_state
+from app.worker_state import serialize_background_worker_kind_state
 from core_ui.managed_secrets import (
     MCP_ENV_NAMESPACE,
     NOTIFICATION_SECRET_NAMESPACE,
@@ -81,7 +81,7 @@ def workers_check() -> dict[str, Any]:
     worker_states = []
     not_ready = []
     for worker_name, spec in STUDIO_WORKER_SPECS.items():
-        state = serialize_background_worker_state(spec["worker_kind"])
+        state = serialize_background_worker_kind_state(spec["worker_kind"])
         ready = state["status"] == "running" and not state["is_stale"]
         worker_states.append(
             {
