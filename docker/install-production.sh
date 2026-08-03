@@ -519,6 +519,7 @@ wait_for_stack() {
   echo "==> Waiting for background workers"
   # Workers usually have no Docker HEALTHCHECK — State.Status=running is enough.
   wait_for_service scheduled-pipelines 180
+  wait_for_service pipeline-execution 180
   wait_for_service operator-execution 180
   wait_for_service scheduled-agents 180
   wait_for_service monitor 180
@@ -691,6 +692,7 @@ main() {
     backend
     playbook-execution-worker
     scheduled-pipelines
+    pipeline-execution
     operator-execution
     scheduled-agents
     monitor

@@ -83,12 +83,17 @@ def test_production_installers_generate_the_required_mcp_runner_token() -> None:
     assert 'env_set STUDIO_MCP_RUNNER_TOKEN "$(random_string 64)"' in outer
 
 
-def test_production_installer_starts_the_playbook_execution_plane() -> None:
+def test_production_installer_starts_the_execution_planes() -> None:
     installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+    smoke = (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
 
     service_block = installer.split("local services=(", 1)[1].split(")", 1)[0]
     assert "playbook-docker-proxy" in service_block
     assert "playbook-execution-worker" in service_block
+    assert "pipeline-execution" in service_block
+    assert "wait_for_service pipeline-execution 180" in installer
+    assert "mini-prod-pipeline-execution" in smoke
+    assert '"studio_pipeline_execution"' in smoke
 
 
 def test_production_installer_pulls_the_pinned_agent_command_runner() -> None:

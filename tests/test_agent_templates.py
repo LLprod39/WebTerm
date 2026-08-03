@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 
 from app.shell_commands import is_read_only_command
 from servers.agents.agent_templates import AGENT_TEMPLATES
-from servers.models import ServerAgent
+from servers.models_agents import ServerAgent
 
 
 def test_service_health_template_is_compatible_with_read_only_servers() -> None:

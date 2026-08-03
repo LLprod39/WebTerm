@@ -87,7 +87,7 @@ require_command() {
 assert_fresh_host() {
   local reserved_names=(
     mini-prod-postgres mini-prod-redis mini-prod-backend mini-prod-frontend mini-prod-nginx
-    mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-scheduled-agents
+    mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-pipeline-execution mini-prod-scheduled-agents
     mini-prod-history-pruner mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
     mini-prod-playbook-docker-proxy-smoke
     mini-prod-ssh-target-smoke
@@ -286,7 +286,7 @@ worker_rows = {
     item.get("worker"): item
     for item in (runtime_workers.get("details", {}).get("workers") or [])
 }
-for worker in ("scheduled-pipelines", "monitor"):
+for worker in ("scheduled-pipelines", "pipeline-execution", "monitor"):
     assert worker_rows.get(worker, {}).get("ready") is True, (worker, worker_rows.get(worker))
 print(json.dumps(payload.get("summary", {}), sort_keys=True))
 PY
@@ -307,6 +307,7 @@ from servers.models import BackgroundWorkerState
 
 required = {
     "studio_scheduled_pipelines",
+    "studio_pipeline_execution",
     "studio_monitor",
     "scheduled_agents",
     "memory_dreams",
