@@ -9,6 +9,7 @@ from asgiref.sync import sync_to_async
 from django.utils import timezone
 
 from servers.models import Server
+from servers.ssh_private_keys import import_server_private_key, is_managed_private_key_reference
 
 
 class SSHHostKeyVerificationError(RuntimeError):
@@ -148,6 +149,7 @@ def build_server_connect_kwargs(
     server: Server,
     *,
     secret: str = "",
+    private_key_text: str = "",
     known_hosts: asyncssh.SSHKnownHosts,
     connect_timeout: int = 10,
     login_timeout: int = 15,
@@ -180,14 +182,29 @@ def build_server_connect_kwargs(
     elif server.auth_method == "key":
         if not (server.key_path or "").strip():
             raise ValueError("Не указан путь к SSH ключу (key auth)")
-        kwargs["client_keys"] = [server.key_path]
+        if private_key_text:
+            kwargs["client_keys"] = [import_server_private_key(server, private_key_text=private_key_text)]
+        elif is_managed_private_key_reference(server.key_path):
+            raise ValueError("Managed SSH private key was not resolved")
+        else:
+            kwargs["client_keys"] = [server.key_path]
     elif server.auth_method == "key_password":
         if not (server.key_path or "").strip():
             raise ValueError("Не указан путь к SSH ключу (key+password auth)")
         if not secret:
             raise ValueError("Не удалось получить пасфразу ключа. Проверь Managed Secret сервера.")
-        kwargs["client_keys"] = [server.key_path]
-        kwargs["passphrase"] = secret
+        if private_key_text:
+            kwargs["client_keys"] = [
+                import_server_private_key(server, passphrase=secret, private_key_text=private_key_text)
+            ]
+            # The isolated agent-command runtime consumes this value when it
+            # receives the encrypted OpenSSH text over stdin.
+            kwargs["passphrase"] = secret
+        elif is_managed_private_key_reference(server.key_path):
+            raise ValueError("Managed SSH private key was not resolved")
+        else:
+            kwargs["client_keys"] = [server.key_path]
+            kwargs["passphrase"] = secret
     else:
         raise ValueError(f"Неизвестный auth_method: {server.auth_method}")
 

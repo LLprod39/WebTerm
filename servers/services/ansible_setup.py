@@ -31,6 +31,7 @@ from servers.services.playbook_inventory_identity import (
     inventory_host_alias as _safe_host_name,
 )
 from servers.ssh_host_keys import parse_server_host_port
+from servers.ssh_private_keys import get_server_private_key_text, write_ephemeral_private_key
 
 logger = logging.getLogger(__name__)
 
@@ -355,12 +356,12 @@ def _write_inventory(
         auth_method = getattr(server, "auth_method", "password") or "password"
         key_path = (getattr(server, "key_path", "") or "").strip()
 
-        if auth_method in ("key", "key_password") and key_path and Path(key_path).is_file():
-            # Copy key into workdir for docker mounts
+        if auth_method in ("key", "key_password") and key_path:
+            # Ansible requires a path. Materialize the decrypted ManagedSecret
+            # only inside the per-run workdir, which is removed in the engine's
+            # finally block.
             key_dest = workdir / f"key_{server.id}"
-            shutil.copy2(key_path, key_dest)
-            with contextlib.suppress(OSError):
-                os.chmod(key_dest, 0o600)
+            write_ephemeral_private_key(key_dest, get_server_private_key_text(server))
             cleanup.append(key_dest)
             # Inside docker/native workdir relative path
             parts.append(f"ansible_ssh_private_key_file={key_dest.name}")

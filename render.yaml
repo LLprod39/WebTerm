@@ -5,7 +5,7 @@ services:
     plan: free
     dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
-    preDeployCommand: python manage.py migrate --noinput && python manage.py load_pipeline_templates
+    preDeployCommand: python manage.py migrate --noinput && python manage.py migrate_ssh_private_keys --apply && python manage.py load_pipeline_templates
     healthCheckPath: /api/health/
     envVars:
       - fromGroup: mini-prod-backend-common

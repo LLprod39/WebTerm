@@ -52,6 +52,21 @@ def invalidate_server_ssh_pool(sender, instance: Server, created: bool, **kwargs
     transaction.on_commit(lambda: invalidate_ssh_connections(instance.pk))
 
 
+@receiver(post_delete, sender=Server)
+def delete_server_private_key_secret(sender, instance: Server, **kwargs):
+    server_id = int(instance.pk)
+    legacy_key_path = str(instance.key_path or "")
+
+    def _delete_private_key() -> None:
+        from core_ui.managed_secrets import delete_server_ssh_private_key
+        from servers.ssh_private_keys import delete_managed_private_key
+
+        delete_server_ssh_private_key(server_id)
+        delete_managed_private_key(legacy_key_path)
+
+    transaction.on_commit(_delete_private_key)
+
+
 def _invalidate_share_connections(instance: ServerShare) -> None:
     from servers.services.ssh_pool import invalidate_ssh_connections
 

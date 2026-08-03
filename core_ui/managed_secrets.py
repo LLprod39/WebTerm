@@ -26,6 +26,7 @@ __all__ = [
 
 SERVER_AUTH_NAMESPACE = "server_auth_secret"
 SERVER_SUDO_NAMESPACE = "server_sudo_secret"
+SERVER_SSH_PRIVATE_KEY_NAMESPACE = "server_ssh_private_key"
 MCP_ENV_NAMESPACE = "mcp_secret_env"
 LLM_API_KEY_NAMESPACE = "llm_api_key"
 LLM_API_KEY_OBJECT_ID = 1
@@ -238,6 +239,34 @@ def get_server_auth_secret(server_id: int) -> str:
 
 def has_server_auth_secret(server_id: int) -> bool:
     return _has(SERVER_AUTH_NAMESPACE, server_id)
+
+
+def set_server_ssh_private_key(server_id: int, private_key: str) -> None:
+    value = str(private_key or "")
+    if not value.strip():
+        _delete(SERVER_SSH_PRIVATE_KEY_NAMESPACE, server_id)
+        return
+    _upsert(
+        SERVER_SSH_PRIVATE_KEY_NAMESPACE,
+        server_id,
+        {"private_key": value},
+        metadata={"kind": "server_ssh_private_key"},
+    )
+
+
+def get_server_ssh_private_key(server_id: int) -> str:
+    payload = _get(SERVER_SSH_PRIVATE_KEY_NAMESPACE, server_id, default={})
+    if isinstance(payload, dict):
+        return str(payload.get("private_key") or "")
+    return ""
+
+
+def has_server_ssh_private_key(server_id: int) -> bool:
+    return _has(SERVER_SSH_PRIVATE_KEY_NAMESPACE, server_id)
+
+
+def delete_server_ssh_private_key(server_id: int) -> None:
+    _delete(SERVER_SSH_PRIVATE_KEY_NAMESPACE, server_id)
 
 
 def set_server_sudo_secret(server_id: int, secret_value: str) -> None:

@@ -34,6 +34,7 @@ from servers.monitoring.monitor_parsing import (
 )
 from servers.secret_utils import get_server_auth_secret
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
+from servers.ssh_private_keys import get_server_private_key_text
 
 
 def sync_to_async(func, thread_sensitive=False):
@@ -83,9 +84,13 @@ def _decrypt_server_secret(server: Server) -> str:
 async def _build_connect_kwargs(server: Server) -> dict[str, Any]:
     known_hosts = await ensure_server_known_hosts(server)
     secret = await sync_to_async(_decrypt_server_secret, thread_sensitive=True)(server)
+    private_key_text = ""
+    if server.auth_method in {"key", "key_password"}:
+        private_key_text = await sync_to_async(get_server_private_key_text, thread_sensitive=True)(server)
     return build_server_connect_kwargs(
         server,
         secret=secret,
+        private_key_text=private_key_text,
         known_hosts=known_hosts,
         connect_timeout=max(1, int(getattr(settings, "SSH_CONNECT_TIMEOUT_SECONDS", 10) or 10)),
         login_timeout=max(1, int(getattr(settings, "SSH_LOGIN_TIMEOUT_SECONDS", 20) or 20)),

@@ -27,6 +27,7 @@ def test_production_migration_is_one_shot_and_backend_is_scalable():
 
     assert migration["restart"] == "no"
     assert "manage.py migrate --noinput" in command
+    assert "manage.py migrate_ssh_private_keys --apply" in command
     assert "load_pipeline_templates" in command
     assert "--force" not in command
     assert backend["depends_on"]["migrate"]["condition"] == "service_completed_successfully"

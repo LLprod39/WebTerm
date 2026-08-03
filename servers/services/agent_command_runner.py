@@ -5,12 +5,14 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from app.agent_kernel.sandbox.ephemeral_runner import AgentCommandResult, execute_ephemeral_ssh_command
 from app.observability import record_ssh_command, start_span
 from servers.services.ssh_connection import get_server_connect_kwargs
 from servers.ssh_host_keys import get_server_trusted_host_keys
+from servers.ssh_private_keys import get_server_private_key_text
 
 
 def _known_hosts_text(server: Any, connect_kwargs: dict[str, Any]) -> str:
@@ -36,9 +38,9 @@ async def run_agent_command(
     timeout_seconds: int | None = None,
 ) -> AgentCommandResult:
     resolved_connect_kwargs = connect_kwargs or await get_server_connect_kwargs(server)
-    key_path = ""
+    private_key = ""
     if str(getattr(server, "auth_method", "") or "") in {"key", "key_password"}:
-        key_path = str(getattr(server, "key_path", "") or "").strip()
+        private_key = await sync_to_async(get_server_private_key_text, thread_sensitive=True)(server)
     command_text = str(command or "")
     attributes = {
         "server.id": int(getattr(server, "id", 0) or 0),
@@ -53,7 +55,7 @@ async def run_agent_command(
                 connect_kwargs=resolved_connect_kwargs,
                 command=command_text,
                 known_hosts_text=_known_hosts_text(server, resolved_connect_kwargs),
-                key_path=key_path,
+                private_key=private_key,
                 input_text=input_text,
                 timeout_seconds=timeout_seconds,
             )

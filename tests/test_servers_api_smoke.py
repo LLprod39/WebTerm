@@ -1,11 +1,10 @@
-import os
-
 import asyncssh
 import pytest
 from django.contrib.auth.models import User
 from django.test import Client, override_settings
 
 from servers.models import Server
+from servers.ssh_private_keys import get_server_private_key_text, is_managed_private_key_reference
 from tests.servers_api_smoke_harness import (
     create_server as _create_server,
 )
@@ -199,10 +198,9 @@ def test_server_create_accepts_uploaded_ssh_private_key(tmp_path):
         assert response.status_code == 200
         server = Server.objects.get(id=response.json()["server_id"])
         assert server.key_path
-        assert str(server.key_path).startswith(str(tmp_path / "ssh_keys"))
-        assert os.path.exists(server.key_path)
-        with open(server.key_path, encoding="utf-8") as stored_key:
-            assert stored_key.read() == key_text.strip() + "\n"
+        assert is_managed_private_key_reference(server.key_path, server_id=server.id)
+        assert get_server_private_key_text(server) == key_text.strip() + "\n"
+        assert not list((tmp_path / "ssh_keys").rglob("*.key"))
 
 
 @pytest.mark.django_db

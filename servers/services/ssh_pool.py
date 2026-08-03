@@ -12,9 +12,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import asyncssh
+from asgiref.sync import sync_to_async
 from django.conf import settings
 
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
+from servers.ssh_private_keys import get_server_private_key_text
 
 
 class SSHConnectionPoolExhausted(RuntimeError):
@@ -213,7 +215,15 @@ class SSHConnectionPool:
 
     async def _connect_kwargs(self, server, secret: str) -> dict[str, Any]:
         known_hosts = await ensure_server_known_hosts(server)
-        return build_server_connect_kwargs(server, secret=secret, known_hosts=known_hosts)
+        private_key_text = ""
+        if str(getattr(server, "auth_method", "") or "") in {"key", "key_password"}:
+            private_key_text = await sync_to_async(get_server_private_key_text, thread_sensitive=True)(server)
+        return build_server_connect_kwargs(
+            server,
+            secret=secret,
+            private_key_text=private_key_text,
+            known_hosts=known_hosts,
+        )
 
     async def open_sftp(self, server, *, user_id: int | None = None, secret: str = "") -> PooledSFTPClient:
         key = (int(server.pk), int(user_id or server.user_id))

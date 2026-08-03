@@ -9,7 +9,11 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
-from core_ui.managed_secrets import SERVER_AUTH_NAMESPACE, SERVER_SUDO_NAMESPACE
+from core_ui.managed_secrets import (
+    SERVER_AUTH_NAMESPACE,
+    SERVER_SSH_PRIVATE_KEY_NAMESPACE,
+    SERVER_SUDO_NAMESPACE,
+)
 from core_ui.models import ManagedSecret
 
 
@@ -61,7 +65,7 @@ def _managed_secret_revisions(server_ids: list[int]) -> dict[int, list[dict[str,
     if not server_ids:
         return revisions
     rows = ManagedSecret.objects.filter(
-        namespace__in=[SERVER_AUTH_NAMESPACE, SERVER_SUDO_NAMESPACE],
+        namespace__in=[SERVER_AUTH_NAMESPACE, SERVER_SSH_PRIVATE_KEY_NAMESPACE, SERVER_SUDO_NAMESPACE],
         object_id__in=server_ids,
     ).order_by("object_id", "namespace", "key")
     for row in rows:

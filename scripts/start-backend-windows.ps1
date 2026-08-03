@@ -41,6 +41,7 @@ if (-not $SkipDocker) {
 if ($Migrate) {
   Write-Host "Running migrations..." -ForegroundColor Cyan
   & $Python manage.py migrate
+  & $Python manage.py migrate_ssh_private_keys --apply
 }
 
 Write-Host "Starting backend on http://127.0.0.1:$Port/ (native Windows, no WSL)" -ForegroundColor Green

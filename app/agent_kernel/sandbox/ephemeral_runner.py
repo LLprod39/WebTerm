@@ -132,12 +132,23 @@ async def _execute_on_host_for_tests(
     )
 
 
+async def _resolve_private_key_text(private_key: str, key_path: str) -> str:
+    resolved = str(private_key or "")
+    if resolved or not key_path:
+        return resolved
+    try:
+        return await asyncio.to_thread(Path(key_path).expanduser().read_text, encoding="utf-8")
+    except OSError as exc:
+        raise AgentCommandRuntimeError("Configured SSH private key cannot be read by the agent runner.") from exc
+
+
 async def execute_ephemeral_ssh_command(
     *,
     connect_kwargs: dict[str, Any],
     command: str,
     known_hosts_text: str = "",
     key_path: str = "",
+    private_key: str = "",
     input_text: str | None = None,
     timeout_seconds: int | None = None,
 ) -> AgentCommandResult:
@@ -158,12 +169,7 @@ async def execute_ephemeral_ssh_command(
     ssh_agent_socket = str(os.environ.get("SSH_AUTH_SOCK") or "").strip()
     if ssh_agent_socket and not Path(ssh_agent_socket).exists():
         ssh_agent_socket = ""
-    private_key = ""
-    if key_path:
-        try:
-            private_key = await asyncio.to_thread(Path(key_path).expanduser().read_text, encoding="utf-8")
-        except OSError as exc:
-            raise AgentCommandRuntimeError("Configured SSH private key cannot be read by the agent runner.") from exc
+    resolved_private_key = await _resolve_private_key_text(private_key, key_path)
     docker_command = build_agent_command_docker_command(ssh_agent_socket=ssh_agent_socket)
     payload = {
         "schema": "webterm.agent-command.v1",
@@ -172,7 +178,7 @@ async def execute_ephemeral_ssh_command(
         "username": str(connect_kwargs.get("username") or ""),
         "password": str(connect_kwargs.get("password") or ""),
         "passphrase": str(connect_kwargs.get("passphrase") or ""),
-        "private_key": private_key,
+        "private_key": resolved_private_key,
         "known_hosts": known_hosts_text,
         "tunnel": str(connect_kwargs.get("tunnel") or ""),
         "agent_forwarded": bool(ssh_agent_socket),

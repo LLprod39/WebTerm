@@ -217,6 +217,7 @@ fi
 
 echo "==> Running Django migrations"
 "$VENV_PYTHON" manage.py migrate
+"$VENV_PYTHON" manage.py migrate_ssh_private_keys --apply
 
 if [[ "$SKIP_FRONTEND" -eq 0 ]]; then
   echo "==> Installing frontend dependencies"

@@ -18,7 +18,7 @@ from app.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
 from app.tools.activity_provider import get_tool_audit_context, log_tool_user_activity
 from app.tools.base import BaseTool, ToolMetadata, ToolParameter
 from app.tools.safety import evaluate_command_safety
-from app.tools.server_secret_provider import get_server_sudo_secret
+from app.tools.server_secret_provider import get_server_private_key, get_server_sudo_secret
 from app.tools.ssh_host_key_provider import (
     ensure_server_known_hosts,
     parse_host_port_value,
@@ -139,12 +139,22 @@ class SSHConnectionManager:
             # - password only -> password auth
             # - key only -> public key auth
             # - key + password -> encrypted private key passphrase
-            if key_path:
+            managed_key_loaded = False
+            if key_path and server is not None:
+                private_key_text = await sync_to_async(
+                    get_server_private_key,
+                    thread_sensitive=True,
+                )(server)
+                if not private_key_text:
+                    raise ValueError("Configured SSH private key cannot be resolved")
+                options["client_keys"] = [asyncssh.import_private_key(private_key_text, passphrase=password or None)]
+                managed_key_loaded = True
+            elif key_path:
                 options["client_keys"] = [key_path]
             if password:
-                if key_path:
+                if key_path and not managed_key_loaded:
                     options["passphrase"] = password
-                else:
+                elif not key_path:
                     options["password"] = password
 
             conn = await asyncssh.connect(

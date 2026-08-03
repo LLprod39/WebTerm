@@ -6,6 +6,7 @@ def register_security_adapters() -> None:
     from app.runtime_limits import register_terminal_session_limit_provider
     from app.tools.server_secret_provider import (
         register_server_auth_secret_provider,
+        register_server_private_key_provider,
         register_server_sudo_secret_provider,
     )
     from app.tools.server_tool_gateway import register_server_tool_gateway
@@ -18,6 +19,7 @@ def register_security_adapters() -> None:
         parse_host_port_value,
         verified_known_hosts_for_host,
     )
+    from servers.ssh_private_keys import get_server_private_key_text
     from servers.tool_gateway import DjangoServerToolGateway
 
     register_pipeline_ssh_provider(DjangoPipelineSshProvider())
@@ -25,6 +27,7 @@ def register_security_adapters() -> None:
     register_server_tool_gateway(DjangoServerToolGateway())
     register_server_auth_secret_provider(get_server_auth_secret)
     register_server_sudo_secret_provider(get_server_sudo_secret)
+    register_server_private_key_provider(get_server_private_key_text)
     register_ssh_host_key_provider(
         ensure_server_known_hosts=ensure_server_known_hosts,
         verified_known_hosts_for_host=verified_known_hosts_for_host,
