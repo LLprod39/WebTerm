@@ -4,6 +4,26 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-03
+
+### Added
+
+- Durable operator and Studio pipeline dispatch planes with retry, reconciliation and execution telemetry.
+- Versioned HTTP error envelopes, OpenAPI publication, application rate limits and bulk server operations.
+
+### Changed
+
+- Production readiness now accepts any healthy hostname-keyed worker replica while preserving per-replica leases.
+- Production installation starts and verifies the Studio pipeline execution worker before reporting success.
+- PostgreSQL queue claims avoid nullable-join locking and preserve fencing and capacity guarantees.
+- Server AI write access is explicit in the frontend while generated service-health commands remain read-only.
+- Ashita frontend styles stay within the frozen CSS budget without raising the limit.
+
+### Security
+
+- Hardened production proxy, worker, outbound API, secret and plugin-runner boundaries from the production audit.
+- Kubernetes Ops remains disabled in the supported production profile and frozen to its reviewed read-only boundary.
+
 ## [0.2.1] - 2026-07-30
 
 ### Added
@@ -56,4 +76,5 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 
 [0.1.0]: https://github.com/LLprod39/WebTerm/releases/tag/v0.1.0
 [0.2.1]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.1
-[Unreleased]: https://github.com/LLprod39/WebTerm/compare/v0.2.1...HEAD
+[0.2.2]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.2
+[Unreleased]: https://github.com/LLprod39/WebTerm/compare/v0.2.2...HEAD

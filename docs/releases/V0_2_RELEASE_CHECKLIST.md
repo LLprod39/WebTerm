@@ -1,6 +1,6 @@
 # WebTerm v0.2 release checklist
 
-Status: release candidate until the protected `test` commit, `v0.2.1` tag workflow, published-image smoke and signed assets are all verified.
+Status: release candidate until the protected `test` commit, `v0.2.2` tag workflow, published-image smoke and signed assets are all verified.
 
 ## Protected candidate gates
 
@@ -28,9 +28,9 @@ Status: release candidate until the protected `test` commit, `v0.2.1` tag workfl
 
 ## Publication gates
 
-1. Tag `v0.2.1` must resolve to the exact protected `test` candidate and match `VERSION`.
+1. Tag `v0.2.2` must resolve to the exact protected `test` candidate and match `VERSION`.
 2. Every image job must publish an immutable digest and GitHub provenance attestation.
 3. Published-digest production and Playwright smoke must pass before the release job starts.
 4. `SHA256SUMS.txt` must validate every uploaded asset.
 5. `release-manifest.json`, install archives, SBOMs and image digests must have verifiable GitHub attestations.
-6. Only then may GitHub Release `v0.2.1` be marked latest.
+6. Only then may GitHub Release `v0.2.2` be marked latest.

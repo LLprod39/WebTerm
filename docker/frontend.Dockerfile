@@ -1,6 +1,6 @@
 FROM node:22.23.1-bookworm-slim
 
-ARG WEBTERM_VERSION=0.2.1
+ARG WEBTERM_VERSION=0.2.2
 ARG http_proxy
 ARG https_proxy
 ARG ftp_proxy

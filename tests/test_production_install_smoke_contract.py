@@ -44,7 +44,7 @@ def test_release_tag_must_match_the_canonical_version() -> None:
     assert "Verify release tag and contracts" in workflow
     assert 'expected="v$(tr -d' in workflow
     assert 'test "$GITHUB_REF_NAME" = "$expected"' in workflow
-    assert "docs/releases/V0_2_1_RELEASE_NOTES.md" in workflow
+    assert "docs/releases/V0_2_2_RELEASE_NOTES.md" in workflow
 
 
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:
