@@ -43,8 +43,8 @@ The script will:
 Default stack services:
   postgres, redis, backend, frontend, nginx,
   mcp-runner,
-  scheduled-pipelines, scheduled-agents, monitor,
-  ops-supervisor (agent execution + watchers + memory dreams),
+  scheduled-pipelines, scheduled-agents, agent-execution pool, monitor,
+  ops-supervisor (watchers + memory dreams),
   kubernetes-ops-sync, celery-worker
   optional profiles: telegram-bot, mars-agent
 
@@ -522,6 +522,7 @@ wait_for_stack() {
   wait_for_service pipeline-execution 180
   wait_for_service operator-execution 180
   wait_for_service scheduled-agents 180
+  wait_for_service agent-execution 180
   wait_for_service monitor 180
   wait_for_service ops-supervisor 180
   wait_for_service kubernetes-ops-sync 180
@@ -591,7 +592,8 @@ Core services:
   postgres redis backend frontend nginx mcp-runner
 
 Background workers (agents / studio / monitoring):
-  ops-supervisor          # full/multi agent execution + watchers + memory dreams
+  agent-execution         # scalable mini/full/multi agent execution pool
+  ops-supervisor          # watchers + memory dreams
   scheduled-agents        # cron/interval agent dispatch
   scheduled-pipelines     # Studio pipeline schedules
   operator-execution      # durable Operator Chat turns
@@ -601,9 +603,9 @@ Background workers (agents / studio / monitoring):
 
 Useful commands:
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE ps
-  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE logs -f backend ops-supervisor nginx
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE logs -f backend agent-execution nginx
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE logs -f scheduled-agents celery-worker
-  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE restart ops-supervisor scheduled-agents
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE restart agent-execution ops-supervisor scheduled-agents
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE down
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE up -d --build
 
@@ -619,7 +621,7 @@ First login checklist:
   2. Settings → AI: add at least one LLM API key
   3. Servers: add a host and open Terminal
   4. Agents: create a Mini agent and Run (no worker setup needed for mini)
-  5. Full/multi agents use ops-supervisor automatically in this stack
+  5. Mini/full/multi agents use the scalable agent-execution pool automatically
 EOF
 
   if [[ "$CREATE_SUPERUSER" -eq 1 ]]; then
@@ -695,6 +697,7 @@ main() {
     pipeline-execution
     operator-execution
     scheduled-agents
+    agent-execution
     monitor
     ops-supervisor
     kubernetes-ops-sync

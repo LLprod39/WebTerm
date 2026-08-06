@@ -114,7 +114,7 @@ export function buildRunReport(detail: ReturnType<typeof buildRunDetail>) {
             ? "При необходимости запустите агент повторно."
           : isWaiting
             ? "Ответьте на вопрос агента, чтобы продолжить выполнение."
-          : "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+          : "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
       progress: isTerminal ? 100 : isWaiting ? 68 : 62,
       execution_state: {
         status: isStopped || isFailed ? "dispatch_canceled" : isWaiting ? "waiting_for_operator" : "worker_missing",
@@ -136,7 +136,7 @@ export function buildRunReport(detail: ReturnType<typeof buildRunDetail>) {
               ? "Ответьте на вопрос агента на странице отчёта."
             : isStale
               ? "Очистите stale run или запустите execution worker, если запуск ещё должен выполняться."
-            : "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+            : "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
         dispatch,
         worker: {
           worker_kind: "agent_execution",

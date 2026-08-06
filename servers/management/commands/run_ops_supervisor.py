@@ -28,6 +28,11 @@ class Command(BaseCommand):
             "--with-scheduled-agents", action="store_true", help="Also supervise scheduled server agents"
         )
         parser.add_argument(
+            "--without-agent-execution",
+            action="store_true",
+            help="Do not start the legacy single agent worker when a dedicated scalable pool is deployed",
+        )
+        parser.add_argument(
             "--restart-delay", type=int, default=5, help="Seconds to wait before restarting a dead worker"
         )
         parser.add_argument(
@@ -130,19 +135,22 @@ class Command(BaseCommand):
                     str(lease_seconds),
                 ],
             ),
-            _WorkerSpec(
-                name="agent_execution",
-                args=base
-                + [
-                    "run_agent_execution_plane",
-                    *(["--once"] if once else ["--interval", str(max(2, int(options["execution_interval"] or 5)))]),
-                    "--worker-key",
-                    "default",
-                    "--lease-seconds",
-                    str(lease_seconds),
-                ],
-            ),
         ]
+        if not bool(options.get("without_agent_execution")):
+            specs.append(
+                _WorkerSpec(
+                    name="agent_execution",
+                    args=base
+                    + [
+                        "run_agent_execution_plane",
+                        *(["--once"] if once else ["--interval", str(max(2, int(options["execution_interval"] or 5)))]),
+                        "--worker-key",
+                        "default",
+                        "--lease-seconds",
+                        str(lease_seconds),
+                    ],
+                )
+            )
         if bool(options.get("with_scheduled_agents")):
             specs.append(
                 _WorkerSpec(

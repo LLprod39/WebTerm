@@ -326,7 +326,7 @@ def test_agent_list_runtime_overview_exposes_queue_and_blockers(settings):
     assert "scheduled_agents_worker_not_ready" in issue_ids
     assert "run_agent_execution_plane" in overview["commands"]["execution_worker"]
     assert "run_scheduled_agents" in overview["commands"]["scheduled_agents_worker"]
-    assert "run_ops_supervisor" in overview["commands"]["ops_supervisor"]
+    assert "agent-execution" in overview["commands"]["ops_supervisor"]
     assert overview["items"]["active_runs"][0]["run_id"] == run.id
     assert overview["items"]["active_runs"][0]["agent_name"] == agent.name
     assert overview["items"]["active_runs"][0]["server_name"] == server.name
@@ -447,8 +447,8 @@ def test_agent_list_exposes_execution_readiness_for_full_agents():
     assert readiness["status"] == "missing"
     assert readiness["severity"] == "warning"
     assert "run_agent_execution_plane" in readiness["next_action"]
-    assert "run_ops_supervisor" in readiness["supervisor_action"]
-    assert "run_ops_supervisor" in readiness["commands"]["ops_supervisor"]
+    assert "agent-execution" in readiness["supervisor_action"]
+    assert "agent-execution" in readiness["commands"]["ops_supervisor"]
 
     now = timezone.now()
     BackgroundWorkerState.objects.create(

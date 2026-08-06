@@ -5,7 +5,7 @@ import contextlib
 from django.db.models import Q
 from django.utils import timezone
 
-from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
+from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
 from core_ui.projects import active_project_for_user
 from servers.agents.agent_background import launch_plan_execution_background
 from servers.agents.agent_cleanup_service import cleanup_stale_agent_runs_for_user as cleanup_stale_agent_runs_for_user
@@ -31,7 +31,7 @@ from servers.models import AgentRun, BackgroundWorkerState, ServerAgent, ServerW
 from servers.monitoring.watcher_actions import ensure_watcher_agent, mark_watcher_draft_launched
 from servers.run_events import record_run_event
 from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
-from servers.worker_state import serialize_background_worker_state
+from servers.worker_state import serialize_background_worker_kind_state, serialize_background_worker_state
 
 
 def compute_next_due_at(agent: ServerAgent, now=None):
@@ -201,7 +201,7 @@ def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
     return {
         "summary": summary,
         "scheduled_agents": items,
-        "execution_plane": serialize_background_worker_state(BackgroundWorkerState.KIND_AGENT_EXECUTION),
+        "execution_plane": serialize_background_worker_kind_state(BackgroundWorkerState.KIND_AGENT_EXECUTION),
         "scheduled_agents_worker": serialize_background_worker_state(BackgroundWorkerState.KIND_SCHEDULED_AGENTS),
         "worker_states": get_agent_worker_states(),
         "execution_readiness": get_agent_execution_readiness(),
@@ -244,10 +244,6 @@ def start_agent_run_for_user(
     Never runs SSH/LLM inside the HTTP request — that blocked Daphne threads and
     left orphan ``running`` rows when the client timed out or the worker hung.
     """
-    limit_error = get_agent_run_limit_error(user)
-    if limit_error:
-        return {"ok": False, "status": 429, "payload": limit_error}
-
     launch_result = launch_queued_agent_run(
         agent=agent,
         user=user,
@@ -255,10 +251,11 @@ def start_agent_run_for_user(
         server_id=int(server_id) if server_id is not None else None,
     )
     if not launch_result["ok"]:
+        payload = launch_result.get("payload")
         return {
             "ok": False,
             "status": int(launch_result["status"]),
-            "payload": {"success": False, "error": launch_result["error"]},
+            "payload": payload if isinstance(payload, dict) else {"success": False, "error": launch_result["error"]},
         }
 
     run_result = launch_result["run"]

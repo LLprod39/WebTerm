@@ -52,6 +52,10 @@ def test_render_pipeline_workers_have_runtime_env():
             "python manage.py run_pipeline_execution_plane --interval 5 --lease-seconds 180 "
             "--global-concurrency 4 --per-user-concurrency 2 --worker-key render"
         ),
+        "mini-prod-agent-execution": (
+            "python manage.py run_agent_execution_plane --interval 2 --lease-seconds 180 "
+            "--global-concurrency 5 --per-user-concurrency 2 --worker-concurrency 5"
+        ),
         "mini-prod-scheduled-pipelines": "python manage.py run_scheduled_pipelines --daemon --interval 60",
         "mini-prod-monitor": "python manage.py run_monitor --quick-interval 300 --deep-interval 600 --concurrency 5",
         "mini-prod-telegram-bot": "python manage.py run_telegram_bot",
@@ -68,6 +72,7 @@ def test_render_pipeline_workers_have_runtime_env():
     assert "TELEGRAM_BOT_POLL_TOKEN" in _env_keys(telegram)
     assert "TELEGRAM_BOT_POLL_TOKEN" not in _env_keys(_service_by_name(blueprint, "mini-prod-scheduled-pipelines"))
     assert "MANAGED_SECRET_KEY" in _env_keys(_service_by_name(blueprint, "mini-prod-pipeline-execution"))
+    assert "MANAGED_SECRET_KEY" in _env_keys(_service_by_name(blueprint, "mini-prod-agent-execution"))
 
 
 def test_render_kubernetes_ops_sync_worker_is_declared():
@@ -141,12 +146,21 @@ def test_compose_production_studio_workers_are_declared():
 
     assert "scheduled-pipelines" in services
     assert "pipeline-execution" in services
+    assert "agent-execution" in services
     assert "operator-execution" in services
     assert "history-pruner" in services
     assert "monitor" in services
     assert "telegram-bot" in services
     assert "python manage.py run_scheduled_pipelines --daemon" in " ".join(services["scheduled-pipelines"]["command"])
     assert "python manage.py run_pipeline_execution_plane" in " ".join(services["pipeline-execution"]["command"])
+    agent_command = " ".join(services["agent-execution"]["command"])
+    assert "python manage.py run_agent_execution_plane" in agent_command
+    assert "--global-concurrency ${AGENT_EXECUTION_GLOBAL_CONCURRENCY:-10}" in agent_command
+    assert "--per-user-concurrency ${AGENT_EXECUTION_PER_USER_CONCURRENCY:-2}" in agent_command
+    assert "--worker-concurrency ${AGENT_EXECUTION_WORKER_CONCURRENCY:-2}" in agent_command
+    assert services["agent-execution"]["deploy"]["replicas"] == "${AGENT_EXECUTION_REPLICAS:-5}"
+    assert "container_name" not in services["agent-execution"]
+    assert "--without-agent-execution" in " ".join(services["ops-supervisor"]["command"])
     assert "python manage.py run_operator_execution_plane" in " ".join(services["operator-execution"]["command"])
     assert services["history-pruner"]["command"] == [
         "python",

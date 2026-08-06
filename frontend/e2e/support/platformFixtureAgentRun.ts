@@ -195,14 +195,14 @@ export function makeAgentRunFixtureData() {
       description:
         "Идёт сбор данных, выполнение команд и накопление доказательств для финального отчёта. Уже есть проблемные сигналы: 2. Dispatch ждёт в очереди 2m 5s. Статус worker: missing.",
       current_step: "Execution worker не принимает запуск",
-      next_expected: "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+      next_expected: "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
       progress: 62,
       execution_state: {
         status: "worker_missing",
         severity: "warning",
         title: "Execution worker не принимает запуск",
         description: "Dispatch ждёт в очереди 2m 5s. Статус worker: missing.",
-        next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+        next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
         dispatch: {
           id: 701,
           run_id: 901,

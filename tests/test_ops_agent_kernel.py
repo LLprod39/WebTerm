@@ -95,6 +95,35 @@ def test_run_ops_supervisor_once_fails_when_child_worker_fails(monkeypatch):
         call_command("run_ops_supervisor", "--once")
 
 
+def test_run_ops_supervisor_can_defer_agent_execution_to_scalable_pool(monkeypatch):
+    spawned: list[list[str]] = []
+
+    class DummyProcess:
+        def __init__(self, args, **_kwargs):
+            spawned.append(list(args))
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return 0
+
+        def terminate(self):
+            return None
+
+        def kill(self):
+            return None
+
+    monkeypatch.setattr("subprocess.Popen", DummyProcess)
+
+    call_command("run_ops_supervisor", "--once", "--without-agent-execution", "--with-watchers")
+
+    joined = [" ".join(args) for args in spawned]
+    assert any("run_memory_dreams --once" in item for item in joined)
+    assert any("run_watchers --once" in item for item in joined)
+    assert not any("run_agent_execution_plane" in item for item in joined)
+
+
 def test_terminal_memory_capture_filters_trivial_commands():
     commands = [
         {"cmd": "clear", "output": "screen cleared", "exit_code": 0},

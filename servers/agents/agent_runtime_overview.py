@@ -18,14 +18,18 @@ from servers.agents.agent_execution_state import (
 from servers.agents.agent_schedule import compute_next_due_by_schedule, normalize_schedule_config
 from servers.agents.scheduled_agents import is_agent_due
 from servers.models import AgentRun, AgentRunDispatch, BackgroundWorkerState, ServerAgent
-from servers.worker_state import cleanup_stale_background_workers, serialize_background_worker_state
+from servers.worker_state import (
+    cleanup_stale_background_workers,
+    serialize_background_worker_kind_state,
+    serialize_background_worker_state,
+)
 
 
 def get_agent_worker_states() -> dict[str, dict]:
     cleanup_stale_background_workers(BackgroundWorkerState.KIND_AGENT_EXECUTION)
     cleanup_stale_background_workers(BackgroundWorkerState.KIND_SCHEDULED_AGENTS)
     return {
-        "agent_execution": serialize_background_worker_state(BackgroundWorkerState.KIND_AGENT_EXECUTION),
+        "agent_execution": serialize_background_worker_kind_state(BackgroundWorkerState.KIND_AGENT_EXECUTION),
         "scheduled_agents": serialize_background_worker_state(BackgroundWorkerState.KIND_SCHEDULED_AGENTS),
     }
 

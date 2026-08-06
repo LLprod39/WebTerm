@@ -13,6 +13,36 @@ This runbook defines the operator procedure for the controlled v0.1 pilot. Comma
 
 The repository-side F-13a proof runs `./docker/production-install-smoke.sh` on a fresh Ubuntu CI runner. It refuses hosts that already contain WebTerm containers, executes the real production installer, requires migration/deploy checks, verifies authenticated readiness and fail-closed Plugins, checks scheduler/worker heartbeats plus Celery, and exercises terminal, pipeline and agent runtime paths over HTTPS/WebSocket. The workflow uploads the exact SHA, host/tool versions, Compose state/images/logs and probe results from every run.
 
+### Agent execution capacity
+
+Agent runs are consumed by a dedicated horizontally scalable `agent-execution`
+pool. The supported Compose defaults start five replicas with two local slots
+each, while PostgreSQL enforces a cluster-wide cap of ten and a per-user cap of
+two. Capacity is therefore:
+
+`min(replicas * worker concurrency, global concurrency, provider/host capacity)`
+
+Tune `AGENT_EXECUTION_REPLICAS`, `AGENT_EXECUTION_WORKER_CONCURRENCY`,
+`AGENT_EXECUTION_GLOBAL_CONCURRENCY`, and
+`AGENT_EXECUTION_PER_USER_CONCURRENCY` together. Never raise the database caps
+without enough CPU, memory, SSH-runner capacity and LLM-provider quota. Verify
+all replica heartbeats and the `webterm_agent_queue_depth`,
+`webterm_agent_queue_oldest_age_seconds`, `webterm_agent_active_dispatches`, and
+`webterm_agent_execution_workers` metrics after every capacity change.
+
+For an explicit temporary scale change, run:
+
+```bash
+docker compose --project-name webtrerm-prod --env-file .env.production \
+  -f docker-compose.production.yml up -d --scale agent-execution=8 agent-execution
+```
+
+PostgreSQL serializes only the short admission decision, applies global and
+per-user limits atomically, and prioritizes users with fewer active claims.
+Excess work remains durable and fenced instead of being dropped or executed
+twice. No finite deployment can promise a permanently empty queue under
+unbounded arrivals; scale from measured queue age and provider saturation.
+
 ### Managed-secret key rotation
 
 Managed secrets use `v2:<key_id>:<ciphertext>` envelopes. New writes use `MANAGED_SECRET_KEY`; `MANAGED_SECRET_PREVIOUS_KEYS` is a JSON object containing only the old keys needed during a bounded rotation window. Never pass encryption keys as command arguments.

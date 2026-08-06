@@ -8,7 +8,7 @@ export function makeAgentFixtureData() {
     severity: "warning",
     title: "Execution worker не запущен",
     description: "Full/multi-агенты будут поставлены в очередь, но не начнут выполняться до запуска worker.",
-    next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+    next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
     worker: {
       worker_kind: "agent_execution",
       worker_key: "default",
@@ -93,13 +93,13 @@ export function makeAgentFixtureData() {
         severity: "warning",
         title: "Execution worker не активен",
         description: "Full/multi-запуски есть в очереди, но worker не подтверждён.",
-        next_action: "python manage.py run_agent_execution_plane --worker-key default",
+        next_action: "python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
       },
     ],
     commands: {
-      execution_worker: "python manage.py run_agent_execution_plane --worker-key default",
+      execution_worker: "python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
       scheduled_agents_worker: "python manage.py run_scheduled_agents --daemon --worker-key default",
-      ops_supervisor: "python manage.py run_ops_supervisor --with-scheduled-agents --with-watchers",
+      ops_supervisor: "docker compose up -d --scale agent-execution=<replicas> agent-execution",
     },
     items: {
       active_runs: [

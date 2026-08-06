@@ -5,7 +5,14 @@ in focused app-local modules and are imported here to preserve the public
 ``servers.models`` import path.
 """
 
-from servers.models_agents import AgentRun, AgentRunArtifact, AgentRunDispatch, AgentRunEvent, ServerAgent
+from servers.models_agents import (
+    AgentDispatchControl,
+    AgentRun,
+    AgentRunArtifact,
+    AgentRunDispatch,
+    AgentRunEvent,
+    ServerAgent,
+)
 from servers.models_bulk import ServerBulkOperation
 from servers.models_groups import (
     ServerGroup,
@@ -56,6 +63,7 @@ from servers.models_playbooks import Playbook, PlaybookCompatibilityRevision, Pl
 
 __all__ = [
     "AgentRun",
+    "AgentDispatchControl",
     "AgentRunArtifact",
     "AgentRunDispatch",
     "AgentRunEvent",

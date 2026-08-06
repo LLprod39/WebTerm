@@ -295,6 +295,16 @@ class AgentRunArtifact(models.Model):
         return f"run={self.run_id} {self.name}"
 
 
+class AgentDispatchControl(models.Model):
+    """Named lock rows used for cross-process agent admission decisions."""
+
+    name = models.CharField(max_length=32, unique=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class AgentRunDispatch(models.Model):
     """Queue item for the dedicated agent execution plane."""
 
@@ -343,6 +353,8 @@ class AgentRunDispatch(models.Model):
         ]
         indexes = [
             models.Index(fields=["status", "queued_at"]),
+            models.Index(fields=["status", "lease_expires_at"], name="agent_dispatch_lease_idx"),
+            models.Index(fields=["user", "status", "queued_at"], name="agent_dispatch_user_queue_idx"),
             models.Index(fields=["run", "status", "-queued_at"]),
             models.Index(fields=["agent", "status", "-queued_at"]),
         ]

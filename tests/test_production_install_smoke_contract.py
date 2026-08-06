@@ -91,9 +91,12 @@ def test_production_installer_starts_the_execution_planes() -> None:
     assert "playbook-docker-proxy" in service_block
     assert "playbook-execution-worker" in service_block
     assert "pipeline-execution" in service_block
+    assert "agent-execution" in service_block
     assert "wait_for_service pipeline-execution 180" in installer
+    assert "wait_for_service agent-execution 180" in installer
     assert "mini-prod-pipeline-execution" in smoke
     assert '"studio_pipeline_execution"' in smoke
+    assert "healthy_agent_execution_replicas" in smoke
 
 
 def test_production_installer_pulls_the_pinned_agent_command_runner() -> None:

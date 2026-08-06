@@ -11,11 +11,11 @@ from app.agent_kernel.memory.types import (
     SKILL_DRAFT_PREFIX,
 )
 from servers.adapters.django_memory_serializers import serialize_episode, serialize_revalidation, serialize_snapshot
+from servers.worker_state import serialize_background_worker_kind_state, serialize_background_worker_state
 
 
 def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]:
     from servers.models import ServerMemoryEpisode, ServerMemoryRevalidation, ServerMemorySnapshot
-    from servers.worker_state import serialize_background_worker_state
 
     snapshots = list(
         ServerMemorySnapshot.objects.filter(server_id=server_id)
@@ -68,7 +68,7 @@ def build_memory_overview_payload(server_id: int, policy: Any) -> dict[str, Any]
         "daemon_state": serialize_background_worker_state("memory_dreams"),
         "worker_states": {
             "memory_dreams": serialize_background_worker_state("memory_dreams"),
-            "agent_execution": serialize_background_worker_state("agent_execution"),
+            "agent_execution": serialize_background_worker_kind_state("agent_execution"),
             "scheduled_agents": serialize_background_worker_state("scheduled_agents"),
             "watchers": serialize_background_worker_state("watchers"),
         },

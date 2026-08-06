@@ -32,6 +32,7 @@ def test_backend_and_every_worker_have_runtime_resource_limits():
     worker_names = (
         "scheduled-pipelines",
         "scheduled-agents",
+        "agent-execution",
         "history-pruner",
         "playbook-execution-worker",
         "monitor",

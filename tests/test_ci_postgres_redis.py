@@ -79,7 +79,11 @@ def test_agent_dispatch_claims_four_rows_without_head_of_line_blocking(monkeypat
         close_old_connections()
         try:
             barrier.wait(timeout=5)
-            dispatch = claim_next_agent_dispatch(worker_name=f"postgres-agent-{index}")
+            dispatch = claim_next_agent_dispatch(
+                worker_name=f"postgres-agent-{index}",
+                global_concurrency=4,
+                per_user_concurrency=4,
+            )
             assert dispatch is not None
             return dispatch.id
         finally:
@@ -92,6 +96,58 @@ def test_agent_dispatch_claims_four_rows_without_head_of_line_blocking(monkeypat
 
     assert len(set(claimed_ids)) == 4
     assert elapsed < 0.75, f"four skip-locked claims took {elapsed:.3f}s; expected near one 0.25s claim"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_five_users_can_claim_two_agents_each_concurrently(monkeypatch):
+    users = [User.objects.create_user(username=f"postgres-agent-capacity-{index}") for index in range(5)]
+    agents = [
+        ServerAgent.objects.create(
+            user=user,
+            name=f"Postgres capacity probe {index}",
+            mode=ServerAgent.MODE_MINI,
+            agent_type=ServerAgent.TYPE_CUSTOM,
+        )
+        for index, user in enumerate(users)
+    ]
+    for index in range(15):
+        user = users[index % len(users)]
+        agent = agents[index % len(agents)]
+        run = AgentRun.objects.create(agent=agent, user=user, status=AgentRun.STATUS_PENDING)
+        enqueue_agent_run_dispatch(
+            run=run,
+            agent_id=agent.id,
+            user_id=user.id,
+            server_ids=[],
+            plan_only=False,
+        )
+
+    claim_attempts = 12
+    barrier = threading.Barrier(claim_attempts)
+    monkeypatch.setattr("servers.agents.agent_dispatch._refresh_run_report_payload", lambda *_args: None)
+
+    def claim(index: int) -> tuple[int, int] | None:
+        close_old_connections()
+        try:
+            barrier.wait(timeout=5)
+            dispatch = claim_next_agent_dispatch(
+                worker_name=f"postgres-agent-capacity-{index}",
+                global_concurrency=10,
+                per_user_concurrency=2,
+            )
+            return (dispatch.id, dispatch.user_id) if dispatch is not None else None
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=claim_attempts) as pool:
+        claims = list(pool.map(claim, range(claim_attempts)))
+
+    accepted = [claim for claim in claims if claim is not None]
+    assert len({dispatch_id for dispatch_id, _user_id in accepted}) == 10
+    assert {user_id for _dispatch_id, user_id in accepted} == {user.id for user in users}
+    assert all(
+        sum(1 for _dispatch_id, claimed_user_id in accepted if claimed_user_id == user.id) == 2 for user in users
+    )
 
 
 @pytest.mark.django_db(transaction=True)

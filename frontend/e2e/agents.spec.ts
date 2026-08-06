@@ -101,7 +101,7 @@ test("blocks full agent launch when execution worker is not ready", async ({ pag
           severity: "warning",
           title: "Execution worker не активен",
           description: "Full/multi-агенты могут остаться в очереди.",
-          next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key default",
+          next_action: "Запустите worker: python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
           worker: null,
         },
       },
@@ -162,7 +162,7 @@ test("shows agent runtime queue blockers", async ({ page }) => {
               severity: "warning",
               title: "Execution worker не активен",
               description: "Full/multi-запуски есть в очереди, но worker не подтверждён.",
-              next_action: "python manage.py run_agent_execution_plane --worker-key default",
+              next_action: "python manage.py run_agent_execution_plane --worker-key <unique-worker-key>",
             },
             {
               id: "scheduled_agents_worker_not_ready",
@@ -269,7 +269,7 @@ test("shows agent runtime queue blockers", async ({ page }) => {
   await expect(runtimeSection.getByText("run #904")).toBeVisible();
   await expect(runtimeSection.getByRole("button", { name: /Clean stale/i })).toBeVisible();
   await expect(runtimeSection.getByText("Recommended production worker")).toBeVisible();
-  await expect(runtimeSection.getByText("python manage.py run_ops_supervisor")).toBeVisible();
+  await expect(runtimeSection.getByText("docker compose up -d --scale agent-execution")).toBeVisible();
   await expect(runtimeSection.getByText("python manage.py run_scheduled_agents")).toBeVisible();
 
   await runtimeSection.getByRole("button", { name: /Clean stale/i }).click();

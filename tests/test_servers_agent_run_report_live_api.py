@@ -110,7 +110,7 @@ def test_agent_run_report_endpoint_explains_queued_run_without_worker(settings):
     assert execution_state["stale_after_ms"] == 60_000
     assert "Очистите stale run" in execution_state["next_action"]
     assert "run_agent_execution_plane" in execution_state["commands"]["execution_worker"]
-    assert "run_ops_supervisor" in execution_state["commands"]["ops_supervisor"]
+    assert "agent-execution" in execution_state["commands"]["ops_supervisor"]
     assert payload["report_state"]["current_step"] == "Запуск завис в очереди"
 
 

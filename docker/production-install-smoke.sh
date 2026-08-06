@@ -315,8 +315,10 @@ required = {
     "watchers",
     "kubernetes_ops_sync",
 }
+expected_agent_execution_replicas = max(1, int(os.getenv("AGENT_EXECUTION_REPLICAS", "5")))
 rows = []
 healthy = set()
+healthy_agent_execution_replicas = 0
 now = timezone.now()
 for state in BackgroundWorkerState.objects.all().order_by("worker_kind", "worker_key"):
     lease_current = bool(state.lease_expires_at and state.lease_expires_at > now)
@@ -333,11 +335,24 @@ for state in BackgroundWorkerState.objects.all().order_by("worker_kind", "worker
     )
     if state.status == BackgroundWorkerState.STATUS_RUNNING and lease_current:
         healthy.add(state.worker_kind)
+        if state.worker_kind == "agent_execution":
+            healthy_agent_execution_replicas += 1
 
 missing = sorted(required - healthy)
-print(json.dumps({"healthy": sorted(healthy), "missing": missing, "workers": rows}, indent=2))
+print(json.dumps({
+    "healthy": sorted(healthy),
+    "missing": missing,
+    "healthy_agent_execution_replicas": healthy_agent_execution_replicas,
+    "expected_agent_execution_replicas": expected_agent_execution_replicas,
+    "workers": rows,
+}, indent=2))
 if missing:
     raise SystemExit(f"Missing current worker heartbeats: {', '.join(missing)}")
+if healthy_agent_execution_replicas < expected_agent_execution_replicas:
+    raise SystemExit(
+        "Agent execution pool is undersized: "
+        f"{healthy_agent_execution_replicas}/{expected_agent_execution_replicas} replicas healthy"
+    )
 PY
 }
 

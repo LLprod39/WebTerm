@@ -2,7 +2,7 @@
 
 Generated from `.env.production.example` by `scripts/env_contract.py`. Do not edit this table by hand.
 
-Total variables: **304**.
+Total variables: **311**.
 
 ## Required
 
@@ -142,15 +142,23 @@ Total variables: **304**.
 | `PIPELINE_EXECUTION_GLOBAL_CONCURRENCY` | Production background workers | `4` |
 | `PIPELINE_EXECUTION_PER_USER_CONCURRENCY` | Production background workers | `2` |
 | `PIPELINE_EXECUTION_MAX_ATTEMPTS` | Production background workers | `3` |
-| `APP_RATE_LIMIT_ASSISTANT_PER_MINUTE` | Production background workers | `30` |
-| `APP_RATE_LIMIT_PIPELINE_RUNS_PER_MINUTE` | Production background workers | `10` |
-| `APP_RATE_LIMIT_AGENT_RUNS_PER_MINUTE` | Production background workers | `10` |
-| `SSH_POOL_IDLE_TTL_SECONDS` | Production background workers | `60` |
-| `SSH_POOL_MAX_PER_SERVER` | Production background workers | `4` |
-| `SSH_POOL_MAX_CONNECTIONS` | Production background workers | `50` |
-| `WEBHOOK_SIGNATURE_TOLERANCE_SECONDS` | Production background workers | `300` |
-| `SCHEDULED_AGENTS_INTERVAL` | Production background workers | `60` |
-| `SCHEDULED_AGENTS_LIMIT` | Production background workers | `100` |
+| `AGENT_EXECUTION_REPLICAS` | database caps remain authoritative across every replica and process. | `5` |
+| `AGENT_EXECUTION_WORKER_CONCURRENCY` | database caps remain authoritative across every replica and process. | `2` |
+| `AGENT_EXECUTION_GLOBAL_CONCURRENCY` | database caps remain authoritative across every replica and process. | `10` |
+| `AGENT_EXECUTION_PER_USER_CONCURRENCY` | database caps remain authoritative across every replica and process. | `2` |
+| `AGENT_EXECUTION_INTERVAL` | database caps remain authoritative across every replica and process. | `2` |
+| `AGENT_EXECUTION_LEASE_SECONDS` | database caps remain authoritative across every replica and process. | `180` |
+| `AGENT_ACTIVE_RUNS_PER_USER_LIMIT` | database caps remain authoritative across every replica and process. | `5` |
+| `AGENT_ACTIVE_RUNS_GLOBAL_LIMIT` | database caps remain authoritative across every replica and process. | `25` |
+| `APP_RATE_LIMIT_ASSISTANT_PER_MINUTE` | database caps remain authoritative across every replica and process. | `30` |
+| `APP_RATE_LIMIT_PIPELINE_RUNS_PER_MINUTE` | database caps remain authoritative across every replica and process. | `10` |
+| `APP_RATE_LIMIT_AGENT_RUNS_PER_MINUTE` | database caps remain authoritative across every replica and process. | `10` |
+| `SSH_POOL_IDLE_TTL_SECONDS` | database caps remain authoritative across every replica and process. | `60` |
+| `SSH_POOL_MAX_PER_SERVER` | database caps remain authoritative across every replica and process. | `4` |
+| `SSH_POOL_MAX_CONNECTIONS` | database caps remain authoritative across every replica and process. | `50` |
+| `WEBHOOK_SIGNATURE_TOLERANCE_SECONDS` | database caps remain authoritative across every replica and process. | `300` |
+| `SCHEDULED_AGENTS_INTERVAL` | database caps remain authoritative across every replica and process. | `60` |
+| `SCHEDULED_AGENTS_LIMIT` | database caps remain authoritative across every replica and process. | `100` |
 | `PLAYBOOK_EXECUTION_INTERVAL_SECONDS` | replica shares this database-enforced global claim limit. | `5` |
 | `PLAYBOOK_EXECUTION_LEASE_SECONDS` | replica shares this database-enforced global claim limit. | `180` |
 | `PLAYBOOK_EXECUTION_GLOBAL_CONCURRENCY` | replica shares this database-enforced global claim limit. | `4` |
@@ -183,7 +191,6 @@ Total variables: **304**.
 | `MONITOR_DEEP_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `600` |
 | `MONITOR_CONCURRENCY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `5` |
 | `MEMORY_DREAM_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `300` |
-| `AGENT_EXECUTION_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `5` |
 | `WATCHERS_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `120` |
 | `WATCHERS_LIMIT` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `100` |
 | `SERVER_BULK_WORKER_INTERVAL_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `2` |

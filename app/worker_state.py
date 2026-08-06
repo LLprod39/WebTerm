@@ -227,12 +227,17 @@ def serialize_background_worker_kind_state(worker_kind: str) -> dict[str, Any]:
     model = _worker_state_model()
     now = timezone.now()
     states = list(model.objects.filter(worker_kind=worker_kind).order_by("-updated_at", "worker_key"))
+    healthy_states = [
+        item
+        for item in states
+        if item.status == model.STATUS_RUNNING and item.lease_expires_at is not None and item.lease_expires_at > now
+    ]
     state = next(
-        (
-            item
-            for item in states
-            if item.status == model.STATUS_RUNNING and item.lease_expires_at is not None and item.lease_expires_at > now
-        ),
+        (item for item in healthy_states),
         states[0] if states else None,
     )
-    return _serialize_background_worker_state(worker_kind, "*", state)
+    payload = _serialize_background_worker_state(worker_kind, "*", state)
+    payload["replica_count"] = len(states)
+    payload["healthy_replica_count"] = len(healthy_states)
+    payload["healthy_worker_keys"] = [item.worker_key for item in healthy_states]
+    return payload

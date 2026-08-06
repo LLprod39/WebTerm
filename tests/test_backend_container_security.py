@@ -44,6 +44,7 @@ def test_production_compose_prepares_volumes_for_non_root_backend():
         "scheduled-pipelines",
         "operator-execution",
         "scheduled-agents",
+        "agent-execution",
         "history-pruner",
         "playbook-execution-worker",
         "monitor",

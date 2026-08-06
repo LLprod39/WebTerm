@@ -302,6 +302,96 @@ services:
           envVarKey: ANTHROPIC_API_KEY
 
   - type: worker
+    name: mini-prod-agent-execution
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./docker/backend.Dockerfile
+    dockerContext: .
+    dockerCommand: python manage.py run_agent_execution_plane --interval 2 --lease-seconds 180 --global-concurrency 5 --per-user-concurrency 2 --worker-concurrency 5
+    envVars:
+      - fromGroup: mini-prod-backend-common
+      - key: DJANGO_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: DJANGO_SECRET_KEY
+      - key: MANAGED_SECRET_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: MANAGED_SECRET_KEY
+      - key: CHANNEL_REDIS_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: mini-prod-redis
+          type: keyvalue
+          property: connectionString
+      - key: POSTGRES_HOST
+        fromDatabase:
+          name: mini-prod-postgres
+          property: host
+      - key: POSTGRES_PORT
+        fromDatabase:
+          name: mini-prod-postgres
+          property: port
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: mini-prod-postgres
+          property: database
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: mini-prod-postgres
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: mini-prod-postgres
+          property: password
+      - key: GEMINI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GEMINI_API_KEY
+      - key: OPENAI_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: OPENAI_API_KEY
+      - key: CODEX_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: CODEX_API_KEY
+      - key: ANTHROPIC_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: ANTHROPIC_API_KEY
+      - key: GROK_API_KEY
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: GROK_API_KEY
+      - key: TELEGRAM_BOT_TOKEN
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_BOT_TOKEN
+      - key: TELEGRAM_CHAT_ID
+        fromService:
+          name: mini-prod-backend
+          type: web
+          envVarKey: TELEGRAM_CHAT_ID
+
+  - type: worker
     name: mini-prod-monitor
     runtime: docker
     plan: starter
@@ -472,7 +562,7 @@ services:
     plan: starter
     dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
-    dockerCommand: python manage.py run_ops_supervisor --with-watchers --dream-interval 300 --execution-interval 5 --watchers-interval 120 --watchers-limit 100
+    dockerCommand: python manage.py run_ops_supervisor --without-agent-execution --with-watchers --dream-interval 300 --watchers-interval 120 --watchers-limit 100
     envVars:
       - fromGroup: mini-prod-backend-common
       - key: DJANGO_SECRET_KEY
@@ -633,7 +723,15 @@ envVarGroups:
       - key: MEMORY_DREAM_INTERVAL
         value: "300"
       - key: AGENT_EXECUTION_INTERVAL
+        value: "2"
+      - key: AGENT_EXECUTION_REPLICAS
+        value: "1"
+      - key: AGENT_EXECUTION_WORKER_CONCURRENCY
         value: "5"
+      - key: AGENT_EXECUTION_GLOBAL_CONCURRENCY
+        value: "5"
+      - key: AGENT_EXECUTION_PER_USER_CONCURRENCY
+        value: "2"
       - key: WATCHERS_INTERVAL
         value: "120"
       - key: WATCHERS_LIMIT

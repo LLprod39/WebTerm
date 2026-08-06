@@ -58,6 +58,10 @@ x-backend-worker-environment: &backend-worker-environment
   AGENT_COMMAND_DOCKER_PIDS_LIMIT: ${AGENT_COMMAND_DOCKER_PIDS_LIMIT:-64}
   AGENT_COMMAND_TIMEOUT_SECONDS: ${AGENT_COMMAND_TIMEOUT_SECONDS:-120}
   AGENT_COMMAND_OUTPUT_MAX_CHARS: ${AGENT_COMMAND_OUTPUT_MAX_CHARS:-100000}
+  AGENT_EXECUTION_REPLICAS: ${AGENT_EXECUTION_REPLICAS:-5}
+  AGENT_EXECUTION_WORKER_CONCURRENCY: ${AGENT_EXECUTION_WORKER_CONCURRENCY:-2}
+  AGENT_EXECUTION_GLOBAL_CONCURRENCY: ${AGENT_EXECUTION_GLOBAL_CONCURRENCY:-10}
+  AGENT_EXECUTION_PER_USER_CONCURRENCY: ${AGENT_EXECUTION_PER_USER_CONCURRENCY:-2}
   PLUGIN_BACKEND_DOCKER_HOST: tcp://plugin-backend-docker-proxy:2375
   PLUGIN_BACKEND_RUNNER_IMAGE: ${PLUGIN_BACKEND_RUNNER_IMAGE:-}
   PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK: ${PLUGIN_BACKEND_DOCKER_EGRESS_NETWORK:-}
@@ -423,6 +427,18 @@ services:
         "python manage.py run_scheduled_agents --daemon --interval ${SCHEDULED_AGENTS_INTERVAL:-60} --limit ${SCHEDULED_AGENTS_LIMIT:-100}",
       ]
 
+  agent-execution:
+    <<: *backend-worker
+    stop_grace_period: 12m
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec python manage.py run_agent_execution_plane --interval ${AGENT_EXECUTION_INTERVAL:-2} --lease-seconds ${AGENT_EXECUTION_LEASE_SECONDS:-180} --global-concurrency ${AGENT_EXECUTION_GLOBAL_CONCURRENCY:-10} --per-user-concurrency ${AGENT_EXECUTION_PER_USER_CONCURRENCY:-2} --worker-concurrency ${AGENT_EXECUTION_WORKER_CONCURRENCY:-2} --worker-key \"$${HOSTNAME:-production}\"",
+      ]
+    deploy:
+      replicas: ${AGENT_EXECUTION_REPLICAS:-5}
+
   history-pruner:
     <<: *backend-worker
     container_name: mini-prod-history-pruner
@@ -662,7 +678,7 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_ops_supervisor --with-watchers --dream-interval ${MEMORY_DREAM_INTERVAL:-300} --execution-interval ${AGENT_EXECUTION_INTERVAL:-5} --watchers-interval ${WATCHERS_INTERVAL:-120} --watchers-limit ${WATCHERS_LIMIT:-100}",
+        "python manage.py run_ops_supervisor --without-agent-execution --with-watchers --dream-interval ${MEMORY_DREAM_INTERVAL:-300} --watchers-interval ${WATCHERS_INTERVAL:-120} --watchers-limit ${WATCHERS_LIMIT:-100}",
       ]
 
   kubernetes-ops-sync:

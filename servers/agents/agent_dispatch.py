@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from datetime import timedelta
 from typing import Any
 
@@ -10,7 +11,7 @@ from django.utils import timezone
 from opentelemetry.trace import SpanKind
 
 from app.observability import capture_trace_context, start_span
-from servers.models import AgentRun, AgentRunDispatch
+from servers.models import AgentDispatchControl, AgentRun, AgentRunDispatch
 from servers.run_events import record_run_event
 
 logger = logging.getLogger(__name__)
@@ -132,12 +133,41 @@ def _fail_one_exhausted_dispatch(now) -> AgentRunDispatch | None:
     return exhausted
 
 
-def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> AgentRunDispatch | None:
+def claim_next_agent_dispatch(
+    *,
+    worker_name: str,
+    lease_seconds: int = 180,
+    global_concurrency: int = 10,
+    per_user_concurrency: int = 2,
+) -> AgentRunDispatch | None:
+    """Claim one dispatch under database-enforced global and per-user caps.
+
+    The named control row serializes only the short capacity decision. Execution
+    remains fully parallel across worker processes, while ``skip_locked`` and
+    attempt fencing prevent duplicate ownership.
+    """
+
     now = timezone.now()
     lease_delta = timedelta(seconds=max(int(lease_seconds), 30))
+    global_limit = max(1, int(global_concurrency))
+    user_limit = max(1, int(per_user_concurrency))
+    claimed_dispatch: AgentRunDispatch | None = None
     with transaction.atomic():
+        control, _created = AgentDispatchControl.objects.get_or_create(name="claim-capacity")
+        AgentDispatchControl.objects.select_for_update().get(pk=control.pk)
         _fail_one_exhausted_dispatch(now)
-        dispatch = (
+        active_user_ids = list(
+            AgentRunDispatch.objects.filter(
+                status=AgentRunDispatch.STATUS_CLAIMED,
+                lease_expires_at__gt=now,
+            ).values_list("user_id", flat=True)
+        )
+        if len(active_user_ids) >= global_limit:
+            return None
+
+        claims_by_user = Counter(active_user_ids)
+        blocked_user_ids = [user_id for user_id, count in claims_by_user.items() if count >= user_limit]
+        candidate_queryset = (
             AgentRunDispatch.objects.select_for_update(skip_locked=True, of=("self",))
             .select_related("run", "agent", "user")
             .filter(
@@ -150,8 +180,14 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
                 ],
                 attempt_count__lt=F("max_attempts"),
             )
-            .order_by("queued_at", "id")
-            .first()
+        )
+        if blocked_user_ids:
+            candidate_queryset = candidate_queryset.exclude(user_id__in=blocked_user_ids)
+        candidates = list(candidate_queryset.order_by("queued_at", "id")[:500])
+        dispatch = min(
+            candidates,
+            key=lambda candidate: (claims_by_user[candidate.user_id], candidate.queued_at, candidate.id),
+            default=None,
         )
         if dispatch is None:
             return None
@@ -181,19 +217,25 @@ def claim_next_agent_dispatch(*, worker_name: str, lease_seconds: int = 180) -> 
                 "error",
             ]
         )
+
+        claimed_dispatch = dispatch
+
+    # Keep audit/report work outside the capacity lock so slow observers do not
+    # serialize otherwise independent workers.
+    if claimed_dispatch is not None:
         record_run_event(
-            dispatch.run_id,
+            claimed_dispatch.run_id,
             "agent_dispatch_claimed",
             {
-                "dispatch_id": dispatch.id,
-                "dispatch_kind": dispatch.dispatch_kind,
+                "dispatch_id": claimed_dispatch.id,
+                "dispatch_kind": claimed_dispatch.dispatch_kind,
                 "worker_key": worker_name[:120],
-                "attempt_count": int(dispatch.attempt_count or 0),
+                "attempt_count": int(claimed_dispatch.attempt_count or 0),
                 "message": f"Dispatch claimed by worker {worker_name[:120]}",
             },
         )
-        _refresh_run_report_payload(dispatch.run_id)
-        return dispatch
+        _refresh_run_report_payload(claimed_dispatch.run_id)
+    return claimed_dispatch
 
 
 def heartbeat_agent_dispatch(
