@@ -1,0 +1,118 @@
+groups:
+  - name: webterm-pilot
+    interval: 30s
+    rules:
+      - alert: WebTermBackendDown
+        expr: up{job="webterm"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: WebTerm backend metrics endpoint is unavailable
+      - alert: WebTermTelemetryDown
+        expr: up{job="otel-collector"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: OpenTelemetry Collector is unavailable
+      - alert: WebTermMetricsProviderFailed
+        expr: webterm_metrics_provider_up == 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: A WebTerm durable metrics provider failed
+      - alert: WebTermAgentQueueOldest
+        expr: webterm_agent_queue_oldest_age_seconds > 120
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Oldest agent job has waited more than two minutes
+      - alert: WebTermAgentCapacityExceeded
+        expr: webterm_agent_active_dispatches > 10
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: Active agent dispatches exceed the ten-run pilot cap
+      - alert: WebTermAgentWorkerHeartbeatLow
+        expr: webterm_agent_execution_workers < 5
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Fewer than five pilot agent workers have a current heartbeat
+      - alert: WebTermAiAuthWorkerHeartbeatLost
+        expr: (webterm_ai_cli_enabled == 1) and on() (webterm_ai_auth_workers < 1)
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: AI CLI is enabled but no auth worker heartbeat is current
+      - alert: WebTermAiAuthBacklog
+        expr: (webterm_ai_auth_backlog > 8) and on() (webterm_ai_cli_enabled == 1)
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: AI provider device-login backlog exceeds eight jobs
+      - alert: WebTermAiLeaseOwnershipLost
+        expr: (webterm_ai_stale_leases > 0) and on() (webterm_ai_cli_enabled == 1)
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: An active AI provider lease has passed its ownership deadline
+      - alert: WebTermAiProviderFailures
+        expr: (delta(webterm_ai_provider_failures[5m]) > 5) and on() (webterm_ai_cli_enabled == 1)
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: AI CLI provider failures exceed the pilot threshold
+      - alert: WebTermAiQuotaLimited
+        expr: (webterm_ai_quota_limited_connections > 0) and on() (webterm_ai_cli_enabled == 1)
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: A pilot provider connection is quota-limited
+      - alert: WebTermPostgreSQLMetricsMissing
+        expr: count({__name__=~"postgresql_.*"}) < 1
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: PostgreSQL receiver metrics are missing
+      - alert: WebTermRedisMetricsMissing
+        expr: count({__name__=~"redis_.*"}) < 1
+        for: 3m
+        labels: {severity: critical}
+        annotations:
+          summary: Redis receiver metrics are missing
+      - alert: WebTermBackupSignalMissing
+        expr: absent(webterm_backup_last_success_unixtime_seconds) == 1
+        for: 30m
+        labels: {severity: critical}
+        annotations:
+          summary: No successful encrypted-backup status is available
+      - alert: WebTermBackupStale
+        expr: time() - webterm_backup_last_success_unixtime_seconds > 93600
+        for: 15m
+        labels: {severity: critical}
+        annotations:
+          summary: The latest successful encrypted backup is older than 26 hours
+      - alert: WebTermBackupFailed
+        expr: webterm_backup_last_failure_unixtime_seconds > webterm_backup_last_success_unixtime_seconds
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: The latest backup attempt failed after the latest success
+      - alert: WebTermHostCpuHigh
+        expr: avg(system_cpu_utilization_ratio) > 0.85
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: Pilot host CPU utilization is above 85 percent
+      - alert: WebTermHostMemoryHigh
+        expr: avg(system_memory_utilization_ratio) > 0.85
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: Pilot host memory utilization is above 85 percent
+      - alert: WebTermHostDiskHigh
+        expr: max(system_filesystem_utilization_ratio) > 0.8
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          summary: Pilot host filesystem utilization is above 80 percent

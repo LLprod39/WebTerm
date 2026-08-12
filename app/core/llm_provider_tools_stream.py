@@ -7,9 +7,15 @@ from typing import Any
 
 from loguru import logger
 
+from app.ai_runtime import LLMExecutionContext
 from app.core.llm_budget import BudgetExceededError, get_current_llm_budget_status
-from app.core.llm_provider_resolution import RuntimeProviderKeys, resolve_stream_provider
+from app.core.llm_provider_resolution import (
+    RuntimeProviderKeys,
+    apply_execution_context_binding,
+    resolve_stream_provider,
+)
 from app.core.llm_runtime import _is_ollama_connect_error, _provider_timeout_seconds
+from app.core.llm_subscription_stream import is_subscription_execution, stream_subscription_tools
 from app.core.llm_tools import (
     ollama_model_supports_tools,
     stream_anthropic_tools,
@@ -39,6 +45,7 @@ async def stream_provider_chat_tools(
     specific_model: str | None = None,
     purpose: str = "orchestrator",
     system_prompt: str | None = None,
+    execution_context: LLMExecutionContext | None = None,
 ) -> AsyncGenerator[dict[str, Any], None]:
     """Stream chat with native tool-calling (Anthropic → OpenAI → JSON fallback).
 
@@ -48,19 +55,34 @@ async def stream_provider_chat_tools(
       {"type":"done","usage":dict,"stop_reason":str}
       {"type":"error","message":str}
     """
+    model, specific_model = apply_execution_context_binding(
+        execution_context=execution_context,
+        requested_provider=model,
+        requested_specific_model=specific_model,
+    )
+
+    if is_subscription_execution(execution_context):
+        async for event in stream_subscription_tools(
+            context=execution_context,
+            messages=messages,
+            tools=tools,
+            system_prompt=system_prompt,
+        ):
+            yield event
+        return
+
     await provider._load_managed_api_keys()
 
-    if model == "auto" or not model:
-        model, specific_model = resolve_stream_provider(
-            requested_provider=model,
-            requested_specific_model=specific_model,
-            purpose=purpose,
-            model_manager=model_manager,
-            keys=RuntimeProviderKeys.from_llm_provider(provider),
-            ollama_base_url=provider._get_ollama_base_url(),
-            warn=logger.warning,
-        )
-        logger.info(f"[{purpose}/tools] using provider: {model}, model: {specific_model or '(default)'}")
+    model, specific_model = resolve_stream_provider(
+        requested_provider=model,
+        requested_specific_model=specific_model,
+        purpose=purpose,
+        model_manager=model_manager,
+        keys=RuntimeProviderKeys.from_llm_provider(provider),
+        ollama_base_url=provider._get_ollama_base_url(),
+        warn=logger.warning,
+    )
+    logger.info(f"[{purpose}/tools] using provider: {model}, model: {specific_model or '(default)'}")
 
     try:
         _budget = get_current_llm_budget_status()
@@ -170,6 +192,7 @@ async def stream_provider_chat_tools(
             purpose=purpose,
             system_prompt=system_prompt,
             json_mode=json_mode,
+            execution_context=execution_context,
         ):
             yield chunk
 

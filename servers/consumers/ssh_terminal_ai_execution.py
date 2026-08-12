@@ -389,6 +389,7 @@ class TerminalAiExecutionOperations:
             remaining_cmds=remaining_cmds or [],
             user_reply=user_reply,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("terminal_recovery"),
         )
 
     async def _ai_step_decide_next(
@@ -419,6 +420,7 @@ class TerminalAiExecutionOperations:
             remaining_cmds=remaining_cmds or [],
             user_reply=user_reply,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("terminal_step_decision"),
         )
 
     async def _ai_type_text(self, text: str):

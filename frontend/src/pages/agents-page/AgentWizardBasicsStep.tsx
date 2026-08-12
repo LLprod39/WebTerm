@@ -1,6 +1,8 @@
 import { Shield } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ProviderBindingSelect } from "@/components/settings/ProviderBindingSelect";
+import type { ProviderBinding } from "@/api/aiProviders";
 import { localize } from "@/lib/i18n";
 import {
   AGENT_BUDGET_PROFILES,
@@ -31,6 +33,9 @@ type AgentWizardBasicsStepProps = {
   setSessionTimeoutSeconds: StateSetter<number>;
   maxConnections: number;
   setMaxConnections: StateSetter<number>;
+  providerBinding: ProviderBinding | null;
+  setProviderBinding: StateSetter<ProviderBinding | null>;
+  providerMode: "interactive" | "unattended";
   sudoPolicy: AgentSudoPolicy;
   setSudoPolicy: StateSetter<AgentSudoPolicy>;
   setToolsConfig: StateSetter<Record<string, boolean>>;
@@ -58,6 +63,9 @@ export function AgentWizardBasicsStep({
   setSessionTimeoutSeconds,
   maxConnections,
   setMaxConnections,
+  providerBinding,
+  setProviderBinding,
+  providerMode,
   sudoPolicy,
   setSudoPolicy,
   setToolsConfig,
@@ -70,10 +78,11 @@ export function AgentWizardBasicsStep({
         {localize(lang, "Основные настройки", "Basics")}
       </h3>
       <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">
+        <label htmlFor="agent-name" className="text-sm font-medium text-foreground">
           {localize(lang, "Название агента", "Agent name")} <span className="text-primary">*</span>
         </label>
         <Input
+          id="agent-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={localize(lang, "Анализ логов", "Log analysis")}
@@ -83,16 +92,16 @@ export function AgentWizardBasicsStep({
       {mode === "mini" ? (
         <div className="space-y-2">
           <div>
-            <label className="text-sm font-medium text-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
+            <label htmlFor="agent-commands" className="text-sm font-medium text-foreground">{t("agent.commands_label")} <span className="text-primary">*</span></label>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Каждая команда — с новой строки. Агент выполнит их по порядку.", "One command per line. The agent runs them in order.")}</p>
           </div>
-          <Textarea value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
+          <Textarea id="agent-commands" value={commands} onChange={(e) => setCommands(e.target.value)} rows={7} className="font-mono text-xs" placeholder={"hostname\nuptime\nfree -m"} />
         </div>
       ) : (
         <>
           <div className="space-y-2">
             <div>
-              <label className="text-sm font-medium text-foreground">
+              <label htmlFor="agent-goal" className="text-sm font-medium text-foreground">
                 {localize(lang, "Цель", "Goal")}
               </label>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -100,6 +109,7 @@ export function AgentWizardBasicsStep({
               </p>
             </div>
             <Textarea
+              id="agent-goal"
               value={goal}
               onChange={(e) => setGoal(e.target.value)}
               rows={3}
@@ -113,10 +123,10 @@ export function AgentWizardBasicsStep({
           </div>
           <div className="space-y-2">
             <div className="pt-2">
-              <label className="text-sm font-medium text-foreground">{localize(lang, "Инструкции (поведение)", "Instructions (behaviour)")}</label>
+              <label htmlFor="agent-system-prompt" className="text-sm font-medium text-foreground">{localize(lang, "Инструкции (поведение)", "Instructions (behaviour)")}</label>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как агенту себя вести: роль, стиль, ограничения.", "How the agent should behave: role, style, constraints.")}</p>
             </div>
-            <Textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: действуй осторожно, ничего не меняй без подтверждения", "e.g. act carefully, do not change anything without confirmation")} />
+            <Textarea id="agent-system-prompt" value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} rows={3} className="bg-background/60 text-sm" placeholder={localize(lang, "Например: действуй осторожно, ничего не меняй без подтверждения", "e.g. act carefully, do not change anything without confirmation")} />
           </div>
           <div className="space-y-2">
             <div className="pt-1">
@@ -188,13 +198,38 @@ export function AgentWizardBasicsStep({
       )}
       <div className="space-y-2">
         <div className="pt-2">
-          <label className="text-sm font-medium text-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как разобрать и оформить результат выполнения.", "How to interpret and format the run's results.")}</p>
+          <label id="agent-provider-label" className="text-sm font-medium text-foreground">
+            {localize(lang, "AI-провайдер задачи", "Task AI provider")}
+          </label>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {localize(
+              lang,
+              providerMode === "unattended"
+                ? "Для расписания показаны только подключения с правом фонового запуска. Привязка закрепляется за запуском."
+                : "Можно закрепить Codex CLI или Grok CLI за агентом; без выбора действует настройка по умолчанию.",
+              providerMode === "unattended"
+                ? "Only connections allowed for background runs are shown. The binding is pinned to each run."
+                : "Pin Codex CLI or Grok CLI to this agent, or use the configured task default.",
+            )}
+          </p>
         </div>
-        <Textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={4} className="bg-background/60 text-sm" />
+        <ProviderBindingSelect
+          value={providerBinding}
+          onChange={setProviderBinding}
+          mode={providerMode}
+          lang={lang === "ru" ? "ru" : "en"}
+          ariaLabel={localize(lang, "AI-провайдер задачи", "Task AI provider")}
+        />
       </div>
       <div className="space-y-2">
-        <label className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Права запуска", "Run access")}</label>
+        <div className="pt-2">
+          <label htmlFor="agent-analysis-prompt" className="text-sm font-medium text-foreground">{localize(lang, "Инструкции к анализу", "Analysis instructions")}</label>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Как разобрать и оформить результат выполнения.", "How to interpret and format the run's results.")}</p>
+        </div>
+        <Textarea id="agent-analysis-prompt" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={4} className="bg-background/60 text-sm" />
+      </div>
+      <div className="space-y-2">
+        <p className="pt-2 text-sm font-medium text-muted-foreground">{localize(lang, "Права запуска", "Run access")}</p>
         <div className="grid gap-3 md:grid-cols-3">
           {SUDO_AGENT_OPTIONS.map((option) => {
             const active = sudoPolicy === option.value;

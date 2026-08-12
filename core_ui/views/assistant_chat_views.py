@@ -37,7 +37,7 @@ def _err(message: str, status: int = 400) -> JsonResponse:
     return JsonResponse({"error": message}, status=status)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 def api_assistant_chats(request):
     if request.method == "GET":
         return JsonResponse({"chats": list_chat_sessions(request.user)})
@@ -50,7 +50,7 @@ def api_assistant_chats(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["GET", "POST", "PATCH"])
 def api_assistant_artifacts(request, chat_id: int):
     from core_ui.services.operator_artifacts import (
@@ -97,7 +97,7 @@ def api_assistant_artifacts(request, chat_id: int):
     return JsonResponse(serialize_artifact(art))
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 def api_assistant_duty(request):
     """Get/create duty session, toggle enabled, or force a briefing."""
     from core_ui.services.operator_duty import (
@@ -142,7 +142,7 @@ def api_assistant_duty(request):
     return _err("Method not allowed", 405)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 def api_assistant_chat_detail(request, chat_id: int):
     session = get_chat_session(request.user, chat_id)
     if session is None:
@@ -165,6 +165,14 @@ def api_assistant_chat_detail(request, chat_id: int):
             if kind in {"manual", "duty", "incident"}:
                 session.kind = kind
                 update_fields.append("kind")
+        if "provider_binding" in data:
+            binding = data.get("provider_binding")
+            if binding in ({}, None):
+                session.provider_binding = {}
+                session.provider_session_id = ""
+                update_fields.extend(["provider_binding", "provider_session_id"])
+            else:
+                return _err("A chat binding is pinned by sending a message with that provider", 400)
         if update_fields:
             update_fields.append("updated_at")
             session.save(update_fields=update_fields)
@@ -177,7 +185,7 @@ def api_assistant_chat_detail(request, chat_id: int):
     return _err("Method not allowed", 405)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_chat_message(request, chat_id: int):
     session = get_chat_session(request.user, chat_id)
@@ -194,7 +202,13 @@ def api_assistant_chat_message(request, chat_id: int):
         return _err(f"Message is too large (max {MAX_MESSAGE_CHARS} characters).", 413)
 
     try:
-        result = handle_user_message(session, request.user, message, request=request)
+        result = handle_user_message(
+            session,
+            request.user,
+            message,
+            request=request,
+            provider_binding=data.get("provider_binding"),
+        )
     except AssistantActionError as exc:
         if exc.status >= 500:
             return internal_error_response(request, exc, status=exc.status)
@@ -213,7 +227,7 @@ def api_assistant_chat_message(request, chat_id: int):
     )
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_chat_create_and_message(request):
     data = _json_body(request)
@@ -226,7 +240,13 @@ def api_assistant_chat_create_and_message(request):
         return _err(f"Message is too large (max {MAX_MESSAGE_CHARS} characters).", 413)
     session = create_chat_session(request.user, title=message[:80])
     try:
-        result = handle_user_message(session, request.user, message, request=request)
+        result = handle_user_message(
+            session,
+            request.user,
+            message,
+            request=request,
+            provider_binding=data.get("provider_binding"),
+        )
     except AssistantActionError as exc:
         session.delete()
         if exc.status >= 500:
@@ -274,7 +294,7 @@ def _resume_operator_if_parked(action: AssistantAction, *, request=None, cancell
         logger.warning("assistant action resume failed action_id={}: {}", action.pk, exc)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_action_confirm(request, action_id: int):
     action = _get_action_for_user(request.user, action_id)
@@ -300,7 +320,7 @@ def api_assistant_action_confirm(request, action_id: int):
     return JsonResponse(serialize_action(action), status=status)
 
 
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_action_cancel(request, action_id: int):
     action = _get_action_for_user(request.user, action_id)

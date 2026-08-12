@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout exact commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install age for encrypted backup and restore validation
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends age
       - name: Run production backup, isolated restore and recovery smoke
         run: ./docker/production-recovery-smoke.sh
       - name: Upload privacy-safe F-13b evidence

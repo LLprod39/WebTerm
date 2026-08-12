@@ -104,6 +104,8 @@ def test_accessible_server_sync_helpers_include_owned_server_only():
 async def test_open_agent_target_connection_uses_authorized_server_secret_and_connects():
     class FakeServer:
         id = 7
+        host = "10.0.0.7"
+        port = 22
 
     calls: dict[str, object] = {}
     fake_server = FakeServer()

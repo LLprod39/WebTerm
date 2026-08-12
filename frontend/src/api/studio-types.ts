@@ -40,6 +40,7 @@ export interface PipelineListItem {
   is_owner?: boolean;
   can_edit?: boolean;
   access_mode?: StudioAccessMode;
+  provider_binding?: import("./aiProviders").ProviderBinding;
 }
 
 export interface PipelineNode {
@@ -175,6 +176,7 @@ export interface AgentConfig extends StudioAccessMetadata {
   skill_errors?: string[];
   mcp_servers: Array<{ id: number; name: string; transport: string }>;
   server_scope: Array<{ id: number; name: string }>;
+  provider_binding?: import("./aiProviders").ProviderBinding;
 }
 
 export interface StudioSkill extends StudioAccessMetadata {

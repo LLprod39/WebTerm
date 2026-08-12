@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { AssistantChatMessage, AssistantChatSession } from "@/api";
+import type { AssistantChatMessage, AssistantChatSession, ProviderBinding } from "@/api";
 import type { useToast } from "@/hooks/use-toast";
 
 import { hasMarkdownTable, inferInventorySkeletonKind } from "./InventoryPanelSkeleton";
@@ -48,6 +48,7 @@ export type UseChatPageOperatorRuntimeParams = {
   setAtBottom: Dispatch<SetStateAction<boolean>>;
   sendMutationPending: boolean;
   createChatMutationPending: boolean;
+  providerBinding: ProviderBinding | null;
 };
 
 export function useChatPageOperatorRuntime({
@@ -74,6 +75,7 @@ export function useChatPageOperatorRuntime({
   setAtBottom,
   sendMutationPending,
   createChatMutationPending,
+  providerBinding,
 }: UseChatPageOperatorRuntimeParams) {
   // Handlers recreated each render; useOperatorChatWs stores them in a ref.
   const handlers = createChatOperatorHandlers({
@@ -257,11 +259,11 @@ export function useChatPageOperatorRuntime({
   useEffect(() => {
     if (!pendingSend || !activeChatId || !operatorReady) return;
     const text = pendingSend;
-    if (sendOperatorMessage(text)) {
+    if (sendOperatorMessage(text, providerBinding)) {
       setDraft("");
       setPendingSend(null);
     }
-  }, [pendingSend, activeChatId, operatorReady, sendOperatorMessage, setDraft, setPendingSend]);
+  }, [pendingSend, activeChatId, operatorReady, providerBinding, sendOperatorMessage, setDraft, setPendingSend]);
 
   const turnOpen =
     Boolean(activeTurn?.busy) ||

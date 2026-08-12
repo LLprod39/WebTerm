@@ -9,6 +9,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.utils import timezone
 
+from core_ui.views.access_views import _apply_access_profile
 from servers.agents.agent_dispatch import enqueue_agent_run_dispatch
 from servers.agents.scheduled_agents import dispatch_scheduled_agents, is_agent_due
 from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
@@ -70,6 +71,7 @@ def test_is_agent_due_respects_daily_schedule_config():
 @pytest.mark.django_db
 def test_dispatch_scheduled_agents_launches_due_full_agent(monkeypatch):
     user = User.objects.create_user(username="sched-full-user", password="x")
+    _apply_access_profile(user, "pilot_operator")
     server = _create_server(user, name="scheduled-full-node")
     agent = ServerAgent.objects.create(
         user=user,
@@ -120,6 +122,7 @@ def test_dispatch_scheduled_agents_launches_due_full_agent(monkeypatch):
 @pytest.mark.django_db
 def test_dispatch_scheduled_agents_queues_mini_agent(monkeypatch):
     user = User.objects.create_user(username="sched-mini-user", password="x")
+    _apply_access_profile(user, "pilot_operator")
     server = _create_server(user, name="scheduled-mini-node")
     agent = ServerAgent.objects.create(
         user=user,
@@ -170,6 +173,7 @@ def test_dispatch_scheduled_agents_queues_mini_agent(monkeypatch):
 @pytest.mark.django_db
 def test_dispatch_scheduled_agents_skips_active_runs():
     user = User.objects.create_user(username="sched-active-user", password="x")
+    _apply_access_profile(user, "pilot_operator")
     server = _create_server(user, name="scheduled-active-node")
     agent = ServerAgent.objects.create(
         user=user,

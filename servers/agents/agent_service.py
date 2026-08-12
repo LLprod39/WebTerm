@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
+from core_ui.activity import log_user_activity
 from core_ui.projects import active_project_for_user
 from servers.agents.agent_background import launch_plan_execution_background
 from servers.agents.agent_cleanup_service import cleanup_stale_agent_runs_for_user as cleanup_stale_agent_runs_for_user
@@ -16,6 +17,7 @@ from servers.agents.agent_execution_state import (
 )
 from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
 from servers.agents.agent_launch import launch_queued_agent_run
+from servers.agents.agent_pilot_policy import pilot_agent_policy_violations_for_agent
 from servers.agents.agent_run_lifecycle import mark_agent_run_stopped
 from servers.agents.agent_run_report import record_run_event_and_refresh_report, refresh_agent_run_report_payload
 from servers.agents.agent_runtime import get_engine_for_agent, get_engine_for_run, update_runtime_control
@@ -62,6 +64,8 @@ def serialize_run_result(run: AgentRun) -> dict:
         "total_iterations": run.total_iterations,
         "final_report": run.final_report,
         "dispatch": serialize_agent_dispatch(latest_dispatch),
+        "provider_binding_snapshot": dict(run.provider_binding_snapshot or {}),
+        "provider_session_id": run.provider_session_id or "",
     }
 
 
@@ -106,6 +110,7 @@ def serialize_agent_item(
         "skill_slugs": list(agent.skill_slugs or []),
         "input_artifacts": normalize_input_artifacts(agent.input_artifacts),
         "report_delivery": normalize_report_delivery(agent.report_delivery),
+        "provider_binding": dict(agent.provider_binding or {}),
         "session_timeout_seconds": agent.session_timeout_seconds,
         "max_connections": agent.max_connections,
         "last_run_at": agent.last_run_at.isoformat() if agent.last_run_at else None,
@@ -238,17 +243,42 @@ def start_agent_run_for_user(
     server_id: int | None = None,
     source: str = "http",
     extra_event_payload: dict | None = None,
+    provider_binding: dict | None = None,
 ) -> dict:
     """Queue any agent mode (mini/full/multi) for the execution-plane worker.
 
     Never runs SSH/LLM inside the HTTP request — that blocked Daphne threads and
     left orphan ``running`` rows when the client timed out or the worker hung.
     """
+    violations = pilot_agent_policy_violations_for_agent(user=user, agent=agent)
+    if violations:
+        log_user_activity(
+            user=user,
+            category="agent",
+            action="pilot_policy_denied",
+            status="warning",
+            description="Agent launch denied by restricted pilot safety policy",
+            entity_type="agent",
+            entity_id=agent.pk,
+            entity_name=agent.name,
+            metadata={"source": source, "violations": violations},
+        )
+        return {
+            "ok": False,
+            "status": 403,
+            "payload": {
+                "success": False,
+                "error": "Agent configuration violates restricted pilot policy",
+                "code": "pilot_policy_violation",
+                "fields": {"agent": violations},
+            },
+        }
     launch_result = launch_queued_agent_run(
         agent=agent,
         user=user,
         accessible_servers_queryset=accessible_servers_queryset,
         server_id=int(server_id) if server_id is not None else None,
+        explicit_provider_binding=provider_binding,
     )
     if not launch_result["ok"]:
         payload = launch_result.get("payload")

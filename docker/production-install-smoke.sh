@@ -9,6 +9,8 @@ ARTIFACT_DIR="${F13A_ARTIFACT_DIR:-$ROOT_DIR/.ci-artifacts/production-install-sm
 PROJECT_NAME="${F13A_PROJECT_NAME:-webterm-f13a-smoke}"
 KEEP_UP="${F13A_KEEP_UP:-0}"
 RELEASE_IMAGES="${F13A_RELEASE_IMAGES:-0}"
+WITH_AI_CLI="${F13A_WITH_AI_CLI:-0}"
+WITH_OBSERVABILITY="${F13A_WITH_OBSERVABILITY:-0}"
 HTTPS_PORT="${F13A_HTTPS_PORT:-18443}"
 ADMIN_USERNAME="f13a-admin"
 ADMIN_PASSWORD="F13aSmokePass123!"
@@ -21,6 +23,8 @@ ENV_CREATED=0
 TLS_CREATED=0
 TLS_CERT="$ROOT_DIR/docker/nginx/ssl/mini-prod-selfsigned.crt"
 TLS_KEY="$ROOT_DIR/docker/nginx/ssl/mini-prod-selfsigned.key"
+AI_CLI_SMOKE_VOLUME=""
+BACKUP_KEY_DIR=""
 
 mkdir -p "$ARTIFACT_DIR"
 exec > >(tee "$ARTIFACT_DIR/production-install-smoke.log") 2>&1
@@ -58,6 +62,12 @@ cleanup() {
   trap - EXIT
   collect_runtime_evidence
   rm -f "$COOKIE_JAR" "$LOGIN_PAYLOAD"
+  if [[ -n "$AI_CLI_SMOKE_VOLUME" ]]; then
+    docker volume rm -f "$AI_CLI_SMOKE_VOLUME" >/dev/null 2>&1 || true
+  fi
+  if [[ -n "$BACKUP_KEY_DIR" && "$BACKUP_KEY_DIR" == /tmp/* ]]; then
+    rm -rf -- "$BACKUP_KEY_DIR"
+  fi
   if [[ "$STARTED" -eq 1 && "$exit_code" -eq 0 && "$KEEP_UP" == "1" ]]; then
     retained=1
     echo "Retaining the successful F-13a stack for a parent recovery drill"
@@ -89,6 +99,8 @@ assert_fresh_host() {
     mini-prod-postgres mini-prod-redis mini-prod-backend mini-prod-frontend mini-prod-nginx
     mini-prod-mcp-runner mini-prod-scheduled-pipelines mini-prod-pipeline-execution mini-prod-scheduled-agents
     mini-prod-history-pruner mini-prod-monitor mini-prod-ops-supervisor mini-prod-kubernetes-ops-sync mini-prod-celery-worker
+    mini-prod-ai-cli-docker-proxy mini-prod-ai-cli-egress-proxy mini-prod-ai-cli-runner-manager mini-prod-ai-provider-auth
+    mini-prod-otel-collector mini-prod-prometheus mini-prod-alertmanager mini-prod-grafana mini-prod-tempo mini-prod-loki
     mini-prod-playbook-docker-proxy-smoke
     mini-prod-ssh-target-smoke
   )
@@ -177,6 +189,28 @@ values = {
     "POSTGRES_PASSWORD": secrets.token_urlsafe(32),
     "STUDIO_MCP_RUNNER_TOKEN": secrets.token_urlsafe(48),
     "AGENT_COMMAND_RUNNER_IMAGE": os.environ.get("AGENT_COMMAND_RUNNER_IMAGE", ""),
+    "AI_CLI_SUBSCRIPTIONS_ENABLED": "true" if os.environ.get("F13A_WITH_AI_CLI") == "1" else "false",
+    "AI_CLI_RUNNER_MANAGER_TOKEN": secrets.token_urlsafe(48),
+    "AI_CLI_CODEX_RUNNER_IMAGE": os.environ.get("AI_CLI_CODEX_RUNNER_IMAGE", ""),
+    "AI_CLI_GROK_RUNNER_IMAGE": os.environ.get("AI_CLI_GROK_RUNNER_IMAGE", ""),
+    "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE": os.environ.get("WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE", ""),
+    "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE": os.environ.get("WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE", ""),
+    "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE": os.environ.get("WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE", ""),
+    "GRAFANA_ADMIN_PASSWORD": secrets.token_urlsafe(36),
+    "GRAFANA_BIND_HOST": "127.0.0.1",
+    "GRAFANA_PORT": "13000",
+    "GRAFANA_ROOT_URL": "http://127.0.0.1:13000",
+    "GRAFANA_COOKIE_SECURE": "false",
+    "BACKUP_AGE_RECIPIENT_FILE": os.environ.get("F13A_BACKUP_AGE_RECIPIENT_FILE", "/missing/pilot-backup-recipient"),
+    "BACKUP_DIR": os.environ.get("F13A_BACKUP_DIR", "./backups/postgres"),
+    "BACKUP_STATUS_DIR": os.environ.get("F13A_BACKUP_STATUS_DIR", "./backups/status"),
+    "ALERTMANAGER_WEBHOOK_URL_FILE": os.environ.get(
+        "F13A_ALERTMANAGER_WEBHOOK_URL_FILE", "/missing/pilot-alertmanager-webhook"
+    ),
+    "PILOT_RESTRICTED_MODE": "true",
+    "PILOT_SSH_ALLOWED_HOSTS": "ssh-target",
+    "PILOT_SSH_ALLOWED_CIDRS": "172.30.253.0/24",
+    "PILOT_SSH_ALLOWED_PORTS": "2222",
     "PLUGIN_MARKETPLACE_RELEASE_MODE": "disabled",
     "SMOKE_SSH_USERNAME": "smoke",
     "SMOKE_SSH_PASSWORD": "smoke-password",
@@ -362,6 +396,24 @@ require_command curl
 require_command python3
 require_command openssl
 require_command timeout
+if [[ "$WITH_OBSERVABILITY" == "1" ]]; then
+  require_command age
+  require_command age-keygen
+  require_command sudo
+  BACKUP_KEY_DIR="$(mktemp -d)"
+  age-keygen -o "$BACKUP_KEY_DIR/identity" >/dev/null 2>&1
+  age-keygen -y "$BACKUP_KEY_DIR/identity" >"$BACKUP_KEY_DIR/recipient"
+  chmod 600 "$BACKUP_KEY_DIR/identity"
+  chmod 644 "$BACKUP_KEY_DIR/recipient"
+  export F13A_BACKUP_AGE_RECIPIENT_FILE="$BACKUP_KEY_DIR/recipient"
+  export F13A_BACKUP_DIR="$ARTIFACT_DIR/encrypted-backups"
+  export F13A_BACKUP_STATUS_DIR="$ARTIFACT_DIR/backup-status"
+  printf '%s\n' 'https://alerts.example.invalid/webterm-production-smoke' \
+    >"$BACKUP_KEY_DIR/alertmanager.webhook-url"
+  chmod 600 "$BACKUP_KEY_DIR/alertmanager.webhook-url"
+  sudo chown 65534:65534 "$BACKUP_KEY_DIR/alertmanager.webhook-url"
+  export F13A_ALERTMANAGER_WEBHOOK_URL_FILE="$BACKUP_KEY_DIR/alertmanager.webhook-url"
+fi
 docker compose version >/dev/null
 record_host_metadata
 assert_fresh_host
@@ -381,7 +433,99 @@ install_args=(
 if [[ "$RELEASE_IMAGES" == "1" ]]; then
   install_args+=(--pull --no-build)
 fi
+if [[ "$WITH_AI_CLI" == "1" ]]; then
+  install_args+=(--with-ai-cli)
+fi
+if [[ "$WITH_OBSERVABILITY" == "1" ]]; then
+  install_args+=(--with-observability)
+fi
 printf '%s\n' "$ADMIN_PASSWORD" | bash "$ROOT_DIR/docker/install-production.sh" "${install_args[@]}"
+
+if [[ "$WITH_AI_CLI" == "1" ]]; then
+  echo "==> Verifying the isolated AI CLI production profile"
+  for service in ai-cli-docker-proxy ai-cli-egress-proxy ai-cli-runner-manager ai-provider-auth; do
+    wait_for_service "$service" 240
+  done
+
+  egress_id="$(compose ps -q ai-cli-egress-proxy | head -n 1)"
+  manager_id="$(compose ps -q ai-cli-runner-manager | head -n 1)"
+  docker inspect --format '{{json .Config.Healthcheck.Test}}' "$egress_id" | grep -Fq squidclient
+  docker inspect --format '{{json .Config.Healthcheck.Test}}' "$manager_id" | grep -Fq 127.0.0.1:9000/health
+
+  compose exec -T ai-cli-runner-manager python - <<'PY' \
+    | tee "$ARTIFACT_DIR/ai-cli-egress-policy.txt"
+import socket
+
+
+def proxy_status(authority: str) -> int:
+    with socket.create_connection(("ai-cli-egress-proxy", 3128), timeout=10) as stream:
+        request = (
+            f"CONNECT {authority} HTTP/1.1\r\n"
+            f"Host: {authority}\r\n"
+            "Proxy-Connection: close\r\n\r\n"
+        )
+        stream.sendall(request.encode("ascii"))
+        response = stream.recv(4096).split(b"\r\n", 1)[0].decode("ascii", "replace")
+    parts = response.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        raise SystemExit(f"invalid proxy response for {authority}: {response}")
+    return int(parts[1])
+
+
+for denied in (
+    "127.0.0.1:443",
+    "169.254.169.254:443",
+    "10.0.0.1:443",
+    "postgres:5432",
+    "redis:6379",
+    "backend:443",
+    "example.com:443",
+):
+    status = proxy_status(denied)
+    if status != 403:
+        raise SystemExit(f"egress policy allowed {denied}: HTTP {status}")
+    print(f"deny {denied}=403")
+
+for allowed in ("api.openai.com:443", "api.x.ai:443"):
+    status = proxy_status(allowed)
+    if status != 200:
+        raise SystemExit(f"official provider endpoint unavailable {allowed}: HTTP {status}")
+    print(f"allow {allowed}=200")
+PY
+
+  credential_prefix="$(awk -F= '$1 == "AI_CLI_CREDENTIAL_VOLUME_PREFIX" {print $2}' "$ENV_FILE" | tail -n 1)"
+  credential_volume="${credential_prefix}smokeuid1234"
+  AI_CLI_SMOKE_VOLUME="$credential_volume"
+  codex_image="$(awk -F= '$1 == "AI_CLI_CODEX_RUNNER_IMAGE" {print $2}' "$ENV_FILE" | tail -n 1)"
+  docker volume create "$credential_volume" >/dev/null
+  docker run --rm \
+    --user 10001:10001 \
+    --entrypoint /bin/sh \
+    --mount "type=volume,src=$credential_volume,dst=/credentials" \
+    "$codex_image" \
+    -ec 'test -w /credentials/codex; printf ready > /credentials/codex/uid-10001-smoke'
+  docker run --rm \
+    --user 10001:10001 \
+    --entrypoint /bin/sh \
+    --mount "type=volume,src=$credential_volume,dst=/credentials" \
+    "$codex_image" \
+    -ec 'test "$(cat /credentials/codex/uid-10001-smoke)" = ready'
+  docker volume rm "$credential_volume" >/dev/null
+  AI_CLI_SMOKE_VOLUME=""
+  printf '%s\n' "AI CLI profile healthchecks and UID 10001 credential volume passed" \
+    >"$ARTIFACT_DIR/ai-cli-profile.txt"
+fi
+
+if [[ "$WITH_OBSERVABILITY" == "1" ]]; then
+  echo "==> Verifying the built-in observability profile"
+  for service in tempo loki alertmanager otel-collector prometheus grafana; do
+    wait_for_service "$service" 240
+  done
+  compose exec -T alertmanager /bin/amtool check-config /etc/alertmanager/alertmanager.yml \
+    >"$ARTIFACT_DIR/alertmanager-config.txt"
+  curl --fail --silent --show-error http://127.0.0.1:13000/api/health \
+    >"$ARTIFACT_DIR/grafana-health.json"
+fi
 
 echo "==> Verifying agent commands have only the filtered Docker API"
 compose exec -T backend sh -lc \

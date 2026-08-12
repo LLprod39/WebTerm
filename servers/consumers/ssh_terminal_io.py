@@ -211,6 +211,15 @@ class TerminalIoOperations:
 
         return await user_can_servers(user_id)
 
+    @database_sync_to_async
+    def _user_can_automation(self, user_id: int) -> bool:
+        from django.contrib.auth import get_user_model
+
+        from servers.agents.agent_pilot_policy import user_can_automate
+
+        user = get_user_model().objects.filter(pk=user_id, is_active=True).first()
+        return bool(user and user_can_automate(user))
+
     async def _get_terminal_session_limit(self, user_id: int) -> dict[str, object] | None:
         from servers.services.terminal_access import get_terminal_session_limit
 

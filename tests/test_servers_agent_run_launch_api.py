@@ -6,6 +6,7 @@ from django.test import Client, override_settings
 from django.utils import timezone
 
 from app.runtime_limits import get_terminal_session_limit_error
+from core_ui.views.access_views import _apply_access_profile
 from servers.models import (
     AgentRun,
     AgentRunDispatch,
@@ -28,7 +29,7 @@ from tests.servers_api_smoke_harness import json_payload as _json
 )
 def test_agent_run_launches_in_background(monkeypatch, mode, extra_fields):
     user = User.objects.create_user(username=f"agent-user-{mode}", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
 
@@ -93,7 +94,7 @@ def test_agent_run_launches_in_background(monkeypatch, mode, extra_fields):
 @override_settings(AGENT_ACTIVE_RUNS_PER_USER_LIMIT=1, AGENT_ACTIVE_RUNS_GLOBAL_LIMIT=0)
 def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
     user = User.objects.create_user(username="agent-limit-user", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
 
@@ -142,7 +143,7 @@ def test_full_agent_run_enforces_user_active_run_limit(monkeypatch):
 @pytest.mark.django_db
 def test_multi_agent_run_launches_without_plan_only(monkeypatch):
     user = User.objects.create_user(username="multi-launch-user", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
 
@@ -261,7 +262,7 @@ def test_multi_agent_approve_plan_launches_in_background(monkeypatch):
 @pytest.mark.django_db
 def test_agent_schedule_overview_and_dispatch_api(monkeypatch):
     user = User.objects.create_user(username="agent-schedule-user", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
 

@@ -36,6 +36,7 @@ from servers.services.terminal_ai.agent.tools.base import (
     tool_err,
     tool_ok,
 )
+from servers.services.terminal_ai.server_ai_policy import is_terminal_ai_read_only_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +184,11 @@ class ShellTool:
         gate = evaluate_command_execution_gate(cmd)
 
         # Read-only is an immutable target boundary, not an approval prompt.
-        if target.read_only and not is_read_only_command(cmd):
+        effective_read_only = target.read_only or await sync_to_async(
+            is_terminal_ai_read_only_for_user,
+            thread_sensitive=True,
+        )(target.server_id, ctx.user_id)
+        if effective_read_only and not is_read_only_command(cmd):
             return tool_err(
                 f"target '{target.name}' is in read-only mode",
                 output=(

@@ -44,7 +44,7 @@ from servers.views.server_playbook_serializers import (
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_list(request):
     qs = _playbooks_for_user(request.user).order_by("-updated_at")
@@ -66,7 +66,7 @@ def playbook_list(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_detail(request, playbook_id: int):
     pb = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
@@ -74,7 +74,7 @@ def playbook_detail(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_create(request):
     data = json.loads(request.body or "{}")
@@ -139,7 +139,7 @@ def playbook_create(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 @transaction.atomic
 def playbook_update(request, playbook_id: int):
@@ -218,7 +218,7 @@ def playbook_update(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_delete(request, playbook_id: int):
     pb = get_object_or_404(Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user))
@@ -249,7 +249,7 @@ def playbook_delete(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_restore(request, playbook_id: int):
     pb = get_object_or_404(
@@ -266,7 +266,7 @@ def playbook_restore(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_duplicate(request, playbook_id: int):
     pb = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
@@ -297,7 +297,7 @@ def playbook_duplicate(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_import(request):
     data = json.loads(request.body or "{}")
@@ -343,7 +343,7 @@ def playbook_import(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_ansible_status(request):
     if validator_socket_path():
@@ -378,14 +378,14 @@ def playbook_ansible_status(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_guided_recipes(request):
     return JsonResponse({"success": True, "recipes": list_guided_recipes()})
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_guided_generate(request):
     data = json.loads(request.body or "{}")
@@ -419,14 +419,14 @@ def playbook_guided_generate(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_templates(request):
     return JsonResponse({"success": True, "templates": list_templates()})
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_template_install(request, slug: str):
     tmpl = get_template(slug)

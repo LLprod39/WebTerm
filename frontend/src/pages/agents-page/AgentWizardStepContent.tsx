@@ -35,6 +35,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     setSessionTimeoutSeconds,
     maxConnections,
     setMaxConnections,
+    providerBinding,
+    setProviderBinding,
+    providerMode,
     sudoPolicy,
     setSudoPolicy,
     servers,
@@ -55,6 +58,10 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     enabledToolCount,
     toolsConfig,
     setToolsConfig,
+    canConfigureMutatingTools,
+    mutatingToolsAcknowledged,
+    setMutatingToolsAcknowledged,
+    mutatingToolsEnabled,
     toolsExpanded,
     setToolsExpanded,
     stopConditionsText,
@@ -86,7 +93,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     commandCount,
     readiness,
     readinessChecks,
-    runAfterSave = true,
+    runAfterSave = false,
     setRunAfterSave,
     isEditing = false,
   } = props;
@@ -127,6 +134,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             setSessionTimeoutSeconds={setSessionTimeoutSeconds}
             maxConnections={maxConnections}
             setMaxConnections={setMaxConnections}
+            providerBinding={providerBinding}
+            setProviderBinding={setProviderBinding}
+            providerMode={providerMode}
             sudoPolicy={sudoPolicy}
             setSudoPolicy={setSudoPolicy}
             setToolsConfig={setToolsConfig}
@@ -162,6 +172,10 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             enabledToolCount={enabledToolCount}
             toolsConfig={toolsConfig}
             setToolsConfig={setToolsConfig}
+            canConfigureMutatingTools={canConfigureMutatingTools}
+            mutatingToolsAcknowledged={mutatingToolsAcknowledged}
+            setMutatingToolsAcknowledged={setMutatingToolsAcknowledged}
+            mutatingToolsEnabled={mutatingToolsEnabled}
             toolsExpanded={toolsExpanded}
             setToolsExpanded={setToolsExpanded}
             stopConditionsText={stopConditionsText}

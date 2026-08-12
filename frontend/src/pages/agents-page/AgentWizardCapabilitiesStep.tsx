@@ -2,7 +2,12 @@ import { BookOpen } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentInputArtifact, StudioSkill } from "@/lib/api";
 import { localize } from "@/lib/i18n";
-import { FULL_AGENT_TOOL_OPTIONS, type AgentTaskDraft, buildDefaultToolsConfig } from "./agentPageUtils";
+import {
+  FULL_AGENT_TOOL_OPTIONS,
+  READ_ONLY_AGENT_TOOL_KEYS,
+  type AgentTaskDraft,
+  buildDefaultToolsConfig,
+} from "./agentPageUtils";
 import { AgentMaterialsSection } from "./AgentMaterialsSection";
 import type { AgentMode, StateSetter } from "./agentWizardStepTypes";
 
@@ -12,6 +17,10 @@ type AgentWizardCapabilitiesStepProps = {
   enabledToolCount: number;
   toolsConfig: Record<string, boolean>;
   setToolsConfig: StateSetter<Record<string, boolean>>;
+  canConfigureMutatingTools: boolean;
+  mutatingToolsAcknowledged: boolean;
+  setMutatingToolsAcknowledged: StateSetter<boolean>;
+  mutatingToolsEnabled: boolean;
   toolsExpanded: boolean;
   setToolsExpanded: StateSetter<boolean>;
   stopConditionsText: string;
@@ -45,6 +54,10 @@ export function AgentWizardCapabilitiesStep({
   enabledToolCount,
   toolsConfig,
   setToolsConfig,
+  canConfigureMutatingTools,
+  mutatingToolsAcknowledged,
+  setMutatingToolsAcknowledged,
+  mutatingToolsEnabled,
   toolsExpanded,
   setToolsExpanded,
   stopConditionsText,
@@ -84,7 +97,7 @@ export function AgentWizardCapabilitiesStep({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Включить все", "Enable all")}</button>
+              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Read-only набор", "Read-only defaults")}</button>
               <button type="button" className="min-h-8 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setToolsExpanded((current) => !current)}>
                 {toolsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Развернуть", "Expand")}
               </button>
@@ -95,11 +108,51 @@ export function AgentWizardCapabilitiesStep({
               <div className="grid gap-2 md:grid-cols-2">
                 {FULL_AGENT_TOOL_OPTIONS.map((tool) => (
                   <label key={tool.key} className="flex min-h-10 items-center gap-2 rounded-md border border-border/70 bg-background/35 px-3 text-xs text-muted-foreground">
-                    <input type="checkbox" checked={Boolean(toolsConfig[tool.key])} onChange={(event) => setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }))} />
-                    {tool.label}
+                    <input
+                      type="checkbox"
+                      checked={Boolean(toolsConfig[tool.key])}
+                      disabled={!READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) && !canConfigureMutatingTools}
+                      onChange={(event) => {
+                        if (!READ_ONLY_AGENT_TOOL_KEYS.has(tool.key)) setMutatingToolsAcknowledged(false);
+                        setToolsConfig((current) => ({ ...current, [tool.key]: event.target.checked }));
+                      }}
+                    />
+                    <span>
+                      {tool.label}
+                      {!READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) ? (
+                        <span className="ml-2 text-warning">
+                          {localize(lang, "изменяющий", "mutating")}
+                        </span>
+                      ) : null}
+                    </span>
                   </label>
                 ))}
               </div>
+              {!canConfigureMutatingTools ? (
+                <p role="note" className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                  {localize(
+                    lang,
+                    "Изменяющие инструменты заблокированы для пилотного пользователя.",
+                    "Mutating tools are locked for pilot users.",
+                  )}
+                </p>
+              ) : mutatingToolsEnabled ? (
+                <label className="flex items-start gap-3 rounded-md border border-warning/35 bg-warning/10 px-3 py-3 text-xs leading-5 text-foreground">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={mutatingToolsAcknowledged}
+                    onChange={(event) => setMutatingToolsAcknowledged(event.target.checked)}
+                  />
+                  <span>
+                    {localize(
+                      lang,
+                      "Я понимаю, что выбранные инструменты могут изменить тестовый сервер, и подтверждаю изолированную среду.",
+                      "I understand the selected tools may change a test server and confirm this is an isolated environment.",
+                    )}
+                  </span>
+                </label>
+              ) : null}
               <Textarea value={stopConditionsText} onChange={(e) => setStopConditionsText(e.target.value)} rows={3} className="bg-background/60 text-xs" placeholder={localize(lang, "Условия остановки", "Stop conditions")} />
             </>
           )}

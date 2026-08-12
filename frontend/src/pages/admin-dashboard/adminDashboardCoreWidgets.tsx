@@ -11,20 +11,12 @@ import {
   Workflow,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 import type { AdminDashboardData, MonitoringDashboard } from "@/api";
 import { Button } from "@/components/ui/button";
+import {
+  AgentRunsChart,
+  HourlyActivityChart,
+} from "@/components/dashboard/LightweightDashboardCharts";
 import {
   MetricCard,
   MetricGrid,
@@ -165,50 +157,11 @@ export function buildAdminCoreWidgets(
             className={sectionToneStyles[tone]}
           >
             <div className="h-[180px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={daily}
-                  margin={{ top: 5, right: 5, left: -25, bottom: 0 }}
-                  barCategoryGap="25%"
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-border/40"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(value) => formatChartDay(lang, value)}
-                    className="text-xs font-medium fill-muted-foreground"
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    className="text-xs font-medium fill-muted-foreground"
-                  />
-                  <Tooltip
-                    labelFormatter={(value) => formatChartDay(lang, value)}
-                    cursor={{ fill: "hsl(var(--muted) / 0.25)" }}
-                    contentStyle={{
-                      background: "hsl(var(--background))",
-                      borderColor: "hsl(var(--border))",
-                      borderRadius: "4px",
-                      fontSize: "11px",
-                    }}
-                  />
-                  <Bar
-                    dataKey="succeeded"
-                    stackId="runs"
-                    name={localize(lang, "Успешно", "Succeeded")}
-                    fill="hsl(var(--success))"
-                  />
-                  <Bar
-                    dataKey="failed"
-                    stackId="runs"
-                    name={localize(lang, "Сбой", "Failed")}
-                    fill="hsl(var(--destructive))"
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <AgentRunsChart
+                data={daily}
+                formatDay={(value) => formatChartDay(lang, value)}
+                lang={lang}
+              />
             </div>
           </SectionCard>
         );
@@ -424,57 +377,12 @@ export function buildAdminCoreWidgets(
             icon={<Activity className="h-4 w-4" />}
             className={sectionToneStyles[tone]}
           >
-            <div className="h-[200px] w-full mt-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart
-                  data={d.hourly_activity ?? []}
-                  margin={{ top: 5, right: 5, left: -25, bottom: 0 }}
-                >
-                  <defs>
-                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop
-                        offset="5%"
-                        stopColor="hsl(var(--primary))"
-                        stopOpacity={0.35}
-                      />
-                      <stop
-                        offset="95%"
-                        stopColor="hsl(var(--primary))"
-                        stopOpacity={0}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-border/40"
-                  />
-                  <XAxis
-                    dataKey="hour"
-                    tickFormatter={formatChartHour}
-                    className="text-xs font-medium fill-muted-foreground"
-                  />
-                  <YAxis className="text-xs font-medium fill-muted-foreground" />
-                  <Tooltip
-                    labelFormatter={formatChartHour}
-                    contentStyle={{
-                      background: "hsl(var(--background))",
-                      borderColor: "hsl(var(--border))",
-                      borderRadius: "8px",
-                      fontSize: "11px",
-                      boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="count"
-                    name="Действия"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    fillOpacity={1}
-                    fill="url(#colorCount)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="mt-2 h-[200px] w-full">
+              <HourlyActivityChart
+                data={d.hourly_activity ?? []}
+                formatHour={formatChartHour}
+                lang={lang}
+              />
             </div>
           </SectionCard>
         );

@@ -57,6 +57,10 @@ export function CreateAgentDialog({
     setMaxIter,
     toolsConfig,
     setToolsConfig,
+    canConfigureMutatingTools,
+    mutatingToolsAcknowledged,
+    setMutatingToolsAcknowledged,
+    mutatingToolsEnabled,
     sudoPolicy,
     setSudoPolicy,
     stopConditionsText,
@@ -65,6 +69,9 @@ export function CreateAgentDialog({
     setSessionTimeoutSeconds,
     maxConnections,
     setMaxConnections,
+    providerBinding,
+    setProviderBinding,
+    providerMode,
     selectedServers,
     schedule,
     setSchedule,
@@ -148,8 +155,8 @@ export function CreateAgentDialog({
                 ? localize(lang, "Обновите цель, серверы или права — и сохраните.", "Update goal, servers, or access — then save.")
                 : localize(
                   lang,
-                  "По умолчанию: полный агент и сценарий «Вручную» — можно сразу нажать Далее или выбрать другое.",
-                  "Default: full agent and Custom scenario — press Next right away or pick something else.",
+                  "По умолчанию: диагностика read-only, один сервер и сохранение без запуска.",
+                  "Default: read-only diagnostics, one server, and save without running.",
                 )}
             </DialogDescription>
           </div>
@@ -189,6 +196,9 @@ export function CreateAgentDialog({
             setSessionTimeoutSeconds={setSessionTimeoutSeconds}
             maxConnections={maxConnections}
             setMaxConnections={setMaxConnections}
+            providerBinding={providerBinding}
+            setProviderBinding={setProviderBinding}
+            providerMode={providerMode}
             sudoPolicy={sudoPolicy}
             setSudoPolicy={setSudoPolicy}
             servers={visibleServers}
@@ -209,6 +219,10 @@ export function CreateAgentDialog({
             enabledToolCount={enabledToolCount}
             toolsConfig={toolsConfig}
             setToolsConfig={setToolsConfig}
+            canConfigureMutatingTools={canConfigureMutatingTools}
+            mutatingToolsAcknowledged={mutatingToolsAcknowledged}
+            setMutatingToolsAcknowledged={setMutatingToolsAcknowledged}
+            mutatingToolsEnabled={mutatingToolsEnabled}
             toolsExpanded={toolsExpanded}
             setToolsExpanded={setToolsExpanded}
             stopConditionsText={stopConditionsText}

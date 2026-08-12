@@ -79,6 +79,7 @@ export interface ServersPageViewProps {
   testConnection: (server: FrontendServer) => void | Promise<void>;
   saving: boolean;
   testingConnection: boolean;
+  canConfigureElevatedAccess: boolean;
   serverDeleteTarget: FrontendServer | null;
   clearServerDeleteTarget: () => void;
   confirmDeleteServer: () => void;
@@ -122,7 +123,7 @@ export function ServersPageView(props: ServersPageViewProps) {
     onlineCount, offlineCount, search, setSearch, collapsed, filtered, grouped, toggleGroup,
     fleetHealthByServerId, openCreate, openEdit, requestDeleteServer, dialogOpen, setDialogOpen,
     editingServer, form, formValidation, handlePrivateKeyFile, setForm, saveServer, saveAndTestServer,
-    testConnection, saving, testingConnection, serverDeleteTarget, clearServerDeleteTarget,
+    testConnection, saving, testingConnection, canConfigureElevatedAccess, serverDeleteTarget, clearServerDeleteTarget,
     confirmDeleteServer, hostKeyEnrollmentTarget, closeHostKeyEnrollment, confirmHostKeyEnrollment,
     openCreateGroup, openGroupSettings, requestDeleteGroup, openGroupRules,
     groupDialogOpen, setGroupDialogOpen, editingGroup, groupForm, setGroupForm, groupSaving,
@@ -263,6 +264,7 @@ export function ServersPageView(props: ServersPageViewProps) {
         setForm={setForm}
         t={t}
         testingConnection={testingConnection}
+        canConfigureElevatedAccess={canConfigureElevatedAccess}
       />
 
       <ServerGroupDialog

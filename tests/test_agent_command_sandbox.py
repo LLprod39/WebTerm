@@ -176,7 +176,7 @@ async def test_agent_command_secrets_are_sent_only_on_stdin(monkeypatch, tmp_pat
 
 @pytest.mark.asyncio
 async def test_full_agent_open_does_not_connect_from_backend_in_docker_mode(monkeypatch) -> None:
-    server = SimpleNamespace(id=7, name="prod", host="prod.example", user=None, group=None)
+    server = SimpleNamespace(id=7, name="prod", host="prod.example", port=22, user=None, group=None)
     manager = AgentSessionManager([server])
 
     async def forbidden_connect_kwargs(_server):

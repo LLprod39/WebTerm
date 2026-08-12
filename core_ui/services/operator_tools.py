@@ -14,6 +14,7 @@ from app.assistant_actions import (
 from app.core.llm_tools import normalise_tool_name
 from app.egress_redaction import payload_preview, redact_egress_payload
 from core_ui.access import feature_allowed_for_user
+from core_ui.models import AssistantAction
 
 
 def _redacted_result(payload: Any) -> Any:
@@ -264,6 +265,16 @@ def execute_tool(
         return {"ok": False, "error": f"Unknown tool: {action_type}"}
     if not feature_allowed_for_user(user, spec.required_feature):
         return {"ok": False, "error": f"Feature access required: {spec.required_feature}"}
+    if spec.risk != AssistantAction.RISK_READ:
+        from servers.agents.agent_pilot_policy import user_can_automate
+
+        if not user_can_automate(user, request=request):
+            return {
+                "ok": False,
+                "error": "Mutating tools require the pilot_operator role and automation capability",
+                "code": "automation_required",
+                "status": 403,
+            }
     try:
         result = spec.handler(
             AssistantActionContext(

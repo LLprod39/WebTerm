@@ -5,6 +5,7 @@ import { AlertTriangle, Loader2, Save, Server as ServerIcon, Share2, ShieldCheck
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ProviderBindingSelect } from "@/components/settings/ProviderBindingSelect";
 import { studioMCP, studioServers, studioSkills, type AgentConfig } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 import {
@@ -65,6 +66,7 @@ export function profileFingerprint(profile: Partial<AgentConfig>) {
     server_scope: toIdList(profile.server_scope as Array<number | { id: number }> | undefined),
     is_shared: Boolean(profile.is_shared),
     shared_user_ids: [...(profile.shared_user_ids || [])].sort((a, b) => a - b),
+    provider_binding: profile.provider_binding || {},
   });
 }
 
@@ -261,13 +263,34 @@ export function AgentForm({
 
         <div className="space-y-6">
           {activeSection === "main" ? (
-            <AgentCoreSettingsSection
-              form={form}
-              lang={lang}
-              readOnly={readOnly}
-              onFieldChange={setField}
-              isAdmin={isAdmin}
-            />
+            <>
+              <AgentCoreSettingsSection
+                form={form}
+                lang={lang}
+                readOnly={readOnly}
+                onFieldChange={setField}
+                isAdmin={isAdmin}
+              />
+              <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-4">
+                <div className="text-sm font-medium text-foreground">
+                  {localize(lang, "AI-провайдер запусков", "Run AI provider")}
+                </div>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {localize(
+                    lang,
+                    "Studio-запуски считаются фоновыми: доступны только подключения с unattended-доступом.",
+                    "Studio runs are unattended, so only connections with background access are available.",
+                  )}
+                </p>
+                <ProviderBindingSelect
+                  value={form.provider_binding?.target_id ? form.provider_binding : null}
+                  onChange={(binding) => setField("provider_binding", binding || {})}
+                  mode="unattended"
+                  lang={lang}
+                  disabled={readOnly}
+                />
+              </div>
+            </>
           ) : null}
 
           {activeSection === "tools" ? (

@@ -8,11 +8,11 @@ x-proxy-env: &proxy-env
   http_proxy: ${http_proxy:-}
   https_proxy: ${https_proxy:-}
   ftp_proxy: ${ftp_proxy:-}
-  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,ai-cli-runner-manager,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
   HTTP_PROXY: ${HTTP_PROXY:-}
   HTTPS_PROXY: ${HTTPS_PROXY:-}
   FTP_PROXY: ${FTP_PROXY:-}
-  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,ai-cli-runner-manager,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
 
 x-json-logging: &json-logging
   driver: json-file
@@ -49,6 +49,23 @@ x-backend-worker-environment: &backend-worker-environment
   # stdio MCP through the shared runner instead of spawning on the host.
   STUDIO_MCP_RUNNER_URL: ${STUDIO_MCP_RUNNER_URL:-http://mcp-runner:9000}
   STUDIO_MCP_RUNNER_TOKEN: "${STUDIO_MCP_RUNNER_TOKEN:?STUDIO_MCP_RUNNER_TOKEN is required}"
+  AI_CLI_SUBSCRIPTIONS_ENABLED: ${AI_CLI_SUBSCRIPTIONS_ENABLED:-false}
+  AI_CLI_RUNNER_MANAGER_URL: ${AI_CLI_RUNNER_MANAGER_URL:-http://ai-cli-runner-manager:9000}
+  AI_CLI_RUNNER_MANAGER_TOKEN: ${AI_CLI_RUNNER_MANAGER_TOKEN:-}
+  AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS: ${AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS:-30}
+  AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS: ${AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS:-300}
+  PILOT_RESTRICTED_MODE: ${PILOT_RESTRICTED_MODE:-false}
+  PILOT_SSH_ALLOWED_HOSTS: ${PILOT_SSH_ALLOWED_HOSTS:-}
+  PILOT_SSH_ALLOWED_CIDRS: ${PILOT_SSH_ALLOWED_CIDRS:-}
+  PILOT_SSH_ALLOWED_PORTS: ${PILOT_SSH_ALLOWED_PORTS:-}
+  WEBTERM_OTEL_REQUIRED: ${WEBTERM_OTEL_REQUIRED:-false}
+  OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+  OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-webterm-worker}
+  OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-30000}
+  WEBTERM_ENVIRONMENT: ${WEBTERM_ENVIRONMENT:-production}
+  WEBTERM_PROCESS_ROLE: ${WEBTERM_PROCESS_ROLE:-worker}
   DOCKER_HOST: tcp://agent-command-docker-proxy:2375
   AGENT_COMMAND_RUNTIME: docker
   AGENT_COMMAND_RUNNER_IMAGE: "${AGENT_COMMAND_RUNNER_IMAGE:?AGENT_COMMAND_RUNNER_IMAGE is required}"
@@ -252,6 +269,20 @@ services:
       CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       CURSOR_CLI_HTTP_1: ${CURSOR_CLI_HTTP_1:-1}
       CURSOR_CLI_EXTRA_ENV: ${CURSOR_CLI_EXTRA_ENV:-}
+      AI_CLI_SUBSCRIPTIONS_ENABLED: ${AI_CLI_SUBSCRIPTIONS_ENABLED:-false}
+      AI_CLI_RUNNER_MANAGER_URL: ${AI_CLI_RUNNER_MANAGER_URL:-http://ai-cli-runner-manager:9000}
+      AI_CLI_RUNNER_MANAGER_TOKEN: ${AI_CLI_RUNNER_MANAGER_TOKEN:-}
+      AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS: ${AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS:-30}
+      AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS: ${AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS:-300}
+      AI_CLI_AUTH_IN_PROCESS: "false"
+      WEBTERM_OTEL_REQUIRED: ${WEBTERM_OTEL_REQUIRED:-false}
+      OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-webterm-backend}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-30000}
+      WEBTERM_ENVIRONMENT: ${WEBTERM_ENVIRONMENT:-production}
+      WEBTERM_PROCESS_ROLE: web
       CLI_RUNTIME_TIMEOUT_SECONDS: ${CLI_RUNTIME_TIMEOUT_SECONDS:-600}
       CLI_FIRST_OUTPUT_TIMEOUT_SECONDS: ${CLI_FIRST_OUTPUT_TIMEOUT_SECONDS:-120}
       DOMAIN_AUTH_ENABLED: ${DOMAIN_AUTH_ENABLED:-false}
@@ -355,7 +386,7 @@ services:
           "CMD",
           "python",
           "-c",
-          "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/ready/', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=4).read()",
+          "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/ready/?scope=core', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=4).read()",
         ]
       interval: 10s
       timeout: 5s
@@ -497,6 +528,341 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
+    logging: *json-logging
+
+  ai-cli-docker-proxy:
+    profiles: ["ai-cli"]
+    image: ${WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE:-webterm-ai-cli-docker-proxy:local}
+    build:
+      context: .
+      dockerfile: docker/playbook-socket-proxy.Dockerfile
+    container_name: mini-prod-ai-cli-docker-proxy
+    user: "10002:10002"
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    environment:
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_PROXY_POLICY: ai-cli
+      AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:-}
+      AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:-}
+      AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
+      AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
+      AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    networks:
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10002,gid=10002,mode=1770
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:2375/health', timeout=2).read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging: *json-logging
+
+  ai-cli-egress-proxy:
+    profiles: ["ai-cli"]
+    image: ${WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE:-webterm-ai-cli-egress-proxy:local}
+    build:
+      context: .
+      dockerfile: docker/ai-cli-egress-proxy.Dockerfile
+    container_name: mini-prod-ai-cli-egress-proxy
+    user: "10003:10003"
+    networks:
+      - default
+      - ai-cli-egress
+    expose:
+      - "3128"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10003,gid=10003,mode=1770
+      - /var/cache/squid:rw,noexec,nosuid,nodev,size=64m,uid=10003,gid=10003,mode=0700
+      - /var/log/squid:rw,noexec,nosuid,nodev,size=16m,uid=10003,gid=10003,mode=0700
+      - /run/squid:rw,noexec,nosuid,nodev,size=4m,uid=10003,gid=10003,mode=0700
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    logging: *json-logging
+
+  ai-cli-runner-manager:
+    profiles: ["ai-cli"]
+    image: ${WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE:-webterm-ai-cli-runner-manager:local}
+    build:
+      context: .
+      dockerfile: docker/ai-cli-runner-manager.Dockerfile
+    container_name: mini-prod-ai-cli-runner-manager
+    environment:
+      DOCKER_HOST: tcp://ai-cli-docker-proxy:2375
+      AI_CLI_RUNNER_MANAGER_TOKEN: ${AI_CLI_RUNNER_MANAGER_TOKEN:-}
+      AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:-}
+      AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:-}
+      AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
+      AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
+      AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
+      AI_CLI_DOCKER_CPUS: ${AI_CLI_DOCKER_CPUS:-1.0}
+      AI_CLI_DOCKER_MEMORY: ${AI_CLI_DOCKER_MEMORY:-1g}
+      AI_CLI_DOCKER_PIDS_LIMIT: ${AI_CLI_DOCKER_PIDS_LIMIT:-128}
+      AI_CLI_REQUEST_TIMEOUT_SECONDS: ${AI_CLI_REQUEST_TIMEOUT_SECONDS:-900}
+      AI_CLI_OUTPUT_LIMIT_BYTES: ${AI_CLI_OUTPUT_LIMIT_BYTES:-2097152}
+    expose:
+      - "9000"
+    networks:
+      - default
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    depends_on:
+      ai-cli-docker-proxy:
+        condition: service_healthy
+      ai-cli-egress-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *json-logging
+
+  ai-provider-auth:
+    <<: *backend-worker
+    profiles: ["ai-cli"]
+    container_name: mini-prod-ai-provider-auth
+    environment:
+      <<: *backend-worker-environment
+      AI_CLI_AUTH_IN_PROCESS: "false"
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec python manage.py run_ai_provider_auth_worker --interval ${AI_CLI_AUTH_WORKER_INTERVAL_SECONDS:-2} --concurrency ${AI_CLI_AUTH_WORKER_CONCURRENCY:-4} --worker-key \"$${HOSTNAME:-production}\"",
+      ]
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ai-cli-runner-manager:
+        condition: service_healthy
+
+  otel-collector:
+    profiles: ["observability"]
+    image: ${WEBTERM_OTEL_COLLECTOR_IMAGE:-otel/opentelemetry-collector-contrib:0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5}
+    container_name: mini-prod-otel-collector
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB:-weu_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-weu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      REDIS_ENDPOINT: redis:6379
+    volumes:
+      - ./docker/observability/otel-collector.yml:/etc/otelcol-contrib/config.yaml:ro
+      - mini_prod_logs:/var/log/webterm:ro
+      - ${BACKUP_STATUS_DIR:-./backups/status}:/var/lib/webterm-backup-status:ro
+      - /proc:/hostfs/proc:ro
+      - /sys:/hostfs/sys:ro
+      - /:/hostfs/root:ro
+    expose:
+      - "4317"
+      - "4318"
+      - "9464"
+      - "13133"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    restart: unless-stopped
+    logging: *json-logging
+
+  prometheus:
+    profiles: ["observability"]
+    image: ${WEBTERM_PROMETHEUS_IMAGE:-prom/prometheus:v3.13.2-distroless@sha256:64f71bb84e03c855948418b0fc5dea53e9543d8e3fc9931598f583805507f05e}
+    container_name: mini-prod-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/prometheus-alerts.yml:/etc/prometheus/prometheus-alerts.yml:ro
+      - mini_prod_prometheus:/prometheus
+    expose:
+      - "9090"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    depends_on:
+      otel-collector:
+        condition: service_started
+      backend:
+        condition: service_healthy
+      alertmanager:
+        condition: service_started
+    restart: unless-stopped
+    logging: *json-logging
+
+  alertmanager:
+    profiles: ["observability"]
+    image: ${WEBTERM_ALERTMANAGER_IMAGE:-quay.io/prometheus/alertmanager:main@sha256:a42c3e2e8f7cd4fd3a0ce1bd593ca5abe965c97b993476007d6f69c4a2aa33b5}
+    container_name: mini-prod-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=${ALERTMANAGER_RETENTION:-336h}
+    volumes:
+      - ./docker/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${ALERTMANAGER_WEBHOOK_URL_FILE:-/etc/webterm/alertmanager.webhook-url}:/run/secrets/alertmanager_webhook_url:ro
+      - mini_prod_alertmanager:/alertmanager
+    expose:
+      - "9093"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/bin/amtool",
+          "--alertmanager.url=http://127.0.0.1:9093",
+          "config",
+          "show",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: *json-logging
+
+  tempo:
+    profiles: ["observability"]
+    image: ${WEBTERM_TEMPO_IMAGE:-grafana/tempo:main-1a8b052-2010-1@sha256:78dc87894e9eb054b0229980ac3e7f099b437aec07a8731612373fc09b7f8ba0}
+    container_name: mini-prod-tempo
+    command: ["-config.file=/etc/tempo/tempo.yml", "-config.expand-env=true"]
+    environment:
+      TEMPO_RETENTION: ${TEMPO_RETENTION:-336h}
+    volumes:
+      - ./docker/observability/tempo.yml:/etc/tempo/tempo.yml:ro
+      - mini_prod_tempo:/var/tempo
+    expose:
+      - "3200"
+      - "4317"
+      - "4318"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *json-logging
+
+  loki:
+    profiles: ["observability"]
+    image: ${WEBTERM_LOKI_IMAGE:-grafana/loki:3.7.6@sha256:efd47c67f9bac88ca29bcf8cb997d9ab29d1848bd0aff579282295542a745952}
+    container_name: mini-prod-loki
+    command: ["-config.file=/etc/loki/loki.yml", "-config.expand-env=true"]
+    environment:
+      LOKI_RETENTION_PERIOD: ${LOKI_RETENTION_PERIOD:-336h}
+    volumes:
+      - ./docker/observability/loki.yml:/etc/loki/loki.yml:ro
+      - mini_prod_loki:/var/loki
+    expose:
+      - "3100"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    restart: unless-stopped
+    logging: *json-logging
+
+  grafana:
+    profiles: ["observability"]
+    image: ${WEBTERM_GRAFANA_IMAGE:-grafana/grafana:nightly-distroless-slim@sha256:b2c2fd5391216bd57e6bad74c0dce05f8e275479e1153ab57149a4f019a3dceb}
+    container_name: mini-prod-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-webterm-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-disabled-until-observability-is-provisioned}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SECURITY_COOKIE_SECURE: ${GRAFANA_COOKIE_SECURE:-true}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://127.0.0.1:3000}
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_BIND_HOST:-127.0.0.1}:${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - mini_prod_grafana:/var/lib/grafana
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=32m
+      - /var/lib/grafana/plugins:rw,noexec,nosuid,nodev,size=128m,uid=472,gid=0,mode=0750
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 256
+    mem_limit: 1g
+    cpus: 1.0
+    depends_on:
+      prometheus:
+        condition: service_started
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+    restart: unless-stopped
     logging: *json-logging
 
   plugin-backend-docker-proxy:
@@ -851,7 +1217,15 @@ volumes:
   playbook_runtime:
     name: ${PLAYBOOK_RUNTIME_VOLUME_NAME:-mini_prod_playbook_runtime}
   playbook_validator_socket:
+  mini_prod_prometheus:
+  mini_prod_alertmanager:
+  mini_prod_grafana:
+  mini_prod_tempo:
+  mini_prod_loki:
 
 networks:
   docker-control:
+    internal: true
+  ai-cli-egress:
+    name: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
     internal: true

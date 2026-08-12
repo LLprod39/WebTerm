@@ -1,14 +1,19 @@
 import type { LucideIcon } from "lucide-react";
 
 import { SettingsIcons } from "@/lib/app-icons";
+import type { AuthUser } from "@/lib/api";
+import { hasAnyFeatureAccess, hasFeatureAccess } from "@/lib/featureAccess";
 
 export interface SettingsNavItem {
   id: string;
   label: string;
+  labelEn?: string;
   description: string;
+  descriptionEn?: string;
   icon: LucideIcon;
   path: string;
   adminOnly?: boolean;
+  feature?: string | string[];
   /** Short setup tip for readiness / hub cards */
   setupHint?: string;
 }
@@ -16,7 +21,9 @@ export interface SettingsNavItem {
 export interface SettingsNavGroup {
   id: string;
   label: string;
+  labelEn?: string;
   description?: string;
+  descriptionEn?: string;
   items: SettingsNavItem[];
 }
 
@@ -51,6 +58,17 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         path: "/settings/ai",
         adminOnly: true,
         setupHint: "Подключите LLM — чат, агенты, оркестратор",
+      },
+      {
+        id: "ai-connections",
+        label: "CLI-подписки",
+        labelEn: "CLI subscriptions",
+        description: "Codex CLI, Grok CLI и маршрутизация",
+        descriptionEn: "Codex CLI, Grok CLI, and routing",
+        icon: SettingsIcons.ai,
+        path: "/settings/ai-connections",
+        feature: ["ai_connections_personal", "ai_connections_admin"],
+        setupHint: "Личные подключения и workspace-пулы",
       },
       {
         id: "limits",
@@ -168,17 +186,37 @@ export const settingsNavGroups: SettingsNavGroup[] = [
 export const allSettingsNavItems = settingsNavGroups.flatMap((group) => group.items);
 
 export function visibleSettingsNavGroups(
-  isAdmin: boolean,
+  user: AuthUser | null | undefined,
   pluginsEnabled: boolean,
 ): SettingsNavGroup[] {
+  const isAdmin = Boolean(user?.is_staff);
   return settingsNavGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(
-        (item) => (!item.adminOnly || isAdmin) && (item.id !== "plugins" || pluginsEnabled),
+        (item) => {
+          if (item.adminOnly && !isAdmin) return false;
+          if (item.id === "plugins" && !pluginsEnabled) return false;
+          const feature = item.feature ?? "settings";
+          return Array.isArray(feature)
+            ? hasAnyFeatureAccess(user, feature)
+            : hasFeatureAccess(user, feature);
+        },
       ),
     }))
     .filter((group) => group.items.length > 0);
+}
+
+export function canViewSettingsNavItem(
+  user: AuthUser | null | undefined,
+  item: SettingsNavItem | undefined,
+): boolean {
+  if (!item) return true;
+  if (item.adminOnly && !user?.is_staff) return false;
+  const feature = item.feature ?? "settings";
+  return Array.isArray(feature)
+    ? hasAnyFeatureAccess(user, feature)
+    : hasFeatureAccess(user, feature);
 }
 
 export function findSettingsNavItem(pathname: string): SettingsNavItem | undefined {

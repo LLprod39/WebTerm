@@ -44,6 +44,7 @@ async def extract_server_memory(
     semaphore=None,
     llm_factory=None,
     max_chars: int = 7000,
+    execution_context=None,
 ) -> dict[str, Any]:
     """
     Build concise durable server context from a terminal AI run.
@@ -66,7 +67,12 @@ async def extract_server_memory(
 
     async def _collect() -> None:
         nonlocal out
-        async for chunk in llm.stream_chat(prompt, model="auto", purpose="memory_extraction"):
+        async for chunk in llm.stream_chat(
+            prompt,
+            model="auto",
+            purpose="memory_extraction",
+            execution_context=execution_context,
+        ):
             out += chunk
             if len(out) > max_chars:
                 break
@@ -119,6 +125,7 @@ async def run_memory_extraction(
     server_id: int,
     semaphore=None,
     llm_factory=None,
+    execution_context=None,
 ) -> dict[str, Any] | None:
     """Extract durable server memory and persist it if anything useful exists."""
     memory_obj = await extract_server_memory(
@@ -127,6 +134,7 @@ async def run_memory_extraction(
         report=report,
         semaphore=semaphore,
         llm_factory=llm_factory,
+        execution_context=execution_context,
     )
     return await save_extracted_server_memory(
         user_id=user_id,

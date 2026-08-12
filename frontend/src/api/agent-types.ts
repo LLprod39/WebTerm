@@ -1,5 +1,6 @@
 import type { BackgroundWorkerStateRecord } from "@/api/server-memory";
 import type { AgentRunReportSeverity } from "@/api/agent-report-types";
+import type { ProviderBinding } from "@/api/aiProviders";
 
 export type * from "@/api/agent-report-types";
 
@@ -82,6 +83,7 @@ export interface AgentItem {
   report_delivery: AgentReportDelivery;
   session_timeout_seconds: number;
   max_connections: number;
+  provider_binding?: ProviderBinding;
   last_run_at: string | null;
   last_run_status: string | null;
   last_run_id: number | null;

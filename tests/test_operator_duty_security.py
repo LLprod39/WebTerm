@@ -74,7 +74,9 @@ def test_typed_confirm_validation():
 @pytest.mark.django_db
 def test_execute_action_blocks_without_typed_confirm():
     user = User.objects.create_user(username="tc-exec", password="x")
-    _grant(user, "orchestrator", "servers")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
     session = ChatSession.objects.create(user=user)
 
     from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
@@ -121,7 +123,9 @@ def test_execute_action_blocks_without_typed_confirm():
 @pytest.mark.django_db
 def test_execute_action_is_idempotent_after_completion():
     user = User.objects.create_user(username="idem-action", password="x")
-    _grant(user, "orchestrator", "servers")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
     session = ChatSession.objects.create(user=user)
     calls = {"count": 0}
 

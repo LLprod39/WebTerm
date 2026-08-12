@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from servers.agents.agent_pilot_policy import user_can_automate
 from servers.models_bulk import ServerBulkOperation
 from servers.models_inventory import Server
 
@@ -41,6 +42,12 @@ def normalize_bulk_parameters(action: str, parameters: Any) -> dict[str, Any]:
 
 def create_bulk_operation(*, group, project, requested_by, action: str, parameters: Any) -> ServerBulkOperation:
     normalized = normalize_bulk_parameters(action, parameters)
+    if (
+        action == ServerBulkOperation.ACTION_SET_AI_READ_ONLY
+        and normalized["value"] is False
+        and not user_can_automate(requested_by)
+    ):
+        raise ServerBulkOperationError("disabling AI read-only requires automation access")
     target_ids = list(Server.objects.filter(group=group, project=project).order_by("id").values_list("id", flat=True))
     if not target_ids:
         raise ServerBulkOperationError("group has no servers in the active project")
@@ -144,6 +151,40 @@ def process_bulk_operation(
     lease_seconds: int = DEFAULT_LEASE_SECONDS,
     max_items: int | None = None,
 ) -> ServerBulkOperation:
+    with transaction.atomic():
+        current = (
+            ServerBulkOperation.objects.select_for_update(of=("self",))
+            .select_related("requested_by")
+            .get(pk=operation.pk)
+        )
+        unsafe_read_only_change = (
+            current.action == ServerBulkOperation.ACTION_SET_AI_READ_ONLY and current.parameters.get("value") is False
+        )
+        if unsafe_read_only_change and not (current.requested_by and user_can_automate(current.requested_by)):
+            now = timezone.now()
+            current.status = ServerBulkOperation.STATUS_FAILED
+            current.failed_count = current.total_count
+            current.failures = [
+                {
+                    "error": "automation capability missing at execution time",
+                    "code": "automation_required",
+                }
+            ]
+            current.completed_at = now
+            current.heartbeat_at = now
+            current.lease_expires_at = now
+            current.save(
+                update_fields=[
+                    "status",
+                    "failed_count",
+                    "failures",
+                    "completed_at",
+                    "heartbeat_at",
+                    "lease_expires_at",
+                    "updated_at",
+                ]
+            )
+            return current
     target_ids = [int(value) for value in (operation.target_server_ids or [])]
     start = max(int(operation.processed_count), 0)
     remaining = target_ids[start:]

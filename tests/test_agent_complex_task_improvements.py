@@ -18,6 +18,10 @@ from servers.agents.agent_budgets import (
     clamp_command_timeout,
     clamp_full_iterations,
 )
+from servers.agents.agent_pilot_policy import (
+    PILOT_MAX_ITERATIONS,
+    PILOT_MAX_SESSION_TIMEOUT_SECONDS,
+)
 from servers.services.agent_complexity import (
     classify_goal_complexity,
     ensure_verification_task,
@@ -73,8 +77,8 @@ def test_create_paths_default_to_full_budget_constants():
 
 
 @pytest.mark.django_db
-def test_agent_create_api_omitted_budgets_use_full_defaults():
-    """Real HTTP create path: omit max_iterations/session_timeout → complex defaults."""
+def test_agent_create_api_omitted_budgets_use_pilot_safe_defaults():
+    """A non-operator cannot inherit legacy budgets above the pilot caps."""
     import json
 
     from django.contrib.auth.models import User
@@ -113,16 +117,16 @@ def test_agent_create_api_omitted_budgets_use_full_defaults():
     body = response.json()
     assert body.get("success") is True
     agent = ServerAgent.objects.get(id=body["id"])
-    assert agent.max_iterations == FULL_DEFAULT_MAX_ITERATIONS
-    assert agent.session_timeout_seconds == FULL_DEFAULT_SESSION_TIMEOUT_SEC
+    assert agent.max_iterations == PILOT_MAX_ITERATIONS
+    assert agent.session_timeout_seconds == PILOT_MAX_SESSION_TIMEOUT_SECONDS
 
 
-def test_create_agent_dialog_seeds_complex_defaults():
+def test_create_agent_dialog_seeds_pilot_safe_defaults():
     from pathlib import Path
 
     src = Path("frontend/src/pages/agents-page/useCreateAgentDialogState.ts").read_text(encoding="utf-8")
-    assert "useState(40)" in src
-    assert "useState(1200)" in src
+    assert f"useState({PILOT_MAX_ITERATIONS})" in src
+    assert f"useState({PILOT_MAX_SESSION_TIMEOUT_SECONDS})" in src
     assert "max_iterations || 40" in src or "max_iterations || 40)" in src
     assert "session_timeout_seconds || 1200" in src
 

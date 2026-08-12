@@ -83,9 +83,10 @@ function nextDueLabel(ag: AgentItem, lang: "ru" | "en"): string | null {
 }
 
 function serverLabel(ag: AgentItem): string {
-  if (!ag.server_names.length) return "—";
-  if (ag.server_names.length > 1) return `${ag.server_names[0]} +${ag.server_names.length - 1}`;
-  return ag.server_names[0];
+  const serverNames = ag.server_names ?? [];
+  if (!serverNames.length) return "—";
+  if (serverNames.length > 1) return `${serverNames[0]} +${serverNames.length - 1}`;
+  return serverNames[0];
 }
 
 export function AgentListSection({
@@ -116,7 +117,7 @@ export function AgentListSection({
       (ag) =>
         ag.name.toLowerCase().includes(query) ||
         (ag.goal || "").toLowerCase().includes(query) ||
-        ag.server_names.some((name) => name.toLowerCase().includes(query)),
+        (ag.server_names ?? []).some((name) => name.toLowerCase().includes(query)),
     );
   }, [agents, search]);
 
@@ -257,9 +258,10 @@ export function AgentListSection({
                   : localize(lang, "Следить", "Watch");
               const dot = runDot(ag);
               const dueLabel = nextDueLabel(ag, lang);
+              const commandCount = ag.commands?.length ?? 0;
               const summary = ag.goal
-                || (ag.commands.length
-                  ? localize(lang, `${ag.commands.length} команд(ы)`, `${ag.commands.length} command(s)`)
+                || (commandCount
+                  ? localize(lang, `${commandCount} команд(ы)`, `${commandCount} command(s)`)
                   : "");
               const scheduled = isAgentScheduled(ag);
               const runMeta = ag.active_run_id
@@ -314,7 +316,7 @@ export function AgentListSection({
                       </div>
                     </div>
 
-                    <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block" title={ag.server_names.join(", ")}>
+                    <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block" title={(ag.server_names ?? []).join(", ")}>
                       {serverLabel(ag)}
                     </div>
                     <div className="hidden min-w-0 truncate text-[13px] leading-5 text-muted-foreground lg:block">

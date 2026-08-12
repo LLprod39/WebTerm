@@ -8,7 +8,7 @@ import pytest
 from channels.layers import get_channel_layer
 from django.contrib.auth.models import User
 from django.core.cache import cache
-from django.db import close_old_connections, connection
+from django.db import close_old_connections, connection, connections
 
 from servers.agents.agent_dispatch import claim_next_agent_dispatch, enqueue_agent_run_dispatch
 from servers.models import AgentRun, PlaybookRun, ServerAgent
@@ -87,7 +87,7 @@ def test_agent_dispatch_claims_four_rows_without_head_of_line_blocking(monkeypat
             assert dispatch is not None
             return dispatch.id
         finally:
-            close_old_connections()
+            connections.close_all()
 
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -137,7 +137,7 @@ def test_five_users_can_claim_two_agents_each_concurrently(monkeypatch):
             )
             return (dispatch.id, dispatch.user_id) if dispatch is not None else None
         finally:
-            close_old_connections()
+            connections.close_all()
 
     with ThreadPoolExecutor(max_workers=claim_attempts) as pool:
         claims = list(pool.map(claim, range(claim_attempts)))
@@ -183,7 +183,7 @@ def test_playbook_dispatch_validates_four_skip_locked_candidates_concurrently(mo
             assert dispatch is not None
             return dispatch.id
         finally:
-            close_old_connections()
+            connections.close_all()
 
     started = time.perf_counter()
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -220,7 +220,7 @@ def test_playbook_concurrent_claims_preserve_the_global_capacity_limit(monkeypat
             )
             return dispatch.id if dispatch is not None else None
         finally:
-            close_old_connections()
+            connections.close_all()
 
     with ThreadPoolExecutor(max_workers=4) as pool:
         claimed_ids = list(pool.map(claim, range(4)))

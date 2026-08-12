@@ -3,6 +3,7 @@
   "baselineTotalJavaScriptBytes": 4687999,
   "baselineLargestJavaScriptBytes": 979344,
   "baselineTotalCssBytes": 219798,
+  "minimumHeadroomPercent": 5,
   "maxTotalJavaScriptBytes": 4922000,
   "maxLargestJavaScriptBytes": 1029000,
   "maxTotalCssBytes": 231000

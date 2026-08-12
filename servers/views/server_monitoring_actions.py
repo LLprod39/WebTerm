@@ -16,7 +16,8 @@ from core_ui.activity import log_user_activity
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from servers.agents.agent_service import launch_watcher_draft_for_user
-from servers.models import Server, ServerAlert, ServerHealthCheck
+from servers.models_inventory import Server
+from servers.models_monitoring import ServerAlert, ServerHealthCheck
 from servers.monitoring.watcher_service import WatcherService
 from servers.views.server_helpers import _accessible_servers_queryset
 
@@ -307,6 +308,10 @@ def monitoring_config(request):
 @require_http_methods(["POST"])
 def ai_analyze_server(request, server_id):
     """AI analysis of server health data and logs."""
+    try:
+        data = json.loads(request.body) if request.body else {}
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return JsonResponse({"success": False, "error": "Invalid JSON"}, status=400)
     server = _accessible_servers_queryset(request.user).filter(id=server_id).first()
     if not server:
         return JsonResponse({"success": False, "error": "Server not found"}, status=404)
@@ -383,10 +388,25 @@ def ai_analyze_server(request, server_id):
 
     full_prompt = "\n".join(prompt_parts)
     provider = LLMProvider()
+    from core_ui.services.ai_execution_context import build_execution_context
+
+    execution_context = build_execution_context(
+        actor_user_id=request.user.pk,
+        project_id=server.project_id,
+        purpose="opssummary",
+        source_kind="server_monitoring_analysis",
+        source_id=server.pk,
+        stored_binding=data.get("provider_binding"),
+        idempotency_key=f"server-monitoring:{server.pk}:{getattr(last_check, 'pk', 'none')}",
+    )
 
     async def _collect():
         chunks = []
-        async for chunk in provider.stream_chat(full_prompt, model="auto"):
+        async for chunk in provider.stream_chat(
+            full_prompt,
+            model="auto",
+            execution_context=execution_context,
+        ):
             chunks.append(chunk)
         return "".join(chunks)
 

@@ -22,6 +22,7 @@ from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.elevated_files import read_text_file_elevated, write_text_file_elevated
+from servers.services.server_mutation_policy import decide_server_mutation
 from servers.sftp import (
     change_owner,
     change_permissions,
@@ -65,6 +66,16 @@ __all__ = [
 ]
 
 
+def _mutation_policy_response(request, server):
+    decision = decide_server_mutation(request.user, server, request=request)
+    if decision.allowed:
+        return None
+    return JsonResponse(
+        {"success": False, "error": decision.message, "code": decision.code},
+        status=403,
+    )
+
+
 @login_required
 @require_feature("servers")
 @require_http_methods(["GET"])
@@ -101,8 +112,10 @@ def server_file_read_text(request, server_id):
             with contextlib.suppress(Exception):
                 body = json.loads(request.body or "{}") or {}
         params = request.GET if request.method == "GET" else body
-        password = _resolve_server_secret(server, request, params if isinstance(params, dict) else request.GET)
         elevate = _parse_bool(params.get("elevate") if isinstance(params, dict) else request.GET.get("elevate"))
+        if elevate and (denied := _mutation_policy_response(request, server)):
+            return denied
+        password = _resolve_server_secret(server, request, params if isinstance(params, dict) else request.GET)
         # Password only accepted from POST body.
         sudo_password = str(body.get("sudo_password") or "") if request.method == "POST" else ""
         path = str((params.get("path") if isinstance(params, dict) else None) or request.GET.get("path") or "")
@@ -149,6 +162,8 @@ def server_file_write_text(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -202,6 +217,8 @@ def server_file_chmod(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -237,6 +254,8 @@ def server_file_chown(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -284,6 +303,8 @@ def server_file_upload(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         password = _resolve_server_secret(server, request, request.POST)
@@ -396,6 +417,8 @@ def server_file_rename(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -436,6 +459,8 @@ def server_file_delete(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")
@@ -476,6 +501,8 @@ def server_file_mkdir(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
     if not _server_has_capability(server, request.user, "write_files"):
         return _missing_capability_response("write_files")
+    if denied := _mutation_policy_response(request, server):
+        return denied
     try:
         _require_ssh_server(server)
         data = json.loads(request.body or "{}")

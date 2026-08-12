@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import signal
 import socket
 import sys
@@ -62,6 +63,8 @@ class Command(BaseCommand):
             1,
             int(options.get("global_concurrency") or getattr(settings, "AGENT_EXECUTION_GLOBAL_CONCURRENCY", 10)),
         )
+        if os.getenv("PILOT_RESTRICTED_MODE", "").strip().lower() in {"1", "true", "yes"} and global_concurrency > 10:
+            raise CommandError("PILOT_RESTRICTED_MODE limits agent execution global concurrency to 10")
         per_user_concurrency = max(
             1,
             int(options.get("per_user_concurrency") or getattr(settings, "AGENT_EXECUTION_PER_USER_CONCURRENCY", 2)),

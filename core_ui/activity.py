@@ -185,7 +185,6 @@ def log_llm_activity(
 ) -> None:
     """Persist a user-visible audit event for an LLM request."""
     audit_ctx = get_audit_context()
-    prompt_excerpt = _normalize_text(prompt, 5000)
     response_excerpt = _normalize_text(response, 5000)
     merged_metadata = {
         "provider": str(provider or "").strip(),
@@ -212,7 +211,7 @@ def log_llm_activity(
         category="ai",
         action="llm_request",
         status=user_status,
-        description=prompt_excerpt,
+        description="LLM request completed",
         entity_type=str(audit_ctx.get("entity_type") or "llm").strip() or "llm",
         entity_id=str(audit_ctx.get("entity_id") or "").strip(),
         entity_name=str(audit_ctx.get("entity_name") or f"{provider}:{model_name}").strip(),

@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly WebTerm encrypted PostgreSQL restore validation
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=webterm-postgres-restore-test.service
+
+[Install]
+WantedBy=timers.target

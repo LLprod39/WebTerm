@@ -1,0 +1,168 @@
+# v0.2.3 worktree baseline inventory
+
+- Captured: 2026-08-11 before pilot remediation edits
+- Branch: `test`
+- Base HEAD: `91b7c531a0f9ead6e30002782046e46ce612e859`
+- Modified/tracked entries: 100
+- Untracked entries: 57
+- Safety rule: do not reset, checkout, stash, or overwrite these entries; all remediation changes must be reviewed against this baseline.
+
+```text
+ M .env.production.example
+ M app/core/llm.py
+ M app/core/llm_provider_resolution.py
+ M app/core/llm_provider_stream.py
+ M app/core/llm_provider_tools_stream.py
+ M core_ui/apps.py
+ M core_ui/consumers/operator_chat.py
+ M core_ui/models/__init__.py
+ M core_ui/models/chat.py
+ M core_ui/services/assistant_chat.py
+ M core_ui/services/assistant_chat_planning.py
+ M core_ui/services/operator_dispatch.py
+ M core_ui/services/operator_loop.py
+ M core_ui/services/operator_session.py
+ M core_ui/services/operator_turn_runtime.py
+ M core_ui/urls.py
+ M core_ui/views/assistant_chat_views.py
+ M core_ui/views/chat_views.py
+ M core_ui/views/page_views.py
+ M core_ui/views/rag_views.py
+ M core_ui/views/runtime.py
+ M core_ui/views/utility_views.py
+ M docker-compose.production.yml
+ M docker/playbook-socket-proxy.Dockerfile
+ M docker/playbook_socket_proxy.py
+ M docs/architecture/AI_SUBSCRIPTION_CLI_PROVIDERS_IMPLEMENTATION_PLAN.md
+ M frontend/src/App.tsx
+ M frontend/src/api/agent-types.ts
+ M frontend/src/api/agents.ts
+ M frontend/src/api/assistant-chat.ts
+ M frontend/src/api/studio-types.ts
+ M frontend/src/components/settings/settings-nav-items.ts
+ M frontend/src/lib/api.ts
+ M frontend/src/pages/PipelineEditorPage.tsx
+ M frontend/src/pages/agent-config/AgentProfileForm.tsx
+ M frontend/src/pages/agents-page/AgentWizardBasicsStep.tsx
+ M frontend/src/pages/agents-page/AgentWizardStepContent.tsx
+ M frontend/src/pages/agents-page/CreateAgentDialog.tsx
+ M frontend/src/pages/agents-page/agentWizardStepTypes.ts
+ M frontend/src/pages/agents-page/useCreateAgentDialogState.ts
+ M frontend/src/pages/chat-page/ChatComposerForm.tsx
+ M frontend/src/pages/chat-page/useChatPageController.ts
+ M frontend/src/pages/chat-page/useChatPageOperatorRuntime.ts
+ M frontend/src/pages/chat-page/useOperatorChatWs.ts
+ M frontend/src/pages/pipeline-editor/PipelineEditorToolbar.tsx
+ M frontend/src/pages/pipeline-editor/usePipelineEditorMutations.ts
+ M servers/adapters/django_memory_llm.py
+ M servers/agents/agent_analysis.py
+ M servers/agents/agent_background.py
+ M servers/agents/agent_engine.py
+ M servers/agents/agent_engine_prompts.py
+ M servers/agents/agent_engine_runner_loop.py
+ M servers/agents/agent_launch.py
+ M servers/agents/agent_runtime.py
+ M servers/agents/agent_service.py
+ M servers/agents/agent_tools.py
+ M servers/agents/mini_executor.py
+ M servers/agents/multi_agent_engine.py
+ M servers/agents/multi_agent_engine_runner.py
+ M servers/agents/multi_agent_llm.py
+ M servers/agents/multi_agent_planning.py
+ M servers/agents/multi_agent_task_runner.py
+ M servers/agents/scheduled_agents.py
+ M servers/consumers/ssh_terminal_agent_runner.py
+ M servers/consumers/ssh_terminal_agent_support.py
+ M servers/consumers/ssh_terminal_ai_execution.py
+ M servers/consumers/ssh_terminal_ai_tools.py
+ M servers/models_agents.py
+ M servers/models_inventory.py
+ M servers/monitoring/ai_insights.py
+ M servers/services/pipeline_agents.py
+ M servers/services/playbook_compatibility_ai.py
+ M servers/services/terminal_ai/agent/loop.py
+ M servers/services/terminal_ai/agent/loop_helpers.py
+ M servers/services/terminal_ai/decision.py
+ M servers/services/terminal_ai/memory_extraction.py
+ M servers/services/terminal_ai/output_explanation.py
+ M servers/services/terminal_ai/planning.py
+ M servers/services/terminal_ai/preferences.py
+ M servers/services/terminal_ai/report_generation.py
+ M servers/views/server_agent_runs.py
+ M servers/views/server_agents.py
+ M servers/views/server_monitoring_actions.py
+ M servers/views/server_playbook_compatibility_views.py
+ M studio/model_serializers.py
+ M studio/models.py
+ M studio/pipeline/pipeline_agent_llm.py
+ M studio/pipeline/pipeline_agent_runtime.py
+ M studio/services/pipeline_assistant.py
+ M studio/trigger_dispatch.py
+ M studio/views/agent_helpers.py
+ M studio/views/agent_views.py
+ M studio/views/pipeline_assistant_views.py
+ M studio/views/pipeline_helpers.py
+ M studio/views/pipeline_views.py
+ M tests/test_llm_provider_resolution.py
+ M tests/test_playbook_compatibility.py
+ M tests/test_studio_agent_integration_node_executors.py
+ M tests/test_terminal_ai_explain.py
+ M tests/test_terminal_ai_report_generation.py
+?? ai_cli_runner_manager/__init__.py
+?? ai_cli_runner_manager/adapters/__init__.py
+?? ai_cli_runner_manager/adapters/codex.py
+?? ai_cli_runner_manager/adapters/common.py
+?? ai_cli_runner_manager/adapters/grok.py
+?? ai_cli_runner_manager/config.py
+?? ai_cli_runner_manager/docker_runtime.py
+?? ai_cli_runner_manager/fake_runtime.py
+?? ai_cli_runner_manager/protocol.py
+?? ai_cli_runner_manager/provider-requirements.txt
+?? ai_cli_runner_manager/provider_runtime.py
+?? ai_cli_runner_manager/requirements.txt
+?? ai_cli_runner_manager/security.py
+?? ai_cli_runner_manager/server.py
+?? app/ai_cli_socket_proxy_policy.py
+?? app/ai_runtime/__init__.py
+?? app/ai_runtime/contracts.py
+?? app/ai_runtime/errors.py
+?? app/ai_runtime/routing.py
+?? app/ai_runtime/targets.py
+?? app/core/ai_cli_runner_client.py
+?? app/core/ai_subscription_gateway.py
+?? app/core/llm_subscription_stream.py
+?? core_ui/management/commands/run_ai_provider_auth_worker.py
+?? core_ui/migrations/0025_aiproviderconnection_aiconnectionauthflow_and_more.py
+?? core_ui/migrations/0026_chatsession_provider_binding_and_more.py
+?? core_ui/migrations/0027_aiconnectionauthflow_claimed_at_and_more.py
+?? core_ui/models/ai_providers.py
+?? core_ui/services/ai_execution_context.py
+?? core_ui/services/ai_provider_access.py
+?? core_ui/services/ai_provider_auth.py
+?? core_ui/services/ai_provider_routing.py
+?? core_ui/services/ai_subscription_runtime.py
+?? core_ui/services/operator_provider_context.py
+?? core_ui/views/ai_provider_views.py
+?? docker/ai-cli-egress-proxy.Dockerfile
+?? docker/ai-cli-egress-squid.conf
+?? docker/ai-cli-provider-runner.Dockerfile
+?? docker/ai-cli-runner-manager.Dockerfile
+?? frontend/src/api/aiProviders.ts
+?? frontend/src/components/settings/ProviderBindingSelect.tsx
+?? frontend/src/pages/settings/SettingsAIConnectionsPage.tsx
+?? servers/migrations/0059_agentrun_provider_binding_snapshot_and_more.py
+?? servers/migrations/0060_agentrun_provider_execution_mode.py
+?? studio/migrations/0020_agentconfig_provider_binding_and_more.py
+?? studio/migrations/0021_pipelinerun_provider_execution_mode.py
+?? studio/services/ai_execution_context.py
+?? tests/test_ai_cli_provider_adapters.py
+?? tests/test_ai_cli_runner_manager.py
+?? tests/test_ai_cli_socket_proxy_policy.py
+?? tests/test_ai_provider_api.py
+?? tests/test_ai_provider_auth_worker.py
+?? tests/test_ai_provider_routing.py
+?? tests/test_ai_provider_surface_bindings.py
+?? tests/test_ai_runtime_contracts.py
+?? tests/test_llm_execution_context_coverage.py
+?? tests/test_llm_subscription_transport.py
+```

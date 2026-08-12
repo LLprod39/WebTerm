@@ -20,6 +20,7 @@ async def explain_command_output(
     semaphore=None,
     llm_factory=None,
     max_chars: int = 4000,
+    execution_context=None,
 ) -> str:
     from app.core.llm import LLMProvider
 
@@ -35,7 +36,12 @@ async def explain_command_output(
 
     async def _collect() -> None:
         nonlocal text
-        async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_chat"):
+        async for chunk in llm.stream_chat(
+            prompt,
+            model="auto",
+            purpose="terminal_chat",
+            execution_context=execution_context,
+        ):
             text += chunk
             if len(text) > max_chars:
                 break

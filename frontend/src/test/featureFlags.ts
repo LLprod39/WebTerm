@@ -15,7 +15,11 @@ const FEATURE_FLAGS: FeatureFlag[] = [
   "mars",
   "plugins",
   "settings",
+  "chat",
   "orchestrator",
+  "automation",
+  "ai_connections_personal",
+  "ai_connections_admin",
   "knowledge_base",
 ];
 

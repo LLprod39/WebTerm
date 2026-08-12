@@ -9,7 +9,8 @@ import pytest
 from django.contrib.auth.models import User
 
 from app.assistant_actions import AssistantActionSpec, get_action_spec, register_action
-from core_ui.models import ChatMessage, ChatSession, ChatTurnState, UserAppPermission
+from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState, UserAppPermission
+from core_ui.services.assistant_chat import execute_action
 from core_ui.services.operator_loop import handle_operator_message
 from core_ui.services.operator_plan import (
     advance_plan_on_action,
@@ -18,7 +19,8 @@ from core_ui.services.operator_plan import (
     mark_plan_approved,
 )
 from core_ui.services.operator_policy import filter_tools_for_policy, is_pilot_restricted_operator
-from core_ui.services.operator_tools import specs_to_tools
+from core_ui.services.operator_tools import execute_tool, specs_to_tools
+from core_ui.views.access_views import _apply_access_profile
 from servers.operator.mutate_tools import register_operator_mutate_tools
 from servers.operator.tools import register_operator_tools
 
@@ -45,26 +47,76 @@ class ScriptedToolsLLM:
 
 
 @pytest.mark.django_db
-def test_pilot_policy_filters_and_forces_confirm():
+def test_pilot_policy_exposes_only_read_tools_without_exact_operator_profile(monkeypatch):
+    monkeypatch.setenv("PILOT_RESTRICTED_MODE", "true")
     pilot = User.objects.create_user(username="pilot1", password="x")
     _grant(pilot, "orchestrator", "servers", "agents")
     assert is_pilot_restricted_operator(pilot) is True
 
     staff = User.objects.create_user(username="staff1", password="x", is_staff=True)
-    assert is_pilot_restricted_operator(staff) is False
+    assert is_pilot_restricted_operator(staff) is True
 
     register_operator_tools()
     register_operator_mutate_tools()
     tools = specs_to_tools(pilot)
     # Studio tools should not appear for pilot
     assert not any(str(t.get("action_type") or "").startswith("studio.") for t in tools)
-    # Mutates must require confirmation
+    # Mutates are not listed at all for ordinary pilot/staff users.
     mutates = [t for t in tools if t.get("risk") != "read"]
-    assert mutates
-    assert all(t.get("requires_confirmation") for t in mutates)
+    assert mutates == []
 
     # filter is idempotent
     assert len(filter_tools_for_policy(pilot, tools)) == len(tools)
+
+    operator = User.objects.create_user(username="pilot-operator-policy", password="x")
+    _apply_access_profile(operator, "pilot_operator")
+    assert is_pilot_restricted_operator(operator) is False
+    assert any(t.get("risk") != "read" for t in specs_to_tools(operator))
+
+
+@pytest.mark.django_db
+def test_direct_mutating_tool_and_pending_action_recheck_pilot_operator_authority(monkeypatch):
+    monkeypatch.setenv("PILOT_RESTRICTED_MODE", "true")
+    calls: list[str] = []
+    action_type = "test.pilot_mutation_boundary"
+    if get_action_spec(action_type) is None:
+        register_action(
+            AssistantActionSpec(
+                action_type=action_type,
+                label="Pilot mutation boundary",
+                description="Test-only mutation boundary",
+                risk=AssistantAction.RISK_MUTATING,
+                requires_confirmation=True,
+                required_feature="servers",
+                handler=lambda ctx: calls.append(str(ctx.user.pk)) or {"ok": True},
+            )
+        )
+    pilot = User.objects.create_user(username="pilot-direct-mutate", password="x")
+    staff = User.objects.create_user(username="staff-direct-mutate", password="x", is_staff=True)
+    operator = User.objects.create_user(username="pilot-operator-direct-mutate", password="x")
+    _apply_access_profile(operator, "pilot_operator")
+
+    for user in (pilot, staff):
+        denied = execute_tool(user=user, action_type=action_type, arguments={})
+        assert denied["code"] == "automation_required"
+        session = ChatSession.objects.create(user=user, title="denied mutation")
+        pending = AssistantAction.objects.create(
+            user=user,
+            session=session,
+            action_type=action_type,
+            title="Denied mutation",
+            status=AssistantAction.STATUS_REQUIRES_CONFIRMATION,
+            risk=AssistantAction.RISK_MUTATING,
+            required_feature="servers",
+            requires_confirmation=True,
+        )
+        result = execute_action(pending, confirmed=True)
+        assert result.status == AssistantAction.STATUS_FAILED
+        assert "pilot_operator" in result.error
+
+    allowed = execute_tool(user=operator, action_type=action_type, arguments={})
+    assert allowed["ok"] is True
+    assert calls == [str(operator.pk)]
 
 
 @pytest.mark.django_db

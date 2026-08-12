@@ -13,6 +13,16 @@ from .access import (
     GroupAppPermission,
     UserAppPermission,
 )
+from .ai_providers import (
+    AIConnectionAuthFlow,
+    AIProviderConnection,
+    AIProviderConnectionGrant,
+    AIProviderInvocation,
+    AIProviderLease,
+    AIProviderPool,
+    AIProviderPoolMember,
+    AIProviderPreference,
+)
 from .audit import LLMUsageLog, UserActivityLog
 from .chat import (
     AssistantAction,
@@ -46,4 +56,12 @@ __all__ = [
     "DashboardLayout",
     "Project",
     "ProjectMembership",
+    "AIProviderConnection",
+    "AIConnectionAuthFlow",
+    "AIProviderPool",
+    "AIProviderPoolMember",
+    "AIProviderConnectionGrant",
+    "AIProviderPreference",
+    "AIProviderInvocation",
+    "AIProviderLease",
 ]

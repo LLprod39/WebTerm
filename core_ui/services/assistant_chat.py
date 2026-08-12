@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from django.db import transaction
@@ -82,6 +82,7 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
         "kind": getattr(session, "kind", None) or "manual",
         "pinned_context": getattr(session, "pinned_context", None) or {},
         "total_usage": getattr(session, "total_usage", None) or {},
+        "provider_binding": getattr(session, "provider_binding", None) or {},
         "created_at": session.created_at.isoformat(),
         "updated_at": session.updated_at.isoformat(),
     }
@@ -245,6 +246,16 @@ def execute_action(
             action.save(update_fields=["status", "error", "completed_at", "updated_at"])
             return action
 
+        if spec.risk != AssistantAction.RISK_READ:
+            from servers.agents.agent_pilot_policy import user_can_automate
+
+            if not user_can_automate(action.user, request=request):
+                action.status = AssistantAction.STATUS_FAILED
+                action.error = "Mutating actions require the pilot_operator role and automation capability"
+                action.completed_at = timezone.now()
+                action.save(update_fields=["status", "error", "completed_at", "updated_at"])
+                return action
+
         if action.requires_confirmation and not confirmed:
             action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
             action.save(update_fields=["status", "updated_at"])
@@ -337,7 +348,14 @@ def cancel_action(action: AssistantAction) -> AssistantAction:
         return action
 
 
-def handle_user_message(session: ChatSession, user, message: str, *, request=None) -> AssistantTurnResult:
+def handle_user_message(
+    session: ChatSession,
+    user,
+    message: str,
+    *,
+    request=None,
+    provider_binding: dict[str, Any] | None = None,
+) -> AssistantTurnResult:
     """Handle a user message via the Operator tool-calling loop.
 
     On loop failure BEFORE anything was persisted the turn falls back to the
@@ -360,7 +378,13 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
     try:
         from core_ui.services.operator_loop import handle_operator_message_sync
 
-        result = handle_operator_message_sync(session, user, text, request=request)
+        result = handle_operator_message_sync(
+            session,
+            user,
+            text,
+            request=request,
+            provider_binding=provider_binding,
+        )
         return AssistantTurnResult(
             user_message=result.user_message,
             assistant_message=result.assistant_message,
@@ -377,10 +401,23 @@ def handle_user_message(session: ChatSession, user, message: str, *, request=Non
             logger.exception("operator loop failed mid-turn: {}", exc)
             raise AssistantActionError(f"Оператор не смог ответить: {exc}") from exc
         logger.exception("operator loop failed before writes; planner fallback: {}", exc)
-        return _planner_fallback_turn(session, user, text, request=request)
+        return _planner_fallback_turn(
+            session,
+            user,
+            text,
+            request=request,
+            provider_binding=provider_binding,
+        )
 
 
-def _planner_fallback_turn(session: ChatSession, user, text: str, *, request=None) -> AssistantTurnResult:
+def _planner_fallback_turn(
+    session: ChatSession,
+    user,
+    text: str,
+    *,
+    request=None,
+    provider_binding: dict[str, Any] | None = None,
+) -> AssistantTurnResult:
     """Legacy v1 flow: one planner call proposing actions (no tool loop)."""
     with transaction.atomic():
         user_message = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=text)
@@ -391,8 +428,24 @@ def _planner_fallback_turn(session: ChatSession, user, text: str, *, request=Non
         history = _chat_history(session)
         catalog = _action_catalog_for_user(user)
         runtime_context = build_runtime_context(user)
+        from core_ui.services.operator_provider_context import prepare_operator_turn_context
+
+        execution_context = replace(
+            prepare_operator_turn_context(
+                session=session,
+                user=user,
+                provider_binding=provider_binding,
+            ),
+            idempotency_key=f"chat:{session.pk}:legacy-planner:{user_message.pk}",
+        )
         plan = asyncio.run(
-            _call_planner(history=history, catalog=catalog, runtime_context=runtime_context, message=text)
+            _call_planner(
+                history=history,
+                catalog=catalog,
+                runtime_context=runtime_context,
+                message=text,
+                execution_context=execution_context,
+            )
         )
     except Exception as exc:
         logger.exception("assistant chat planner failed; using heuristic fallback: {}", exc)

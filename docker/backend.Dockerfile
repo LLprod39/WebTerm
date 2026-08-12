@@ -35,12 +35,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 #     --python-version 3.11 --python-platform linux --generate-hashes
 COPY requirements.lock ./
 RUN python -m venv /opt/venv \
-    && /opt/venv/bin/pip install --no-cache-dir --require-hashes -r requirements.lock
+    && /opt/venv/bin/pip install --no-cache-dir --require-hashes -r requirements.lock \
+    && /opt/venv/bin/pip uninstall --yes pip setuptools wheel
 
 
 FROM python:3.11.15-slim-bookworm AS runtime
 
-ARG WEBTERM_VERSION=0.2.2
+ARG WEBTERM_VERSION=0.2.3
 ARG http_proxy
 ARG https_proxy
 ARG ftp_proxy
@@ -102,5 +103,5 @@ USER 10001:10001
 
 EXPOSE 9000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/ready/', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=4).read()"
+    CMD python -c "import urllib.request; req=urllib.request.Request('http://127.0.0.1:9000/api/ready/?scope=core', headers={'X-Forwarded-Proto': 'https', 'Host': '127.0.0.1'}); urllib.request.urlopen(req, timeout=4).read()"
 CMD ["./docker/render-backend-start.sh"]

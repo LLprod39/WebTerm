@@ -2,6 +2,7 @@ import { Send, Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { localize } from "@/lib/i18n";
 
 import { ComposeCommandPalette } from "./ComposeCommandPalette";
@@ -31,6 +32,9 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
     isBusy,
     handleStop,
     submitMessage,
+    providerOptions,
+    providerOverride,
+    setProviderOverride,
   } = c;
 
   return (
@@ -48,6 +52,19 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
           onUnpinServer={unpinServer}
           onUnpinUser={unpinUser}
         />
+        {providerOptions.length ? (
+          <div className="mb-2 flex justify-end">
+            <Select value={providerOverride || "inherit"} onValueChange={(value) => setProviderOverride(value === "inherit" ? "" : value)}>
+              <SelectTrigger className="h-8 w-auto min-w-44 border-border/60 bg-muted/20 text-xs">
+                <SelectValue placeholder={localize(lang, "Провайдер чата", "Chat provider")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">{localize(lang, "По умолчанию", "Default")}</SelectItem>
+                {providerOptions.map((option) => <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
         <ComposeCommandPalette
           ref={paletteRef}
           draft={draft}

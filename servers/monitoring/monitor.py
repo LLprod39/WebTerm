@@ -33,6 +33,7 @@ from servers.monitoring.monitor_parsing import (
     _parse_quick_output,
 )
 from servers.secret_utils import get_server_auth_secret
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 from servers.ssh_private_keys import get_server_private_key_text
 
@@ -176,6 +177,7 @@ async def check_server(server: Server, deep: bool = False) -> ServerHealthCheck 
 
     metrics: dict[str, Any] | None = None
     try:
+        validate_pilot_ssh_destination(server.host, server.port)
         async with asyncssh.connect(**kwargs) as conn:
             # Collector v2 sleeps 1s for dual /proc/stat samples; legacy quick
             # commands run only when the v2 markers are missing from the output.

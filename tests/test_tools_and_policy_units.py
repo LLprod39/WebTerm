@@ -239,6 +239,7 @@ async def test_servers_list_tool_uses_registered_gateway(monkeypatch):
 @pytest.mark.asyncio
 async def test_server_execute_tool_enforces_target_server_lock(monkeypatch):
     tool = ServerExecuteTool()
+    monkeypatch.setattr("app.tools.server_tools._user_can_automate", lambda _user_id: False)
     monkeypatch.setattr(
         tool, "_get_server", lambda _user_id, _server_name_or_id: SimpleNamespace(id=2, name="other-node")
     )

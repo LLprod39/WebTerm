@@ -10,6 +10,8 @@ from servers.agents.agent_inputs import (
 )
 from servers.agents.agent_sessions import AgentSessionManager
 from servers.agents.agent_tools import (
+    DEFAULT_READ_ONLY_AGENT_TOOLS,
+    get_enabled_tools,
     tool_list_materials,
     tool_read_material,
     tool_run_script_material,
@@ -37,6 +39,15 @@ SAMPLE_MATERIALS = [
         "content": "Step 1: prepare\nStep 2: close SBK\nStep 3: verify",
     },
 ]
+
+
+def test_empty_tools_config_defaults_to_minimal_read_only_allowlist():
+    enabled = get_enabled_tools({})
+
+    assert set(enabled) == set(DEFAULT_READ_ONLY_AGENT_TOOLS)
+    assert "ssh_execute" not in enabled
+    assert "run_script_material" not in enabled
+    assert "send_ctrl_c" not in enabled
 
 
 def test_normalize_assigns_ids_and_task_status():
@@ -71,6 +82,7 @@ async def test_list_read_update_and_run_script_tools():
         allowed_servers=[_Server()],
         available_materials=SAMPLE_MATERIALS,
     )
+    session.execution_approval_granted = True
     # Pretend connected
     session.connections[1] = type(
         "S", (), {"server_id": 1, "server_name": "web-1", "proc": object(), "conn": object()}
@@ -113,3 +125,71 @@ async def test_list_read_update_and_run_script_tools():
     dry = await tool_run_script_material(session, material="m1", server="web-1", dry_run=True)
     assert dry.success
     assert dry.data.get("dry_run") is True
+
+
+@pytest.mark.asyncio
+async def test_run_script_material_is_blocked_by_server_read_only_policy():
+    class _ReadOnlyServer:
+        id = 1
+        name = "readonly-1"
+        host = "10.0.0.2"
+        ai_read_only = True
+
+    session = AgentSessionManager(
+        allowed_servers=[_ReadOnlyServer()],
+        available_materials=SAMPLE_MATERIALS,
+    )
+    session.connections[1] = type(
+        "S", (), {"server_id": 1, "server_name": "readonly-1", "proc": object(), "conn": object()}
+    )()
+    session._name_to_id["readonly-1"] = 1
+    called = False
+
+    async def fake_execute(_server_id, _command):
+        nonlocal called
+        called = True
+        raise AssertionError("read-only material execution reached SSH")
+
+    session.execute = fake_execute  # type: ignore[method-assign]
+
+    result = await tool_run_script_material(session, material="m1", server="readonly-1")
+
+    assert result.success is False
+    assert "read-only" in result.result
+    assert called is False
+
+
+@pytest.mark.asyncio
+async def test_dangerous_material_is_blocked_when_dry_run_is_string_false():
+    class _Server:
+        id = 1
+        name = "write-1"
+        host = "10.0.0.3"
+        ai_read_only = False
+
+    materials = [{"kind": "script", "name": "danger.sh", "content": "#!/bin/bash\nrm -rf /\n"}]
+    session = AgentSessionManager(allowed_servers=[_Server()], available_materials=materials)
+    session.execution_approval_granted = True
+    session.connections[1] = type(
+        "S", (), {"server_id": 1, "server_name": "write-1", "proc": object(), "conn": object()}
+    )()
+    session._name_to_id["write-1"] = 1
+    called = False
+
+    async def fake_execute(_server_id, _command):
+        nonlocal called
+        called = True
+        raise AssertionError("dangerous material reached SSH")
+
+    session.execute = fake_execute  # type: ignore[method-assign]
+
+    result = await tool_run_script_material(
+        session,
+        material="m1",
+        server="write-1",
+        dry_run="false",
+    )
+
+    assert result.success is False
+    assert "high-risk" in result.result
+    assert called is False

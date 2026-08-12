@@ -14,6 +14,7 @@ from typing import Any
 from google import genai
 from loguru import logger
 
+from app.ai_runtime import LLMExecutionContext
 from app.core.llm_ollama import (
     build_ollama_request_targets,
     get_ollama_think_value,
@@ -178,6 +179,7 @@ class LLMProvider:
         purpose: str = "chat",
         system_prompt: str | None = None,
         json_mode: bool = False,
+        execution_context: LLMExecutionContext | None = None,
     ) -> AsyncGenerator[str, None]:
         """Stream chat response from the selected model (see llm_provider_stream)."""
         from app.core.llm_provider_stream import stream_provider_chat
@@ -190,6 +192,7 @@ class LLMProvider:
             purpose=purpose,
             system_prompt=system_prompt,
             json_mode=json_mode,
+            execution_context=execution_context,
         )
         async with contextlib.aclosing(stream):
             async for chunk in stream:
@@ -204,6 +207,7 @@ class LLMProvider:
         specific_model: str | None = None,
         purpose: str = "orchestrator",
         system_prompt: str | None = None,
+        execution_context: LLMExecutionContext | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Stream chat with native tool-calling (see llm_provider_tools_stream)."""
         from app.core.llm_provider_tools_stream import stream_provider_chat_tools
@@ -216,6 +220,7 @@ class LLMProvider:
             specific_model=specific_model,
             purpose=purpose,
             system_prompt=system_prompt,
+            execution_context=execution_context,
         )
         async with contextlib.aclosing(stream):
             async for event in stream:

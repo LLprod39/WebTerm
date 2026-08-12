@@ -53,6 +53,7 @@ class TerminalLifecycleOperations:
             return
 
         self._user_id = int(user.id)
+        self._automation_allowed = await self._user_can_automation(self._user_id)
 
         can_servers = await self._user_can_servers(user.id)
         logger.debug("WS connect: user={} can_servers={}", user, can_servers)

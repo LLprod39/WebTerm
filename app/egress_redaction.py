@@ -64,14 +64,14 @@ _TEXT_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     (
         "secret_assignment",
         re.compile(
-            r"(?i)\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|cookie|session[_-]?id)\b"
+            r"(?i)\b(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|device[_-]?code|user[_-]?code|cookie|session[_-]?id)\b"
             r"(\s*[:=]\s*|\s+is\s+)([^\s\"']+|\"[^\"]*\"|'[^']*')"
         ),
     ),
 )
 
 _KEY_HINT_RE = re.compile(
-    r"(?i)(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|cookie|authorization|session)"
+    r"(?i)(password|passwd|secret|token|api[_-]?key|access[_-]?key|refresh[_-]?token|device[_-]?code|user[_-]?code|cookie|authorization|session)"
 )
 _INSTRUCTIONAL_LINE_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(?i)\bignore (all |any )?(previous|prior) instructions\b"),

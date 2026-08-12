@@ -4,6 +4,7 @@ import { Layers, Server, Shield, Tag } from "lucide-react";
 import {
   createAgent,
   fetchAgentTemplates,
+  fetchAuthSession,
   fetchFrontendBootstrap,
   studioSkills,
   updateAgent,
@@ -12,9 +13,11 @@ import {
   type AgentScheduleConfig,
   type AgentScheduleMode,
   type AgentTemplate,
+  type ProviderBinding,
   type StudioSkill,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 import {
   AGENT_WIZARD_STEPS,
   type AgentSudoPolicy,
@@ -22,6 +25,9 @@ import {
   type AgentWizardStep,
   buildAgentWizardReadiness,
   buildDefaultToolsConfig,
+  enforceReadOnlyToolsConfig,
+  FULL_AGENT_TOOL_OPTIONS,
+  READ_ONLY_AGENT_TOOL_KEYS,
   defaultScheduleConfig,
   deriveScheduleMinutes,
   finalizeScheduleConfig,
@@ -61,13 +67,15 @@ export function useCreateAgentDialogState({
   const [aiPrompt, setAiPrompt] = useState("");
   const [goal, setGoal] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
-  // Keep in sync with servers.agents.agent_budgets FULL_DEFAULT_* (complex-task defaults).
-  const [maxIter, setMaxIter] = useState(40);
+  // Pilot-safe quick diagnostic profile. Operators can deliberately raise the
+  // budget later, but omission must not create a long-running agent.
+  const [maxIter, setMaxIter] = useState(15);
   const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
   const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");
   const [stopConditionsText, setStopConditionsText] = useState("");
-  const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(1200);
-  const [maxConnections, setMaxConnections] = useState(5);
+  const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(600);
+  const [maxConnections, setMaxConnections] = useState(1);
+  const [providerBinding, setProviderBinding] = useState<ProviderBinding | null>(null);
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
   const [schedule, setSchedule] = useState(0);
   const [scheduleConfig, setScheduleConfig] = useState<AgentScheduleConfig>(() => defaultScheduleConfig());
@@ -81,7 +89,18 @@ export function useCreateAgentDialogState({
   const [toolsExpanded, setToolsExpanded] = useState(false);
   const [skillsExpanded, setSkillsExpanded] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [runAfterSave, setRunAfterSave] = useState(true);
+  const [runAfterSave, setRunAfterSave] = useState(false);
+  const [mutatingToolsAcknowledged, setMutatingToolsAcknowledged] = useState(false);
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  // Administrative access alone is not execution authority in the pilot.
+  // Mutating tools are reserved for the explicit operator profile on disposable hosts.
+  const canConfigureMutatingTools = authData?.user?.access_profile === "pilot_operator"
+    && hasFeatureAccess(authData.user, "automation");
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
   const { data: availableSkillsData } = useQuery<unknown>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
@@ -159,7 +178,12 @@ export function useCreateAgentDialogState({
     telegramChatId,
     telegramEnabled,
   ]);
-  const canSave = readiness === 100 && schemaValidation.isValid;
+  const mutatingToolsEnabled = FULL_AGENT_TOOL_OPTIONS.some(
+    (tool) => !READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) && Boolean(toolsConfig[tool.key]),
+  );
+  const canSave = readiness === 100
+    && schemaValidation.isValid
+    && (!mutatingToolsEnabled || (canConfigureMutatingTools && mutatingToolsAcknowledged));
   const resetForm = () => {
     setSchedule(0);
     setScheduleConfig(defaultScheduleConfig());
@@ -172,16 +196,18 @@ export function useCreateAgentDialogState({
     setServerSearch("");
     setToolsExpanded(false);
     setSkillsExpanded(false);
-    setMaxIter(40);
+    setMaxIter(15);
     setToolsConfig(buildDefaultToolsConfig());
     setSudoPolicy("disabled");
     setStopConditionsText("");
-    setSessionTimeoutSeconds(1200);
-    setMaxConnections(5);
+    setSessionTimeoutSeconds(600);
+    setMaxConnections(1);
+    setProviderBinding(null);
     setSelectedServers([]);
     setAiPrompt("");
     setCommands("");
-    setRunAfterSave(true);
+    setRunAfterSave(false);
+    setMutatingToolsAcknowledged(false);
     setMode("full");
     setSelectedType("custom");
     setName("");
@@ -209,6 +235,7 @@ export function useCreateAgentDialogState({
     setStopConditionsText((initialAgent.stop_conditions || []).join("\n"));
     setSessionTimeoutSeconds(initialAgent.session_timeout_seconds || 1200);
     setMaxConnections(initialAgent.max_connections || 5);
+    setProviderBinding(initialAgent.provider_binding?.target_id ? initialAgent.provider_binding : null);
     setSelectedServers(initialAgent.server_ids || []);
     setSchedule(initialAgent.schedule_minutes || 0);
     setScheduleConfig(initialAgent.schedule_config || scheduleConfigFromMinutes(initialAgent.schedule_minutes || 0));
@@ -223,6 +250,7 @@ export function useCreateAgentDialogState({
     setToolsExpanded(false);
     setSkillsExpanded(false);
     setRunAfterSave(false);
+    setMutatingToolsAcknowledged(false);
   }, [open, initialAgent]);
   const onSelectTemplate = (tpl: AgentTemplate) => {
     setSelectedType(tpl.type);
@@ -242,6 +270,10 @@ export function useCreateAgentDialogState({
       setStep(schemaValidation.issues[0]?.step || "basics");
       return;
     }
+    if (mutatingToolsEnabled && (!canConfigureMutatingTools || !mutatingToolsAcknowledged)) {
+      setStep("capabilities");
+      return;
+    }
     setSaving(true);
     try {
       const normalizedSchedule = finalizeScheduleConfig(scheduleConfig, schedule);
@@ -258,7 +290,11 @@ export function useCreateAgentDialogState({
         system_prompt: systemPrompt,
         max_iterations: maxIter,
         allow_multi_server: selectedServers.length > 1,
-        tools_config: mode === "mini" ? {} : toolsConfig,
+        tools_config: mode === "mini"
+          ? {}
+          : canConfigureMutatingTools
+            ? toolsConfig
+            : enforceReadOnlyToolsConfig(toolsConfig),
         sudo_policy: sudoPolicy,
         stop_conditions: stopConditionsText.split("\n").map((item) => item.trim()).filter(Boolean),
         skill_slugs: selectedSkillSlugs,
@@ -266,6 +302,7 @@ export function useCreateAgentDialogState({
         report_delivery: { telegram: { enabled: telegramEnabled, chat_id: telegramChatId.trim(), format: "brief", include_link: true } },
         session_timeout_seconds: sessionTimeoutSeconds,
         max_connections: maxConnections,
+        provider_binding: providerBinding || {},
       };
       if (initialAgent) {
         await updateAgent(initialAgent.id, payload);
@@ -289,9 +326,16 @@ export function useCreateAgentDialogState({
     setStep(AGENT_WIZARD_STEPS[Math.min(currentStepIndex + 1, AGENT_WIZARD_STEPS.length - 1)].key);
   };
   const goBack = () => setStep(AGENT_WIZARD_STEPS[Math.max(currentStepIndex - 1, 0)].key);
-  const toggleServer = (id: number) => setSelectedServers((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
+  const toggleServer = (id: number) => setSelectedServers((prev) => {
+    if (prev.includes(id)) return prev.filter((item) => item !== id);
+    // A normal diagnostic agent is intentionally limited to one host. Only
+    // the explicitly selected multi-agent mode may widen the server scope.
+    return mode === "multi" ? [...prev, id] : [id];
+  });
   const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
-  const selectAll = () => setSelectedServers(hasAllServersSelected ? [] : allServerIds);
+  const selectAll = () => setSelectedServers(
+    hasAllServersSelected ? [] : mode === "multi" ? allServerIds : allServerIds.slice(0, 1),
+  );
   const setScheduleMode = (modeValue: AgentScheduleMode) => {
     const nextInterval = modeValue === "interval" ? (schedule || scheduleConfig.interval_minutes || 60) : 0;
     setSchedule(nextInterval);
@@ -380,6 +424,10 @@ export function useCreateAgentDialogState({
     setMaxIter,
     toolsConfig,
     setToolsConfig,
+    canConfigureMutatingTools,
+    mutatingToolsAcknowledged,
+    setMutatingToolsAcknowledged,
+    mutatingToolsEnabled,
     sudoPolicy,
     setSudoPolicy,
     stopConditionsText,
@@ -388,6 +436,9 @@ export function useCreateAgentDialogState({
     setSessionTimeoutSeconds,
     maxConnections,
     setMaxConnections,
+    providerBinding,
+    setProviderBinding,
+    providerMode: schedule > 0 ? "unattended" as const : "interactive" as const,
     selectedServers,
     schedule,
     setSchedule,

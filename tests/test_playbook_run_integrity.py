@@ -47,9 +47,11 @@ def _server(user: User, *, name: str = "web-01") -> Server:
 
 @pytest.mark.django_db
 def test_http_and_operator_use_the_same_validated_run_snapshot(monkeypatch):
+    from core_ui.views.access_views import _apply_access_profile
     from servers.operator.mutate_playbooks import run_playbook
 
     user = User.objects.create_user(username="run-parity", password="x")
+    _apply_access_profile(user, "pilot_operator")
     server = _server(user)
     playbook = Playbook.objects.create(
         user=user,

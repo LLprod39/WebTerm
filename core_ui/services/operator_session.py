@@ -22,6 +22,7 @@ from core_ui.services.operator_loop import (
     _history_messages,
     run_operator_loop,
 )
+from core_ui.services.operator_provider_context import prepare_operator_turn_context
 from core_ui.services.operator_session_resume import resume_after_action, resume_after_async_result
 from core_ui.services.operator_tools import specs_to_tools
 
@@ -41,6 +42,7 @@ def start_operator_turn(
     user,
     message: str,
     request=None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> tuple[ChatTurnState, list[dict[str, Any]]]:
     text = str(message or "").strip()
     if not text:
@@ -91,6 +93,11 @@ def start_operator_turn(
         # Serialize turn creation across ASGI workers/tabs.  The process-local
         # task map is only a UX optimisation; the database is authoritative.
         session = ChatSession.objects.select_for_update().get(pk=session.pk, user=user)
+        execution_context = prepare_operator_turn_context(
+            session=session,
+            user=user,
+            provider_binding=provider_binding,
+        )
         if ChatTurnState.objects.filter(
             session=session,
             status__in={
@@ -167,8 +174,9 @@ def start_operator_turn(
             assistant_message=assistant_message,
             status=ChatTurnState.STATUS_RUNNING,
             llm_messages=history,
+            provider_binding_snapshot=execution_context.binding.to_dict(),
+            provider_session_id=execution_context.provider_session_id,
         )
-
     tools = specs_to_tools(user, message=text)
     log_user_activity(
         user=user,
@@ -192,8 +200,15 @@ async def handle_operator_message(
     request=None,
     on_event: EventCallback | None = None,
     provider=None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> OperatorTurnResult:
-    turn, tools = await start_operator_turn(session=session, user=user, message=message, request=request)
+    turn, tools = await start_operator_turn(
+        session=session,
+        user=user,
+        message=message,
+        request=request,
+        provider_binding=provider_binding,
+    )
     return await run_operator_loop(
         turn=turn,
         user=user,
@@ -211,6 +226,7 @@ def handle_operator_message_sync(
     *,
     request=None,
     provider=None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> OperatorTurnResult:
     """Sync wrapper for HTTP endpoints."""
     import asyncio
@@ -223,11 +239,34 @@ def handle_operator_message_sync(
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 return pool.submit(
                     lambda: asyncio.run(
-                        handle_operator_message(session, user, message, request=request, provider=provider)
+                        handle_operator_message(
+                            session,
+                            user,
+                            message,
+                            request=request,
+                            provider=provider,
+                            provider_binding=provider_binding,
+                        )
                     )
                 ).result()
         return loop.run_until_complete(
-            handle_operator_message(session, user, message, request=request, provider=provider)
+            handle_operator_message(
+                session,
+                user,
+                message,
+                request=request,
+                provider=provider,
+                provider_binding=provider_binding,
+            )
         )
     except RuntimeError:
-        return asyncio.run(handle_operator_message(session, user, message, request=request, provider=provider))
+        return asyncio.run(
+            handle_operator_message(
+                session,
+                user,
+                message,
+                request=request,
+                provider=provider,
+                provider_binding=provider_binding,
+            )
+        )

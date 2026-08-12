@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.test import override_settings
 
 from core_ui.checks import production_database_deploy_check, trusted_proxy_hops_deploy_check
@@ -5,15 +6,27 @@ from core_ui.checks import production_database_deploy_check, trusted_proxy_hops_
 _PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
-@override_settings(DEBUG=False, DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3"}})
-def test_production_database_deploy_check_rejects_sqlite():
+def test_production_database_deploy_check_rejects_sqlite(monkeypatch):
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(
+        settings,
+        "DATABASES",
+        {"default": {"ENGINE": "django.db.backends.sqlite3"}},
+    )
+
     errors = production_database_deploy_check(None)
 
     assert [error.id for error in errors] == ["core_ui.E006"]
 
 
-@override_settings(DEBUG=False, DATABASES={"default": {"ENGINE": "django.db.backends.postgresql"}})
-def test_production_database_deploy_check_accepts_postgres():
+def test_production_database_deploy_check_accepts_postgres(monkeypatch):
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(
+        settings,
+        "DATABASES",
+        {"default": {"ENGINE": "django.db.backends.postgresql"}},
+    )
+
     assert production_database_deploy_check(None) == []
 
 

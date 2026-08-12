@@ -111,7 +111,7 @@ describe("AppSidebar preview-gated nav", () => {
   });
 
   it("renders enabled MARS and Chat, and staff gets Kubernetes without readiness gate", async () => {
-    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, settings: true });
+    renderSidebar({ servers: true, dashboard: true, agents: true, automation: true, studio: true, chat: true, orchestrator: true, kubernetes: true, mars: true, settings: true });
 
     expect(await screen.findByText("MARS")).toBeInTheDocument();
     expect(screen.getByText("Чат")).toBeInTheDocument();
@@ -129,7 +129,7 @@ describe("AppSidebar preview-gated nav", () => {
   });
 
   it("uses the five target navigation groups and exposes playbooks", async () => {
-    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: true, kubernetes: true, mars: true, plugins: true, settings: true });
+    renderSidebar({ servers: true, dashboard: true, agents: true, automation: true, studio: true, chat: true, orchestrator: true, kubernetes: true, mars: true, plugins: true, settings: true });
 
     const dashboard = await screen.findByTestId("nav-section-dashboard");
     const infrastructure = screen.getByTestId("nav-section-infrastructure");
@@ -149,7 +149,7 @@ describe("AppSidebar preview-gated nav", () => {
 
   it("marks Playbooks active on standalone and nested automation routes", async () => {
     renderSidebar(
-      { servers: true, dashboard: true, agents: true, settings: true },
+      { servers: true, dashboard: true, agents: true, automation: true, settings: true },
       { path: "/automation/playbooks/42" },
     );
 
@@ -231,11 +231,17 @@ describe("AppSidebar preview-gated nav", () => {
   });
 
   it("hides new sidebar items without feature access", async () => {
-    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, orchestrator: false, kubernetes: false, mars: false, settings: true });
+    renderSidebar({ servers: true, dashboard: true, agents: true, studio: true, chat: false, orchestrator: true, kubernetes: false, mars: false, settings: true });
 
     await screen.findByText("Серверы");
     expect(screen.queryByText("Чат")).not.toBeInTheDocument();
     expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
     expect(screen.queryByText("MARS")).not.toBeInTheDocument();
+  });
+
+  it("shows Chat with the narrow chat capability and no orchestrator access", async () => {
+    renderSidebar({ dashboard: true, chat: true, orchestrator: false });
+
+    expect(await screen.findByRole("link", { name: "Чат" })).toHaveAttribute("href", "/chat");
   });
 });

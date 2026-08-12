@@ -14,7 +14,7 @@ from loguru import logger
 from app.core.model_config import model_manager
 from core_ui.decorators import require_feature
 from core_ui.middleware import get_template_name
-from core_ui.views.runtime import get_rag_engine
+from core_ui.views.runtime import get_rag_engine, rag_backend_is_configured
 
 
 def welcome_view(request):
@@ -63,18 +63,18 @@ def serve_landing_video(request, filename):
 
 
 @login_required
-@require_feature("orchestrator", redirect_on_forbidden=True)
+@require_feature("chat", redirect_on_forbidden=True)
 def chat_view(request):
     """Main chat interface."""
     default_provider = model_manager.config.default_provider
-    rag = get_rag_engine()
+    rag = get_rag_engine() if rag_backend_is_configured() else None
     context = {
         "default_provider": default_provider,
         "is_auto_default": default_provider == "auto",
         "is_gemini_default": default_provider == "gemini",
         "is_grok_default": default_provider == "grok",
-        "rag_available": rag.available,
-        "rag_build": getattr(rag, "rag_build", "full"),
+        "rag_available": bool(rag and rag.available),
+        "rag_build": getattr(rag, "rag_build", "disabled"),
     }
 
     task_id = request.GET.get("task_id")
@@ -118,16 +118,18 @@ def monitor_view(request):
 @require_feature("knowledge_base", redirect_on_forbidden=True)
 def knowledge_base_view(request):
     """Knowledge Base (RAG) management - optimized for fast loading."""
-    rag = get_rag_engine()
+    rag = get_rag_engine() if rag_backend_is_configured() else None
     rag_type = (
-        "Qdrant" if (hasattr(rag, "use_qdrant") and rag.use_qdrant) else ("InMemory" if rag.available else "mini")
+        "Qdrant"
+        if (rag is not None and hasattr(rag, "use_qdrant") and rag.use_qdrant)
+        else ("InMemory" if rag is not None and rag.available else "disabled")
     )
     context = {
         "documents": [],
         "doc_count": 0,
-        "rag_available": rag.available,
+        "rag_available": bool(rag and rag.available),
         "rag_type": rag_type,
-        "rag_build": getattr(rag, "rag_build", "full"),
+        "rag_build": getattr(rag, "rag_build", "disabled"),
     }
     template = get_template_name(request, "knowledge_base.html")
     return render(request, template, context)

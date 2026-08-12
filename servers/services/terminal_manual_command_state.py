@@ -18,6 +18,7 @@ class ManualCommandState:
     """Mutable state owned by interactive, non-AI terminal commands."""
 
     input_buffer: str = ""
+    input_forwarding_held: bool = False
     capture_suppression: int = 0
     next_command_id: int = 1_000_000
     pending_commands: list[dict[str, Any]] = field(default_factory=list)
@@ -26,6 +27,7 @@ class ManualCommandState:
 
     def reset(self) -> None:
         self.input_buffer = ""
+        self.input_forwarding_held = False
         self.capture_suppression = 0
         self.next_command_id = 1_000_000
         self.pending_commands.clear()

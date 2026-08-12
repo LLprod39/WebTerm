@@ -6,8 +6,10 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_pipeline_run_limit_error
 from app.server_alert_provider import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
+from core_ui.services.ai_execution_context import build_execution_context
 
 from .models import PipelineRun, PipelineTrigger
 from .pipeline.pipeline_preflight import pipeline_integration_diagnostics
@@ -82,6 +84,7 @@ def create_pipeline_run(
     context: dict[str, Any] | None = None,
     trigger_data: dict[str, Any] | None = None,
     entry_node_id: str,
+    explicit_provider_binding: dict[str, Any] | None = None,
 ) -> PipelineRun:
     entry = str(entry_node_id or "").strip()
     preflight_errors = validate_pipeline_run_creation(
@@ -93,6 +96,21 @@ def create_pipeline_run(
         raise ValueError(f"Pipeline is not runnable: {'; '.join(preflight_errors)}")
 
     from studio.dispatch import enqueue_pipeline_run_dispatch
+
+    actor = triggered_by or pipeline.owner
+    unattended = triggered_by is None or (trigger is not None and trigger.trigger_type != PipelineTrigger.TYPE_MANUAL)
+    execution_mode = ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE
+    execution_context = build_execution_context(
+        actor_user_id=actor.pk,
+        project_id=pipeline.project_id,
+        purpose="ops",
+        source_kind="pipeline",
+        source_id=pipeline.pk,
+        mode=execution_mode,
+        explicit_binding=explicit_provider_binding,
+        stored_binding=pipeline.provider_binding,
+        requested_provider="auto",
+    )
 
     with transaction.atomic():
         run = PipelineRun.objects.create(
@@ -106,6 +124,8 @@ def create_pipeline_run(
             trigger_data=dict(trigger_data or {}),
             entry_node_id=entry,
             routing_state=_initial_routing_state(entry),
+            provider_binding_snapshot=execution_context.binding.to_dict(),
+            provider_execution_mode=execution_mode.value,
         )
         enqueue_pipeline_run_dispatch(run)
     return run

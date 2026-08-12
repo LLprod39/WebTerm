@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import re
 from typing import TYPE_CHECKING
 
+from app.command_execution_gate import evaluate_command_execution_gate
 from servers.agents.agent_tools_base import ToolResult
 
 if TYPE_CHECKING:
@@ -160,7 +162,30 @@ async def tool_run_script_material(
     if not content.strip():
         return ToolResult(False, f"Script material '{item.get('id')}' is empty.")
 
-    # Block obvious destruction before staging
+    dry = dry_run.strip().lower() in {"1", "true", "yes", "on"} if isinstance(dry_run, str) else bool(dry_run)
+
+    sid = session.resolve_server(server)
+    if sid is None:
+        return ToolResult(False, f"Server '{server}' not found or not connected. Use open_connection first.")
+    server_obj = getattr(session, "allowed_servers", {}).get(sid)
+    if not dry and bool(getattr(server_obj, "ai_read_only", False)):
+        return ToolResult(False, f"Blocked: server '{server}' allows read-only AI commands only.")
+
+    # The material content is evaluated at the same enforcement boundary as an
+    # SSH command. A short blocklist alone is not an execution authorization.
+    gate = evaluate_command_execution_gate(content)
+    if not dry and not bool(getattr(session, "execution_approval_granted", False)):
+        approved = await _request_material_execution_approval(
+            session,
+            server=server,
+            material=str(item.get("name") or item.get("id") or material),
+            reason=gate.reason,
+        )
+        if not approved:
+            return ToolResult(False, "Blocked: script material requires explicit operator approval.")
+
+    # Retain a narrow fail-closed guard for destructive content even after
+    # approval; such scripts require a separate operator-controlled workflow.
     dangerous_hits = [
         token
         for token in (
@@ -175,16 +200,12 @@ async def tool_run_script_material(
         )
         if token in content
     ]
-    if dangerous_hits and not dry_run:
+    if dangerous_hits and not dry:
         return ToolResult(
             False,
             "Blocked: script content matches high-risk patterns "
             f"({', '.join(dangerous_hits)}). Use dry_run=true to inspect, or ask_user.",
         )
-
-    sid = session.resolve_server(server)
-    if sid is None:
-        return ToolResult(False, f"Server '{server}' not found or not connected. Use open_connection first.")
 
     try:
         timeout_sec = max(15, min(int(timeout or 300), 900))
@@ -206,7 +227,6 @@ async def tool_run_script_material(
         return ToolResult(False, "args contains unsupported characters; use letters, digits, ./_-=:@+ and spaces.")
     args_quoted = " ".join(shlex.quote(part) for part in args_str.split()) if args_str else ""
 
-    dry = dry_run.strip().lower() in {"1", "true", "yes", "on"} if isinstance(dry_run, str) else bool(dry_run)
     if dry:
         run_block = (
             "echo '=== DRY RUN: head ==='\n"
@@ -271,3 +291,42 @@ exit 0
             "duration_ms": out.get("duration_ms", 0),
         },
     )
+
+
+async def _request_material_execution_approval(
+    session: AgentSessionManager,
+    *,
+    server: str,
+    material: str,
+    reason: str,
+) -> bool:
+    callback = getattr(session, "event_callback", None)
+    if callback is None:
+        return False
+    await callback(
+        "agent_question",
+        {
+            "question": (
+                "Approve this operator-provided script for one execution only?\n"
+                f"Server: {server}\nMaterial: {material}\nPolicy reason: {reason}"
+            )
+        },
+    )
+    previous = getattr(session, "user_reply_future", None)
+    if previous is not None and not previous.done():
+        previous.cancel()
+    session.user_reply_future = asyncio.get_running_loop().create_future()
+    try:
+        answer = await asyncio.wait_for(session.user_reply_future, timeout=300)
+    except (asyncio.CancelledError, TimeoutError):
+        return False
+    return str(answer).strip().lower() in {
+        "approve",
+        "approved",
+        "allow",
+        "allow_once",
+        "yes",
+        "y",
+        "да",
+        "разрешить",
+    }

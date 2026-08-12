@@ -45,7 +45,7 @@ def _variable_names(data: dict) -> list[str]:
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_revision_validate(request, playbook_id: int, revision_id: int):
     try:

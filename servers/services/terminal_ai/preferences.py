@@ -24,6 +24,7 @@ DEFAULT_AI_SETTINGS: dict[str, Any] = {
     "nova_session_context_enabled": True,
     "nova_recent_activity_enabled": True,
     "nova_sudo_policy": "disabled",
+    "provider_binding": {},
 }
 
 
@@ -111,6 +112,9 @@ def normalize_ai_settings(raw_value: Any) -> dict[str, Any]:
             bool(defaults["nova_recent_activity_enabled"]),
         ),
         "nova_sudo_policy": normalize_sudo_policy(incoming.get("nova_sudo_policy")),
+        "provider_binding": dict(incoming.get("provider_binding") or {})
+        if isinstance(incoming.get("provider_binding"), dict)
+        else {},
     }
 
 
@@ -128,6 +132,9 @@ def clone_ai_settings(settings: dict[str, Any] | None) -> dict[str, Any]:
         "nova_session_context_enabled": bool(base.get("nova_session_context_enabled", True)),
         "nova_recent_activity_enabled": bool(base.get("nova_recent_activity_enabled", True)),
         "nova_sudo_policy": normalize_sudo_policy(base.get("nova_sudo_policy")),
+        "provider_binding": dict(base.get("provider_binding") or {})
+        if isinstance(base.get("provider_binding"), dict)
+        else {},
     }
 
 

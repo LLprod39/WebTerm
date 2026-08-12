@@ -196,7 +196,7 @@ def list_dockerfiles(repo: Path) -> list[dict[str, Any]]:
     components: list[dict[str, Any]] = []
     paths = sorted(docker_dir.glob("*.Dockerfile")) if docker_dir.is_dir() else []
     paths += sorted(docker_dir.glob("**/Dockerfile")) if docker_dir.is_dir() else []
-    compose = repo / "docker-compose.yml"
+    compose_paths = (repo / "docker-compose.yml", repo / "docker-compose.production.yml")
     for path in paths:
         rel = path.relative_to(repo).as_posix()
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -211,15 +211,18 @@ def list_dockerfiles(repo: Path) -> list[dict[str, Any]]:
                 properties=[{"name": "webterm:artifact_kind", "value": "dockerfile"}],
             )
         )
-    if compose.is_file():
+    for compose in compose_paths:
+        if not compose.is_file():
+            continue
         text = compose.read_text(encoding="utf-8", errors="replace")
         version = sha256_text(text)[:12]
+        relative = compose.relative_to(repo).as_posix()
         components.append(
             component(
-                name="docker-compose.yml",
+                name=relative,
                 version=version,
                 component_type="file",
-                purl=f"pkg:generic/compose/docker-compose.yml@{version}",
+                purl=f"pkg:generic/compose/{relative.replace('/', '.')}@{version}",
                 hashes=[{"alg": "SHA-256", "content": sha256_text(text)}],
                 properties=[{"name": "webterm:artifact_kind", "value": "compose"}],
             )
@@ -360,6 +363,22 @@ def generate(
             comps = parse_requirements_lock(repo / "requirements-mini.txt")
         write_json(backend_path, base_bom(name="webterm-backend", version="0.0.0-dev", components=comps))
     written.append(backend_path)
+
+    for artifact_name, component_name, lock_path in (
+        ("sbom-ai-cli-manager.cdx.json", "webterm-ai-cli-manager", "ai_cli_runner_manager/requirements.lock"),
+        (
+            "sbom-ai-cli-provider.cdx.json",
+            "webterm-ai-cli-provider",
+            "ai_cli_runner_manager/provider-requirements.lock",
+        ),
+    ):
+        artifact_path = output_dir / artifact_name
+        components = parse_requirements_lock(repo / lock_path)
+        write_json(
+            artifact_path,
+            base_bom(name=component_name, version="0.0.0-dev", components=components),
+        )
+        written.append(artifact_path)
 
     frontend_path = output_dir / "sbom-frontend.cdx.json"
     if not (prefer_external and try_external_npm_sbom(repo, frontend_path)):

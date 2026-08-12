@@ -14,6 +14,8 @@ from typing import Any
 from django.conf import settings
 from loguru import logger
 
+from app.egress_redaction import redact_text
+
 _CONFIGURED = False
 _CONFIG_LOCK = Lock()
 
@@ -36,6 +38,11 @@ def _record_filter(record: dict[str, Any]) -> bool:
     extra.setdefault("request_id", "-")
     extra.setdefault("channel", "-")
     extra.setdefault("user_id", "-")
+    # Every configured persistent sink receives the same last-line defence.
+    # Call sites should still avoid logging prompts or credentials entirely,
+    # but this prevents common token/device-code assignments from surviving a
+    # missed call-site redaction in the 14-day local log.
+    record["message"] = redact_text(str(record.get("message") or "")).text
     return True
 
 

@@ -28,6 +28,17 @@ if POLICY_KIND == "agent-command":
         ssh_agent_socket=os.getenv("AGENT_COMMAND_SSH_AUTH_SOCK", ""),
     )
     authorize_docker_request = authorize_agent_command_docker_request
+elif POLICY_KIND == "ai-cli":
+    from ai_cli_socket_proxy_policy import AiCliProxyPolicyConfig, authorize_ai_cli_docker_request
+
+    POLICY_CONFIG = AiCliProxyPolicyConfig(
+        codex_runner_image=os.environ["AI_CLI_CODEX_RUNNER_IMAGE"],
+        grok_runner_image=os.environ["AI_CLI_GROK_RUNNER_IMAGE"],
+        egress_network=os.environ["AI_CLI_DOCKER_NETWORK"],
+        credential_volume_prefix=os.getenv("AI_CLI_CREDENTIAL_VOLUME_PREFIX", "webterm-ai-cli-cred-"),
+        egress_proxy_url=os.getenv("AI_CLI_EGRESS_PROXY_URL", "http://ai-cli-egress-proxy:3128"),
+    )
+    authorize_docker_request = authorize_ai_cli_docker_request
 elif POLICY_KIND == "plugin-backend":
     from plugin_backend_socket_proxy_policy import (
         PluginBackendProxyPolicyConfig,

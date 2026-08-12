@@ -20,6 +20,12 @@ class ChatSession(models.Model):
     title = models.CharField(max_length=200, default="Новый чат")
     kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_MANUAL)
     pinned_context = models.JSONField(default=dict, blank=True)
+    provider_binding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Pinned canonical AI provider binding for this chat session.",
+    )
+    provider_session_id = models.CharField(max_length=255, blank=True, default="")
     total_usage = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -177,6 +183,8 @@ class ChatTurnState(models.Model):
     status = models.CharField(max_length=30, choices=STATUS_CHOICES, default=STATUS_RUNNING)
     llm_messages = models.JSONField(default=list, blank=True)
     pending_tool_call = models.JSONField(default=dict, blank=True)
+    provider_binding_snapshot = models.JSONField(default=dict, blank=True)
+    provider_session_id = models.CharField(max_length=255, blank=True, default="")
     iteration = models.PositiveIntegerField(default=0)
     total_input_tokens = models.PositiveIntegerField(default=0)
     total_output_tokens = models.PositiveIntegerField(default=0)

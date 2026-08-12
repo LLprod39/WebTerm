@@ -5,6 +5,7 @@ from collections import deque
 from types import SimpleNamespace
 
 import pytest
+from django.core.management.base import CommandError
 
 from servers.management.commands.run_agent_execution_plane import Command
 
@@ -59,3 +60,19 @@ def test_agent_execution_worker_uses_multiple_local_slots(monkeypatch):
 
     asyncio.run(scenario())
     assert maximum_active == 2
+
+
+def test_restricted_pilot_refuses_global_agent_concurrency_above_ten(monkeypatch):
+    monkeypatch.setenv("PILOT_RESTRICTED_MODE", "true")
+
+    with pytest.raises(CommandError, match="global concurrency to 10"):
+        Command().handle(
+            interval=5,
+            lease_seconds=180,
+            limit=1,
+            worker_key="pilot-limit-test",
+            global_concurrency=11,
+            per_user_concurrency=2,
+            worker_concurrency=1,
+            once=True,
+        )

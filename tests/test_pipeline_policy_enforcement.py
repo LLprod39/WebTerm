@@ -153,7 +153,14 @@ def test_pipeline_llm_query_uses_ops_context_and_requested_purpose(monkeypatch):
 
     captured: dict[str, str] = {}
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", specific_model=None, purpose: str = "chat"):
+    async def fake_stream_chat(
+        self,
+        prompt: str,
+        model: str = "auto",
+        specific_model=None,
+        purpose: str = "chat",
+        execution_context=None,
+    ):
         captured["prompt"] = prompt
         captured["model"] = model
         captured["specific_model"] = specific_model or ""
@@ -202,7 +209,14 @@ def test_pipeline_llm_query_sanitizes_instructional_prior_outputs(monkeypatch):
 
     captured: dict[str, str] = {}
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", specific_model=None, purpose: str = "chat"):
+    async def fake_stream_chat(
+        self,
+        prompt: str,
+        model: str = "auto",
+        specific_model=None,
+        purpose: str = "chat",
+        execution_context=None,
+    ):
         captured["prompt"] = prompt
         yield "ok"
 

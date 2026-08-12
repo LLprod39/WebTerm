@@ -29,7 +29,7 @@ from servers.views.server_playbook_serializers import _playbooks_for_user, _seri
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_run(request, playbook_id: int):
     pb = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)
@@ -70,7 +70,7 @@ def playbook_run(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_run_list(request):
     qs = PlaybookRun.objects.filter(user=request.user, project=active_project_for_user(request.user)).order_by(
@@ -85,7 +85,7 @@ def playbook_run_list(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_run_detail(request, run_id: int):
     run = get_object_or_404(PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user))
@@ -93,7 +93,7 @@ def playbook_run_detail(request, run_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_run_cancel(request, run_id: int):
     run = get_object_or_404(PlaybookRun, id=run_id, user=request.user, project=active_project_for_user(request.user))
@@ -112,7 +112,7 @@ def playbook_run_cancel(request, run_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_run_rerun_failed(request, run_id: int):
     """Re-run failed targets through the same exact-revision preflight."""

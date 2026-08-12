@@ -9,6 +9,10 @@ from asgiref.sync import sync_to_async
 from django.utils import timezone
 
 from servers.models import Server
+from servers.services.pilot_destination_policy import (
+    validate_pilot_ssh_destination,
+    validated_pilot_network_tunnel,
+)
 from servers.ssh_private_keys import import_server_private_key, is_managed_private_key_reference
 
 
@@ -51,15 +55,6 @@ def parse_host_port_value(host_value: str, default_port: int = 22) -> tuple[str,
 
 def parse_server_host_port(server: Server) -> tuple[str, int]:
     return parse_host_port_value(server.host or "", int(server.port or 22))
-
-
-def _network_tunnel(network_config: Any) -> str | None:
-    if not isinstance(network_config, dict):
-        return None
-    bastion = (network_config.get("network") or {}).get("bastion_host")
-    if not bastion:
-        return None
-    return str(bastion).strip() or None
 
 
 def _normalize_public_key(public_key: str) -> str:
@@ -157,6 +152,7 @@ def build_server_connect_kwargs(
     keepalive_count_max: int | None = None,
 ) -> dict[str, Any]:
     host, port = parse_server_host_port(server)
+    validate_pilot_ssh_destination(host, port)
     kwargs: dict[str, Any] = {
         "host": host,
         "port": port,
@@ -171,7 +167,7 @@ def build_server_connect_kwargs(
     if keepalive_count_max is not None:
         kwargs["keepalive_count_max"] = keepalive_count_max
 
-    tunnel = _network_tunnel(getattr(server, "network_config", None))
+    tunnel = validated_pilot_network_tunnel(getattr(server, "network_config", None))
     if tunnel:
         kwargs["tunnel"] = tunnel
 
@@ -228,11 +224,12 @@ async def fetch_server_host_key(
     network_config: Any = None,
     connect_timeout: int = 10,
 ) -> dict[str, str]:
+    validate_pilot_ssh_destination(host, port)
     kwargs: dict[str, Any] = {
         "host": host,
         "port": port,
     }
-    tunnel = _network_tunnel(network_config)
+    tunnel = validated_pilot_network_tunnel(network_config)
     if tunnel:
         kwargs["tunnel"] = tunnel
 

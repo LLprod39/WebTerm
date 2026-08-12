@@ -4,6 +4,7 @@ from typing import Any
 
 from app.agent_kernel.permissions.engine import PermissionEngine
 from app.agent_kernel.runtime.outcomes import outcome_from_report_payload
+from app.ai_runtime import LLMExecutionContext
 from app.pipeline_agent_provider import AgentRunSnapshot
 from servers.agents.agent_engine import AgentEngine
 from servers.agents.multi_agent_engine import MultiAgentEngine
@@ -97,6 +98,7 @@ async def run_pipeline_react_agent(
     pipeline_run_id: int | None = None,
     require_all_servers: bool = False,
     execution_approval_granted: bool = False,
+    execution_context: LLMExecutionContext | None = None,
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_node_{node_id}",
@@ -119,6 +121,7 @@ async def run_pipeline_react_agent(
         mcp_servers=mcp_servers,
         skills=skills,
         skill_errors=skill_errors,
+        execution_context=execution_context,
     )
     if permission_mode:
         engine.permission_engine = PermissionEngine(mode=permission_mode, sudo_policy=agent.sudo_policy)
@@ -155,6 +158,7 @@ async def run_pipeline_multi_agent(
     pipeline_run_id: int | None = None,
     require_all_servers: bool = True,
     execution_approval_granted: bool = False,
+    execution_context: LLMExecutionContext | None = None,
 ) -> AgentRunSnapshot:
     agent = ServerAgent(
         name=f"pipeline_multi_{node_id}",
@@ -177,6 +181,7 @@ async def run_pipeline_multi_agent(
         mcp_servers=mcp_servers,
         skills=skills,
         skill_errors=skill_errors,
+        execution_context=execution_context,
     )
     if permission_mode:
         engine.permission_engine = PermissionEngine(mode=permission_mode, sudo_policy=agent.sudo_policy)

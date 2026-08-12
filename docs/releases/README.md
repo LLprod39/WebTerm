@@ -1,6 +1,12 @@
 # Releases
 
-WebTerm v0.2.2 is the production recovery and runtime hardening release built on the v0.2.1 security and isolation foundation. Release artifacts use immutable container digests, signed attestations, SBOMs, checksums, install bundles, and automated runtime/Playwright proof on the published images. The support matrix and explicit capability exclusions remain authoritative.
+WebTerm v0.2.3 is the current local controlled-pilot candidate built on the
+v0.2.2 recovery and runtime-hardening release. It is not tagged, published or
+approved for pilot use yet. Promotion still requires one exact SHA to pass all
+mandatory CI, Linux delivery, real Codex/Grok, recovery, notification and load
+gates. Release artifacts use immutable container digests, signed attestations,
+SBOMs and checksums. The support matrix and explicit capability exclusions
+remain authoritative.
 
 Authoritative release documents:
 
@@ -18,6 +24,8 @@ Authoritative release documents:
 - [CI and Git governance](../architecture/CI_GOVERNANCE.md) — check rollout, promotion and branch-protection policy.
 - [v0.1.0 release notes](V0_1_0_RELEASE_NOTES.md) — install and verification commands for the published release.
 - [v0.2.1 release notes](V0_2_1_RELEASE_NOTES.md) — security and isolation hardening release notes.
-- [v0.2.2 release notes](V0_2_2_RELEASE_NOTES.md) — install, recovery and verification notes for the current release.
+- [v0.2.2 release notes](V0_2_2_RELEASE_NOTES.md) — install, recovery and verification notes for the current published release.
+- [v0.2.3 candidate release notes](V0_2_3_RELEASE_NOTES.md) — controlled Linux pilot scope and remaining promotion evidence.
+- [v0.2.3 Linux pilot runbook](../pilot/V0_2_3_LINUX_PILOT_RUNBOOK.md) — fail-closed install, observability, encrypted backup and emergency-cleanup procedure.
 
 A green local command is not a release. A release candidate requires a clean commit, pinned tools, all mandatory artifacts, an explicit reviewer decision and a traceable CI run. `scripts/collect_release_evidence.py` records those inputs but deliberately never approves a release itself.

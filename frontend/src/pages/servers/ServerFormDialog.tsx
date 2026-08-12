@@ -30,6 +30,7 @@ import type { ServerForm } from "./types";
 import type { ServerValidationResult } from "./serverValidation";
 
 interface ServerFormDialogProps {
+  canConfigureElevatedAccess: boolean;
   editingServer: FrontendServer | null;
   form: ServerForm;
   formValidation: ServerValidationResult;
@@ -120,6 +121,7 @@ function ChoiceButton({
 }
 
 export function ServerFormDialog({
+  canConfigureElevatedAccess,
   editingServer,
   form,
   formValidation,
@@ -140,6 +142,9 @@ export function ServerFormDialog({
     (group): group is FrontendGroup & { id: number } => group.id !== null,
   );
   const showFieldErrors = Boolean(form.name || form.host || form.username || form.ssh_private_key || form.sudo_password);
+  const hasUnsafeLegacyAccess = Boolean(
+    editingServer && (!form.ai_read_only || form.sudo_auth_mode !== "none"),
+  );
 
   return (
     <Dialog open={open} onOpenChange={setDialogOpen}>
@@ -307,62 +312,85 @@ export function ServerFormDialog({
             description={t("srv.access_section_desc")}
             icon={<ServerIcons.security className="h-3.5 w-3.5" strokeWidth={1.5} />}
           >
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-secondary/25 px-4 py-3">
+            {canConfigureElevatedAccess ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-secondary/25 px-4 py-3">
+                  <div className="min-w-0">
+                    <Label htmlFor="server-ai-read-only" className="text-sm font-medium text-foreground">
+                      {t("srv.ai_read_only")}
+                    </Label>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {t(form.ai_read_only ? "srv.ai_read_only_hint" : "srv.ai_write_enabled_hint")}
+                    </p>
+                  </div>
+                  <Switch
+                    id="server-ai-read-only"
+                    checked={form.ai_read_only}
+                    onCheckedChange={(checked) =>
+                      setForm((state) => ({ ...state, ai_read_only: Boolean(checked) }))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FieldLabel>{t("srv.sudo_auth")}</FieldLabel>
+                  <p className="text-sm leading-5 text-muted-foreground">{t("srv.sudo_auth_hint")}</p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    {(["none", "nopasswd", "stored_password"] as const).map((mode) => (
+                      <ChoiceButton
+                        key={mode}
+                        active={form.sudo_auth_mode === mode}
+                        onClick={() => setForm((state) => ({ ...state, sudo_auth_mode: mode }))}
+                      >
+                        {mode === "none"
+                          ? t("srv.sudo_none")
+                          : mode === "nopasswd"
+                            ? t("srv.sudo_nopasswd")
+                            : t("srv.sudo_stored")}
+                      </ChoiceButton>
+                    ))}
+                  </div>
+                </div>
+                {form.sudo_auth_mode === "stored_password" ? (
+                  <div className="space-y-2">
+                    <FieldLabel htmlFor="server-sudo-password" required>{t("srv.sudo_password")}</FieldLabel>
+                    <Input
+                      id="server-sudo-password"
+                      type="password"
+                      placeholder={editingServer?.has_saved_sudo_password ? t("srv.keep_sudo_password_placeholder") : ""}
+                      value={form.sudo_password}
+                      onChange={(event) => setForm((state) => ({ ...state, sudo_password: event.target.value }))}
+                      aria-invalid={Boolean(showFieldErrors && formValidation.errors.sudo_password)}
+                      aria-describedby={showFieldErrors && formValidation.errors.sudo_password ? "server-sudo-password-error" : undefined}
+                    />
+                    {showFieldErrors && formValidation.errors.sudo_password ? (
+                      <p id="server-sudo-password-error" className="text-xs text-destructive">{formValidation.errors.sudo_password}</p>
+                    ) : null}
+                    <p className="text-xs leading-5 text-muted-foreground">{t("srv.sudo_password_hint")}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  "rounded-lg border px-4 py-3",
+                  hasUnsafeLegacyAccess
+                    ? "border-warning/60 bg-warning/10"
+                    : "border-border/60 bg-secondary/25",
+                )}
+                role={hasUnsafeLegacyAccess ? "alert" : "status"}
+              >
                 <div className="min-w-0">
-                  <Label htmlFor="server-ai-read-only" className="text-sm font-medium text-foreground">
-                    {t("srv.ai_read_only")}
-                  </Label>
-                  <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                    {t(form.ai_read_only ? "srv.ai_read_only_hint" : "srv.ai_write_enabled_hint")}
+                  <p className="text-sm font-semibold text-foreground">
+                    {t("srv.pilot_access_locked")}
+                  </p>
+                  <p className="mt-1 text-sm leading-5 text-muted-foreground">
+                    {t(hasUnsafeLegacyAccess
+                      ? "srv.unsafe_server_locked_warning"
+                      : "srv.pilot_access_locked_hint")}
                   </p>
                 </div>
-                <Switch
-                  id="server-ai-read-only"
-                  checked={form.ai_read_only}
-                  onCheckedChange={(checked) =>
-                    setForm((state) => ({ ...state, ai_read_only: Boolean(checked) }))
-                  }
-                />
               </div>
-              <div className="space-y-2">
-                <FieldLabel>{t("srv.sudo_auth")}</FieldLabel>
-                <p className="text-sm leading-5 text-muted-foreground">{t("srv.sudo_auth_hint")}</p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  {(["none", "nopasswd", "stored_password"] as const).map((mode) => (
-                    <ChoiceButton
-                      key={mode}
-                      active={form.sudo_auth_mode === mode}
-                      onClick={() => setForm((state) => ({ ...state, sudo_auth_mode: mode }))}
-                    >
-                      {mode === "none"
-                        ? t("srv.sudo_none")
-                        : mode === "nopasswd"
-                          ? t("srv.sudo_nopasswd")
-                          : t("srv.sudo_stored")}
-                    </ChoiceButton>
-                  ))}
-                </div>
-              </div>
-              {form.sudo_auth_mode === "stored_password" ? (
-                <div className="space-y-2">
-                  <FieldLabel htmlFor="server-sudo-password" required>{t("srv.sudo_password")}</FieldLabel>
-                  <Input
-                    id="server-sudo-password"
-                    type="password"
-                    placeholder={editingServer?.has_saved_sudo_password ? t("srv.keep_sudo_password_placeholder") : ""}
-                    value={form.sudo_password}
-                    onChange={(event) => setForm((state) => ({ ...state, sudo_password: event.target.value }))}
-                    aria-invalid={Boolean(showFieldErrors && formValidation.errors.sudo_password)}
-                    aria-describedby={showFieldErrors && formValidation.errors.sudo_password ? "server-sudo-password-error" : undefined}
-                  />
-                  {showFieldErrors && formValidation.errors.sudo_password ? (
-                    <p id="server-sudo-password-error" className="text-xs text-destructive">{formValidation.errors.sudo_password}</p>
-                  ) : null}
-                  <p className="text-xs leading-5 text-muted-foreground">{t("srv.sudo_password_hint")}</p>
-                </div>
-              ) : null}
-            </div>
+            )}
           </DialogSection>
 
           <DialogSection

@@ -7,6 +7,7 @@ from django.test import Client
 from django.utils import timezone
 
 from core_ui.models import UserAppPermission
+from core_ui.views.access_views import _apply_access_profile
 from servers.models import AgentRun, AgentRunDispatch, AgentRunEvent, BackgroundWorkerState, Server, ServerAgent
 
 
@@ -35,9 +36,120 @@ def _grant_feature(user: User, *features: str) -> None:
 
 
 @pytest.mark.django_db
+def test_pilot_agent_create_rejects_unsafe_server_tools_and_schedule():
+    user = User.objects.create_user(username="pilot-agent-policy", password="x")
+    _grant_feature(user, "agents")
+    safe = _create_server(user, name="safe-pilot", ai_read_only=True)
+    unsafe = _create_server(user, name="unsafe-pilot", ai_read_only=False)
+    client = Client()
+    client.force_login(user)
+
+    unsafe_server = client.post(
+        "/servers/api/agents/create/",
+        data=_json(
+            {
+                "mode": "mini",
+                "name": "Unsafe server agent",
+                "commands": ["uname -a"],
+                "server_ids": [unsafe.pk],
+            }
+        ),
+        content_type="application/json",
+    )
+    unsafe_tool = client.post(
+        "/servers/api/agents/create/",
+        data=_json(
+            {
+                "mode": "mini",
+                "name": "Unsafe tool agent",
+                "commands": ["uname -a"],
+                "server_ids": [safe.pk],
+                "tools_config": {"run_script_material": True},
+            }
+        ),
+        content_type="application/json",
+    )
+    scheduled = client.post(
+        "/servers/api/agents/create/",
+        data=_json(
+            {
+                "mode": "mini",
+                "name": "Scheduled pilot agent",
+                "commands": ["uname -a"],
+                "server_ids": [safe.pk],
+                "schedule_minutes": 10,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert unsafe_server.status_code == 403
+    assert unsafe_tool.status_code == 403
+    assert scheduled.status_code == 403
+    assert all(
+        response.json()["code"] == "pilot_policy_violation" for response in (unsafe_server, unsafe_tool, scheduled)
+    )
+
+
+@pytest.mark.django_db
+def test_pilot_agent_safe_defaults_and_existing_unsafe_agent_cannot_update_or_run():
+    user = User.objects.create_user(username="pilot-agent-runtime-policy", password="x")
+    _grant_feature(user, "agents")
+    safe = _create_server(user, name="safe-runtime", ai_read_only=True)
+    client = Client()
+    client.force_login(user)
+
+    created = client.post(
+        "/servers/api/agents/create/",
+        data=_json(
+            {
+                "mode": "mini",
+                "name": "Safe diagnostic",
+                "commands": ["uname -a"],
+                "server_ids": [safe.pk],
+            }
+        ),
+        content_type="application/json",
+    )
+    assert created.status_code == 200
+    safe_agent = ServerAgent.objects.get(pk=created.json()["id"])
+    assert safe_agent.max_connections == 1
+    assert safe_agent.schedule_minutes == 0
+    assert safe_agent.allow_multi_server is False
+    assert safe_agent.sudo_policy == "disabled"
+
+    unsafe_agent = ServerAgent.objects.create(
+        user=user,
+        name="Legacy unsafe agent",
+        mode=ServerAgent.MODE_FULL,
+        goal="Mutate host",
+        max_connections=5,
+        tools_config={"run_script_material": True},
+        sudo_policy="approved",
+    )
+    unsafe_agent.servers.set([safe])
+
+    update = client.post(
+        f"/servers/api/agents/{unsafe_agent.pk}/update/",
+        data=_json({"name": "Still unsafe"}),
+        content_type="application/json",
+    )
+    run = client.post(
+        f"/servers/api/agents/{unsafe_agent.pk}/run/",
+        data=_json({}),
+        content_type="application/json",
+    )
+
+    assert update.status_code == 403
+    assert run.status_code == 403
+    unsafe_agent.refresh_from_db()
+    assert unsafe_agent.name == "Legacy unsafe agent"
+
+
+@pytest.mark.django_db
 def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     user = User.objects.create_user(username="agent-user", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
     server = _create_server(user, name="agent-srv", server_type="ssh")
@@ -251,7 +363,13 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert update_task.json()["success"] is True
     assert update_task.json()["plan_tasks"][0]["name"] == "Check logs and disk"
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat"):
+    async def fake_stream_chat(
+        self,
+        prompt: str,
+        model: str = "auto",
+        purpose: str = "chat",
+        **_kwargs,
+    ):
         assert "Верни ТОЛЬКО JSON-объект" in prompt
         yield '{"name":"Refined task","description":"Updated by AI"}'
 
@@ -422,7 +540,7 @@ def test_agent_runtime_cleanup_stale_runs_is_user_scoped(settings):
 @pytest.mark.django_db
 def test_agent_list_exposes_execution_readiness_for_full_agents():
     user = User.objects.create_user(username="agent-readiness-user", password="x")
-    _grant_feature(user, "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
     server = _create_server(user, name="readiness-srv", server_type="ssh")

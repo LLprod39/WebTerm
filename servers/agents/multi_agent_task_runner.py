@@ -197,6 +197,7 @@ async def summarize_multi_agent_task(engine: Any, task: dict, iterations: list[d
             model=engine.model_preference,
             specific_model=engine.specific_model,
             purpose="opssummary",
+            execution_context=await engine._execution_context_for("opssummary"),
         ):
             chunks.append(chunk)
     return "".join(chunks)

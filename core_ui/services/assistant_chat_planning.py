@@ -4,6 +4,7 @@ import json
 import re
 from typing import Any
 
+from app.ai_runtime import LLMExecutionContext
 from app.core.llm import LLMProvider
 
 ASSISTANT_SYSTEM_PROMPT = """You are WebTerm Chat, an operations assistant inside the WebTerm platform.
@@ -277,6 +278,7 @@ async def _call_planner(
     catalog: list[dict[str, Any]],
     runtime_context: dict[str, Any],
     message: str,
+    execution_context: LLMExecutionContext | None = None,
 ) -> dict[str, Any]:
     if not catalog:
         return {
@@ -301,6 +303,7 @@ async def _call_planner(
         purpose="orchestrator",
         system_prompt=ASSISTANT_SYSTEM_PROMPT,
         json_mode=True,
+        execution_context=execution_context,
     ):
         chunks.append(chunk)
     parsed = _extract_json_object("".join(chunks))

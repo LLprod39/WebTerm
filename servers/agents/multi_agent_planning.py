@@ -280,6 +280,7 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
                 model=engine.model_preference,
                 specific_model=engine.specific_model,
                 purpose="opssummary",
+                execution_context=await engine._execution_context_for("opssummary"),
             ):
                 chunks.append(chunk)
                 if chunks and len(chunks) % 20 == 0:

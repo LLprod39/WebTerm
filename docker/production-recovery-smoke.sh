@@ -193,7 +193,14 @@ require_command docker
 require_command git
 require_command python3
 require_command sha256sum
+require_command age
+require_command age-keygen
 assert_restore_target_absent
+
+age-keygen -o "$SENSITIVE_DIR/backup.age.identity" >/dev/null 2>&1
+age-keygen -y "$SENSITIVE_DIR/backup.age.identity" >"$SENSITIVE_DIR/backup.age.recipient"
+chmod 600 "$SENSITIVE_DIR/backup.age.identity"
+chmod 644 "$SENSITIVE_DIR/backup.age.recipient"
 
 echo "==> Building the source state through the proven F-13a install path"
 F13A_PROJECT_NAME="$SOURCE_PROJECT" \
@@ -224,18 +231,18 @@ ENV_FILE="$SOURCE_ENV" \
 COMPOSE_FILE="$COMPOSE_FILE" \
 RETENTION_DAILY=1 \
 RETENTION_WEEKLY=0 \
+BACKUP_AGE_RECIPIENT_FILE="$SENSITIVE_DIR/backup.age.recipient" \
+BACKUP_STATUS_DIR="$SENSITIVE_DIR/backup-status" \
   "$ROOT_DIR/scripts/backup_postgres.sh"
-DUMP_PATH="$(find "$SENSITIVE_DIR/postgres" -maxdepth 1 -type f -name 'webterm_*.dump' | head -n 1)"
-if [[ -z "$DUMP_PATH" ]]; then
-  echo "PostgreSQL backup was not created" >&2
+DUMP_PATH="$(find "$SENSITIVE_DIR/postgres" -maxdepth 1 -type f -name 'webterm_*.dump.age' | head -n 1)"
+VOLUME_ARCHIVE_PATH="$(find "$SENSITIVE_DIR/postgres" -maxdepth 1 -type f -name 'webterm_volumes_*.tar.gz.age' | head -n 1)"
+if [[ -z "$DUMP_PATH" || -z "$VOLUME_ARCHIVE_PATH" ]]; then
+  echo "Encrypted PostgreSQL and important-volume backups were not created" >&2
   exit 1
 fi
 
 cp "$SOURCE_ENV" "$SENSITIVE_DIR/production.env"
 chmod 600 "$SENSITIVE_DIR/production.env"
-source_compose exec -T backend tar -C /workspace/config_runtime -czf - . >"$SENSITIVE_DIR/config.tar.gz"
-source_compose exec -T backend tar -C /workspace/media -czf - . >"$SENSITIVE_DIR/media.tar.gz"
-source_compose exec -T backend tar -C /workspace/private/playbook_bundles -czf - . >"$SENSITIVE_DIR/playbook-bundles.tar.gz"
 source_compose exec -T redis sh -ec '
   redis-cli BGREWRITEAOF >/dev/null 2>&1 || true
   attempts=0
@@ -267,11 +274,15 @@ docker run --rm \
 
 (
   cd "$SENSITIVE_DIR"
-  sha256sum production.env config.tar.gz media.tar.gz playbook-bundles.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
+  sha256sum production.env redis.tar.gz \
+    "postgres/$(basename "$DUMP_PATH")" \
+    "postgres/$(basename "$VOLUME_ARCHIVE_PATH")"
 ) >"$ARTIFACT_DIR/backup-inventory.sha256"
 (
   cd "$SENSITIVE_DIR"
-  wc -c production.env config.tar.gz media.tar.gz playbook-bundles.tar.gz redis.tar.gz "postgres/$(basename "$DUMP_PATH")"
+  wc -c production.env redis.tar.gz \
+    "postgres/$(basename "$DUMP_PATH")" \
+    "postgres/$(basename "$VOLUME_ARCHIVE_PATH")"
 ) >"$ARTIFACT_DIR/backup-sizes.txt"
 
 echo "==> Creating an isolated restore project and restoring Redis persistence"
@@ -307,15 +318,17 @@ PROJECT_NAME="$RESTORE_PROJECT" \
 ENV_FILE="$RESTORE_ENV" \
 COMPOSE_FILE="$COMPOSE_FILE" \
 COMPOSE_OVERRIDE_FILE="$RECOVERY_COMPOSE_FILE" \
+BACKUP_AGE_IDENTITY_FILE="$SENSITIVE_DIR/backup.age.identity" \
   "$ROOT_DIR/scripts/restore_postgres.sh" "$DUMP_PATH"
 
-echo "==> Restoring config, media and private playbook bundles into project-scoped volumes"
-cat "$SENSITIVE_DIR/config.tar.gz" | restore_compose run --rm --no-deps -T backend \
-  tar -C /workspace/config_runtime -xzf -
-cat "$SENSITIVE_DIR/media.tar.gz" | restore_compose run --rm --no-deps -T backend \
-  tar -C /workspace/media -xzf -
-cat "$SENSITIVE_DIR/playbook-bundles.tar.gz" | restore_compose run --rm --no-deps -T backend \
-  tar -C /workspace/private/playbook_bundles -xzf -
+echo "==> Restoring encrypted config, media and private playbook bundles"
+RESTORE_CONFIRM=RESTORE_WEBTERM_VOLUMES \
+PROJECT_NAME="$RESTORE_PROJECT" \
+ENV_FILE="$RESTORE_ENV" \
+COMPOSE_FILE="$COMPOSE_FILE" \
+COMPOSE_OVERRIDE_FILE="$RECOVERY_COMPOSE_FILE" \
+BACKUP_AGE_IDENTITY_FILE="$SENSITIVE_DIR/backup.age.identity" \
+  "$ROOT_DIR/scripts/restore_important_volumes.sh" "$VOLUME_ARCHIVE_PATH"
 
 echo "==> Comparing database, authentication, managed-secret and volume integrity"
 restore_compose run --rm --no-deps -T \

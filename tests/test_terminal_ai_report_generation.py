@@ -6,7 +6,7 @@ from servers.services.terminal_ai.report_generation import generate_ai_report_te
 
 
 class FakeLLM:
-    async def stream_chat(self, prompt: str, *, model: str, purpose: str):
+    async def stream_chat(self, prompt: str, *, model: str, purpose: str, **_kwargs):
         assert purpose == "terminal_report"
         assert model == "auto"
         assert "df -h" in prompt

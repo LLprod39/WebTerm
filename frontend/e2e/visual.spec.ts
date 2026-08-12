@@ -103,7 +103,7 @@ test.describe("Visual regression", () => {
     await dialog.getByRole("button", { name: /Web-01/i }).click();
     await dialog.getByRole("button", { name: "Next" }).click();
     await dialog.getByRole("button", { name: "Next" }).click();
-    await expect(dialog.getByText("Preflight passed")).toBeVisible();
+    await expect(dialog.getByText("Ready to save")).toBeVisible();
 
     await stabilizeVisuals(page);
     await expect(dialog).toHaveScreenshot("agent-wizard-review.png", { animations: "disabled" });
@@ -121,8 +121,8 @@ test.describe("Visual regression", () => {
     await installTerminalSocketMock(page);
     await installPlatformMocks(page, { authenticated: true, lang: "ru" });
     await page.goto("/servers/1/terminal");
-    await expect(page.getByRole("heading", { name: "Web-01" })).toBeVisible();
-    await page.getByRole("button", { name: "Файлы" }).click();
+    await expect(page.getByRole("button", { name: "Web-01" })).toBeVisible();
+    await page.locator('button[title="Показать файловую панель"]').click();
     await expect(page.getByText("Файлы SFTP").first()).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("terminal-files-panel.png", { animations: "disabled", fullPage: true });
@@ -230,7 +230,7 @@ test.describe("Visual regression", () => {
   });
 
   test("settings sso page snapshot", async ({ page }) => {
-    await installPlatformMocks(page, { authenticated: true });
+    await installPlatformMocks(page, { authenticated: true, isStaff: true });
     await page.goto("/settings/sso");
     await expect(page.getByRole("heading", { name: "Domain Authentication" })).toBeVisible();
     await stabilizeVisuals(page);
@@ -257,7 +257,7 @@ test.describe("Visual regression", () => {
   test("kubernetes empty state snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "empty" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Кластеры" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-empty-state.png", { animations: "disabled", fullPage: true });
@@ -266,7 +266,7 @@ test.describe("Visual regression", () => {
   test("kubernetes healthy inventory snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "healthy" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "prod-kz-1" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-healthy-inventory.png", { animations: "disabled", fullPage: true });
@@ -275,7 +275,7 @@ test.describe("Visual regression", () => {
   test("kubernetes degraded inventory snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "degraded" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "prod-eu-1" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-degraded-inventory.png", { animations: "disabled", fullPage: true });
@@ -323,8 +323,8 @@ test.describe("Visual regression", () => {
     await installTerminalSocketMock(page);
     await installPlatformMocks(page, { authenticated: true, lang: "ru" });
     await page.goto("/servers/1/terminal");
-    await expect(page.getByRole("heading", { name: "Web-01" })).toBeVisible();
-    await page.getByRole("button", { name: "Файлы" }).click();
+    await expect(page.getByRole("button", { name: "Web-01" })).toBeVisible();
+    await page.locator('button[title="Показать файловую панель"]').click();
     await expect(page.getByText("Файлы SFTP").first()).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("terminal-files-panel-mobile.png", { animations: "disabled", fullPage: true });

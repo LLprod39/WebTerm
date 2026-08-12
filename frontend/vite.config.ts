@@ -42,6 +42,37 @@ export default defineConfig(({ mode }) => {
             return;
           }
 
+          const moduleId = id.replaceAll("\\", "/");
+
+          // Keep optional editor/runtime code out of the shared application
+          // vendor chunk. These packages are only needed after opening the
+          // corresponding lazy route or editor surface.
+          const editorLanguagePackage = moduleId.match(/\/@codemirror\/(lang-[^/]+)\//)?.[1];
+          if (editorLanguagePackage) {
+            return `editor-${editorLanguagePackage}`;
+          }
+          if (moduleId.includes("/@codemirror/") || moduleId.includes("/@lezer/")) {
+            return "editor-vendor";
+          }
+          if (
+            moduleId.includes("/react/") ||
+            moduleId.includes("/react-dom/") ||
+            moduleId.includes("/react-router") ||
+            moduleId.includes("/scheduler/") ||
+            moduleId.includes("/@tanstack/react-query/") ||
+            moduleId.includes("/@tanstack/query-core/")
+          ) {
+            return "core-vendor";
+          }
+          if (
+            moduleId.includes("/date-fns/") ||
+            moduleId.includes("/react-day-picker/") ||
+            moduleId.includes("/zod/") ||
+            moduleId.includes("/yaml/")
+          ) {
+            return "data-vendor";
+          }
+
           if (id.includes("@xterm") || id.includes("xterm")) {
             return "terminal-vendor";
           }
@@ -76,6 +107,8 @@ export default defineConfig(({ mode }) => {
           if (
             id.includes("recharts") ||
             id.includes("framer-motion") ||
+            id.includes("motion-dom") ||
+            id.includes("motion-utils") ||
             id.includes("embla-carousel-react") ||
             id.includes("d3-") ||
             id.includes("lodash") ||

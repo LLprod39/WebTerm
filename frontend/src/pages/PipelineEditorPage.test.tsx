@@ -230,7 +230,10 @@ describe("PipelineEditorPage save hydration", () => {
     const queryClient = buildQueryClient();
     renderPage(queryClient);
 
-    expect(await screen.findByText(/Текущий шаг:/)).toHaveTextContent("Entry Snapshot");
+    await waitFor(() => expect(api.studioRuns.get).toHaveBeenCalledWith(88), { timeout: 5_000 });
+    expect(
+      await screen.findByText(/Текущий шаг:/, undefined, { timeout: 5_000 }),
+    ).toHaveTextContent("Entry Snapshot");
   });
 
   it("keeps the assigned approval user in save payload", () => {

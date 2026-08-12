@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, ShieldCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { StatusIndicator } from "@/components/StatusIndicator";
@@ -23,6 +23,7 @@ function statusTone(status: Tab["status"]): "online" | "offline" | "unknown" {
 export function TerminalHeader({
   activeTab,
   activeServer,
+  readOnlyMode,
   tabs,
   activeTabId,
   sidePanelMode,
@@ -36,6 +37,7 @@ export function TerminalHeader({
 }: {
   activeTab: Tab;
   activeServer: FrontendServer;
+  readOnlyMode: boolean;
   tabs: Tab[];
   activeTabId: string;
   sidePanelMode: SidePanelMode;
@@ -199,6 +201,20 @@ export function TerminalHeader({
           </Button>
         </div>
       </div>
+      {readOnlyMode ? (
+        <div
+          className="flex items-start gap-2 border-t border-primary/20 px-1 py-2 text-xs leading-5 text-foreground/80 sm:items-center sm:px-2"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary sm:mt-0" aria-hidden="true" />
+          <p>
+            <span className="font-medium text-foreground">{t("terminal.readOnlyNoticeTitle")}</span>{" "}
+            {t("terminal.readOnlyNoticeDescription")}
+          </p>
+        </div>
+      ) : null}
     </header>
   );
 }

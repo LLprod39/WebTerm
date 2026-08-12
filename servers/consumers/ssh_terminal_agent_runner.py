@@ -65,7 +65,7 @@ class TerminalAgentRunOperations:
             display_name=str(self.server.name or ""),
             host=str(getattr(self.server, "host", "") or ""),
             ssh_conn=self._transport_state.ssh_conn,
-            read_only=bool(getattr(self.server, "ai_read_only", False)),
+            read_only=bool(getattr(self.server, "ai_read_only", False)) or not self._automation_allowed,
             sudo_auth_mode=str(getattr(self.server, "sudo_auth_mode", "none") or "none"),
             is_primary=True,
         )
@@ -156,6 +156,7 @@ class TerminalAgentRunOperations:
             emit=_emit,
             prompt_user=_prompt_user,
             open_target=_open_target,
+            execution_context_factory=self._terminal_execution_context,
             stop_requested=_stop_requested,
             rules_context=rules_context,
             memory_context=memory_context,

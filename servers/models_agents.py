@@ -64,6 +64,11 @@ class ServerAgent(models.Model):
     commands = models.JSONField(default=list, help_text="List of shell commands (mini mode)")
     servers = models.ManyToManyField(Server, blank=True, related_name="agents")
     ai_prompt = models.TextField(blank=True, help_text="Extra instruction for AI analysis")
+    provider_binding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Canonical provider binding pinned for this agent and its scheduled runs.",
+    )
 
     # Full-agent fields
     goal = models.TextField(blank=True, help_text="Goal for the agent to achieve (full mode)")
@@ -179,6 +184,9 @@ class AgentRun(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_RUNNING)
     commands_output = models.JSONField(default=list, help_text="[{cmd, stdout, stderr, exit_code, duration_ms}]")
     ai_analysis = models.TextField(blank=True)
+    provider_binding_snapshot = models.JSONField(default=dict, blank=True)
+    provider_session_id = models.CharField(max_length=255, blank=True, default="")
+    provider_execution_mode = models.CharField(max_length=20, default="interactive")
     duration_ms = models.BigIntegerField(default=0)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)

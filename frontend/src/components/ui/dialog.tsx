@@ -31,10 +31,14 @@ type DialogContentProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.
   closeLabel?: string;
 };
 
+function defaultDialogCloseLabel() {
+  return typeof document !== "undefined" && document.documentElement.lang === "ru" ? "Закрыть" : "Close";
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, closeLabel = "Close", ...props }, ref) => (
+>(({ className, children, closeLabel = defaultDialogCloseLabel(), ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -48,7 +52,7 @@ const DialogContent = React.forwardRef<
       {children}
       <DialogPrimitive.Close
         aria-label={closeLabel}
-        className="absolute right-4 top-4 rounded-sm border border-transparent p-1.5 text-muted-foreground transition-colors hover:border-border hover:bg-secondary hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ring-offset-background disabled:pointer-events-none"
+        className="absolute right-4 top-4 rounded-sm border border-transparent p-1.5 text-muted-foreground transition-colors hover:border-border hover:bg-secondary hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none"
       >
         <X className="h-4 w-4" />
         <span className="sr-only">{closeLabel}</span>

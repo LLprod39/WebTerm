@@ -19,10 +19,10 @@ def test_f13b_smoke_restores_all_critical_state_without_uploading_secrets() -> N
     for required_probe in (
         "backup_postgres.sh",
         "restore_postgres.sh",
+        "restore_important_volumes.sh",
         "production.env",
-        "config.tar.gz",
-        "media.tar.gz",
-        "playbook-bundles.tar.gz",
+        "webterm_volumes_*.tar.gz.age",
+        "RESTORE_WEBTERM_VOLUMES",
         "redis.tar.gz",
         "recovery_integrity_manifest.py",
         'cmp "$ARTIFACT_DIR/source-integrity.json"',

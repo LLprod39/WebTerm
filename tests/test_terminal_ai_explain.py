@@ -10,7 +10,11 @@ from servers.services.terminal_ai import build_explain_output_prompt, explain_co
 
 
 def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
+    # ``asyncio.new_event_loop().run_until_complete(...)`` leaves both the
+    # loop and its self-pipe sockets open.  Use the high-level runner so every
+    # test also finalizes asynchronous generators, shuts down the default
+    # executor, and closes the loop deterministically.
+    return asyncio.run(coro)
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +73,11 @@ def _make_consumer() -> tuple[SSHTerminalConsumer, list[dict]]:
     async def _capture(event: dict[str, Any]) -> None:
         sent.append(event)
 
+    async def _execution_context(_purpose: str):
+        return None
+
     cons._send_ai_event = _capture  # type: ignore[assignment]
+    cons._terminal_execution_context = _execution_context  # type: ignore[method-assign]
     return cons, sent
 
 
@@ -80,7 +88,7 @@ class _FakeLLM:
         self.last_prompt: str | None = None
         self.last_purpose: str | None = None
 
-    async def stream_chat(self, prompt, model="auto", purpose="chat"):  # noqa: ANN001
+    async def stream_chat(self, prompt, model="auto", purpose="chat", **_kwargs):  # noqa: ANN001
         self.last_prompt = prompt
         self.last_purpose = purpose
         if self._raise is not None:
@@ -94,7 +102,7 @@ class TestExplainCommandOutputService:
         calls: list[dict] = []
 
         class _ServiceFakeLLM:
-            async def stream_chat(self, prompt, model="auto", purpose="chat"):  # noqa: ANN001
+            async def stream_chat(self, prompt, model="auto", purpose="chat", **_kwargs):  # noqa: ANN001
                 calls.append({"prompt": prompt, "model": model, "purpose": purpose})
                 yield "short explanation"
 

@@ -14,6 +14,7 @@ from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from core_ui.projects import active_project_for_user, user_can_write_project
+from servers.agents.agent_pilot_policy import user_can_automate
 from servers.models import (
     Server,
     ServerBulkOperation,
@@ -231,12 +232,24 @@ def group_bulk_action_create(request, group_id):
         return JsonResponse({"error": "Project operator role required"}, status=403)
     try:
         data = json.loads(request.body or b"{}")
+        action = str(data.get("action") or "").strip()
+        parameters = data.get("parameters")
+        if (
+            action == ServerBulkOperation.ACTION_SET_AI_READ_ONLY
+            and isinstance(parameters, dict)
+            and parameters.get("value") is False
+            and not user_can_automate(request.user, request=request)
+        ):
+            return JsonResponse(
+                {"error": "Disabling AI read-only requires automation access", "code": "automation_required"},
+                status=403,
+            )
         operation = create_bulk_operation(
             group=group,
             project=project,
             requested_by=request.user,
-            action=str(data.get("action") or "").strip(),
-            parameters=data.get("parameters"),
+            action=action,
+            parameters=parameters,
         )
     except (json.JSONDecodeError, ServerBulkOperationError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)

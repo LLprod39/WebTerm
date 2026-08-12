@@ -22,7 +22,7 @@ export function AgentWizardProgress({ step, currentStepIndex, lang, onStepChange
     <div className="border-b border-border bg-surface-0/40">
       <div className="h-0.5 w-full bg-surface-2">
         <div
-          className="h-full bg-primary transition-[width] duration-500 ease-[var(--ease-standard)]"
+          className="h-full bg-primary transition-[width] duration-500 ease-standard"
           style={{ width: `${progressPct}%` }}
         />
       </div>

@@ -56,6 +56,18 @@ jobs:
             dockerfile: docker/mcp-runner.Dockerfile
           - name: mars-agent
             dockerfile: docker/mars-agent.Dockerfile
+          - name: ai-cli-docker-proxy
+            dockerfile: docker/playbook-socket-proxy.Dockerfile
+          - name: ai-cli-egress-proxy
+            dockerfile: docker/ai-cli-egress-proxy.Dockerfile
+          - name: ai-cli-runner-manager
+            dockerfile: docker/ai-cli-runner-manager.Dockerfile
+          - name: ai-cli-codex-runner
+            dockerfile: docker/ai-cli-provider-runner.Dockerfile
+            target: codex
+          - name: ai-cli-grok-runner
+            dockerfile: docker/ai-cli-provider-runner.Dockerfile
+            target: grok
     steps:
       - name: Checkout exact tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
@@ -68,17 +80,42 @@ jobs:
         env:
           IMAGE: ghcr.io/llprod39/webterm-${{ matrix.name }}
           VERSION_TAG: ${{ github.ref_name }}
+          TARGET: ${{ matrix.target }}
+          GROK_BUILD_URL: ${{ vars.GROK_BUILD_URL }}
+          GROK_BUILD_SHA256: ${{ vars.GROK_BUILD_SHA256 }}
         run: |
           set -euo pipefail
           revision_tag="sha-${GITHUB_SHA::12}"
-          docker build \
-            --file "${{ matrix.dockerfile }}" \
+          build_args=(--file "${{ matrix.dockerfile }}")
+          if [ -n "${TARGET:-}" ]; then
+            build_args+=(--target "$TARGET")
+          fi
+          if [ "${TARGET:-}" = "grok" ]; then
+            [[ "${GROK_BUILD_URL:-}" =~ ^https:// ]]
+            [[ "${GROK_BUILD_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]
+            build_args+=(
+              --build-arg "GROK_BUILD_URL=$GROK_BUILD_URL"
+              --build-arg "GROK_BUILD_SHA256=$GROK_BUILD_SHA256"
+            )
+          fi
+          docker build "${build_args[@]}" \
             --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.version=${VERSION_TAG}" \
             --tag "${IMAGE}:${VERSION_TAG}" \
             --tag "${IMAGE}:${revision_tag}" \
             .
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock:ro \
+            --volume "$PWD:/work" \
+            aquasec/trivy:0.73.0@sha256:4bbf3824d974b70f27631005e2e6194d4d8fbd6e72c4a9e04cf521e25c5cb07f \
+            image \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output "/work/release-image-scan-${{ matrix.name }}.json" \
+            "${IMAGE}:${VERSION_TAG}"
           docker push "${IMAGE}:${VERSION_TAG}"
           docker push "${IMAGE}:${revision_tag}"
           reference="$(docker image inspect "${IMAGE}:${VERSION_TAG}" --format '{{index .RepoDigests 0}}')"
@@ -97,7 +134,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-image-${{ matrix.name }}
-          path: release-image-${{ matrix.name }}.txt
+          path: |
+            release-image-${{ matrix.name }}.txt
+            release-image-scan-${{ matrix.name }}.json
           if-no-files-found: error
           retention-days: 30
 
@@ -133,6 +172,11 @@ jobs:
               "agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
+              "ai-cli-docker-proxy": "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE",
+              "ai-cli-egress-proxy": "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE",
+              "ai-cli-runner-manager": "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE",
+              "ai-cli-codex-runner": "AI_CLI_CODEX_RUNNER_IMAGE",
+              "ai-cli-grok-runner": "AI_CLI_GROK_RUNNER_IMAGE",
           }
           lines = []
           for name, env_name in mapping.items():
@@ -151,6 +195,7 @@ jobs:
         env:
           F13A_RELEASE_IMAGES: "1"
           F13A_KEEP_UP: "1"
+          F13A_WITH_AI_CLI: "1"
         run: bash docker/production-install-smoke.sh
       - name: Set up Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -230,6 +275,11 @@ jobs:
               "agent-command-docker-proxy",
               "mcp-runner",
               "mars-agent",
+              "ai-cli-docker-proxy",
+              "ai-cli-egress-proxy",
+              "ai-cli-runner-manager",
+              "ai-cli-codex-runner",
+              "ai-cli-grok-runner",
           ]
           images = {}
           for name in names:
@@ -252,6 +302,11 @@ jobs:
               "agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE",
               "mcp-runner": "WEBTERM_MCP_RUNNER_IMAGE",
               "mars-agent": "MARS_AGENT_DOCKER_IMAGE",
+              "ai-cli-docker-proxy": "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE",
+              "ai-cli-egress-proxy": "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE",
+              "ai-cli-runner-manager": "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE",
+              "ai-cli-codex-runner": "AI_CLI_CODEX_RUNNER_IMAGE",
+              "ai-cli-grok-runner": "AI_CLI_GROK_RUNNER_IMAGE",
           }
           env_text = "\n".join(f"{env_names[name]}={images[name]}" for name in names) + "\n"
           Path("release-assets/manifest/release-images.env").write_text(env_text, encoding="utf-8")
@@ -268,6 +323,7 @@ jobs:
           args=()
           for ref in "${refs[@]}"; do args+=(--image "$ref"); done
           python scripts/generate_sbom.py --output-dir release-assets/sbom "${args[@]}"
+          cp .ci-artifacts/release-images/release-image-scan-*.json release-assets/sbom/
       - name: Generate checksums and provenance
         run: |
           mkdir -p release-assets/upload
@@ -299,7 +355,7 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "WebTerm $GITHUB_REF_NAME" \
-            --notes-file docs/releases/V0_2_2_RELEASE_NOTES.md \
+            --notes-file docs/releases/V0_2_3_RELEASE_NOTES.md \
             --verify-tag \
             --latest \
             release-assets/upload/*

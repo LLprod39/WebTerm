@@ -8,6 +8,9 @@ COMPOSE_FILE="$ROOT_DIR/docker-compose.production.yml"
 PROJECT_NAME="webtrerm-prod"
 WITH_MCP=1
 WITH_TELEGRAM_BOT=0
+WITH_AI_CLI=0
+WITH_OBSERVABILITY=0
+CLEANUP_AI_CLI_CREDENTIALS=0
 DO_BUILD=1
 DO_PULL=0
 GENERATE_SECRETS=0
@@ -46,7 +49,7 @@ Default stack services:
   scheduled-pipelines, scheduled-agents, agent-execution pool, monitor,
   ops-supervisor (watchers + memory dreams),
   kubernetes-ops-sync, celery-worker
-  optional profiles: telegram-bot, mars-agent
+  optional profiles: ai-cli, observability, telegram-bot, mars-agent
 
 Options:
   --env-file PATH              Path to env file (default: .env.production)
@@ -54,6 +57,9 @@ Options:
   --project-name NAME          Docker compose project name (default: webtrerm-prod)
   --with-mcp                   Backward-compatible no-op: MCP services are already enabled by default
   --with-telegram-bot          Also start the telegram-bot profile service
+  --with-ai-cli                Build/pull and start isolated Codex/Grok CLI services
+  --with-observability         Start OTel, Prometheus, Alertmanager, Grafana, Tempo and Loki
+  --cleanup-ai-cli-credentials Stop AI CLI and remove its namespaced credential volumes, then exit
   --pull                       Pull newer images before startup
   --no-build                   Do not build local images during startup
   --generate-secrets           Auto-fill placeholder DJANGO_SECRET_KEY/POSTGRES_PASSWORD
@@ -71,6 +77,7 @@ Options:
 Examples:
   ./docker/install-production.sh --generate-secrets
   ./docker/install-production.sh --pull --generate-secrets
+  ./docker/install-production.sh --with-ai-cli --with-observability --generate-secrets
   ./docker/install-production.sh --create-superuser \
     --superuser-username admin \
     --superuser-email admin@example.com
@@ -99,6 +106,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-telegram-bot)
       WITH_TELEGRAM_BOT=1
+      shift
+      ;;
+    --with-ai-cli)
+      WITH_AI_CLI=1
+      shift
+      ;;
+    --with-observability)
+      WITH_OBSERVABILITY=1
+      shift
+      ;;
+    --cleanup-ai-cli-credentials)
+      CLEANUP_AI_CLI_CREDENTIALS=1
       shift
       ;;
     --pull)
@@ -187,6 +206,12 @@ compose() {
   )
   if [[ "${WITH_TELEGRAM_BOT:-0}" -eq 1 ]]; then
     args+=(--profile telegram-bot)
+  fi
+  if [[ "${WITH_AI_CLI:-0}" -eq 1 ]]; then
+    args+=(--profile ai-cli)
+  fi
+  if [[ "${WITH_OBSERVABILITY:-0}" -eq 1 ]]; then
+    args+=(--profile observability)
   fi
   docker "${args[@]}" "$@"
 }
@@ -396,6 +421,313 @@ ensure_agent_command_runner_image() {
   echo "[ok] pinned agent command runner: $image_id"
 }
 
+is_immutable_image_ref() {
+  [[ "$1" =~ ^(sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._:/-]*@sha256:[0-9a-f]{64})$ ]]
+}
+
+ensure_ai_cli_image() {
+  local key="$1"
+  local local_tag="$2"
+  local dockerfile="$3"
+  local target="${4:-}"
+  local configured image_id
+  configured="$(read_env_value "$key")"
+  if is_immutable_image_ref "$configured"; then
+    upsert_env_value "$key" "$configured"
+    if [[ "$VALIDATE_ONLY" -eq 0 ]] && ! docker image inspect "$configured" >/dev/null 2>&1; then
+      if [[ "$configured" == sha256:* ]]; then
+        echo "Error: $key references a local image ID that is not present" >&2
+        exit 1
+      fi
+      echo "==> Pulling pinned $key"
+      docker pull "$configured"
+    fi
+    return 0
+  fi
+  if [[ "$VALIDATE_ONLY" -eq 1 ]]; then
+    echo "Error: --validate-only with --with-ai-cli requires immutable $key" >&2
+    exit 1
+  fi
+  if [[ "$DO_BUILD" -ne 1 ]]; then
+    echo "Error: --no-build with --with-ai-cli requires immutable $key" >&2
+    exit 1
+  fi
+
+  local build_args=(--tag "$local_tag" --file "$ROOT_DIR/$dockerfile")
+  if [[ -n "$target" ]]; then
+    build_args+=(--target "$target")
+  fi
+  if [[ "$target" == "grok" ]]; then
+    local grok_url grok_sha
+    grok_url="$(read_env_value "GROK_BUILD_URL")"
+    grok_sha="$(read_env_value "GROK_BUILD_SHA256")"
+    if [[ ! "$grok_url" =~ ^https:// ]] || [[ ! "$grok_sha" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "Error: local Grok build requires HTTPS GROK_BUILD_URL and a lowercase 64-hex GROK_BUILD_SHA256" >&2
+      exit 1
+    fi
+    build_args+=(--build-arg "GROK_BUILD_URL=$grok_url" --build-arg "GROK_BUILD_SHA256=$grok_sha")
+  fi
+
+  echo "==> Building $key"
+  docker build "${build_args[@]}" "$ROOT_DIR"
+  image_id="$(docker image inspect --format '{{.Id}}' "$local_tag")"
+  if ! is_immutable_image_ref "$image_id"; then
+    echo "Error: $key build did not produce an immutable image ID" >&2
+    exit 1
+  fi
+  upsert_env_value "$key" "$image_id"
+  echo "[ok] pinned $key: $image_id"
+}
+
+ensure_ai_cli_images() {
+  if [[ "$WITH_AI_CLI" -ne 1 ]]; then
+    if [[ "$(read_env_value "AI_CLI_SUBSCRIPTIONS_ENABLED" | tr '[:upper:]' '[:lower:]')" == "true" ]]; then
+      echo "Error: AI_CLI_SUBSCRIPTIONS_ENABLED=true requires the explicit --with-ai-cli installer flag" >&2
+      exit 1
+    fi
+    return 0
+  fi
+
+  upsert_env_value "AI_CLI_SUBSCRIPTIONS_ENABLED" "true"
+  ensure_ai_cli_image \
+    "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE" \
+    "webterm-ai-cli-docker-proxy:installer" \
+    "docker/playbook-socket-proxy.Dockerfile"
+  ensure_ai_cli_image \
+    "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE" \
+    "webterm-ai-cli-egress-proxy:installer" \
+    "docker/ai-cli-egress-proxy.Dockerfile"
+  ensure_ai_cli_image \
+    "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE" \
+    "webterm-ai-cli-runner-manager:installer" \
+    "docker/ai-cli-runner-manager.Dockerfile"
+  ensure_ai_cli_image \
+    "AI_CLI_CODEX_RUNNER_IMAGE" \
+    "webterm-ai-cli-codex-runner:installer" \
+    "docker/ai-cli-provider-runner.Dockerfile" \
+    "codex"
+  ensure_ai_cli_image \
+    "AI_CLI_GROK_RUNNER_IMAGE" \
+    "webterm-ai-cli-grok-runner:installer" \
+    "docker/ai-cli-provider-runner.Dockerfile" \
+    "grok"
+}
+
+validate_optional_profiles() {
+  local telegram_token
+  telegram_token="$(read_env_value "TELEGRAM_BOT_TOKEN")"
+  if [[ "$WITH_TELEGRAM_BOT" -eq 1 ]]; then
+    if [[ ${#telegram_token} -lt 20 ]] || is_placeholder_value "TELEGRAM_BOT_TOKEN" "$telegram_token"; then
+      echo "Error: --with-telegram-bot requires an explicitly provisioned TELEGRAM_BOT_TOKEN" >&2
+      exit 1
+    fi
+  elif [[ -n "$telegram_token" ]]; then
+    echo "Error: TELEGRAM_BOT_TOKEN is provisioned but --with-telegram-bot was not requested" >&2
+    exit 1
+  fi
+
+  if [[ "$WITH_AI_CLI" -eq 1 ]]; then
+    local token key value auth_concurrency restricted_mode allowed_hosts allowed_cidrs allowed_ports
+    local agent_global agent_per_user agent_replicas agent_worker_concurrency
+    token="$(read_env_value "AI_CLI_RUNNER_MANAGER_TOKEN")"
+    if [[ ${#token} -lt 32 ]] || is_placeholder_value "AI_CLI_RUNNER_MANAGER_TOKEN" "$token"; then
+      echo "Error: --with-ai-cli requires AI_CLI_RUNNER_MANAGER_TOKEN with at least 32 characters" >&2
+      exit 1
+    fi
+    for key in \
+      WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE \
+      WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE \
+      WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE \
+      AI_CLI_CODEX_RUNNER_IMAGE \
+      AI_CLI_GROK_RUNNER_IMAGE; do
+      value="$(read_env_value "$key")"
+      if ! is_immutable_image_ref "$value"; then
+        echo "Error: $key must be an immutable sha256 image ID or repository digest" >&2
+        exit 1
+      fi
+    done
+    auth_concurrency="$(read_env_value "AI_CLI_AUTH_WORKER_CONCURRENCY")"
+    auth_concurrency="${auth_concurrency:-4}"
+    if [[ ! "$auth_concurrency" =~ ^[1-8]$ ]]; then
+      echo "Error: AI_CLI_AUTH_WORKER_CONCURRENCY must be an integer from 1 through 8" >&2
+      exit 1
+    fi
+    upsert_env_value "AI_CLI_AUTH_WORKER_CONCURRENCY" "$auth_concurrency"
+    agent_global="$(read_env_value "AGENT_EXECUTION_GLOBAL_CONCURRENCY")"
+    agent_per_user="$(read_env_value "AGENT_EXECUTION_PER_USER_CONCURRENCY")"
+    agent_replicas="$(read_env_value "AGENT_EXECUTION_REPLICAS")"
+    agent_worker_concurrency="$(read_env_value "AGENT_EXECUTION_WORKER_CONCURRENCY")"
+    python3 "$ROOT_DIR/docker/validate-pilot-capacity.py" \
+      --global-concurrency "${agent_global:-10}" \
+      --per-user-concurrency "${agent_per_user:-2}" \
+      --replicas "${agent_replicas:-5}" \
+      --worker-concurrency "${agent_worker_concurrency:-2}"
+    restricted_mode="$(read_env_value "PILOT_RESTRICTED_MODE" | tr '[:upper:]' '[:lower:]')"
+    allowed_hosts="$(read_env_value "PILOT_SSH_ALLOWED_HOSTS")"
+    allowed_cidrs="$(read_env_value "PILOT_SSH_ALLOWED_CIDRS")"
+    allowed_ports="$(read_env_value "PILOT_SSH_ALLOWED_PORTS")"
+    if [[ "$restricted_mode" != "true" ]]; then
+      echo "Error: --with-ai-cli requires PILOT_RESTRICTED_MODE=true" >&2
+      exit 1
+    fi
+    if [[ -z "$allowed_hosts" || -z "$allowed_cidrs" || -z "$allowed_ports" ]]; then
+      echo "Error: --with-ai-cli requires explicit disposable PILOT_SSH_ALLOWED_HOSTS/CIDRS/PORTS" >&2
+      exit 1
+    fi
+    python3 - "$allowed_hosts" "$allowed_cidrs" "$allowed_ports" <<'PY'
+import ipaddress
+import re
+import sys
+
+hosts_raw, cidrs_raw, ports_raw = sys.argv[1:]
+hosts = [item.strip() for item in hosts_raw.split(",") if item.strip()]
+cidrs = [item.strip() for item in cidrs_raw.split(",") if item.strip()]
+ports = [item.strip() for item in ports_raw.split(",") if item.strip()]
+forbidden_hosts = {
+    "localhost", "metadata.google.internal", "postgres", "postgresql", "redis",
+    "backend", "web", "db", "host.docker.internal",
+}
+if not hosts or any(host != host.lower() for host in hosts):
+    raise SystemExit("PILOT_SSH_ALLOWED_HOSTS must contain lowercase exact entries")
+if any(host in forbidden_hosts for host in hosts):
+    raise SystemExit("PILOT_SSH_ALLOWED_HOSTS contains a forbidden service/metadata destination")
+hostname = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$")
+for host in hosts:
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        if not hostname.fullmatch(host):
+            raise SystemExit(f"invalid PILOT_SSH_ALLOWED_HOSTS entry: {host}")
+    else:
+        if address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified:
+            raise SystemExit(f"forbidden PILOT_SSH_ALLOWED_HOSTS address: {host}")
+networks = []
+for value in cidrs:
+    try:
+        network = ipaddress.ip_network(value, strict=True)
+    except ValueError as exc:
+        raise SystemExit(f"invalid strict PILOT_SSH_ALLOWED_CIDRS entry: {value}") from exc
+    if network.prefixlen == 0 or network.is_loopback or network.is_link_local or network.is_multicast or network.is_unspecified:
+        raise SystemExit(f"forbidden PILOT_SSH_ALLOWED_CIDRS network: {value}")
+    networks.append(network)
+for host in hosts:
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        continue
+    if not any(address.version == network.version and address in network for network in networks):
+        raise SystemExit(f"literal host is outside PILOT_SSH_ALLOWED_CIDRS: {host}")
+try:
+    parsed_ports = {int(value) for value in ports}
+except ValueError as exc:
+    raise SystemExit("PILOT_SSH_ALLOWED_PORTS must contain integers") from exc
+if not parsed_ports or not parsed_ports.issubset({22, 2222}):
+    raise SystemExit("PILOT_SSH_ALLOWED_PORTS is limited to 22 and 2222 for the pilot")
+PY
+  fi
+
+  if [[ "$WITH_OBSERVABILITY" -eq 1 ]]; then
+    local grafana_password image_key image_ref backup_recipient backup_status_dir resolved_status_dir
+    local alert_webhook_file alert_webhook_owner
+    upsert_env_value "WEBTERM_OTEL_REQUIRED" "true"
+    upsert_env_value "OTEL_SDK_DISABLED" "false"
+    upsert_env_value "OTEL_EXPORTER_OTLP_ENDPOINT" "http://otel-collector:4318"
+    grafana_password="$(read_env_value "GRAFANA_ADMIN_PASSWORD")"
+    if [[ ${#grafana_password} -lt 20 ]] || is_placeholder_value "GRAFANA_ADMIN_PASSWORD" "$grafana_password"; then
+      echo "Error: --with-observability requires GRAFANA_ADMIN_PASSWORD with at least 20 characters" >&2
+      exit 1
+    fi
+    for image_key in \
+      WEBTERM_OTEL_COLLECTOR_IMAGE \
+      WEBTERM_PROMETHEUS_IMAGE \
+      WEBTERM_ALERTMANAGER_IMAGE \
+      WEBTERM_GRAFANA_IMAGE \
+      WEBTERM_TEMPO_IMAGE \
+      WEBTERM_LOKI_IMAGE; do
+      image_ref="$(read_env_value "$image_key")"
+      if ! is_immutable_image_ref "$image_ref"; then
+        echo "Error: $image_key must be pinned by sha256 digest" >&2
+        exit 1
+      fi
+    done
+    alert_webhook_file="$(read_env_value "ALERTMANAGER_WEBHOOK_URL_FILE")"
+    if [[ -z "$alert_webhook_file" || ! -f "$alert_webhook_file" || -L "$alert_webhook_file" ]]; then
+      echo "Error: ALERTMANAGER_WEBHOOK_URL_FILE must reference a non-symlink notification secret file" >&2
+      exit 1
+    fi
+    if find "$alert_webhook_file" -prune -perm /077 -print -quit | grep -q .; then
+      echo "Error: ALERTMANAGER_WEBHOOK_URL_FILE must not be accessible by group or other users" >&2
+      exit 1
+    fi
+    alert_webhook_owner="$(stat -c '%u' "$alert_webhook_file")"
+    if [[ "$alert_webhook_owner" != "65534" ]]; then
+      echo "Error: ALERTMANAGER_WEBHOOK_URL_FILE must be owned by runtime UID 65534" >&2
+      exit 1
+    fi
+    python3 - "$alert_webhook_file" <<'PY'
+from pathlib import Path
+import sys
+from urllib.parse import urlsplit
+
+try:
+    value = Path(sys.argv[1]).read_text(encoding="utf-8")
+except (OSError, UnicodeError) as exc:
+    raise SystemExit("ALERTMANAGER_WEBHOOK_URL_FILE is unreadable or not UTF-8") from exc
+lines = value.splitlines()
+if len(lines) != 1 or not lines[0] or value.strip() != lines[0]:
+    raise SystemExit("ALERTMANAGER_WEBHOOK_URL_FILE must contain exactly one non-empty line")
+parsed = urlsplit(lines[0])
+if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.fragment:
+    raise SystemExit("ALERTMANAGER_WEBHOOK_URL_FILE must contain one HTTPS URL without userinfo or fragment")
+PY
+    backup_recipient="$(read_env_value "BACKUP_AGE_RECIPIENT_FILE")"
+    if ! command -v age >/dev/null 2>&1; then
+      echo "Error: --with-observability pilot install requires the age command for encrypted backups" >&2
+      exit 1
+    fi
+    if [[ -z "$backup_recipient" || ! -f "$backup_recipient" ]]; then
+      echo "Error: BACKUP_AGE_RECIPIENT_FILE must reference a provisioned public age recipient file" >&2
+      exit 1
+    fi
+    backup_status_dir="$(read_env_value "BACKUP_STATUS_DIR")"
+    backup_status_dir="${backup_status_dir:-./backups/status}"
+    if [[ "$backup_status_dir" == /* ]]; then
+      resolved_status_dir="$backup_status_dir"
+    else
+      resolved_status_dir="$ROOT_DIR/${backup_status_dir#./}"
+    fi
+    if [[ "$resolved_status_dir" == "/" || "$resolved_status_dir" == "$ROOT_DIR" ]]; then
+      echo "Error: BACKUP_STATUS_DIR must be a dedicated directory" >&2
+      exit 1
+    fi
+    if [[ "$VALIDATE_ONLY" -eq 0 ]]; then
+      mkdir -p "$resolved_status_dir"
+      chmod 755 "$resolved_status_dir"
+    fi
+  elif [[ "$(read_env_value "OTEL_SDK_DISABLED" | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
+    echo "Error: OTEL_SDK_DISABLED=false requires the explicit --with-observability installer flag" >&2
+    exit 1
+  fi
+}
+
+cleanup_ai_cli_credentials() {
+  local prefix volume removed=0
+  prefix="$(read_env_value "AI_CLI_CREDENTIAL_VOLUME_PREFIX")"
+  if [[ ${#prefix} -lt 12 ]] || [[ ! "$prefix" =~ ^[a-z0-9][a-z0-9_.-]*-$ ]]; then
+    echo "Error: refusing AI CLI cleanup for unsafe credential volume prefix: $prefix" >&2
+    exit 1
+  fi
+  echo "==> Stopping AI CLI services before offline credential cleanup"
+  compose stop ai-provider-auth ai-cli-runner-manager ai-cli-docker-proxy ai-cli-egress-proxy >/dev/null 2>&1 || true
+  while IFS= read -r volume; do
+    [[ -n "$volume" && "$volume" == "$prefix"* ]] || continue
+    docker volume rm "$volume"
+    removed=$((removed + 1))
+  done < <(docker volume ls --format '{{.Name}}')
+  upsert_env_value "AI_CLI_SUBSCRIPTIONS_ENABLED" "false"
+  echo "[done] Removed $removed namespaced AI CLI credential volume(s); AI CLI is disabled"
+}
+
 configure_agent_command_network() {
   local configured
   configured="${AGENT_COMMAND_DOCKER_NETWORK:-$(read_env_value "AGENT_COMMAND_DOCKER_NETWORK")}"
@@ -530,6 +862,22 @@ wait_for_stack() {
   if [[ "$WITH_TELEGRAM_BOT" -eq 1 ]]; then
     wait_for_service telegram-bot 180
   fi
+  if [[ "$WITH_AI_CLI" -eq 1 ]]; then
+    echo "==> Waiting for the isolated AI CLI plane"
+    wait_for_service ai-cli-docker-proxy 180
+    wait_for_service ai-cli-egress-proxy 180
+    wait_for_service ai-cli-runner-manager 240
+    wait_for_service ai-provider-auth 180
+  fi
+  if [[ "$WITH_OBSERVABILITY" -eq 1 ]]; then
+    echo "==> Waiting for the pilot observability plane"
+    wait_for_service tempo 180
+    wait_for_service loki 180
+    wait_for_service otel-collector 180
+    wait_for_service prometheus 180
+    wait_for_service alertmanager 180
+    wait_for_service grafana 180
+  fi
 }
 
 smoke_check_http() {
@@ -610,6 +958,10 @@ Useful commands:
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE up -d --build
 
 Optional profiles:
+  # Subscription CLI providers (requires five immutable image refs)
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile ai-cli up -d
+  # Pilot telemetry; Grafana is bound to loopback and must be reached over TLS/VPN/SSH tunnel
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile observability up -d
   # Telegram bot (needs TELEGRAM_BOT_TOKEN in env)
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile telegram-bot up -d telegram-bot
   # MARS (disabled until MARS_AGENT_DOCKER_IMAGE is an exact release digest)
@@ -638,6 +990,7 @@ EOF
 main() {
   require_cmd docker
   require_cmd python3
+  require_cmd stat
   if ! docker compose version >/dev/null 2>&1; then
     echo "Error: docker compose v2 plugin is required" >&2
     exit 1
@@ -651,16 +1004,30 @@ main() {
   ensure_superuser_args
   load_superuser_password
 
+  if [[ "$CLEANUP_AI_CLI_CREDENTIALS" -eq 1 ]]; then
+    WITH_AI_CLI=1
+    cleanup_ai_cli_credentials
+    exit 0
+  fi
+
   if [[ "$GENERATE_SECRETS" -eq 1 ]]; then
     generate_secret_if_needed "DJANGO_SECRET_KEY" 64
     generate_secret_if_needed "MANAGED_SECRET_KEY" 64
     generate_secret_if_needed "POSTGRES_PASSWORD" 32
     generate_secret_if_needed "STUDIO_MCP_RUNNER_TOKEN" 64
+    if [[ "$WITH_AI_CLI" -eq 1 ]]; then
+      generate_secret_if_needed "AI_CLI_RUNNER_MANAGER_TOKEN" 64
+    fi
+    if [[ "$WITH_OBSERVABILITY" -eq 1 ]]; then
+      generate_secret_if_needed "GRAFANA_ADMIN_PASSWORD" 48
+    fi
   fi
 
   ensure_agent_command_runner_image
+  ensure_ai_cli_images
   configure_agent_command_network
   validate_required_env
+  validate_optional_profiles
   configure_docker_socket_gid
 
   echo "==> Validating docker compose config"
@@ -705,10 +1072,20 @@ main() {
     frontend
     nginx
   )
-  if [[ "$WITH_TELEGRAM_BOT" -eq 1 ]]; then
-    services+=(telegram-bot)
-  fi
   compose "${up_args[@]}" "${services[@]}"
+
+  if [[ "$WITH_AI_CLI" -eq 1 ]]; then
+    echo "==> Starting isolated AI CLI profile"
+    compose up -d ai-cli-docker-proxy ai-cli-egress-proxy ai-cli-runner-manager ai-provider-auth
+  fi
+  if [[ "$WITH_OBSERVABILITY" -eq 1 ]]; then
+    echo "==> Starting built-in observability profile"
+    compose up -d tempo loki alertmanager otel-collector prometheus grafana
+  fi
+  if [[ "$WITH_TELEGRAM_BOT" -eq 1 ]]; then
+    echo "==> Starting explicitly provisioned Telegram bot"
+    compose up -d telegram-bot
+  fi
 
   if [[ "$SKIP_HEALTHCHECKS" -eq 0 ]]; then
     wait_for_stack

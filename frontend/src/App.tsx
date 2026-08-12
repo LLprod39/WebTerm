@@ -3,12 +3,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Suspense, lazy, type ReactNode } from "react";
-import { I18nProvider, useI18n } from "./lib/i18n";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { I18nProvider, localize, useI18n } from "./lib/i18n";
 import { UiStyleProvider } from "./lib/ui-style";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
 import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
 import { FirstRunReadinessGate } from "./components/FirstRunReadinessGate";
+import { firstAllowedApplicationPath } from "./lib/navigation";
 
 const queryClient = new QueryClient();
 const Index = lazy(() => import("./pages/Index"));
@@ -29,6 +31,7 @@ const SettingsIndexRedirect = lazy(() =>
 const SettingsReadinessPage = lazy(() => import("./pages/settings/SettingsReadinessPage"));
 const SettingsLimitsPage = lazy(() => import("./pages/settings/SettingsLimitsPage"));
 const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
+const SettingsAIConnectionsPage = lazy(() => import("./pages/settings/SettingsAIConnectionsPage"));
 const SettingsAccessPage = lazy(() => import("./pages/settings/SettingsAccessPage"));
 const SettingsMemoryPage = lazy(() => import("./pages/settings/SettingsMemoryPage"));
 const SettingsAuditPage = lazy(() => import("./pages/settings/SettingsAuditPage"));
@@ -74,7 +77,7 @@ function RouteLoader() {
 function AuthGate({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { t } = useI18n();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["auth", "session"],
     queryFn: fetchAuthSession,
     staleTime: 60_000,
@@ -89,6 +92,10 @@ function AuthGate({ children }: { children: ReactNode }) {
     );
   }
 
+  if (isError) {
+    return <SessionUnavailable onRetry={() => void refetch()} />;
+  }
+
   if (!data?.authenticated) {
     const next = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?next=${next}`} replace />;
@@ -98,6 +105,13 @@ function AuthGate({ children }: { children: ReactNode }) {
 
 function PermissionDenied() {
   const { t } = useI18n();
+  const { data } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const destination = firstAllowedApplicationPath(data?.user);
   return (
     <div className="flex min-h-full items-center justify-center px-6 py-12">
       <section className="max-w-lg rounded-xl border border-border bg-card px-6 py-6 shadow-sm">
@@ -110,14 +124,43 @@ function PermissionDenied() {
         <p className="mt-3 text-sm leading-6 text-muted-foreground">
           {t("app.permission_denied_desc")}
         </p>
-        <Link
-          to="/servers"
+        {destination ? <Link
+          to={destination}
           className="mt-5 inline-flex min-h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {t("app.permission_denied_action")}
-        </Link>
+        </Link> : null}
       </section>
     </div>
+  );
+}
+
+function SessionUnavailable({ onRetry }: { onRetry: () => void }) {
+  const { lang } = useI18n();
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-background px-6 py-12">
+      <section role="alert" className="w-full max-w-lg rounded-xl border border-warning/35 bg-card p-6 shadow-sm">
+        <AlertCircle className="h-6 w-6 text-warning" aria-hidden />
+        <h1 className="mt-3 text-xl font-semibold text-foreground">
+          {localize(lang, "Сервис временно недоступен", "Service temporarily unavailable")}
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          {localize(
+            lang,
+            "Сеанс не завершён. WebTerm не смог проверить его из-за ошибки соединения.",
+            "Your session was not signed out. WebTerm could not verify it because of a connection error.",
+          )}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RefreshCw className="h-4 w-4" aria-hidden />
+          {localize(lang, "Повторить проверку", "Retry session check")}
+        </button>
+      </section>
+    </main>
   );
 }
 
@@ -212,7 +255,7 @@ const App = () => (
                 <Route
                   path="/automation/*"
                   element={(
-                    <FeatureGate feature="servers">
+                    <FeatureGate feature="automation">
                       <AutomationPage />
                     </FeatureGate>
                   )}
@@ -252,7 +295,7 @@ const App = () => (
                 <Route
                   path="/chat"
                   element={(
-                    <FeatureGate feature="orchestrator">
+                    <FeatureGate feature="chat">
                       <ChatPage />
                     </FeatureGate>
                   )}
@@ -389,24 +432,116 @@ const App = () => (
                 <Route
                   path="/settings"
                   element={(
-                    <FeatureGate feature="settings">
+                    <FeatureGate feature={["settings", "ai_connections_personal", "ai_connections_admin"]}>
                       <SettingsLayout />
                     </FeatureGate>
                   )}
                 >
                   <Route index element={<SettingsIndexRedirect />} />
-                  <Route path="readiness" element={<SettingsReadinessPage />} />
-                  <Route path="limits" element={<SettingsLimitsPage />} />
-                  <Route path="ai" element={<SettingsAIPage />} />
-                  <Route path="access" element={<SettingsAccessPage />} />
-                  <Route path="users" element={<SettingsUsersPage />} />
-                  <Route path="groups" element={<SettingsGroupsPage />} />
-                  <Route path="permissions" element={<SettingsPermissionsPage />} />
-                  <Route path="sso" element={<SettingsSSOPage />} />
-                  <Route path="memory" element={<SettingsMemoryPage />} />
-                  <Route path="audit" element={<SettingsAuditPage />} />
-                  <Route path="notifications" element={<NotificationsSettingsPage showStudioNav={false} />} />
-                  <Route path="kubernetes" element={<SettingsKubernetesPage />} />
+                  <Route
+                    path="readiness"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsReadinessPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="limits"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsLimitsPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="ai"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsAIPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="ai-connections"
+                    element={(
+                      <FeatureGate feature={["ai_connections_personal", "ai_connections_admin"]}>
+                        <SettingsAIConnectionsPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="access"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsAccessPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="users"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsUsersPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="groups"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsGroupsPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="permissions"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsPermissionsPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="sso"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsSSOPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="memory"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsMemoryPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="audit"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsAuditPage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="notifications"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <NotificationsSettingsPage showStudioNav={false} />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
+                    path="kubernetes"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsKubernetesPage />
+                      </FeatureGate>
+                    )}
+                  />
                   <Route
                     path="plugins"
                     element={(

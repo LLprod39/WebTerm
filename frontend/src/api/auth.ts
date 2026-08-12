@@ -43,11 +43,14 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse> {
   if (isDemoMode()) return DEMO_SESSION;
   try {
     return await apiFetch<AuthSessionResponse>("/api/auth/session/");
-  } catch {
+  } catch (error) {
     if (canUseDemoMode() && enableDemoMode()) {
       return DEMO_SESSION;
     }
-    return { authenticated: false, user: null };
+    // A transport/backend failure is not a logout. Keeping this as a rejected
+    // query preserves the authenticated shell and lets the UI offer retry
+    // instead of redirecting the operator to the login screen.
+    throw error;
   }
 }
 

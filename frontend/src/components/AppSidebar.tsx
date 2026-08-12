@@ -16,24 +16,14 @@ import {
 import { activateProject, authLogout, fetchAuthSession, fetchKubernetesReadiness, fetchProjects } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { localize, useI18n } from "@/lib/i18n";
-import { canAccessStudio, hasFeatureAccess } from "@/lib/featureAccess";
-import { NavIcons } from "@/lib/app-icons";
+import { hasFeatureAccess } from "@/lib/featureAccess";
+import {
+  allowedPrimaryNavigation,
+  type NavSectionId,
+  type PrimaryNavigationItem,
+} from "@/lib/navigation";
 import { prefetchRouteForPath } from "@/lib/route-prefetch";
 import { cn } from "@/lib/utils";
-import type { LucideIcon } from "lucide-react";
-
-const CHAT_NAV_READY = true;
-type NavSectionId = "dashboard" | "infrastructure" | "automation" | "extensions" | "administration";
-
-interface PrimaryNavItem {
-  titleKey: string;
-  url: string;
-  icon: LucideIcon;
-  feature: string;
-  section: NavSectionId;
-  ready?: boolean;
-  staffOnly?: boolean;
-}
 
 export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
@@ -70,33 +60,11 @@ export function AppSidebar() {
   // Operators: keep production/pilot sidebar gate (ready_for_sidebar).
   const kubernetesNavReady = isStaff || Boolean(kubernetesReadiness?.ready_for_sidebar);
 
-  const navItems: PrimaryNavItem[] = [
-    { titleKey: "nav.dashboard", url: "/dashboard", icon: NavIcons.dashboard, feature: "dashboard", section: "dashboard" },
-    { titleKey: "nav.servers", url: "/servers", icon: NavIcons.servers, feature: "servers", section: "infrastructure" },
-    { titleKey: "nav.kubernetes", url: "/kubernetes", icon: NavIcons.kubernetes, feature: "kubernetes", section: "infrastructure", ready: kubernetesNavReady },
-    { titleKey: "nav.agents", url: "/agents", icon: NavIcons.agents, feature: "agents", section: "automation" },
-    { titleKey: "nav.playbooks", url: "/automation", icon: NavIcons.playbooks, feature: "servers", section: "automation" },
-    { titleKey: "nav.chat", url: "/chat", icon: NavIcons.chat, feature: "orchestrator", section: "automation", ready: CHAT_NAV_READY },
-    { titleKey: "nav.studio", url: "/studio", icon: NavIcons.studio, feature: "studio", section: "automation" },
-    { titleKey: "nav.mars", url: "/mars", icon: NavIcons.mars, feature: "mars", section: "automation" },
-    { titleKey: "nav.plugins", url: "/settings/plugins", icon: NavIcons.plugins, feature: "plugins", section: "extensions", staffOnly: true },
-    { titleKey: "nav.insights", url: "/monitoring/insights", icon: NavIcons.insights, feature: "dashboard", section: "administration", staffOnly: true },
-    { titleKey: "nav.settings", url: "/settings", icon: NavIcons.settings, feature: "settings", section: "administration" },
-  ];
-
-  const allowedItems = navItems.filter((item) => {
-    if ("ready" in item && item.ready === false) return false;
-    if ("staffOnly" in item && item.staffOnly && !isStaff) return false;
-    if (!item.feature) return true;
-    if (item.feature === "studio") {
-      return canAccessStudio(data?.user);
-    }
-    return hasFeatureAccess(data?.user, item.feature);
-  });
+  const allowedItems = allowedPrimaryNavigation(data?.user, { kubernetesReady: kubernetesNavReady });
 
   const roleLabel = data?.user?.is_staff ? t("nav.admin") : t("nav.operator");
   const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
-  const navSections: Array<{ id: NavSectionId; label: string; items: PrimaryNavItem[] }> = [
+  const navSections: Array<{ id: NavSectionId; label: string; items: PrimaryNavigationItem[] }> = [
     { id: "dashboard", label: t("nav.section_dashboard"), items: allowedItems.filter((item) => item.section === "dashboard") },
     { id: "infrastructure", label: t("nav.section_infrastructure"), items: allowedItems.filter((item) => item.section === "infrastructure") },
     { id: "automation", label: t("nav.section_automation"), items: allowedItems.filter((item) => item.section === "automation") },
@@ -202,10 +170,10 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.titleKey}>
                     <SidebarMenuButton asChild size="sm" className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent">
                       <NavLink
-                        to={item.url}
-                        end={item.url === "/dashboard"}
-                        onMouseEnter={() => prefetchRouteForPath(item.url)}
-                        onFocus={() => prefetchRouteForPath(item.url)}
+                        to={item.path}
+                        end={item.path === "/dashboard"}
+                        onMouseEnter={() => prefetchRouteForPath(item.path)}
+                        onFocus={() => prefetchRouteForPath(item.path)}
                         className={cn(
                           "group flex min-h-10 items-center gap-2.5 rounded-sm border border-transparent px-2 py-1.5 text-[13px] transition-colors",
                           "text-sidebar-foreground/85",

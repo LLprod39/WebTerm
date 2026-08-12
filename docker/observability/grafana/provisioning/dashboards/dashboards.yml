@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: WebTerm pilot
+    orgId: 1
+    folder: WebTerm Pilot
+    type: file
+    disableDeletion: true
+    editable: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards

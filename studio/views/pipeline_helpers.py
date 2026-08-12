@@ -52,6 +52,7 @@ def _create_pipeline_run(
     context: dict | None = None,
     trigger_data: dict | None = None,
     entry_node_id: str,
+    explicit_provider_binding: dict | None = None,
 ) -> PipelineRun:
     return _dispatch_create_pipeline_run(
         pipeline=pipeline,
@@ -60,6 +61,7 @@ def _create_pipeline_run(
         context=context,
         trigger_data=trigger_data,
         entry_node_id=entry_node_id,
+        explicit_provider_binding=explicit_provider_binding,
     )
 
 

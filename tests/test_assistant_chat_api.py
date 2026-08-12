@@ -6,6 +6,7 @@ from django.test import Client
 
 from app.assistant_actions import AssistantActionSpec, register_action
 from core_ui.models import AssistantAction, ChatSession, UserAppPermission
+from core_ui.models.ai_providers import AIProviderConnection
 from core_ui.services.operator_rate_limit import MAX_MESSAGE_CHARS
 from servers.models import ServerAgent
 
@@ -36,8 +37,9 @@ def _force_planner_path(monkeypatch) -> None:
 
 
 @pytest.mark.django_db
-def test_assistant_chat_requires_orchestrator_feature():
+def test_assistant_chat_requires_chat_feature():
     user = User.objects.create_user(username="chat-no-access", password="x")
+    UserAppPermission.objects.create(user=user, feature="chat", allowed=False)
     client = Client()
     client.force_login(user)
 
@@ -200,6 +202,64 @@ def test_assistant_chat_passes_runtime_context_to_planner(monkeypatch):
     assert response.status_code == 201
     agents = captured["runtime_context"]["agents"]
     assert any(item["id"] == agent.id and item["name"] == "Chat Agent" for item in agents)
+
+
+@pytest.mark.django_db
+def test_assistant_planner_fallback_clears_session_when_provider_binding_changes(monkeypatch):
+    user = User.objects.create_user(username="chat-fallback-binding-switch", password="x")
+    _grant_feature(user, "chat")
+    first = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=user,
+        name="First fallback account",
+        status=AIProviderConnection.STATUS_CONNECTED,
+    )
+    second = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=user,
+        name="Second fallback account",
+        status=AIProviderConnection.STATUS_CONNECTED,
+    )
+    session = ChatSession.objects.create(
+        user=user,
+        title="Fallback binding switch",
+        provider_binding={"target_id": "codex_subscription", "connection_id": first.pk},
+        provider_session_id="thread-from-first-account",
+    )
+    client = Client()
+    client.force_login(user)
+    _force_planner_path(monkeypatch)
+    captured: dict = {}
+
+    async def fake_plan(**kwargs):
+        captured.update(kwargs)
+        return {"reply": "Binding switched safely.", "actions": [], "_planned_by": "llm"}
+
+    monkeypatch.setattr("core_ui.services.assistant_chat._call_planner", fake_plan)
+
+    response = client.post(
+        f"/api/assistant/chats/{session.pk}/message/",
+        data=_json(
+            {
+                "message": "Use the second account",
+                "provider_binding": {
+                    "target_id": "codex_subscription",
+                    "connection_id": second.pk,
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 201
+    session.refresh_from_db()
+    execution_context = captured["execution_context"]
+    assert execution_context.binding.connection_id == second.pk
+    assert execution_context.provider_session_id == ""
+    assert session.provider_binding["connection_id"] == second.pk
+    assert session.provider_session_id == ""
 
 
 @pytest.mark.django_db

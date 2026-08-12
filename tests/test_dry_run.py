@@ -21,7 +21,17 @@ from servers.services.terminal_transport_state import TerminalTransportState
 
 
 def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
+    with asyncio.Runner() as runner:
+        return runner.run(coro)
+
+
+def test_run_closes_owned_event_loop():
+    async def _capture_running_loop():
+        return asyncio.get_running_loop()
+
+    loop = _run(_capture_running_loop())
+
+    assert loop.is_closed()
 
 
 # ---------------------------------------------------------------------------

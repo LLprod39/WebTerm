@@ -63,7 +63,7 @@ async def test_open_terminal_ssh_session_builds_pty_process(monkeypatch):
         return conn
 
     monkeypatch.setattr(mod, "build_terminal_connect_kwargs", fake_build_kwargs)
-    server = SimpleNamespace(host="10.0.0.80")
+    server = SimpleNamespace(host="10.0.0.80", port=22)
 
     opened = await open_terminal_ssh_session(
         server=server,

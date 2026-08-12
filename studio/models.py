@@ -152,6 +152,11 @@ class AgentConfig(models.Model):
         default="gemini-2.0-flash-exp",
         help_text="LLM model identifier",
     )
+    provider_binding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Canonical provider binding used when this agent config runs.",
+    )
     max_iterations = models.PositiveIntegerField(default=10)
 
     allowed_tools = models.JSONField(
@@ -257,6 +262,11 @@ class Pipeline(models.Model):
         related_name="shared_studio_pipelines",
     )
     is_template = models.BooleanField(default=False, help_text="Bundled template, not user-created")
+    provider_binding = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Provider binding pinned when scheduled/background triggers are saved.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -485,6 +495,9 @@ class PipelineRun(models.Model):
     # Context passed to the run (from trigger payload or manual input)
     context = models.JSONField(default=dict, blank=True)
     trigger_data = models.JSONField(default=dict, blank=True)
+    provider_binding_snapshot = models.JSONField(default=dict, blank=True)
+    provider_session_id = models.CharField(max_length=255, blank=True, default="")
+    provider_execution_mode = models.CharField(max_length=20, default="interactive")
     runtime_control = models.JSONField(
         default=dict,
         blank=True,

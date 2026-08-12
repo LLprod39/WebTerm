@@ -5,7 +5,10 @@ Studio pipeline CRUD and run endpoints.
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from app.ai_runtime import ExecutionMode
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
+from core_ui.services.ai_execution_context import build_execution_context
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineTrigger
 from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
 from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
@@ -40,6 +43,22 @@ def api_pipelines(request):
         name = data.get("name", "").strip()
         if not name:
             return _err("name is required")
+        provider_binding = {}
+        if data.get("provider_binding"):
+            try:
+                project = active_project_for_user(request.user)
+                context = build_execution_context(
+                    actor_user_id=request.user.pk,
+                    project_id=project.pk if project else None,
+                    purpose="ops",
+                    source_kind="pipeline",
+                    source_id="new",
+                    mode=ExecutionMode.UNATTENDED,
+                    explicit_binding=data.get("provider_binding"),
+                )
+                provider_binding = context.binding.to_dict()
+            except (TypeError, ValueError, RuntimeError) as exc:
+                return _err(str(exc))
         nodes = data.get("nodes", [])
         edges = data.get("edges", [])
         if not nodes and not edges:
@@ -61,6 +80,7 @@ def api_pipelines(request):
             edges=edges,
             graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
             owner=request.user,
+            provider_binding=provider_binding,
         )
         pipeline.sync_triggers_from_nodes()
         return _ok(pipeline.to_detail_dict(), status=201)
@@ -92,6 +112,23 @@ def api_pipeline_detail(request, pipeline_id: int):
         for field in ("name", "description", "icon", "tags", "nodes", "edges", "is_shared"):
             if field in data:
                 setattr(pipeline, field, data[field])
+        if "provider_binding" in data:
+            if data.get("provider_binding") in ({}, None):
+                pipeline.provider_binding = {}
+            else:
+                try:
+                    context = build_execution_context(
+                        actor_user_id=request.user.pk,
+                        project_id=pipeline.project_id,
+                        purpose="ops",
+                        source_kind="pipeline",
+                        source_id=pipeline.pk,
+                        mode=ExecutionMode.UNATTENDED,
+                        explicit_binding=data.get("provider_binding"),
+                    )
+                    pipeline.provider_binding = context.binding.to_dict()
+                except (TypeError, ValueError, RuntimeError) as exc:
+                    return _err(str(exc))
         pipeline.graph_version = CURRENT_PIPELINE_GRAPH_VERSION
         pipeline.save()
         pipeline.sync_triggers_from_nodes()
@@ -222,6 +259,7 @@ def api_pipeline_run(request, pipeline_id: int):
                 "entry_node_id": selected_trigger.node_id,
             },
             entry_node_id=selected_trigger.node_id,
+            explicit_provider_binding=payload.get("provider_binding"),
         )
     except ValueError as exc:
         return _validation_err(pipeline_run_creation_error_details(exc), prefix="Pipeline is not runnable")

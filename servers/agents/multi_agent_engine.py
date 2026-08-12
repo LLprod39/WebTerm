@@ -23,6 +23,7 @@ from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
 from servers.agents.agent_runtime import (
+    build_agent_execution_context,
     build_runtime_control_state,
     update_runtime_control,
 )
@@ -84,18 +85,19 @@ class MultiAgentEngine:
         skill_errors: list[str] | None = None,
         skill_provider: SkillProvider | None = None,
         mcp_runtime_provider: MCPRuntimeProvider | None = None,
+        execution_context: object | None = None,
     ):
         self.agent = agent
         self.servers = servers
         self.user = user
         self.event_callback = event_callback
+        self.execution_context = execution_context
+        self._provider_invocation_seq = 0
 
         self.session_timeout = agent.session_timeout_seconds or SESSION_TIMEOUT_DEFAULT
         self.tools_config = dict(agent.tools_config or {})
-        self.allowed_tool_names = (
-            {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
-        )
         self.enabled_tools = get_enabled_tools(self.tools_config)
+        self.allowed_tool_names = set(self.enabled_tools)
 
         self._stop_requested = False
         self._pause_event = asyncio.Event()
@@ -145,15 +147,17 @@ class MultiAgentEngine:
             if self.allowed_tool_names is not None:
                 self.allowed_tool_names.update({"list_skills", "read_skill"})
 
-        from servers.agents.agent_inputs import MATERIALS_TOOL_NAMES, normalize_input_artifacts
+        from servers.agents.agent_inputs import normalize_input_artifacts
 
         self.input_materials = normalize_input_artifacts(getattr(agent, "input_artifacts", None) or [])
         if self.input_materials:
-            for tool_name in MATERIALS_TOOL_NAMES:
+            for tool_name in ("list_materials", "read_material"):
                 if tool_name not in self.enabled_tools:
                     self.enabled_tools.append(tool_name)
-            if self.allowed_tool_names is not None:
-                self.allowed_tool_names.update(MATERIALS_TOOL_NAMES)
+            self.allowed_tool_names.update({"list_materials", "read_material"})
+
+    async def _execution_context_for(self, purpose: str):
+        return await build_agent_execution_context(self, purpose, surface="multi_agent")
 
     # ------------------------------------------------------------------
     # Public control methods

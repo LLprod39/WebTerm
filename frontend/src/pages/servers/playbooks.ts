@@ -1,4 +1,4 @@
-import yaml from "js-yaml";
+import { parse as parseYaml } from "yaml";
 
 import type { Playbook, PlaybookTask } from "./types";
 
@@ -28,7 +28,7 @@ export function parseAnsiblePlaybook(content: string, filename: string): Playboo
   // Try YAML first, then JSON
   let parsed: unknown;
   try {
-    parsed = yaml.load(content);
+    parsed = parseYaml(content);
   } catch {
     parsed = JSON.parse(content);
   }

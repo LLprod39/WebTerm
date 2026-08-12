@@ -111,8 +111,8 @@ def verify(root: Path = ROOT) -> list[str]:
     version_path = root / "VERSION"
     if not version_path.is_file():
         errors.append("missing release version file: VERSION")
-    elif version_path.read_text(encoding="utf-8").strip() != "0.2.2":
-        errors.append("VERSION must declare 0.2.2")
+    elif version_path.read_text(encoding="utf-8").strip() != "0.2.3":
+        errors.append("VERSION must declare 0.2.3")
 
     api_inventory = root / "config/public-api-v0.1.json"
     if not api_inventory.is_file():

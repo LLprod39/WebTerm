@@ -411,6 +411,9 @@ def test_canceling_queued_dispatch_finishes_run_without_execution(monkeypatch):
 @pytest.mark.django_db(transaction=True)
 def test_cancel_api_uses_durable_dispatch_state(monkeypatch):
     user = User.objects.create_user(username="playbook-dispatch-cancel-api", password="x")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
     run = _run(user)
     dispatch = enqueue_playbook_run_dispatch(run=run)
     monkeypatch.setattr(

@@ -11,6 +11,7 @@ export type SessionUser = {
     agents: boolean;
     studio: boolean;
     settings: boolean;
+    chat: boolean;
     orchestrator: boolean;
   };
 };
@@ -69,6 +70,7 @@ export function makeSessionUser(isStaff: boolean, username = "admin"): SessionUs
       kubernetes: false,
       mars: false,
       settings: true,
+      chat: true,
       orchestrator: true,
     },
   };

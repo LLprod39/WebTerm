@@ -249,7 +249,13 @@ async def _run_agent_body(
     ):
         try:
             ai_analysis = await asyncio.wait_for(
-                get_ai_analysis(agent, server, outputs, template=get_template(agent.agent_type)),
+                get_ai_analysis(
+                    agent,
+                    server,
+                    outputs,
+                    template=get_template(agent.agent_type),
+                    execution_context=await _mini_execution_context(agent, user, run),
+                ),
                 timeout=MINI_AI_ANALYSIS_TIMEOUT_SEC,
             )
         except TimeoutError:
@@ -323,6 +329,28 @@ async def _run_agent_body(
         logger.warning("Mini-agent memory ingestion failed: {}", mem_exc)
 
     return run
+
+
+async def _mini_execution_context(agent: ServerAgent, user, run: AgentRun):
+    from core_ui.services.ai_execution_context import abuild_execution_context
+
+    context = await abuild_execution_context(
+        actor_user_id=user.pk,
+        project_id=run.project_id or agent.project_id,
+        purpose="opssummary",
+        source_kind="agent_run",
+        source_id=run.pk,
+        mode=run.provider_execution_mode,
+        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        requested_provider="auto",
+        provider_session_id=run.provider_session_id,
+        idempotency_key=f"agent:{run.pk}:mini-analysis",
+        tool_policy={"surface": "mini_agent", "webtrerm_tools_only": True},
+    )
+    if not run.provider_binding_snapshot:
+        run.provider_binding_snapshot = context.binding.to_dict()
+        await sync_to_async(run.save)(update_fields=["provider_binding_snapshot"])
+    return context
 
 
 async def run_agent_on_all_servers(

@@ -23,7 +23,7 @@ from servers.views.playbook_workspace_helpers import get_playbook_for_action, js
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET", "POST"])
 def playbook_shares(request, playbook_id: int):
     try:
@@ -61,7 +61,7 @@ def playbook_shares(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["DELETE"])
 def playbook_share_detail(request, playbook_id: int, share_id: int):
     try:

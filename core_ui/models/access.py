@@ -7,6 +7,10 @@ FEATURE_CHOICES = [
     ("servers", "Servers"),
     ("dashboard", "Dashboard"),
     ("agents", "Agents"),
+    ("chat", "Chat"),
+    ("automation", "Automation"),
+    ("ai_connections_personal", "Personal AI Connections"),
+    ("ai_connections_admin", "AI Connections Administration"),
     ("studio", "Studio"),
     ("studio_pipelines", "Studio Pipelines"),
     ("studio_runs", "Studio Runs"),
@@ -28,7 +32,7 @@ FEATURE_CHOICES = [
 
 # Features allowed by default for non-staff users (aligned with pilot_user).
 # Settings remain opt-in, and the admin dashboard stays staff-only.
-DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard"}
+DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard", "chat", "ai_connections_personal"}
 # Features that must be granted explicitly even for staff users.
 EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes",
@@ -38,6 +42,7 @@ EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes_secret_read",
     "mars",
     "web_research",
+    "ai_connections_admin",
 }
 STAFF_ONLY_FEATURES = set()
 

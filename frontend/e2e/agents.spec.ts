@@ -7,11 +7,12 @@ test("creates and runs a mini agent from the agents page", async ({ page }) => {
   const harness = await installApiHarness(page, makeAgentsHandler());
 
   await page.goto("/agents");
-  await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
-  await page.getByRole("button", { name: "Create your first agent" }).click();
+  await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "New agent" }).click();
 
   const createDialog = page.getByRole("dialog");
   await expect(createDialog.getByText("Agent type")).toBeVisible();
+  await createDialog.getByRole("button", { name: /Mini Agent/i }).click();
   await createDialog.getByRole("button", { name: /Custom/i }).click();
 
   await expect(createDialog.getByRole("heading", { name: "Basics" })).toBeVisible();
@@ -27,19 +28,20 @@ test("creates and runs a mini agent from the agents page", async ({ page }) => {
   await expect(createDialog.getByRole("heading", { name: "Capabilities" })).toBeVisible();
   await createDialog.getByRole("button", { name: "Next" }).click();
 
-  await expect(createDialog.getByText("Preflight passed")).toBeVisible();
+  await expect(createDialog.getByText("Ready to save")).toBeVisible();
   await createDialog.getByRole("button", { name: "Create Agent" }).click();
 
   await expect.poll(() => harness.getCalls("/servers/api/agents/create/", "POST").length).toBe(1);
   await expect(createDialog).toBeHidden();
   await expect(page.getByRole("main").getByText("Disk Audit")).toBeVisible();
 
-  await page.getByRole("button", { name: /^Run$/ }).click();
+  await page.getByRole("button", { name: "Run Disk Audit" }).click();
   await expect.poll(() => harness.getCalls("/servers/api/agents/300/run/", "POST").length).toBe(1);
-  await expect(page.getByText("Mini audit succeeded")).toBeVisible();
+  await expect(page).toHaveURL(/\/agents\/run\/700$/);
+  await expect(page.getByRole("heading", { name: "Disk Audit" })).toBeVisible();
 });
 
-test("shows mini run report as a quick preview with full report CTA", async ({ page }) => {
+test("opens the durable mini run report after launch", async ({ page }) => {
   await installApiHarness(
     page,
     makeAgentsHandler([
@@ -62,19 +64,11 @@ test("shows mini run report as a quick preview with full report CTA", async ({ p
 
   await page.goto("/agents");
   await expect(page.getByText("Mini Preview")).toBeVisible();
-  await page.getByRole("button", { name: /^Run$/ }).click();
+  await page.getByRole("button", { name: "Run Mini Preview" }).click();
 
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Agent report for Web-01" })).toBeVisible();
-  await expect(dialog.getByText("Completed")).toBeVisible();
-  await expect(dialog.getByText("1s")).toBeVisible();
-  await expect(dialog.getByText("1 commands")).toBeVisible();
-  await expect(dialog.getByText("Mini audit succeeded")).toBeVisible();
-  await expect(dialog.getByText("Full-only evidence line")).toHaveCount(0);
-
-  await dialog.getByRole("link", { name: "Open full report" }).click();
   await expect(page).toHaveURL(/\/agents\/run\/700$/);
-  await expect(page.locator("h1", { hasText: "Mini Preview" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Mini Preview" })).toBeVisible();
+  await expect(page.getByText("1s").first()).toBeVisible();
 });
 
 test("blocks full agent launch when execution worker is not ready", async ({ page }) => {
@@ -112,10 +106,9 @@ test("blocks full agent launch when execution worker is not ready", async ({ pag
   await expect(page.getByText("Worker Blocked")).toBeVisible();
   await expect(page.getByText("Execution worker").first()).toBeVisible();
   await expect(page.getByText("Full/multi agent queue runtime")).toBeVisible();
-  await expect(page.getByText("worker wait")).toBeVisible();
   await expect(page.getByText("python manage.py run_agent_execution_plane").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Copy$/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /^Run$/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Run Worker Blocked" })).toBeDisabled();
   expect(harness.getCalls("/servers/api/agents/211/run/", "POST")).toHaveLength(0);
 });
 

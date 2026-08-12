@@ -232,7 +232,7 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
               tone={agent.active_run_id ? "info" : "warning"}
               title={agent.agent_name}
               meta={[
-                agent.server_names[0] || `${agent.server_count} servers`,
+                agent.server_names?.[0] || `${agent.server_count} servers`,
                 formatScheduleConfigLabel(agent.schedule_config, agent.schedule_minutes, lang),
                 agent.due_age_seconds ? localize(lang, `due ${formatRuntimeAge(agent.due_age_seconds)}`, `due ${formatRuntimeAge(agent.due_age_seconds)}`) : "due now",
               ]}

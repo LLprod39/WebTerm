@@ -17,7 +17,9 @@ export function initialForm(): ServerForm {
     notes: "",
     group_id: null,
     is_active: true,
-    ai_read_only: false,
+    // Pilot-safe default: a newly registered host must never grant AI write
+    // access merely because the operator did not expand the advanced section.
+    ai_read_only: true,
   };
 }
 
@@ -29,26 +31,36 @@ export function initialGroupForm(): ServerGroupForm {
   };
 }
 
-export function asPayload(form: ServerForm) {
-  const payload: Record<string, unknown> = {
-    name: form.name,
-    server_type: form.server_type,
-    host: form.host,
-    port: form.port,
-    username: form.username,
-    auth_method: form.auth_method,
-    key_path: form.key_path,
-    password: form.password,
-    sudo_auth_mode: form.sudo_auth_mode,
-    sudo_password: form.sudo_password,
-    tags: form.tags,
-    notes: form.notes,
-    group_id: form.group_id,
-    is_active: form.is_active,
-    ai_read_only: form.ai_read_only,
+export function enforcePilotServerAccess(form: ServerForm): ServerForm {
+  return {
+    ...form,
+    ai_read_only: true,
+    sudo_auth_mode: "none",
+    sudo_password: "",
   };
-  const privateKey = form.ssh_private_key.trim();
-  if (form.auth_method !== "password" && privateKey) {
+}
+
+export function asPayload(form: ServerForm, canConfigureElevatedAccess = false) {
+  const effectiveForm = canConfigureElevatedAccess ? form : enforcePilotServerAccess(form);
+  const payload: Record<string, unknown> = {
+    name: effectiveForm.name,
+    server_type: effectiveForm.server_type,
+    host: effectiveForm.host,
+    port: effectiveForm.port,
+    username: effectiveForm.username,
+    auth_method: effectiveForm.auth_method,
+    key_path: effectiveForm.key_path,
+    password: effectiveForm.password,
+    sudo_auth_mode: effectiveForm.sudo_auth_mode,
+    sudo_password: effectiveForm.sudo_password,
+    tags: effectiveForm.tags,
+    notes: effectiveForm.notes,
+    group_id: effectiveForm.group_id,
+    is_active: effectiveForm.is_active,
+    ai_read_only: effectiveForm.ai_read_only,
+  };
+  const privateKey = effectiveForm.ssh_private_key.trim();
+  if (effectiveForm.auth_method !== "password" && privateKey) {
     payload.ssh_private_key = privateKey;
   }
   return payload;

@@ -21,6 +21,17 @@ def test_published_openapi_is_generated_from_pydantic_and_matches_routes():
     assert transfer_media["example"] == {"target_user_id": 42}
     resume = document["paths"]["/api/studio/runs/{run_id}/resume/"]["post"]
     assert resume["requestBody"]["content"]["application/json"]["example"] == {"confirm_non_idempotent": False}
+    auth = document["paths"]["/api/ai/providers/connections/{connection_id}/auth/"]["post"]
+    verify = document["paths"]["/api/ai/providers/connections/{connection_id}/verify/"]["post"]
+    for operation in (auth, verify):
+        assert "200" not in operation["responses"]
+        assert {"202", "404"} <= set(operation["responses"])
+    ready = document["paths"]["/api/ready/"]["get"]
+    assert ready["responses"]["503"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/ReadinessResponse"
+    }
+    readiness_schema = document["components"]["schemas"]["ReadinessResponse"]
+    assert "components" in readiness_schema["required"]
 
 
 def test_committed_openapi_document_matches_generator():

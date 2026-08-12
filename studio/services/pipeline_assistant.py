@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
+from app.ai_runtime import LLMExecutionContext
 from app.core.llm import LLMProvider
 from studio.services.pipeline_assistant_catalog import (
     NODE_TYPE_ALIASES,
@@ -39,7 +40,7 @@ class PipelineAssistantError(Exception):
         self.status = status
 
 
-async def _call_llm(*, user_prompt: str) -> str:
+async def _call_llm(*, user_prompt: str, execution_context: LLMExecutionContext | None = None) -> str:
     provider = LLMProvider()
     chunks: list[str] = []
     async for chunk in provider.stream_chat(
@@ -48,6 +49,7 @@ async def _call_llm(*, user_prompt: str) -> str:
         purpose="chat",
         system_prompt=SYSTEM_PROMPT,
         json_mode=True,
+        execution_context=execution_context,
     ):
         chunks.append(chunk)
     return "".join(chunks)
@@ -105,6 +107,7 @@ def build_pipeline_assistant_response(
     known_node_ids: set[str] | None = None,
     known_node_types: dict[str, str] | None = None,
     known_edges: list[dict[str, Any]] | None = None,
+    execution_context: LLMExecutionContext | None = None,
 ) -> dict[str, Any]:
     safe_user_message = (
         sanitize_prompt_context_text(user_message).text.strip()[:4000]
@@ -122,7 +125,7 @@ def build_pipeline_assistant_response(
 
     loop = asyncio.new_event_loop()
     try:
-        raw_response = loop.run_until_complete(_call_llm(user_prompt=user_prompt))
+        raw_response = loop.run_until_complete(_call_llm(user_prompt=user_prompt, execution_context=execution_context))
     except Exception as exc:
         raise PipelineAssistantError(f"LLM error: {exc}", 500) from exc
     finally:

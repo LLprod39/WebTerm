@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
+from asgiref.sync import sync_to_async
 from loguru import logger
 
 from core_ui.audit import audit_context
@@ -25,6 +26,36 @@ _TermSize = terminal_input.TerminalSize
 
 
 class TerminalAgentSupportOperations:
+    async def _terminal_execution_context(self, purpose: str):
+        """Resolve and pin the terminal AI provider for this user/server session."""
+        from core_ui.services.ai_execution_context import abuild_execution_context
+        from servers.models import TerminalAiProviderState
+
+        state = await sync_to_async(
+            lambda: TerminalAiProviderState.objects.get_or_create(
+                user_id=self._user_id,
+                server_id=self.server.id,
+            )[0],
+            thread_sensitive=True,
+        )()
+        self._terminal_provider_invocation_seq = int(getattr(self, "_terminal_provider_invocation_seq", 0) or 0) + 1
+        explicit_binding = (self._ai_state.settings or {}).get("provider_binding") or None
+        return await abuild_execution_context(
+            actor_user_id=self._user_id,
+            project_id=getattr(self.server, "project_id", None),
+            purpose=purpose,
+            source_kind="terminal_ai_state",
+            source_id=state.pk,
+            explicit_binding=explicit_binding,
+            stored_binding=state.provider_binding,
+            requested_provider="auto",
+            provider_session_id=state.provider_session_id,
+            idempotency_key=(
+                f"terminal:{state.pk}:run:{self._ai_state.session.run_id}:call:{self._terminal_provider_invocation_seq}"
+            ),
+            tool_policy={"surface": "terminal_ai", "webtrerm_tools_only": True},
+        )
+
     async def _ai_build_agent_extras(self) -> dict[str, Any]:
         """Return the opt-in extra targets the user authorised for this session.
 
@@ -38,6 +69,7 @@ class TerminalAgentSupportOperations:
             ai_settings=self._ai_state.settings,
             user_id=self._user_id,
             primary_server_id=int(self.server.id) if self.server else None,
+            automation_allowed=self._automation_allowed,
         )
 
     async def _ai_build_agent_memory_context(self, server_ids: list[int]) -> str:
@@ -111,6 +143,7 @@ class TerminalAgentSupportOperations:
             execution_mode=execution_mode,
             dry_run=dry_run,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("terminal_planning"),
         )
 
     _compute_report_status = staticmethod(compute_report_status)
@@ -123,6 +156,7 @@ class TerminalAgentSupportOperations:
             user_message,
             done_items,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("terminal_report"),
         )
 
     async def _ai_make_report(self, user_message: str, commands_with_output: list[dict[str, Any]]) -> str:
@@ -140,6 +174,7 @@ class TerminalAgentSupportOperations:
             user_message,
             commands_with_output,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("terminal_report"),
         )
 
     _sanitize_memory_line = staticmethod(sanitize_memory_line)
@@ -198,6 +233,7 @@ class TerminalAgentSupportOperations:
                     user_id=user_id,
                     server_id=server_id,
                     semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+                    execution_context=await self._terminal_execution_context("memory_extraction"),
                 )
         except asyncio.CancelledError:
             raise
@@ -227,6 +263,7 @@ class TerminalAgentSupportOperations:
             commands_with_output=commands_with_output,
             report=report,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+            execution_context=await self._terminal_execution_context("memory_extraction"),
         )
 
     async def _save_ai_server_profile(

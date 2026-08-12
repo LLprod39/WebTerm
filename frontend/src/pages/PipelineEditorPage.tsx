@@ -11,6 +11,7 @@ import {
   type PipelineNode,
   type PipelineEdge,
   type PipelineRun,
+  type ProviderBinding,
   type StudioCapabilityNode,
 } from "@/lib/api";
 import { getPipelineClientValidationErrors } from "@/components/pipeline/pipelineClientValidation";
@@ -52,6 +53,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [edges, setEdges, onEdgesChangeRaw] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<PipelineNode | null>(null);
   const [pipelineName, setPipelineName] = useState("");
+  const [providerBinding, setProviderBinding] = useState<ProviderBinding | null>(null);
   const [lastRun, setLastRun] = useState<PipelineRun | null>(null);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
   const [graphRunId, setGraphRunId] = useState<number | null>(null);
@@ -103,6 +105,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setHasHydratedPipeline(!pipelineId);
     setHasLocalChanges(false);
     setLastRun(null);
+    setProviderBinding(null);
     clearGraphOverlay();
     if (pipelineId) {
       setSelectedNode(null);
@@ -118,6 +121,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       return;
     }
     setPipelineName(pipeline.name);
+    setProviderBinding(pipeline.provider_binding?.target_id ? pipeline.provider_binding : null);
     const normalisedGraph = normalisePipelineGraph(
       (pipeline.nodes || []) as PipelineNode[],
       (pipeline.edges || []) as PipelineEdge[],
@@ -159,6 +163,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     lang,
     navigate,
     pipelineId,
+    providerBinding,
     resetRunDialog: runDialog.resetRunDialog,
     setActiveRunId,
     setEdges,
@@ -225,7 +230,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         nodes: nodes as unknown as PipelineNode[],
         edges: edges as unknown as PipelineEdge[],
         hasLocalChanges,
-      }),
+      }) as { name: string; nodes: PipelineNode[]; edges: PipelineEdge[]; provider_binding?: ProviderBinding | Record<string, never> },
     );
   };
   const handleValidateGraph = () => {
@@ -288,6 +293,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         name: pipelineName || "Untitled",
         nodes: nodes as unknown as PipelineNode[],
         edges: edges as unknown as PipelineEdge[],
+        provider_binding: providerBinding || {},
       });
       await runMutation.mutateAsync({
         targetPipelineId: pipelineId ?? saved.id,
@@ -306,6 +312,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         name: pipelineName || "Untitled",
         nodes: nodes as unknown as PipelineNode[],
         edges: edges as unknown as PipelineEdge[],
+        provider_binding: providerBinding || {},
       });
       await validateRunMutation.mutateAsync({
         targetPipelineId: pipelineId ?? saved.id,
@@ -378,6 +385,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         lang={lang}
         pipelineId={pipelineId}
         pipelineName={pipelineName}
+        providerBinding={providerBinding}
         resolvedLastRun={resolvedLastRun}
         runDisabled={runMutation.isPending || validateRunMutation.isPending || saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
         runPending={runMutation.isPending}
@@ -396,6 +404,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onOpenRunDialog={runDialog.handleOpenRunDialog}
         onPipelineNameChange={(value) => {
           setPipelineName(value);
+          setHasLocalChanges(true);
+        }}
+        onProviderBindingChange={(binding) => {
+          setProviderBinding(binding);
           setHasLocalChanges(true);
         }}
         onSave={handleSave}

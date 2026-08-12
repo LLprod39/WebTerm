@@ -101,6 +101,62 @@ def test_metrics_endpoint_exposes_operator_queue_and_failure_health(client):
     assert "webterm_pipeline_open_dead_letters 0" in body
 
 
+@pytest.mark.django_db
+def test_metrics_endpoint_exposes_privacy_safe_ai_cli_health(client):
+    AIProviderConnection = django_apps.get_model("core_ui", "AIProviderConnection", require_ready=False)
+    AIConnectionAuthFlow = django_apps.get_model("core_ui", "AIConnectionAuthFlow", require_ready=False)
+    AIProviderInvocation = django_apps.get_model("core_ui", "AIProviderInvocation", require_ready=False)
+    AIProviderLease = django_apps.get_model("core_ui", "AIProviderLease", require_ready=False)
+    BackgroundWorkerState = django_apps.get_model("servers", "BackgroundWorkerState", require_ready=False)
+
+    user = User.objects.create_user(username="ai-metrics-owner", password="x")
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        created_by=user,
+        name="Pilot Codex",
+        status="limited",
+    )
+    AIConnectionAuthFlow.objects.create(connection=connection, status="pending")
+    invocation = AIProviderInvocation.objects.create(
+        user=user,
+        connection=connection,
+        target_id="codex_subscription",
+        purpose="agents",
+        source_kind="agent_run",
+        source_id="metrics-fixture",
+        mode="interactive",
+        status="failed",
+        error_code="provider_quota_exceeded",
+    )
+    AIProviderLease.objects.create(
+        invocation=invocation,
+        connection=connection,
+        owner_id="expired-worker",
+        status="expired",
+        expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    BackgroundWorkerState.objects.create(
+        worker_kind="ai_provider_auth",
+        worker_key="metrics-auth-worker",
+        status="running",
+        heartbeat_at=timezone.now(),
+        lease_expires_at=timezone.now() + timedelta(minutes=1),
+    )
+
+    body = client.get("/metrics").content.decode("utf-8")
+
+    assert 'webterm_ai_provider_connections{target="codex_subscription",status="limited"} 1' in body
+    assert 'webterm_ai_provider_invocations{target="codex_subscription",status="failed"} 1' in body
+    assert 'webterm_ai_provider_failures{target="codex_subscription",reason="quota"} 1' in body
+    assert "webterm_ai_auth_backlog 1" in body
+    assert "webterm_ai_auth_workers 1" in body
+    assert 'webterm_ai_lease_losses{target="codex_subscription"} 1' in body
+    assert 'webterm_ai_quota_limited_connections{target="codex_subscription"} 1' in body
+    assert "provider_quota_exceeded" not in body
+
+
 def test_nginx_metrics_endpoint_is_internal_only():
     config = Path("docker/nginx/webterm-server-common.conf").read_text(encoding="utf-8")
     assert config.count("location = /metrics {") == 1

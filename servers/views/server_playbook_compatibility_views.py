@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from core_ui.projects import active_project_for_user
+from core_ui.services.ai_execution_context import active_project_for_execution
 from servers.models import Playbook, PlaybookCompatibilityRevision
 from servers.services.playbook_compatibility_ai import PlaybookAdaptationError, adapt_playbook_with_ai
 from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility, compare_semantics
@@ -69,7 +69,7 @@ def _compatibility_failure_message(guard: dict[str, Any], report: dict[str, Any]
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_analyze(request, playbook_id: int):
     playbook = get_object_or_404(playbooks_visible_to(request.user), id=playbook_id)
@@ -105,11 +105,11 @@ def playbook_compatibility_analyze(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_adapt(request, playbook_id: int):
     playbook = get_object_or_404(
-        Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user)
+        Playbook, id=playbook_id, user=request.user, project=active_project_for_execution(request.user)
     )
     data = _json_body(request)
     bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
@@ -122,6 +122,8 @@ def playbook_compatibility_adapt(request, playbook_id: int):
             bindings=bindings,
             target_servers=target_servers,
             user_instruction=str(data.get("instruction") or ""),
+            user=request.user,
+            provider_binding=data.get("provider_binding"),
         )
     except PlaybookAdaptationError as exc:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
@@ -129,11 +131,11 @@ def playbook_compatibility_adapt(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_apply(request, playbook_id: int):
     playbook = get_object_or_404(
-        Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user)
+        Playbook, id=playbook_id, user=request.user, project=active_project_for_execution(request.user)
     )
     # Establish the legacy source as the published origin before activating a
     # newly accepted compatibility record. Otherwise lazy workspace migration
@@ -209,7 +211,7 @@ def playbook_compatibility_apply(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_compatibility_revisions(request, playbook_id: int):
     playbook = get_object_or_404(_playbooks_for_user(request.user), id=playbook_id)

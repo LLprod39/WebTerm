@@ -15,6 +15,8 @@ from typing import Any
 import asyncssh
 from django.conf import settings
 
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
+
 _IMMUTABLE_IMAGE = re.compile(r"^(?:[a-z0-9][a-z0-9._:/-]*@)?sha256:[0-9a-f]{64}$")
 _RUNNER_ID = re.compile(r"^[0-9a-f]{32}$")
 _RUNNER_INPUT_LIMIT = 1024 * 1024
@@ -118,6 +120,10 @@ async def _execute_on_host_for_tests(
     output_limit: int,
 ) -> AgentCommandResult:
     started = time.monotonic()
+    validate_pilot_ssh_destination(
+        str(connect_kwargs.get("host") or ""),
+        int(connect_kwargs.get("port") or 22),
+    )
     async with asyncssh.connect(**connect_kwargs) as connection:
         run_kwargs: dict[str, Any] = {}
         if input_text is not None:

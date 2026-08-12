@@ -250,6 +250,12 @@ def _is_read_only_fragment(fragment: str) -> bool:
             return not re.search(r"(?:^|\s)(?:-K|--kill)(?:\s|$)", value)
         return True
     if _SYSTEM_READ_ONLY_PATTERN.match(value):
+        if re.match(r"^(?:sudo\s+(?:-n\s+)?)?nginx(?:\s|$)", value, re.IGNORECASE):
+            return not re.search(
+                r"(?:^|\s)-s(?:\s|=|(?:stop|quit|reopen|reload)\b)",
+                value,
+                re.IGNORECASE,
+            )
         return True
     if _DOCKER_READ_ONLY_PATTERN.match(value):
         return not re.search(r"(?:^|\s)--output(?:=|\s)", value, re.IGNORECASE)
@@ -297,7 +303,8 @@ def _is_read_only_fragment(fragment: str) -> bool:
         has_head_mode = bool(re.search(r"(?:^|\s)(?:-I|--head)(?:\s|$)", value))
         mutating_option = re.search(
             r"(?:^|\s)(?:-d|--data(?:-ascii|-binary|-raw|-urlencode)?|-F|--form|-T|--upload-file|"
-            r"-o|--output|-O|--remote-name|-X|--request)(?:\s|=|$)",
+            r"-o|--output|-O|--remote-name|-X|--request|-c|--cookie-jar|--libcurl|"
+            r"--trace[^\s=]*)(?:\s|=|/|$)|(?:^|\s)-[A-Za-z]*c(?:\s|=|/|$)",
             value,
             re.IGNORECASE,
         )

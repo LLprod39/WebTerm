@@ -1,0 +1,529 @@
+from __future__ import annotations
+
+import json
+
+import pytest
+from django.contrib.auth.models import User
+
+from core_ui.models import UserActivityLog, UserAppPermission
+from core_ui.models.ai_providers import (
+    AIConnectionAuthFlow,
+    AIProviderConnection,
+    AIProviderConnectionGrant,
+    AIProviderPool,
+    AIProviderPreference,
+)
+from core_ui.models.projects import Project, ProjectMembership
+from core_ui.services.ai_provider_auth import retry_pending_credential_cleanup
+
+pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def _enable_ai_cli_provider_api(monkeypatch):
+    monkeypatch.setenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "true")
+
+
+def _project(user: User) -> Project:
+    project = Project.objects.create(name="Ops", slug=f"ops-{user.pk}", owner=user, is_default=True)
+    ProjectMembership.objects.create(project=project, user=user, role=ProjectMembership.ROLE_OWNER)
+    return project
+
+
+def test_user_can_create_personal_connection_without_secret_in_response(client) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    _project(user)
+    client.force_login(user)
+
+    response = client.post(
+        "/api/ai/providers/connections/",
+        data=json.dumps(
+            {
+                "target_id": "codex_subscription",
+                "scope": "personal",
+                "name": "My Codex",
+                "concurrency_limit": 1,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 201
+    payload = response.json()["connection"]
+    assert payload["name"] == "My Codex"
+    assert "credential_ref" not in payload
+    assert payload["access"] == {"interactive": False, "unattended": False}
+
+    connection = AIProviderConnection.objects.get(pk=payload["id"])
+    connection.status = AIProviderConnection.STATUS_CONNECTED
+    connection.save(update_fields=["status"])
+    response = client.get("/api/ai/providers/connections/")
+    personal = next(item for item in response.json()["connections"] if item["id"] == connection.pk)
+    assert personal["access"] == {"interactive": True, "unattended": True}
+
+
+def test_non_admin_cannot_create_workspace_connection(client) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    _project(user)
+    client.force_login(user)
+
+    response = client.post(
+        "/api/ai/providers/connections/",
+        data=json.dumps(
+            {
+                "target_id": "grok_subscription",
+                "scope": "workspace",
+                "name": "Shared Grok",
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+
+
+def test_staff_requires_explicit_admin_capability_for_workspace_connections(client) -> None:
+    staff = User.objects.create_user("staff-provider-admin", password="pw", is_staff=True)
+    _project(staff)
+    client.force_login(staff)
+    body = {
+        "target_id": "grok_subscription",
+        "scope": "workspace",
+        "name": "Shared Grok",
+    }
+
+    denied = client.post(
+        "/api/ai/providers/connections/",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "permission_denied"
+
+    UserAppPermission.objects.create(user=staff, feature="ai_connections_admin", allowed=True)
+    allowed = client.post(
+        "/api/ai/providers/connections/",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert allowed.status_code == 201
+    assert allowed.json()["connection"]["scope"] == "workspace"
+
+
+def test_staff_without_admin_capability_cannot_enumerate_or_manage_workspace_credentials(client) -> None:
+    creator = User.objects.create_user("workspace-credential-owner", password="pw")
+    staff = User.objects.create_user("staff-without-ai-admin", password="pw", is_staff=True)
+    granted_user = User.objects.create_user("workspace-grantee", password="pw")
+    _project(creator)
+    _project(staff)
+    workspace = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=creator,
+        name="Hidden workspace credential",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="workspace_credential_ref",
+    )
+    grant = AIProviderConnectionGrant.objects.create(
+        connection=workspace,
+        user=granted_user,
+        allow_interactive=True,
+    )
+    flow = AIConnectionAuthFlow.objects.create(connection=workspace)
+    client.force_login(staff)
+
+    listed = client.get("/api/ai/providers/connections/")
+    detail = client.get(f"/api/ai/providers/connections/{workspace.pk}/")
+    auth = client.post(f"/api/ai/providers/connections/{workspace.pk}/auth/")
+    revoke = client.delete(f"/api/ai/providers/connections/{workspace.pk}/")
+    auth_flow = client.get(f"/api/ai/providers/auth-flows/{flow.public_id}/")
+
+    assert listed.status_code == 200
+    assert all(item["id"] != workspace.pk for item in listed.json()["connections"])
+    assert detail.status_code == auth.status_code == revoke.status_code == auth_flow.status_code == 403
+    workspace.refresh_from_db()
+    assert workspace.status == AIProviderConnection.STATUS_CONNECTED
+    assert workspace.credential_ref == "workspace_credential_ref"
+
+    UserAppPermission.objects.create(user=staff, feature="ai_connections_admin", allowed=True)
+    allowed = client.get("/api/ai/providers/connections/")
+    serialized = next(item for item in allowed.json()["connections"] if item["id"] == workspace.pk)
+    assert serialized["manageable"] is True
+    assert serialized["grants"] == [
+        {
+            "id": grant.pk,
+            "connection_id": workspace.pk,
+            "user": {"id": granted_user.pk, "username": granted_user.username},
+            "group": None,
+            "project": None,
+            "project_role": "",
+            "allow_interactive": True,
+            "allow_unattended": False,
+        }
+    ]
+    assert client.get(f"/api/ai/providers/auth-flows/{flow.public_id}/").status_code == 200
+
+
+def test_preference_is_default_deny_until_workspace_grant_exists(client) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    project = _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="workspace",
+        name="Shared Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_1234",
+    )
+    client.force_login(user)
+    body = {
+        "purpose": "agents",
+        "project_scoped": True,
+        "require_unattended": True,
+        "binding": {"target_id": "codex_subscription", "connection_id": connection.pk},
+    }
+
+    denied = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "provider_route_unavailable"
+
+    AIProviderConnectionGrant.objects.create(
+        connection=connection,
+        project=project,
+        allow_interactive=True,
+        allow_unattended=True,
+    )
+    allowed = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(body),
+        content_type="application/json",
+    )
+    assert allowed.status_code == 200
+    assert allowed.json()["preference"]["binding"]["connection_id"] == connection.pk
+
+
+def test_invalid_concurrency_is_a_bounded_client_error(client) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    _project(user)
+    client.force_login(user)
+
+    response = client.post(
+        "/api/ai/providers/connections/",
+        data=json.dumps(
+            {
+                "target_id": "codex_subscription",
+                "scope": "personal",
+                "name": "My Codex",
+                "concurrency_limit": "many",
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "success": False,
+        "error": "Validation failed",
+        "code": "validation_error",
+        "fields": {"concurrency_limit": ["Must be an integer"]},
+    }
+
+
+def test_revoke_fails_closed_and_retains_reference_for_offline_cleanup(client, monkeypatch) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        created_by=user,
+        name="My Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_1234",
+    )
+    client.force_login(user)
+    monkeypatch.setattr(
+        "core_ui.views.ai_provider_views.revoke_connection_credentials",
+        lambda _connection: False,
+    )
+
+    response = client.delete(f"/api/ai/providers/connections/{connection.pk}/")
+
+    assert response.status_code == 202
+    assert response.json()["cleanup_pending"] is True
+    connection.refresh_from_db()
+    assert connection.enabled is False
+    assert connection.status == AIProviderConnection.STATUS_DISABLED
+    assert connection.credential_ref == "connection_1234"
+
+    monkeypatch.setattr(
+        "core_ui.services.ai_provider_auth.revoke_connection_credentials",
+        lambda _connection: True,
+    )
+    assert retry_pending_credential_cleanup() == 1
+    connection.refresh_from_db()
+    assert connection.status == AIProviderConnection.STATUS_REVOKED
+    assert connection.credential_ref == ""
+
+
+def test_string_false_does_not_enable_connection(client) -> None:
+    user = User.objects.create_user("strict-bool-operator", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        created_by=user,
+        name="My Codex",
+        enabled=True,
+    )
+    client.force_login(user)
+
+    response = client.patch(
+        f"/api/ai/providers/connections/{connection.pk}/",
+        data=json.dumps({"enabled": "false"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "validation_error"
+    assert response.json()["fields"] == {"enabled": ["Must be a boolean"]}
+    connection.refresh_from_db()
+    assert connection.enabled is True
+
+
+def test_provider_api_is_hidden_when_cli_feature_is_disabled(client, monkeypatch) -> None:
+    user = User.objects.create_user("disabled-provider-user", password="pw")
+    _project(user)
+    client.force_login(user)
+    monkeypatch.setenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "false")
+
+    response = client.get("/api/ai/providers/connections/")
+
+    assert response.status_code == 404
+    assert response.json()["code"] == "feature_disabled"
+
+
+def test_verify_is_queued_and_returns_without_running_provider(client, monkeypatch) -> None:
+    user = User.objects.create_user("verify-queue-operator", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        created_by=user,
+        name="My Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_verify_1234",
+    )
+    client.force_login(user)
+    monkeypatch.setenv("AI_CLI_AUTH_IN_PROCESS", "false")
+
+    response = client.post(f"/api/ai/providers/connections/{connection.pk}/verify/")
+
+    assert response.status_code == 202
+    assert response.json()["auth_flow"]["status"] == "pending"
+    assert connection.auth_flows.get().flow_kind == "verification"
+
+
+def test_pool_rejects_duplicate_members_and_invalid_weights_as_400(client) -> None:
+    staff = User.objects.create_user("pool-validation-admin", password="pw", is_staff=True)
+    _project(staff)
+    UserAppPermission.objects.create(user=staff, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=staff,
+        name="Workspace Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+    )
+    client.force_login(staff)
+
+    duplicate = client.post(
+        "/api/ai/providers/pools/",
+        data=json.dumps(
+            {
+                "name": "Bad duplicate pool",
+                "target_id": "codex_subscription",
+                "members": [
+                    {"connection_id": connection.pk, "weight": 1},
+                    {"connection_id": connection.pk, "weight": 2},
+                ],
+            }
+        ),
+        content_type="application/json",
+    )
+    invalid_weight = client.post(
+        "/api/ai/providers/pools/",
+        data=json.dumps(
+            {
+                "name": "Bad weight pool",
+                "target_id": "codex_subscription",
+                "members": [{"connection_id": connection.pk, "weight": 0}],
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert duplicate.status_code == 400
+    assert invalid_weight.status_code == 400
+    assert duplicate.json()["code"] == "validation_error"
+    assert duplicate.json()["fields"] == {"members.1.connection_id": ["Duplicate connection ID"]}
+    assert invalid_weight.json()["fields"] == {"members.0.weight": ["Must be between 1 and 100"]}
+    assert AIProviderPool.objects.count() == 0
+
+
+def test_pool_and_grant_ids_reject_json_booleans_with_structured_fields(client) -> None:
+    admin = User.objects.create_user("strict-id-admin", password="pw")
+    _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Strict ID workspace connection",
+    )
+    client.force_login(admin)
+
+    pool_response = client.post(
+        "/api/ai/providers/pools/",
+        data=json.dumps(
+            {
+                "name": "Boolean ID pool",
+                "target_id": "codex_subscription",
+                "members": [{"connection_id": True, "weight": True}],
+            }
+        ),
+        content_type="application/json",
+    )
+    grant_response = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps({"connection_id": True, "user_id": True}),
+        content_type="application/json",
+    )
+    weight_response = client.post(
+        "/api/ai/providers/pools/",
+        data=json.dumps(
+            {
+                "name": "Boolean weight pool",
+                "target_id": "codex_subscription",
+                "members": [{"connection_id": connection.pk, "weight": True}],
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert pool_response.status_code == 400
+    assert pool_response.json()["fields"] == {"members.0.connection_id": ["Must be an integer, not a boolean"]}
+    assert grant_response.status_code == 400
+    assert grant_response.json()["fields"] == {"connection_id": ["Must be an integer, not a boolean"]}
+    assert weight_response.status_code == 400
+    assert weight_response.json()["fields"] == {"members.0.weight": ["Must be an integer, not a boolean"]}
+
+
+def test_provider_pools_are_admin_only_even_for_personal_connection_users(client) -> None:
+    pilot = User.objects.create_user("pilot-pool-reader", password="pw")
+    _project(pilot)
+    client.force_login(pilot)
+
+    response = client.get("/api/ai/providers/pools/")
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+
+
+def test_auth_queue_exception_never_echoes_secret_to_client_or_logs(client, monkeypatch, caplog) -> None:
+    user = User.objects.create_user("auth-secret-privacy", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        created_by=user,
+        name="Private Codex",
+    )
+    client.force_login(user)
+    marker = "credential-secret-marker-9847"
+
+    def fail_auth(_connection):
+        raise RuntimeError(marker)
+
+    monkeypatch.setattr("core_ui.views.ai_provider_views.start_connection_auth", fail_auth)
+    response = client.post(f"/api/ai/providers/connections/{connection.pk}/auth/")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "provider_transport_unavailable"
+    assert marker not in response.content.decode()
+    assert marker not in caplog.text
+
+
+def test_destructive_provider_mutations_emit_metadata_only_audit_events(client, monkeypatch) -> None:
+    admin = User.objects.create_user("provider-audit-admin", password="pw")
+    project = _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Audited connection",
+        credential_ref="credential-secret-must-not-be-audited",
+    )
+    grant = AIProviderConnectionGrant.objects.create(connection=connection, project=project)
+    pool = AIProviderPool.objects.create(
+        name="Audited pool",
+        target_id="codex_subscription",
+        created_by=admin,
+    )
+    preference = AIProviderPreference.objects.create(
+        user=None,
+        project=project,
+        purpose=AIProviderPreference.PURPOSE_ASSISTANT,
+        target_id="codex_subscription",
+        connection=connection,
+    )
+    client.force_login(admin)
+    monkeypatch.setattr(
+        "core_ui.views.ai_provider_views.revoke_connection_credentials",
+        lambda _connection: True,
+    )
+
+    assert client.delete(f"/api/ai/providers/grants/{grant.pk}/").status_code == 200
+    assert client.delete(f"/api/ai/providers/pools/{pool.pk}/").status_code == 200
+    assert (
+        client.delete(
+            "/api/ai/providers/preferences/",
+            data=json.dumps(
+                {
+                    "purpose": AIProviderPreference.PURPOSE_ASSISTANT,
+                    "workspace_default": True,
+                    "project_scoped": True,
+                }
+            ),
+            content_type="application/json",
+        ).status_code
+        == 200
+    )
+    assert client.delete(f"/api/ai/providers/connections/{connection.pk}/").status_code == 200
+
+    rows = list(
+        UserActivityLog.objects.filter(
+            action__in={
+                "ai_provider.grant.delete",
+                "ai_provider.pool.delete",
+                "ai_provider.workspace_default.delete",
+                "ai_provider.connection.revoke",
+            }
+        )
+    )
+    assert {row.action for row in rows} == {
+        "ai_provider.grant.delete",
+        "ai_provider.pool.delete",
+        "ai_provider.workspace_default.delete",
+        "ai_provider.connection.revoke",
+    }
+    assert preference.pk is not None
+    assert "credential-secret-must-not-be-audited" not in repr([row.metadata for row in rows])

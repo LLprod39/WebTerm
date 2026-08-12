@@ -7,6 +7,7 @@ import {
   type ServerGroupRole,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
@@ -72,7 +73,16 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     setAdvancedOpen(false);
     setAdvancedServer(null);
   }, [advancedServer?.id]);
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const canConfigureElevatedAccess = authData?.user?.access_profile === "pilot_operator"
+    && hasFeatureAccess(authData.user, "automation");
   const {
+    canConfigureElevatedAccess: serverAccessCanBeConfigured,
     closeHostKeyEnrollment,
     confirmHostKeyEnrollment,
     dialogOpen,
@@ -95,6 +105,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     testConnection,
     testingConnection,
   } = useServerCrudController({
+    canConfigureElevatedAccess,
     onServerDeleted: closeAdvancedServerIfDeleted,
     reload,
     t,
@@ -124,12 +135,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
-  });
-  const { data: authData } = useQuery({
-    queryKey: ["auth", "session"],
-    queryFn: fetchAuthSession,
-    staleTime: 60_000,
-    retry: false,
   });
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const { fleetHealthByServerId } = useServersFleetHealth(servers, mainTab);
@@ -251,6 +256,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       testConnection={testConnection}
       saving={saving}
       testingConnection={testingConnection}
+      canConfigureElevatedAccess={serverAccessCanBeConfigured}
       serverDeleteTarget={serverDeleteTarget}
       clearServerDeleteTarget={clearServerDeleteTarget}
       confirmDeleteServer={confirmDeleteServer}

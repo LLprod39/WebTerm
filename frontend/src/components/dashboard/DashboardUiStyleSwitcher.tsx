@@ -43,6 +43,7 @@ export function DashboardUiStyleSwitcher({ className }: { className?: string }) 
       <div className="grid gap-2 sm:grid-cols-2">
         {UI_STYLE_OPTIONS.map((option) => {
           const selected = style === option.id;
+          const officialPilotTheme = option.id === "flow-dark";
           return (
             <button
               key={option.id}
@@ -72,8 +73,18 @@ export function DashboardUiStyleSwitcher({ className }: { className?: string }) 
                 ) : null}
               </div>
               <div>
-                <div className="text-xs font-semibold text-foreground">
-                  {lang === "ru" ? option.labelRu : option.labelEn}
+                <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-foreground">
+                  <span>{lang === "ru" ? option.labelRu : option.labelEn}</span>
+                  <span className={cn(
+                    "rounded-full border px-1.5 py-0.5 text-xs font-medium",
+                    officialPilotTheme
+                      ? "border-success/35 bg-success/10 text-success"
+                      : "border-border bg-secondary/50 text-muted-foreground",
+                  )}>
+                    {officialPilotTheme
+                      ? localize(lang, "Пилот", "Pilot")
+                      : localize(lang, "Эксперимент", "Experimental")}
+                  </span>
                 </div>
                 <div className="mt-0.5 text-2xs leading-4 text-muted-foreground">
                   {lang === "ru" ? option.blurbRu : option.blurbEn}

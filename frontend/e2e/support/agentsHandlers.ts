@@ -75,6 +75,10 @@ export function makeAgentsHandler(
       });
     }
 
+    if (req.path === "/api/settings/readiness/" && req.method === "GET") {
+      return json({ success: true, status: "ready", checks: [] });
+    }
+
     if (req.path === "/servers/api/frontend/bootstrap/" && req.method === "GET") {
       return json({
         success: true,

@@ -25,7 +25,7 @@ from servers.services.playbooks.gitlab_source import fetch_gitlab_project_archiv
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_bundle_preview(request):
     upload = request.FILES.get("bundle") or request.FILES.get("file")
@@ -45,7 +45,7 @@ def playbook_bundle_preview(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_gitlab_preview(request):
     payload = _json_payload(request)
@@ -72,7 +72,7 @@ def playbook_gitlab_preview(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_bundle_commit(request):
     upload = request.FILES.get("bundle") or request.FILES.get("file")
@@ -101,7 +101,7 @@ def playbook_bundle_commit(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_gitlab_commit(request):
     payload = _json_payload(request)
@@ -147,7 +147,7 @@ def playbook_gitlab_commit(request):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def playbook_revision_bundle_export(request, playbook_id: int, revision_id: int):
     playbook = playbooks_visible_to(request.user).filter(pk=playbook_id).first()

@@ -84,6 +84,10 @@ def _node_execution_approval_granted(run: PipelineRun, node_id: str) -> bool:
     )
 
 
+def _stored_provider_binding(value: object) -> dict:
+    return dict(value or {})
+
+
 async def execute_agent_react(
     node: dict,
     context: dict,
@@ -98,6 +102,7 @@ async def execute_agent_react(
     config = node.get("data", {})
     node_id = node.get("id")
     agent_config_id = config.get("agent_config_id")
+    inherited_provider_binding: dict = {}
     server_ids = config.get("server_ids", [])
     mcp_server_ids = config.get("mcp_server_ids", [])
     node_skill_slugs = normalise_skill_slugs(config.get("skill_slugs"))
@@ -122,6 +127,7 @@ async def execute_agent_react(
         agent_conf = await _load_owned_agent_config(owner, agent_conf_pk)
         if agent_conf is None:
             return {"status": "failed", "error": f"Agent config not found: {agent_config_id}"}
+        inherited_provider_binding = _stored_provider_binding(agent_conf.provider_binding)
         system_prompt = render_template_value(agent_conf.system_prompt, context)
         instructions = render_template_value(agent_conf.instructions, context)
         max_iterations = agent_conf.max_iterations or default_max_iterations("agent/react")
@@ -182,6 +188,15 @@ async def execute_agent_react(
         }
 
     model_preference, specific_model = resolve_agent_model_preference(config, model=model)
+    from studio.services.ai_execution_context import build_pipeline_execution_context
+
+    execution_context = await build_pipeline_execution_context(
+        run,
+        purpose="ops",
+        node_id=str(node["id"]),
+        config=config,
+        inherited_binding=inherited_provider_binding,
+    )
 
     logger.info(
         "pipeline run %s node %s agent/react start: provider=%s model=%s servers=%s mcp_servers=%s skills=%s unattended=%s",
@@ -216,6 +231,7 @@ async def execute_agent_react(
         pipeline_run_id=run.pk,
         require_all_servers=require_all_servers_enabled(config, default=False),
         execution_approval_granted=_node_execution_approval_granted(run, str(node["id"])),
+        execution_context=execution_context,
     )
     logger.info(
         "pipeline run %s node %s agent/react done: agent_run_id=%s status=%s outcome=%s report_chars=%s",
@@ -273,6 +289,7 @@ async def execute_agent_multi(
     servers = await _load_owned_servers(owner, server_ids) if server_ids else []
 
     agent_config_id = config.get("agent_config_id")
+    inherited_provider_binding: dict = {}
     instructions = ""
     if agent_config_id:
         try:
@@ -282,6 +299,7 @@ async def execute_agent_multi(
         agent_conf = await _load_owned_agent_config(owner, agent_conf_pk)
         if agent_conf is None:
             return {"status": "failed", "error": f"Agent config not found: {agent_config_id}"}
+        inherited_provider_binding = _stored_provider_binding(agent_conf.provider_binding)
         system_prompt = render_template_value(agent_conf.system_prompt, context)
         instructions = render_template_value(agent_conf.instructions, context)
         max_iterations = agent_conf.max_iterations or default_max_iterations("agent/multi")
@@ -342,6 +360,15 @@ async def execute_agent_multi(
         }
 
     model_preference, specific_model = resolve_agent_model_preference(config, model=model)
+    from studio.services.ai_execution_context import build_pipeline_execution_context
+
+    execution_context = await build_pipeline_execution_context(
+        run,
+        purpose="ops",
+        node_id=str(node["id"]),
+        config=config,
+        inherited_binding=inherited_provider_binding,
+    )
 
     agent_run = await run_pipeline_multi_agent(
         node_id=str(node["id"]),
@@ -364,6 +391,7 @@ async def execute_agent_multi(
         pipeline_run_id=run.pk,
         require_all_servers=require_all_servers_enabled(config, default=True),
         execution_approval_granted=_node_execution_approval_granted(run, str(node["id"])),
+        execution_context=execution_context,
     )
     state = map_agent_outcome_to_pipeline_state(
         outcome=getattr(agent_run, "outcome", "") or "",

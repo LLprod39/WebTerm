@@ -55,6 +55,21 @@ export const FULL_AGENT_TOOL_OPTIONS = [
   { key: "update_material_task", label: "Update material task" },
 ] as const;
 
+export const READ_ONLY_AGENT_TOOL_KEYS = new Set([
+  "open_connection",
+  "close_connection",
+  "ssh_execute",
+  "read_console",
+  "wait_for_output",
+  "report",
+  "ask_user",
+  "analyze_output",
+  "list_skills",
+  "read_skill",
+  "list_materials",
+  "read_material",
+]);
+
 export type AgentSudoPolicy = "disabled" | "ask" | "approved";
 
 export const SUDO_AGENT_OPTIONS: Array<{
@@ -92,7 +107,22 @@ export function sudoAgentOption(value: string | undefined) {
 }
 
 export function buildDefaultToolsConfig() {
+  return Object.fromEntries(
+    FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, READ_ONLY_AGENT_TOOL_KEYS.has(tool.key)]),
+  );
+}
+
+export function buildAllToolsConfig() {
   return Object.fromEntries(FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, true]));
+}
+
+export function enforceReadOnlyToolsConfig(config: Record<string, boolean>) {
+  return Object.fromEntries(
+    FULL_AGENT_TOOL_OPTIONS.map((tool) => [
+      tool.key,
+      READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) && Boolean(config[tool.key]),
+    ]),
+  );
 }
 
 export function relativeTime(iso: string | null): string {

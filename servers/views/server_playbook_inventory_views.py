@@ -19,7 +19,7 @@ from servers.views.server_playbook_serializers import _playbooks_for_user
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_inventory_preview(request):
     data = json.loads(request.body or "{}")

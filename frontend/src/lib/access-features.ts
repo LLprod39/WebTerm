@@ -16,7 +16,11 @@ export type FeatureFlag =
   | "mars"
   | "plugins"
   | "settings"
+  | "chat"
   | "orchestrator"
+  | "automation"
+  | "ai_connections_personal"
+  | "ai_connections_admin"
   | "knowledge_base";
 
 export const ACCESS_FEATURE_OPTIONS: Array<{ value: FeatureFlag; label: string }> = [
@@ -33,6 +37,10 @@ export const ACCESS_FEATURE_OPTIONS: Array<{ value: FeatureFlag; label: string }
   { value: "kubernetes", label: "Kubernetes" },
   { value: "mars", label: "MARS" },
   { value: "settings", label: "Settings" },
-  { value: "orchestrator", label: "Chat (Operator)" },
+  { value: "chat", label: "Chat" },
+  { value: "orchestrator", label: "Operator orchestration" },
+  { value: "automation", label: "Automation" },
+  { value: "ai_connections_personal", label: "AI connections (personal)" },
+  { value: "ai_connections_admin", label: "AI connections (admin)" },
   { value: "knowledge_base", label: "Knowledge Base" },
 ];

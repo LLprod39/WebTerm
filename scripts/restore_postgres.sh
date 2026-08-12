@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restore a custom-format dump created by backup_postgres.sh.
+# Restore an age-encrypted custom-format dump created by backup_postgres.sh.
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -9,6 +9,7 @@ COMPOSE_OVERRIDE_FILE="${COMPOSE_OVERRIDE_FILE:-}"
 ENV_FILE="${ENV_FILE:-$ROOT_DIR/.env.production}"
 PROJECT_NAME="${PROJECT_NAME:-mini-prod}"
 SERVICE="${POSTGRES_SERVICE:-postgres}"
+AGE_IDENTITY_FILE="${BACKUP_AGE_IDENTITY_FILE:-}"
 DRY_RUN="${RESTORE_DRY_RUN:-0}"
 CONFIRMATION="${RESTORE_CONFIRM:-}"
 
@@ -25,7 +26,19 @@ compose() {
 }
 
 if [[ -z "$DUMP_PATH" || ! -f "$DUMP_PATH" ]]; then
-  echo "Usage: $0 /path/to/webterm_YYYYMMDDTHHMMSSZ.dump" >&2
+  echo "Usage: $0 /path/to/webterm_YYYYMMDDTHHMMSSZ.dump.age" >&2
+  exit 1
+fi
+if ! command -v age >/dev/null 2>&1; then
+  echo "age is required to decrypt PostgreSQL backups" >&2
+  exit 1
+fi
+if [[ -z "$AGE_IDENTITY_FILE" || ! -f "$AGE_IDENTITY_FILE" ]]; then
+  echo "BACKUP_AGE_IDENTITY_FILE must reference the protected age identity file" >&2
+  exit 1
+fi
+if find "$AGE_IDENTITY_FILE" -prune -perm /077 -print -quit | grep -q .; then
+  echo "BACKUP_AGE_IDENTITY_FILE must not be accessible by group or other users" >&2
   exit 1
 fi
 if [[ ! -f "$COMPOSE_FILE" || ! -f "$ENV_FILE" ]]; then
@@ -43,14 +56,17 @@ if [[ -z "$container_id" ]]; then
   exit 1
 fi
 
-echo "Validating PostgreSQL archive: $DUMP_PATH"
-if [[ -f "$DUMP_PATH.sha256" ]]; then
-  (
-    cd "$(dirname "$DUMP_PATH")"
-    sha256sum --check "$(basename "$DUMP_PATH").sha256"
-  )
+echo "Validating encrypted PostgreSQL archive"
+if [[ ! -f "$DUMP_PATH.sha256" ]]; then
+  echo "Encrypted backup checksum file is required" >&2
+  exit 1
 fi
-cat "$DUMP_PATH" | compose exec -T "$SERVICE" pg_restore --list >/dev/null
+(
+  cd "$(dirname "$DUMP_PATH")"
+  sha256sum --check "$(basename "$DUMP_PATH").sha256"
+)
+age --decrypt --identity "$AGE_IDENTITY_FILE" "$DUMP_PATH" \
+  | compose exec -T "$SERVICE" pg_restore --list >/dev/null
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "Archive is valid; dry run did not change the database"
   exit 0
@@ -74,6 +90,7 @@ compose exec -T "$SERVICE" sh -ec '
 '
 
 echo "Restoring the archive into PostgreSQL service $SERVICE"
-cat "$DUMP_PATH" | compose exec -T "$SERVICE" sh -ec \
+age --decrypt --identity "$AGE_IDENTITY_FILE" "$DUMP_PATH" \
+  | compose exec -T "$SERVICE" sh -ec \
   'exec pg_restore --exit-on-error --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"'
 echo "Restore finished"

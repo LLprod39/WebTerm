@@ -28,6 +28,18 @@ from servers.agents.agent_tools_materials import (
     tool_update_material_task,
 )
 
+DEFAULT_READ_ONLY_AGENT_TOOLS = (
+    "read_console",
+    "wait_for_output",
+    "report",
+    "ask_user",
+    "analyze_output",
+    "list_skills",
+    "read_skill",
+    "list_materials",
+    "read_material",
+)
+
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
@@ -179,7 +191,13 @@ async def tool_analyze_output(session: AgentSessionManager, *, text: str, questi
     provider = LLMProvider()
     chunks = []
     try:
-        async for chunk in provider.stream_chat(prompt, model="auto"):
+        context_factory = getattr(session, "llm_execution_context_provider", None)
+        execution_context = await context_factory("ops") if context_factory else None
+        async for chunk in provider.stream_chat(
+            prompt,
+            model="auto",
+            execution_context=execution_context,
+        ):
             chunks.append(chunk)
         return ToolResult(True, "".join(chunks))
     except Exception as exc:
@@ -421,7 +439,7 @@ def get_enabled_tools(tools_config: dict) -> list[str]:
     """Return list of enabled tool names based on agent config."""
     all_tools = get_all_agent_tools()
     if not tools_config:
-        return list(all_tools.keys())
+        return [name for name in DEFAULT_READ_ONLY_AGENT_TOOLS if name in all_tools]
     return [name for name in all_tools if tools_config.get(name, False)]
 
 

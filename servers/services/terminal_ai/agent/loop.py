@@ -90,10 +90,10 @@ class AgentContext:
     emit: Callable[[dict[str, Any]], Awaitable[None]] | None = None
     prompt_user: Callable[[UserPromptRequest], Awaitable[str | None]] | None = None
     open_target: Callable[[str], Awaitable[Any | None]] | None = None
+    execution_context_factory: Callable[[str], Awaitable[Any]] | None = None
 
     # External stop signal set by the consumer when the user types `/stop`.
     stop_requested: Callable[[], bool] | None = None
-
     # Optional rules/context block from the server's GlobalServerRules.
     rules_context: str = ""
 
@@ -114,6 +114,12 @@ class AgentContext:
     dry_run: bool = False
     sudo_policy: str = "disabled"
     compact_after_turns: int = NOVA_COMPACT_AFTER_TURNS
+
+
+async def _execution_context_for_iteration(ctx: AgentContext):
+    if ctx.execution_context_factory is None:
+        return None
+    return await ctx.execution_context_factory("terminal_agent")
 
 
 # ---------------------------------------------------------------------------
@@ -195,10 +201,12 @@ async def run_agent_loop(
             )
 
             try:
+                execution_context = await _execution_context_for_iteration(ctx)
                 step = await _llm_next_step_with_retry(
                     system_prompt,
                     user_prompt,
                     timeout_sec=ctx.iteration_timeout_sec,
+                    execution_context=execution_context,
                 )
             except TimeoutError:
                 stopped = True

@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly WebTerm encrypted PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=webterm-postgres-backup.service
+
+[Install]
+WantedBy=timers.target

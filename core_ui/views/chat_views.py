@@ -27,11 +27,26 @@ from core_ui.views.chat_helpers import (
     _try_server_command_by_name,
 )
 from core_ui.views.ide_views import _resolve_ide_workspace
-from core_ui.views.runtime import get_unified_orchestrator
+from core_ui.views.runtime import get_unified_orchestrator, rag_backend_is_configured
+from servers.agents.agent_pilot_policy import user_can_automate
+
+
+def _validate_chat_payload(*, user_message: str, use_rag: bool, workspace_param: str):
+    if not user_message:
+        return JsonResponse({"error": "Empty message"}, status=400)
+    if use_rag and not workspace_param and not rag_backend_is_configured():
+        return JsonResponse(
+            {
+                "error": "RAG is disabled: configure a separate embedding backend first",
+                "code": "rag_embedding_backend_not_configured",
+            },
+            status=409,
+        )
+    return None
 
 
 @login_required
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["GET"])
 def api_chats_list(request):
     """List current user's chat sessions."""
@@ -77,7 +92,7 @@ def api_chats_list(request):
 
 
 @login_required
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_chats_create(request):
     """Create a new chat session."""
@@ -94,7 +109,7 @@ def api_chats_create(request):
 
 
 @login_required
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["GET"])
 def api_chat_detail(request, chat_id):
     """Return one chat session with messages."""
@@ -121,7 +136,7 @@ def api_chat_detail(request, chat_id):
 
 
 @async_login_required
-@async_require_feature("orchestrator")
+@async_require_feature("chat")
 async def chat_api(request):
     """
     Stream assistant chat responses.
@@ -136,17 +151,45 @@ async def chat_api(request):
         user_message = data.get("message", "")
         model = data.get("model", model_manager.config.default_provider)
         specific_model = data.get("specific_model")
-        use_rag = data.get("use_rag", True)
+        use_rag = data.get("use_rag", False)
+        if not isinstance(use_rag, bool):
+            return JsonResponse({"error": "use_rag must be a boolean"}, status=400)
         chat_id = data.get("chat_id")
         task_context_id = data.get("task_context_id")
-        workspace_param = data.get("workspace", "").strip()
-
-        if not user_message:
-            return JsonResponse({"error": "Empty message"}, status=400)
+        workspace_raw = data.get("workspace", "")
+        if not isinstance(workspace_raw, str):
+            return JsonResponse({"error": "workspace must be a string"}, status=400)
+        workspace_param = workspace_raw.strip()
+        approve_mcps = data.get("approve_mcps", False)
+        if not isinstance(approve_mcps, bool):
+            return JsonResponse({"error": "approve_mcps must be a boolean"}, status=400)
 
         user_id = await sync_to_async(lambda r: r.user.id if getattr(r.user, "is_authenticated", False) else None)(
             request
         )
+        automation_allowed = await sync_to_async(
+            lambda: user_can_automate(request.user, request=request),
+            thread_sensitive=True,
+        )()
+        effective_model = (model_manager.config.default_provider or "cursor") if model == "auto" else model
+        requested_mode = str(data.get("mode") or "chat").strip().lower()
+        if not automation_allowed and (
+            workspace_param or effective_model in {"cursor", "auto"} or requested_mode != "chat" or approve_mcps
+        ):
+            return JsonResponse(
+                {
+                    "error": "Workspace, Cursor agent mode, and MCP approval require automation access",
+                    "code": "automation_required",
+                },
+                status=403,
+            )
+        validation_error = _validate_chat_payload(
+            user_message=user_message,
+            use_rag=use_rag,
+            workspace_param=workspace_param,
+        )
+        if validation_error is not None:
+            return validation_error
         if user_id:
             await sync_to_async(log_user_activity, thread_sensitive=True)(
                 user_id=user_id,
@@ -154,14 +197,15 @@ async def chat_api(request):
                 category="assistant",
                 action="chat_request",
                 status=UserActivityLog.STATUS_SUCCESS,
-                description=user_message[:400],
+                description="Chat request accepted",
                 entity_type="chat_session",
                 entity_id=str(chat_id or ""),
                 metadata={
                     "model": model,
                     "specific_model": specific_model or "",
                     "use_rag": bool(use_rag),
-                    "workspace": workspace_param or "",
+                    "message_length": len(user_message),
+                    "workspace_requested": bool(workspace_param),
                 },
             )
 
@@ -181,8 +225,6 @@ async def chat_api(request):
             accumulated = []
             created_session_id = None
             try:
-                effective_model = model_manager.config.default_provider or "cursor" if model == "auto" else model
-
                 if effective_model in ("cursor", "auto"):
                     if not session and user_id:
                         session = await asyncio.to_thread(
@@ -319,7 +361,7 @@ def _save_chat_exchange(session, user_message: str, assistant_message: str) -> N
 
 
 @login_required
-@require_feature("orchestrator")
+@require_feature("chat")
 @require_http_methods(["POST"])
 def api_clear_history(request):
     """Clear conversation history via UnifiedOrchestrator."""

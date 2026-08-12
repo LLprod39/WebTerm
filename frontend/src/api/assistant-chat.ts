@@ -69,6 +69,7 @@ export interface AssistantChatSession {
   kind?: string;
   pinned_context?: Record<string, unknown>;
   total_usage?: Record<string, unknown>;
+  provider_binding?: import("./aiProviders").ProviderBinding;
   created_at: string;
   updated_at: string;
   messages?: AssistantChatMessage[];
@@ -149,6 +150,7 @@ export function updateAssistantChat(
     title?: string;
     kind?: string;
     pinned_context?: Record<string, unknown>;
+    provider_binding?: import("./aiProviders").ProviderBinding | Record<string, never>;
   },
 ) {
   return apiFetch<AssistantChatSession>(`/api/assistant/chats/${chatId}/`, {
@@ -163,17 +165,21 @@ export function deleteAssistantChat(chatId: number) {
   });
 }
 
-export function sendAssistantChatMessage(chatId: number, message: string) {
+export function sendAssistantChatMessage(
+  chatId: number,
+  message: string,
+  providerBinding?: import("./aiProviders").ProviderBinding,
+) {
   return apiFetch<AssistantChatTurnResponse>(`/api/assistant/chats/${chatId}/message/`, {
     method: "POST",
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, ...(providerBinding ? { provider_binding: providerBinding } : {}) }),
   });
 }
 
-export function startAssistantChat(message: string) {
+export function startAssistantChat(message: string, providerBinding?: import("./aiProviders").ProviderBinding) {
   return apiFetch<AssistantChatTurnResponse>("/api/assistant/chats/message/", {
     method: "POST",
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, ...(providerBinding ? { provider_binding: providerBinding } : {}) }),
   });
 }
 

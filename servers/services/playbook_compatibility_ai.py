@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from hashlib import sha256
 from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
+from app.ai_runtime import LLMExecutionContext
 from app.core.llm import LLMProvider
 from servers.services.playbook_compatibility_analysis import (
     analyze_playbook_compatibility,
@@ -76,7 +78,11 @@ def _extract_json(raw: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
-async def _call_llm(prompt: str, system_prompt: str) -> str:
+async def _call_llm(
+    prompt: str,
+    system_prompt: str,
+    execution_context: LLMExecutionContext,
+) -> str:
     provider = LLMProvider()
     chunks: list[str] = []
     async for chunk in provider.stream_chat(
@@ -85,6 +91,7 @@ async def _call_llm(prompt: str, system_prompt: str) -> str:
         purpose="chat",
         system_prompt=system_prompt,
         json_mode=True,
+        execution_context=execution_context,
     ):
         chunks.append(chunk)
     return "".join(chunks)
@@ -96,6 +103,8 @@ def adapt_playbook_with_ai(
     bindings: dict[str, Any] | None = None,
     target_servers: list[Any] | None = None,
     user_instruction: str = "",
+    user=None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report = analyze_playbook_compatibility(
         source_yaml,
@@ -162,9 +171,22 @@ Hard constraints:
         },
         ensure_ascii=False,
     )
+    from core_ui.services.ai_execution_context import active_project_for_execution, build_execution_context
+
+    project = active_project_for_execution(user) if user is not None else None
+    actor_user_id = user.pk if user is not None else None
+    execution_context = build_execution_context(
+        actor_user_id=actor_user_id,
+        project_id=project.pk if project else None,
+        purpose="chat",
+        source_kind="playbook_adaptation",
+        source_id=f"user:{actor_user_id}" if actor_user_id else "internal",
+        explicit_binding=provider_binding,
+        idempotency_key=(f"playbook-adapt:{actor_user_id or 'internal'}:{sha256(prompt.encode('utf-8')).hexdigest()}"),
+    )
     loop = asyncio.new_event_loop()
     try:
-        raw = loop.run_until_complete(_call_llm(prompt, system_prompt))
+        raw = loop.run_until_complete(_call_llm(prompt, system_prompt, execution_context))
     except Exception as exc:
         raise PlaybookAdaptationError(f"LLM adaptation failed: {exc}") from exc
     finally:

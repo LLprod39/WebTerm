@@ -3,6 +3,7 @@ Authentication and frontend redirect views.
 """
 
 import json
+import os
 
 from django.conf import settings
 from django.contrib.auth import authenticate
@@ -90,6 +91,9 @@ def _auth_user_payload(user, *, request=None):
     access = build_user_access_payload(user, request=request)
     features = access["effective_permissions"]
     feature_payload = {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()}
+    if os.getenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "").strip().lower() not in {"1", "true", "yes"}:
+        feature_payload["ai_connections_personal"] = False
+        feature_payload["ai_connections_admin"] = False
     from plugin_marketplace.release_profile import plugin_marketplace_enabled
 
     # Product release capability, not a grantable database permission.  Plugin

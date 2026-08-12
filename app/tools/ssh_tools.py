@@ -24,6 +24,12 @@ from app.tools.ssh_host_key_provider import (
     parse_host_port_value,
     verified_known_hosts_for_host,
 )
+from servers.services.pilot_destination_policy import (
+    PilotDestinationInvalid,
+    validate_pilot_ssh_destination,
+    validated_pilot_http_proxy_tunnel,
+    validated_pilot_network_tunnel,
+)
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
@@ -77,11 +83,14 @@ class SSHConnectionManager:
             connection ID
         """
         normalized_host, normalized_port = parse_host_port_value(host, port)
+        validate_pilot_ssh_destination(normalized_host, normalized_port)
         conn_id = f"{username}@{normalized_host}:{normalized_port}:{secrets.token_hex(4)}"
 
         try:
             logger.info(f"Connecting to {conn_id}...")
             effective_network_config = network_config or getattr(server, "network_config", None) or {}
+            if not isinstance(effective_network_config, dict):
+                raise PilotDestinationInvalid("network_config must be an object")
 
             if server is not None:
                 known_hosts = await ensure_server_known_hosts(server)
@@ -107,27 +116,20 @@ class SSHConnectionManager:
                 nc = effective_network_config
 
                 # Bastion/Jump host
-                bastion = nc.get("network", {}).get("bastion_host")
+                bastion = validated_pilot_network_tunnel(nc)
                 if bastion:
-                    # Format: host:port или host
-                    if ":" in bastion:
-                        jump_host, jump_port = bastion.split(":")
-                        options["jump_host"] = (jump_host, int(jump_port))
-                    else:
-                        options["jump_host"] = bastion
-                    logger.info(f"Using bastion host: {bastion}")
+                    options["tunnel"] = bastion
+                    logger.info("Using validated bastion host")
 
                 # Proxy command (для работы через HTTP прокси)
                 proxy = nc.get("proxy", {}).get("http_proxy")
                 if proxy:
-                    # Используем ProxyCommand через netcat
-                    # Формат прокси: http://proxy.corp.com:8080
-                    proxy_url = proxy.replace("http://", "").replace("https://", "")
-                    if ":" in proxy_url:
-                        proxy_host, proxy_port = proxy_url.split(":")
-                        # ProxyCommand: nc -X connect -x proxy:port %h %p
-                        options["tunnel"] = (proxy_host, int(proxy_port))
-                    logger.info(f"Using proxy: {proxy}")
+                    if bastion:
+                        raise PilotDestinationInvalid("Configure either an SSH bastion or an HTTP proxy, not both")
+                    proxy_endpoint = validated_pilot_http_proxy_tunnel(proxy)
+                    if proxy_endpoint:
+                        options["tunnel"] = proxy_endpoint
+                    logger.info("Using validated SSH proxy")
 
                 # Environment variables (для команд на удалённом сервере)
                 # Сохраняем для использования в execute

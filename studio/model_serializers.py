@@ -15,6 +15,7 @@ def agent_config_to_dict(agent) -> dict:
         "system_prompt": agent.system_prompt,
         "instructions": agent.instructions,
         "model": agent.model,
+        "provider_binding": dict(agent.provider_binding or {}),
         "max_iterations": agent.max_iterations,
         "allowed_tools": agent.allowed_tools,
         "sudo_policy": agent.sudo_policy,
@@ -81,6 +82,7 @@ def pipeline_to_list_dict(pipeline) -> dict:
         "node_count": len(pipeline.nodes) if pipeline.nodes else 0,
         "created_at": pipeline.created_at.isoformat(),
         "updated_at": pipeline.updated_at.isoformat(),
+        "provider_binding": dict(pipeline.provider_binding or {}),
         "trigger_summary": pipeline.get_trigger_summary(),
         "last_run": {
             "id": last_run.pk,
@@ -130,6 +132,8 @@ def pipeline_run_to_dict(run) -> dict:
         "trigger_node_id": trigger.node_id if trigger else run.entry_node_id,
         "can_resume": run.status in {run.STATUS_FAILED, run.STATUS_STOPPED},
         "resume_confirmation_required": list(trigger_data.get("resume_confirmation_required") or []),
+        "provider_binding_snapshot": dict(run.provider_binding_snapshot or {}),
+        "provider_session_id": run.provider_session_id or "",
     }
 
 

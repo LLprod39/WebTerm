@@ -40,6 +40,20 @@ from servers.services.terminal_ai.agent.tools import (
 )
 from tests.agent_tool_fakes import FakeRunResult, FakeSSHConn, primary_target, tool_context
 
+
+@pytest.fixture(autouse=True)
+def _stub_live_terminal_ai_policy_for_unit_tools(monkeypatch):
+    """These pure tool tests exercise mechanics; policy integration has DB-backed coverage."""
+    monkeypatch.setattr(
+        "servers.services.terminal_ai.agent.tools.shell.is_terminal_ai_read_only_for_user",
+        lambda _server_id, _user_id: False,
+    )
+    monkeypatch.setattr(
+        "servers.services.terminal_ai.agent.tools.files.is_terminal_ai_read_only_for_user",
+        lambda _server_id, _user_id: False,
+    )
+
+
 # ---------------------------------------------------------------------------
 # ShellTool
 # ---------------------------------------------------------------------------

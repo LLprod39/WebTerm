@@ -1,6 +1,7 @@
 import type { TerminalConnectionStatus } from "@/components/terminal/XTerminal";
 import type { AiMessage } from "@/components/terminal/ai-types";
-import type { FrontendServer } from "@/lib/api";
+import type { AuthUser, FrontendServer } from "@/lib/api";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 
 export interface Tab {
   id: string;
@@ -39,6 +40,15 @@ export function mapStatus(status: TerminalConnectionStatus): Tab["status"] {
 
 export function findServer(servers: FrontendServer[], id: number) {
   return servers.find((server) => server.id === id);
+}
+
+export function isTerminalReadOnlyMode(server: FrontendServer, user: AuthUser | null | undefined) {
+  if (server.ai_read_only === true) return true;
+  // Keep the disclosure fail-closed while the session is loading or when the
+  // auth endpoint is temporarily unavailable. Only a positively identified
+  // pilot operator may receive the unrestricted terminal UX.
+  if (!user) return true;
+  return user.access_profile !== "pilot_operator" || !hasFeatureAccess(user, "automation");
 }
 
 function getNextSessionNumber(tabs: Tab[], serverId: number) {

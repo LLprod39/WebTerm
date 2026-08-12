@@ -73,6 +73,13 @@ def test_agent_policy_preserves_compound_read_only_commands(mode):
         "ip link set eth0 down",
         "journalctl --vacuum-time=1s",
         "less +!touch /tmp/audit_probe /etc/hosts",
+        "curl -I --libcurl /tmp/replay.c https://example.test",
+        "curl --head --trace /tmp/curl.trace https://example.test",
+        "curl --head --trace-ascii=/tmp/curl.trace https://example.test",
+        "curl -I --cookie-jar /tmp/cookies https://example.test",
+        "curl -Ic /tmp/cookies https://example.test",
+        "nginx -t -s reload",
+        "nginx -t -sstop",
     ],
 )
 def test_agent_policy_rejects_mutating_options_on_read_like_commands(command):

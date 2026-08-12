@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type { BackgroundWorkerStateRecord } from "@/api/server-memory";
+import type { ProviderBinding } from "@/api/aiProviders";
 import type {
   AgentExecutionReadiness,
   AgentInputArtifact,
@@ -104,6 +105,7 @@ export async function createAgent(payload: {
   report_delivery?: AgentReportDelivery;
   session_timeout_seconds?: number;
   max_connections?: number;
+  provider_binding?: ProviderBinding | Record<string, never>;
 }) {
   return apiFetch<{ success: boolean; id: number }>("/servers/api/agents/create/", {
     method: "POST",
@@ -122,14 +124,17 @@ export async function deleteAgent(agentId: number) {
   return apiFetch<{ success: boolean }>(`/servers/api/agents/${agentId}/delete/`, { method: "POST" });
 }
 
-export async function runAgent(agentId: number, serverId?: number) {
+export async function runAgent(agentId: number, serverId?: number, providerBinding?: ProviderBinding) {
   // Launch only queues the run (execution plane). Keep a modest timeout so a
   // stuck HTTP thread cannot pin the UI for minutes.
   return apiFetch<{ success: boolean; runs: AgentRunResult[]; run_id?: number; status?: string }>(
     `/servers/api/agents/${agentId}/run/`,
     {
       method: "POST",
-      body: JSON.stringify(serverId ? { server_id: serverId } : {}),
+      body: JSON.stringify({
+        ...(serverId ? { server_id: serverId } : {}),
+        ...(providerBinding ? { provider_binding: providerBinding } : {}),
+      }),
       timeoutMs: 60_000,
     },
   );

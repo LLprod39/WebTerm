@@ -41,6 +41,7 @@ from core_ui.services.operator_loop_prompt import (
     build_operator_system_prompt,
 )
 from core_ui.services.operator_loop_tool_cycle import process_tool_calls
+from core_ui.services.operator_provider_context import build_operator_iteration_context
 
 if TYPE_CHECKING:
     from core_ui.services.operator_session import (
@@ -145,11 +146,18 @@ async def run_operator_loop(
         await _emit(on_event, {"type": "thinking", "iteration": iteration})
 
         try:
+            execution_context = await build_operator_iteration_context(
+                session=session,
+                turn=turn,
+                user=user,
+                iteration=iteration,
+            )
             async for event in llm.stream_chat_tools(
                 messages=messages,
                 tools=tools,
                 purpose="orchestrator",
                 system_prompt=system_prompt,
+                execution_context=execution_context,
             ):
                 etype = event.get("type")
                 if etype == "text_delta":

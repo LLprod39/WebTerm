@@ -2,7 +2,20 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from app.core.llm_provider_resolution import RuntimeProviderKeys, resolve_stream_provider
+import pytest
+
+from app.ai_runtime import (
+    ExecutionMode,
+    LLMExecutionContext,
+    ProviderBinding,
+    ProviderRouteUnavailableError,
+    ProviderRuntimeError,
+)
+from app.core.llm_provider_resolution import (
+    RuntimeProviderKeys,
+    apply_execution_context_binding,
+    resolve_stream_provider,
+)
 
 
 class _ModelManager:
@@ -16,7 +29,7 @@ class _ModelManager:
         return self._provider, self._model
 
 
-def test_resolve_stream_provider_uses_preferred_key_even_when_disabled():
+def test_resolve_stream_provider_rejects_preferred_provider_when_disabled():
     manager = _ModelManager(
         "openai",
         "gpt-test",
@@ -30,21 +43,18 @@ def test_resolve_stream_provider_uses_preferred_key_even_when_disabled():
     )
     keys = RuntimeProviderKeys(openai="openai-key")
 
-    provider, model = resolve_stream_provider(
-        requested_provider="auto",
-        requested_specific_model=None,
-        purpose="agent",
-        model_manager=manager,
-        keys=keys,
-        ollama_base_url="http://127.0.0.1:11434",
-    )
-
-    assert provider == "openai"
-    assert model == "gpt-test"
+    with pytest.raises(ProviderRouteUnavailableError):
+        resolve_stream_provider(
+            requested_provider="auto",
+            requested_specific_model=None,
+            purpose="agent",
+            model_manager=manager,
+            keys=keys,
+            ollama_base_url="http://127.0.0.1:11434",
+        )
 
 
-def test_resolve_stream_provider_falls_back_to_first_enabled_provider():
-    warnings: list[str] = []
+def test_resolve_stream_provider_does_not_fall_back_to_another_provider():
     manager = _ModelManager(
         "claude",
         "claude-test",
@@ -58,19 +68,17 @@ def test_resolve_stream_provider_falls_back_to_first_enabled_provider():
     )
     keys = RuntimeProviderKeys(openai="openai-key", grok="grok-key")
 
-    provider, model = resolve_stream_provider(
-        requested_provider="",
-        requested_specific_model="manual-model",
-        purpose="agent",
-        model_manager=manager,
-        keys=keys,
-        ollama_base_url="http://127.0.0.1:11434",
-        warn=warnings.append,
-    )
+    with pytest.raises(ProviderRouteUnavailableError) as exc_info:
+        resolve_stream_provider(
+            requested_provider="",
+            requested_specific_model="manual-model",
+            purpose="agent",
+            model_manager=manager,
+            keys=keys,
+            ollama_base_url="http://127.0.0.1:11434",
+        )
 
-    assert provider == "openai"
-    assert model == "manual-model"
-    assert warnings == ["[agent] provider 'claude' is disabled/unconfigured, falling back to 'openai'"]
+    assert exc_info.value.details["target_id"] == "claude_api"
 
 
 def test_resolve_stream_provider_returns_requested_provider_unchanged():
@@ -87,3 +95,48 @@ def test_resolve_stream_provider_returns_requested_provider_unchanged():
 
     assert provider == "gemini"
     assert model == "gemini-test"
+
+
+def test_resolve_stream_provider_accepts_canonical_api_target():
+    manager = _ModelManager("openai", "gpt-test", SimpleNamespace())
+    provider, model = resolve_stream_provider(
+        requested_provider="openai_api",
+        requested_specific_model="gpt-explicit",
+        purpose="agent",
+        model_manager=manager,
+        keys=RuntimeProviderKeys(),
+        ollama_base_url="",
+    )
+    assert (provider, model) == ("openai", "gpt-explicit")
+
+
+def test_subscription_target_never_crosses_into_api_transport():
+    manager = _ModelManager("openai", "gpt-test", SimpleNamespace())
+    with pytest.raises(ProviderRuntimeError) as exc_info:
+        resolve_stream_provider(
+            requested_provider="codex_subscription",
+            requested_specific_model=None,
+            purpose="agent",
+            model_manager=manager,
+            keys=RuntimeProviderKeys(openai="api-key"),
+            ollama_base_url="",
+        )
+    assert exc_info.value.code == "provider_transport_unavailable"
+
+
+def test_execution_context_binding_overrides_legacy_model_arguments():
+    context = LLMExecutionContext(
+        actor_user_id=1,
+        project_id=None,
+        purpose="assistant",
+        source_kind="chat_session",
+        source_id="4",
+        mode=ExecutionMode.INTERACTIVE,
+        binding=ProviderBinding("grok_subscription", connection_id=7, model_id="grok-code-fast"),
+    )
+    provider, model = apply_execution_context_binding(
+        execution_context=context,
+        requested_provider="openai",
+        requested_specific_model="gpt-old",
+    )
+    assert (provider, model) == ("grok_subscription", "grok-code-fast")

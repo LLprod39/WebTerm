@@ -61,6 +61,7 @@ class TerminalAiToolOperations:
                 exit_code=exit_code,
                 user_question=question,
                 semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
+                execution_context=await self._terminal_execution_context("terminal_chat"),
             )
             await self._send_ai_event(terminal_events.ai_explanation(item_id=cmd_id, command=cmd, explanation=text))
         except Exception as exc:
@@ -159,7 +160,8 @@ class TerminalAiToolOperations:
             allowlist_patterns=allowlist_patterns,
             confirm_dangerous_commands=confirm_dangerous_commands,
             exec_mode=exec_mode,
-            read_only=bool(getattr(getattr(self, "server", None), "ai_read_only", False)),
+            read_only=bool(getattr(getattr(self, "server", None), "ai_read_only", False))
+            or not self._automation_allowed,
         )
 
     def _legacy_direct_exec_enabled(self) -> bool:

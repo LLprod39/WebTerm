@@ -8,6 +8,7 @@ import os
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 from loguru import logger
 
 from app.execution_policy import build_execution_policy_audit_metadata
@@ -24,6 +25,7 @@ from app.tools.server_tool_gateway import (
     save_tool_knowledge,
 )
 from app.tools.ssh_tools import ssh_manager
+from servers.agents.agent_pilot_policy import user_can_automate
 
 
 def _get_user_id(kwargs: dict[str, Any]) -> int | None:
@@ -56,6 +58,11 @@ def _get_target_server(kwargs: dict[str, Any]) -> tuple[int | None, str | None]:
         target_server_name = os.environ.get("WEU_TARGET_SERVER_NAME")
 
     return target_server_id, target_server_name
+
+
+def _user_can_automate(user_id: int) -> bool:
+    user = get_user_model().objects.filter(pk=user_id, is_active=True).first()
+    return bool(user and user_can_automate(user))
 
 
 class ServersListTool(BaseTool):
@@ -135,10 +142,34 @@ class ServerExecuteTool(BaseTool):
         ctx = kwargs.get("_context") or {}
         server_name_or_id = (kwargs.get("server_name_or_id") or "").strip()
         command = (kwargs.get("command") or "").strip()
-        allow_destructive = bool(kwargs.get("allow_destructive") or ctx.get("allow_destructive"))
+        if "allow_destructive" in kwargs:
+            raw_allow_destructive = kwargs.get("allow_destructive")
+        else:
+            raw_allow_destructive = ctx.get("allow_destructive", False)
+        if not isinstance(raw_allow_destructive, bool):
+            return "allow_destructive must be a boolean."
+        allow_destructive = raw_allow_destructive
 
         if not server_name_or_id or not command:
             return "Нужны server_name_or_id и command."
+        automation_allowed = await sync_to_async(_user_can_automate, thread_sensitive=True)(int(user_id))
+        if not automation_allowed and (allow_destructive or not is_read_only_command(command)):
+            await log_tool_user_activity(
+                user_id=user_id,
+                category="terminal",
+                action="server_tool_execute",
+                status="error",
+                description=command[:4000],
+                entity_type="server",
+                entity_id=str(server_name_or_id),
+                entity_name=str(server_name_or_id),
+                metadata={
+                    "tool": "server_execute",
+                    "blocked": True,
+                    "reason": "automation_capability_required",
+                },
+            )
+            return "Для pilot-пользователя разрешены только классифицированные read-only команды."
         command_risk = evaluate_command_safety(command)
         policy_metadata = build_execution_policy_audit_metadata(
             tool_name="server_execute",

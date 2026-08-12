@@ -1,0 +1,25 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: webterm-pilot
+
+rule_files:
+  - /etc/prometheus/prometheus-alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [alertmanager:9093]
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [prometheus:9090]
+  - job_name: webterm
+    metrics_path: /metrics
+    static_configs:
+      - targets: [backend:9000]
+  - job_name: otel-collector
+    static_configs:
+      - targets: [otel-collector:9464]

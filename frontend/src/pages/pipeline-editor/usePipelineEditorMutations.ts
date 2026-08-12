@@ -3,7 +3,7 @@ import type { NavigateFunction } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { Edge, Node } from "@xyflow/react";
 
-import type { PipelineDetail, PipelineEdge, PipelineNode, PipelineRun } from "@/lib/api";
+import type { PipelineDetail, PipelineEdge, PipelineNode, PipelineRun, ProviderBinding } from "@/lib/api";
 import { studioPipelines } from "@/lib/api";
 
 import { localize } from "./presentation";
@@ -15,6 +15,7 @@ export function usePipelineEditorMutations({
   lang,
   navigate,
   pipelineId,
+  providerBinding,
   resetRunDialog,
   setActiveRunId,
   setEdges,
@@ -31,6 +32,7 @@ export function usePipelineEditorMutations({
   lang: "en" | "ru";
   navigate: NavigateFunction;
   pipelineId: number | null;
+  providerBinding: ProviderBinding | null;
   resetRunDialog: () => void;
   setActiveRunId: (runId: number | null) => void;
   setEdges: Dispatch<SetStateAction<Edge[]>>;
@@ -47,10 +49,10 @@ export function usePipelineEditorMutations({
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
-    mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string }) =>
+    mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string; provider_binding?: ProviderBinding | Record<string, never> }) =>
       pipelineId
-        ? studioPipelines.update(pipelineId, data)
-        : studioPipelines.create({ ...data, icon: "W" }),
+        ? studioPipelines.update(pipelineId, { ...data, provider_binding: data.provider_binding ?? providerBinding ?? {} })
+        : studioPipelines.create({ ...data, provider_binding: data.provider_binding ?? providerBinding ?? {}, icon: "W" }),
     onSuccess: (pipeline: PipelineDetail) => {
       queryClient.setQueryData(["studio", "pipeline", pipeline.id], pipeline);
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });

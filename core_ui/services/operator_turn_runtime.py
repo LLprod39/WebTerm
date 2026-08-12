@@ -314,6 +314,7 @@ async def _run_message_turn(
     user,
     message: str,
     thinking: str | None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> None:
     # No explicit per-turn choice → pick a tier by intent (fast for simple asks).
     effective_thinking = thinking or classify_turn_thinking(message)
@@ -326,7 +327,13 @@ async def _run_message_turn(
             await broadcast_operator_event(chat_id, event)
 
         work_task = asyncio.create_task(
-            handle_operator_message(session, user, message, on_event=on_event),
+            handle_operator_message(
+                session,
+                user,
+                message,
+                on_event=on_event,
+                provider_binding=provider_binding,
+            ),
             name=f"operator-work-{chat_id}",
         )
 
@@ -460,6 +467,7 @@ async def start_message_turn(
     user,
     message: str,
     thinking: Any = None,
+    provider_binding: dict[str, Any] | None = None,
 ) -> bool:
     """Schedule a message turn. Returns False if chat already has a running task."""
     chat_id = int(chat_id)
@@ -470,6 +478,7 @@ async def start_message_turn(
         session=session,
         message=message,
         thinking=mode,
+        provider_binding=provider_binding,
     )
     return dispatch is not None
 
@@ -506,6 +515,7 @@ async def run_claimed_operator_dispatch(dispatch: OperatorTurnDispatch) -> None:
             user=dispatch.session.user,
             message=str(payload.get("message") or ""),
             thinking=_normalize_thinking(payload.get("thinking")),
+            provider_binding=payload.get("provider_binding"),
         )
         return
     if dispatch.kind == OperatorTurnDispatch.KIND_ACTION and dispatch.action is not None:

@@ -9,8 +9,16 @@ import pytest
 def workspace_users(db):
     from django.contrib.auth.models import User
 
+    from core_ui.views.access_views import _apply_access_profile
+
     owner = User.objects.create_user(username="workspace-owner", password="x")
     teammate = User.objects.create_user(username="workspace-teammate", password="x")
+    # Workspace tests exercise authoring, sharing, validation, and execution.
+    # In the restricted pilot those are automation capabilities, so the test
+    # principals must carry the exact operator profile rather than an ad-hoc
+    # feature grant (which is deliberately rejected by the server boundary).
+    _apply_access_profile(owner, "pilot_operator")
+    _apply_access_profile(teammate, "pilot_operator")
     return owner, teammate
 
 

@@ -3,7 +3,9 @@ from __future__ import annotations
 from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES, get_agent_run_limit_error
+from core_ui.activity import log_user_activity
 from servers.agents.agent_launch import launch_queued_agent_run
+from servers.agents.agent_pilot_policy import pilot_agent_policy_violations_for_agent
 from servers.agents.agent_run_report import record_run_event_and_refresh_report
 from servers.agents.agent_schedule import is_agent_due_by_schedule
 from servers.models import AgentRun, Server, ServerAgent
@@ -42,6 +44,7 @@ def dispatch_scheduled_agents(
             "no_servers": 0,
             "active_run": 0,
             "limit": 0,
+            "pilot_policy": 0,
             "launch_rejected": 0,
             "error": 0,
         },
@@ -62,6 +65,34 @@ def dispatch_scheduled_agents(
             summary["skip_reasons"]["no_servers"] += 1
             continue
 
+        policy_violations = pilot_agent_policy_violations_for_agent(
+            user=agent.user,
+            agent=agent,
+            servers=list(server_qs),
+        )
+        if policy_violations:
+            summary["skipped"] += 1
+            summary["skip_reasons"]["pilot_policy"] += 1
+            summary["errors"].append(
+                {
+                    "agent_id": agent.id,
+                    "agent_name": agent.name,
+                    "error": "Agent configuration violates restricted pilot policy",
+                }
+            )
+            log_user_activity(
+                user=agent.user,
+                category="agent",
+                action="pilot_policy_denied",
+                status="warning",
+                description="Scheduled agent launch denied by restricted pilot safety policy",
+                entity_type="agent",
+                entity_id=agent.pk,
+                entity_name=agent.name,
+                metadata={"source": "schedule", "violations": policy_violations},
+            )
+            continue
+
         if AgentRun.objects.filter(agent=agent, status__in=ACTIVE_AGENT_RUN_STATUSES).exists():
             summary["skipped"] += 1
             summary["skip_reasons"]["active_run"] += 1
@@ -80,6 +111,7 @@ def dispatch_scheduled_agents(
                 agent=agent,
                 user=agent.user,
                 accessible_servers_queryset=server_qs,
+                unattended=True,
             )
             if not launch_result["ok"]:
                 summary["skipped"] += 1

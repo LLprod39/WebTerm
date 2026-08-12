@@ -254,6 +254,7 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
             model=engine.model_preference,
             specific_model=engine.specific_model,
             purpose="opssummary",
+            execution_context=await engine._execution_context_for("opssummary"),
         ):
             if not is_thinking_chunk(chunk):
                 chunks.append(chunk)

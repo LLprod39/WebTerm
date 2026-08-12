@@ -7,19 +7,21 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { fetchAuthSession } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import type { AuthUser } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 import {
   allSettingsNavItems,
+  canViewSettingsNavItem,
   findSettingsNavItem,
   visibleSettingsNavGroups,
   type SettingsNavItem,
 } from "./settings-nav-items";
 
 /** First settings page a non-admin is allowed to open (fallback landing). */
-function firstNonAdminSettingsPath(): string {
-  return allSettingsNavItems.find((item) => !item.adminOnly)?.path ?? "/settings/access";
+function firstAllowedSettingsPath(user: AuthUser | null | undefined): string {
+  return allSettingsNavItems.find((item) => canViewSettingsNavItem(user, item))?.path ?? "/";
 }
 
 /** Default landing for /settings — readiness is admin-only. */
@@ -31,8 +33,7 @@ export function SettingsIndexRedirect() {
     retry: false,
   });
   if (isLoading) return null;
-  const isAdmin = Boolean(authData?.user?.is_staff);
-  return <Navigate to={isAdmin ? "/settings/readiness" : firstNonAdminSettingsPath()} replace />;
+  return <Navigate to={firstAllowedSettingsPath(authData?.user)} replace />;
 }
 
 function isActivePath(pathname: string, item: SettingsNavItem) {
@@ -40,31 +41,26 @@ function isActivePath(pathname: string, item: SettingsNavItem) {
 }
 
 function SettingsSideNav({
-  isAdmin,
+  user,
   onNavigate,
   className,
 }: {
-  isAdmin: boolean;
+  user: AuthUser | null | undefined;
   onNavigate?: () => void;
   className?: string;
 }) {
   const location = useLocation();
-  const { data: authData } = useQuery({
-    queryKey: ["auth", "session"],
-    queryFn: fetchAuthSession,
-    staleTime: 60_000,
-    retry: false,
-  });
-  const groups = visibleSettingsNavGroups(isAdmin, Boolean(authData?.user?.features.plugins));
+  const { lang } = useI18n();
+  const groups = visibleSettingsNavGroups(user, Boolean(user?.features.plugins));
 
   return (
     <nav className={cn("space-y-6", className)} aria-label="Разделы настроек">
       {groups.map((group) => (
         <div key={group.id}>
           <div className="mb-2 px-2">
-            <div className="type-label text-muted-foreground">{group.label}</div>
+            <div className="type-label text-muted-foreground">{localize(lang, group.label, group.labelEn ?? group.label)}</div>
             {group.description ? (
-              <p className="mt-1 text-2xs leading-4 text-muted-foreground">{group.description}</p>
+              <p className="mt-1 text-xs leading-4 text-muted-foreground">{localize(lang, group.description, group.descriptionEn ?? group.description)}</p>
             ) : null}
           </div>
           <ul className="space-y-0.5">
@@ -95,10 +91,10 @@ function SettingsSideNav({
                     </span>
                     <span className="min-w-0">
                       <span className={cn("block font-medium leading-5", active && "text-foreground")}>
-                        {item.label}
+                        {localize(lang, item.label, item.labelEn ?? item.label)}
                       </span>
-                      <span className="mt-0.5 block text-2xs leading-4 text-muted-foreground">
-                        {item.description}
+                      <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">
+                        {localize(lang, item.description, item.descriptionEn ?? item.description)}
                       </span>
                     </span>
                   </NavLink>
@@ -113,10 +109,10 @@ function SettingsSideNav({
 }
 
 function SettingsMobileMenu({
-  isAdmin,
+  user,
   onNavigate,
 }: {
-  isAdmin: boolean;
+  user: AuthUser | null | undefined;
   onNavigate?: () => void;
 }) {
   const { t } = useI18n();
@@ -135,7 +131,7 @@ function SettingsMobileMenu({
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3 py-4">
-        <SettingsSideNav isAdmin={isAdmin} onNavigate={onNavigate} />
+        <SettingsSideNav user={user} onNavigate={onNavigate} />
       </ScrollArea>
     </div>
   );
@@ -143,7 +139,7 @@ function SettingsMobileMenu({
 
 export default function SettingsLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const location = useLocation();
   const { data: authData, isLoading: authLoading } = useQuery({
     queryKey: ["auth", "session"],
@@ -151,13 +147,13 @@ export default function SettingsLayout() {
     staleTime: 60_000,
     retry: false,
   });
-  const isAdmin = authData?.user?.is_staff ?? false;
+  const user = authData?.user;
   const current = findSettingsNavItem(location.pathname);
 
   // Route-level guard: non-admins hitting an admin-only settings page directly
   // (by URL) are bounced to the settings index, which lands them on an allowed page.
-  if (!authLoading && current?.adminOnly && !isAdmin) {
-    return <Navigate to="/settings" replace />;
+  if (!authLoading && !canViewSettingsNavItem(user, current)) {
+    return <Navigate to={firstAllowedSettingsPath(user)} replace />;
   }
 
   return (
@@ -172,15 +168,15 @@ export default function SettingsLayout() {
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-[min(100vw-2rem,20rem)] p-0">
-            <SettingsMobileMenu isAdmin={isAdmin} onNavigate={() => setMobileOpen(false)} />
+            <SettingsMobileMenu user={user} onNavigate={() => setMobileOpen(false)} />
           </SheetContent>
         </Sheet>
         <div className="min-w-0">
           <div className="truncate font-semibold text-foreground">
-            {current?.label || t("nav.settings")}
+            {current ? localize(lang, current.label, current.labelEn ?? current.label) : t("nav.settings")}
           </div>
           {current?.description ? (
-            <div className="truncate text-2xs text-muted-foreground">{current.description}</div>
+            <div className="truncate text-xs text-muted-foreground">{localize(lang, current.description, current.descriptionEn ?? current.description)}</div>
           ) : null}
         </div>
       </header>
@@ -207,16 +203,16 @@ export default function SettingsLayout() {
             </p>
           </div>
           <ScrollArea className="min-h-0 flex-1 px-2 py-4">
-            <SettingsSideNav isAdmin={isAdmin} />
+            <SettingsSideNav user={user} />
           </ScrollArea>
         </aside>
 
         {/* Content */}
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto">
+        <div role="region" aria-label={t("nav.settings")} className="min-h-0 min-w-0 flex-1 overflow-auto">
           <div className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
             <Outlet />
           </div>
-        </main>
+        </div>
       </div>
     </div>
   );

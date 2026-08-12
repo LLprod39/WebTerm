@@ -16,11 +16,17 @@ from django.utils import timezone
 from core_ui.models.chat import OperatorTurnDispatch
 
 
-def enqueue_operator_message(*, session, message: str, thinking: str | None) -> OperatorTurnDispatch | None:
+def enqueue_operator_message(
+    *,
+    session,
+    message: str,
+    thinking: str | None,
+    provider_binding: dict[str, Any] | None = None,
+) -> OperatorTurnDispatch | None:
     return _enqueue(
         session=session,
         kind=OperatorTurnDispatch.KIND_MESSAGE,
-        payload={"message": str(message), "thinking": thinking},
+        payload={"message": str(message), "thinking": thinking, "provider_binding": provider_binding},
     )
 
 

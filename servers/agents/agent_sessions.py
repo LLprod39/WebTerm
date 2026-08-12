@@ -26,6 +26,7 @@ from app.agent_kernel.sandbox.ephemeral_runner import agent_command_uses_docker
 from app.sudo_policy import normalize_sudo_policy
 from servers.agents.agent_sessions_exec import AgentSessionExecMixin
 from servers.monitoring.monitor import _build_connect_kwargs
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 
 BUFFER_MAX_CHARS = 8192
 COMMAND_TIMEOUT = 30
@@ -118,6 +119,7 @@ class AgentSessionManager(AgentSessionExecMixin):
 
         forbidden = self._collect_forbidden(server)
         session = _ServerSession(server.id, server.name, forbidden)
+        validate_pilot_ssh_destination(server.host, server.port)
 
         if agent_command_uses_docker():
             session.connected_at = time.monotonic()

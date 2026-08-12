@@ -150,6 +150,9 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
 
     const term = new Terminal({
       allowProposedApi: true,
+      // Expose terminal rows through xterm's accessibility tree for keyboard
+      // and screen-reader users. This remains compatible with normal input.
+      screenReaderMode: true,
       cursorBlink: cursorBlinkProp,
       cursorStyle,
       fontSize,

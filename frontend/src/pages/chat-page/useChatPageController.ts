@@ -3,13 +3,19 @@ import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
+  aiProviderQueryKeys,
   fetchAssistantChat,
   fetchAssistantChats,
+  fetchAiProviderConnections,
+  fetchAiProviderPools,
   updateAssistantChat,
   type AssistantChatMessage,
   type AssistantChatSession,
+  type ProviderBinding,
 } from "@/api";
+import type { AuthSessionResponse } from "@/api/auth";
 import { useToast } from "@/hooks/use-toast";
+import { hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
 
 import type { ComposePaletteHandle } from "./ComposeCommandPalette";
@@ -39,6 +45,7 @@ export function useChatPageController() {
   const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const [actionWorkingId, setActionWorkingId] = useState<number | null>(null);
   const [pendingSend, setPendingSend] = useState<string | null>(null);
+  const [providerOverride, setProviderOverride] = useState("");
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
   /** True while the view is pinned to the newest message — gates autoscroll. */
   const [atBottom, setAtBottom] = useState(true);
@@ -51,6 +58,8 @@ export function useChatPageController() {
   const paletteRef = useRef<ComposePaletteHandle | null>(null);
   const humanTrailRef = useRef<Array<{ cmd: string; at: number }>>([]);
   const activeChatId = Number(searchParams.get("chat") || 0) || null;
+  const authData = queryClient.getQueryData<AuthSessionResponse>(["auth", "session"]);
+  const canUseProviderPools = hasFeatureAccess(authData?.user, "ai_connections_admin");
 
   const openSessionDock = useCallback(
     (opts: { serverId: number; serverName?: string; host?: string; mode?: "agent" | "live" }) => {
@@ -158,11 +167,71 @@ export function useChatPageController() {
     enabled: Boolean(activeChatId),
     staleTime: 10_000,
   });
+  const providerConnectionsQuery = useQuery({
+    queryKey: aiProviderQueryKeys.connections,
+    queryFn: fetchAiProviderConnections,
+    staleTime: 30_000,
+  });
+  const providerPoolsQuery = useQuery({
+    queryKey: aiProviderQueryKeys.pools,
+    queryFn: fetchAiProviderPools,
+    enabled: canUseProviderPools,
+    staleTime: 30_000,
+  });
 
   const chats = useMemo(() => chatsQuery.data?.chats || [], [chatsQuery.data?.chats]);
   const activeChat = activeChatQuery.data;
   const messages = useMemo(() => activeChat?.messages || [], [activeChat?.messages]);
   const activeTurn = activeChat?.active_turn;
+  const providerOptions = useMemo(() => [
+    ...(providerConnectionsQuery.data?.connections ?? [])
+      .filter((item) => item.access.interactive && item.status === "connected")
+      .map((item) => ({
+        key: `connection:${item.id}`,
+        label: `${item.name} · ${item.target_id}`,
+        binding: { target_id: item.target_id, connection_id: item.id } as ProviderBinding,
+      })),
+    ...(providerPoolsQuery.data?.pools ?? [])
+      .filter((item) => item.enabled && item.members.some((member) => member.access?.interactive))
+      .map((item) => ({
+      key: `pool:${item.id}`,
+      label: `${item.name} · пул`,
+      binding: { target_id: item.target_id, pool_id: item.id } as ProviderBinding,
+    })),
+  ], [providerConnectionsQuery.data?.connections, providerPoolsQuery.data?.pools]);
+  const selectedProviderBinding = useMemo(
+    () => providerOptions.find((item) => item.key === providerOverride)?.binding ?? null,
+    [providerOptions, providerOverride],
+  );
+
+  useEffect(() => {
+    const binding = activeChat?.provider_binding;
+    if (binding?.connection_id) setProviderOverride(`connection:${binding.connection_id}`);
+    else if (binding?.pool_id) setProviderOverride(`pool:${binding.pool_id}`);
+    else setProviderOverride("");
+  }, [activeChatId, activeChat?.provider_binding]);
+
+  const handleProviderOverrideChange = useCallback((nextValue: string) => {
+    if (nextValue || !activeChatId) {
+      setProviderOverride(nextValue);
+      return;
+    }
+    void updateAssistantChat(activeChatId, { provider_binding: {} })
+      .then((updated) => {
+        queryClient.setQueryData(["assistant", "chat", activeChatId], (current: AssistantChatSession | undefined) => ({
+          ...(current || updated),
+          ...updated,
+        }));
+        setProviderOverride("");
+      })
+      .catch((error: unknown) => {
+        toast({
+          title: localize(lang, "Не удалось сбросить провайдера", "Could not reset provider"),
+          description: error instanceof Error ? error.message : String(error),
+          variant: "destructive",
+        });
+      });
+  }, [activeChatId, lang, queryClient, toast]);
 
   const { pinnedServers, pinnedUsers, pinServer, unpinServer, unpinUser } = useChatPagePins({
     activeChatId,
@@ -231,6 +300,7 @@ export function useChatPageController() {
     setAtBottom,
     sendMutationPending: sendMutation.isPending,
     createChatMutationPending: createChatMutation.isPending,
+    providerBinding: selectedProviderBinding,
   });
 
   const sessionTokens = useMemo(() => {
@@ -320,7 +390,7 @@ export function useChatPageController() {
       createChatMutation.mutate();
       return;
     }
-    if (operatorWs.ready && operatorWs.sendMessage(text)) {
+    if (operatorWs.ready && operatorWs.sendMessage(text, selectedProviderBinding)) {
       return;
     }
     // Socket not ready yet (just switched chat / reconnecting) — queue for WS effect
@@ -475,6 +545,9 @@ export function useChatPageController() {
     filteredChats,
     chatGroups,
     sessionTokens,
+    providerOptions,
+    providerOverride,
+    setProviderOverride: handleProviderOverrideChange,
     showLiveStream,
     activePlan,
     displayMessages,

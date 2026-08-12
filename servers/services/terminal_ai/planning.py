@@ -69,6 +69,7 @@ async def plan_terminal_commands(
     semaphore=None,
     llm_factory=None,
     max_chars: int = 20000,
+    execution_context=None,
 ) -> dict[str, Any]:
     """
     Ask the LLM to choose answer/ask/execute mode and planned commands.
@@ -102,6 +103,7 @@ async def plan_terminal_commands(
             purpose="terminal_planning",
             system_prompt=system_prompt,
             json_mode=True,
+            execution_context=execution_context,
         ):
             out += chunk
             if len(out) > max_chars:

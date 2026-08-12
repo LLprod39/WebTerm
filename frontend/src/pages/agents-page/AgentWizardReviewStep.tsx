@@ -33,7 +33,7 @@ export function AgentWizardReviewStep({
   telegramEnabled,
   readiness,
   readinessChecks,
-  runAfterSave = true,
+  runAfterSave = false,
   setRunAfterSave,
   isEditing = false,
 }: AgentWizardReviewStepProps) {
@@ -54,8 +54,8 @@ export function AgentWizardReviewStep({
         <p className="mt-1 text-sm leading-5 text-muted-foreground">
           {localize(
             lang,
-            "Краткий обзор — затем сохранение или сразу запуск на выбранных серверах.",
-            "Quick review — then save, or run immediately on the selected servers.",
+            "Краткий обзор. Безопасный вариант по умолчанию — сохранить профиль без запуска.",
+            "Quick review. The safe default is to save the profile without running it.",
           )}
         </p>
       </div>
@@ -136,13 +136,13 @@ export function AgentWizardReviewStep({
           <span className="min-w-0">
             <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Play className="h-4 w-4 text-primary" />
-              {localize(lang, "Сразу запустить после создания", "Run immediately after create")}
+              {localize(lang, "Запустить после создания", "Run after create")}
             </span>
             <span className="mt-1 block text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Откроется live-отчёт запуска. Можно снять галочку и запустить позже из списка.",
-                "Opens the live run report. Uncheck to run later from the list.",
+                "Требует явного выбора. Для пилота рекомендуется сохранить и запустить позже после проверки параметров.",
+                "Requires an explicit choice. For the pilot, save first and run later after reviewing the settings.",
               )}
             </span>
           </span>
@@ -162,7 +162,11 @@ export function AgentWizardReviewStep({
       ) : (
         <InlineAlert
           tone="success"
-          title={localize(lang, "Готово к production-запуску", "Ready for a production run")}
+          title={
+            runAfterSave && !isEditing
+              ? localize(lang, "Готово к созданию и запуску", "Ready to create and run")
+              : localize(lang, "Готово к сохранению", "Ready to save")
+          }
           description={
             runAfterSave && !isEditing
               ? localize(lang, "Агент будет создан и сразу запущен на выбранных серверах.", "The agent will be created and started on the selected servers.")

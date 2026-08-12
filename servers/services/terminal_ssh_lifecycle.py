@@ -14,6 +14,7 @@ from typing import Any
 
 import asyncssh
 
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 from servers.services.terminal_connection_options import build_terminal_connect_kwargs
 from servers.services.terminal_input import TerminalSize
 
@@ -33,6 +34,7 @@ async def open_terminal_ssh_session(
     connect_factory=None,
 ) -> OpenTerminalSession:
     connect = connect_factory or asyncssh.connect
+    validate_pilot_ssh_destination(server.host, server.port)
     connect_kwargs = await build_terminal_connect_kwargs(server, secret=secret or "")
     conn = await connect(**connect_kwargs)
     proc = await conn.create_process(

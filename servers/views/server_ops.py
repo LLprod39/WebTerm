@@ -18,6 +18,7 @@ from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
 from servers.models import ServerCommandHistory
+from servers.services.server_mutation_policy import decide_server_command
 from servers.ssh_host_keys import (
     SSHHostKeyEnrollmentRequired,
     SSHHostKeyFingerprintMismatch,
@@ -221,6 +222,17 @@ def server_execute_command(request, server_id):
 
         if not command:
             return JsonResponse({"error": "Command required"}, status=400)
+
+        command_decision = decide_server_command(request.user, server, command, request=request)
+        if not command_decision.allowed:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": command_decision.message,
+                    "code": command_decision.code,
+                },
+                status=403,
+            )
 
         try:
             password = _resolve_server_secret(server, request, data)

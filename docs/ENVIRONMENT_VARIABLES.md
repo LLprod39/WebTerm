@@ -2,7 +2,7 @@
 
 Generated from `.env.production.example` by `scripts/env_contract.py`. Do not edit this table by hand.
 
-Total variables: **311**.
+Total variables: **360**.
 
 ## Required
 
@@ -173,35 +173,84 @@ Total variables: **311**.
 | `WEBTERM_OTEL_REQUIRED` | reachable, then enable both the SDK and the deploy gate. | `false` |
 | `OTEL_SDK_DISABLED` | reachable, then enable both the SDK and the deploy gate. | `true` |
 | `OTEL_SERVICE_NAME` | reachable, then enable both the SDK and the deploy gate. | `webterm` |
+| `WEBTERM_ENVIRONMENT` | reachable, then enable both the SDK and the deploy gate. | `production` |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | reachable, then enable both the SDK and the deploy gate. | `http/protobuf` |
-| `AGENT_COMMAND_RUNNER_IMAGE` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `empty` |
-| `AGENT_COMMAND_DOCKER_NETWORK` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `bridge` |
-| `AGENT_COMMAND_DOCKER_CPUS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `0.5` |
-| `AGENT_COMMAND_DOCKER_MEMORY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `256m` |
-| `AGENT_COMMAND_DOCKER_PIDS_LIMIT` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `64` |
-| `AGENT_COMMAND_TIMEOUT_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `120` |
-| `AGENT_COMMAND_OUTPUT_MAX_CHARS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `100000` |
-| `WEBTERM_ANSIBLE_DOCKER_NETWORK` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `bridge` |
-| `WEBTERM_ANSIBLE_DOCKER_CPUS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `1.0` |
-| `WEBTERM_ANSIBLE_DOCKER_MEMORY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `512m` |
-| `WEBTERM_ANSIBLE_RUNTIME_TTL_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `7200` |
-| `ANSIBLE_VALIDATOR_MAX_CONCURRENCY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `4` |
-| `ANSIBLE_VALIDATOR_READ_TIMEOUT_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `10` |
-| `MONITOR_QUICK_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `300` |
-| `MONITOR_DEEP_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `600` |
-| `MONITOR_CONCURRENCY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `5` |
-| `MEMORY_DREAM_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `300` |
-| `WATCHERS_INTERVAL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `120` |
-| `WATCHERS_LIMIT` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `100` |
-| `SERVER_BULK_WORKER_INTERVAL_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `2` |
-| `SERVER_BULK_WORKER_LEASE_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `90` |
-| `CELERY_LOG_LEVEL` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `info` |
-| `CELERY_WORKER_CONCURRENCY` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `2` |
-| `KUBERNETES_OPS_SYNC_INTERVAL_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `300` |
-| `KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `1800` |
-| `KUBERNETES_OPS_STALE_AFTER_SECONDS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `900` |
-| `KUBERNETES_OPS_AUDIT_RETENTION_DAYS` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `365` |
-| `KUBERNETES_OPS_READY_FOR_SIDEBAR` | OTEL_EXPORTER_OTLP_HEADERS=authorization=Bearer%20replace-me | `false` |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | reachable, then enable both the SDK and the deploy gate. | `http://otel-collector:4318` |
+| `OTEL_METRIC_EXPORT_INTERVAL` | reachable, then enable both the SDK and the deploy gate. | `30000` |
+| `WEBTERM_OTEL_COLLECTOR_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `otel/opentelemetry-collector-contrib:0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5` |
+| `WEBTERM_PROMETHEUS_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `prom/prometheus:v3.13.2-distroless@sha256:64f71bb84e03c855948418b0fc5dea53e9543d8e3fc9931598f583805507f05e` |
+| `WEBTERM_ALERTMANAGER_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `quay.io/prometheus/alertmanager:main@sha256:a42c3e2e8f7cd4fd3a0ce1bd593ca5abe965c97b993476007d6f69c4a2aa33b5` |
+| `WEBTERM_GRAFANA_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `grafana/grafana:nightly-distroless-slim@sha256:b2c2fd5391216bd57e6bad74c0dce05f8e275479e1153ab57149a4f019a3dceb` |
+| `WEBTERM_TEMPO_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `grafana/tempo:main-1a8b052-2010-1@sha256:78dc87894e9eb054b0229980ac3e7f099b437aec07a8731612373fc09b7f8ba0` |
+| `WEBTERM_LOKI_IMAGE` | images are digest-pinned and require the full Linux observability smoke before GO. | `grafana/loki:3.7.6@sha256:efd47c67f9bac88ca29bcf8cb997d9ab29d1848bd0aff579282295542a745952` |
+| `PROMETHEUS_RETENTION` | images are digest-pinned and require the full Linux observability smoke before GO. | `30d` |
+| `ALERTMANAGER_RETENTION` | images are digest-pinned and require the full Linux observability smoke before GO. | `336h` |
+| `LOKI_RETENTION_PERIOD` | images are digest-pinned and require the full Linux observability smoke before GO. | `336h` |
+| `TEMPO_RETENTION` | images are digest-pinned and require the full Linux observability smoke before GO. | `336h` |
+| `ALERTMANAGER_WEBHOOK_URL_FILE` | stays out of Compose environment/log output and is read by Alertmanager only. | `/etc/webterm/alertmanager.webhook-url` |
+| `GRAFANA_ADMIN_USER` | stays out of Compose environment/log output and is read by Alertmanager only. | `webterm-admin` |
+| `GRAFANA_ADMIN_PASSWORD` | stays out of Compose environment/log output and is read by Alertmanager only. | `operator supplied` |
+| `GRAFANA_BIND_HOST` | stays out of Compose environment/log output and is read by Alertmanager only. | `127.0.0.1` |
+| `GRAFANA_PORT` | stays out of Compose environment/log output and is read by Alertmanager only. | `3000` |
+| `GRAFANA_ROOT_URL` | stays out of Compose environment/log output and is read by Alertmanager only. | `https://grafana.webterm.example.com` |
+| `GRAFANA_COOKIE_SECURE` | stays out of Compose environment/log output and is read by Alertmanager only. | `true` |
+| `AGENT_COMMAND_RUNNER_IMAGE` | stays out of Compose environment/log output and is read by Alertmanager only. | `empty` |
+| `AGENT_COMMAND_DOCKER_NETWORK` | stays out of Compose environment/log output and is read by Alertmanager only. | `bridge` |
+| `AGENT_COMMAND_DOCKER_CPUS` | stays out of Compose environment/log output and is read by Alertmanager only. | `0.5` |
+| `AGENT_COMMAND_DOCKER_MEMORY` | stays out of Compose environment/log output and is read by Alertmanager only. | `256m` |
+| `AGENT_COMMAND_DOCKER_PIDS_LIMIT` | stays out of Compose environment/log output and is read by Alertmanager only. | `64` |
+| `AGENT_COMMAND_TIMEOUT_SECONDS` | stays out of Compose environment/log output and is read by Alertmanager only. | `120` |
+| `AGENT_COMMAND_OUTPUT_MAX_CHARS` | stays out of Compose environment/log output and is read by Alertmanager only. | `100000` |
+| `AI_CLI_SUBSCRIPTIONS_ENABLED` | tokens here; device login writes only to isolated named Docker volumes. | `false` |
+| `AI_CLI_RUNNER_MANAGER_TOKEN` | tokens here; device login writes only to isolated named Docker volumes. | `operator supplied` |
+| `AI_CLI_CODEX_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
+| `AI_CLI_GROK_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
+| `AI_CLI_RUNNER_MANAGER_URL` | tokens here; device login writes only to isolated named Docker volumes. | `http://ai-cli-runner-manager:9000` |
+| `AI_CLI_DOCKER_NETWORK` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-egress` |
+| `AI_CLI_CREDENTIAL_VOLUME_PREFIX` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-cred-` |
+| `AI_CLI_EGRESS_PROXY_URL` | tokens here; device login writes only to isolated named Docker volumes. | `http://ai-cli-egress-proxy:3128` |
+| `AI_CLI_DOCKER_CPUS` | tokens here; device login writes only to isolated named Docker volumes. | `1.0` |
+| `AI_CLI_DOCKER_MEMORY` | tokens here; device login writes only to isolated named Docker volumes. | `1g` |
+| `AI_CLI_DOCKER_PIDS_LIMIT` | tokens here; device login writes only to isolated named Docker volumes. | `128` |
+| `AI_CLI_REQUEST_TIMEOUT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `900` |
+| `AI_CLI_OUTPUT_LIMIT_BYTES` | tokens here; device login writes only to isolated named Docker volumes. | `2097152` |
+| `AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `30` |
+| `AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `300` |
+| `AI_CLI_AUTH_WORKER_INTERVAL_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `2` |
+| `AI_CLI_AUTH_WORKER_CONCURRENCY` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `4` |
+| `WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
+| `WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
+| `WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
+| `GROK_BUILD_URL` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
+| `GROK_BUILD_SHA256` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
+| `PILOT_RESTRICTED_MODE` | out of this list; only disposable/snapshot-capable test targets belong here. | `true` |
+| `PILOT_SSH_ALLOWED_HOSTS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |
+| `PILOT_SSH_ALLOWED_CIDRS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |
+| `PILOT_SSH_ALLOWED_PORTS` | out of this list; only disposable/snapshot-capable test targets belong here. | `22` |
+| `BACKUP_AGE_RECIPIENT_FILE` | repository and production env. | `/etc/webterm/backup.age.recipient` |
+| `BACKUP_DIR` | repository and production env. | `./backups/postgres` |
+| `BACKUP_STATUS_DIR` | repository and production env. | `./backups/status` |
+| `WEBTERM_ANSIBLE_DOCKER_NETWORK` | repository and production env. | `bridge` |
+| `WEBTERM_ANSIBLE_DOCKER_CPUS` | repository and production env. | `1.0` |
+| `WEBTERM_ANSIBLE_DOCKER_MEMORY` | repository and production env. | `512m` |
+| `WEBTERM_ANSIBLE_RUNTIME_TTL_SECONDS` | repository and production env. | `7200` |
+| `ANSIBLE_VALIDATOR_MAX_CONCURRENCY` | repository and production env. | `4` |
+| `ANSIBLE_VALIDATOR_READ_TIMEOUT_SECONDS` | repository and production env. | `10` |
+| `MONITOR_QUICK_INTERVAL` | repository and production env. | `300` |
+| `MONITOR_DEEP_INTERVAL` | repository and production env. | `600` |
+| `MONITOR_CONCURRENCY` | repository and production env. | `5` |
+| `MEMORY_DREAM_INTERVAL` | repository and production env. | `300` |
+| `WATCHERS_INTERVAL` | repository and production env. | `120` |
+| `WATCHERS_LIMIT` | repository and production env. | `100` |
+| `SERVER_BULK_WORKER_INTERVAL_SECONDS` | repository and production env. | `2` |
+| `SERVER_BULK_WORKER_LEASE_SECONDS` | repository and production env. | `90` |
+| `CELERY_LOG_LEVEL` | repository and production env. | `info` |
+| `CELERY_WORKER_CONCURRENCY` | repository and production env. | `2` |
+| `KUBERNETES_OPS_SYNC_INTERVAL_SECONDS` | repository and production env. | `300` |
+| `KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS` | repository and production env. | `1800` |
+| `KUBERNETES_OPS_STALE_AFTER_SECONDS` | repository and production env. | `900` |
+| `KUBERNETES_OPS_AUDIT_RETENTION_DAYS` | repository and production env. | `365` |
+| `KUBERNETES_OPS_READY_FOR_SIDEBAR` | repository and production env. | `false` |
 | `KUBERNETES_OPS_PILOT_SIDEBAR` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_OPS_RELEASE_ENVIRONMENT` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `local` |
 | `KUBERNETES_OPS_PRODUCTION_APPROVAL_REF` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `empty` |

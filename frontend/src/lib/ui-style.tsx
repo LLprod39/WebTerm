@@ -36,6 +36,18 @@ export const GUEST_USER_KEY = "guest";
 
 /** Skins that force light color-scheme (native inputs, scrollbars, form controls). */
 export const LIGHT_UI_STYLES = new Set<UiStyleId>(["folio", "flow"]);
+const EXPERIMENTAL_UI_STYLES = new Set<UiStyleId>([
+  "catalog",
+  "classic",
+  "pulse",
+  "signal",
+  "folio",
+  "folio-dark",
+  "ashita",
+]);
+const EXPERIMENTAL_THEME_FONT_LINK_ID = "webterm-experimental-theme-fonts";
+let experimentalThemePromise: Promise<typeof import("./experimental-theme-tokens")> | null = null;
+let appliedExperimentalTokenNames = new Set<string>();
 
 /** Folio light + dark share the same editorial paper design language. */
 export function isFolioStyle(value: unknown): value is "folio" | "folio-dark" {
@@ -195,11 +207,47 @@ function migrateLegacyIfNeeded() {
   }
 }
 
+function clearExperimentalThemeTokens() {
+  for (const tokenName of appliedExperimentalTokenNames) {
+    document.documentElement.style.removeProperty(tokenName);
+  }
+  appliedExperimentalTokenNames = new Set();
+}
+
+function loadExperimentalTheme(style: UiStyleId) {
+  if (!EXPERIMENTAL_UI_STYLES.has(style)) return;
+  experimentalThemePromise ??= import("./experimental-theme-tokens");
+  void experimentalThemePromise.then((themeModule) => {
+    if (document.documentElement.getAttribute("data-ui-style") !== style) return;
+
+    if (!document.getElementById(EXPERIMENTAL_THEME_FONT_LINK_ID)) {
+      const fontLink = document.createElement("link");
+      fontLink.id = EXPERIMENTAL_THEME_FONT_LINK_ID;
+      fontLink.rel = "stylesheet";
+      fontLink.href = themeModule.EXPERIMENTAL_THEME_FONT_URL;
+      document.head.append(fontLink);
+    }
+
+    const tokenTheme = style as keyof typeof themeModule.EXPERIMENTAL_THEME_TOKENS;
+    const tokens = themeModule.EXPERIMENTAL_THEME_TOKENS[tokenTheme];
+    if (!tokens) return;
+    for (const [tokenName, value] of Object.entries(tokens)) {
+      document.documentElement.style.setProperty(tokenName, value);
+      appliedExperimentalTokenNames.add(tokenName);
+    }
+  }).catch(() => {
+    // Experimental styles may fall back to the base palette if their optional
+    // chunk cannot be loaded. The supported flow-dark pilot theme is inline.
+  });
+}
+
 export function applyUiStyleToDocument(style: UiStyleId) {
   if (typeof document === "undefined") return;
+  clearExperimentalThemeTokens();
   document.documentElement.setAttribute("data-ui-style", style);
   // Only light Folio uses light color-scheme; Folio dark and all other skins stay dark.
   document.documentElement.style.colorScheme = LIGHT_UI_STYLES.has(style) ? "light" : "dark";
+  loadExperimentalTheme(style);
 }
 
 export function readActiveUiStyle(): UiStyleId {

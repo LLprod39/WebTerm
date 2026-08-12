@@ -41,6 +41,7 @@ from servers.agents.agent_engine_prompts import build_system_prompt, generate_fi
 from servers.agents.agent_engine_runner import run_agent_engine
 from servers.agents.agent_engine_tools import execute_agent_tool, validate_agent_tool_args
 from servers.agents.agent_runtime import (
+    build_agent_execution_context,
     build_runtime_control_state,
     update_runtime_control,
 )
@@ -97,11 +98,14 @@ class AgentEngine(AgentEngineOpsMixin):
         skill_errors: list[str] | None = None,
         skill_provider: SkillProvider | None = None,
         mcp_runtime_provider: MCPRuntimeProvider | None = None,
+        execution_context: object | None = None,
     ):
         self.agent = agent
         self.servers = servers
         self.user = user
         self.event_callback = event_callback
+        self.execution_context = execution_context
+        self._provider_invocation_seq = 0
 
         self.max_iterations = clamp_full_iterations(agent.max_iterations or FULL_DEFAULT_MAX_ITERATIONS)
         self.session_timeout = agent.session_timeout_seconds or SESSION_TIMEOUT_DEFAULT
@@ -111,10 +115,8 @@ class AgentEngine(AgentEngineOpsMixin):
             or self.tools_config.get("command_timeout_seconds")
             or DEFAULT_COMMAND_TIMEOUT
         )
-        self.allowed_tool_names = (
-            {name for name, enabled in self.tools_config.items() if enabled} if self.tools_config else None
-        )
         self.enabled_tools = get_enabled_tools(self.tools_config)
+        self.allowed_tool_names = set(self.enabled_tools)
 
         self._stop_requested = False
         self._pause_event = asyncio.Event()
@@ -164,17 +166,16 @@ class AgentEngine(AgentEngineOpsMixin):
             if self.allowed_tool_names is not None:
                 self.allowed_tool_names.update({"list_skills", "read_skill"})
 
-        # Materials tools are always available when the agent has input_artifacts,
-        # so the model can list/read scripts and run operator-provided scripts.
-        from servers.agents.agent_inputs import MATERIALS_TOOL_NAMES, normalize_input_artifacts
+        # Materials are discoverable by default, but mutating material tools
+        # remain explicit opt-ins in the agent allowlist.
+        from servers.agents.agent_inputs import normalize_input_artifacts
 
         self.input_materials = normalize_input_artifacts(getattr(agent, "input_artifacts", None) or [])
         if self.input_materials:
-            for tool_name in MATERIALS_TOOL_NAMES:
+            for tool_name in ("list_materials", "read_material"):
                 if tool_name not in self.enabled_tools:
                     self.enabled_tools.append(tool_name)
-            if self.allowed_tool_names is not None:
-                self.allowed_tool_names.update(MATERIALS_TOOL_NAMES)
+            self.allowed_tool_names.update({"list_materials", "read_material"})
 
     # ------------------------------------------------------------------
     # Public control methods (called from WebSocket consumer)
@@ -296,12 +297,14 @@ class AgentEngine(AgentEngineOpsMixin):
         provider = LLMProvider()
         chunks = []
         try:
+            execution_context = await self._execution_context_for("ops")
             with self._audit_scope():
                 async for chunk in provider.stream_chat(
                     prompt,
                     model=self.model_preference,
                     specific_model=self.specific_model,
                     purpose="ops",
+                    execution_context=execution_context,
                 ):
                     if not is_thinking_chunk(chunk):
                         chunks.append(chunk)
@@ -309,6 +312,9 @@ class AgentEngine(AgentEngineOpsMixin):
             logger.error("LLM call failed: {}", exc)
             raise
         return "".join(chunks)
+
+    async def _execution_context_for(self, purpose: str):
+        return await build_agent_execution_context(self, purpose, surface="agent")
 
     @staticmethod
     def _history_to_prompt(history: list[dict]) -> str:

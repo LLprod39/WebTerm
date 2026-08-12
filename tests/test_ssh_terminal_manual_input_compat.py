@@ -52,6 +52,15 @@ def _build_consumer() -> SSHTerminalConsumer:
     )
     consumer._ai_state.session.marker_token = "manualtest"
     consumer._manual_state = ManualCommandState()
+
+    async def get_server(_user_id, _server_id):
+        return consumer.server
+
+    async def mutation_allowed(_user_id, _server_id):
+        return True
+
+    consumer.terminal_transport._get_server = get_server
+    consumer.terminal_transport._manual_input_mutation_allowed = mutation_allowed
     return consumer
 
 

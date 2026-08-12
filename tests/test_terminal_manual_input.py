@@ -32,6 +32,7 @@ class DummyOwner:
         self._nova_session_context = {"cwd": "/srv/app"}
         self.recent_activity: list[dict] = []
         self.sent: list[dict] = []
+        self.mutation_allowed = False
 
     def _marker_prefix(self) -> str:
         return f"__WEUAI_EXIT_{self._ai_marker_token}_"
@@ -57,6 +58,7 @@ class DummyOwner:
             append_recent_activity=self._append_nova_recent_activity,
             log_activity=_log_activity,
             persist_result=_persist_result,
+            mutation_allowed=self.mutation_allowed,
         )
 
 
@@ -97,6 +99,7 @@ async def test_handle_terminal_input_adds_marker_for_single_safe_command():
 @pytest.mark.asyncio
 async def test_handle_terminal_input_persists_uncaptured_block_without_marker():
     owner = DummyOwner()
+    owner.mutation_allowed = True
 
     await owner.handle_input("if true; then\r")
 
@@ -119,6 +122,7 @@ async def test_handle_terminal_input_persists_uncaptured_block_without_marker():
 @pytest.mark.asyncio
 async def test_handle_terminal_input_intercepts_editor_commands_without_persisting():
     owner = DummyOwner()
+    owner.mutation_allowed = True
 
     await owner.handle_input("nano /etc/hosts\r")
 
@@ -133,3 +137,51 @@ async def test_handle_terminal_input_intercepts_editor_commands_without_persisti
     ]
     assert owner.manual_state.pending_commands == []
     assert _persist_result.calls == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "command",
+    [
+        "touch /tmp/pilot-bypass",
+        "mkdir -p /tmp/pilot-bypass",
+        "printf owned > /tmp/pilot-bypass",
+        "systemctl restart nginx",
+        "sudo -n cat /etc/shadow",
+    ],
+)
+async def test_restricted_manual_terminal_never_forwards_mutating_or_sudo_command(command):
+    owner = DummyOwner()
+
+    await owner.handle_input(command)
+    assert owner._ssh_proc.stdin.writes == []
+
+    await owner.handle_input("\r")
+
+    assert owner._ssh_proc.stdin.writes == ["\x15"]
+    assert all(command not in write for write in owner._ssh_proc.stdin.writes)
+    assert owner.sent[-1]["code"] == "read_only_command_required"
+    assert _persist_result.calls == []
+
+
+@pytest.mark.asyncio
+async def test_restricted_manual_terminal_reconstructs_split_read_only_command():
+    owner = DummyOwner()
+
+    await owner.handle_input("systemctl status")
+    assert owner._ssh_proc.stdin.writes == []
+
+    await owner.handle_input(" nginx\r")
+
+    assert owner._ssh_proc.stdin.writes[:2] == ["\x15", "systemctl status nginx\r"]
+    assert any("__WEUAI_EXIT_manualtest_1000000" in write for write in owner._ssh_proc.stdin.writes)
+
+
+@pytest.mark.asyncio
+async def test_restricted_manual_terminal_does_not_forward_shell_history_escape_or_enter():
+    owner = DummyOwner()
+
+    await owner.handle_input("\x1b[A\r")
+
+    assert owner._ssh_proc.stdin.writes == []
+    assert owner.sent == []

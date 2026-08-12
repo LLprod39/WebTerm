@@ -173,7 +173,14 @@ def test_django_server_memory_store_nightly_llm_enhances_sequence_playbooks(monk
             actor_user_id=owner.id,
         )
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat", specific_model=None):
+    async def fake_stream_chat(
+        self,
+        prompt: str,
+        model: str = "auto",
+        purpose: str = "chat",
+        specific_model=None,
+        execution_context=None,
+    ):
         if "Workflow candidates" in prompt:
             yield (
                 '[{"normalized_command":"nginx -t => systemctl reload nginx","when_to_use":"перед безопасным reload после правки конфига",'

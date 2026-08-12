@@ -19,6 +19,7 @@ import base64
 import logging
 import shlex
 
+from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
 from servers.services.terminal_ai.agent.schemas import ToolResult
@@ -28,6 +29,7 @@ from servers.services.terminal_ai.agent.tools.base import (
     tool_err,
     tool_ok,
 )
+from servers.services.terminal_ai.server_ai_policy import is_terminal_ai_read_only_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +230,11 @@ class EditFileTool:
         if not path:
             return tool_err("empty path")
 
-        if target.read_only:
+        effective_read_only = target.read_only or await sync_to_async(
+            is_terminal_ai_read_only_for_user,
+            thread_sensitive=True,
+        )(target.server_id, ctx.user_id)
+        if effective_read_only:
             return tool_err(
                 f"target '{target.name}' is read-only; edit_file refused",
                 output=(f"Server '{target.display_name or target.name}' is in read-only mode."),
@@ -271,8 +277,6 @@ class EditFileTool:
                 cat_res = await asyncio.wait_for(conn.run(f"cat {q_path}"), timeout=10.0)
                 original = str(getattr(cat_res, "stdout", "") or "")
                 if ctx.user_id is not None and target.server_id and original:
-                    from asgiref.sync import sync_to_async
-
                     from servers.services.snapshot_service import save_snapshot
 
                     snap_pk = await sync_to_async(save_snapshot)(

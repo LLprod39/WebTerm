@@ -12,6 +12,7 @@ from .views import (
     access_group_views,
     access_views,
     admin_views,
+    ai_provider_views,
     assistant_chat_views,
     auth_views,
     dashboard_layout,
@@ -62,6 +63,49 @@ urlpatterns = [
     path("api/settings/check/", settings_config_views.api_settings_check, name="api_settings_check"),
     path("api/models/", model_views.api_models_list, name="api_models"),
     path("api/models/refresh/", model_views.api_models_refresh, name="api_models_refresh"),
+    path("api/ai/providers/catalog/", ai_provider_views.api_ai_provider_catalog, name="api_ai_provider_catalog"),
+    path(
+        "api/ai/providers/connections/",
+        ai_provider_views.api_ai_provider_connections,
+        name="api_ai_provider_connections",
+    ),
+    path(
+        "api/ai/providers/connections/<int:connection_id>/",
+        ai_provider_views.api_ai_provider_connection_detail,
+        name="api_ai_provider_connection_detail",
+    ),
+    path(
+        "api/ai/providers/connections/<int:connection_id>/auth/",
+        ai_provider_views.api_ai_provider_connection_auth,
+        name="api_ai_provider_connection_auth",
+    ),
+    path(
+        "api/ai/providers/connections/<int:connection_id>/verify/",
+        ai_provider_views.api_ai_provider_connection_verify,
+        name="api_ai_provider_connection_verify",
+    ),
+    path(
+        "api/ai/providers/auth-flows/<uuid:flow_id>/",
+        ai_provider_views.api_ai_provider_auth_flow,
+        name="api_ai_provider_auth_flow",
+    ),
+    path("api/ai/providers/pools/", ai_provider_views.api_ai_provider_pools, name="api_ai_provider_pools"),
+    path(
+        "api/ai/providers/pools/<int:pool_id>/",
+        ai_provider_views.api_ai_provider_pool_detail,
+        name="api_ai_provider_pool_detail",
+    ),
+    path("api/ai/providers/grants/", ai_provider_views.api_ai_provider_grants, name="api_ai_provider_grants"),
+    path(
+        "api/ai/providers/grants/<int:grant_id>/",
+        ai_provider_views.api_ai_provider_grant_detail,
+        name="api_ai_provider_grant_detail",
+    ),
+    path(
+        "api/ai/providers/preferences/",
+        ai_provider_views.api_ai_provider_preferences,
+        name="api_ai_provider_preferences",
+    ),
     # Project tenant boundary
     path("api/projects/", project_views.api_projects, name="api_projects"),
     path(

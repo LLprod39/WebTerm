@@ -18,6 +18,7 @@ export function handleAccessFixture(req: any, ctx: PlatformFixtureContext) {
           features: [
             { value: "servers", label: "Servers" },
             { value: "settings", label: "Settings" },
+            { value: "chat", label: "Chat" },
             { value: "orchestrator", label: "Orchestrator" },
           ],
         });
@@ -29,6 +30,7 @@ export function handleAccessFixture(req: any, ctx: PlatformFixtureContext) {
           features: [
             { value: "servers", label: "Servers" },
             { value: "settings", label: "Settings" },
+            { value: "chat", label: "Chat" },
             { value: "orchestrator", label: "Orchestrator" },
           ],
         });

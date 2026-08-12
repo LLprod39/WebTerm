@@ -157,15 +157,23 @@ async def execute_agent_llm_query(node: dict, context: dict, node_outputs: dict[
 
     try:
         from app.core.llm import LLMProvider
+        from studio.services.ai_execution_context import build_pipeline_execution_context
 
         t0 = time.time()
         llm = LLMProvider()
+        execution_context = await build_pipeline_execution_context(
+            run,
+            purpose=purpose,
+            node_id=str(node.get("id") or "llm_query"),
+            config=config,
+        )
         output_chunks: list[str] = []
         async for chunk in llm.stream_chat(
             full_prompt,
             model=provider,
             specific_model=specific_model or None,
             purpose=purpose,
+            execution_context=execution_context,
         ):
             output_chunks.append(chunk)
         output_text = compact_text("".join(output_chunks), limit=6000)

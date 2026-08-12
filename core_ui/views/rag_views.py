@@ -11,7 +11,18 @@ from loguru import logger
 
 from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
-from core_ui.views.runtime import get_rag_engine
+from core_ui.views.runtime import get_rag_engine, rag_backend_is_configured
+
+
+def _rag_disabled() -> JsonResponse:
+    return JsonResponse(
+        {
+            "success": False,
+            "error": "RAG is disabled: configure a separate embedding backend first",
+            "code": "rag_embedding_backend_not_configured",
+        },
+        status=409,
+    )
 
 
 @login_required
@@ -27,9 +38,11 @@ def rag_add_api(request):
         if not text:
             return JsonResponse({"success": False, "error": "Empty text"}, status=400)
 
+        if not rag_backend_is_configured():
+            return _rag_disabled()
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
+            return _rag_disabled()
 
         doc_id = rag.add_text(text, source, user_id=request.user.id)
         if doc_id is None:
@@ -56,12 +69,11 @@ def rag_query_api(request):
         if not query:
             return JsonResponse({"success": False, "error": "Empty query"}, status=400)
 
+        if not rag_backend_is_configured():
+            return _rag_disabled()
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse(
-                {"success": False, "error": "RAG not available", "documents": [[]], "metadatas": [[]]},
-                status=503,
-            )
+            return _rag_disabled()
 
         try:
             results = rag.query(query, n_results, user_id=request.user.id)
@@ -91,9 +103,11 @@ def rag_query_api(request):
 def rag_reset_api(request):
     """Reset the user's RAG database."""
     try:
+        if not rag_backend_is_configured():
+            return _rag_disabled()
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
+            return _rag_disabled()
 
         try:
             rag.reset_db(user_id=request.user.id)
@@ -116,9 +130,11 @@ def rag_delete_api(request):
         doc_id = data.get("doc_id") or data.get("id")
         if not doc_id:
             return JsonResponse({"success": False, "error": "doc_id required"}, status=400)
+        if not rag_backend_is_configured():
+            return _rag_disabled()
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({"success": False, "error": "RAG not available"}, status=503)
+            return _rag_disabled()
         removed = rag.delete_document(str(doc_id), user_id=request.user.id)
         if removed:
             return JsonResponse({"success": True, "message": "Document deleted"})
@@ -135,9 +151,11 @@ def rag_delete_api(request):
 def rag_documents_api(request):
     """Get RAG documents with pagination."""
     try:
+        if not rag_backend_is_configured():
+            return _rag_disabled()
         rag = get_rag_engine()
         if not rag.available:
-            return JsonResponse({"success": False, "error": "RAG not available", "documents": [], "doc_count": 0})
+            return _rag_disabled()
 
         limit = int(request.GET.get("limit", 50))
         offset = int(request.GET.get("offset", 0))

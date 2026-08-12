@@ -308,6 +308,28 @@ class TerminalAiChatMessage(models.Model):
         return f"{self.role}: {preview}"
 
 
+class TerminalAiProviderState(models.Model):
+    """Pinned provider binding/session for one user's terminal AI on one server."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="terminal_ai_provider_states")
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="terminal_ai_provider_states")
+    provider_binding = models.JSONField(default=dict, blank=True)
+    provider_session_id = models.CharField(max_length=255, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "server"],
+                name="servers_terminal_ai_provider_unique",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "server"])]
+
+    def __str__(self):
+        return f"terminal-ai user={self.user_id} server={self.server_id}"
+
+
 class CommandSnapshot(models.Model):
     """Pre-execution snapshot of a file captured before AI modifies it.
 

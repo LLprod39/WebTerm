@@ -1,0 +1,134 @@
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+  hostmetrics:
+    root_path: /hostfs
+    collection_interval: 30s
+    scrapers:
+      cpu:
+      disk:
+      filesystem:
+        exclude_fs_types:
+          fs_types: [autofs, binfmt_misc, bpf, cgroup2, configfs, debugfs, devpts, devtmpfs, fusectl, hugetlbfs, mqueue, overlay, proc, pstore, securityfs, sysfs, tracefs]
+          match_type: strict
+      load:
+      memory:
+      network:
+      paging:
+  postgresql:
+    endpoint: "${env:POSTGRES_HOST}:${env:POSTGRES_PORT}"
+    transport: tcp
+    username: ${env:POSTGRES_USER}
+    password: ${env:POSTGRES_PASSWORD}
+    databases: ["${env:POSTGRES_DB}"]
+    collection_interval: 30s
+    tls:
+      insecure: true
+  redis:
+    endpoint: ${env:REDIS_ENDPOINT}
+    collection_interval: 30s
+  filelog/webterm:
+    include: [/var/log/webterm/*.log]
+    start_at: end
+    include_file_name: true
+    operators:
+      - type: regex_parser
+        regex: '^(?P<event_time>[^|]+) \| (?P<severity>[^|]+) \| req=(?P<request_id>\S+) chan=(?P<channel>\S+) user=(?P<user_id>\S+) \| (?P<source>\S+) - .*$'
+        parse_from: body
+        on_error: send
+  filelog/backup_success:
+    include: [/var/lib/webterm-backup-status/last_success.unixtime]
+    start_at: beginning
+    operators:
+      - type: regex_parser
+        regex: '^(?P<backup_timestamp>[0-9]{10})$'
+        parse_to: attributes
+  filelog/backup_failure:
+    include: [/var/lib/webterm-backup-status/last_failure.unixtime]
+    start_at: beginning
+    operators:
+      - type: regex_parser
+        regex: '^(?P<backup_timestamp>[0-9]{10})$'
+        parse_to: attributes
+
+connectors:
+  signaltometrics/backup_success:
+    logs:
+      - name: webterm.backup.last_success_unixtime_seconds
+        description: Unix timestamp of the latest encrypted PostgreSQL backup that passed archive validation.
+        gauge:
+          value: Double(attributes["backup_timestamp"])
+  signaltometrics/backup_failure:
+    logs:
+      - name: webterm.backup.last_failure_unixtime_seconds
+        description: Unix timestamp of the latest failed encrypted PostgreSQL backup attempt.
+        gauge:
+          value: Double(attributes["backup_timestamp"])
+
+processors:
+  memory_limiter:
+    check_interval: 5s
+    limit_mib: 384
+    spike_limit_mib: 96
+  resource/webterm_logs:
+    attributes:
+      - key: service.name
+        value: webterm
+        action: upsert
+  transform/sanitize_logs:
+    error_mode: ignore
+    log_statements:
+      - context: log
+        statements:
+          - keep_keys(attributes, ["event_time", "severity", "request_id", "channel", "user_id", "source", "log.file.name"])
+          - set(body, "webterm event metadata only; message removed by pilot privacy policy")
+  batch:
+    send_batch_size: 1024
+    timeout: 5s
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:9464
+    resource_to_telemetry_conversion:
+      enabled: true
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
+    tls:
+      insecure: true
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+    tls:
+      insecure: true
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: warn
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlphttp/tempo]
+    metrics:
+      receivers: [otlp, hostmetrics, postgresql, redis, signaltometrics/backup_success, signaltometrics/backup_failure]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    logs:
+      receivers: [filelog/webterm]
+      processors: [memory_limiter, resource/webterm_logs, transform/sanitize_logs, batch]
+      exporters: [otlphttp/loki]
+    logs/backup_success:
+      receivers: [filelog/backup_success]
+      exporters: [signaltometrics/backup_success]
+    logs/backup_failure:
+      receivers: [filelog/backup_failure]
+      exporters: [signaltometrics/backup_failure]

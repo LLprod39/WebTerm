@@ -8,6 +8,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from core_ui.services.ai_execution_context import active_project_for_execution, build_execution_context
 from studio.capability_registry import build_studio_capability_registry
 from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
@@ -44,6 +45,22 @@ from studio.views.pipeline_assistant_preview import (
 )
 from studio.views.pipeline_helpers import _get_pipeline
 from studio.views.skill_helpers import _can_read_skill, _skill_access_map, _skill_to_summary_dict
+
+
+def _pipeline_assistant_execution_context(request, data: dict, pipeline):
+    project = pipeline.project if pipeline is not None else active_project_for_execution(request.user)
+    return build_execution_context(
+        actor_user_id=request.user.pk,
+        project_id=project.pk if project else None,
+        purpose="chat",
+        source_kind="pipeline_assistant",
+        source_id=pipeline.pk if pipeline is not None else f"user-{request.user.pk}",
+        explicit_binding=data.get("provider_binding"),
+        stored_binding=pipeline.provider_binding if pipeline is not None else {},
+        requested_provider="auto",
+        idempotency_key=str(data.get("idempotency_key") or ""),
+        tool_policy={"surface": "pipeline_assistant", "webtrerm_tools_only": True},
+    )
 
 
 def _conversation_history(raw_history: object) -> list[dict[str, str]]:
@@ -259,6 +276,7 @@ def _build_assistant_response_for_payload(request, data: dict) -> tuple[dict | N
         )
     else:
         try:
+            execution_context = _pipeline_assistant_execution_context(request, data, assistant_pipeline)
             response = build_pipeline_assistant_response(
                 user_message=user_message,
                 conversation_history=_conversation_history(history),
@@ -268,6 +286,7 @@ def _build_assistant_response_for_payload(request, data: dict) -> tuple[dict | N
                     node_id: str(node.get("type") or "") for node_id, node in node_map.items() if isinstance(node, dict)
                 },
                 known_edges=[edge for edge in edges if isinstance(edge, dict)],
+                execution_context=execution_context,
             )
         except PipelineAssistantError as exc:
             return None, {}, _err(exc.message, exc.status)

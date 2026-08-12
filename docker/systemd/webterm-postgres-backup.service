@@ -1,0 +1,21 @@
+[Unit]
+Description=WebTerm encrypted PostgreSQL and important-volume backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=webterm
+Group=webterm
+SupplementaryGroups=docker
+WorkingDirectory=/opt/webterm
+Environment=WEBTERM_ROOT_DIR=/opt/webterm
+EnvironmentFile=/etc/webterm/backup.env
+ExecStart=/opt/webterm/scripts/backup_postgres.sh
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectHome=true
+ProtectSystem=full
+LockPersonality=true

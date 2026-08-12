@@ -6,6 +6,12 @@ from app.agent_kernel import skill_provider_registry
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from app.sudo_policy import normalize_sudo_policy
 from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agents.agent_pilot_policy import (
+    PILOT_MAX_ITERATIONS,
+    PILOT_MAX_SESSION_TIMEOUT_SECONDS,
+    pilot_agent_policy_violations,
+    user_can_automate,
+)
 from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agents.agent_service import list_agents_for_user
 from servers.models import ServerAgent
@@ -161,11 +167,16 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         clamp_full_iterations,
     )
 
+    restricted_pilot = not user_can_automate(ctx.user)
+    default_iterations = PILOT_MAX_ITERATIONS if restricted_pilot else FULL_DEFAULT_MAX_ITERATIONS
     try:
-        max_iterations = clamp_full_iterations(int(data.get("max_iterations") or FULL_DEFAULT_MAX_ITERATIONS))
+        max_iterations = clamp_full_iterations(int(data.get("max_iterations") or default_iterations))
     except (TypeError, ValueError):
-        max_iterations = FULL_DEFAULT_MAX_ITERATIONS
-    schedule_minutes = int(data.get("schedule_minutes") or 0)
+        max_iterations = default_iterations
+    try:
+        schedule_minutes = int(data.get("schedule_minutes") or 0)
+    except (TypeError, ValueError):
+        raise AssistantActionError("schedule_minutes must be an integer", status=400) from None
     schedule_config = normalize_schedule_config(data.get("schedule_config"), fallback_minutes=schedule_minutes)
     schedule = schedule_minutes_for_config(schedule_config, schedule_minutes)
     skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
@@ -195,16 +206,27 @@ def create_agent(ctx: AssistantActionContext) -> dict:
             "Нет доступных серверов для агента. Добавь сервер в инвентарь или укажи @имя / server_ids."
         )
 
+    default_timeout = PILOT_MAX_SESSION_TIMEOUT_SECONDS if restricted_pilot else FULL_DEFAULT_SESSION_TIMEOUT_SEC
     try:
-        session_timeout_seconds = int(data.get("session_timeout_seconds") or FULL_DEFAULT_SESSION_TIMEOUT_SEC)
+        session_timeout_seconds = int(data.get("session_timeout_seconds") or default_timeout)
     except (TypeError, ValueError):
-        session_timeout_seconds = FULL_DEFAULT_SESSION_TIMEOUT_SEC
+        session_timeout_seconds = default_timeout
     session_timeout_seconds = max(30, min(session_timeout_seconds, 3600))
 
     tools_config = data.get("tools_config") if isinstance(data.get("tools_config"), dict) else {}
     # Empty = all tools enabled in the engine
     stop_conditions = data.get("stop_conditions") if isinstance(data.get("stop_conditions"), list) else []
-    sudo_policy = data.get("sudo_policy")
+    sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
+
+    allow_multi_raw = data.get("allow_multi_server", False if restricted_pilot else mode == ServerAgent.MODE_MULTI)
+    if not isinstance(allow_multi_raw, bool):
+        raise AssistantActionError("allow_multi_server must be a boolean", status=400)
+    allow_multi_server = allow_multi_raw
+    try:
+        max_connections = int(data.get("max_connections") or (1 if restricted_pilot else 5))
+    except (TypeError, ValueError):
+        raise AssistantActionError("max_connections must be an integer", status=400) from None
+    max_connections = max(1, min(max_connections, 10))
 
     accessible, denied_server_ids = resolve_servers_for_user_capability(
         server_ids,
@@ -214,6 +236,24 @@ def create_agent(ctx: AssistantActionContext) -> dict:
     )
     if denied_server_ids or not accessible:
         raise AssistantActionError("Missing server capability: execute_command", status=403)
+
+    policy_violations = pilot_agent_policy_violations(
+        user=ctx.user,
+        servers=accessible,
+        tools_config=tools_config,
+        sudo_policy=sudo_policy,
+        schedule_minutes=schedule,
+        schedule_config=schedule_config,
+        allow_multi_server=allow_multi_server,
+        max_connections=max_connections,
+        max_iterations=max_iterations,
+        session_timeout_seconds=session_timeout_seconds,
+    )
+    if policy_violations:
+        raise AssistantActionError(
+            f"Pilot policy violation: {'; '.join(policy_violations)}",
+            status=403,
+        )
 
     agent = ServerAgent.objects.create(
         user=ctx.user,
@@ -225,12 +265,12 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         goal=goal,
         system_prompt=system_prompt,
         max_iterations=max_iterations,
-        allow_multi_server=bool(data.get("allow_multi_server", mode == ServerAgent.MODE_MULTI)),
+        allow_multi_server=allow_multi_server,
         tools_config=tools_config if tools_config else {},
-        sudo_policy=normalize_sudo_policy(sudo_policy),
+        sudo_policy=sudo_policy,
         stop_conditions=stop_conditions,
         session_timeout_seconds=session_timeout_seconds,
-        max_connections=max(1, min(int(data.get("max_connections") or 5), 10)),
+        max_connections=max_connections,
         schedule_minutes=schedule,
         schedule_config=schedule_config,
         skill_slugs=skill_slugs,

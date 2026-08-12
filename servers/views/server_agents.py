@@ -10,12 +10,19 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from app.agent_kernel import skill_provider_registry
+from app.ai_runtime import ExecutionMode
 from app.sudo_policy import normalize_sudo_policy
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
-from core_ui.projects import active_project_for_user
+from core_ui.services.ai_execution_context import active_project_for_execution, build_execution_context
 from servers.agents import get_all_templates, get_template
 from servers.agents.agent_inputs import normalize_input_artifacts, normalize_report_delivery
+from servers.agents.agent_pilot_policy import (
+    PILOT_MAX_ITERATIONS,
+    PILOT_MAX_SESSION_TIMEOUT_SECONDS,
+    pilot_agent_policy_violations,
+    user_can_automate,
+)
 from servers.agents.agent_schedule import normalize_schedule_config, schedule_minutes_for_config
 from servers.agents.agent_service import (
     cleanup_stale_agent_runs_for_user,
@@ -49,7 +56,7 @@ def agent_list(request):
 
 
 @login_required
-@require_feature("agents")
+@require_feature("automation")
 @require_http_methods(["GET"])
 def agent_schedule_overview(request):
     """List scheduled agents and their due state for the current user."""
@@ -63,7 +70,7 @@ def agent_schedule_overview(request):
 
 
 @login_required
-@require_feature("agents")
+@require_feature("automation")
 @require_http_methods(["POST"])
 def agent_schedule_dispatch(request):
     """Dispatch due scheduled agents for the current user."""
@@ -192,25 +199,31 @@ def agent_create(request):
         clamp_full_iterations,
     )
 
+    automation_allowed = user_can_automate(request.user, request=request)
+    default_iterations = FULL_DEFAULT_MAX_ITERATIONS if automation_allowed else PILOT_MAX_ITERATIONS
     try:
-        raw_iterations = data.get("max_iterations", FULL_DEFAULT_MAX_ITERATIONS)
+        raw_iterations = data.get("max_iterations", default_iterations)
         max_iterations = clamp_full_iterations(
-            int(raw_iterations if raw_iterations not in (None, "") else FULL_DEFAULT_MAX_ITERATIONS)
+            int(raw_iterations if raw_iterations not in (None, "") else default_iterations)
         )
     except (TypeError, ValueError):
-        max_iterations = FULL_DEFAULT_MAX_ITERATIONS
+        max_iterations = default_iterations
     max_iterations = min(max_iterations, FULL_MAX_ITERATIONS_CAP)
-    allow_multi_server = bool(data.get("allow_multi_server", False))
+    allow_multi_server = data.get("allow_multi_server", False)
     tools_config = data.get("tools_config", {})
     sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
     stop_conditions = data.get("stop_conditions", [])
     try:
-        raw_timeout = data.get("session_timeout_seconds", FULL_DEFAULT_SESSION_TIMEOUT_SEC)
-        session_timeout = int(raw_timeout if raw_timeout not in (None, "") else FULL_DEFAULT_SESSION_TIMEOUT_SEC)
+        default_timeout = FULL_DEFAULT_SESSION_TIMEOUT_SEC if automation_allowed else PILOT_MAX_SESSION_TIMEOUT_SECONDS
+        raw_timeout = data.get("session_timeout_seconds", default_timeout)
+        session_timeout = int(raw_timeout if raw_timeout not in (None, "") else default_timeout)
     except (TypeError, ValueError):
-        session_timeout = FULL_DEFAULT_SESSION_TIMEOUT_SEC
+        session_timeout = default_timeout
     session_timeout = max(30, min(session_timeout, 3600))
-    max_connections = min(int(data.get("max_connections", 5)), 10)
+    try:
+        max_connections = min(int(data.get("max_connections", 5 if automation_allowed else 1)), 10)
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "error": "max_connections must be an integer"}, status=400)
     skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
         request.user,
         skill_provider_registry.normalise_skill_slugs(
@@ -219,6 +232,22 @@ def agent_create(request):
     )
     input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
     report_delivery = normalize_report_delivery(data.get("report_delivery"))
+    provider_binding = {}
+    if data.get("provider_binding"):
+        try:
+            project = active_project_for_execution(request.user)
+            context = build_execution_context(
+                actor_user_id=request.user.pk,
+                project_id=project.pk if project else None,
+                purpose="ops",
+                source_kind="server_agent",
+                source_id="new",
+                mode=ExecutionMode.UNATTENDED if schedule > 0 else ExecutionMode.INTERACTIVE,
+                explicit_binding=data.get("provider_binding"),
+            )
+            provider_binding = context.binding.to_dict()
+        except (TypeError, ValueError, RuntimeError) as exc:
+            return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
     if mode == "full" and tpl:
         if not goal:
@@ -239,6 +268,22 @@ def agent_create(request):
             {"success": False, "error": "Missing server capability: execute_command"},
             status=403,
         )
+
+    violations = pilot_agent_policy_violations(
+        user=request.user,
+        servers=execution_servers,
+        tools_config=tools_config,
+        sudo_policy=sudo_policy,
+        schedule_minutes=schedule,
+        schedule_config=schedule_config,
+        allow_multi_server=allow_multi_server,
+        max_connections=max_connections,
+        max_iterations=max_iterations,
+        session_timeout_seconds=session_timeout,
+        request=request,
+    )
+    if violations:
+        return _pilot_policy_denied(request, action="agent_create", violations=violations)
 
     agent = ServerAgent.objects.create(
         user=request.user,
@@ -261,6 +306,7 @@ def agent_create(request):
         skill_slugs=skill_slugs,
         input_artifacts=input_artifacts,
         report_delivery=report_delivery,
+        provider_binding=provider_binding,
     )
 
     agent.servers.set(execution_servers)
@@ -284,7 +330,7 @@ def agent_create(request):
 def agent_update(request, agent_id):
     """Update agent configuration."""
     agent = ServerAgent.objects.filter(
-        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+        id=agent_id, user=request.user, project=active_project_for_execution(request.user)
     ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
@@ -350,6 +396,27 @@ def agent_update(request, agent_id):
         agent.input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
     if "report_delivery" in data:
         agent.report_delivery = normalize_report_delivery(data.get("report_delivery"))
+    if "provider_binding" in data:
+        if data.get("provider_binding") in ({}, None):
+            agent.provider_binding = {}
+        else:
+            try:
+                context = build_execution_context(
+                    actor_user_id=request.user.pk,
+                    project_id=agent.project_id,
+                    purpose="ops",
+                    source_kind="server_agent",
+                    source_id=agent.pk,
+                    mode=(
+                        ExecutionMode.UNATTENDED
+                        if int(data.get("schedule_minutes", agent.schedule_minutes) or 0) > 0
+                        else ExecutionMode.INTERACTIVE
+                    ),
+                    explicit_binding=data.get("provider_binding"),
+                )
+                agent.provider_binding = context.binding.to_dict()
+            except (TypeError, ValueError, RuntimeError) as exc:
+                return JsonResponse({"success": False, "error": str(exc)}, status=400)
 
     execution_servers = None
     if "server_ids" in data:
@@ -365,6 +432,28 @@ def agent_update(request, agent_id):
                 status=403,
             )
 
+    effective_servers = list(execution_servers) if execution_servers is not None else list(agent.servers.all())
+    violations = pilot_agent_policy_violations(
+        user=request.user,
+        servers=effective_servers,
+        tools_config=agent.tools_config,
+        sudo_policy=agent.sudo_policy,
+        schedule_minutes=agent.schedule_minutes,
+        schedule_config=agent.schedule_config,
+        allow_multi_server=agent.allow_multi_server,
+        max_connections=agent.max_connections,
+        max_iterations=agent.max_iterations,
+        session_timeout_seconds=agent.session_timeout_seconds,
+        request=request,
+    )
+    if violations:
+        return _pilot_policy_denied(
+            request,
+            action="agent_update",
+            violations=violations,
+            agent=agent,
+        )
+
     agent.save()
     if execution_servers is not None:
         agent.servers.set(execution_servers)
@@ -377,7 +466,7 @@ def agent_update(request, agent_id):
 def agent_delete(request, agent_id):
     """Delete an agent."""
     agent = ServerAgent.objects.filter(
-        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+        id=agent_id, user=request.user, project=active_project_for_execution(request.user)
     ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
@@ -391,7 +480,7 @@ def agent_delete(request, agent_id):
 def agent_run(request, agent_id):
     """Run agent on its configured servers (or a specific one)."""
     agent = (
-        ServerAgent.objects.filter(id=agent_id, user=request.user, project=active_project_for_user(request.user))
+        ServerAgent.objects.filter(id=agent_id, user=request.user, project=active_project_for_execution(request.user))
         .prefetch_related("servers")
         .first()
     )
@@ -403,11 +492,55 @@ def agent_run(request, agent_id):
     except Exception:
         data = {}
 
+    violations = pilot_agent_policy_violations(
+        user=request.user,
+        servers=list(agent.servers.all()),
+        tools_config=agent.tools_config,
+        sudo_policy=agent.sudo_policy,
+        schedule_minutes=agent.schedule_minutes,
+        schedule_config=agent.schedule_config,
+        allow_multi_server=agent.allow_multi_server,
+        max_connections=agent.max_connections,
+        max_iterations=agent.max_iterations,
+        session_timeout_seconds=agent.session_timeout_seconds,
+        request=request,
+    )
+    if violations:
+        return _pilot_policy_denied(
+            request,
+            action="agent_run",
+            violations=violations,
+            agent=agent,
+        )
+
     launch_result = start_agent_run_for_user(
         agent=agent,
         user=request.user,
         accessible_servers_queryset=_accessible_servers_queryset(request.user),
         server_id=data.get("server_id"),
         source="http",
+        provider_binding=data.get("provider_binding"),
     )
     return JsonResponse(launch_result["payload"], status=200 if launch_result["ok"] else int(launch_result["status"]))
+
+
+def _pilot_policy_denied(request, *, action: str, violations: list[str], agent=None) -> JsonResponse:
+    log_user_activity(
+        user=request.user,
+        request=request,
+        category="agent",
+        action="pilot_policy_denied",
+        entity_type="agent",
+        entity_id=str(getattr(agent, "pk", "new")),
+        entity_name=str(getattr(agent, "name", action)),
+        metadata={"requested_action": action, "violations": violations[:10]},
+    )
+    return JsonResponse(
+        {
+            "success": False,
+            "error": "Agent configuration violates the restricted pilot policy",
+            "code": "pilot_policy_violation",
+            "violations": violations,
+        },
+        status=403,
+    )

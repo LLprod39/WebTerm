@@ -5,8 +5,10 @@ import * as api from "@/lib/api";
 import {
   activateTab,
   renderServers,
+  serverDetails,
   setupServersPageApiMocks,
 } from "@/pages/servers/serversPageTestHarness";
+import { featureMap } from "@/test/featureFlags";
 
 vi.mock("@/lib/api", () => ({
   addServerGroupMember: vi.fn(),
@@ -239,6 +241,80 @@ describe("Servers page rules and translations", () => {
         }),
       );
     });
+  });
+
+  it("locks and sanitizes unsafe legacy server access for a pilot user", async () => {
+    vi.mocked(api.fetchServerDetails).mockResolvedValue({
+      ...serverDetails,
+      ai_read_only: false,
+      sudo_auth_mode: "stored_password",
+      has_saved_sudo_password: true,
+    });
+    renderServers("en");
+
+    await screen.findByText("prod-web-01");
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Server" }));
+
+    const warning = await screen.findByRole("alert");
+    expect(warning).toHaveTextContent("unsafe legacy access");
+    expect(screen.queryByRole("switch", { name: "AI read-only" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "NOPASSWD" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Sudo password")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Update" }));
+    await waitFor(() => {
+      expect(api.updateServer).toHaveBeenCalledWith(1, expect.objectContaining({
+        ai_read_only: true,
+        sudo_auth_mode: "none",
+        sudo_password: "",
+      }));
+    });
+  });
+
+  it("does not unlock elevated server access for team admins", async () => {
+    vi.mocked(api.fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 2,
+        username: "team-admin",
+        email: "team-admin@example.com",
+        is_staff: true,
+        access_profile: "team_admin",
+        features: featureMap({ automation: true }),
+      },
+    });
+    renderServers("en");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Pilot access is locked");
+    expect(screen.queryByRole("switch", { name: "AI read-only" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "NOPASSWD" })).not.toBeInTheDocument();
+  });
+
+  it("unlocks elevated server access only for pilot_operator with automation", async () => {
+    vi.mocked(api.fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 3,
+        username: "pilot-operator",
+        email: "pilot-operator@example.com",
+        is_staff: false,
+        access_profile: "pilot_operator",
+        features: featureMap({ automation: true }),
+      },
+    });
+    renderServers("en");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
+
+    expect(await screen.findByRole("switch", { name: "AI read-only" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
+    expect(screen.queryByText("Pilot access is locked")).not.toBeInTheDocument();
   });
 
   it("tests an existing server connection without native alerts", async () => {

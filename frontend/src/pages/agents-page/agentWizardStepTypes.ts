@@ -6,6 +6,7 @@ import type {
   AgentScheduleMode,
   AgentTemplate,
   FrontendServer,
+  ProviderBinding,
   StudioSkill,
 } from "@/lib/api";
 import type { AgentSudoPolicy, AgentTaskDraft, AgentWizardCheck, AgentWizardStep } from "./agentPageUtils";
@@ -41,6 +42,9 @@ export type AgentWizardStepContentProps = {
   setSessionTimeoutSeconds: StateSetter<number>;
   maxConnections: number;
   setMaxConnections: StateSetter<number>;
+  providerBinding: ProviderBinding | null;
+  setProviderBinding: StateSetter<ProviderBinding | null>;
+  providerMode: "interactive" | "unattended";
   sudoPolicy: AgentSudoPolicy;
   setSudoPolicy: StateSetter<AgentSudoPolicy>;
   servers: FrontendServer[];
@@ -61,6 +65,10 @@ export type AgentWizardStepContentProps = {
   enabledToolCount: number;
   toolsConfig: Record<string, boolean>;
   setToolsConfig: StateSetter<Record<string, boolean>>;
+  canConfigureMutatingTools: boolean;
+  mutatingToolsAcknowledged: boolean;
+  setMutatingToolsAcknowledged: StateSetter<boolean>;
+  mutatingToolsEnabled: boolean;
   toolsExpanded: boolean;
   setToolsExpanded: StateSetter<boolean>;
   stopConditionsText: string;

@@ -49,6 +49,7 @@ class SSHTerminalConsumer(AsyncJsonWebsocketConsumer):
 
     server: Server | None = None
     _user_id: int | None = None
+    _automation_allowed: bool = False
     _ai_state: TerminalAiState
     _manual_state: ManualCommandState
     _transport_state: TerminalTransportState

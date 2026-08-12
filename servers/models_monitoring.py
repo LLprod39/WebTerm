@@ -166,11 +166,13 @@ class BackgroundWorkerState(models.Model):
     KIND_AGENT_EXECUTION = "agent_execution"
     KIND_SCHEDULED_AGENTS = "scheduled_agents"
     KIND_WATCHERS = "watchers"
+    KIND_AI_PROVIDER_AUTH = "ai_provider_auth"
     KIND_CHOICES = [
         (KIND_MEMORY_DREAMS, "Memory Dreams"),
         (KIND_AGENT_EXECUTION, "Agent Execution"),
         (KIND_SCHEDULED_AGENTS, "Scheduled Agents"),
         (KIND_WATCHERS, "Watchers"),
+        (KIND_AI_PROVIDER_AUTH, "AI Provider Authentication"),
     ]
 
     STATUS_IDLE = "idle"

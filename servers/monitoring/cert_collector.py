@@ -21,6 +21,7 @@ from django.utils import timezone
 from loguru import logger
 
 from servers.models import Server, ServerCertificate
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 
 CERT_MARKER_RE = re.compile(r"^==WTCERT:([A-Z0-9]+)==$")
 _SAN_ENTRY_RE = re.compile(r"(?:DNS|IP Address):([^,\s]+)")
@@ -210,6 +211,7 @@ async def collect_server_certificates(server: Server) -> dict[str, int] | None:
 
     try:
         kwargs = await _build_connect_kwargs(server)
+        validate_pilot_ssh_destination(server.host, server.port)
         async with asyncssh.connect(**kwargs) as conn:
             script = build_cert_script(server.host, int(server.port or 22))
             result = await asyncio.wait_for(conn.run(script, check=False), timeout=90)

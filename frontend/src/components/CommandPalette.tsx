@@ -1,25 +1,17 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   Bot,
   Globe,
-  LayoutDashboard,
   Moon,
   Palette,
-  Server,
-  Settings,
   Sparkles,
   Terminal,
-  Workflow,
-  MessageSquare,
-  Activity,
-  BookOpen,
-  Box,
   History,
 } from "lucide-react";
 
-import { fetchAgents, fetchFrontendBootstrap } from "@/lib/api";
+import { fetchAgents, fetchAuthSession, fetchFrontendBootstrap } from "@/lib/api";
 import {
   CommandDialog,
   CommandEmpty,
@@ -33,6 +25,8 @@ import {
 import { getRecentRuns, getRecentServers, pushRecentServer } from "@/lib/recent-entities";
 import { localize, useI18n } from "@/lib/i18n";
 import { isFlowStyle, useUiStyle } from "@/lib/ui-style";
+import { hasFeatureAccess } from "@/lib/featureAccess";
+import { allowedPrimaryNavigation, canOpenAssistant } from "@/lib/navigation";
 
 type Props = {
   open: boolean;
@@ -40,46 +34,38 @@ type Props = {
   onOpenAssistant?: () => void;
 };
 
-type NavItem = {
-  id: string;
-  labelRu: string;
-  labelEn: string;
-  path: string;
-  icon: ComponentType<{ className?: string }>;
-  keywords?: string;
-};
-
-const NAV: NavItem[] = [
-  { id: "dashboard", labelRu: "Дашборд", labelEn: "Dashboard", path: "/dashboard", icon: LayoutDashboard, keywords: "home main" },
-  { id: "servers", labelRu: "Серверы", labelEn: "Servers", path: "/servers", icon: Server, keywords: "ssh fleet hosts" },
-  { id: "playbooks", labelRu: "Ansible", labelEn: "Ansible", path: "/automation", icon: BookOpen, keywords: "playbooks yaml automation runbook" },
-  { id: "agents", labelRu: "Агенты", labelEn: "Agents", path: "/agents", icon: Bot, keywords: "runs automation" },
-  { id: "chat", labelRu: "Операторский чат", labelEn: "Operator chat", path: "/chat", icon: MessageSquare, keywords: "ai assistant" },
-  { id: "studio", labelRu: "Studio", labelEn: "Studio", path: "/studio", icon: Workflow, keywords: "pipeline" },
-  { id: "monitoring", labelRu: "Insights", labelEn: "Insights", path: "/monitoring", icon: Activity, keywords: "forecast alerts" },
-  { id: "k8s", labelRu: "Kubernetes", labelEn: "Kubernetes", path: "/kubernetes", icon: Box, keywords: "cluster pods" },
-  { id: "settings", labelRu: "Настройки", labelEn: "Settings", path: "/settings", icon: Settings, keywords: "config" },
-];
-
 export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
   const navigate = useNavigate();
-  const { lang, setLang } = useI18n();
+  const { lang, setLang, t } = useI18n();
   const { style, setStyle } = useUiStyle();
   const [recentServers, setRecentServers] = useState(() => getRecentServers());
   const [recentRuns, setRecentRuns] = useState(() => getRecentRuns());
+
+  const sessionQuery = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+    enabled: open,
+  });
+  const user = sessionQuery.data?.user;
+  const canUseServers = hasFeatureAccess(user, "servers");
+  const canUseAgents = hasFeatureAccess(user, "agents");
+  const canUseAssistant = canOpenAssistant(user);
+  const navigation = useMemo(() => allowedPrimaryNavigation(user), [user]);
 
   const serversQuery = useQuery({
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 30_000,
-    enabled: open,
+    enabled: open && canUseServers,
   });
 
   const agentsQuery = useQuery({
     queryKey: ["agents", "list"],
     queryFn: () => fetchAgents(),
     staleTime: 20_000,
-    enabled: open,
+    enabled: open && canUseAgents,
   });
 
   useEffect(() => {
@@ -89,8 +75,10 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
     }
   }, [open]);
 
-  const servers = serversQuery.data?.servers ?? [];
-  const agents = agentsQuery.data?.agents ?? [];
+  const servers = canUseServers ? serversQuery.data?.servers ?? [] : [];
+  const agents = canUseAgents ? agentsQuery.data?.agents ?? [] : [];
+  const visibleRecentServers = canUseServers ? recentServers : [];
+  const visibleRecentRuns = canUseAgents ? recentRuns : [];
 
   const run = useCallback(
     (fn: () => void) => {
@@ -133,9 +121,9 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
       <CommandList>
         <CommandEmpty>{localize(lang, "Ничего не найдено", "No results")}</CommandEmpty>
 
-        {(recentServers.length > 0 || recentRuns.length > 0) && (
+        {(visibleRecentServers.length > 0 || visibleRecentRuns.length > 0) && (
           <CommandGroup heading={localize(lang, "Недавнее", "Recent")}>
-            {recentServers.map((server) => (
+            {visibleRecentServers.map((server) => (
               <CommandItem
                 key={`recent-srv-${server.id}`}
                 value={`recent server ${server.name} ${server.host ?? ""}`}
@@ -149,7 +137,7 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
                 <CommandShortcut>{localize(lang, "Терминал", "Terminal")}</CommandShortcut>
               </CommandItem>
             ))}
-            {recentRuns.map((item) => (
+            {visibleRecentRuns.map((item) => (
               <CommandItem
                 key={`recent-run-${item.id}`}
                 value={`recent run ${item.agentName} ${item.id}`}
@@ -164,16 +152,16 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
         )}
 
         <CommandGroup heading={localize(lang, "Навигация", "Navigation")}>
-          {NAV.map((item) => {
+          {navigation.map((item) => {
             const Icon = item.icon;
             return (
               <CommandItem
                 key={item.id}
-                value={`${item.labelRu} ${item.labelEn} ${item.keywords ?? ""}`}
+                value={`${t(item.titleKey)} ${item.keywords ?? ""}`}
                 onSelect={() => go(item.path)}
               >
                 <Icon className="mr-2 h-4 w-4" />
-                {localize(lang, item.labelRu, item.labelEn)}
+                {t(item.titleKey)}
               </CommandItem>
             );
           })}
@@ -220,18 +208,20 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
         <CommandSeparator />
 
         <CommandGroup heading={localize(lang, "Действия", "Actions")}>
-          <CommandItem
-            value="assistant ask ai chat drawer"
-            onSelect={() =>
-              run(() => {
-                onOpenAssistant?.();
-              })
-            }
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            {localize(lang, "Спросить ассистента", "Ask assistant")}
-            <CommandShortcut>⌘.</CommandShortcut>
-          </CommandItem>
+          {canUseAssistant ? (
+            <CommandItem
+              value="assistant ask ai chat drawer"
+              onSelect={() =>
+                run(() => {
+                  onOpenAssistant?.();
+                })
+              }
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              {localize(lang, "Спросить ассистента", "Ask assistant")}
+              <CommandShortcut>⌘.</CommandShortcut>
+            </CommandItem>
+          ) : null}
           <CommandItem value="theme toggle dark light flow" onSelect={toggleTheme}>
             <Moon className="mr-2 h-4 w-4" />
             {localize(lang, "Переключить тему", "Toggle theme")}

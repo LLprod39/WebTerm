@@ -43,7 +43,7 @@ def is_retryable_llm_error(exc: Exception) -> bool:
     return any(code in message for code in ("500", "502", "503", "504", "internal error", "service unavailable"))
 
 
-async def llm_next_step(system_prompt: str, user_prompt: str) -> AgentStep:
+async def llm_next_step(system_prompt: str, user_prompt: str, *, execution_context=None) -> AgentStep:
     """Call the planner LLM once and parse its response.
 
     Uses JSON mode so we get a guaranteed-valid JSON object on the wire.
@@ -59,6 +59,7 @@ async def llm_next_step(system_prompt: str, user_prompt: str) -> AgentStep:
         purpose="terminal_agent",
         system_prompt=system_prompt,
         json_mode=True,
+        execution_context=execution_context,
     ):
         out += chunk
         if len(out) > LLM_OUTPUT_CHAR_CAP:
@@ -80,12 +81,13 @@ async def llm_next_step_with_retry(
     *,
     timeout_sec: float,
     max_attempts: int = 2,
+    execution_context=None,
 ) -> AgentStep:
     last_exc: Exception | None = None
     for attempt in range(max_attempts):
         try:
             return await asyncio.wait_for(
-                llm_next_step(system_prompt, user_prompt),
+                llm_next_step(system_prompt, user_prompt, execution_context=execution_context),
                 timeout=timeout_sec,
             )
         except TimeoutError:

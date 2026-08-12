@@ -217,7 +217,7 @@ class TerminalAiControlOperations:
             category="assistant",
             action="terminal_ai_request",
             status="success",
-            description=request.message[:400],
+            description="Terminal AI request accepted",
             entity_type="server",
             entity_id=self.server.id if self.server else "",
             entity_name=self.server.name if self.server else "",

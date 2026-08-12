@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods
 
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
-from core_ui.projects import active_project_for_user
+from core_ui.services.ai_execution_context import active_project_for_execution
 from servers.agents.agent_dispatch import serialize_agent_dispatch
 from servers.agents.agent_run_report import (
     build_agent_run_events_payload,
@@ -33,7 +33,7 @@ from servers.views.server_helpers import _accessible_servers_queryset
 
 
 def _owned_agent_run(user, run_id: int) -> AgentRun | None:
-    project = active_project_for_user(user)
+    project = active_project_for_execution(user)
     run = AgentRun.objects.filter(project=project, id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
@@ -60,7 +60,7 @@ def _run_agent_mode(run: AgentRun) -> str:
 def agent_runs(request, agent_id):
     """History of runs for an agent."""
     agent = ServerAgent.objects.filter(
-        id=agent_id, user=request.user, project=active_project_for_user(request.user)
+        id=agent_id, user=request.user, project=active_project_for_execution(request.user)
     ).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
@@ -443,6 +443,7 @@ def agent_run_task_ai_refine(request, run_id, task_id):
     import re as _re
 
     from app.core.llm import LLMProvider
+    from core_ui.services.ai_execution_context import build_execution_context
 
     prompt = f"""Ты — ассистент, помогающий редактировать задачи в плане DevOps-агента.
 
@@ -455,10 +456,27 @@ def agent_run_task_ai_refine(request, run_id, task_id):
 Верни ТОЛЬКО JSON-объект с полями name и description (без markdown, без пояснений):
 {{"name": "...", "description": "..."}}"""
 
+    execution_context = build_execution_context(
+        actor_user_id=request.user.pk,
+        project_id=run.project_id,
+        purpose="chat",
+        source_kind="agent_run",
+        source_id=run.pk,
+        mode=run.provider_execution_mode,
+        stored_binding=run.provider_binding_snapshot,
+        provider_session_id=run.provider_session_id,
+        idempotency_key=f"agent-run:{run.pk}:task-refine:{task_id}",
+    )
+
     async def _call():
         provider = LLMProvider()
         chunks = []
-        async for chunk in provider.stream_chat(prompt, model="auto", purpose="chat"):
+        async for chunk in provider.stream_chat(
+            prompt,
+            model="auto",
+            purpose="chat",
+            execution_context=execution_context,
+        ):
             chunks.append(chunk)
         return "".join(chunks)
 

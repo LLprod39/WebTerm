@@ -102,6 +102,16 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         if msg_type == "ping":
             await self.send_json({"type": "pong"})
             return
+        if not await self._has_feature():
+            await self.send_json(
+                {
+                    "type": "error",
+                    "code": "permission_revoked",
+                    "message": "Chat access has been revoked",
+                }
+            )
+            await self.close(code=4403)
+            return
         if msg_type == "chat.message":
             await self._handle_message(content or {})
         elif msg_type == "turn.stop":
@@ -167,6 +177,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             user=user,
             message=text,
             thinking=content.get("thinking"),
+            provider_binding=content.get("provider_binding"),
         )
         if not started:
             await self.send_json({"type": "error", "message": "Turn already in progress"})
@@ -221,7 +232,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
     @database_sync_to_async
     def _has_feature(self) -> bool:
         user = User.objects.filter(id=self._user_id).first()
-        return bool(user and feature_allowed_for_user(user, "orchestrator"))
+        return bool(user and feature_allowed_for_user(user, "chat"))
 
     @database_sync_to_async
     def _get_user(self):

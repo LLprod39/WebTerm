@@ -27,6 +27,7 @@ async def _stream_decision(
     semaphore=None,
     llm_factory=None,
     max_chars: int,
+    execution_context=None,
 ) -> dict[str, Any]:
     from app.core.llm import LLMProvider
 
@@ -41,6 +42,7 @@ async def _stream_decision(
             model="auto",
             purpose=purpose,
             json_mode=True,
+            execution_context=execution_context,
         ):
             out += chunk
             if len(out) > max_chars:
@@ -68,6 +70,7 @@ async def decide_recovery(
     user_reply: str | None = None,
     semaphore=None,
     llm_factory=None,
+    execution_context=None,
 ) -> dict[str, Any]:
     """Decide what to do after a command failure."""
     prompt = build_recovery_prompt(
@@ -86,6 +89,7 @@ async def decide_recovery(
         semaphore=semaphore,
         llm_factory=llm_factory,
         max_chars=3000,
+        execution_context=execution_context,
     )
 
 
@@ -99,6 +103,7 @@ async def decide_step_next(
     user_reply: str | None = None,
     semaphore=None,
     llm_factory=None,
+    execution_context=None,
 ) -> dict[str, Any]:
     """Decide the next step after a command in step-by-step mode."""
     prompt = build_step_decision_prompt(
@@ -118,4 +123,5 @@ async def decide_step_next(
         semaphore=semaphore,
         llm_factory=llm_factory,
         max_chars=5000,
+        execution_context=execution_context,
     )

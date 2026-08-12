@@ -10,6 +10,7 @@ from app.core.llm import LLMProvider, is_thinking_chunk
 from servers.agents.agent_inputs import build_agent_materials_prompt
 
 if TYPE_CHECKING:
+    from app.ai_runtime import LLMExecutionContext
     from servers.models import Server, ServerAgent
 
 
@@ -79,6 +80,7 @@ async def get_ai_analysis(
     outputs: list[dict[str, Any]],
     *,
     template: dict[str, Any] | None,
+    execution_context: LLMExecutionContext | None = None,
 ) -> str:
     skills, skill_errors = await _sync_to_async(
         lambda: skill_provider_registry.resolve_skills(list(agent.skill_slugs or [])),
@@ -97,7 +99,12 @@ async def get_ai_analysis(
 
     try:
         chunks = []
-        async for chunk in LLMProvider().stream_chat(full_prompt, model="auto"):
+        async for chunk in LLMProvider().stream_chat(
+            full_prompt,
+            model="auto",
+            purpose="opssummary",
+            execution_context=execution_context,
+        ):
             if not is_thinking_chunk(chunk):
                 chunks.append(chunk)
         return "".join(chunks)

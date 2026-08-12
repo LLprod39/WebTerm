@@ -60,7 +60,7 @@ const groupContext = {
   environment_vars: { TEAM: "ops" },
 };
 
-const serverDetails = {
+export const serverDetails = {
   id: 1,
   name: "prod-web-01",
   host: "10.0.0.5",

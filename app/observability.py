@@ -20,7 +20,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 INSTRUMENTATION_NAME = "webterm"
-INSTRUMENTATION_VERSION = "0.2.2"
+INSTRUMENTATION_VERSION = "0.2.3"
 _PROPAGATOR = TraceContextTextMapPropagator()
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 

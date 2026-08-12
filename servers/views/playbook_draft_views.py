@@ -15,7 +15,7 @@ from servers.views.playbook_workspace_helpers import get_playbook_for_action, js
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET", "PUT"])
 def playbook_draft(request, playbook_id: int):
     try:

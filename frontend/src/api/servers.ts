@@ -26,6 +26,7 @@ export interface FrontendServer {
   terminal_path: string;
   minimal_terminal_path: string;
   last_connected: string | null;
+  ai_read_only?: boolean;
   sudo_auth_mode?: "none" | "nopasswd" | "stored_password";
   has_saved_sudo_password?: boolean;
   has_trusted_host_keys?: boolean;

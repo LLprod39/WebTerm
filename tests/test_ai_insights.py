@@ -27,7 +27,7 @@ FAKE_ANALYSIS = (
 def fake_llm(monkeypatch):
     calls: list[dict] = []
 
-    def _fake(prompt: str, *, system_prompt: str) -> tuple[str, str]:
+    def _fake(prompt: str, *, system_prompt: str, execution_context=None) -> tuple[str, str]:
         calls.append({"prompt": prompt, "system_prompt": system_prompt})
         return FAKE_ANALYSIS, "test-model"
 

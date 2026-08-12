@@ -81,6 +81,9 @@ export default function AppLayout() {
     return (
       <SidebarProvider>
         <FlowChrome>
+          <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only">
+            {localize(lang, "Перейти к содержимому", "Skip to content")}
+          </a>
           {isAshita ? <AshitaAtmosphere /> : null}
           {mobileSidebarTrigger}
           <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
@@ -99,7 +102,7 @@ export default function AppLayout() {
                   <span className="text-xs font-medium text-foreground">{localize(lang, immersive.titleRu, immersive.titleEn)}</span>
                 </header>
               )}
-              <main className="flex min-h-0 flex-1 flex-col overflow-hidden pt-16 md:pt-0">
+              <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col overflow-hidden pt-16 md:pt-0">
                 <Suspense fallback={<ContentFallback />}>
                   <PageTransition>
                     <Outlet />
@@ -118,6 +121,9 @@ export default function AppLayout() {
   return (
     <SidebarProvider>
       <FlowChrome>
+        <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only">
+          {localize(lang, "Перейти к содержимому", "Skip to content")}
+        </a>
         {isAshita ? <AshitaAtmosphere /> : null}
         {mobileSidebarTrigger}
         <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
@@ -125,6 +131,8 @@ export default function AppLayout() {
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {isFlow && <FlowTopbar />}
             <main
+              id="main-content"
+              tabIndex={-1}
               className={
                 isFlow
                   ? isChatRoute

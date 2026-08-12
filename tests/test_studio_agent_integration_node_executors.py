@@ -114,11 +114,12 @@ def test_llm_query_node_streams_response_with_context(monkeypatch):
         return "OPERATIONAL RECIPES"
 
     class FakeLLMProvider:
-        async def stream_chat(self, full_prompt, *, model, specific_model=None, purpose):
+        async def stream_chat(self, full_prompt, *, model, specific_model=None, purpose, execution_context=None):
             captured["prompt"] = full_prompt
             captured["model"] = model
             captured["specific_model"] = specific_model
             captured["purpose"] = purpose
+            captured["execution_context"] = execution_context
             for chunk in ["part-1 ", "part-2"]:
                 yield chunk
 
@@ -149,6 +150,7 @@ def test_llm_query_node_streams_response_with_context(monkeypatch):
     assert "CPU at 99%" in str(captured["prompt"])
     assert "SERVER MEMORY" in str(captured["prompt"])
     assert captured["model"] == "gemini"
+    assert captured["execution_context"] is not None
 
 
 def test_mcp_call_node_executes_tool_and_tracks_execution(monkeypatch):

@@ -7,7 +7,7 @@ import { cloneAiPreferences, cloneAiSettings, readStoredAiPreferences } from "@/
 import type { AiAssistantSettings, AiChatMode, AiExecutionMode, AiPreferences } from "@/components/terminal/ai-types";
 import type { SftpPanelHandle } from "@/components/terminal/SftpPanel";
 import { toast } from "@/hooks/use-toast";
-import { fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
+import { fetchAuthSession, fetchFrontendBootstrap, type FrontendServer } from "@/lib/api";
 import { resolveTheme } from "@/components/terminal/TerminalThemes";
 import { TerminalSettingsPanel } from "@/components/terminal/TerminalSettingsPanel";
 import { FileEditorModal } from "@/components/editor/FileEditorModal";
@@ -23,6 +23,7 @@ import {
   createEmptyAiState,
   createTab,
   findServer,
+  isTerminalReadOnlyMode,
   mapStatus,
   nextId,
   type SidePanelMode,
@@ -42,6 +43,12 @@ export default function TerminalPage() {
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
+  });
+  const { data: authData } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
   });
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const defaultServer = findServer(servers, requestedId) || servers[0];
@@ -167,6 +174,7 @@ export default function TerminalPage() {
     enabled: true,
   });
   const activeServer = activeTab ? findServer(servers, activeTab.serverId) : null;
+  const readOnlyMode = activeServer ? isTerminalReadOnlyMode(activeServer, authData?.user) : false;
   const activeAiState = activeTabId ? tabAiState[activeTabId] || createEmptyAiState() : createEmptyAiState();
   const activeAiPreferences =
     activeTabId && tabAiPreferences[activeTabId]
@@ -368,6 +376,7 @@ export default function TerminalPage() {
       <TerminalHeader
         activeTab={activeTab}
         activeServer={activeServer}
+        readOnlyMode={readOnlyMode}
         tabs={tabs}
         activeTabId={activeTabId}
         sidePanelMode={sidePanelMode}

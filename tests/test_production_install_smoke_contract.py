@@ -26,6 +26,103 @@ def test_release_publishes_and_smokes_the_socket_proxy_image() -> None:
     assert workflow.count('"agent-command-docker-proxy": "WEBTERM_AGENT_COMMAND_DOCKER_PROXY_IMAGE"') == 2
 
 
+def test_release_publishes_and_smokes_separate_ai_cli_images() -> None:
+    workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    smoke = (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
+
+    for name, env_name in (
+        ("ai-cli-docker-proxy", "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE"),
+        ("ai-cli-egress-proxy", "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE"),
+        ("ai-cli-runner-manager", "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE"),
+        ("ai-cli-codex-runner", "AI_CLI_CODEX_RUNNER_IMAGE"),
+        ("ai-cli-grok-runner", "AI_CLI_GROK_RUNNER_IMAGE"),
+    ):
+        assert f"name: {name}" in workflow
+        assert workflow.count(f'"{name}": "{env_name}"') == 2
+    assert "target: codex" in workflow
+    assert "target: grok" in workflow
+    assert "GROK_BUILD_SHA256" in workflow
+    assert 'F13A_WITH_AI_CLI: "1"' in workflow
+    assert "UID 10001 credential volume passed" in smoke
+    assert "ai-cli-egress-policy.txt" in smoke
+    assert '"169.254.169.254:443"' in smoke
+    assert '"postgres:5432"' in smoke
+    assert '"api.openai.com:443"' in smoke
+    assert '"api.x.ai:443"' in smoke
+
+
+def test_ai_cli_images_install_only_hashed_locks_and_security_audits_them() -> None:
+    backend_dockerfile = (ROOT / "docker/backend.Dockerfile").read_text(encoding="utf-8")
+    manager_dockerfile = (ROOT / "docker/ai-cli-runner-manager.Dockerfile").read_text(encoding="utf-8")
+    provider_dockerfile = (ROOT / "docker/ai-cli-provider-runner.Dockerfile").read_text(encoding="utf-8")
+    security = (ROOT / ".github/workflows/security.yml").read_text(encoding="utf-8")
+    sbom = (ROOT / "scripts/generate_sbom.py").read_text(encoding="utf-8")
+
+    assert "--require-hashes -r /app/ai_cli_runner_manager/requirements.lock" in manager_dockerfile
+    assert "--require-hashes --requirement /app/provider-requirements.lock" in provider_dockerfile
+    assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in backend_dockerfile
+    assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in manager_dockerfile
+    assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in provider_dockerfile
+    for lock in ("ai_cli_runner_manager/requirements.lock", "ai_cli_runner_manager/provider-requirements.lock"):
+        text = (ROOT / lock).read_text(encoding="utf-8")
+        assert "--hash=sha256:" in text
+        assert lock in security
+        assert lock in sbom
+    assert "pip-audit-ai-cli-$plane.json" in security
+    assert "sbom-ai-cli-manager.cdx.json" in security
+    assert "sbom-ai-cli-provider.cdx.json" in security
+
+
+def test_optional_pilot_profiles_are_explicit_and_fail_closed() -> None:
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
+
+    for flag in ("--with-ai-cli", "--with-observability", "--cleanup-ai-cli-credentials"):
+        assert flag in installer
+    assert "AI_CLI_RUNNER_IMAGE" not in compose
+    assert "webterm-ai-cli-egress-proxy:latest" not in compose
+    assert "webterm-ai-cli-runner-manager:latest" not in compose
+    assert "api/ready/?scope=core" in compose
+    assert 'profiles: ["observability"]' in compose
+    assert "TELEGRAM_BOT_TOKEN is provisioned but --with-telegram-bot was not requested" in installer
+    assert "--concurrency ${AI_CLI_AUTH_WORKER_CONCURRENCY:-4}" in compose
+    assert "AI_CLI_AUTH_WORKER_CONCURRENCY must be an integer from 1 through 8" in installer
+    assert "validate-pilot-capacity.py" in installer
+    assert "--with-ai-cli requires PILOT_RESTRICTED_MODE=true" in installer
+    assert "explicit disposable PILOT_SSH_ALLOWED_HOSTS/CIDRS/PORTS" in installer
+    for key in (
+        "PILOT_RESTRICTED_MODE",
+        "PILOT_SSH_ALLOWED_HOSTS",
+        "PILOT_SSH_ALLOWED_CIDRS",
+        "PILOT_SSH_ALLOWED_PORTS",
+    ):
+        assert key in compose
+    assert "pilot install requires the age command for encrypted backups" in installer
+    assert "BACKUP_AGE_RECIPIENT_FILE must reference a provisioned public age recipient file" in installer
+    assert "WEBTERM_ALERTMANAGER_IMAGE" in installer
+    assert "alertmanager-config.txt" in (ROOT / "docker/production-install-smoke.sh").read_text(encoding="utf-8")
+
+
+def test_ai_cli_egress_denies_private_and_metadata_destinations_before_provider_domains() -> None:
+    squid = (ROOT / "docker/ai-cli-egress-squid.conf").read_text(encoding="utf-8")
+
+    deny = squid.index("http_access deny forbidden_dst")
+    allow = squid.index("http_access allow CONNECT provider_domains")
+    assert deny < allow
+    assert squid.index("http_access allow localhost manager") < squid.index("http_access deny manager")
+    assert squid.index("http_access deny manager") < squid.index("http_access deny !CONNECT")
+    for network in (
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "::1/128",
+        "fc00::/7",
+    ):
+        assert network in squid
+
+
 def test_release_excludes_the_local_mcp_demo_fixture() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
     compose = (ROOT / "docker-compose.production.yml").read_text(encoding="utf-8")
@@ -40,11 +137,12 @@ def test_release_excludes_the_local_mcp_demo_fixture() -> None:
 
 def test_release_tag_must_match_the_canonical_version() -> None:
     workflow = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip().replace(".", "_")
 
     assert "Verify release tag and contracts" in workflow
     assert 'expected="v$(tr -d' in workflow
     assert 'test "$GITHUB_REF_NAME" = "$expected"' in workflow
-    assert "docs/releases/V0_2_2_RELEASE_NOTES.md" in workflow
+    assert f"docs/releases/V{version}_RELEASE_NOTES.md" in workflow
 
 
 def test_f13a_smoke_enforces_release_profile_runtime_gates() -> None:

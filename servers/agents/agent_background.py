@@ -114,6 +114,19 @@ async def _run_agent_background(
         thread_sensitive=True,
     )()
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
+    from core_ui.services.ai_execution_context import abuild_execution_context
+
+    execution_context = await abuild_execution_context(
+        actor_user_id=user.pk,
+        project_id=run.project_id or agent.project_id,
+        purpose="ops",
+        source_kind="agent_run",
+        source_id=run.pk,
+        mode=run.provider_execution_mode,
+        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        requested_provider="auto",
+        provider_session_id=run.provider_session_id,
+    )
     servers, denied_server_ids = await sync_to_async(
         lambda: resolve_servers_for_user_capability(server_ids, user, CAPABILITY_EXECUTE_COMMAND),
         thread_sensitive=True,
@@ -143,11 +156,25 @@ async def _run_agent_background(
     callback = _make_event_callback(run_id)
     if agent.is_multi:
         engine = MultiAgentEngine(
-            agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors
+            agent,
+            servers,
+            user,
+            event_callback=callback,
+            skills=skills,
+            skill_errors=skill_errors,
+            execution_context=execution_context,
         )
         await engine.run(plan_only=plan_only, run_record=run)
     else:
-        engine = AgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
+        engine = AgentEngine(
+            agent,
+            servers,
+            user,
+            event_callback=callback,
+            skills=skills,
+            skill_errors=skill_errors,
+            execution_context=execution_context,
+        )
         await engine.run(run_record=run)
 
 
@@ -180,6 +207,19 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         thread_sensitive=True,
     )()
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
+    from core_ui.services.ai_execution_context import abuild_execution_context
+
+    execution_context = await abuild_execution_context(
+        actor_user_id=user.pk,
+        project_id=run.project_id or agent.project_id,
+        purpose="ops",
+        source_kind="agent_run",
+        source_id=run.pk,
+        mode=run.provider_execution_mode,
+        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        requested_provider="auto",
+        provider_session_id=run.provider_session_id,
+    )
     servers, denied_server_ids = await sync_to_async(
         lambda: resolve_servers_for_user_capability(server_ids, user, CAPABILITY_EXECUTE_COMMAND),
         thread_sensitive=True,
@@ -192,7 +232,15 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
     )()
 
     callback = _make_event_callback(run_id)
-    engine = MultiAgentEngine(agent, servers, user, event_callback=callback, skills=skills, skill_errors=skill_errors)
+    engine = MultiAgentEngine(
+        agent,
+        servers,
+        user,
+        event_callback=callback,
+        skills=skills,
+        skill_errors=skill_errors,
+        execution_context=execution_context,
+    )
     await engine.execute_existing_plan(run)
 
 

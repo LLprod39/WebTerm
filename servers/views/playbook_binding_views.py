@@ -27,7 +27,7 @@ def _require_binding_access(playbook, user):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["GET", "POST"])
 def playbook_bindings(request, playbook_id: int):
     try:
@@ -56,7 +56,7 @@ def playbook_bindings(request, playbook_id: int):
 
 
 @login_required
-@require_feature("servers")
+@require_feature("automation")
 @require_http_methods(["PATCH", "DELETE"])
 def playbook_binding_detail(request, playbook_id: int, binding_id: int):
     try:

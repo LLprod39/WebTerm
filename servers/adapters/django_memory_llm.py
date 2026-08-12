@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 from typing import Any
 
 from asgiref.sync import async_to_sync
@@ -8,6 +9,7 @@ from asgiref.sync import async_to_sync
 from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.snapshot_utils import content_delta, render_snapshot_lines
 from app.agent_kernel.memory.types import OperationalPattern, SnapshotCandidate
+from app.ai_runtime import ExecutionMode
 
 
 def should_distill_with_llm(
@@ -88,11 +90,28 @@ def distill_with_llm(
         f"Исходные разделы:\n{json.dumps(sections, ensure_ascii=False)}"
     )
     provider = LLMProvider()
+    from core_ui.services.ai_execution_context import build_execution_context
+
+    execution_context = build_execution_context(
+        actor_user_id=server.user_id,
+        project_id=server.project_id,
+        purpose="opssummary",
+        source_kind="server_memory",
+        source_id=server.pk,
+        mode=ExecutionMode.UNATTENDED,
+        requested_specific_model=model_alias,
+        idempotency_key=f"server-memory:{server.pk}:distill:{sha256(prompt.encode('utf-8')).hexdigest()}",
+    )
     try:
         chunks: list[str] = []
 
         async def _collect():
-            async for chunk in provider.stream_chat(prompt, purpose="opssummary", specific_model=model_alias):
+            async for chunk in provider.stream_chat(
+                prompt,
+                purpose="opssummary",
+                specific_model=model_alias,
+                execution_context=execution_context,
+            ):
                 chunks.append(chunk)
 
         async_to_sync(_collect)()
@@ -162,11 +181,28 @@ def llm_enhance_patterns(
         f"Workflow candidates:\n{json.dumps(candidates, ensure_ascii=False)}"
     )
     provider = LLMProvider()
+    from core_ui.services.ai_execution_context import build_execution_context
+
+    execution_context = build_execution_context(
+        actor_user_id=server.user_id,
+        project_id=server.project_id,
+        purpose="opssummary",
+        source_kind="server_memory",
+        source_id=server.pk,
+        mode=ExecutionMode.UNATTENDED,
+        requested_specific_model=model_alias,
+        idempotency_key=f"server-memory:{server.pk}:patterns:{sha256(prompt.encode('utf-8')).hexdigest()}",
+    )
     try:
         chunks: list[str] = []
 
         async def _collect():
-            async for chunk in provider.stream_chat(prompt, purpose="opssummary", specific_model=model_alias):
+            async for chunk in provider.stream_chat(
+                prompt,
+                purpose="opssummary",
+                specific_model=model_alias,
+                execution_context=execution_context,
+            ):
                 chunks.append(chunk)
 
         async_to_sync(_collect)()

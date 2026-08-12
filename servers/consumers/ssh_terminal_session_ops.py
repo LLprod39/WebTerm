@@ -13,7 +13,9 @@ from channels.db import database_sync_to_async
 from loguru import logger
 
 from core_ui.activity import log_user_activity_async
+from servers.models import Server
 from servers.services import terminal_input, terminal_nova_context
+from servers.services.server_mutation_policy import decide_server_mutation
 from servers.services.terminal_ai.active_command import (
     active_command_id,
     exit_future,
@@ -217,6 +219,21 @@ class TerminalSessionOperations:
                 await self._disconnect_ssh()
 
     async def _handle_input(self, data: str):
+        try:
+            current_server = await self._get_server(self._user_id, self.server.id)
+        except Server.DoesNotExist:
+            await self._safe_send_json(
+                {
+                    "type": "error",
+                    "code": "server_access_revoked",
+                    "message": "Server access was revoked before terminal input could be processed.",
+                }
+            )
+            await self._disconnect_ssh()
+            await self.close(code=4403)
+            return
+        self.server = current_server
+        mutation_allowed = await self._manual_input_mutation_allowed(self._user_id, self.server.id)
         await handle_terminal_input(
             self._manual_state,
             data,
@@ -234,7 +251,19 @@ class TerminalSessionOperations:
                 self._persist_manual_terminal_command_result,
                 thread_sensitive=True,
             ),
+            mutation_allowed=mutation_allowed,
         )
+
+    @staticmethod
+    @database_sync_to_async
+    def _manual_input_mutation_allowed(user_id: int, server_id: int) -> bool:
+        from django.contrib.auth import get_user_model
+
+        user = get_user_model().objects.filter(pk=user_id, is_active=True).first()
+        server = Server.objects.filter(pk=server_id, is_active=True).first()
+        if not user or not server:
+            return False
+        return decide_server_mutation(user, server).allowed
 
     _should_use_manual_command_marker = staticmethod(terminal_input.should_use_manual_command_marker)
     _strip_terminal_input_sequences = staticmethod(terminal_input.strip_terminal_input_sequences)

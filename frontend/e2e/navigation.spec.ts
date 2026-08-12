@@ -7,6 +7,7 @@ const fullFeatures = {
   agents: true,
   studio: true,
   settings: true,
+  chat: true,
   orchestrator: true,
 };
 
@@ -211,11 +212,11 @@ test("sidebar navigation opens key sections", async ({ page }) => {
 
   await page.getByRole("link", { name: "Dashboard" }).first().click();
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.getByRole("heading", { name: "Мой воркспейс" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "My workspace" })).toBeVisible();
 
   await page.getByRole("link", { name: "Agents" }).first().click();
   await expect(page).toHaveURL(/\/agents$/);
-  await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Studio" }).first().click();
   await expect(page).toHaveURL(/\/studio$/);
@@ -228,4 +229,69 @@ test("sidebar navigation opens key sections", async ({ page }) => {
   await page.getByRole("link", { name: "Servers" }).first().click();
   await expect(page).toHaveURL(/\/servers$/);
   await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+});
+
+test("pilot personal AI capability cannot direct-load administrative settings", async ({ page }) => {
+  const harness = await installApiHarness(page, (req) => {
+    if (req.path === "/api/auth/session/" && req.method === "GET") {
+      return json({
+        authenticated: true,
+        user: {
+          id: 20,
+          username: "pilot-user",
+          email: "pilot@example.test",
+          is_staff: false,
+          access_profile: "pilot_user",
+          features: { ai_connections_personal: true },
+        },
+      });
+    }
+    if (req.path === "/api/ai/providers/connections/") {
+      return json({ success: true, connections: [] });
+    }
+    if (req.path === "/api/ai/providers/preferences/") {
+      return json({ success: true, preferences: [], workspace_defaults: [] });
+    }
+    if (req.path === "/api/ai/providers/catalog/") {
+      return json({ success: true, targets: [], purposes: [] });
+    }
+  });
+
+  await page.goto("/settings/users");
+
+  await expect(page).toHaveURL(/\/settings\/ai-connections$/);
+  await expect(page.getByRole("heading", { name: "CLI subscriptions" })).toBeVisible();
+  expect(harness.getCalls("/api/access/users/")).toHaveLength(0);
+  expect(harness.getCalls("/api/ai/providers/pools/")).toHaveLength(0);
+});
+
+test("pilot opens Chat with the narrow chat capability only", async ({ page }) => {
+  const harness = await installApiHarness(page, (req) => {
+    if (req.path === "/api/auth/session/" && req.method === "GET") {
+      return json({
+        authenticated: true,
+        user: {
+          id: 21,
+          username: "pilot-chat",
+          email: "pilot-chat@example.test",
+          is_staff: false,
+          access_profile: "pilot_user",
+          features: {
+            chat: true,
+            orchestrator: false,
+            ai_connections_personal: true,
+            ai_connections_admin: false,
+          },
+        },
+      });
+    }
+    if (req.path === "/api/assistant/chats/") return json({ chats: [] });
+    if (req.path === "/api/ai/providers/connections/") return json({ success: true, connections: [] });
+  });
+
+  await page.goto("/chat");
+
+  await expect(page).toHaveURL(/\/chat$/);
+  await expect(page.getByRole("heading", { name: "Chats", exact: true })).toBeVisible();
+  expect(harness.getCalls("/api/ai/providers/pools/")).toHaveLength(0);
 });

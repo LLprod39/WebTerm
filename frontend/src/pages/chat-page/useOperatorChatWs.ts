@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { AssistantAction, OperatorWsEvent } from "@/api";
+import type { AssistantAction, OperatorWsEvent, ProviderBinding } from "@/api";
 import { getOperatorChatWsUrl } from "@/lib/api";
 
 import type { ThinkingPhase } from "./OperatorThinkingPanel";
@@ -416,7 +416,7 @@ export function useOperatorChatWs({
   );
 
   const sendMessage = useCallback(
-    (message: string) => {
+    (message: string, providerBinding?: ProviderBinding | null) => {
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         return false;
@@ -427,7 +427,11 @@ export function useOperatorChatWs({
       setThinkingStartedAt(Date.now());
       setThinkingIteration(1);
       // Reasoning mode is decided server-side by the admin model config
-      ws.send(JSON.stringify({ type: "chat.message", message }));
+      ws.send(JSON.stringify({
+        type: "chat.message",
+        message,
+        ...(providerBinding ? { provider_binding: providerBinding } : {}),
+      }));
       return true;
     },
     [resetStream],

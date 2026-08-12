@@ -10,13 +10,17 @@ from django.contrib.auth.models import User
 from django.test import Client
 from django.utils import timezone
 
+from core_ui.models import UserAppPermission
+from core_ui.views.access_views import _apply_access_profile
 from servers.models import BackgroundWorkerState, Playbook, PlaybookRun, Server
 from servers.services.playbooks.target_identity import target_connection_identity_hashes
 
 
 @pytest.fixture
 def user(db):
-    return User.objects.create_user(username="pb_user", password="testpass123")
+    value = User.objects.create_user(username="pb_user", password="testpass123")
+    UserAppPermission.objects.create(user=value, feature="automation", allowed=True)
+    return value
 
 
 @pytest.fixture
@@ -37,6 +41,42 @@ def server(user):
         auth_method="key",
         is_active=True,
     )
+
+
+@pytest.mark.django_db
+def test_playbook_surface_requires_automation_but_staff_is_allowed():
+    pilot = User.objects.create_user(username="pb_pilot", password="testpass123")
+    _apply_access_profile(pilot, "pilot_user")
+    pilot_client = Client()
+    pilot_client.force_login(pilot)
+
+    denied = pilot_client.get("/servers/api/playbooks/")
+    assert denied.status_code == 403
+
+    staff = User.objects.create_user(username="pb_staff", password="testpass123", is_staff=True)
+    staff_client = Client()
+    staff_client.force_login(staff)
+    allowed = staff_client.get("/servers/api/playbooks/")
+    assert allowed.status_code == 200
+
+
+@pytest.mark.django_db
+def test_restricted_pilot_playbooks_require_exact_pilot_operator_profile(monkeypatch):
+    monkeypatch.setenv("PILOT_RESTRICTED_MODE", "true")
+    custom = User.objects.create_user(username="pb_custom_automation", password="testpass123")
+    UserAppPermission.objects.create(user=custom, feature="automation", allowed=True)
+    staff = User.objects.create_user(username="pb_restricted_staff", password="testpass123", is_staff=True)
+    operator = User.objects.create_user(username="pb_pilot_operator", password="testpass123")
+    _apply_access_profile(operator, "pilot_operator")
+
+    for denied_user in (custom, staff):
+        denied_client = Client()
+        denied_client.force_login(denied_user)
+        assert denied_client.get("/servers/api/playbooks/").status_code == 403
+
+    operator_client = Client()
+    operator_client.force_login(operator)
+    assert operator_client.get("/servers/api/playbooks/").status_code == 200
 
 
 @pytest.mark.django_db

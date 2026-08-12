@@ -9,8 +9,9 @@ from django.contrib.auth.models import User
 from django.test import Client
 from django.utils import timezone
 
-from core_ui.models import ProjectMembership, UserActivityLog
+from core_ui.models import ProjectMembership, UserActivityLog, UserAppPermission
 from core_ui.projects import ensure_default_project
+from core_ui.views.access_views import _apply_access_profile
 from servers.consumers.ssh_terminal import SSHTerminalConsumer
 from servers.models import (
     Server,
@@ -168,6 +169,52 @@ def test_group_bulk_action_reports_progress_and_resumes_expired_lease():
     payload = detail.json()["operation"]
     assert payload["progress_percent"] == 100.0
     assert payload["status"] == "completed"
+
+
+@pytest.mark.django_db
+def test_group_bulk_cannot_disable_read_only_without_live_automation_capability():
+    owner = User.objects.create_user(username="bulk-read-only-owner", password="x")
+    grant_feature(owner, "servers")
+    project = ensure_default_project(owner)
+    group = ServerGroup.objects.create(user=owner, name="bulk-read-only-group")
+    ServerGroupMember.objects.create(group=group, user=owner, role="owner")
+    server = Server.objects.create(
+        user=owner,
+        project=project,
+        group=group,
+        name="bulk-read-only",
+        host="10.2.1.10",
+        username="root",
+        ai_read_only=True,
+    )
+    client = Client()
+    client.force_login(owner)
+    payload = {"action": "set_ai_read_only", "parameters": {"value": False}}
+
+    denied = client.post(
+        f"/servers/api/groups/{group.pk}/bulk-actions/",
+        data=json_payload(payload),
+        content_type="application/json",
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "automation_required"
+    assert not ServerBulkOperation.objects.exists()
+
+    _apply_access_profile(owner, "pilot_operator")
+    queued = client.post(
+        f"/servers/api/groups/{group.pk}/bulk-actions/",
+        data=json_payload(payload),
+        content_type="application/json",
+    )
+    assert queued.status_code == 202
+    operation = claim_bulk_operation(worker_id="policy-worker", lease_seconds=30)
+    UserAppPermission.objects.filter(user=owner, feature="automation").delete()
+
+    result = process_bulk_operation(operation, worker_id="policy-worker", lease_seconds=30)
+
+    assert result.status == ServerBulkOperation.STATUS_FAILED
+    server.refresh_from_db()
+    assert server.ai_read_only is True
 
 
 def test_terminal_access_revocation_event_closes_matching_socket(monkeypatch):

@@ -31,7 +31,10 @@ jobs:
         with:
           python-version: "3.11.15"
           cache: pip
-          cache-dependency-path: requirements-dev.lock
+          cache-dependency-path: |
+            requirements-dev.lock
+            ai_cli_runner_manager/requirements.lock
+            ai_cli_runner_manager/provider-requirements.lock
       - name: Install native build dependencies
         run: sudo apt-get update && sudo apt-get install -y libldap2-dev libsasl2-dev
       - name: Install locked development dependencies
@@ -41,13 +44,29 @@ jobs:
         # GitHub-hosted runners may ship a vulnerable setuptools that
         # pip-audit --local will flag (e.g. PYSEC-2026-3447 / 79.x).
         run: |
-          python -m pip install --upgrade "setuptools>=83.0.0" "wheel"
+          python -m pip install --upgrade "pip>=26.1.2" "setuptools>=83.0.0" "wheel"
           python -m pip install pip-audit
       - name: Audit installed environment
         # Prefer --local after a hashed install. Auditing the lock file with
         # --require-hashes dry-run can fail on incomplete transitive extras.
         # Base image tooling (setuptools/wheel) is patched in the previous step.
         run: python -m pip_audit --local --progress-spinner=off
+      - name: Audit isolated AI CLI dependency planes
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-artifacts/security
+          for plane in manager provider; do
+            lock="ai_cli_runner_manager/requirements.lock"
+            if [ "$plane" = "provider" ]; then
+              lock="ai_cli_runner_manager/provider-requirements.lock"
+            fi
+            python -m venv ".audit-$plane"
+            ".audit-$plane/bin/python" -m pip install --upgrade "pip>=26.1.2" "setuptools>=83.0.0" wheel pip-audit
+            ".audit-$plane/bin/python" -m pip install --require-hashes --requirement "$lock"
+            ".audit-$plane/bin/python" -m pip_audit --local --progress-spinner=off \
+              --format json --output ".ci-artifacts/security/pip-audit-ai-cli-$plane.json"
+            ".audit-$plane/bin/python" -m pip freeze > ".ci-artifacts/security/pip-freeze-ai-cli-$plane.txt"
+          done
       - name: Record audit evidence
         if: always()
         run: |
@@ -97,6 +116,58 @@ jobs:
           name: npm-security-evidence-${{ github.sha }}
           path: .ci-artifacts/security
           if-no-files-found: warn
+          retention-days: 14
+
+  pilot-observability-images:
+    name: Pilot image audit (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: otel-collector
+            ref: otel/opentelemetry-collector-contrib:0.158.0@sha256:c5918f78992ee73b0d6f0e599423ac5ec52dd5d9726733114d6eca53d5a32ed5
+          - name: prometheus
+            ref: prom/prometheus:v3.13.2-distroless@sha256:64f71bb84e03c855948418b0fc5dea53e9543d8e3fc9931598f583805507f05e
+          - name: alertmanager
+            ref: quay.io/prometheus/alertmanager:main@sha256:a42c3e2e8f7cd4fd3a0ce1bd593ca5abe965c97b993476007d6f69c4a2aa33b5
+          - name: grafana
+            ref: grafana/grafana:nightly-distroless-slim@sha256:b2c2fd5391216bd57e6bad74c0dce05f8e275479e1153ab57149a4f019a3dceb
+          - name: tempo
+            ref: grafana/tempo:main-1a8b052-2010-1@sha256:78dc87894e9eb054b0229980ac3e7f099b437aec07a8731612373fc09b7f8ba0
+          - name: loki
+            ref: grafana/loki:3.7.6@sha256:efd47c67f9bac88ca29bcf8cb997d9ab29d1848bd0aff579282295542a745952
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Scan immutable image with uncompromised pilot policy
+        env:
+          IMAGE_REF: ${{ matrix.ref }}
+          REPORT_PATH: .ci-artifacts/security/trivy-observability-${{ matrix.name }}.json
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-artifacts/security
+          docker run --rm \
+            --volume "$PWD:/work" \
+            --workdir /work \
+            aquasec/trivy:0.73.0@sha256:4bbf3824d974b70f27631005e2e6194d4d8fbd6e72c4a9e04cf521e25c5cb07f \
+            image \
+            --image-src remote \
+            --scanners vuln \
+            --exit-code 1 \
+            --ignore-unfixed \
+            --severity HIGH,CRITICAL \
+            --format json \
+            --output "/work/$REPORT_PATH" \
+            "$IMAGE_REF"
+      - name: Upload pilot image evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pilot-image-security-${{ matrix.name }}-${{ github.sha }}
+          path: .ci-artifacts/security/trivy-observability-${{ matrix.name }}.json
+          if-no-files-found: error
           retention-days: 14
 
   sbom-provenance:
@@ -149,6 +220,8 @@ jobs:
           set -euo pipefail
           test -s .ci-artifacts/sbom/sbom-backend.cdx.json
           test -s .ci-artifacts/sbom/sbom-frontend.cdx.json
+          test -s .ci-artifacts/sbom/sbom-ai-cli-manager.cdx.json
+          test -s .ci-artifacts/sbom/sbom-ai-cli-provider.cdx.json
           test -s .ci-artifacts/sbom/sbom-containers.cdx.json
           test -s .ci-artifacts/checksums/SHA256SUMS.txt
           test -s .ci-artifacts/provenance/provenance.intoto.json
@@ -157,11 +230,17 @@ jobs:
           from pathlib import Path
           backend = json.loads(Path(".ci-artifacts/sbom/sbom-backend.cdx.json").read_text(encoding="utf-8"))
           frontend = json.loads(Path(".ci-artifacts/sbom/sbom-frontend.cdx.json").read_text(encoding="utf-8"))
+          manager = json.loads(Path(".ci-artifacts/sbom/sbom-ai-cli-manager.cdx.json").read_text(encoding="utf-8"))
+          provider = json.loads(Path(".ci-artifacts/sbom/sbom-ai-cli-provider.cdx.json").read_text(encoding="utf-8"))
           assert backend.get("bomFormat") == "CycloneDX"
           assert frontend.get("bomFormat") == "CycloneDX"
+          assert manager.get("bomFormat") == "CycloneDX"
+          assert provider.get("bomFormat") == "CycloneDX"
           assert len(backend.get("components") or []) >= 1
           assert len(frontend.get("components") or []) >= 1
-          print("SBOM component counts:", len(backend["components"]), len(frontend["components"]))
+          assert len(manager.get("components") or []) >= 1
+          assert len(provider.get("components") or []) >= 1
+          print("SBOM component counts:", len(backend["components"]), len(frontend["components"]), len(manager["components"]), len(provider["components"]))
           PY
       - name: Sign subjects with GitHub artifact attestation
         id: attest
@@ -170,6 +249,8 @@ jobs:
           subject-path: |
             .ci-artifacts/sbom/sbom-backend.cdx.json
             .ci-artifacts/sbom/sbom-frontend.cdx.json
+            .ci-artifacts/sbom/sbom-ai-cli-manager.cdx.json
+            .ci-artifacts/sbom/sbom-ai-cli-provider.cdx.json
             .ci-artifacts/sbom/sbom-containers.cdx.json
             .ci-artifacts/checksums/SHA256SUMS.txt
             .ci-artifacts/checksums/SHA256SUMS.json
@@ -202,6 +283,8 @@ jobs:
               "subjects_attested": [
                   ".ci-artifacts/sbom/sbom-backend.cdx.json",
                   ".ci-artifacts/sbom/sbom-frontend.cdx.json",
+                  ".ci-artifacts/sbom/sbom-ai-cli-manager.cdx.json",
+                  ".ci-artifacts/sbom/sbom-ai-cli-provider.cdx.json",
                   ".ci-artifacts/sbom/sbom-containers.cdx.json",
                   ".ci-artifacts/checksums/SHA256SUMS.txt",
                   ".ci-artifacts/checksums/SHA256SUMS.json",

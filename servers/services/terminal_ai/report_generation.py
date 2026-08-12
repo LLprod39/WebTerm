@@ -22,6 +22,7 @@ async def make_ai_report(
     semaphore=None,
     llm_factory=None,
     max_chars: int = 12000,
+    execution_context=None,
 ) -> str:
     from app.core.llm import LLMProvider
 
@@ -35,7 +36,12 @@ async def make_ai_report(
 
     async def _collect() -> None:
         nonlocal out
-        async for chunk in llm.stream_chat(prompt, model="auto", purpose="terminal_report"):
+        async for chunk in llm.stream_chat(
+            prompt,
+            model="auto",
+            purpose="terminal_report",
+            execution_context=execution_context,
+        ):
             out += chunk
             if len(out) > max_chars:
                 break
@@ -54,6 +60,7 @@ async def generate_ai_report_text(
     *,
     semaphore=None,
     llm_factory=None,
+    execution_context=None,
 ) -> str:
     done_with_output = [item for item in done_items if (item.get("output") or "").strip()]
     report = ""
@@ -65,6 +72,7 @@ async def generate_ai_report_text(
                     done_with_output,
                     semaphore=semaphore,
                     llm_factory=llm_factory,
+                    execution_context=execution_context,
                 )
             ).strip()
         except Exception as exc:

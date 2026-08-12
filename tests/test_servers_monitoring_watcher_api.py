@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.test import Client
 from django.utils import timezone
 
+from core_ui.views.access_views import _apply_access_profile
 from servers.models import (
     AgentRun,
     ServerAgent,
@@ -112,7 +113,13 @@ def test_monitoring_alerts_and_ai_analyze_endpoints(monkeypatch):
     assert resolve.status_code == 200
     assert resolve.json()["success"] is True
 
-    async def fake_stream_chat(self, prompt: str, model: str = "auto", purpose: str = "chat"):
+    async def fake_stream_chat(
+        self,
+        prompt: str,
+        model: str = "auto",
+        purpose: str = "chat",
+        execution_context=None,
+    ):
         assert "Проанализируй сервер" in prompt
         yield "## Резюме\nСервер стабилен."
 
@@ -235,7 +242,7 @@ def test_watcher_scan_endpoint_returns_drafts_for_health_alerts_and_failed_runs(
 @pytest.mark.django_db
 def test_watcher_launch_endpoint_creates_run_and_updates_draft(monkeypatch):
     user = User.objects.create_user(username="watcher-launch-user", password="x")
-    _grant_feature(user, "servers", "agents")
+    _apply_access_profile(user, "pilot_operator")
     client = Client()
     client.force_login(user)
 

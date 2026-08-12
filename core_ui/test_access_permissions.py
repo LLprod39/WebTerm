@@ -1,13 +1,28 @@
+from unittest import mock
+
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from core_ui.access import PILOT_USER_FEATURES, access_profile_permissions, build_user_access_payload
 from core_ui.models import GroupAppPermission, UserAppPermission
 from core_ui.views.access_views import _apply_access_profile
+from core_ui.views.ide_views import api_ide_list_files
+from servers.agents.agent_pilot_policy import user_can_automate
 
 
 class AccessPermissionsTests(TestCase):
+    def setUp(self):
+        self._ai_cli_env = mock.patch.dict(
+            "os.environ",
+            {
+                "AI_CLI_SUBSCRIPTIONS_ENABLED": "true",
+                "PILOT_RESTRICTED_MODE": "true",
+            },
+        )
+        self._ai_cli_env.start()
+        self.addCleanup(self._ai_cli_env.stop)
+
     def create_user(self, username: str, *, is_staff: bool = False) -> User:
         return User.objects.create_user(
             username=username,
@@ -55,6 +70,11 @@ class AccessPermissionsTests(TestCase):
         self.assertFalse(features["kubernetes"])
         self.assertFalse(features["mars"])
         self.assertFalse(features.get("knowledge_base", False))
+        self.assertTrue(features["ai_connections_personal"])
+        self.assertFalse(features["ai_connections_admin"])
+        self.assertFalse(features["automation"])
+        self.assertTrue(features["chat"])
+        self.assertFalse(features["orchestrator"])
         self.assertFalse(user.is_staff)
 
         access = build_user_access_payload(user)
@@ -66,10 +86,49 @@ class AccessPermissionsTests(TestCase):
         self.assertEqual(access_profile_permissions("pilot_user")["dashboard"], True)
         self.assertEqual(access_profile_permissions("pilot_user")["servers"], True)
         self.assertEqual(access_profile_permissions("pilot_user")["agents"], True)
+        self.assertEqual(access_profile_permissions("pilot_user")["chat"], True)
 
         # User dashboard surface is allowed; staff admin metrics stay forbidden.
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 403)
+
+        models_response = self.client.get(reverse("api_models"))
+        self.assertEqual(models_response.status_code, 403)
+        ide_request = RequestFactory().get("/api/ide/files/")
+        ide_request.user = user
+        self.assertEqual(api_ide_list_files(ide_request).status_code, 403)
+
+    def test_ai_connection_capabilities_are_hidden_when_runtime_profile_is_disabled(self):
+        user = self.create_user("ai-runtime-disabled")
+        UserAppPermission.objects.create(user=user, feature="ai_connections_admin", allowed=True)
+
+        with mock.patch.dict("os.environ", {"AI_CLI_SUBSCRIPTIONS_ENABLED": "false"}):
+            features = self.auth_features(user)
+
+        self.assertFalse(features["ai_connections_personal"])
+        self.assertFalse(features["ai_connections_admin"])
+
+    def test_pilot_operator_profile_gets_explicit_automation_without_staff(self):
+        user = self.create_user("pilot-operator")
+        _apply_access_profile(user, "pilot_operator")
+
+        features = self.auth_features(user)
+
+        self.assertFalse(user.is_staff)
+        self.assertTrue(features["automation"])
+        self.assertTrue(features["ai_connections_admin"])
+        self.assertTrue(features["chat"])
+        self.assertFalse(features["orchestrator"])
+        self.assertEqual(build_user_access_payload(user)["access_profile"], "pilot_operator")
+        self.assertTrue(user_can_automate(user))
+
+    def test_custom_or_staff_automation_grant_is_not_pilot_operator_authority(self):
+        custom = self.create_user("custom-automation")
+        staff = self.create_user("staff-automation", is_staff=True)
+        UserAppPermission.objects.create(user=custom, feature="automation", allowed=True)
+
+        self.assertFalse(user_can_automate(custom))
+        self.assertFalse(user_can_automate(staff))
 
     def test_dashboard_access_is_not_tied_to_agents_for_staff(self):
         user = self.create_user("staffer", is_staff=True)

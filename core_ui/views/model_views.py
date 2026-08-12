@@ -43,6 +43,7 @@ def api_tools_list(request):
 
 
 @login_required
+@require_feature("orchestrator")
 def api_models_list(request):
     """Get list of available models for dropdowns."""
     try:

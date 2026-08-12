@@ -4,6 +4,35 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 
 ## [Unreleased]
 
+## [0.2.3] - candidate (not published)
+
+### Added
+
+- Separate immutable Codex and Grok runners behind a filtered Docker API and a
+  provider-only egress proxy.
+- Built-in pilot observability with OpenTelemetry Collector, Prometheus,
+  Alertmanager, Grafana, Tempo and Loki, including privacy-safe dashboards and
+  notification routing.
+- Nightly age-encrypted PostgreSQL and important-volume backups with checksums
+  and a weekly non-mutating restore validation.
+
+### Changed
+
+- The controlled pilot is capped at 10 database-authoritative concurrent agent
+  runs and two runs per user, with fail-closed disposable SSH allowlists.
+- Python locks carry `aiohttp 3.14.3` and `cryptography 50.0.0`; AI CLI planes
+  use separately audited hashed dependency locks.
+
+### Security
+
+- Provider runner images are target-specific and digest-pinned; Grok local
+  builds require an HTTPS artifact plus an exact SHA-256 checksum.
+- AI credentials, prompts, device codes and token contents are excluded from
+  observability and backup artifacts; restored provider connections require
+  fresh authentication.
+- Telegram remains disabled unless a token is explicitly provisioned with the
+  matching installer profile.
+
 ## [0.2.2] - 2026-08-03
 
 ### Added
@@ -77,4 +106,5 @@ All notable WebTerm changes are recorded here. The format follows Keep a Changel
 [0.1.0]: https://github.com/LLprod39/WebTerm/releases/tag/v0.1.0
 [0.2.1]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.1
 [0.2.2]: https://github.com/LLprod39/WebTerm/releases/tag/v0.2.2
+[0.2.3]: https://github.com/LLprod39/WebTerm/compare/v0.2.2...HEAD
 [Unreleased]: https://github.com/LLprod39/WebTerm/compare/v0.2.2...HEAD

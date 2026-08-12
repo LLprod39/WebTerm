@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections import defaultdict
 from typing import Any
 
@@ -23,6 +24,7 @@ STUDIO_SECTION_FEATURES = {
 
 VALID_ACCESS_PROFILES = {
     "pilot_user",
+    "pilot_operator",
     "server_only",
     "operator_server_only",
     "operator_studio_runner",
@@ -34,10 +36,15 @@ VALID_ACCESS_PROFILES = {
 }
 
 # Closed pilot: user dashboard + servers surface + agents. No Studio/K8s/MARS/settings.
-PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents"})
+PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents", "chat", "ai_connections_personal"})
 
 _PROFILE_TRUE_FEATURES = {
     "pilot_user": set(PILOT_USER_FEATURES),
+    "pilot_operator": {
+        *PILOT_USER_FEATURES,
+        "automation",
+        "ai_connections_admin",
+    },
     "server_only": {"servers"},
     "operator_server_only": {"servers"},
     "operator_studio_runner": {
@@ -47,6 +54,9 @@ _PROFILE_TRUE_FEATURES = {
         "studio_pipelines",
         "studio_runs",
         "studio_notifications",
+        "automation",
+        "chat",
+        "ai_connections_personal",
     },
     "team_admin_no_secrets": {
         "servers",
@@ -58,12 +68,17 @@ _PROFILE_TRUE_FEATURES = {
         "studio_agents",
         "studio_skills",
         "orchestrator",
+        "chat",
         "knowledge_base",
+        "automation",
+        "ai_connections_personal",
+        "ai_connections_admin",
     },
 }
 
 PROFILE_STAFF_FLAGS = {
     "pilot_user": False,
+    "pilot_operator": False,
     "server_only": False,
     "operator_server_only": False,
     "operator_studio_runner": False,
@@ -158,31 +173,14 @@ def feature_allowed_for_user(
         else summarize_group_permissions(load_group_permission_sources(user))
     )
 
-    if feature in STAFF_ONLY_FEATURES and not user.is_staff:
-        return False
-
-    if feature in explicit:
-        return bool(explicit[feature])
-
-    if feature in grouped:
-        return bool(grouped[feature])
-
-    for legacy_feature in LEGACY_FEATURE_FALLBACKS.get(feature, ()):
-        if legacy_feature in explicit:
-            return bool(explicit[legacy_feature])
-        if legacy_feature in grouped:
-            return bool(grouped[legacy_feature])
-
-    if feature in EXPLICIT_OPT_IN_FEATURES:
-        return False
-
-    if user.is_staff:
-        return True
-
-    if feature == "settings":
-        return False
-
-    return feature in DEFAULT_ALLOWED_FEATURES
+    effective, _sources = _effective_feature_access(
+        user,
+        access_feature_slugs(),
+        explicit,
+        grouped,
+    )
+    _apply_pilot_automation_boundary(user, effective)
+    return bool(effective.get(feature, False))
 
 
 def _legacy_feature_access(
@@ -231,6 +229,7 @@ def _effective_feature_access(
 def _access_profile_for(user, effective: dict[str, bool]) -> str:
     for profile_name in (
         "pilot_user",
+        "pilot_operator",
         "operator_server_only",
         "operator_studio_runner",
         "team_admin_no_secrets",
@@ -243,6 +242,18 @@ def _access_profile_for(user, effective: dict[str, bool]) -> str:
     if user.is_staff and all(effective.values()):
         return "admin_full"
     return "custom"
+
+
+def _pilot_restricted_mode() -> bool:
+    return os.getenv("PILOT_RESTRICTED_MODE", "").strip().lower() in {"1", "true", "yes"}
+
+
+def _apply_pilot_automation_boundary(user, effective: dict[str, bool]) -> None:
+    """In a restricted pilot, write automation belongs only to the exact pilot role."""
+    if not _pilot_restricted_mode() or not effective.get("automation"):
+        return
+    if _access_profile_for(user, effective) != "pilot_operator":
+        effective["automation"] = False
 
 
 def build_user_access_payload(
@@ -269,6 +280,9 @@ def build_user_access_payload(
     grouped = summarize_group_permissions(group_sources)
 
     effective, sources = _effective_feature_access(user, features, explicit, grouped)
+    _apply_pilot_automation_boundary(user, effective)
+    if not effective.get("automation") and sources.get("automation") not in {None, "explicit_opt_in"}:
+        sources["automation"] = "pilot_operator_required"
     profile = _access_profile_for(user, effective)
 
     payload = {

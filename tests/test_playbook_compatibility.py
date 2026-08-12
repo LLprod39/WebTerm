@@ -84,7 +84,7 @@ def test_runtime_compiler_changes_only_hosts_and_emits_bound_group():
 
 
 def test_ai_proposal_that_changes_task_logic_is_rejected(monkeypatch):
-    async def fake_call(_prompt, _system_prompt):
+    async def fake_call(_prompt, _system_prompt, _execution_context):
         return json.dumps(
             {
                 "edits": [
@@ -110,7 +110,7 @@ def test_ai_proposal_that_changes_task_logic_is_rejected(monkeypatch):
 
 
 def test_ai_applies_only_exact_local_edits(monkeypatch):
-    async def fake_call(_prompt, _system_prompt):
+    async def fake_call(_prompt, _system_prompt, _execution_context):
         return json.dumps(
             {
                 "edits": [
@@ -307,6 +307,9 @@ def test_compatibility_api_apply_and_run_binding(monkeypatch):
         lambda: fingerprint,
     )
     user = User.objects.create_user(username="compat_user", password="pass123")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
     server = Server.objects.create(
         user=user,
         name="web-01",

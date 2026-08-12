@@ -6,6 +6,7 @@ from typing import Any
 
 from servers.services import terminal_input
 from servers.services.editor_intercept import detect_editor_command
+from servers.services.server_mutation_policy import is_unprivileged_read_only_command
 from servers.services.terminal_manual_command_state import ManualCommandState
 
 ActivityLogger = Callable[..., Awaitable[Any]]
@@ -148,6 +149,7 @@ async def handle_terminal_input(
     append_recent_activity: Callable[..., None],
     log_activity: ActivityLogger,
     persist_result: PersistManualCommandResult,
+    mutation_allowed: bool = False,
 ) -> None:
     if not data:
         return
@@ -156,6 +158,24 @@ async def handle_terminal_input(
 
     try:
         completed_commands = await capture_terminal_input(state, data)
+        if not mutation_allowed or state.input_forwarding_held:
+            await _handle_policy_buffered_input(
+                state,
+                data,
+                completed_commands=completed_commands,
+                mutation_allowed=mutation_allowed,
+                server=server,
+                user_id=user_id,
+                ssh_proc=ssh_proc,
+                server_connection_id=server_connection_id,
+                session_context=session_context,
+                marker_prefix=marker_prefix,
+                send_json=send_json,
+                append_recent_activity=append_recent_activity,
+                log_activity=log_activity,
+                persist_result=persist_result,
+            )
+            return
         if not completed_commands:
             ssh_proc.stdin.write(data)
             return
@@ -215,3 +235,97 @@ async def handle_terminal_input(
                 command_index += 1
     except Exception as exc:  # noqa: BLE001
         await send_json({"type": "error", "message": f"stdin write failed: {exc}"})
+
+
+async def _handle_policy_buffered_input(
+    state: ManualCommandState,
+    data: str,
+    *,
+    completed_commands: list[str],
+    mutation_allowed: bool,
+    server: Any,
+    user_id: int | None,
+    ssh_proc: Any,
+    server_connection_id: str | None,
+    session_context: dict[str, Any] | None,
+    marker_prefix: str,
+    send_json: Callable[[dict[str, Any]], Awaitable[Any]],
+    append_recent_activity: Callable[..., None],
+    log_activity: ActivityLogger,
+    persist_result: PersistManualCommandResult,
+) -> None:
+    """Hold raw PTY input until the complete command can be authorized.
+
+    Forwarding individual keystrokes would let shell history or line-editing
+    sequences make the remote command differ from the command classified by
+    WebTerm. Reconstructing the accepted line keeps the policy decision bound
+    to the exact bytes which reach the shell.
+    """
+
+    if "\x03" in data:
+        state.input_buffer = ""
+        state.input_forwarding_held = False
+        ssh_proc.stdin.write("\x03")
+        return
+    if "\x15" in data and not completed_commands:
+        state.input_forwarding_held = bool(state.input_buffer)
+        ssh_proc.stdin.write("\x15")
+        return
+    if not completed_commands:
+        state.input_forwarding_held = bool(state.input_buffer)
+        return
+
+    state.input_forwarding_held = bool(state.input_buffer)
+    if not mutation_allowed and not all(is_unprivileged_read_only_command(command) for command in completed_commands):
+        # Clear any remote readline state left from a role/policy change before
+        # withholding Enter, otherwise a later newline could execute stale text.
+        ssh_proc.stdin.write("\x15")
+        await log_activity(
+            user_id=user_id,
+            category="terminal",
+            action="terminal_command_blocked",
+            status="error",
+            description="Blocked mutating or unclassifiable manual terminal command",
+            entity_type="server",
+            entity_id=getattr(server, "id", ""),
+            entity_name=getattr(server, "name", ""),
+            metadata={"source": "interactive_shell", "command_count": len(completed_commands)},
+        )
+        await send_json(
+            {
+                "type": "error",
+                "code": "read_only_command_required",
+                "message": "Pilot terminal permits only classified read-only commands.",
+            }
+        )
+        return
+
+    ssh_proc.stdin.write("\x15")
+    if len(completed_commands) == 1:
+        command = completed_commands[0]
+        ssh_proc.stdin.write(command + "\r")
+        await enqueue_manual_terminal_command_capture(
+            state,
+            command,
+            server=server,
+            user_id=user_id,
+            ssh_proc=ssh_proc,
+            server_connection_id=server_connection_id,
+            session_context=session_context,
+            marker_prefix=marker_prefix,
+            log_activity=log_activity,
+        )
+        return
+
+    for command in completed_commands:
+        ssh_proc.stdin.write(command + "\r")
+        await persist_uncaptured_manual_command(
+            command,
+            server=server,
+            user_id=user_id,
+            server_connection_id=server_connection_id,
+            session_context=session_context,
+            append_recent_activity=append_recent_activity,
+            log_activity=log_activity,
+            persist_result=persist_result,
+        )

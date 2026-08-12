@@ -19,6 +19,7 @@ from servers.monitoring.monitoring_live_parse import (
     compute_cpu_percent,
     parse_live_line,
 )
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 
 __all__ = [
     "REMOTE_LOOP_TEMPLATE",
@@ -408,6 +409,7 @@ class LiveMetricsManager:
         command = REMOTE_LOOP_TEMPLATE.format(interval=interval)
         prev_sample: dict | None = None
 
+        validate_pilot_ssh_destination(server.host, server.port)
         async with asyncssh.connect(**kwargs) as conn, conn.create_process(command) as process:
             await self._broadcast_state(entry, "streaming")
             while not self._should_stop(entry, started_at):

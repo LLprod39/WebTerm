@@ -15,6 +15,7 @@ from core_ui.activity import log_user_activity
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
+from servers.agents.agent_pilot_policy import user_can_automate
 from servers.models import Server, ServerGroup
 from servers.secret_utils import (
     clear_server_sudo_secret,
@@ -25,6 +26,12 @@ from servers.secret_utils import (
     server_sudo_secret_storage_mode,
     store_server_auth_secret,
     store_server_sudo_secret,
+)
+from servers.services.pilot_destination_policy import (
+    PilotDestinationDenied,
+    PilotDestinationInvalid,
+    validate_pilot_network_config,
+    validate_pilot_ssh_destination,
 )
 from servers.services.server_ownership import ServerOwnershipTransferError, transfer_server_ownership
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
@@ -80,14 +87,37 @@ def server_create(request):
         auth_method = str(data.get("auth_method", "password") or "password").strip().lower()
         if auth_method not in ("password", "key", "key_password"):
             return JsonResponse({"error": "Invalid auth_method"}, status=400)
+        network_config = data.get("network_config", {})
+        try:
+            validate_pilot_ssh_destination(str(data.get("host") or ""), port)
+            validate_pilot_network_config(network_config)
+        except PilotDestinationInvalid as exc:
+            return JsonResponse({"error": str(exc), "code": "invalid_network_config"}, status=400)
+        except PilotDestinationDenied as exc:
+            return JsonResponse({"error": str(exc), "code": "pilot_destination_denied"}, status=403)
 
         group, error_response = _normalize_group_for_user(data.get("group_id"), request.user)
         if error_response:
             return error_response
 
+        automation_allowed = user_can_automate(request.user, request=request)
+        raw_ai_read_only = data.get("ai_read_only", True)
+        if not isinstance(raw_ai_read_only, bool):
+            return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
+        if not automation_allowed and raw_ai_read_only is False:
+            return JsonResponse(
+                {"error": "Disabling AI read-only requires automation access", "code": "automation_required"},
+                status=403,
+            )
+        ai_read_only = True if not automation_allowed else raw_ai_read_only
         password = str(data.get("password", "") or "").strip()
         sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
         sudo_password = str(data.get("sudo_password", "") or "").strip()
+        if not automation_allowed and (sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD or bool(sudo_password)):
+            return JsonResponse(
+                {"error": "Stored sudo credentials require automation access", "code": "automation_required"},
+                status=403,
+            )
         if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and not sudo_password:
             return JsonResponse({"error": "sudo_password is required when sudo_auth_mode=stored_password"}, status=400)
 
@@ -102,10 +132,12 @@ def server_create(request):
                 username=data.get("username", ""),
                 auth_method=auth_method,
                 key_path=data.get("key_path", ""),
+                ai_read_only=ai_read_only,
                 sudo_auth_mode=sudo_auth_mode,
                 tags=data.get("tags", ""),
                 notes=data.get("notes", ""),
                 corporate_context=data.get("corporate_context", ""),
+                network_config=network_config,
                 group=group,
             )
 
@@ -169,6 +201,7 @@ def server_update(request, server_id):
     try:
         server = get_object_or_404(Server, id=server_id, user=request.user)
         data = json.loads(request.body)
+        automation_allowed = user_can_automate(request.user, request=request)
         host_changed = False
 
         if "name" in data:
@@ -209,9 +242,25 @@ def server_update(request, server_id):
         if "is_active" in data:
             server.is_active = data["is_active"]
         if "ai_read_only" in data:
-            server.ai_read_only = bool(data["ai_read_only"])
+            if not isinstance(data["ai_read_only"], bool):
+                return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
+            if not automation_allowed and data["ai_read_only"] is False:
+                return JsonResponse(
+                    {"error": "Disabling AI read-only requires automation access", "code": "automation_required"},
+                    status=403,
+                )
+            server.ai_read_only = data["ai_read_only"]
         if "sudo_auth_mode" in data:
             server.sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
+
+        if not automation_allowed and (
+            ("sudo_auth_mode" in data and server.sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD)
+            or bool(str(data.get("sudo_password") or "").strip())
+        ):
+            return JsonResponse(
+                {"error": "Stored sudo credentials require automation access", "code": "automation_required"},
+                status=403,
+            )
 
         if "group_id" in data:
             group, error_response = _normalize_group_for_user(data.get("group_id"), request.user)
@@ -219,11 +268,19 @@ def server_update(request, server_id):
                 return error_response
             server.group = group
 
+        network_config = data.get("network_config", server.network_config or {})
+
+        try:
+            validate_pilot_ssh_destination(server.host, server.port)
+            validate_pilot_network_config(network_config)
+        except PilotDestinationInvalid as exc:
+            return JsonResponse({"error": str(exc), "code": "invalid_network_config"}, status=400)
+        except PilotDestinationDenied as exc:
+            return JsonResponse({"error": str(exc), "code": "pilot_destination_denied"}, status=403)
+
         if "network_config" in data:
-            network_config = data["network_config"]
-            if isinstance(network_config, dict):
-                server.network_config = network_config
-                server.update_network_flags()
+            server.network_config = network_config
+            server.update_network_flags()
 
         if "password" in data:
             password = str(data.get("password") or "").strip()

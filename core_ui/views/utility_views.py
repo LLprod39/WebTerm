@@ -15,7 +15,7 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from core_ui.api_errors import internal_error_response
 from core_ui.decorators import async_login_required, async_require_feature, require_feature
-from core_ui.views.runtime import get_rag_engine
+from core_ui.views.runtime import get_rag_engine, rag_backend_is_configured
 
 try:
     from app.utils.file_processor import FileProcessor
@@ -120,6 +120,15 @@ async def api_agent_execute(request):
 def api_upload_file(request):
     """Upload a file and add its extracted text to RAG."""
     try:
+        if not rag_backend_is_configured():
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "RAG is disabled: configure a separate embedding backend first",
+                    "code": "rag_embedding_backend_not_configured",
+                },
+                status=409,
+            )
         if FileProcessor is None:
             return JsonResponse({"error": "File processor is not available"}, status=500)
         if "file" not in request.FILES:
@@ -145,7 +154,12 @@ def api_upload_file(request):
             return JsonResponse({"error": result["error"]}, status=400)
 
         rag = get_rag_engine()
-        if rag.available and result["text"]:
+        if not rag.available:
+            return JsonResponse(
+                {"success": False, "error": "RAG embedding backend became unavailable"},
+                status=409,
+            )
+        if result["text"]:
             doc_id = rag.add_text(result["text"], source=f"upload:{filename}", user_id=request.user.id)
             result["metadata"]["rag_doc_id"] = doc_id
 

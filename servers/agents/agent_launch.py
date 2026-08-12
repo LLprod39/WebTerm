@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from django.db import transaction
 
+from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_agent_run_limit_error
+from core_ui.services.ai_execution_context import build_execution_context
 from servers.agents.agent_background import launch_agent_run_background
 from servers.models import AgentDispatchControl, AgentRun
 from servers.run_events import record_run_event
@@ -15,6 +17,8 @@ def launch_queued_agent_run(
     user,
     accessible_servers_queryset,
     server_id: int | None = None,
+    unattended: bool = False,
+    explicit_provider_binding: dict | None = None,
 ) -> dict:
     """Queue mini/full/multi agent run for the dedicated execution-plane worker.
 
@@ -79,11 +83,25 @@ def launch_queued_agent_run(
             return {"ok": False, "status": 409, "error": "Agent is already running"}
 
         primary_server = servers[0]
+        execution_mode = ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE
+        execution_context = build_execution_context(
+            actor_user_id=user.pk,
+            project_id=agent.project_id,
+            purpose="ops",
+            source_kind="server_agent",
+            source_id=agent.pk,
+            mode=execution_mode,
+            explicit_binding=explicit_provider_binding,
+            stored_binding=agent.provider_binding,
+            requested_provider="auto",
+        )
         run_result = AgentRun.objects.create(
             agent=agent,
             server=primary_server,
             user=user,
             status=AgentRun.STATUS_PENDING,
+            provider_binding_snapshot=execution_context.binding.to_dict(),
+            provider_execution_mode=execution_mode.value,
         )
         record_run_event(
             run_result.id,

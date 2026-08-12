@@ -5,6 +5,8 @@ type GlobalHotkeyHandlers = {
   onOpenCommandPalette?: () => void;
   onOpenCheatsheet?: () => void;
   onToggleAssistant?: () => void;
+  canNavigate?: (path: string) => boolean;
+  assistantEnabled?: boolean;
 };
 
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -52,6 +54,7 @@ export function useGlobalHotkeys(handlers: GlobalHotkeyHandlers = {}) {
 
       // Ctrl/Cmd+. — assistant
       if (meta && key === ".") {
+        if (handlersRef.current.assistantEnabled === false) return;
         event.preventDefault();
         handlersRef.current.onToggleAssistant?.();
         clearPendingG();
@@ -80,12 +83,12 @@ export function useGlobalHotkeys(handlers: GlobalHotkeyHandlers = {}) {
           s: "/servers",
           a: "/agents",
           c: "/chat",
-          m: "/monitoring",
+          m: "/monitoring/insights",
           k: "/kubernetes",
           t: "/studio",
         };
         const path = map[key.toLowerCase()];
-        if (path) navigate(path);
+        if (path && (handlersRef.current.canNavigate?.(path) ?? true)) navigate(path);
         return;
       }
 

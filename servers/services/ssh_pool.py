@@ -15,6 +15,7 @@ import asyncssh
 from asgiref.sync import sync_to_async
 from django.conf import settings
 
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 from servers.ssh_host_keys import build_server_connect_kwargs, ensure_server_known_hosts
 from servers.ssh_private_keys import get_server_private_key_text
 
@@ -196,6 +197,10 @@ class SSHConnectionPool:
         if entry is not None:
             await self._close_entry(key, entry)
         await self._make_room(key[0])
+        validate_pilot_ssh_destination(
+            str(connect_kwargs.get("host") or ""),
+            int(connect_kwargs.get("port") or 22),
+        )
         connection = await asyncssh.connect(**connect_kwargs)
         entry = _ConnectionEntry(
             connection=connection,

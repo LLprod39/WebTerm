@@ -69,7 +69,12 @@ def _make_consumer(conn: _FakeConn | None) -> tuple[SSHTerminalConsumer, list[di
 
 
 def _run(coro):
-    return asyncio.new_event_loop().run_until_complete(coro)
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
 
 
 class TestLegacyDirectExecModeGate:

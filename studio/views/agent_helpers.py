@@ -51,6 +51,7 @@ def _agent_to_dict(agent: AgentConfig, viewer) -> dict:
         "system_prompt": agent.system_prompt,
         "instructions": agent.instructions,
         "model": agent.model,
+        "provider_binding": dict(agent.provider_binding or {}),
         "max_iterations": agent.max_iterations,
         "allowed_tools": agent.allowed_tools,
         "sudo_policy": agent.sudo_policy,

@@ -20,6 +20,8 @@ from app.agent_kernel.runtime.outcomes import (
 from app.agent_kernel.tools.registry import ToolRegistry
 from servers.agents.agent_run_report import build_agent_run_report_payload
 from servers.agents.agent_runtime import (
+    execution_binding_snapshot,
+    execution_mode_value,
     is_runtime_stop_requested,
     register_engine,
     reset_runtime_control_state,
@@ -52,6 +54,8 @@ async def run_multi_agent_engine(
             user=engine.user,
             status=AgentRun.STATUS_RUNNING,
             runtime_control=reset_runtime_control_state(),
+            provider_binding_snapshot=execution_binding_snapshot(engine.execution_context),
+            provider_execution_mode=execution_mode_value(engine.execution_context),
         )
     else:
         current_status = await sync_to_async(
@@ -113,6 +117,7 @@ async def run_multi_agent_engine(
         sudo_policy=engine.permission_engine.sudo_policy,
         execution_approval_granted=bool(getattr(engine, "execution_approval_granted", False)),
     )
+    engine.session.llm_execution_context_provider = engine._execution_context_for
 
     plan_tasks: list[dict] = []
     orchestrator_log: list[dict] = []
@@ -280,6 +285,7 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         sudo_policy=engine.permission_engine.sudo_policy,
         execution_approval_granted=bool(getattr(engine, "execution_approval_granted", False)),
     )
+    engine.session.llm_execution_context_provider = engine._execution_context_for
 
     try:
         await engine._emit("agent_status", {"status": "connecting"})

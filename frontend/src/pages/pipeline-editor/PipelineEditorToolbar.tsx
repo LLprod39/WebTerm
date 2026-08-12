@@ -3,6 +3,7 @@ import { ArrowLeft, Bell, CheckCircle2, Clock, Info, Link2, Loader2, MoreHorizon
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { ProviderBindingSelect } from "@/components/settings/ProviderBindingSelect";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { PipelineActivityState } from "@/components/pipeline/pipelineActivity";
-import type { PipelineLastRun, PipelineRun } from "@/lib/api";
+import type { PipelineLastRun, PipelineRun, ProviderBinding } from "@/lib/api";
 
 import { getPipelineActivityCopy, localize } from "./presentation";
 
@@ -21,6 +22,7 @@ export function PipelineEditorToolbar({
   lang,
   pipelineId,
   pipelineName,
+  providerBinding,
   resolvedLastRun,
   runDisabled,
   runPending,
@@ -32,6 +34,7 @@ export function PipelineEditorToolbar({
   onOpenPalette,
   onOpenRunDialog,
   onPipelineNameChange,
+  onProviderBindingChange,
   onSave,
   onValidateGraph,
 }: {
@@ -41,6 +44,7 @@ export function PipelineEditorToolbar({
   lang: "en" | "ru";
   pipelineId: number | null;
   pipelineName: string;
+  providerBinding: ProviderBinding | null;
   resolvedLastRun: PipelineLastRun | null;
   runDisabled: boolean;
   runPending: boolean;
@@ -52,6 +56,7 @@ export function PipelineEditorToolbar({
   onOpenPalette: () => void;
   onOpenRunDialog: () => void;
   onPipelineNameChange: (value: string) => void;
+  onProviderBindingChange: (value: ProviderBinding | null) => void;
   onSave: () => void;
   onValidateGraph: () => void;
 }) {
@@ -89,6 +94,13 @@ export function PipelineEditorToolbar({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:justify-end">
+        <ProviderBindingSelect
+          value={providerBinding}
+          onChange={onProviderBindingChange}
+          mode="unattended"
+          lang={lang}
+          className="h-9 min-w-48 max-w-64"
+        />
         <Button
           size="sm"
           variant="outline"

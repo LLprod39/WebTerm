@@ -19,6 +19,7 @@ async def call_multi_agent_llm_raw(engine: Any, system_prompt: str, user_msg: st
                 model=engine.model_preference,
                 specific_model=engine.specific_model,
                 purpose="opsplan",
+                execution_context=await engine._execution_context_for("opsplan"),
             ):
                 if not is_thinking_chunk(chunk):
                     chunks.append(chunk)
@@ -44,6 +45,7 @@ async def call_multi_agent_llm_history(engine: Any, history: list[dict]) -> str:
                 model=engine.model_preference,
                 specific_model=engine.specific_model,
                 purpose="ops",
+                execution_context=await engine._execution_context_for("ops"),
             ):
                 if not is_thinking_chunk(chunk):
                     chunks.append(chunk)

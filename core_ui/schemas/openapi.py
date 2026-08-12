@@ -40,7 +40,20 @@ class ApiErrorResponse(BaseModel):
     error: str
     code: str
     details: list[ApiErrorDetail] | dict[str, Any] | None = None
+    fields: dict[str, list[str]] | None = None
     request_id: str | None = None
+
+
+class ReadinessComponent(BaseModel):
+    required: bool
+    status: str
+
+
+class ReadinessResponse(BaseModel):
+    status: Literal["ready", "not_ready"]
+    timestamp: str
+    services: dict[str, str]
+    components: dict[str, ReadinessComponent]
 
 
 def _iter_patterns(
@@ -126,6 +139,8 @@ def _schema_components() -> dict[str, Any]:
         ApiSuccessResponse,
         ApiErrorDetail,
         ApiErrorResponse,
+        ReadinessComponent,
+        ReadinessResponse,
         *ROUTE_SCHEMAS.values(),
     }
     components: dict[str, Any] = {}
@@ -186,6 +201,14 @@ def build_openapi_document() -> dict[str, Any]:
                     "500": {"$ref": "#/components/responses/InternalError"},
                 },
             }
+            current = callback
+            while current is not None:
+                for status, response in dict(getattr(current, "openapi_responses", {}) or {}).items():
+                    if response is None:
+                        operation["responses"].pop(str(status), None)
+                    else:
+                        operation["responses"][str(status)] = dict(response)
+                current = getattr(current, "__wrapped__", None)
             if parameters:
                 operation["parameters"] = parameters
             if method in {"POST", "PUT", "PATCH"}:

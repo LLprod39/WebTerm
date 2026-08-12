@@ -91,7 +91,9 @@ class ScriptedToolsLLM:
 def operator_user(db):
     _ensure_test_tools()
     user = User.objects.create_user(username="op-user", password="x")
-    _grant(user, "orchestrator", "servers", "agents")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
     return user
 
 

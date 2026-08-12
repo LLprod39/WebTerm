@@ -20,6 +20,7 @@ export * from "@/api/server-memory";
 export * from "@/api/playbooks";
 export * from "@/api/projects";
 export * from "@/api/settings";
+export * from "@/api/aiProviders";
 export * from "@/api/plugins";
 export * from "@/api/studio";
 export * from "@/api/studio-notifications";

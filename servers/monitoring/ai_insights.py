@@ -22,6 +22,7 @@ from django.conf import settings
 from django.utils import timezone
 from loguru import logger
 
+from app.ai_runtime import ExecutionMode, LLMExecutionContext
 from app.egress_redaction import sanitize_prompt_context_text
 from servers.models import (
     Server,
@@ -82,7 +83,12 @@ def endpoint_key_for(server: Server) -> str:
     return f"{host}:{port}"
 
 
-def _call_llm(prompt: str, *, system_prompt: str) -> tuple[str, str]:
+def _call_llm(
+    prompt: str,
+    *,
+    system_prompt: str,
+    execution_context: LLMExecutionContext,
+) -> tuple[str, str]:
     """Collect one LLM completion. Split out so tests can monkeypatch it."""
     from app.core.llm import LLMProvider
 
@@ -90,7 +96,12 @@ def _call_llm(prompt: str, *, system_prompt: str) -> tuple[str, str]:
 
     async def _collect() -> str:
         chunks: list[str] = []
-        async for chunk in provider.stream_chat(prompt, model="auto", system_prompt=system_prompt):
+        async for chunk in provider.stream_chat(
+            prompt,
+            model="auto",
+            system_prompt=system_prompt,
+            execution_context=execution_context,
+        ):
             chunks.append(chunk)
         return "".join(chunks)
 
@@ -299,7 +310,22 @@ def run_server_insight(
         return existing
 
     try:
-        content, model_used = _call_llm(context, system_prompt=SERVER_SYSTEM_PROMPT)
+        from core_ui.services.ai_execution_context import build_execution_context
+
+        execution_context = build_execution_context(
+            actor_user_id=server.user_id,
+            project_id=server.project_id,
+            purpose="opssummary",
+            source_kind="server_ai_insight",
+            source_id=server.pk,
+            mode=ExecutionMode.UNATTENDED,
+            idempotency_key=f"server-insight:{server.pk}:{fingerprint}",
+        )
+        content, model_used = _call_llm(
+            context,
+            system_prompt=SERVER_SYSTEM_PROMPT,
+            execution_context=execution_context,
+        )
     except Exception as exc:
         logger.warning("AI insights: LLM failed for {}: {}", server.name, exc)
         if force:
@@ -351,7 +377,24 @@ def run_fleet_insight(*, force: bool = False, now: datetime | None = None) -> Se
         lines.append("")
 
     try:
-        content, model_used = _call_llm("\n".join(lines), system_prompt=FLEET_SYSTEM_PROMPT)
+        from core_ui.services.ai_execution_context import build_execution_context
+
+        project_ids = {row.server.project_id for row in rows if row.server_id and row.server.project_id}
+        project_id = next(iter(project_ids)) if len(project_ids) == 1 else None
+        execution_context = build_execution_context(
+            actor_user_id=None,
+            project_id=project_id,
+            purpose="opssummary",
+            source_kind="fleet_ai_insight",
+            source_id=project_id or "global",
+            mode=ExecutionMode.UNATTENDED,
+            idempotency_key=f"fleet-insight:{project_id or 'global'}:{fingerprint}",
+        )
+        content, model_used = _call_llm(
+            "\n".join(lines),
+            system_prompt=FLEET_SYSTEM_PROMPT,
+            execution_context=execution_context,
+        )
     except Exception as exc:
         logger.warning("AI insights: fleet LLM failed: {}", exc)
         return None

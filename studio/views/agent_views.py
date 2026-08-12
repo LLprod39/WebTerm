@@ -6,8 +6,11 @@ import json
 
 from django.http import JsonResponse
 
+from app.ai_runtime import ExecutionMode
 from app.sudo_policy import normalize_sudo_policy
 from core_ui.decorators import require_feature
+from core_ui.projects import active_project_for_user
+from core_ui.services.ai_execution_context import build_execution_context
 from studio.models import AgentConfig
 from studio.views.agent_helpers import (
     _agent_read_queryset_for_user,
@@ -47,6 +50,22 @@ def api_agents(request):
         name = data.get("name", "").strip()
         if not name:
             return _err("name is required")
+        provider_binding = {}
+        if data.get("provider_binding"):
+            try:
+                project = active_project_for_user(request.user)
+                context = build_execution_context(
+                    actor_user_id=request.user.pk,
+                    project_id=project.pk if project else None,
+                    purpose="ops",
+                    source_kind="pipeline",
+                    source_id="new-agent-config",
+                    mode=ExecutionMode.UNATTENDED,
+                    explicit_binding=data.get("provider_binding"),
+                )
+                provider_binding = context.binding.to_dict()
+            except (TypeError, ValueError, RuntimeError) as exc:
+                return _err(str(exc))
         requested_mcp_ids = _normalise_related_ids(
             data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")
         )
@@ -65,6 +84,7 @@ def api_agents(request):
                 _normalise_skill_payload(data.get("skill_slugs") if "skill_slugs" in data else data.get("skills")),
             ),
             owner=request.user,
+            provider_binding=provider_binding,
         )
         _set_accessible_mcp_servers(agent, request.user, requested_mcp_ids)
         _set_owned_server_scope(
@@ -111,6 +131,23 @@ def api_agent_detail(request, agent_id: int):
                 setattr(agent, field, data[field])
         if "sudo_policy" in data:
             agent.sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
+        if "provider_binding" in data:
+            if data.get("provider_binding") in ({}, None):
+                agent.provider_binding = {}
+            else:
+                try:
+                    context = build_execution_context(
+                        actor_user_id=request.user.pk,
+                        project_id=agent.project_id,
+                        purpose="ops",
+                        source_kind="pipeline",
+                        source_id=f"agent-config:{agent.pk}",
+                        mode=ExecutionMode.UNATTENDED,
+                        explicit_binding=data.get("provider_binding"),
+                    )
+                    agent.provider_binding = context.binding.to_dict()
+                except (TypeError, ValueError, RuntimeError) as exc:
+                    return _err(str(exc))
         if "skill_slugs" in data or "skills" in data:
             agent.skill_slugs = _sanitize_accessible_skill_slugs(
                 request.user,

@@ -15,6 +15,8 @@ from asgiref.sync import sync_to_async
 from channels.db import database_sync_to_async
 from loguru import logger
 
+from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
+
 
 def normalize_extra_target_server_ids(raw_value: Any, *, limit: int = 5) -> list[int]:
     """Normalize user-provided extra target ids and cap them for SSH fan-out."""
@@ -91,6 +93,7 @@ async def build_agent_extra_targets(
     ai_settings: dict[str, Any] | None,
     user_id: int | None,
     primary_server_id: int | None = None,
+    automation_allowed: bool = False,
     list_servers: Callable[..., Awaitable[list[dict]]] = list_user_accessible_servers,
 ) -> dict[str, Any]:
     """Return opt-in extra targets for a terminal-agent session."""
@@ -117,7 +120,7 @@ async def build_agent_extra_targets(
             server_id=server_id,
             display_name=str(row.get("name") or ""),
             host=str(row.get("host") or ""),
-            read_only=bool(row.get("ai_read_only")),
+            read_only=bool(row.get("ai_read_only")) or not automation_allowed,
             sudo_auth_mode=str(row.get("sudo_auth_mode") or "none"),
             is_primary=False,
             description=str(row.get("description") or ""),
@@ -187,6 +190,7 @@ async def open_agent_target_connection(
 
             connect = asyncssh.connect
 
+        validate_pilot_ssh_destination(server.host, server.port)
         connect_kwargs = await build_connect_kwargs(server, secret=secret or "")
         return await connect(**connect_kwargs)
     except Exception as exc:  # noqa: BLE001

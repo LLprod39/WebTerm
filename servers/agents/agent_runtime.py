@@ -8,10 +8,12 @@ signals (stop/pause/resume/reply) to the currently running engine.
 from __future__ import annotations
 
 from threading import RLock
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
-if TYPE_CHECKING:
-    from servers.models import AgentRun
+from asgiref.sync import sync_to_async
+
+from core_ui.services.ai_execution_context import abuild_execution_context
+from servers.models_agents import AgentRun
 
 _LOCK = RLock()
 _ENGINES_BY_RUN_ID: dict[int, Any] = {}
@@ -23,6 +25,51 @@ DEFAULT_RUNTIME_CONTROL = {
     "reply_ack_nonce": 0,
     "reply_text": "",
 }
+
+
+def execution_binding_snapshot(context: Any | None) -> dict[str, Any]:
+    binding = getattr(context, "binding", None)
+    return binding.to_dict() if binding is not None else {}
+
+
+def execution_mode_value(context: Any | None) -> str:
+    mode = getattr(context, "mode", None)
+    return str(getattr(mode, "value", None) or "interactive")
+
+
+async def build_agent_execution_context(engine: Any, purpose: str, *, surface: str):
+    engine._provider_invocation_seq += 1
+    state: dict[str, Any] = {}
+    run_record = engine.run_record
+    if run_record is not None and run_record.pk:
+        state = await sync_to_async(
+            lambda: AgentRun.objects.filter(pk=run_record.pk)
+            .values(
+                "provider_binding_snapshot",
+                "provider_session_id",
+                "provider_execution_mode",
+            )
+            .get(),
+            thread_sensitive=True,
+        )()
+    base_binding = state.get("provider_binding_snapshot") or execution_binding_snapshot(engine.execution_context)
+    if not base_binding:
+        base_binding = getattr(engine.agent, "provider_binding", {})
+    run_id = getattr(run_record, "pk", None)
+    return await abuild_execution_context(
+        actor_user_id=getattr(engine.user, "pk", None),
+        project_id=getattr(engine.agent, "project_id", None),
+        purpose=purpose,
+        source_kind="agent_run",
+        source_id=run_id or f"ephemeral-{id(engine)}",
+        mode=state.get("provider_execution_mode") or "interactive",
+        stored_binding=base_binding,
+        requested_provider=engine.model_preference,
+        requested_specific_model=engine.specific_model,
+        provider_session_id=state.get("provider_session_id") or "",
+        idempotency_key=f"agent:{run_id}:llm:{engine._provider_invocation_seq}" if run_id else "",
+        tool_policy={"surface": surface, "webtrerm_tools_only": True},
+    )
 
 
 def build_runtime_control_state(raw: Any | None = None) -> dict[str, Any]:
