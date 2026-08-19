@@ -17,12 +17,14 @@ export function AgentCoreSettingsSection({
   form,
   lang,
   readOnly,
+  canSelectModels = false,
   onFieldChange,
   isAdmin = false,
 }: {
   form: Partial<AgentConfig>;
   lang: Lang;
   readOnly: boolean;
+  canSelectModels?: boolean;
   onFieldChange: (key: keyof AgentConfig, value: unknown) => void;
   /** Model selection is admin-only — regular users inherit the admin's configured model. */
   isAdmin?: boolean;
@@ -64,10 +66,10 @@ export function AgentCoreSettingsSection({
         />
       </div>
 
-      <div className={isAdmin ? "grid gap-4 md:grid-cols-2" : "space-y-2"}>
-        {isAdmin ? (
-          <div className="space-y-2">
-            <Label>{localize(lang, "Модель", "Model")}</Label>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label>{localize(lang, "Модель", "Model")}</Label>
+          {canSelectModels && isAdmin ? (
             <Select value={form.model || MODEL_OPTIONS[0]} onValueChange={(value) => onFieldChange("model", value)}>
               <SelectTrigger disabled={readOnly}>
                 <SelectValue />
@@ -80,8 +82,21 @@ export function AgentCoreSettingsSection({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        ) : null}
+          ) : (
+            <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
+              <div className="font-mono text-xs text-foreground">
+                {form.model || localize(lang, "Модель из настроек", "Workspace default model")}
+              </div>
+              <p className="mt-1 text-xs leading-relaxed">
+                {localize(
+                  lang,
+                  "Модель задаёт администратор в настройках. Выбор модели недоступен.",
+                  "The model is set by an admin in settings. Model selection is not available.",
+                )}
+              </p>
+            </div>
+          )}
+        </div>
 
         <div className="space-y-2">
           <Label>{localize(lang, "Лимит итераций", "Max iterations")}</Label>

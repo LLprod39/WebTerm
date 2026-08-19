@@ -2,6 +2,8 @@
 Linux UI read-only snapshot endpoints.
 """
 
+from functools import wraps
+
 from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
@@ -51,8 +53,21 @@ def _missing_linux_ui_capability_response(capability: str) -> JsonResponse:
     return JsonResponse({"success": False, "error": f"Missing server capability: {capability}"}, status=403)
 
 
+def require_linux_ui_admin(view_func):
+    """Keep the Linux UI surface restricted to platform administrators."""
+
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_staff:
+            return JsonResponse({"success": False, "error": "Only admins can access Linux UI"}, status=403)
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_capabilities(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -87,6 +102,7 @@ def server_linux_ui_capabilities(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_settings(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -121,6 +137,7 @@ def server_linux_ui_settings(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_overview(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -155,6 +172,7 @@ def server_linux_ui_overview(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -197,6 +215,7 @@ def server_linux_ui_logs(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_disk(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -236,6 +255,7 @@ def server_linux_ui_disk(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_network(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -275,6 +295,7 @@ def server_linux_ui_network(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_packages(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)

@@ -10,3 +10,4 @@ def test_production_environment_example_is_documented_and_used():
     assert "## Frequently changed" in rendered
     assert "## Expert tuning" in rendered
     assert "`DJANGO_SECRET_KEY`" in rendered
+    assert "| `LDAP_PASSWORD_LOGIN_ENFORCED` | LDAP / AD | `true` |" in rendered

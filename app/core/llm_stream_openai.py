@@ -26,6 +26,7 @@ async def stream_openai_tools(
     usage_logger: UsageLogger | None = None,
     prompt_for_usage: str = "",
     provider: str = "openai",
+    trust_env: bool = False,
 ) -> AsyncGenerator[dict[str, Any], None]:
     import aiohttp
 
@@ -55,7 +56,7 @@ async def stream_openai_tools(
     try:
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with (
-            aiohttp.ClientSession(timeout=timeout) as session,
+            aiohttp.ClientSession(timeout=timeout, trust_env=trust_env) as session,
             session.post(api_url, headers=headers, json=payload) as resp,
         ):
             if resp.status >= 400:

@@ -152,6 +152,7 @@ export function LlmQueryConfig({
   provider,
   modelList,
   loadingModelsFor,
+  canSelectModels = false,
   onSet,
   onProviderChange,
 }: {
@@ -162,6 +163,7 @@ export function LlmQueryConfig({
   provider: string;
   modelList: string[];
   loadingModelsFor: string | null;
+  canSelectModels?: boolean;
   onSet: SetNodeData;
   onProviderChange: (provider: string) => void;
 }) {
@@ -198,34 +200,44 @@ export function LlmQueryConfig({
             rows={2}
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">{localize(lang, "Провайдер", "Provider")}</Label>
-            <Select value={(data.provider as string) || "gemini"} onValueChange={onProviderChange}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DIRECT_LLM_PROVIDERS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {canSelectModels ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(lang, "Провайдер", "Provider")}</Label>
+              <Select value={(data.provider as string) || "gemini"} onValueChange={onProviderChange}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DIRECT_LLM_PROVIDERS.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">{localize(lang, "Модель", "Model")}</Label>
+              <Select value={(data.model as string) || ""} onValueChange={(value) => onSet("model", value)} disabled={loadingModelsFor === provider}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder={loadingModelsFor === provider ? localize(lang, "Загрузка моделей...", "Loading models...") : localize(lang, "Выберите модель", "Select model")} />
+                </SelectTrigger>
+                <SelectContent>
+                  {modelList.length
+                    ? modelList.map((model) => <SelectItem key={model} value={model}>{model}</SelectItem>)
+                    : <SelectItem value="_empty" disabled>{localize(lang, "Модели недоступны", "No models available")}</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">{localize(lang, "Модель", "Model")}</Label>
-            <Select value={(data.model as string) || ""} onValueChange={(value) => onSet("model", value)} disabled={loadingModelsFor === provider}>
-              <SelectTrigger className="h-8 text-xs">
-                <SelectValue placeholder={loadingModelsFor === provider ? localize(lang, "Загрузка моделей...", "Loading models...") : localize(lang, "Выберите модель", "Select model")} />
-              </SelectTrigger>
-              <SelectContent>
-                {modelList.length
-                  ? modelList.map((model) => <SelectItem key={model} value={model}>{model}</SelectItem>)
-                  : <SelectItem value="_empty" disabled>{localize(lang, "Модели недоступны", "No models available")}</SelectItem>}
-              </SelectContent>
-            </Select>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">
+            {localize(
+              lang,
+              "Используется глобальная модель агента из настроек. Выбор модели доступен только администратору.",
+              "Uses the workspace default agent model from settings. Only admins can choose a model.",
+            )}
           </div>
-        </div>
+        )}
         <FieldHint>
           {localize(lang, "Вывод доступен следующим нодам как", "Output is available for next nodes as")} <code>{`{${nodeId}}`}</code> {localize(lang, "и", "and")} <code>{`{${nodeId}_output}`}</code>
         </FieldHint>

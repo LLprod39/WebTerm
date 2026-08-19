@@ -2,7 +2,7 @@
 
 Generated from `.env.production.example` by `scripts/env_contract.py`. Do not edit this table by hand.
 
-Total variables: **360**.
+Total variables: **362**.
 
 ## Required
 
@@ -114,7 +114,9 @@ Total variables: **360**.
 | `DOMAIN_AUTH_HEADER_ALIASES` | Domain auth / SSO | `empty` |
 | `DOMAIN_AUTH_AUTO_CREATE` | Domain auth / SSO | `true` |
 | `DOMAIN_AUTH_LOWERCASE_USERNAMES` | Domain auth / SSO | `true` |
-| `DOMAIN_AUTH_DEFAULT_PROFILE` | Domain auth / SSO | `server_only` |
+| `DOMAIN_AUTH_DEFAULT_PROFILE` | Domain auth / SSO | `pilot_user` |
+| `LOCAL_ADMIN_USERNAMES` | LDAP / AD | `admin` |
+| `LDAP_PASSWORD_LOGIN_ENFORCED` | LDAP / AD | `true` |
 | `LDAP_ENABLED` | LDAP / AD | `false` |
 | `LDAP_SERVER` | LDAP / AD | `empty` |
 | `LDAP_PORT` | LDAP / AD | `empty` |
@@ -267,7 +269,7 @@ Total variables: **360**.
 | `KUBERNETES_ADMIN_NATIVE_APPLY_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_ADMIN_BREAK_GLASS_APPLY_BYPASS_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_ADMIN_DRY_RUN_PROOF_MAX_AGE_SECONDS` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `1800` |
-| `KUBERNETES_ADMIN_SECRET_READ_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `placeholder; replace` |
+| `KUBERNETES_ADMIN_SECRET_READ_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_ADMIN_NATIVE_PATCH_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_ADMIN_PATCH_MAX_BODY_BYTES` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `65536` |
 | `KUBERNETES_ADMIN_NATIVE_SCALE_ENABLED` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |

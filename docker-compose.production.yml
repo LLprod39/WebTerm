@@ -14,6 +14,16 @@ x-proxy-env: &proxy-env
   FTP_PROXY: ${FTP_PROXY:-}
   NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner,ai-cli-runner-manager,playbook-docker-proxy,agent-command-docker-proxy,plugin-backend-docker-proxy
 
+x-build-proxy-args: &build-proxy-args
+  http_proxy: ${http_proxy:-}
+  https_proxy: ${https_proxy:-}
+  ftp_proxy: ${ftp_proxy:-}
+  no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
+  HTTP_PROXY: ${HTTP_PROXY:-}
+  HTTPS_PROXY: ${HTTPS_PROXY:-}
+  FTP_PROXY: ${FTP_PROXY:-}
+  NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
+
 x-json-logging: &json-logging
   driver: json-file
   options:
@@ -23,15 +33,7 @@ x-json-logging: &json-logging
 x-backend-build: &backend-build
   context: .
   dockerfile: docker/backend.Dockerfile
-  args:
-    http_proxy: ${http_proxy:-}
-    https_proxy: ${https_proxy:-}
-    ftp_proxy: ${ftp_proxy:-}
-    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
-    HTTP_PROXY: ${HTTP_PROXY:-}
-    HTTPS_PROXY: ${HTTPS_PROXY:-}
-    FTP_PROXY: ${FTP_PROXY:-}
-    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
+  args: *build-proxy-args
 
 x-backend-worker-environment: &backend-worker-environment
   <<: *proxy-env
@@ -251,6 +253,7 @@ services:
       APP_LOG_SYSLOG_FACILITY: ${APP_LOG_SYSLOG_FACILITY:-LOG_USER}
       SECURE_SSL_REDIRECT: ${SECURE_SSL_REDIRECT:-true}
       TRUST_X_FORWARDED_PROTO: ${TRUST_X_FORWARDED_PROTO:-true}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-1}
       USE_X_FORWARDED_HOST: ${USE_X_FORWARDED_HOST:-true}
       CROSS_SITE_AUTH: ${CROSS_SITE_AUTH:-false}
       SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
@@ -290,7 +293,12 @@ services:
       DOMAIN_AUTH_HEADER_ALIASES: ${DOMAIN_AUTH_HEADER_ALIASES:-}
       DOMAIN_AUTH_AUTO_CREATE: ${DOMAIN_AUTH_AUTO_CREATE:-true}
       DOMAIN_AUTH_LOWERCASE_USERNAMES: ${DOMAIN_AUTH_LOWERCASE_USERNAMES:-true}
-      DOMAIN_AUTH_DEFAULT_PROFILE: ${DOMAIN_AUTH_DEFAULT_PROFILE:-server_only}
+      DOMAIN_AUTH_DEFAULT_PROFILE: ${DOMAIN_AUTH_DEFAULT_PROFILE:-pilot_user}
+      DOMAIN_AUTH_TRUSTED_PROXIES: ${DOMAIN_AUTH_TRUSTED_PROXIES:-}
+      DOMAIN_AUTH_SHARED_SECRET: ${DOMAIN_AUTH_SHARED_SECRET:-}
+      DOMAIN_AUTH_SHARED_SECRET_HEADER: ${DOMAIN_AUTH_SHARED_SECRET_HEADER:-X-Domain-Auth-Secret}
+      LOCAL_ADMIN_USERNAMES: ${LOCAL_ADMIN_USERNAMES:-admin}
+      LDAP_PASSWORD_LOGIN_ENFORCED: ${LDAP_PASSWORD_LOGIN_ENFORCED:-true}
       LDAP_ENABLED: ${LDAP_ENABLED:-false}
       LDAP_SERVERS: ${LDAP_SERVERS:-}
       LDAP_SERVER: ${LDAP_SERVER:-}
@@ -993,6 +1001,7 @@ services:
     build:
       context: .
       dockerfile: docker/ansible-runner/Dockerfile
+      args: *build-proxy-args
     entrypoint: ["ansible-playbook"]
     command: ["--version"]
     restart: "no"
@@ -1002,6 +1011,7 @@ services:
     build:
       context: .
       dockerfile: docker/ansible-runner/Dockerfile
+      args: *build-proxy-args
     user: "0:0"
     entrypoint: ["python", "/opt/webterm/validator.py"]
     command: []
@@ -1100,15 +1110,7 @@ services:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
-      args:
-        http_proxy: ${http_proxy:-}
-        https_proxy: ${https_proxy:-}
-        ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-        FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
+      args: *build-proxy-args
     container_name: mini-prod-frontend
     environment:
       NODE_ENV: production
@@ -1162,15 +1164,7 @@ services:
     build:
       context: .
       dockerfile: docker/mcp-runner.Dockerfile
-      args:
-        http_proxy: ${http_proxy:-}
-        https_proxy: ${https_proxy:-}
-        ftp_proxy: ${ftp_proxy:-}
-        no_proxy: ${no_proxy:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
-        HTTP_PROXY: ${HTTP_PROXY:-}
-        HTTPS_PROXY: ${HTTPS_PROXY:-}
-        FTP_PROXY: ${FTP_PROXY:-}
-        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1},postgres,redis,backend,frontend,nginx,mcp-runner
+      args: *build-proxy-args
     container_name: mini-prod-mcp-runner
     environment:
       <<: *proxy-env

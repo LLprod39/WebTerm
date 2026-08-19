@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  fetchAuthSession,
   fetchModels,
   refreshModels,
   studioAgents,
@@ -71,11 +72,23 @@ export function NodeConfigPanel({
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: authSession } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const authReady = Boolean(authSession);
+  const canSelectModels = Boolean(authSession?.user?.is_staff);
   const { data: agents = [] } = useQuery({ queryKey: ["studio", "agents"], queryFn: studioAgents.list });
   const { data: servers = [] } = useQuery({ queryKey: ["studio", "servers"], queryFn: studioServers.list });
   const { data: mcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });
   const { data: skillList = [] } = useQuery({ queryKey: ["studio", "skills"], queryFn: studioSkills.list });
-  const { data: modelsData } = useQuery({ queryKey: ["api", "models"], queryFn: fetchModels });
+  const { data: modelsData } = useQuery({
+    queryKey: ["api", "models"],
+    queryFn: fetchModels,
+    enabled: canSelectModels,
+  });
   const [d, setD] = useState<Record<string, unknown>>(node.data || {});
   const dataRef = useRef<Record<string, unknown>>(node.data || {});
   const [loadingModelsFor, setLoadingModelsFor] = useState<string | null>(null);
@@ -119,13 +132,15 @@ export function NodeConfigPanel({
   }, [node.id, onUpdate]);
 
   const type = node.type as NodeType;
-  const provider =
-    type === "agent/llm_query"
-      ? ((d.provider as string) || "gemini")
-      : type === "agent/react" || type === "agent/multi"
-        ? ((d.provider as string) || "auto")
-        : "";
-  const currentModel = (d.model as string) || "";
+  const isAgentNode = type === "agent/llm_query" || type === "agent/react" || type === "agent/multi";
+  const provider = !isAgentNode
+    ? ""
+    : authReady && !canSelectModels
+      ? "auto"
+      : type === "agent/llm_query"
+        ? ((d.provider as string) || "gemini")
+        : ((d.provider as string) || "auto");
+  const currentModel = authReady && !canSelectModels ? "" : ((d.model as string) || "");
   const modelProvider = provider && provider !== "auto" ? provider : "";
   const modelList = useMemo(() => getModelsForProvider(modelsData, modelProvider), [modelProvider, modelsData]);
   const selectedAgent = agents.find((agent) => String(agent.id) === String(d.agent_config_id || ""));
@@ -134,6 +149,15 @@ export function NodeConfigPanel({
   const selectedSkillSlugs = Array.isArray(d.skill_slugs) ? (d.skill_slugs as string[]) : [];
   const selectedSkills = skillList.filter((skill) => selectedSkillSlugs.includes(skill.slug));
   const mcpArgsState = parseJsonObjectText(mcpArgsText);
+
+  useEffect(() => {
+    if (!authReady || canSelectModels || !isAgentNode) return;
+    const rawProvider = String(d.provider || "");
+    const rawModel = String(d.model || "");
+    if (rawProvider !== "auto" || rawModel) {
+      setMany({ provider: "auto", model: "" });
+    }
+  }, [authReady, canSelectModels, isAgentNode, d.provider, d.model, setMany]);
 
   useEffect(() => {
     const nextData = node.data || {};
@@ -243,6 +267,10 @@ export function NodeConfigPanel({
     : getNodeTypeGuidance(type, uiLang);
   const triggerWebhookUrl = trigger?.webhook_url ? new URL(trigger.webhook_url, window.location.origin).toString() : "";
   const handleAgentProviderChange = useCallback((nextProvider: string) => {
+    if (!canSelectModels) {
+      setMany({ provider: "auto", model: "" });
+      return;
+    }
     if (nextProvider === "auto") {
       setMany({ provider: "auto", model: "" });
       return;
@@ -262,7 +290,7 @@ export function NodeConfigPanel({
         }
       })
       .finally(() => setLoadingModelsFor(null));
-  }, [queryClient, set, setMany]);
+  }, [canSelectModels, queryClient, set, setMany]);
 
   const agentProviderOptions = useMemo(
     () =>
@@ -316,6 +344,7 @@ export function NodeConfigPanel({
         providerOptions={agentProviderOptions}
         modelList={modelList}
         loadingModelsFor={loadingModelsFor}
+        canSelectModels={canSelectModels}
         mcpList={mcpList}
         servers={servers}
         skillList={skillList}
@@ -433,6 +462,7 @@ export function NodeConfigPanel({
           provider={provider}
           modelList={modelList}
           loadingModelsFor={loadingModelsFor}
+          canSelectModels={canSelectModels}
           onSet={set}
           onProviderChange={handleAgentProviderChange}
         />

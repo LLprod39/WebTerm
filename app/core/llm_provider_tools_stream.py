@@ -154,6 +154,7 @@ async def stream_provider_chat_tools(
             usage_logger=_log_llm_usage,
             prompt_for_usage=prompt_for_usage,
             provider=provider,
+            trust_env=provider in {"openai", "grok"},
         ):
             yield event
         return

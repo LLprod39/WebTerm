@@ -50,6 +50,7 @@ export default function TerminalPage() {
     staleTime: 60_000,
     retry: false,
   });
+  const canUseLinuxUi = Boolean(authData?.user?.is_staff);
   const servers = useMemo(() => data?.servers ?? [], [data?.servers]);
   const defaultServer = findServer(servers, requestedId) || servers[0];
   const [tabs, setTabs] = useState<Tab[]>([]);
@@ -294,9 +295,10 @@ export default function TerminalPage() {
     setSidePanelMode("ai");
   }, []);
   const revealUiPanel = useCallback(() => {
+    if (!canUseLinuxUi) return;
     setPanelWidth((current) => Math.max(current, 520));
     setSidePanelMode("ui");
-  }, []);
+  }, [canUseLinuxUi]);
   const revealAiPanelForTab = useCallback((tabId: string) => {
     if (activeTabIdRef.current === tabId) {
       revealAiPanel();
@@ -348,10 +350,10 @@ export default function TerminalPage() {
     setSidePanelMode("files");
   }, []);
   useEffect(() => {
-    if (sidePanelMode === "ui" && activeServer?.server_type !== "ssh") {
+    if (sidePanelMode === "ui" && (!canUseLinuxUi || activeServer?.server_type !== "ssh")) {
       setSidePanelMode("none");
     }
-  }, [activeServer?.server_type, sidePanelMode]);
+  }, [activeServer?.server_type, canUseLinuxUi, sidePanelMode]);
   // Sync intercept_editors pref → SSH consumer
   useEffect(() => {
     for (const tab of tabs) {
@@ -380,6 +382,7 @@ export default function TerminalPage() {
         tabs={tabs}
         activeTabId={activeTabId}
         sidePanelMode={sidePanelMode}
+        canUseLinuxUi={canUseLinuxUi}
         t={t}
         addTab={addTab}
         closeTab={requestCloseTab}

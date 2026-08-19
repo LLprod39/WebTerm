@@ -2,7 +2,7 @@ import json
 
 import pytest
 from django.contrib.auth.models import Group, User
-from django.test import Client
+from django.test import Client, override_settings
 from django.utils import timezone
 
 from core_ui.activity import log_user_activity
@@ -68,6 +68,30 @@ def test_auth_login_logout_session_flow():
     after = client.get("/api/auth/session/")
     assert after.status_code == 200
     assert after.json()["authenticated"] is False
+
+
+@pytest.mark.django_db
+@override_settings(LDAP_PASSWORD_LOGIN_ENFORCED=True, LDAP_ENABLED=False, LOCAL_ADMIN_USERNAMES=["admin"])
+def test_enforced_ldap_login_fails_closed_but_keeps_local_admin():
+    User.objects.create_user(username="local-user", password="secret123")
+    User.objects.create_superuser(username="admin", password="admin-secret", email="")
+    client = Client()
+
+    domain_login = client.post(
+        "/api/auth/login/",
+        data=_json({"username": "local-user", "password": "secret123", "auth_mode": "local"}),
+        content_type="application/json",
+    )
+    assert domain_login.status_code == 503
+    assert domain_login.json()["error"] == "Domain login is unavailable (LDAP disabled)"
+
+    admin_login = client.post(
+        "/api/auth/login/",
+        data=_json({"username": "admin", "password": "admin-secret", "auth_mode": "auto"}),
+        content_type="application/json",
+    )
+    assert admin_login.status_code == 200
+    assert admin_login.json()["authenticated"] is True
 
 
 @pytest.mark.django_db

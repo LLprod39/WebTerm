@@ -11,6 +11,7 @@ from app.sudo_policy import normalize_sudo_policy
 from core_ui.decorators import require_feature
 from core_ui.projects import active_project_for_user
 from core_ui.services.ai_execution_context import build_execution_context
+from studio.model_policy import forced_agent_model_value, sanitize_agent_model_fields, user_can_select_models
 from studio.models import AgentConfig
 from studio.views.agent_helpers import (
     _agent_read_queryset_for_user,
@@ -46,7 +47,7 @@ def api_agents(request):
         return _ok([_agent_to_dict(agent, request.user) for agent in qs])
 
     if request.method == "POST":
-        data = _json_body(request)
+        data = sanitize_agent_model_fields(request.user, _json_body(request))
         name = data.get("name", "").strip()
         if not name:
             return _err("name is required")
@@ -69,13 +70,14 @@ def api_agents(request):
         requested_mcp_ids = _normalise_related_ids(
             data.get("mcp_server_ids") if "mcp_server_ids" in data else data.get("mcp_servers")
         )
+        default_model = forced_agent_model_value()
         agent = AgentConfig.objects.create(
             name=name,
             description=data.get("description", ""),
             icon=data.get("icon", "🤖"),
             system_prompt=data.get("system_prompt", ""),
             instructions=data.get("instructions", ""),
-            model=data.get("model", "gemini-2.0-flash-exp"),
+            model=(data.get("model") if user_can_select_models(request.user) else default_model) or default_model,
             max_iterations=data.get("max_iterations", 10),
             allowed_tools=data.get("allowed_tools", []),
             sudo_policy=normalize_sudo_policy(data.get("sudo_policy")),
@@ -116,7 +118,7 @@ def api_agent_detail(request, agent_id: int):
     if request.method == "PUT":
         if not can_edit:
             return _err("Only the owner or admin can edit this agent", 403)
-        data = _json_body(request)
+        data = sanitize_agent_model_fields(request.user, _json_body(request))
         for field in (
             "name",
             "description",
@@ -128,7 +130,12 @@ def api_agent_detail(request, agent_id: int):
             "allowed_tools",
         ):
             if field in data:
-                setattr(agent, field, data[field])
+                if field == "model" and not user_can_select_models(request.user):
+                    setattr(agent, field, forced_agent_model_value())
+                else:
+                    setattr(agent, field, data[field])
+        if not user_can_select_models(request.user):
+            agent.model = forced_agent_model_value()
         if "sudo_policy" in data:
             agent.sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
         if "provider_binding" in data:

@@ -138,6 +138,67 @@ def api_auth_csrf(request):
     return JsonResponse({"csrfToken": get_token(request)})
 
 
+def _authenticate_local_password(request, username: str, password: str, *, admin_only: bool = False):
+    from django.contrib.auth.backends import ModelBackend
+
+    user = ModelBackend().authenticate(request, username=username, password=password)
+    if admin_only and user is not None and not (user.is_superuser or user.is_staff):
+        return None, None
+    backend = "django.contrib.auth.backends.ModelBackend" if user is not None else None
+    return user, backend
+
+
+def _enforced_password_auth(request, username: str, password: str):
+    local_admin_usernames = {
+        str(item or "").strip().lower()
+        for item in (getattr(settings, "LOCAL_ADMIN_USERNAMES", None) or ["admin"])
+        if str(item or "").strip()
+    }
+    if username.strip().lower() in local_admin_usernames:
+        user, backend = _authenticate_local_password(request, username, password, admin_only=True)
+        return user, backend, "local", None
+
+    if not bool(getattr(settings, "LDAP_ENABLED", False)):
+        log_user_activity(
+            request=request,
+            username_snapshot=username,
+            category="auth",
+            action="login_failed",
+            status=UserActivityLog.STATUS_ERROR,
+            description="Login failed: LDAP is disabled for domain users",
+            entity_type="auth",
+            metadata={"auth_mode": "ldap"},
+        )
+        response = JsonResponse(
+            {"success": False, "error": "Domain login is unavailable (LDAP disabled)"},
+            status=503,
+        )
+        return None, None, "ldap", response
+
+    from core_ui.ldap_login import authenticate_ldap_user
+
+    user, ldap_error = authenticate_ldap_user(username, password)
+    if user is not None:
+        backend = getattr(user, "backend", None) or "django_auth_ldap.backend.LDAPBackend"
+        return user, backend, "ldap", None
+
+    log_user_activity(
+        request=request,
+        username_snapshot=username,
+        category="auth",
+        action="login_failed",
+        status=UserActivityLog.STATUS_ERROR,
+        description=f"Login failed: {ldap_error or 'invalid username or password'}",
+        entity_type="auth",
+        metadata={"auth_mode": "ldap"},
+    )
+    response = JsonResponse(
+        {"success": False, "error": ldap_error or "Invalid username or password"},
+        status=401,
+    )
+    return None, None, "ldap", response
+
+
 @require_http_methods(["POST"])
 def api_auth_login(request):
     try:
@@ -169,15 +230,15 @@ def api_auth_login(request):
     if auth_mode not in {"auto", "local"}:
         auth_mode = "auto"
 
+    ldap_password_login_enforced = bool(getattr(settings, "LDAP_PASSWORD_LOGIN_ENFORCED", False))
     user = None
     auth_backend = None
-    if auth_mode == "local":
-        from django.contrib.auth.backends import ModelBackend
-
-        local_backend = ModelBackend()
-        user = local_backend.authenticate(request, username=username, password=password)
-        if user is not None:
-            auth_backend = "django.contrib.auth.backends.ModelBackend"
+    if ldap_password_login_enforced:
+        user, auth_backend, auth_mode, error_response = _enforced_password_auth(request, username, password)
+        if error_response is not None:
+            return error_response
+    elif auth_mode == "local":
+        user, auth_backend = _authenticate_local_password(request, username, password)
     else:
         user = authenticate(request, username=username, password=password)
         auth_backend = getattr(user, "backend", None) if user is not None else None

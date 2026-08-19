@@ -268,6 +268,7 @@ export function AgentForm({
                 form={form}
                 lang={lang}
                 readOnly={readOnly}
+                canSelectModels={isAdmin}
                 onFieldChange={setField}
                 isAdmin={isAdmin}
               />
@@ -401,4 +402,3 @@ export function AgentForm({
     </div>
   );
 }
-

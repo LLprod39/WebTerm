@@ -112,6 +112,8 @@ def unused_variables(variables: list[EnvVariable]) -> list[EnvVariable]:
 
 
 def _display_default(item: EnvVariable) -> str:
+    if item.default.lower() in {"true", "false"}:
+        return item.default.lower()
     if any(marker in item.name.upper() for marker in SECRET_MARKERS):
         return "operator supplied" if not item.default else "placeholder; replace"
     return item.default or "empty"

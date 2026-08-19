@@ -27,6 +27,7 @@ export function TerminalHeader({
   tabs,
   activeTabId,
   sidePanelMode,
+  canUseLinuxUi,
   t,
   addTab,
   closeTab,
@@ -41,6 +42,7 @@ export function TerminalHeader({
   tabs: Tab[];
   activeTabId: string;
   sidePanelMode: SidePanelMode;
+  canUseLinuxUi: boolean;
   t: (key: string) => string;
   addTab: () => void;
   closeTab: (tabId: string) => void;
@@ -156,7 +158,7 @@ export function TerminalHeader({
             <TerminalIcons.files className="h-3.5 w-3.5" strokeWidth={1.5} />
             <span className="hidden md:inline">{t("terminal.filesPanel")}</span>
           </Button>
-          {activeServer.server_type === "ssh" ? (
+          {activeServer.server_type === "ssh" && canUseLinuxUi ? (
             <Button
               type="button"
               size="sm"

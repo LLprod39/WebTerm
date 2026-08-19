@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 from django.test import Client
 
 from servers.models import Server, ServerShare
@@ -118,7 +118,7 @@ def test_view_only_shared_user_cannot_connect_execute_or_access_files():
 
     linux_ui_read_response = client.get(f"/servers/api/{server.id}/ui/overview/")
     assert linux_ui_read_response.status_code == 403
-    assert "connect_terminal" in linux_ui_read_response.json()["error"]
+    assert linux_ui_read_response.json()["error"] == "Only admins can access Linux UI"
 
     linux_ui_action_response = client.post(
         f"/servers/api/{server.id}/ui/services/action/",
@@ -126,7 +126,43 @@ def test_view_only_shared_user_cannot_connect_execute_or_access_files():
         content_type="application/json",
     )
     assert linux_ui_action_response.status_code == 403
-    assert "execute_command" in linux_ui_action_response.json()["error"]
+    assert linux_ui_action_response.json()["error"] == "Only admins can access Linux UI"
+
+
+@pytest.mark.django_db
+def test_pilot_group_user_cannot_access_linux_ui_endpoints():
+    user = User.objects.create_user(username="pilot-linux-ui-user", password="x")
+    pilot_group = Group.objects.create(name="pilot")
+    user.groups.add(pilot_group)
+    server = _create_server(user, name="pilot-linux-ui-server", server_type="ssh", port=22)
+
+    client = Client()
+    client.force_login(user)
+    routes = (
+        ("get", "capabilities/"),
+        ("get", "settings/"),
+        ("get", "overview/"),
+        ("get", "logs/"),
+        ("get", "disk/"),
+        ("get", "network/"),
+        ("get", "packages/"),
+        ("get", "services/"),
+        ("get", "services/logs/"),
+        ("post", "services/action/"),
+        ("get", "processes/"),
+        ("post", "processes/action/"),
+        ("get", "docker/"),
+        ("get", "docker/logs/"),
+        ("post", "docker/action/"),
+    )
+
+    for method, suffix in routes:
+        url = f"/servers/api/{server.id}/ui/{suffix}"
+        response = (
+            client.post(url, data=_json({}), content_type="application/json") if method == "post" else client.get(url)
+        )
+        assert response.status_code == 403, url
+        assert response.json()["error"] == "Only admins can access Linux UI", url
 
 
 @pytest.mark.django_db

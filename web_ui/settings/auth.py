@@ -69,6 +69,12 @@ def build_auth_settings(*, debug: bool) -> dict[str, object]:
         .strip()
         .lower()
         or "pilot_user",
+        "LOCAL_ADMIN_USERNAMES": [
+            username.strip().lower()
+            for username in (os.getenv("LOCAL_ADMIN_USERNAMES", "admin") or "admin").split(",")
+            if username.strip()
+        ],
+        "LDAP_PASSWORD_LOGIN_ENFORCED": env_bool("LDAP_PASSWORD_LOGIN_ENFORCED", False),
         "LDAP_ENABLED": env_bool("LDAP_ENABLED", False),
         "LDAP_SERVER": _ldap_server_uri(),
         "LDAP_BIND_DN": (os.getenv("LDAP_BIND_DN", "") or "").strip(),
@@ -106,10 +112,19 @@ def build_auth_settings(*, debug: bool) -> dict[str, object]:
             "AUTH_LDAP_START_TLS": settings["LDAP_START_TLS"],
             "AUTH_LDAP_ALWAYS_UPDATE_USER": True,
             "AUTH_LDAP_CACHE_TIMEOUT": 300,
+            # Accept sAMAccountName, UPN, or mail so users can type German.Keller,
+            # German.Keller@erg.kz, or email interchangeably.
             "AUTH_LDAP_USER_SEARCH": LDAPSearch(
                 settings["LDAP_SEARCH_BASE"],
                 ldap.SCOPE_SUBTREE,
-                f"(&{settings['LDAP_FILTER']}({settings['LDAP_USERNAME_ATTRIBUTE']}=%(user)s))",
+                (
+                    f"(&{settings['LDAP_FILTER']}"
+                    f"(|"
+                    f"({settings['LDAP_USERNAME_ATTRIBUTE']}=%(user)s)"
+                    f"(userPrincipalName=%(user)s)"
+                    f"({settings['LDAP_EMAIL_ATTRIBUTE']}=%(user)s)"
+                    f"))"
+                ),
             ),
             "AUTH_LDAP_USER_ATTR_MAP": {
                 "email": settings["LDAP_EMAIL_ATTRIBUTE"],

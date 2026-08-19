@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
+from studio.model_policy import sanitize_pipeline_nodes_for_user
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession
 from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_assistant_interview import (
@@ -239,7 +240,7 @@ def api_pipeline_draft_apply(request, draft_id: int):
     description = str(data.get("description") or draft.user_goal or latest.assistant_reply or "").strip()
     icon = str(data.get("icon") or "W").strip() or "W"
     tags = data.get("tags") if isinstance(data.get("tags"), list) else ["ai-draft"]
-    nodes = latest.preview_nodes or []
+    nodes = sanitize_pipeline_nodes_for_user(request.user, latest.preview_nodes or [])
     edges = latest.preview_edges or []
 
     owner = draft.source_pipeline.owner if draft.source_pipeline_id and draft.source_pipeline else draft.owner

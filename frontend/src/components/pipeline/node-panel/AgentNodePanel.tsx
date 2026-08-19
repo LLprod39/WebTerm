@@ -28,6 +28,7 @@ type AgentNodePanelProps = {
   providerOptions: AgentProviderCardOption[];
   modelList: string[];
   loadingModelsFor: string | null;
+  canSelectModels?: boolean;
   mcpList: MCPServer[];
   servers: StudioServerOption[];
   skillList: StudioSkill[];
@@ -57,6 +58,7 @@ export function AgentNodePanel({
   providerOptions,
   modelList,
   loadingModelsFor,
+  canSelectModels = false,
   mcpList,
   servers,
   skillList,
@@ -113,6 +115,7 @@ export function AgentNodePanel({
               providerOptions={providerOptions}
               modelList={modelList}
               loadingModelsFor={loadingModelsFor}
+              canSelectModels={canSelectModels}
               mcpList={mcpList}
               servers={servers}
               selectedSkills={selectedSkills}

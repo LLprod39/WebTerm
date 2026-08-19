@@ -9,6 +9,7 @@ from app.ai_runtime import ExecutionMode
 from core_ui.decorators import require_feature
 from core_ui.projects import active_project_for_user
 from core_ui.services.ai_execution_context import build_execution_context
+from studio.model_policy import sanitize_pipeline_nodes_for_user
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineTrigger
 from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
 from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
@@ -59,10 +60,11 @@ def api_pipelines(request):
                 provider_binding = context.binding.to_dict()
             except (TypeError, ValueError, RuntimeError) as exc:
                 return _err(str(exc))
-        nodes = data.get("nodes", [])
+        nodes = sanitize_pipeline_nodes_for_user(request.user, data.get("nodes", []))
         edges = data.get("edges", [])
         if not nodes and not edges:
             nodes = _default_pipeline_draft_nodes()
+            nodes = sanitize_pipeline_nodes_for_user(request.user, nodes)
         errors = validate_pipeline_definition(
             nodes=nodes,
             edges=edges,
@@ -99,7 +101,10 @@ def api_pipeline_detail(request, pipeline_id: int):
 
     if request.method == "PUT":
         data = _json_body(request)
-        next_nodes = data.get("nodes", pipeline.nodes)
+        next_nodes = sanitize_pipeline_nodes_for_user(
+            request.user,
+            data.get("nodes", pipeline.nodes),
+        )
         next_edges = data.get("edges", pipeline.edges)
         errors = validate_pipeline_definition(
             nodes=next_nodes,
@@ -111,7 +116,12 @@ def api_pipeline_detail(request, pipeline_id: int):
             return _validation_err(errors, prefix="Pipeline validation failed")
         for field in ("name", "description", "icon", "tags", "nodes", "edges", "is_shared"):
             if field in data:
-                setattr(pipeline, field, data[field])
+                if field == "nodes":
+                    setattr(pipeline, field, next_nodes)
+                else:
+                    setattr(pipeline, field, data[field])
+        if "nodes" not in data:
+            pipeline.nodes = next_nodes
         if "provider_binding" in data:
             if data.get("provider_binding") in ({}, None):
                 pipeline.provider_binding = {}

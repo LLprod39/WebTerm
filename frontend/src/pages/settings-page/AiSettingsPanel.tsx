@@ -19,13 +19,17 @@ type AiSettingsPanelProps = {
 };
 
 export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPanelProps) {
+  const modelControlsDisabled = !isAdmin;
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium text-foreground">Модели и маршруты</p>
           <p className="max-w-3xl text-xs text-muted-foreground">
-            Сначала выберите провайдера по умолчанию. Роли настраивайте отдельно только там, где это действительно нужно.
+            {isAdmin
+              ? "Сначала выберите провайдера по умолчанию. Роли настраивайте отдельно только там, где это действительно нужно."
+              : "Модели задаёт администратор. У пользователей используется workspace default без выбора модели."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -33,6 +37,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
             {form.aiDraftDirty ? "Есть несохраненные изменения" : "Настройки синхронизированы"}
           </Badge>
           <Badge variant="outline">{form.uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}</Badge>
+          {!isAdmin ? <Badge variant="outline">Только просмотр</Badge> : null}
         </div>
       </div>
 
@@ -43,9 +48,11 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               <button
                 key={providerItem.value}
                 type="button"
+                disabled={modelControlsDisabled}
                 onClick={() => form.handleDefaultProviderChange(providerItem.value)}
                 className={cn(
                   "rounded-2xl border px-4 py-3 text-left transition-colors",
+                  modelControlsDisabled && "cursor-not-allowed opacity-70",
                   providerItem.isSelected
                     ? "border-primary/40 bg-primary/5"
                     : "border-border/60 bg-secondary/15 hover:border-border hover:bg-secondary/35",
@@ -77,7 +84,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase">Провайдер</label>
-                <Select value={form.provider} onValueChange={form.handleDefaultProviderChange}>
+                <Select value={form.provider} onValueChange={form.handleDefaultProviderChange} disabled={modelControlsDisabled}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {LLM_PROVIDERS.map((providerItem) => (
@@ -89,7 +96,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground uppercase">Модель</label>
                 {form.availableModels.length > 0 ? (
-                  <Select value={form.model} onValueChange={form.setModel}>
+                  <Select value={form.model} onValueChange={form.setModel} disabled={modelControlsDisabled}>
                     <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {form.availableModels.map((providerModel) => (
@@ -99,8 +106,8 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   </Select>
                 ) : (
                   <div className="flex gap-2">
-                    <Input value={form.model} onChange={(e) => form.setModel(e.target.value)} placeholder="Model name" className="h-9" />
-                    <Button size="sm" variant="outline" className="h-9 px-3" onClick={form.onRefreshModels} disabled={form.refreshing}>
+                    <Input value={form.model} onChange={(e) => form.setModel(e.target.value)} placeholder="Model name" className="h-9" disabled={modelControlsDisabled} />
+                    <Button size="sm" variant="outline" className="h-9 px-3" onClick={form.onRefreshModels} disabled={modelControlsDisabled || form.refreshing}>
                       <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} />
                     </Button>
                   </div>
@@ -112,9 +119,11 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               <div className="space-y-1">
                 <p className="text-xs font-medium">{getProviderLabel(form.provider)}</p>
                 <p className="text-xs text-muted-foreground">
-                  {form.availableModels.length
-                    ? "Модель можно выбрать из синхронизированного каталога."
-                    : "Для этого провайдера сейчас используется ручной ввод модели."}
+                  {modelControlsDisabled
+                    ? "Только администратор может менять модели и провайдеры."
+                    : form.availableModels.length
+                      ? "Модель можно выбрать из синхронизированного каталога."
+                      : "Для этого провайдера сейчас используется ручной ввод модели."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -122,42 +131,46 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button size="sm" variant="ghost" className="gap-1.5" onClick={form.onRefreshModels} disabled={form.refreshing}>
-                <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} /> Обновить каталог
-              </Button>
-              <Button size="sm" className="gap-1.5" onClick={form.onSave} disabled={form.saving}>
-                <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить основную"}
-              </Button>
-            </div>
+            {isAdmin ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button size="sm" variant="ghost" className="gap-1.5" onClick={form.onRefreshModels} disabled={form.refreshing}>
+                  <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} /> Обновить каталог
+                </Button>
+                <Button size="sm" className="gap-1.5" onClick={form.onSave} disabled={form.saving}>
+                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить основную"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
       </SectionCard>
 
       <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и пайплайнов">
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1">
-              <p className="text-xs font-medium text-foreground">Быстрые действия</p>
-              <p className="text-xs text-muted-foreground">
-                Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить черновик к сохраненному состоянию.
-              </p>
+          {isAdmin ? (
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-foreground">Быстрые действия</p>
+                <p className="text-xs text-muted-foreground">
+                  Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить черновик к сохраненному состоянию.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" className="gap-1.5" onClick={form.applyDefaultToAll}>
+                  <Bot className="h-3.5 w-3.5" /> Копировать основную
+                </Button>
+                <Button size="sm" variant="secondary" className="gap-1.5" onClick={form.fillMissingModels}>
+                  <Cpu className="h-3.5 w-3.5" /> Заполнить пустые
+                </Button>
+                <Button size="sm" variant="ghost" className="gap-1.5" onClick={form.resetAiDraft}>
+                  <RefreshCw className="h-3.5 w-3.5" /> Сбросить черновик
+                </Button>
+                <Button size="sm" className="gap-1.5" onClick={form.onSavePurpose} disabled={form.saving}>
+                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить маршруты"}
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={form.applyDefaultToAll}>
-                <Bot className="h-3.5 w-3.5" /> Копировать основную
-              </Button>
-              <Button size="sm" variant="secondary" className="gap-1.5" onClick={form.fillMissingModels}>
-                <Cpu className="h-3.5 w-3.5" /> Заполнить пустые
-              </Button>
-              <Button size="sm" variant="ghost" className="gap-1.5" onClick={form.resetAiDraft}>
-                <RefreshCw className="h-3.5 w-3.5" /> Сбросить черновик
-              </Button>
-              <Button size="sm" className="gap-1.5" onClick={form.onSavePurpose} disabled={form.saving}>
-                <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить маршруты"}
-              </Button>
-            </div>
-          </div>
+          ) : null}
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
             <PurposeModelSelector
@@ -167,6 +180,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               provider={form.chatProvider}
               model={form.chatModel}
               availableModels={form.getModelsForProvider(form.chatProvider)}
+              disabled={modelControlsDisabled}
               onProviderChange={(nextProvider) => {
                 form.setChatProvider(nextProvider);
                 form.setChatModel(form.getSuggestedModelForProvider(nextProvider));
@@ -182,6 +196,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               provider={form.agentProvider}
               model={form.agentModel}
               availableModels={form.getModelsForProvider(form.agentProvider)}
+              disabled={modelControlsDisabled}
               onProviderChange={(nextProvider) => {
                 form.setAgentProvider(nextProvider);
                 form.setAgentModel(form.getSuggestedModelForProvider(nextProvider));
@@ -197,6 +212,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               provider={form.orchProvider}
               model={form.orchModel}
               availableModels={form.getModelsForProvider(form.orchProvider)}
+              disabled={modelControlsDisabled}
               onProviderChange={(nextProvider) => {
                 form.setOrchProvider(nextProvider);
                 form.setOrchModel(form.getSuggestedModelForProvider(nextProvider));

@@ -26,6 +26,40 @@ def test_provider_timeout_seconds_uses_django_settings():
     assert _provider_timeout_seconds("ollama") == 333
 
 
+@pytest.mark.asyncio
+async def test_grok_tool_stream_uses_proxy_environment(monkeypatch):
+    provider = LLMProvider()
+    provider.grok_api_key = "test-key"
+    captured = {}
+
+    async def skip_managed_keys():
+        return None
+
+    async def fake_stream_openai_tools(**kwargs):
+        captured.update(kwargs)
+        yield {"type": "done", "usage": {}, "stop_reason": "stop"}
+
+    monkeypatch.setattr(provider, "_load_managed_api_keys", skip_managed_keys)
+    monkeypatch.setattr(
+        "app.core.llm_provider_tools_stream.stream_openai_tools",
+        fake_stream_openai_tools,
+    )
+
+    events = [
+        event
+        async for event in provider.stream_chat_tools(
+            messages=[{"role": "user", "content": "hello"}],
+            tools=[],
+            model="grok",
+            specific_model="grok-test",
+        )
+    ]
+
+    assert events[-1]["type"] == "done"
+    assert captured["provider"] == "grok"
+    assert captured["trust_env"] is True
+
+
 @override_settings(LLM_GROK_REASONING_EFFORT=None)
 def test_grok_reasoning_defaults_to_orchestrator_only(monkeypatch):
     monkeypatch.delenv("LLM_GROK_REASONING_EFFORT", raising=False)

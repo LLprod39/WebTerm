@@ -34,11 +34,13 @@ from servers.views.server_linux_ui import (
     _linux_ui_error_response,
     _linux_ui_server_payload,
     _missing_linux_ui_capability_response,
+    require_linux_ui_admin,
 )
 
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_services(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -80,6 +82,7 @@ def server_linux_ui_services(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_service_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -121,6 +124,7 @@ def server_linux_ui_service_logs(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["POST"])
 def server_linux_ui_service_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -169,6 +173,7 @@ def server_linux_ui_service_action(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_processes(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -208,6 +213,7 @@ def server_linux_ui_processes(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["POST"])
 def server_linux_ui_process_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -254,6 +260,7 @@ def server_linux_ui_process_action(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_docker(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -293,6 +300,7 @@ def server_linux_ui_docker(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["GET"])
 def server_linux_ui_docker_logs(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)
@@ -334,6 +342,7 @@ def server_linux_ui_docker_logs(request, server_id):
 
 @login_required
 @require_feature("servers")
+@require_linux_ui_admin
 @require_http_methods(["POST"])
 def server_linux_ui_docker_action(request, server_id):
     server = get_object_or_404(_accessible_servers_queryset(request.user), id=server_id)

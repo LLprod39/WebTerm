@@ -33,6 +33,7 @@ type NodeSettingsTabProps = {
   providerOptions: AgentProviderCardOption[];
   modelList: string[];
   loadingModelsFor: string | null;
+  canSelectModels?: boolean;
   mcpList: MCPServer[];
   servers: StudioServerOption[];
   selectedSkills: StudioSkill[];
@@ -73,6 +74,7 @@ export function NodeSettingsTab({
   providerOptions,
   modelList,
   loadingModelsFor,
+  canSelectModels = false,
   mcpList,
   servers,
   selectedSkills,
@@ -258,71 +260,71 @@ export function NodeSettingsTab({
               "Model settings come from the selected Agent Config. Clear that binding if you want to manage them directly in the node.",
             )}
           </div>
+        ) : !canSelectModels || !isAdmin ? (
+          <div className="rounded-lg border border-dashed border-border/70 px-4 py-4 text-sm text-muted-foreground">
+            {t(
+              lang,
+              "Используется глобальная модель агента из настроек. Выбор модели доступен только администратору.",
+              "Uses the workspace default agent model from settings. Only admins can choose a model.",
+            )}
+          </div>
         ) : (
           <>
-            {isAdmin ? (
-              <>
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">
-                    {t(lang, "Провайдер", "Provider")}
-                  </Label>
-                  <ProviderSelector
-                    options={providerOptions}
-                    value={provider || "auto"}
-                    onChange={onProviderChange}
-                  />
-                </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">
+                {t(lang, "Провайдер", "Provider")}
+              </Label>
+              <ProviderSelector
+                options={providerOptions}
+                value={provider || "auto"}
+                onChange={onProviderChange}
+              />
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="node-model" className="text-xs text-muted-foreground">
-                    {t(lang, "Модель", "Model")}
-                  </Label>
-                  {provider === "auto" ? (
-                    <div className="flex h-10 items-center rounded-lg border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
-                      {t(lang, "Используется глобальная модель агента.", "Uses the workspace default agent model.")}
-                    </div>
-                  ) : (
-                    <Select
-                      value={(data.model as string) || ""}
-                      onValueChange={(value) => onSet("model", value)}
-                      disabled={loadingModelsFor === provider}
-                    >
-                      <SelectTrigger id="node-model" className="h-10 rounded-lg border-border/70 bg-background/70">
-                        <SelectValue
-                          placeholder={
-                            loadingModelsFor === provider
-                              ? t(lang, "Загрузка моделей...", "Loading models...")
-                              : t(lang, "Выберите модель", "Select a model")
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelList.length ? (
-                          modelList.map((model) => (
-                            <SelectItem key={model} value={model}>
-                              {model}
-                            </SelectItem>
-                          ))
-                        ) : (
-                          <SelectItem value="_empty" disabled>
-                            {t(lang, "Модели недоступны", "No models available")}
-                          </SelectItem>
-                        )}
-                      </SelectContent>
-                    </Select>
-                  )}
+            <div className="space-y-2">
+              <Label htmlFor="node-model" className="text-xs text-muted-foreground">
+                {t(lang, "Модель", "Model")}
+              </Label>
+              {provider === "auto" ? (
+                <div className="flex h-10 items-center rounded-lg border border-border/70 bg-muted/20 px-3 text-sm text-muted-foreground">
+                  {t(lang, "Используется глобальная модель агента.", "Uses the workspace default agent model.")}
                 </div>
-              </>
-            ) : (
-              <div className="flex items-center rounded-lg border border-dashed border-border/70 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
-                {t(
-                  lang,
-                  "Модель и провайдера задаёт администратор — используется значение по умолчанию.",
-                  "Model and provider are set by the administrator — the default is used.",
-                )}
-              </div>
-            )}
+              ) : (
+                <Select
+                  value={(data.model as string) || ""}
+                  onValueChange={(value) => onSet("model", value)}
+                  disabled={loadingModelsFor === provider}
+                >
+                  <SelectTrigger id="node-model" className="h-10 rounded-lg border-border/70 bg-background/70">
+                    <SelectValue
+                      placeholder={
+                        loadingModelsFor === provider
+                          ? t(lang, "Загрузка моделей...", "Loading models...")
+                          : t(lang, "Выберите модель", "Select a model")
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {modelList.length ? (
+                      modelList.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="_empty" disabled>
+                        {t(lang, "Модели недоступны", "No models available")}
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </>
+        )}
 
+        {!selectedAgent ? (
+          <>
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">
                 {t(lang, "Максимум шагов", "Max iterations")}
@@ -392,7 +394,7 @@ export function NodeSettingsTab({
               </div>
             ) : null}
           </>
-        )}
+        ) : null}
       </Section>
 
       <Separator />
