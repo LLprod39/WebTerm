@@ -5,6 +5,8 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from core_ui.ai_model_policy import user_can_manage_ai_routing
+
 AGENT_NODE_TYPES = {
     "agent/llm_query",
     "agent/react",
@@ -13,7 +15,7 @@ AGENT_NODE_TYPES = {
 
 
 def user_can_select_models(user) -> bool:
-    return bool(user and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False)))
+    return user_can_manage_ai_routing(user)
 
 
 def workspace_default_agent_model() -> tuple[str, str]:

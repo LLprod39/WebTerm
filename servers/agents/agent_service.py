@@ -7,7 +7,6 @@ from django.utils import timezone
 
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
 from core_ui.activity import log_user_activity
-from core_ui.projects import active_project_for_user
 from servers.agents.agent_background import launch_plan_execution_background
 from servers.agents.agent_cleanup_service import cleanup_stale_agent_runs_for_user as cleanup_stale_agent_runs_for_user
 from servers.agents.agent_dispatch import cancel_agent_dispatches_for_run, serialize_agent_dispatch
@@ -133,12 +132,11 @@ def serialize_agent_item(
 
 
 def _owned_agent_run_queryset(user):
-    project = active_project_for_user(user)
-    return AgentRun.objects.filter(Q(user=user) | Q(agent__user=user), project=project).distinct()
+    return AgentRun.objects.filter(Q(user=user) | Q(agent__user=user)).distinct()
 
 
 def list_agents_for_user(user, *, mode_filter: str | None = None) -> list[dict]:
-    queryset = ServerAgent.objects.filter(user=user, project=active_project_for_user(user)).prefetch_related("servers")
+    queryset = ServerAgent.objects.filter(user=user).prefetch_related("servers")
     if mode_filter in {ServerAgent.MODE_MINI, ServerAgent.MODE_FULL, ServerAgent.MODE_MULTI}:
         queryset = queryset.filter(mode=mode_filter)
 
@@ -165,7 +163,7 @@ def list_agents_for_user(user, *, mode_filter: str | None = None) -> list[dict]:
 def list_scheduled_agents_for_user(user, *, limit: int = 50) -> dict:
     current_time = timezone.now()
     agents = list(
-        ServerAgent.objects.filter(user=user, project=active_project_for_user(user))
+        ServerAgent.objects.filter(user=user)
         .prefetch_related("servers")
         .filter(schedule_minutes__gt=0)
         .order_by("name")[: max(1, min(int(limit), 200))]

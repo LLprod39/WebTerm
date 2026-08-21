@@ -307,6 +307,23 @@ export function usePlaybooksWorkspace({
     }
   };
 
+  const onLoadYamlFile = async (file: File) => {
+    try {
+      const content = await file.text();
+      const base = emptyPlaybookEditor();
+      setEditor({
+        ...base,
+        name: file.name.replace(/\.(?:ya?ml)$/i, "") || base.name,
+        sourceYaml: content,
+      });
+      setOpenedPlaybook(null);
+      setSaveError(null);
+      setView({ mode: "edit", playbookId: null });
+    } catch (err) {
+      notify.error({ title: tr("Не удалось прочитать YAML", "Could not read YAML"), description: String(err) });
+    }
+  };
+
   const onInstallTemplate = async (tmpl: PlaybookTemplate) => {
     try {
       const res = await installPlaybookTemplate(tmpl.slug);
@@ -460,6 +477,7 @@ export function usePlaybooksWorkspace({
     onDelete,
     onDuplicate,
     onImportFile,
+    onLoadYamlFile,
     onInstallTemplate,
     startRunWizard,
     ensureSavedThenWizard,

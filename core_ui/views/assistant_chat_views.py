@@ -7,6 +7,7 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from app.assistant_actions import AssistantActionError
+from core_ui.ai_model_policy import operational_provider_binding
 from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import AssistantAction
@@ -207,7 +208,7 @@ def api_assistant_chat_message(request, chat_id: int):
             request.user,
             message,
             request=request,
-            provider_binding=data.get("provider_binding"),
+            provider_binding=operational_provider_binding(request.user, data.get("provider_binding")),
         )
     except AssistantActionError as exc:
         if exc.status >= 500:
@@ -245,7 +246,7 @@ def api_assistant_chat_create_and_message(request):
             request.user,
             message,
             request=request,
-            provider_binding=data.get("provider_binding"),
+            provider_binding=operational_provider_binding(request.user, data.get("provider_binding")),
         )
     except AssistantActionError as exc:
         session.delete()

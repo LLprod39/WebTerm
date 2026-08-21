@@ -17,9 +17,9 @@ export function initialForm(): ServerForm {
     notes: "",
     group_id: null,
     is_active: true,
-    // Pilot-safe default: a newly registered host must never grant AI write
-    // access merely because the operator did not expand the advanced section.
-    ai_read_only: true,
+    // Release default: authorized automation can work immediately. Users may
+    // still opt a sensitive server into the per-server read-only boundary.
+    ai_read_only: false,
   };
 }
 

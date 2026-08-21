@@ -68,6 +68,16 @@ export const READ_ONLY_AGENT_TOOL_KEYS = new Set([
   "read_skill",
   "list_materials",
   "read_material",
+  "run_script_material",
+  "update_material_task",
+]);
+
+export const SERVER_DEPENDENT_AGENT_TOOL_KEYS = new Set([
+  "open_connection",
+  "close_connection",
+  "ssh_execute",
+  "read_console",
+  "wait_for_output",
 ]);
 
 export type AgentSudoPolicy = "disabled" | "ask" | "approved";
@@ -109,6 +119,15 @@ export function sudoAgentOption(value: string | undefined) {
 export function buildDefaultToolsConfig() {
   return Object.fromEntries(
     FULL_AGENT_TOOL_OPTIONS.map((tool) => [tool.key, READ_ONLY_AGENT_TOOL_KEYS.has(tool.key)]),
+  );
+}
+
+export function buildExternalToolsConfig() {
+  return Object.fromEntries(
+    FULL_AGENT_TOOL_OPTIONS.map((tool) => [
+      tool.key,
+      READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) && !SERVER_DEPENDENT_AGENT_TOOL_KEYS.has(tool.key),
+    ]),
   );
 }
 

@@ -14,7 +14,6 @@ from app.assistant_actions import (
 )
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
 from core_ui.access import feature_allowed_for_user
-from core_ui.projects import active_project_for_user
 from servers.assistant_actions_agents import create_agent, list_agents
 from servers.assistant_actions_runs import (
     agent_report,
@@ -45,7 +44,7 @@ def build_assistant_runtime_context(user) -> dict:
     context: dict = {"agents": [], "servers": []}
     if feature_allowed_for_user(user, "agents"):
         agents = list(
-            ServerAgent.objects.filter(user=user, project=active_project_for_user(user))
+            ServerAgent.objects.filter(user=user)
             .prefetch_related("servers")
             .order_by("-updated_at", "-id")[:30]
         )

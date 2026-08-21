@@ -295,10 +295,29 @@ export interface AdminDashboardData {
   app_version: string;
 }
 
+type AdminDashboardEnvelope = {
+  success: boolean;
+  data: AdminDashboardData;
+};
+
+/**
+ * The shared API client may already unwrap a success envelope.  Keep the
+ * dashboard query stable for both that path and the raw Django response.
+ */
+export function normalizeAdminDashboardResponse(
+  response: AdminDashboardData | AdminDashboardEnvelope,
+): AdminDashboardData {
+  if ("data" in response && typeof response.data === "object" && response.data !== null) {
+    return response.data;
+  }
+  return response;
+}
+
 export async function fetchAdminDashboard() {
-  return apiFetch<{ success: boolean; data: AdminDashboardData }>(
+  const response = await apiFetch<AdminDashboardData | AdminDashboardEnvelope>(
     "/api/admin/dashboard/",
   );
+  return normalizeAdminDashboardResponse(response);
 }
 
 export interface AdminUserActivity {

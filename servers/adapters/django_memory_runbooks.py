@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from app.agent_kernel.memory.compaction import compact_text, unique_preserving_order
+from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
 from app.agent_kernel.memory.trust import prompt_provenance_label
 from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_CANDIDATE_PREFIX, SKILL_DRAFT_PREFIX
 
@@ -144,7 +145,20 @@ def build_operational_recipes_prompt(
     server_ids: list[int] | None = None,
     group_ids: list[int] | None = None,
     limit: int = 5,
+    actor_user_id: int | None = None,
+    agent_id: int | None = None,
 ) -> str:
+    from servers.services.memory_asset_retrieval import memory_asset_retrieval_enabled
+
+    if memory_asset_retrieval_enabled():
+        return build_scoped_operational_recipes_prompt(
+            query,
+            server_ids=server_ids,
+            limit=limit,
+            actor_user_id=actor_user_id,
+            agent_id=agent_id,
+        )
+
     query_terms = extract_runbook_query_terms(query)
     if not query_terms:
         return "- Нет релевантных operational recipes."
@@ -177,6 +191,68 @@ def build_operational_recipes_prompt(
     for item in items[: max(1, min(int(limit), 8))]:
         lines.append(format_operational_recipe_prompt_item(item))
     return "\n".join(lines)
+
+
+def build_scoped_operational_recipes_prompt(
+    query: str,
+    *,
+    server_ids: list[int] | None,
+    limit: int,
+    actor_user_id: int | None,
+    agent_id: int | None,
+) -> str:
+    """Render approved operational hits after centralized server/agent ACL checks."""
+    from django.contrib.auth import get_user_model
+
+    from servers.models import ServerAgent
+    from servers.services.memory_asset_retrieval import (
+        OPERATIONAL_ASSET_KINDS,
+        OPERATIONAL_LEGACY_MEMORY_KEYS,
+        retrieve_server_memory,
+    )
+
+    if not actor_user_id:
+        return "- Нет релевантных operational recipes."
+    user = get_user_model().objects.filter(pk=actor_user_id, is_active=True).first()
+    if user is None:
+        return "- Нет релевантных operational recipes."
+    agent = None
+    if agent_id is not None:
+        agent = ServerAgent.objects.filter(pk=agent_id, user=user).first()
+        if agent is None:
+            return "- Нет релевантных operational recipes."
+
+    bounded_limit = max(1, min(int(limit), 8))
+    result = retrieve_server_memory(
+        user=user,
+        query=query,
+        server_ids=server_ids,
+        agent=agent,
+        include_candidates=False,
+        asset_kinds=OPERATIONAL_ASSET_KINDS,
+        legacy_memory_keys=OPERATIONAL_LEGACY_MEMORY_KEYS,
+        include_legacy_knowledge=True,
+        operational_only=True,
+        top_k=bounded_limit,
+        char_budget=min(4_000, bounded_limit * 500),
+    )
+    lines = [format_scoped_operational_hit(hit) for hit in result.hits]
+    return "\n".join(lines) if lines else "- Нет релевантных operational recipes."
+
+
+def format_scoped_operational_hit(hit) -> str:
+    provenance_by_source = {
+        "asset": "approved asset",
+        "legacy_snapshot": "legacy canonical",
+        "server_knowledge": "manual server knowledge",
+        "group_knowledge": "manual group knowledge",
+    }
+    provenance = provenance_by_source.get(hit.source_type, "scoped memory")
+    title = sanitize_prompt_context_text(compact_text(hit.title, limit=120)).text
+    content = sanitize_prompt_context_text(compact_text(hit.content, limit=220)).text
+    kind = compact_text(hit.kind, limit=40) or "operational"
+    ref = compact_text(hit.ref, limit=96)
+    return f"- [{provenance}] [{kind}] {title}: {content} | Ref={ref}"
 
 
 def format_operational_recipe_prompt_item(item: dict[str, Any]) -> str:

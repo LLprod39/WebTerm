@@ -28,6 +28,9 @@ _TermSize = terminal_input.TerminalSize
 class TerminalAgentSupportOperations:
     async def _terminal_execution_context(self, purpose: str):
         """Resolve and pin the terminal AI provider for this user/server session."""
+        from django.contrib.auth import get_user_model
+
+        from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
         from core_ui.services.ai_execution_context import abuild_execution_context
         from servers.models import TerminalAiProviderState
 
@@ -38,8 +41,19 @@ class TerminalAgentSupportOperations:
             )[0],
             thread_sensitive=True,
         )()
+        user = await sync_to_async(
+            lambda: get_user_model().objects.get(pk=self._user_id),
+            thread_sensitive=True,
+        )()
         self._terminal_provider_invocation_seq = int(getattr(self, "_terminal_provider_invocation_seq", 0) or 0) + 1
         explicit_binding = (self._ai_state.settings or {}).get("provider_binding") or None
+        explicit_binding, stored_binding = await sync_to_async(
+            lambda: (
+                operational_provider_binding(user, explicit_binding),
+                stored_operational_provider_binding(user, state.provider_binding),
+            ),
+            thread_sensitive=True,
+        )()
         return await abuild_execution_context(
             actor_user_id=self._user_id,
             project_id=getattr(self.server, "project_id", None),
@@ -47,7 +61,7 @@ class TerminalAgentSupportOperations:
             source_kind="terminal_ai_state",
             source_id=state.pk,
             explicit_binding=explicit_binding,
-            stored_binding=state.provider_binding,
+            stored_binding=stored_binding,
             requested_provider="auto",
             provider_session_id=state.provider_session_id,
             idempotency_key=(

@@ -15,6 +15,7 @@ import type { useToast } from "@/hooks/use-toast";
 import { localize } from "@/lib/i18n";
 
 import type { PinnedServer, PinnedUser } from "./ComposeCommandPalette";
+import type { PinnedPlaybook } from "./useChatPagePins";
 import { mergeTurnIntoChat, replaceActionInChat } from "./chatHelpers";
 import { LAST_CHAT_KEY } from "./chatPageSession";
 
@@ -36,6 +37,7 @@ export type UseChatPageMutationsParams = {
   setRenamingChatId: Dispatch<SetStateAction<number | null>>;
   pinnedServers: PinnedServer[];
   pinnedUsers: PinnedUser[];
+  pinnedPlaybook: PinnedPlaybook | null;
 };
 
 export function useChatPageMutations({
@@ -49,6 +51,7 @@ export function useChatPageMutations({
   setRenamingChatId,
   pinnedServers,
   pinnedUsers,
+  pinnedPlaybook,
 }: UseChatPageMutationsParams) {
   const sendMutation = useMutation({
     mutationFn: (message: string) => (
@@ -78,11 +81,14 @@ export function useChatPageMutations({
       void queryClient.invalidateQueries({ queryKey: ["assistant", "chats"] });
       setSearchParams({ chat: String(chat.id) });
       // Persist pins chosen before the chat existed
-      if (pinnedServers.length || pinnedUsers.length) {
+      if (pinnedServers.length || pinnedUsers.length || pinnedPlaybook) {
         void updateAssistantChat(chat.id, {
           pinned_context: {
             servers: pinnedServers.map((s) => ({ id: s.id, name: s.name, host: s.host || "" })),
             users: pinnedUsers.map((u) => ({ id: u.id, username: u.username })),
+            playbook: pinnedPlaybook
+              ? { id: pinnedPlaybook.id, name: pinnedPlaybook.name, kind: pinnedPlaybook.kind || "" }
+              : null,
           },
         }).then((updated) => {
           queryClient.setQueryData(["assistant", "chat", chat.id], {

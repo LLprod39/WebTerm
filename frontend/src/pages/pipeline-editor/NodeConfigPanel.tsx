@@ -25,6 +25,7 @@ import {
   type PipelineTrigger,
 } from "@/lib/api";
 import { isPluginStudioNode, pluginNodeDescription, pluginNodeLabel } from "@/plugins/studioNodes";
+import { canManageAiRouting } from "@/lib/featureAccess";
 
 import { NodeFormSection } from "./PanelPrimitives";
 import { TriggerBasicFields, TriggerSpecificConfigSections } from "./TriggerConfigSections";
@@ -79,7 +80,7 @@ export function NodeConfigPanel({
     retry: false,
   });
   const authReady = Boolean(authSession);
-  const canSelectModels = Boolean(authSession?.user?.is_staff);
+  const canSelectModels = canManageAiRouting(authSession?.user);
   const { data: agents = [] } = useQuery({ queryKey: ["studio", "agents"], queryFn: studioAgents.list });
   const { data: servers = [] } = useQuery({ queryKey: ["studio", "servers"], queryFn: studioServers.list });
   const { data: mcpList = [] } = useQuery({ queryKey: ["studio", "mcp"], queryFn: studioMCP.list });

@@ -110,7 +110,7 @@ export function InteractiveForecastsPanel({ title, items, empty, actions }: Prop
   const isEmpty = empty || rows.length === 0;
 
   return (
-    <div className="max-w-[min(420px,100%)] animate-in fade-in-0 duration-300 overflow-hidden rounded-sm border border-border/40 bg-card/30">
+    <div className="w-full max-w-[420px] overflow-hidden rounded-sm border border-border/40 bg-card/30">
       <div className="flex items-baseline justify-between gap-3 px-3 pt-2 pb-0.5">
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
           {title?.replace(/\s*·\s*\d+\s*$/, "") || localize(lang, "Прогнозы", "Forecasts")}
@@ -169,8 +169,8 @@ export function InteractiveForecastsPanel({ title, items, empty, actions }: Prop
                     </span>
                   ) : null}
                   {series.length >= 2 ? (
-                    <div className={cn("h-5 w-12 shrink-0", sevTone(p.severity))}>
-                      <Sparkline data={series} width={48} height={20} strokeWidth={1.25} className="h-full w-full" />
+                    <div className={cn("h-5 w-12 shrink-0 overflow-hidden", sevTone(p.severity))}>
+                      <Sparkline data={series} width={48} height={20} strokeWidth={1.25} className="h-5 w-12" />
                     </div>
                   ) : null}
                 </button>
@@ -178,8 +178,8 @@ export function InteractiveForecastsPanel({ title, items, empty, actions }: Prop
                 {open ? (
                   <div className="space-y-1.5 px-3 pb-2 pl-[1.375rem]">
                     {series.length >= 2 ? (
-                      <div className={cn("h-8 w-full max-w-[240px]", sevTone(p.severity))}>
-                        <Sparkline data={series} width={240} height={32} strokeWidth={1.25} className="h-full w-full" />
+                      <div className={cn("h-8 w-full max-w-[240px] overflow-hidden", sevTone(p.severity))}>
+                        <Sparkline data={series} width={240} height={32} strokeWidth={1.25} className="h-8 w-full" />
                       </div>
                     ) : null}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground/80">

@@ -260,6 +260,7 @@ def promote_pattern_candidates(
     patterns: list[OperationalPattern],
     snapshots: list[Any],
     enhancements: dict[str, dict[str, Any]] | None = None,
+    generation_log=None,
 ) -> dict[str, int]:
     active_keys: set[str] = set()
     pattern_candidates = 0
@@ -271,6 +272,7 @@ def promote_pattern_candidates(
         if pattern.occurrences < 2:
             continue
         enhancement = enhancements.get(pattern.normalized_command) or {}
+        enhancement_generation_log = generation_log if enhancement else None
         pattern_key = f"{PATTERN_CANDIDATE_PREFIX}{pattern_key_suffix(pattern)}"
         active_keys.add(pattern_key)
         upsert_snapshot(
@@ -287,6 +289,7 @@ def promote_pattern_candidates(
             ),
             confidence=pattern_candidate_confidence(pattern, fallback=0.55, cap=0.97),
             metadata=pattern_metadata(pattern) | pattern_enhancement_metadata(enhancement),
+            generation_log=enhancement_generation_log,
         )
         pattern_candidates += 1
 
@@ -311,6 +314,7 @@ def promote_pattern_candidates(
                 metadata=pattern_metadata(pattern)
                 | {"candidate_kind": "automation"}
                 | pattern_enhancement_metadata(enhancement),
+                generation_log=enhancement_generation_log,
             )
             automation_candidates += 1
             if is_skill_draft_candidate(pattern):
@@ -335,6 +339,7 @@ def promote_pattern_candidates(
                     metadata=pattern_metadata(pattern)
                     | {"candidate_kind": "skill_draft"}
                     | pattern_enhancement_metadata(enhancement),
+                    generation_log=enhancement_generation_log,
                 )
                 skill_drafts += 1
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from django.utils import timezone
 
+from app.agent_kernel.memory.trust import TRUST_LLM_DISTILLED, VERIFICATION_NEEDS_REVALIDATION
 from app.agent_kernel.memory.types import SNAPSHOT_FALLBACKS
 from servers.adapters.django_memory_repair import auto_resolve_stale_revalidations
 
@@ -62,19 +63,79 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
     )
 
     llm_sections: dict[str, str] = {}
+    distillation_logs: list[Any] = []
     if (
         job_kind in {"nightly", "hybrid"}
         and policy.dream_mode in {policy.DREAM_HYBRID, policy.DREAM_NIGHTLY_LLM}
         and store._should_distill_with_llm(candidates, snapshots)
     ):
         llm_sections = store._distill_with_llm_sync(
-            server=server, candidates=candidates, model_alias=policy.nightly_model_alias
+            server=server,
+            candidates=candidates,
+            model_alias=policy.nightly_model_alias,
+            generation_log_out=distillation_logs,
         )
 
     updated = 0
     created_versions = 0
+    llm_review_candidates = 0
+    distillation_log = distillation_logs[-1] if distillation_logs else None
+    review_required_keys = {"risks", "runbook", "human_habits"}
     for candidate in candidates:
-        raw_content = llm_sections.get(candidate.memory_key) or candidate.content
+        llm_content = llm_sections.get(candidate.memory_key)
+        if llm_content and candidate.memory_key in review_required_keys:
+            candidate_content = store._sanitize_canonical_content(
+                candidate.memory_key,
+                llm_content,
+                fallback=SNAPSHOT_FALLBACKS.get(candidate.memory_key, candidate.content),
+            )
+            review_snapshot, review_created = store._upsert_snapshot_sync(
+                server_id=server_id,
+                memory_key=f"llm_candidate:{candidate.memory_key}",
+                title=f"LLM Review Candidate: {candidate.title}",
+                content=candidate_content,
+                source_kind="dream",
+                source_ref=f"generation:{distillation_log.pk}" if distillation_log else "",
+                importance_score=candidate.importance_score,
+                stability_score=candidate.stability_score,
+                confidence=min(float(candidate.confidence or 0.0), 0.7),
+                metadata={
+                    **(candidate.metadata or {}),
+                    "candidate_requires_review": True,
+                    "trust_level": TRUST_LLM_DISTILLED,
+                    "verification_status": VERIFICATION_NEEDS_REVALIDATION,
+                    "original_memory_key": candidate.memory_key,
+                    "generation_log_id": distillation_log.pk if distillation_log else None,
+                },
+                layer=ServerMemorySnapshot.LAYER_CANDIDATE,
+                generation_log=distillation_log,
+            )
+            store._ensure_revalidation_sync(
+                server_id,
+                memory_key=review_snapshot.memory_key,
+                title=review_snapshot.title,
+                reason="LLM-derived operational memory requires authorized human approval.",
+                payload={
+                    "snapshot_id": review_snapshot.pk,
+                    "original_memory_key": candidate.memory_key,
+                    "generation_log_id": distillation_log.pk if distillation_log else None,
+                },
+                source_snapshot=review_snapshot,
+            )
+            llm_review_candidates += 1
+            if review_created:
+                created_versions += 1
+
+        raw_content = llm_content if llm_content and candidate.memory_key not in review_required_keys else candidate.content
+        canonical_metadata = dict(candidate.metadata or {})
+        if llm_content and candidate.memory_key not in review_required_keys:
+            canonical_metadata.update(
+                {
+                    "derivation_kind": TRUST_LLM_DISTILLED,
+                    "generation_log_id": distillation_log.pk if distillation_log else None,
+                    "derived_from_trust_level": canonical_metadata.get("trust_level"),
+                }
+            )
         safe_content = store._sanitize_canonical_content(
             candidate.memory_key,
             raw_content,
@@ -91,18 +152,23 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
             stability_score=candidate.stability_score,
             confidence=candidate.confidence,
             verified_at=candidate.verified_at,
-            metadata=candidate.metadata or {},
+            metadata=canonical_metadata,
+            generation_log=(
+                distillation_log if llm_content and candidate.memory_key not in review_required_keys else None
+            ),
         )
         updated += 1
         if created:
             created_versions += 1
 
     pattern_enhancements: dict[str, dict[str, Any]] = {}
+    pattern_generation_logs: list[Any] = []
     if job_kind in {"nightly", "hybrid"} and policy.dream_mode in {policy.DREAM_HYBRID, policy.DREAM_NIGHTLY_LLM}:
         pattern_enhancements = store._llm_enhance_patterns_sync(
             server=server,
             patterns=patterns,
             model_alias=policy.nightly_model_alias,
+            generation_log_out=pattern_generation_logs,
         )
 
     candidate_result = store._promote_pattern_candidates_sync(
@@ -110,6 +176,7 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
         patterns=patterns,
         snapshots=snapshots,
         enhancements=pattern_enhancements,
+        generation_log=pattern_generation_logs[-1] if pattern_generation_logs else None,
     )
 
     if deactivate_noise:
@@ -122,6 +189,7 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
         "pattern_candidates": candidate_result["pattern_candidates"],
         "automation_candidates": candidate_result["automation_candidates"],
         "skill_drafts": candidate_result["skill_drafts"],
+        "llm_review_candidates": llm_review_candidates,
     }
 
 

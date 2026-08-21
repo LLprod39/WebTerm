@@ -1,4 +1,4 @@
-import { Brain, Layers, Settings2, Terminal } from "lucide-react";
+import { Brain, ChevronDown, KeyRound, Layers, Settings2, Terminal, Workflow } from "lucide-react";
 import type { AgentTemplate } from "@/lib/api";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -30,31 +30,56 @@ export function AgentWizardTemplateStep({
     <>
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">
-            {localize(lang, "Тип агента", "Agent type")}
+          <p className="type-label text-primary">{localize(lang, "Шаг 1", "Step 1")}</p>
+          <h3 className="mt-1 font-display text-lg font-bold tracking-tight text-foreground">
+            {localize(lang, "Какую работу поручить?", "What work should this agent own?")}
           </h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="mt-1 text-sm leading-6 text-muted-foreground">
             {localize(
               lang,
-              "Выберите, как агент будет работать. От этого зависят доступные поля и поведение.",
-              "Choose how the agent works. This determines the available fields and its behaviour.",
+              "Начните с чистого профиля или возьмите пример. Это не узкий бот: дальше вы зададите цель, системы, инструменты, права и способ запуска.",
+              "Start with a blank profile or an example. This is not a single-purpose bot: next you will set the goal, systems, tools, permissions, and trigger.",
             )}
           </p>
         </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="rounded-sm border border-border bg-surface-0/50 p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><Workflow className="h-4 w-4 text-primary" /> {localize(lang, "Любой IT-процесс", "Any IT process")}</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Логи, доступы, релизы, проверки, сопровождение и собственные регламенты.", "Logs, access, releases, checks, operations, and your own procedures.")}</p>
+          </div>
+          <div className="rounded-sm border border-border bg-surface-0/50 p-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground"><KeyRound className="h-4 w-4 text-primary" /> {localize(lang, "Ваши системы и правила", "Your systems and rules")}</div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{localize(lang, "Агент использует только выбранные серверы, навыки, материалы и разрешения.", "The agent uses only the selected servers, skills, materials, and permissions.")}</p>
+          </div>
+        </div>
+      </section>
+
+      <details className="group rounded-sm border border-border bg-surface-0/35">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-foreground">
+          <span>
+            {localize(lang, "Advanced: архитектура выполнения", "Advanced: execution architecture")}
+            <span className="ml-2 font-normal text-muted-foreground">· {mode === "full" ? localize(lang, "универсальный", "general") : mode === "mini" ? localize(lang, "командный", "command") : localize(lang, "оркестратор", "orchestrator")}</span>
+          </span>
+          <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-3 border-t border-border px-4 py-4">
+          <p className="text-xs leading-5 text-muted-foreground">
+            {localize(lang, "Меняйте этот режим только если понимаете различия runtime. Для большинства задач подходит универсальный режим.", "Change this only when you understand the runtime trade-offs. The general mode fits most tasks.")}
+          </p>
         <div className="grid gap-3 md:grid-cols-3">
           {[
             {
               key: "full" as const,
               icon: Brain,
-              label: localize(lang, "Полный агент", "Full Agent"),
+              label: localize(lang, "Универсальный", "General agent"),
               text: localize(lang, "Сам решает шаги к цели, используя инструменты и проверки.", "Decides the steps toward a goal on its own, using tools and checks."),
-              when: localize(lang, "По умолчанию · автономность", "Default · autonomy"),
+              when: localize(lang, "Рекомендуется", "Recommended"),
               accent: "text-ai border-ai/30 bg-ai/10",
             },
             {
               key: "mini" as const,
               icon: Terminal,
-              label: localize(lang, "Mini-агент", "Mini Agent"),
+              label: localize(lang, "Командный", "Command agent"),
               text: localize(lang, "Выполняет заданный список команд и делает краткий разбор результата.", "Runs a fixed list of commands and briefly analyses the result."),
               when: localize(lang, "Быстрый старт · без worker", "Quick start · no worker"),
               accent: "text-primary border-primary/30 bg-primary/10",
@@ -62,7 +87,7 @@ export function AgentWizardTemplateStep({
             {
               key: "multi" as const,
               icon: Layers,
-              label: localize(lang, "Мульти-агент", "Multi-agent"),
+              label: localize(lang, "Оркестратор", "Orchestrator"),
               text: localize(lang, "Координирует несколько агентов и серверов в одном сценарии.", "Coordinates several agents and servers in one scenario."),
               when: localize(lang, "Когда задача многошаговая", "When the task is multi-step"),
               accent: "text-info border-info/30 bg-info/10",
@@ -93,12 +118,13 @@ export function AgentWizardTemplateStep({
             );
           })}
         </div>
-      </section>
+        </div>
+      </details>
 
       <section className="space-y-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">
-            {localize(lang, "Шаблон", "Template")}
+            {localize(lang, "Стартовая точка", "Starting point")}
           </h3>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -127,8 +153,8 @@ export function AgentWizardTemplateStep({
             <p className="line-clamp-2 text-xs leading-5 text-foreground">
               {localize(
                 lang,
-                "По умолчанию · создать агента без шаблона",
-                "Default · create an agent without a template",
+                "Рекомендуется · настройте сотрудника под свою задачу",
+                "Recommended · configure an employee for your task",
               )}
             </p>
           </button>

@@ -9,7 +9,7 @@ from app.ai_runtime import ExecutionMode
 from core_ui.decorators import require_feature
 from core_ui.projects import active_project_for_user
 from core_ui.services.ai_execution_context import build_execution_context
-from studio.model_policy import sanitize_pipeline_nodes_for_user
+from studio.model_policy import sanitize_pipeline_nodes_for_user, user_can_select_models
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineTrigger
 from studio.pipeline.pipeline_preflight import pipeline_integration_diagnostics
 from studio.pipeline.pipeline_runtime_context import validate_pipeline_entry_branch, validate_pipeline_runtime_context
@@ -45,7 +45,7 @@ def api_pipelines(request):
         if not name:
             return _err("name is required")
         provider_binding = {}
-        if data.get("provider_binding"):
+        if user_can_select_models(request.user) and data.get("provider_binding"):
             try:
                 project = active_project_for_user(request.user)
                 context = build_execution_context(
@@ -122,7 +122,9 @@ def api_pipeline_detail(request, pipeline_id: int):
                     setattr(pipeline, field, data[field])
         if "nodes" not in data:
             pipeline.nodes = next_nodes
-        if "provider_binding" in data:
+        if not user_can_select_models(request.user):
+            pipeline.provider_binding = {}
+        elif "provider_binding" in data:
             if data.get("provider_binding") in ({}, None):
                 pipeline.provider_binding = {}
             else:
@@ -269,7 +271,7 @@ def api_pipeline_run(request, pipeline_id: int):
                 "entry_node_id": selected_trigger.node_id,
             },
             entry_node_id=selected_trigger.node_id,
-            explicit_provider_binding=payload.get("provider_binding"),
+            explicit_provider_binding=(payload.get("provider_binding") if user_can_select_models(request.user) else None),
         )
     except ValueError as exc:
         return _validation_err(pipeline_run_creation_error_details(exc), prefix="Pipeline is not runnable")

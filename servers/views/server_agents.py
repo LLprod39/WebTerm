@@ -13,6 +13,7 @@ from app.agent_kernel import skill_provider_registry
 from app.ai_runtime import ExecutionMode
 from app.sudo_policy import normalize_sudo_policy
 from core_ui.activity import log_user_activity
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.decorators import require_feature
 from core_ui.services.ai_execution_context import active_project_for_execution, build_execution_context
 from servers.agents import get_all_templates, get_template
@@ -33,6 +34,7 @@ from servers.agents.agent_service import (
     list_scheduled_agents_for_user,
     start_agent_run_for_user,
 )
+from servers.agents.agent_targeting import server_requirement_reasons
 from servers.models import ServerAgent
 from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
 from servers.views.server_helpers import _accessible_servers_queryset
@@ -193,14 +195,21 @@ def agent_create(request):
     goal = data.get("goal", "")
     system_prompt = data.get("system_prompt", "")
     from servers.agents.agent_budgets import (
-        FULL_DEFAULT_MAX_ITERATIONS,
-        FULL_DEFAULT_SESSION_TIMEOUT_SEC,
         FULL_MAX_ITERATIONS_CAP,
         clamp_full_iterations,
+        resolve_agent_runtime_budget,
     )
 
     automation_allowed = user_can_automate(request.user, request=request)
-    default_iterations = FULL_DEFAULT_MAX_ITERATIONS if automation_allowed else PILOT_MAX_ITERATIONS
+    recommended_budget = resolve_agent_runtime_budget(
+        mode=mode,
+        goal=goal,
+        system_prompt=system_prompt,
+        commands=commands,
+        skill_slugs=data.get("skill_slugs") or data.get("skills") or [],
+        input_artifacts=data.get("input_artifacts") or [],
+    )
+    default_iterations = recommended_budget.max_iterations if automation_allowed else PILOT_MAX_ITERATIONS
     try:
         raw_iterations = data.get("max_iterations", default_iterations)
         max_iterations = clamp_full_iterations(
@@ -214,14 +223,14 @@ def agent_create(request):
     sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
     stop_conditions = data.get("stop_conditions", [])
     try:
-        default_timeout = FULL_DEFAULT_SESSION_TIMEOUT_SEC if automation_allowed else PILOT_MAX_SESSION_TIMEOUT_SECONDS
+        default_timeout = recommended_budget.session_timeout_seconds if automation_allowed else PILOT_MAX_SESSION_TIMEOUT_SECONDS
         raw_timeout = data.get("session_timeout_seconds", default_timeout)
         session_timeout = int(raw_timeout if raw_timeout not in (None, "") else default_timeout)
     except (TypeError, ValueError):
         session_timeout = default_timeout
     session_timeout = max(30, min(session_timeout, 3600))
     try:
-        max_connections = min(int(data.get("max_connections", 5 if automation_allowed else 1)), 10)
+        max_connections = min(int(data.get("max_connections", recommended_budget.max_connections if automation_allowed else 1)), 10)
     except (TypeError, ValueError):
         return JsonResponse({"success": False, "error": "max_connections must be an integer"}, status=400)
     skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
@@ -233,7 +242,7 @@ def agent_create(request):
     input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
     report_delivery = normalize_report_delivery(data.get("report_delivery"))
     provider_binding = {}
-    if data.get("provider_binding"):
+    if user_can_manage_ai_routing(request.user) and data.get("provider_binding"):
         try:
             project = active_project_for_execution(request.user)
             context = build_execution_context(
@@ -268,6 +277,24 @@ def agent_create(request):
             {"success": False, "error": "Missing server capability: execute_command"},
             status=403,
         )
+    execution_project_ids = {server.project_id for server in execution_servers}
+    if len(execution_project_ids) > 1:
+        return JsonResponse(
+            {"success": False, "error": "Selected servers cannot be combined in one agent"},
+            status=400,
+        )
+    server_reasons = server_requirement_reasons(
+        mode=mode,
+        commands=commands,
+        tools_config=tools_config,
+        sudo_policy=sudo_policy,
+        skill_slugs=skill_slugs,
+    )
+    if not execution_servers and server_reasons:
+        return JsonResponse(
+            {"success": False, "error": "Selected commands or capabilities require a server", "code": "server_scope_required", "reasons": server_reasons},
+            status=400,
+        )
 
     violations = pilot_agent_policy_violations(
         user=request.user,
@@ -287,6 +314,7 @@ def agent_create(request):
 
     agent = ServerAgent.objects.create(
         user=request.user,
+        project_id=next(iter(execution_project_ids), None),
         name=name,
         mode=mode,
         agent_type=agent_type,
@@ -329,9 +357,7 @@ def agent_create(request):
 @require_http_methods(["POST"])
 def agent_update(request, agent_id):
     """Update agent configuration."""
-    agent = ServerAgent.objects.filter(
-        id=agent_id, user=request.user, project=active_project_for_execution(request.user)
-    ).first()
+    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
 
@@ -396,7 +422,9 @@ def agent_update(request, agent_id):
         agent.input_artifacts = normalize_input_artifacts(data.get("input_artifacts"))
     if "report_delivery" in data:
         agent.report_delivery = normalize_report_delivery(data.get("report_delivery"))
-    if "provider_binding" in data:
+    if not user_can_manage_ai_routing(request.user):
+        agent.provider_binding = {}
+    elif "provider_binding" in data:
         if data.get("provider_binding") in ({}, None):
             agent.provider_binding = {}
         else:
@@ -433,6 +461,18 @@ def agent_update(request, agent_id):
             )
 
     effective_servers = list(execution_servers) if execution_servers is not None else list(agent.servers.all())
+    server_reasons = server_requirement_reasons(
+        mode=agent.mode,
+        commands=agent.commands,
+        tools_config=agent.tools_config,
+        sudo_policy=agent.sudo_policy,
+        skill_slugs=agent.skill_slugs,
+    )
+    if not effective_servers and server_reasons:
+        return JsonResponse(
+            {"success": False, "error": "Selected commands or capabilities require a server", "code": "server_scope_required", "reasons": server_reasons},
+            status=400,
+        )
     violations = pilot_agent_policy_violations(
         user=request.user,
         servers=effective_servers,
@@ -465,9 +505,7 @@ def agent_update(request, agent_id):
 @require_http_methods(["POST"])
 def agent_delete(request, agent_id):
     """Delete an agent."""
-    agent = ServerAgent.objects.filter(
-        id=agent_id, user=request.user, project=active_project_for_execution(request.user)
-    ).first()
+    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
     agent.delete()
@@ -480,7 +518,7 @@ def agent_delete(request, agent_id):
 def agent_run(request, agent_id):
     """Run agent on its configured servers (or a specific one)."""
     agent = (
-        ServerAgent.objects.filter(id=agent_id, user=request.user, project=active_project_for_execution(request.user))
+        ServerAgent.objects.filter(id=agent_id, user=request.user)
         .prefetch_related("servers")
         .first()
     )
@@ -519,7 +557,7 @@ def agent_run(request, agent_id):
         accessible_servers_queryset=_accessible_servers_queryset(request.user),
         server_id=data.get("server_id"),
         source="http",
-        provider_binding=data.get("provider_binding"),
+        provider_binding=(data.get("provider_binding") if user_can_manage_ai_routing(request.user) else None),
     )
     return JsonResponse(launch_result["payload"], status=200 if launch_result["ok"] else int(launch_result["status"]))
 

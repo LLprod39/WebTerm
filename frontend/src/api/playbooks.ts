@@ -62,6 +62,15 @@ export interface PlaybookCompatibilityRevision {
   active?: boolean;
 }
 
+export interface PlaybookCompatibilityProposal {
+  method: "deterministic" | "ai" | "ai_rejected" | string;
+  adapted_yaml: string;
+  changes: string[];
+  assumptions: string[];
+  semantic_guard: PlaybookCompatibilityRevision["semantic_guard"];
+  report: PlaybookCompatibilityReport;
+}
+
 export type PlaybookInventoryBindings = Record<string, { server_ids: number[]; group_ids: number[] }>;
 
 export interface PlaybookSummary {
@@ -385,6 +394,13 @@ export async function analyzePlaybookCompatibility(
   );
 }
 
+export async function analyzePlaybookSource(sourceYaml: string) {
+  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; error?: string }>(
+    "/servers/api/playbooks/compatibility/analyze/",
+    { method: "POST", body: JSON.stringify({ source_yaml: sourceYaml }) },
+  );
+}
+
 export async function adaptPlaybookCompatibility(
   id: number,
   payload: { instruction?: string; inventory_bindings?: PlaybookInventoryBindings } = {},
@@ -392,19 +408,23 @@ export async function adaptPlaybookCompatibility(
   return apiFetch<{
     success: boolean;
     error?: string;
-    proposal: {
-      method: "deterministic" | "ai" | "ai_rejected" | string;
-      adapted_yaml: string;
-      changes: string[];
-      assumptions: string[];
-      semantic_guard: PlaybookCompatibilityRevision["semantic_guard"];
-      report: PlaybookCompatibilityReport;
-    };
+    proposal: PlaybookCompatibilityProposal;
   }>(`/servers/api/playbooks/${id}/compatibility/adapt/`, {
     method: "POST",
     body: JSON.stringify(payload),
     timeoutMs: 120_000,
   });
+}
+
+export async function adaptPlaybookSource(sourceYaml: string, payload: { instruction?: string } = {}) {
+  return apiFetch<{ success: boolean; error?: string; proposal: PlaybookCompatibilityProposal }>(
+    "/servers/api/playbooks/compatibility/adapt/",
+    {
+      method: "POST",
+      body: JSON.stringify({ ...payload, source_yaml: sourceYaml }),
+      timeoutMs: 120_000,
+    },
+  );
 }
 
 export async function applyPlaybookCompatibility(

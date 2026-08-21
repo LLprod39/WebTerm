@@ -42,10 +42,10 @@ import {
 } from "./agent-run/reportShared";
 import { formatDuration } from "./agent-run/formatters";
 
-const tabItems: Array<{ value: ReportTab; label: string; hint: string; icon: LucideIcon }> = [
-  { value: "summary", label: "Итог", hint: "Что случилось", icon: FileText },
-  { value: "progress", label: "Ход", hint: "Шаги агента", icon: Workflow },
-  { value: "materials", label: "Материалы", hint: "Логи и файлы", icon: FolderOpen },
+const tabItems: Array<{ value: ReportTab; label: string; icon: LucideIcon }> = [
+  { value: "summary", label: "Итог", icon: FileText },
+  { value: "progress", label: "Ход", icon: Workflow },
+  { value: "materials", label: "Материалы", icon: FolderOpen },
 ];
 
 /**
@@ -324,12 +324,7 @@ export default function AgentRunPage() {
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  <span className="flex flex-col items-start leading-none">
-                    <span className="font-medium">{item.label}</span>
-                    <span className="mt-0.5 hidden text-2xs font-normal opacity-70 sm:block">
-                      {item.hint}
-                    </span>
-                  </span>
+                  <span className="font-medium">{item.label}</span>
                 </TabsTrigger>
               );
             })}

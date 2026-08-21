@@ -179,13 +179,31 @@ def test_compose_production_studio_workers_are_declared():
     assert services["scheduled-pipelines"]["environment"]["TELEGRAM_BOT_POLL_TOKEN"] == ""
 
 
-def test_compose_production_kubernetes_ops_sync_worker_is_declared():
+def test_compose_dev_monitor_supports_optional_local_inventory_scope():
+    compose = _load_yaml("docker-compose.yml")
+    monitor = compose["services"]["monitor"]
+    command = " ".join(monitor["command"])
+
+    assert compose["x-backend-worker"]["environment"]["MONITOR_SERVER_ID"] == "${MONITOR_SERVER_ID:-}"
+    assert "exec python manage.py run_monitor" in command
+    assert "$${MONITOR_SERVER_ID:+--server-id $${MONITOR_SERVER_ID}}" in command
+
+
+def test_compose_production_kubernetes_ops_sync_worker_is_opt_in():
     compose = _load_yaml("docker-compose.production.yml")
     services = compose["services"]
 
     assert "kubernetes-ops-sync" in services
     assert services["kubernetes-ops-sync"]["container_name"] == "mini-prod-kubernetes-ops-sync"
+    assert services["kubernetes-ops-sync"]["profiles"] == ["kubernetes-ops"]
     command = " ".join(services["kubernetes-ops-sync"]["command"])
     assert "python manage.py run_kubernetes_ops_sync_worker --daemon" in command
     assert "--interval ${KUBERNETES_OPS_SYNC_INTERVAL_SECONDS:-300}" in command
     assert "--worker-key production" in command
+
+    assert compose["x-backend-worker-environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
+    assert services["backend"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
+    dev_compose = _load_yaml("docker-compose.yml")
+    assert dev_compose["services"]["kubernetes-ops-sync"]["profiles"] == ["kubernetes-ops"]
+    assert dev_compose["x-backend-worker"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
+    assert dev_compose["services"]["backend"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"

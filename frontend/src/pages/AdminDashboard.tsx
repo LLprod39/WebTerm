@@ -66,7 +66,7 @@ export default function AdminDashboard() {
     [monitoringResponse, liveMetrics],
   );
 
-  const d = dashResponse?.data;
+  const d = dashResponse;
   const availableWidgets = useMemo(() => {
     const builtins = d ? buildAdminDashboardWidgets(d, lang, monitoring) : [];
     const pluginWidgets = buildPluginDashboardWidgets(pluginSurfaces?.surfaces?.dashboard_widgets ?? []);

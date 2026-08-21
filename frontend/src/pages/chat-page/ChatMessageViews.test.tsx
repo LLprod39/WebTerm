@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AssistantAction } from "@/api";
 
-import { ActionCard } from "./ChatMessageViews";
+import { ActionCard, MetricSeriesReportCard } from "./ChatMessageViews";
 
 
 function dangerousAction(): AssistantAction {
@@ -53,7 +53,11 @@ describe("ActionCard", () => {
       />,
     );
 
-    expect(screen.getByText(/web-01, web-02/)).toBeInTheDocument();
+    expect(screen.getAllByText(/web-01, web-02/)).toHaveLength(2);
+    expect(screen.getByText(/Что произойдёт|What will happen/i)).toBeInTheDocument();
+    expect(screen.getByText(/Где|Where/i)).toBeInTheDocument();
+    expect(screen.getByText(/runtime/i)).toBeInTheDocument();
+    expect(screen.getByText("$ uptime")).toBeInTheDocument();
     const confirm = screen.getByRole("button", { name: /подтвердить|confirm/i });
     expect(confirm).toBeDisabled();
 
@@ -63,5 +67,26 @@ describe("ActionCard", () => {
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledWith(42, "FANOUT");
+  });
+});
+
+describe("MetricSeriesReportCard", () => {
+  it("renders a responsive, stable report card with chart semantics and summary", () => {
+    render(
+      <MetricSeriesReportCard
+        chart={{
+          title: "CPU web-01",
+          series: [18, 21, 26, 31],
+          unit: "%",
+        }}
+      />,
+    );
+
+    const report = screen.getByTestId("metric-series-report");
+    expect(report).toHaveAttribute("role", "img");
+    expect(report).toHaveAttribute("aria-label", expect.stringMatching(/CPU web-01/i));
+    expect(report).toHaveClass("w-full", "max-w-[640px]", "min-h-[190px]", "sm:min-h-[220px]");
+    expect(screen.getByText("31%")).toBeInTheDocument();
+    expect(screen.getByText(/Рост на 13%|Up 13%/i)).toBeInTheDocument();
   });
 });

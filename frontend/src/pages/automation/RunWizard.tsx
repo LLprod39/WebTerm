@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Loader2, Play } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, Play } from "lucide-react";
 
 import {
   validatePlaybookRevision,
@@ -7,7 +7,6 @@ import {
   type PlaybookRunValidation,
 } from "@/api/playbook-preflight";
 import type {
-  PlaybookBindingProfile,
   PlaybookCapabilities,
   PlaybookCompatibilityReport,
   PlaybookRevision,
@@ -16,18 +15,15 @@ import { Button } from "@/components/ui/button";
 import type { FrontendGroup, FrontendServer } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ReviewValidationStep } from "./run-preflight/ReviewValidationStep";
-import { RevisionRuntimeStep } from "./run-preflight/RevisionRuntimeStep";
+import { RunEssentialsStep } from "./run-preflight/RunEssentialsStep";
 import { TargetsBindingStep } from "./run-preflight/TargetsBindingStep";
-import { VariablesPolicyStep } from "./run-preflight/VariablesPolicyStep";
 import {
   bindingsComplete,
   buildAdhocBindings,
   buildRunRequest,
   buildRunTargetContext,
   buildValidationPayload,
-  parseExtraVarsJson,
   pruneAdhocBindingChoices,
-  type ExtraVarsParseError,
   type RunPolicyOptions,
 } from "./runPreflightState";
 
@@ -48,7 +44,6 @@ interface RunWizardProps {
   revisions: PlaybookRevision[];
   publishedRevisionId: number | null;
   revisionsLoading: boolean;
-  bindingProfiles: PlaybookBindingProfile[];
   capabilities: PlaybookCapabilities;
 }
 
@@ -76,22 +71,17 @@ export function RunWizard({
   revisions,
   publishedRevisionId,
   revisionsLoading,
-  bindingProfiles,
   capabilities,
 }: RunWizardProps) {
   const tr = useCallback((ru: string, en: string) => (lang === "ru" ? ru : en), [lang]);
   const validationSequence = useRef(0);
-  const profileInitialized = useRef(false);
   const fingerprintRef = useRef("");
   const [step, setStep] = useState<RunWizardStep>(1);
   const [selectedRevisionId, setSelectedRevisionId] = useState<number | null>(null);
-  const [selectedBindingProfileId, setSelectedBindingProfileId] = useState<number | null>(null);
   const [serverIds, setServerIds] = useState<Set<number>>(new Set());
   const [groupIds, setGroupIds] = useState<Set<number>>(new Set());
   const [bindingChoices, setBindingChoices] = useState<Record<string, string>>({});
-  const [extraVarsText, setExtraVarsText] = useState("{}\n");
   const [extraVars, setExtraVars] = useState<Record<string, unknown>>({});
-  const [extraVarsError, setExtraVarsError] = useState<ExtraVarsParseError>(null);
   const [policy, setPolicy] = useState<RunPolicyOptions>(initialPolicy);
   const [validation, setValidation] = useState<PlaybookRunValidation | null>(null);
   const [validating, setValidating] = useState(false);
@@ -104,7 +94,6 @@ export function RunWizard({
     [capabilities.can_edit, publishedRevisionId, revisions],
   );
   const selectedRevision = visibleRevisions.find((revision) => revision.id === selectedRevisionId) || null;
-  const selectedProfile = bindingProfiles.find((profile) => profile.id === selectedBindingProfileId) || null;
   const revisionCompatibility = selectedRevision?.compatibility ?? compatibility;
   const hostSelectors = useMemo(
     () => revisionCompatibility?.host_selectors || [],
@@ -126,13 +115,13 @@ export function RunWizard({
   );
   const targetContext = useMemo(
     () => buildRunTargetContext({
-      bindingProfile: selectedProfile,
+      bindingProfile: null,
       serverIds,
       groupIds,
       inventoryBindings,
       extraVars,
     }),
-    [extraVars, groupIds, inventoryBindings, selectedProfile, serverIds],
+    [extraVars, groupIds, inventoryBindings, serverIds],
   );
   const targetReady = Boolean(
     (targetContext.serverIds.length || targetContext.groupIds.length) &&
@@ -155,21 +144,12 @@ export function RunWizard({
   }, [publishedRevisionId, visibleRevisions]);
 
   useEffect(() => {
-    if (profileInitialized.current || !bindingProfiles.length) return;
-    profileInitialized.current = true;
-    const defaultProfile = bindingProfiles.find((profile) => profile.is_default);
-    if (!defaultProfile) return;
-    setSelectedBindingProfileId(defaultProfile.id);
-    setPolicy(policyFromProfile(defaultProfile));
-  }, [bindingProfiles]);
-
-  useEffect(() => {
     setBindingChoices((current) => pruneAdhocBindingChoices(current, serverIds, groupIds));
   }, [groupIds, serverIds]);
 
   const contextFingerprint = useMemo(
-    () => JSON.stringify({ selectedRevisionId, targetContext, extraVarsText, extraVars, policy }),
-    [extraVars, extraVarsText, policy, selectedRevisionId, targetContext],
+    () => JSON.stringify({ selectedRevisionId, targetContext, extraVars, policy }),
+    [extraVars, policy, selectedRevisionId, targetContext],
   );
 
   useEffect(() => {
@@ -185,22 +165,21 @@ export function RunWizard({
     setValidating(false);
   }, [contextFingerprint]);
 
-  const selectBindingProfile = (profileId: number | null) => {
-    setSelectedBindingProfileId(profileId);
-    const profile = bindingProfiles.find((item) => item.id === profileId);
-    if (profile) setPolicy(policyFromProfile(profile));
-  };
   const toggleServer = (serverId: number) => setServerIds((previous) => toggledSet(previous, serverId));
   const toggleGroup = (groupId: number) => setGroupIds((previous) => toggledSet(previous, groupId));
-  const updateExtraVars = (source: string) => {
-    setExtraVarsText(source);
-    const parsed = parseExtraVarsJson(source);
-    setExtraVarsError(parsed.error);
-    if (parsed.value) setExtraVars(parsed.value);
+  const updateRequiredVariable = (name: string, value: string) => {
+    const next = { ...extraVars };
+    if (value) next[name] = value;
+    else delete next[name];
+    setExtraVars(next);
   };
+  const profileVariableNames = useMemo(() => new Set<string>(), []);
+  const missingRequiredVariableNames = requiredVariableNames.filter(
+    (name) => !profileVariableNames.has(name) && !Object.prototype.hasOwnProperty.call(extraVars, name),
+  );
 
   const runValidation = useCallback(async () => {
-    if (!selectedRevisionId || extraVarsError || !runtimeReady) return null;
+    if (!selectedRevisionId || !runtimeReady) return null;
     if (!canValidateContext) {
       setValidationError(tr("Нет права проверять или запускать этот playbook.", "You cannot validate or run this playbook."));
       return null;
@@ -226,10 +205,10 @@ export function RunWizard({
     } finally {
       if (validationSequence.current === sequence) setValidating(false);
     }
-  }, [canValidateContext, extraVarsError, playbookId, runtimeReady, selectedRevisionId, targetContext, tr]);
+  }, [canValidateContext, playbookId, runtimeReady, selectedRevisionId, targetContext, tr]);
 
   const openReview = () => {
-    if (extraVarsError || !runtimeReady || !targetReady) return;
+    if (!runtimeReady || !targetReady) return;
     setStep(2);
     void runValidation();
   };
@@ -303,63 +282,40 @@ export function RunWizard({
             lang={lang}
             servers={servers}
             groups={groups}
-            bindingProfiles={bindingProfiles}
-            selectedBindingProfileId={selectedBindingProfileId}
+            bindingProfiles={[]}
+            selectedBindingProfileId={null}
             selectedServerIds={serverIds}
             selectedGroupIds={groupIds}
             hostSelectors={hostSelectors}
             inventoryBindings={targetContext.inventoryBindings}
             bindingChoices={bindingChoices}
-            onBindingProfileChange={selectBindingProfile}
+            onBindingProfileChange={() => undefined}
             onToggleServer={toggleServer}
             onToggleGroup={toggleGroup}
             onSelectOnline={() => setServerIds(new Set(onlineIds))}
             onClearTargets={() => { setServerIds(new Set()); setGroupIds(new Set()); }}
             onBindingChoiceChange={(selector, choice) => setBindingChoices((current) => ({ ...current, [selector]: choice }))}
+            showSourceSelector={false}
           />
 
-          <details className="group overflow-hidden rounded-lg border border-border/80 bg-card/45" open={requiredVariableNames.length > 0 || Boolean(extraVarsError)}>
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-foreground marker:content-none">
-              <span>
-                {tr("Версия и дополнительные параметры", "Revision and advanced settings")}
-                <span className="ml-2 text-xs font-normal text-muted-foreground">
-                  {selectedRevision ? `#${selectedRevision.revision_number}` : "—"} · {policy.dryRun ? "dry-run" : tr("обычный запуск", "normal run")}
-                </span>
-              </span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="space-y-4 border-t border-border/70 p-4">
-              <RevisionRuntimeStep
-                lang={lang}
-                revisions={visibleRevisions}
-                selectedRevisionId={selectedRevisionId}
-                publishedRevisionId={publishedRevisionId}
-                capabilities={capabilities}
-                ansibleAvailable={ansibleAvailable}
-                workerReady={workerReady}
-                loading={revisionsLoading}
-                onRevisionChange={setSelectedRevisionId}
-              />
-              <VariablesPolicyStep
-                lang={lang}
-                bindingProfile={selectedProfile}
-                extraVarsText={extraVarsText}
-                extraVarsError={extraVarsError}
-                availableVariableNames={targetContext.variableNames}
-                requiredVariableNames={requiredVariableNames}
-                policy={policy}
-                onExtraVarsChange={updateExtraVars}
-                onPolicyChange={(patch) => setPolicy((current) => ({ ...current, ...patch }))}
-              />
-            </div>
-          </details>
+          <RunEssentialsStep
+            lang={lang}
+            requiredVariableNames={requiredVariableNames}
+            profileVariableNames={profileVariableNames}
+            selectedProfile={null}
+            extraVars={extraVars}
+            dryRun={policy.dryRun}
+            onRequiredVariableChange={updateRequiredVariable}
+            onDryRunChange={(dryRun) => setPolicy((current) => ({ ...current, dryRun }))}
+          />
+
         </div>
       ) : (
         <ReviewValidationStep
           lang={lang}
           playbookName={playbookName}
           revision={selectedRevision}
-          bindingProfile={selectedProfile}
+          bindingProfile={null}
           context={targetContext}
           extraVars={extraVars}
           policy={policy}
@@ -386,12 +342,13 @@ export function RunWizard({
             <Button
               size="sm"
               className="h-9 px-5"
-              disabled={!selectedRevisionId || revisionsLoading || !canValidateContext || !targetReady || Boolean(extraVarsError) || !runtimeReady}
+              disabled={!selectedRevisionId || revisionsLoading || !canValidateContext || !targetReady || missingRequiredVariableNames.length > 0 || !runtimeReady}
               onClick={openReview}
             >
               {tr("Проверить и продолжить", "Validate and continue")}
             </Button>
             {!targetReady ? <span className="text-2xs text-muted-foreground">{tr("Выберите хотя бы одну цель", "Choose at least one target")}</span> : null}
+            {targetReady && missingRequiredVariableNames.length ? <span className="text-2xs text-muted-foreground">{tr("Заполните обязательные параметры", "Fill in the required parameters")}</span> : null}
           </div>
         ) : (
           <Button
@@ -418,15 +375,4 @@ function toggledSet(previous: Set<number>, value: number): Set<number> {
   if (next.has(value)) next.delete(value);
   else next.add(value);
   return next;
-}
-
-function policyFromProfile(profile: PlaybookBindingProfile): RunPolicyOptions {
-  return {
-    concurrency: Math.max(1, Math.min(Number(profile.options.concurrency) || 4, 12)),
-    dryRun: Boolean(profile.options.dry_run),
-    become: profile.options.become ?? true,
-    tags: profile.options.tags || "",
-    skipTags: profile.options.skip_tags || "",
-    limit: profile.options.limit || "",
-  };
 }

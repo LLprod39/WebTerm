@@ -128,6 +128,7 @@ def test_auth_login_and_logout_require_csrf_when_enforced():
 @pytest.mark.django_db
 def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
     staff = User.objects.create_user(username="staff-core", password="x", is_staff=True)
+    UserAppPermission.objects.create(user=staff, feature="settings", allowed=True)
     client = Client()
     client.force_login(staff)
 
@@ -170,6 +171,7 @@ def test_admin_and_settings_endpoints_for_staff_user(monkeypatch):
 @pytest.mark.django_db
 def test_staff_can_refresh_ollama_models(monkeypatch):
     staff = User.objects.create_user(username="staff-ollama", password="x", is_staff=True)
+    UserAppPermission.objects.create(user=staff, feature="settings", allowed=True)
     client = Client()
     client.force_login(staff)
 

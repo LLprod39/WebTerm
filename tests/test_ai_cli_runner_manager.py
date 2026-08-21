@@ -163,7 +163,7 @@ async def test_stderr_flood_terminates_runner_immediately(monkeypatch) -> None:
     script = "import sys,time; sys.stderr.buffer.write(b'x'*200000); sys.stderr.flush(); time.sleep(30)"
     monkeypatch.setattr(
         "ai_cli_runner_manager.docker_runtime.build_cli_runner_docker_command",
-        lambda _config, _request: [sys.executable, "-c", script],
+        lambda _config, _request, **_kwargs: [sys.executable, "-c", script],
     )
     runtime = DockerCliRuntime(replace(_config(), output_limit_bytes=1024, request_timeout_seconds=10))
 
@@ -181,7 +181,7 @@ async def test_oversized_non_newline_stdout_is_killed_and_translated(monkeypatch
     script = "import sys,time; sys.stdout.buffer.write(b'x'*200000); sys.stdout.flush(); time.sleep(30)"
     monkeypatch.setattr(
         "ai_cli_runner_manager.docker_runtime.build_cli_runner_docker_command",
-        lambda _config, _request: [sys.executable, "-c", script],
+        lambda _config, _request, **_kwargs: [sys.executable, "-c", script],
     )
     runtime = DockerCliRuntime(replace(_config(), output_limit_bytes=1024, request_timeout_seconds=10))
 

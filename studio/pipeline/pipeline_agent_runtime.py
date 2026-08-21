@@ -10,6 +10,7 @@ from app.pipeline_agent_provider import run_pipeline_multi_agent, run_pipeline_r
 from app.pipeline_ssh_provider import get_server_connect_kwargs, get_server_sudo_password, run_agent_command
 from app.sudo_policy import prepare_sudo_command, resolve_sudo_policy
 from core_ui.activity import log_user_activity_async
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from studio.models import MCPServerPool, PipelineRun
 from studio.ops_controls import assert_agents_not_paused
 from studio.policy.execution_policy import build_execution_policy_decisions
@@ -108,6 +109,9 @@ async def execute_agent_react(
     node_skill_slugs = normalise_skill_slugs(config.get("skill_slugs"))
     goal = config.get("goal", "")
     owner = await _s2a_fn(lambda: run.pipeline.owner)()
+    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(owner)
+    if not can_manage_ai_routing:
+        config = {**config, "provider": "auto", "model": "", "provider_binding": {}}
     trigger_type = _pipeline_trigger_type(run)
     unattended = is_unattended_mode(config, trigger_type=trigger_type)
 
@@ -127,11 +131,13 @@ async def execute_agent_react(
         agent_conf = await _load_owned_agent_config(owner, agent_conf_pk)
         if agent_conf is None:
             return {"status": "failed", "error": f"Agent config not found: {agent_config_id}"}
-        inherited_provider_binding = _stored_provider_binding(agent_conf.provider_binding)
+        inherited_provider_binding = (
+            _stored_provider_binding(agent_conf.provider_binding) if can_manage_ai_routing else {}
+        )
         system_prompt = render_template_value(agent_conf.system_prompt, context)
         instructions = render_template_value(agent_conf.instructions, context)
         max_iterations = agent_conf.max_iterations or default_max_iterations("agent/react")
-        model = agent_conf.model
+        model = agent_conf.model if can_manage_ai_routing else ""
         tools_source = {
             **config,
             "allowed_tools": list(agent_conf.allowed_tools or config.get("allowed_tools") or []),
@@ -277,6 +283,9 @@ async def execute_agent_multi(
     node_skill_slugs = normalise_skill_slugs(config.get("skill_slugs"))
     goal = config.get("goal", "")
     owner = await _s2a_fn(lambda: run.pipeline.owner)()
+    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(owner)
+    if not can_manage_ai_routing:
+        config = {**config, "provider": "auto", "model": "", "provider_binding": {}}
     trigger_type = _pipeline_trigger_type(run)
     unattended = is_unattended_mode(config, trigger_type=trigger_type)
 
@@ -299,11 +308,13 @@ async def execute_agent_multi(
         agent_conf = await _load_owned_agent_config(owner, agent_conf_pk)
         if agent_conf is None:
             return {"status": "failed", "error": f"Agent config not found: {agent_config_id}"}
-        inherited_provider_binding = _stored_provider_binding(agent_conf.provider_binding)
+        inherited_provider_binding = (
+            _stored_provider_binding(agent_conf.provider_binding) if can_manage_ai_routing else {}
+        )
         system_prompt = render_template_value(agent_conf.system_prompt, context)
         instructions = render_template_value(agent_conf.instructions, context)
         max_iterations = agent_conf.max_iterations or default_max_iterations("agent/multi")
-        model = agent_conf.model
+        model = agent_conf.model if can_manage_ai_routing else ""
         tools_source = {
             **config,
             "allowed_tools": list(agent_conf.allowed_tools or config.get("allowed_tools") or []),

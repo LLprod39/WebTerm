@@ -1,4 +1,4 @@
-import type { ChangeEvent, Dispatch, SetStateAction } from "react";
+import type { ChangeEvent, Dispatch, ReactNode, SetStateAction } from "react";
 import {
   type FrontendGroup,
   type FrontendServer,
@@ -7,18 +7,31 @@ import {
 } from "@/lib/api";
 import { localize } from "@/lib/i18n";
 import {
+  CircleCheck,
+  Layers3,
+  ListFilter,
   Plus,
   Search,
   Server,
   Settings,
   Layers,
+  TriangleAlert,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { ContentPanel } from "@/components/system/ContentPanel";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PageShell, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
+import { PageShell } from "@/components/ui/page-shell";
+import { cn } from "@/lib/utils";
 import { ServerAdvancedDialog } from "./ServerAdvancedDialog";
 import { ServerFormDialog } from "./ServerFormDialog";
 import { ServerGroupDialog } from "./ServerGroupDialog";
@@ -35,6 +48,7 @@ import type {
   SSHHostKeyEnrollmentTarget,
 } from "./types";
 import type { ServerValidationResult } from "./serverValidation";
+import { formatServerCount } from "./formatters";
 import type { ServerCommandController } from "./useServerCommandController";
 import type { ServerKnowledgeController } from "./useServerKnowledgeController";
 import type { ServerRulesController } from "./useServerRulesController";
@@ -54,11 +68,13 @@ export interface ServersPageViewProps {
   servers: FrontendServer[];
   manageableGroups: ManageableGroup[];
   groupCount: number;
-  sharedCount: number;
-  onlineCount: number;
-  offlineCount: number;
+  healthyCount: number;
+  attentionCount: number;
   search: string;
   setSearch: (value: string) => void;
+  groupFilter: string;
+  groupOptions: Array<{ label: string; value: string }>;
+  setGroupFilter: (value: string) => void;
   collapsed: Record<string, boolean>;
   filtered: FrontendServer[];
   grouped: Record<string, FrontendServer[]>;
@@ -116,11 +132,50 @@ export interface ServersPageViewProps {
   sharesController: ServerSharesController;
 }
 
+function FleetStatCard({
+  label,
+  value,
+  description,
+  icon,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number;
+  description: string;
+  icon: ReactNode;
+  tone?: "neutral" | "success" | "warning" | "info";
+}) {
+  const toneClass = {
+    neutral: "border-border bg-card text-foreground",
+    success: "border-success/20 bg-success/[0.045] text-success",
+    warning: "border-warning/25 bg-warning/[0.055] text-warning",
+    info: "border-info/20 bg-info/[0.045] text-info",
+  }[tone];
+
+  return (
+    <div className={cn("relative overflow-hidden rounded-lg border px-4 py-3.5 shadow-elev-1", toneClass)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-foreground">{label}</p>
+          <p className="mt-1.5 font-display text-xl font-bold leading-none tabular-nums tracking-[-0.03em] text-foreground">
+            {value}
+          </p>
+          <p className="mt-1 text-[11px] leading-4 text-muted-foreground">{description}</p>
+        </div>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-current/15 bg-current/[0.07]">
+          {icon}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /** Presentational layout for the Servers page (tabs, dialogs, stats). */
 export function ServersPageView(props: ServersPageViewProps) {
   const {
-    t, tr, lang, mainTab, setMainTab, servers, manageableGroups, groupCount, sharedCount,
-    onlineCount, offlineCount, search, setSearch, collapsed, filtered, grouped, toggleGroup,
+    t, tr, lang, mainTab, setMainTab, servers, manageableGroups, groupCount,
+    healthyCount, attentionCount, search, setSearch, groupFilter, groupOptions, setGroupFilter,
+    collapsed, filtered, grouped, toggleGroup,
     fleetHealthByServerId, openCreate, openEdit, requestDeleteServer, dialogOpen, setDialogOpen,
     editingServer, form, formValidation, handlePrivateKeyFile, setForm, saveServer, saveAndTestServer,
     testConnection, saving, testingConnection, canConfigureElevatedAccess, serverDeleteTarget, clearServerDeleteTarget,
@@ -134,73 +189,129 @@ export function ServersPageView(props: ServersPageViewProps) {
   } = props;
 
   return (
-    <PageShell width="7xl" className="space-y-4">
-      <SoftHeader
-        compact
-        title={t("srv.title")}
-        count={servers.length > 0 ? servers.length : undefined}
-        subtitle={localize(lang, "Серверы, группы и правила", "Servers, groups, and rules")}
-        actions={
-          <>
-            <div className="relative w-full sm:w-auto">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={t("srv.search")}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-9 w-full pl-9 text-sm sm:w-72"
-              />
+    <PageShell width="6xl" className="space-y-4 pb-8">
+      <header className="relative overflow-hidden rounded-lg border border-border bg-card px-5 py-4 shadow-elev-1">
+        <div aria-hidden className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/80 via-primary/25 to-transparent" />
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="mb-1.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              <Server className="h-3.5 w-3.5 text-primary" aria-hidden />
+              {localize(lang, "Инфраструктура", "Infrastructure")}
             </div>
-            <Button className="gap-1.5" onClick={openCreate}>
-              <Plus className="h-4 w-4" /> {t("srv.add")}
-            </Button>
-          </>
-        }
-      />
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="font-display text-2xl font-bold tracking-[-0.035em] text-foreground">
+                {localize(lang, "Серверы", "Servers")}
+              </h1>
+              {servers.length > 0 ? (
+                <span className="rounded-full border border-border bg-surface-2 px-2.5 py-1 font-mono text-xs tabular-nums text-muted-foreground">
+                  {servers.length}
+                </span>
+              ) : null}
+            </div>
+            <p className="mt-1 max-w-2xl text-[13px] leading-5 text-muted-foreground">
+              {localize(
+                lang,
+                "Подключения, состояние и правила доступа к вашей серверной инфраструктуре.",
+                "Connections, health, and access rules for your server infrastructure.",
+              )}
+            </p>
+          </div>
+          <Button className="h-9 gap-2 rounded-lg px-3.5 shadow-elev-1" onClick={openCreate}>
+            <Plus className="h-4 w-4" aria-hidden /> {t("srv.add")}
+          </Button>
+        </div>
+      </header>
 
       {servers.length > 0 ? (
-        <StatStrip>
-          <StatStripItem
+        <section className="grid grid-cols-2 gap-2.5 xl:grid-cols-4" aria-label={localize(lang, "Сводка по серверам", "Server summary")}>
+          <FleetStatCard
             label={localize(lang, "Всего", "Total")}
             value={servers.length}
-            hint={localize(lang, "серверы", "servers")}
+            description={localize(lang, "в вашем доступе", "in your access scope")}
+            icon={<Server className="h-4 w-4" aria-hidden />}
           />
-          <StatStripItem
-            label={localize(lang, "Онлайн", "Online")}
-            value={onlineCount}
-            tone={onlineCount > 0 ? "success" : "default"}
-            hint={tr("srv.online_count", { count: onlineCount })}
+          <FleetStatCard
+            label={localize(lang, "В норме", "Healthy")}
+            value={healthyCount}
+            description={localize(lang, "по последней проверке", "at the latest check")}
+            icon={<CircleCheck className="h-4 w-4" aria-hidden />}
+            tone="success"
           />
-          <StatStripItem
-            label={localize(lang, "Офлайн", "Offline")}
-            value={offlineCount}
-            tone={offlineCount > 0 ? "warning" : "default"}
-            hint={localize(lang, "нет связи / unknown", "unreachable / unknown")}
+          <FleetStatCard
+            label={localize(lang, "Нужна проверка", "Needs attention")}
+            value={attentionCount}
+            description={localize(lang, "нет данных или есть отклонения", "missing data or health issues")}
+            icon={<TriangleAlert className="h-4 w-4" aria-hidden />}
+            tone={attentionCount > 0 ? "warning" : "neutral"}
           />
-          <StatStripItem
+          <FleetStatCard
             label={localize(lang, "Группы", "Groups")}
             value={groupCount}
-            hint={
-              sharedCount > 0
-                ? tr("srv.shared_count", { count: sharedCount })
-                : localize(lang, "управляемые", "manageable")
-            }
+            description={localize(lang, "доступны для управления", "available to manage")}
+            icon={<Layers3 className="h-4 w-4" aria-hidden />}
+            tone="info"
           />
-        </StatStrip>
+        </section>
       ) : null}
 
       <Tabs value={mainTab} onValueChange={(v) => setMainTab(v as MainTab)} className="space-y-3">
-        <TabsList className="h-auto justify-start gap-1 rounded-sm border border-border bg-surface-0 p-0.5">
-          <TabsTrigger value="servers" className="min-h-9 gap-2 px-3 text-sm">
-            <Server className="h-4 w-4" /> {t("srv.list")}
-          </TabsTrigger>
-          <TabsTrigger value="groups" className="min-h-9 gap-2 px-3 text-sm">
-            <Layers className="h-4 w-4" /> {t("srv.groups")}
-          </TabsTrigger>
-          <TabsTrigger value="rules" className="min-h-9 gap-2 px-3 text-sm">
-            <Settings className="h-4 w-4" /> {t("srv.rules_tab")}
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card p-1.5 shadow-elev-1 lg:flex-row lg:items-center lg:justify-between">
+          <TabsList className="h-10 w-full justify-start gap-1 rounded-lg bg-surface-2 p-1 lg:w-auto">
+            <TabsTrigger value="servers" className="min-h-8 gap-2 rounded-md px-3 text-sm">
+              <Server className="h-4 w-4" aria-hidden /> {t("srv.list")}
+            </TabsTrigger>
+            <TabsTrigger value="groups" className="min-h-8 gap-2 rounded-md px-3 text-sm">
+              <Layers className="h-4 w-4" aria-hidden /> {t("srv.groups")}
+            </TabsTrigger>
+            <TabsTrigger value="rules" className="min-h-8 gap-2 rounded-md px-3 text-sm">
+              <Settings className="h-4 w-4" aria-hidden /> {t("srv.rules_tab")}
+            </TabsTrigger>
+          </TabsList>
+
+          {mainTab === "servers" ? (
+            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-center lg:justify-end">
+              <span aria-live="polite" className="hidden whitespace-nowrap px-1 text-xs text-muted-foreground xl:inline">
+                {filtered.length === servers.length
+                  ? formatServerCount(servers.length, lang)
+                  : localize(lang, `Показано ${filtered.length} из ${servers.length}`, `${filtered.length} of ${servers.length} shown`)}
+              </span>
+              <div className="relative min-w-0 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  aria-label={localize(lang, "Поиск по серверам", "Search servers")}
+                  placeholder={localize(lang, "Имя, адрес, ОС или группа…", "Name, address, OS, or group…")}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="h-9 rounded-lg bg-surface-0 pl-9 pr-9 text-sm"
+                />
+                {search ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearch("")}
+                    className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                    aria-label={localize(lang, "Очистить поиск", "Clear search")}
+                  >
+                    <X className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                ) : null}
+              </div>
+              <Select value={groupFilter} onValueChange={setGroupFilter}>
+                <SelectTrigger className="h-9 w-full rounded-lg bg-surface-0 text-sm sm:w-48" aria-label={localize(lang, "Фильтр по группе", "Filter by group")}>
+                  <ListFilter className="mr-2 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all_groups__">{localize(lang, "Все группы", "All groups")}</SelectItem>
+                  {groupOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label || t("srv.no_group")}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+        </div>
 
         <TabsContent value="servers" className="mt-0 space-y-3">
           <ServersListTab
@@ -217,7 +328,10 @@ export function ServersPageView(props: ServersPageViewProps) {
             onOpenAdvanced={openAdvanced}
             onOpenEdit={openEdit}
             onRequestDeleteServer={requestDeleteServer}
-            onClearSearch={() => setSearch("")}
+            onClearFilters={() => {
+              setSearch("");
+              setGroupFilter("__all_groups__");
+            }}
           />
         </TabsContent>
 

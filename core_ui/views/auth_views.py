@@ -89,9 +89,16 @@ def _auth_user_payload(user, *, request=None):
     if not user or not getattr(user, "is_authenticated", False):
         return None
     access = build_user_access_payload(user, request=request)
+    from core_ui.ai_model_policy import user_can_manage_ai_routing
+
     features = access["effective_permissions"]
     feature_payload = {feature: bool(features.get(feature, False)) for feature in access_feature_slugs()}
-    if os.getenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "").strip().lower() not in {"1", "true", "yes"}:
+    ai_cli_runtime_enabled = os.getenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+    if not user_can_manage_ai_routing(user):
         feature_payload["ai_connections_personal"] = False
         feature_payload["ai_connections_admin"] = False
     from plugin_marketplace.release_profile import plugin_marketplace_enabled
@@ -108,6 +115,8 @@ def _auth_user_payload(user, *, request=None):
         "username": user.username,
         "email": user.email or "",
         "is_staff": bool(user.is_staff),
+        "can_manage_ai_routing": user_can_manage_ai_routing(user),
+        "ai_cli_runtime_enabled": ai_cli_runtime_enabled,
         "access_profile": access["access_profile"],
         "permission_sources": access["permission_sources"],
         "features": feature_payload,

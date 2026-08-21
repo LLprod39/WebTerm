@@ -120,12 +120,12 @@ describe("AppSidebar preview-gated nav", () => {
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
   });
 
-  it("shows the active project selector when the user belongs to multiple projects", async () => {
+  it("does not expose the internal project selector", async () => {
     renderSidebar({ servers: true, dashboard: true }, { projectCount: 2 });
 
-    const selector = await screen.findByLabelText("Активный проект");
-    expect(selector).toHaveValue("project-a");
-    expect(within(selector).getByRole("option", { name: "Staging" })).toBeInTheDocument();
+    await screen.findByTestId("nav-section-dashboard");
+    expect(screen.queryByLabelText("Активный проект")).not.toBeInTheDocument();
+    expect(fetchProjects).not.toHaveBeenCalled();
   });
 
   it("uses the five target navigation groups and exposes playbooks", async () => {

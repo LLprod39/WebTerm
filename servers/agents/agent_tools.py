@@ -38,6 +38,8 @@ DEFAULT_READ_ONLY_AGENT_TOOLS = (
     "read_skill",
     "list_materials",
     "read_material",
+    "run_script_material",
+    "update_material_task",
 )
 
 # ---------------------------------------------------------------------------

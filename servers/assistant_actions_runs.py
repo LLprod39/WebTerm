@@ -6,7 +6,6 @@ from asgiref.sync import async_to_sync
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from app.runtime_limits import ACTIVE_AGENT_RUN_STATUSES
-from core_ui.projects import active_project_for_user
 from servers.agents.agent_run_report import build_agent_run_report_response
 from servers.agents.agent_service import (
     approve_agent_plan_for_user,
@@ -129,7 +128,7 @@ def _resolve_agent_run_id(ctx: AssistantActionContext) -> int:
 
 def _agent_for_user(user, agent_id: int) -> ServerAgent:
     agent = (
-        ServerAgent.objects.filter(id=agent_id, user=user, project=active_project_for_user(user))
+        ServerAgent.objects.filter(id=agent_id, user=user)
         .prefetch_related("servers")
         .first()
     )
@@ -139,12 +138,11 @@ def _agent_for_user(user, agent_id: int) -> ServerAgent:
 
 
 def _run_for_user(user, run_id: int) -> AgentRun:
-    project = active_project_for_user(user)
-    run = AgentRun.objects.filter(project=project, id=run_id, user=user).select_related("agent", "server").first()
+    run = AgentRun.objects.filter(id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
     run = (
-        AgentRun.objects.filter(project=project, id=run_id, agent__user=user).select_related("agent", "server").first()
+        AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
     )
     if run is None:
         raise AssistantActionError("Agent run not found", status=404)

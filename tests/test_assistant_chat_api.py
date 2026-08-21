@@ -207,7 +207,7 @@ def test_assistant_chat_passes_runtime_context_to_planner(monkeypatch):
 @pytest.mark.django_db
 def test_assistant_planner_fallback_clears_session_when_provider_binding_changes(monkeypatch):
     user = User.objects.create_user(username="chat-fallback-binding-switch", password="x")
-    _grant_feature(user, "chat")
+    _grant_feature(user, "chat", "settings")
     first = AIProviderConnection.objects.create(
         target_id="codex_subscription",
         scope=AIProviderConnection.SCOPE_PERSONAL,

@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   studioPipelines,
+  fetchAuthSession,
   studioNodeManifests,
   type PipelineNode,
   type PipelineEdge,
@@ -25,6 +26,7 @@ import { usePipelineRunDialogState } from "./pipeline-editor/usePipelineRunDialo
 import { localize } from "./pipeline-editor/presentation";
 import { buildPipelineSavePayload, normalisePipelineGraph } from "./pipeline-editor/pipelineGraphUtils";
 import { buildPluginNodePalette, buildPluginNodeTypes } from "@/plugins/studioNodes";
+import { canManageAiRouting as canManageAiRoutingForUser } from "@/lib/featureAccess";
 import { usePipelineAssistantDraft } from "./pipeline-editor/usePipelineAssistantDraft";
 import { usePipelineEditorGraphActions } from "./pipeline-editor/usePipelineEditorGraphActions";
 import { usePipelineEditorMutations } from "./pipeline-editor/usePipelineEditorMutations";
@@ -44,6 +46,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     enabled: !!pipelineId,
     refetchOnMount: "always",
   });
+  const { data: authSession } = useQuery({
+    queryKey: ["auth", "session"],
+    queryFn: fetchAuthSession,
+    staleTime: 60_000,
+    retry: false,
+  });
+  const canManageAiRouting = canManageAiRoutingForUser(authSession?.user);
   const { data: nodeManifestRegistry } = useQuery({
     queryKey: ["studio", "node-manifests"],
     queryFn: studioNodeManifests.get,
@@ -121,7 +130,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       return;
     }
     setPipelineName(pipeline.name);
-    setProviderBinding(pipeline.provider_binding?.target_id ? pipeline.provider_binding : null);
+    setProviderBinding(canManageAiRouting && pipeline.provider_binding?.target_id ? pipeline.provider_binding : null);
     const normalisedGraph = normalisePipelineGraph(
       (pipeline.nodes || []) as PipelineNode[],
       (pipeline.edges || []) as PipelineEdge[],
@@ -138,7 +147,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       nodeIdCounter.current = maxId + 1;
       setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 100);
     }
-  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
+  }, [canManageAiRouting, pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
   const showClientValidationError = useCallback(() => {
     const pipelineNodes = nodes as unknown as PipelineNode[];
     const validationErrors = getPipelineClientValidationErrors(pipelineNodes, nodeManifests);
@@ -386,6 +395,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         pipelineId={pipelineId}
         pipelineName={pipelineName}
         providerBinding={providerBinding}
+        canManageAiRouting={canManageAiRouting}
         resolvedLastRun={resolvedLastRun}
         runDisabled={runMutation.isPending || validateRunMutation.isPending || saveMutation.isPending || (Boolean(pipelineId) && !hasHydratedPipeline)}
         runPending={runMutation.isPending}

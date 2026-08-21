@@ -140,7 +140,7 @@ async def tool_run_script_material(
     session: AgentSessionManager,
     *,
     material: str,
-    server: str,
+    server: str = "",
     args: str = "",
     dry_run: bool = False,
     timeout: int = 300,
@@ -164,11 +164,12 @@ async def tool_run_script_material(
 
     dry = dry_run.strip().lower() in {"1", "true", "yes", "on"} if isinstance(dry_run, str) else bool(dry_run)
 
-    sid = session.resolve_server(server)
-    if sid is None:
+    local_run = not str(server or "").strip()
+    sid = None if local_run else session.resolve_server(server)
+    if not local_run and sid is None:
         return ToolResult(False, f"Server '{server}' not found or not connected. Use open_connection first.")
-    server_obj = getattr(session, "allowed_servers", {}).get(sid)
-    if not dry and bool(getattr(server_obj, "ai_read_only", False)):
+    server_obj = None if sid is None else getattr(session, "allowed_servers", {}).get(sid)
+    if not local_run and not dry and bool(getattr(server_obj, "ai_read_only", False)):
         return ToolResult(False, f"Blocked: server '{server}' allows read-only AI commands only.")
 
     # The material content is evaluated at the same enforcement boundary as an
@@ -177,7 +178,7 @@ async def tool_run_script_material(
     if not dry and not bool(getattr(session, "execution_approval_granted", False)):
         approved = await _request_material_execution_approval(
             session,
-            server=server,
+            server=server or "isolated local sandbox",
             material=str(item.get("name") or item.get("id") or material),
             reason=gate.reason,
         )
@@ -226,6 +227,32 @@ async def tool_run_script_material(
     if args_str and not re.fullmatch(r"[A-Za-z0-9_./=\s\-:,@+]+", args_str):
         return ToolResult(False, "args contains unsupported characters; use letters, digits, ./_-=:@+ and spaces.")
     args_quoted = " ".join(shlex.quote(part) for part in args_str.split()) if args_str else ""
+
+    if local_run:
+        source_name = str(item.get("source_name") or item.get("name") or "").lower()
+        first_line = content.lstrip().splitlines()[0] if content.lstrip() else ""
+        if not (source_name.endswith((".sh", ".bash")) or first_line.startswith(("#!/bin/sh", "#!/bin/bash", "#!/usr/bin/env bash"))):
+            return ToolResult(False, "Blocked: isolated material runner supports only identifiable shell/bash scripts.", data={"code": "unsupported_material_language", "runtime": "blocked"})
+        try:
+            from app.agent_kernel.sandbox.material_runner import MaterialRunnerError, execute_isolated_material
+
+            callback = getattr(session, "event_callback", None)
+            if callback is not None:
+                await callback("agent_material_execution_started", {"material_id": item.get("id"), "runtime": "isolated_container", "dry_run": dry})
+            local_content = f"set -n\n{content}" if dry else content
+            result = await execute_isolated_material(content=local_content, args=args_str.split(), timeout_seconds=timeout_sec, language="bash")
+        except MaterialRunnerError as exc:
+            if callback is not None:
+                await callback("agent_material_execution_blocked", {"material_id": item.get("id"), "runtime": "isolated_container", "reason": str(exc)})
+            return ToolResult(False, f"Blocked: {exc} WebTerm did not execute the material on the backend host.", data={"code": "isolated_material_runner_unavailable", "runtime": "blocked"})
+        if callback is not None:
+            await callback("agent_material_execution_finished", {"material_id": item.get("id"), "runtime": "isolated_container", "exit_status": result.exit_status, "duration_ms": result.duration_ms})
+        combined = result.stdout + (f"\nSTDERR:\n{result.stderr}" if result.stderr else "")
+        return ToolResult(
+            result.exit_status == 0,
+            f"run_script_material mode={'dry_run' if dry else 'execute'} id={item.get('id')} name={item.get('name')!r} runtime=isolated_container script_exit={result.exit_status}\n\n{combined[:8000]}",
+            data={"material_id": item.get("id"), "script_exit": result.exit_status, "exit_code": result.exit_status, "dry_run": dry, "duration_ms": result.duration_ms, "runtime": "isolated_container"},
+        )
 
     if dry:
         run_block = (

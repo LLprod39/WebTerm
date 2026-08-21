@@ -12,6 +12,8 @@ def serialize_snapshot(item, *, history_items: list[Any] | None = None) -> dict[
         "memory_key": item.memory_key,
         "title": item.title,
         "content": item.content,
+        "content_hash": getattr(item, "content_hash", "") or "",
+        "generation_log_id": getattr(item, "generation_log_id", None),
         "source_kind": item.source_kind,
         "source_ref": item.source_ref,
         "layer": item.layer,
@@ -63,6 +65,9 @@ def serialize_revalidation(item) -> dict[str, Any]:
         "payload": item.payload or {},
         "updated_at": item.updated_at.isoformat() if item.updated_at else None,
         "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
+        "decided_by_id": getattr(item, "decided_by_id", None),
+        "decided_at": item.decided_at.isoformat() if getattr(item, "decided_at", None) else None,
+        "decision_reason": getattr(item, "decision_reason", "") or "",
     }
 
 

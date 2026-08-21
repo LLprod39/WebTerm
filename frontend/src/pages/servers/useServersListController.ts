@@ -3,6 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import type { FrontendServer } from "@/lib/api";
 
 const COLLAPSED_GROUPS_KEY_PREFIX = "webterm.servers.collapsed-groups";
+const ALL_GROUPS = "__all_groups__";
+const UNGROUPED = "__ungrouped__";
+
+function groupFilterValue(groupName: string) {
+  return groupName.trim() ? groupName : UNGROUPED;
+}
 
 function storageKeyFor(userKey?: string) {
   return userKey ? `${COLLAPSED_GROUPS_KEY_PREFIX}.${userKey}` : COLLAPSED_GROUPS_KEY_PREFIX;
@@ -28,6 +34,7 @@ function readCollapsedGroups(userKey?: string): Record<string, boolean> {
 
 export function useServersListController(servers: FrontendServer[], userKey?: string) {
   const [search, setSearch] = useState("");
+  const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
   // Groups are expanded by default; only groups the user explicitly collapses are
   // stored, and that choice is remembered across reloads / navigation.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => readCollapsedGroups(userKey));
@@ -35,11 +42,33 @@ export function useServersListController(servers: FrontendServer[], userKey?: st
 
   const safeServers = servers;
 
+  const groupOptions = useMemo(() => {
+    const groups = new Set(safeServers.map((server) => server.group_name || ""));
+    return Array.from(groups)
+      .sort((left, right) => left.localeCompare(right))
+      .map((groupName) => ({
+        label: groupName,
+        value: groupFilterValue(groupName),
+      }));
+  }, [safeServers]);
+
   const filtered = useMemo(() => {
-    if (!search) return safeServers;
-    const q = search.toLowerCase();
-    return safeServers.filter((server) => server.name.toLowerCase().includes(q) || server.host.includes(q));
-  }, [safeServers, search]);
+    const query = search.trim().toLocaleLowerCase();
+    return safeServers.filter((server) => {
+      if (groupFilter !== ALL_GROUPS && groupFilterValue(server.group_name || "") !== groupFilter) {
+        return false;
+      }
+      if (!query) return true;
+      return [
+        server.name,
+        server.host,
+        server.username,
+        server.group_name,
+        server.detected_os,
+        server.detected_os_pretty,
+      ].some((value) => String(value || "").toLocaleLowerCase().includes(query));
+    });
+  }, [groupFilter, safeServers, search]);
 
   const grouped = useMemo(() => {
     const map: Record<string, FrontendServer[]> = {};
@@ -48,11 +77,6 @@ export function useServersListController(servers: FrontendServer[], userKey?: st
     });
     return map;
   }, [filtered]);
-
-  const onlineCount = useMemo(
-    () => safeServers.filter((server) => server.status === "online").length,
-    [safeServers],
-  );
 
   const toggleGroup = (groupName: string) => {
     setCollapsed((current) => ({ ...current, [groupName]: !current[groupName] }));
@@ -87,10 +111,12 @@ export function useServersListController(servers: FrontendServer[], userKey?: st
   return {
     collapsed,
     filtered,
+    groupFilter,
+    groupOptions,
     grouped,
-    onlineCount,
     search,
     selectedServerId,
+    setGroupFilter,
     setSearch,
     toggleGroup,
   };

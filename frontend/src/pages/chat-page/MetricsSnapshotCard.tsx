@@ -68,7 +68,7 @@ function MetricBar({
       </div>
       <div className="h-1 overflow-hidden rounded-full bg-muted/60">
         <div
-          className={cn("h-full rounded-full transition-all duration-500", barTone(pct))}
+          className={cn("h-full rounded-full", barTone(pct))}
           style={{ width: pct == null ? "0%" : `${pct}%` }}
         />
       </div>
@@ -95,7 +95,7 @@ export function MetricsSnapshotCard({ data }: { data: MetricsSnapshot }) {
   const orderedMounts = rootMount ? [rootMount, ...otherMounts] : mounts;
 
   return (
-    <div className="max-w-[min(360px,100%)] overflow-hidden rounded-xl border border-border/50 bg-card/40 shadow-sm animate-in fade-in-0 duration-300">
+    <div className="w-full max-w-[360px] overflow-hidden rounded-xl border border-border/50 bg-card/40 shadow-sm">
       <div className="flex items-start justify-between gap-2 border-b border-border/40 px-3.5 py-2.5">
         <div className="min-w-0">
           <div className="truncate text-[13px] font-semibold tracking-tight text-foreground">

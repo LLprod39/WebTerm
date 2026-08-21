@@ -81,12 +81,12 @@ function authUser(automation: boolean): AuthUser {
   };
 }
 
-describe("TerminalHeader read-only pilot notice", () => {
+describe("TerminalHeader read-only capability notice", () => {
   it("explains the restricted terminal behavior in English", () => {
     renderHeader("en", true);
 
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Read-only pilot mode.");
+    expect(notice).toHaveTextContent("Read-only mode.");
     expect(notice).toHaveTextContent(
       "Commands are checked after you press Enter. Sudo, file changes, shell history, and Tab completion are unavailable.",
     );
@@ -96,7 +96,7 @@ describe("TerminalHeader read-only pilot notice", () => {
     renderHeader("ru", true);
 
     const notice = screen.getByRole("status");
-    expect(notice).toHaveTextContent("Пилотный режим «только чтение».");
+    expect(notice).toHaveTextContent("Режим «только чтение».");
     expect(notice).toHaveTextContent(
       "Команды проверяются после нажатия Enter. Sudo, изменение файлов, история shell и автодополнение по Tab недоступны.",
     );
@@ -116,7 +116,7 @@ describe("TerminalHeader read-only pilot notice", () => {
         { ...server, ai_read_only: false },
         { ...authUser(true), access_profile: "admin_full" },
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(isTerminalReadOnlyMode({ ...server, ai_read_only: true }, authUser(true))).toBe(true);
     expect(isTerminalReadOnlyMode({ ...server, ai_read_only: false }, authUser(true))).toBe(false);
   });

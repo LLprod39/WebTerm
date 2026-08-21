@@ -4,6 +4,8 @@ import os
 from collections import defaultdict
 from typing import Any
 
+from django.conf import settings
+
 from core_ui.models import (
     DEFAULT_ALLOWED_FEATURES,
     EXPLICIT_OPT_IN_FEATURES,
@@ -36,14 +38,13 @@ VALID_ACCESS_PROFILES = {
 }
 
 # Closed pilot: user dashboard + servers surface + agents. No Studio/K8s/MARS/settings.
-PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents", "chat", "ai_connections_personal"})
+PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents", "chat"})
 
 _PROFILE_TRUE_FEATURES = {
     "pilot_user": set(PILOT_USER_FEATURES),
     "pilot_operator": {
         *PILOT_USER_FEATURES,
         "automation",
-        "ai_connections_admin",
     },
     "server_only": {"servers"},
     "operator_server_only": {"servers"},
@@ -56,7 +57,6 @@ _PROFILE_TRUE_FEATURES = {
         "studio_notifications",
         "automation",
         "chat",
-        "ai_connections_personal",
     },
     "team_admin_no_secrets": {
         "servers",
@@ -71,8 +71,6 @@ _PROFILE_TRUE_FEATURES = {
         "chat",
         "knowledge_base",
         "automation",
-        "ai_connections_personal",
-        "ai_connections_admin",
     },
 }
 
@@ -179,7 +177,7 @@ def feature_allowed_for_user(
         explicit,
         grouped,
     )
-    _apply_pilot_automation_boundary(user, effective)
+    _apply_pilot_automation_boundary(user, effective, explicit)
     return bool(effective.get(feature, False))
 
 
@@ -205,7 +203,9 @@ def _effective_feature_access(
     effective: dict[str, bool] = {}
     sources: dict[str, str] = {}
     for feature in features:
-        if feature in STAFF_ONLY_FEATURES and not user.is_staff:
+        if feature == "kubernetes" and not getattr(settings, "KUBERNETES_OPS_ENABLED", True):
+            result = (False, "deployment_disabled")
+        elif feature in STAFF_ONLY_FEATURES and not user.is_staff:
             result = (False, "staff_required")
         elif feature in explicit:
             result = (bool(explicit[feature]), "user_explicit")
@@ -248,11 +248,17 @@ def _pilot_restricted_mode() -> bool:
     return os.getenv("PILOT_RESTRICTED_MODE", "").strip().lower() in {"1", "true", "yes"}
 
 
-def _apply_pilot_automation_boundary(user, effective: dict[str, bool]) -> None:
+def _apply_pilot_automation_boundary(
+    user,
+    effective: dict[str, bool],
+    explicit: dict[str, bool] | None = None,
+) -> None:
     """In a restricted pilot, write automation belongs only to the exact pilot role."""
     if not _pilot_restricted_mode() or not effective.get("automation"):
         return
-    if _access_profile_for(user, effective) != "pilot_operator":
+    target = access_profile_permissions("pilot_operator")
+    is_materialized_profile = explicit is not None and all(explicit.get(feature) is allowed for feature, allowed in target.items())
+    if _access_profile_for(user, effective) != "pilot_operator" or not is_materialized_profile:
         effective["automation"] = False
 
 
@@ -280,8 +286,11 @@ def build_user_access_payload(
     grouped = summarize_group_permissions(group_sources)
 
     effective, sources = _effective_feature_access(user, features, explicit, grouped)
-    _apply_pilot_automation_boundary(user, effective)
-    if not effective.get("automation") and sources.get("automation") not in {None, "explicit_opt_in"}:
+    _apply_pilot_automation_boundary(user, effective, explicit)
+    if _pilot_restricted_mode() and not effective.get("automation") and sources.get("automation") not in {
+        None,
+        "explicit_opt_in",
+    }:
         sources["automation"] = "pilot_operator_required"
     profile = _access_profile_for(user, effective)
 

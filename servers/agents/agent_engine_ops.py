@@ -56,6 +56,8 @@ class AgentEngineOpsMixin:
             server_ids=server_ids,
             group_ids=list(dict.fromkeys(group_ids)),
             limit=5,
+            actor_user_id=self.agent.user_id,
+            agent_id=self.agent.id,
         )
         tool_registry_prompt = self.tool_registry.build_prompt_slice(limit=10) if self.tool_registry else ""
 

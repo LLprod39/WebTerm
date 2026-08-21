@@ -10,6 +10,8 @@ import { osBadgeStyles, osIconSrc } from "@/components/servers/os-icon-map";
 
 const sizeMap = {
 
+  xs: { box: "h-6 w-6 rounded-md", icon: "h-3 w-3", text: "text-[11px]" },
+
   sm: { box: "h-7 w-7 rounded-lg", icon: "h-3.5 w-3.5", text: "text-xs" },
 
   md: { box: "h-9 w-9 rounded-xl", icon: "h-4 w-4", text: "text-xs" },

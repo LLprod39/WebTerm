@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
 import type { AssistantChatMessage, AssistantChatSession, ProviderBinding } from "@/api";
@@ -23,6 +23,32 @@ type OpenSessionDock = (opts: {
 type PushSessionLine = (line: Omit<OperatorSessionLine, "id" | "at"> & { id?: string }) => void;
 
 type ActiveTurn = AssistantChatSession["active_turn"];
+
+export function shouldReconcileOperatorCompletion({
+  restTurnWasOpen,
+  operatorBusy,
+  activeTurn,
+  lastMessage,
+}: {
+  restTurnWasOpen: boolean;
+  operatorBusy: boolean;
+  activeTurn: ActiveTurn;
+  lastMessage?: AssistantChatMessage;
+}) {
+  const restStillOpen = Boolean(
+    activeTurn?.busy ||
+    activeTurn?.status === "running" ||
+    activeTurn?.status === "resuming" ||
+    activeTurn?.status === "awaiting_async",
+  );
+  return Boolean(
+    restTurnWasOpen &&
+    operatorBusy &&
+    !restStillOpen &&
+    lastMessage?.role === "assistant" &&
+    lastMessage.content?.trim(),
+  );
+}
 
 export type UseChatPageOperatorRuntimeParams = {
   activeChatId: number | null;
@@ -107,7 +133,9 @@ export function useChatPageOperatorRuntime({
     sendMessage: sendOperatorMessage,
     stopTurn: stopOperatorTurn,
     streamText: operatorStreamText,
+    endTurn: finishOperatorTurn,
   } = operatorWs;
+  const restTurnWasOpenRef = useRef(false);
 
   // Resume mid-turn after navigation: hydrate from REST active_turn
   useEffect(() => {
@@ -135,6 +163,36 @@ export function useChatPageOperatorRuntime({
     operatorStreamText,
     setStreamHold,
   ]);
+
+  // WS completion is transient; REST is durable. If polling observed an open
+  // turn and now sees no active turn plus the final assistant row, reconcile
+  // the local busy flag instead of leaving the composer in «Пишет» forever.
+  useEffect(() => {
+    const restOpen = Boolean(
+      activeTurn?.busy ||
+      activeTurn?.status === "running" ||
+      activeTurn?.status === "resuming" ||
+      activeTurn?.status === "awaiting_async",
+    );
+    if (restOpen) {
+      restTurnWasOpenRef.current = true;
+      return;
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (shouldReconcileOperatorCompletion({
+      restTurnWasOpen: restTurnWasOpenRef.current,
+      operatorBusy,
+      activeTurn,
+      lastMessage,
+    })) {
+      restTurnWasOpenRef.current = false;
+      finishOperatorTurn();
+      setStreamHold(true);
+      refreshChat();
+    } else if (!operatorBusy) {
+      restTurnWasOpenRef.current = false;
+    }
+  }, [activeTurn, finishOperatorTurn, messages, operatorBusy, refreshChat, setStreamHold]);
 
   // While turn runs (even after leaving/rejoining), poll history for progressive text
   useEffect(() => {
@@ -221,7 +279,7 @@ export function useChatPageOperatorRuntime({
       if (stored.startsWith(pending)) return true;
       // Strip backend-only context blocks before compare
       const head = stored
-        .split(/\n\nКонтекст серверов:|\n\n\[Human terminal on |\nКонтекст пользователей:/)[0]
+        .split(/\n\nКонтекст серверов:|\n\nКонтекст playbook:|\n\n\[Human terminal on |\nКонтекст пользователей:/)[0]
         .trim();
       return head === pending || head.startsWith(pending) || pending.startsWith(head);
     };

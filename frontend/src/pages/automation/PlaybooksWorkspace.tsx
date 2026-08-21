@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { GuidedBuilder } from "./GuidedBuilder";
@@ -7,6 +9,7 @@ import { RunWizard } from "./RunWizard";
 import { detailToPlaybookEditor } from "./playbookEditorState";
 import { PlaybooksCatalogPanel } from "./playbooks/PlaybooksCatalogPanel";
 import { PlaybookWorkspacePanels } from "./playbooks/PlaybookWorkspacePanels";
+import { PlaybookBundleImportDialog } from "./playbooks/PlaybookBundleImportDialog";
 import type { PlaybooksWorkspaceProps } from "./playbooks/types";
 import { usePlaybooksWorkspace } from "./playbooks/usePlaybooksWorkspace";
 
@@ -46,7 +49,6 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     servers,
     playbooksQuery,
     playbooks,
-    templates,
     recentRuns,
     ansible,
     ansibleAvailable,
@@ -56,10 +58,8 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     onSave,
     onDelete,
     onDuplicate,
-    onImportFile,
-    onInstallTemplate,
+    onLoadYamlFile,
     startRunWizard,
-    ensureSavedThenWizard,
     onConfirmRun,
     onCancelRun,
     onRerunFailed,
@@ -72,6 +72,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
   const playbookSurfaceLoading = Boolean(
     routePlaybookId && openedPlaybook?.id !== routePlaybookId,
   );
+  const [projectImportOpen, setProjectImportOpen] = useState(false);
 
   return (
     <div className="space-y-3">
@@ -82,7 +83,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) void onImportFile(file);
+          if (file) void onLoadYamlFile(file);
           e.target.value = "";
         }}
       />
@@ -92,7 +93,6 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           lang={lang}
           tr={tr}
           playbooks={playbooks}
-          templates={templates}
           recentRuns={recentRuns}
           playbooksLoading={playbooksQuery.isLoading}
           playbooksError={
@@ -114,11 +114,8 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           onRefreshRuns={() => {
             void queryClient.invalidateQueries({ queryKey: ["playbook-runs"] });
           }}
-          onImportClick={() => fileInputRef.current?.click()}
-          onImportFile={(file) => void onImportFile(file)}
           onOpenNew={openNew}
-          onOpenGuided={() => setView({ mode: "guided" })}
-          onInstallTemplate={(tmpl) => void onInstallTemplate(tmpl)}
+          onOpenImport={() => setProjectImportOpen(true)}
           onOpenEdit={(id) => void openEdit(id)}
           onStartRun={(id) => void startRunWizard(id)}
           onDuplicate={(id) => void onDuplicate(id)}
@@ -161,20 +158,16 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           canRun={!view.playbookId || (workspace.capabilityReady && workspace.capabilities.can_run)}
           canValidate={!view.playbookId || workspace.capabilities.can_validate}
           canAdapt={!view.playbookId || workspace.capabilities.is_owner}
-          publishedRevisionNumber={
-            workspace.revisions.find((revision) => revision.id === workspace.publishedRevisionId)?.revision_number ?? null
-          }
-          hasUnpublishedRevision={workspace.hasUnpublishedRevision}
           onChange={updateEditor}
           onSave={() => void onSave()}
           onBack={leaveEditor}
           onRun={() => {
             if (view.playbookId) setView({ mode: "run-wizard", playbookId: view.playbookId });
-            else void ensureSavedThenWizard();
           }}
-          title={view.playbookId ? tr("Редактирование", "Edit playbook") : tr("Новый playbook", "New playbook")}
           playbookId={view.playbookId}
           onCompatibilityApplied={onCompatibilityApplied}
+          onImportYaml={() => fileInputRef.current?.click()}
+          onImportProject={() => setProjectImportOpen(true)}
         />
       ) : null}
 
@@ -195,7 +188,6 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           revisions={workspace.revisions}
           publishedRevisionId={workspace.publishedRevisionId}
           revisionsLoading={workspace.revisionsLoading}
-          bindingProfiles={workspace.bindings}
           capabilities={workspace.capabilities}
           workerReady={Boolean(ansible?.worker_ready)}
           onBack={() => setView({ mode: "edit", playbookId: view.playbookId })}
@@ -263,6 +255,13 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
         confirmLabel={tr("Удалить", "Delete")}
         cancelLabel={tr("Отмена", "Cancel")}
         onConfirm={() => void onDelete()}
+      />
+
+      <PlaybookBundleImportDialog
+        open={projectImportOpen}
+        onOpenChange={setProjectImportOpen}
+        lang={lang}
+        onOpenPlaybook={(playbookId) => void openEdit(playbookId)}
       />
     </div>
   );

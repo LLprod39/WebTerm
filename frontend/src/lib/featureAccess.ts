@@ -9,7 +9,7 @@ export const STUDIO_SECTION_FEATURES: StudioSectionFeature[] = [
   "studio_notifications",
 ];
 
-type UserLike = Pick<AuthUser, "features"> | null | undefined;
+type UserLike = Pick<AuthUser, "features" | "can_manage_ai_routing"> | null | undefined;
 
 export function hasFeatureAccess(user: UserLike, feature: FeatureFlag | string): boolean {
   if (!user) return false;
@@ -25,4 +25,8 @@ export function hasAnyFeatureAccess(user: UserLike, features: Array<FeatureFlag 
 
 export function canAccessStudio(user: UserLike): boolean {
   return hasFeatureAccess(user, "studio") || hasAnyFeatureAccess(user, STUDIO_SECTION_FEATURES);
+}
+
+export function canManageAiRouting(user: UserLike): boolean {
+  return Boolean(user?.can_manage_ai_routing);
 }

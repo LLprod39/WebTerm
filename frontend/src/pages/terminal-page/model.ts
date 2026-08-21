@@ -45,10 +45,10 @@ export function findServer(servers: FrontendServer[], id: number) {
 export function isTerminalReadOnlyMode(server: FrontendServer, user: AuthUser | null | undefined) {
   if (server.ai_read_only === true) return true;
   // Keep the disclosure fail-closed while the session is loading or when the
-  // auth endpoint is temporarily unavailable. Only a positively identified
-  // pilot operator may receive the unrestricted terminal UX.
+  // auth endpoint is temporarily unavailable. Release write access follows
+  // the centrally managed automation capability, not a named access profile.
   if (!user) return true;
-  return user.access_profile !== "pilot_operator" || !hasFeatureAccess(user, "automation");
+  return !hasFeatureAccess(user, "automation");
 }
 
 function getNextSessionNumber(tabs: Tab[], serverId: number) {

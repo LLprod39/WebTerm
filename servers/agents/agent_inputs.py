@@ -32,7 +32,8 @@ MATERIALS_RUNTIME_PROTOCOL = """## Operator materials — working rules
 4. `script` — ГОТОВЫЙ исполняемый артефакт оператора:
    - **Не пиши свой скрипт с нуля**, если есть подходящий material script.
    - Не копируй скрипт вручную через `echo`/`cat <<EOF` — используй `run_script_material`.
-   - Типичный цикл: (опционально `read_material` / `dry_run=true`) → `run_script_material`
+   - Без server запускай только распознанный shell/bash в отдельном immutable Docker runner с bridge egress; host network/backend host никогда не используются.
+   - С `server` материал исполняется через существующий SSH-контракт. Типичный цикл: inspect/dry_run → run → verify.
      → проверка результата (сервисы/логи/порты) → при сбое: fix точечно + re-run script
      или `update_material_task` как blocked с причиной.
 5. Цель оператора + materials = источник истины. Если script закрывает цель (например СБК),

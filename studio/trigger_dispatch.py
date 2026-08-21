@@ -9,6 +9,7 @@ from django.utils import timezone
 from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_pipeline_run_limit_error
 from app.server_alert_provider import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
+from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
 from core_ui.services.ai_execution_context import build_execution_context
 
 from .models import PipelineRun, PipelineTrigger
@@ -107,8 +108,8 @@ def create_pipeline_run(
         source_kind="pipeline",
         source_id=pipeline.pk,
         mode=execution_mode,
-        explicit_binding=explicit_provider_binding,
-        stored_binding=pipeline.provider_binding,
+        explicit_binding=operational_provider_binding(actor, explicit_provider_binding),
+        stored_binding=stored_operational_provider_binding(actor, pipeline.provider_binding),
         requested_provider="auto",
     )
 

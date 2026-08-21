@@ -7,6 +7,7 @@ import {
   Loader2,
   LockKeyhole,
   ShieldCheck,
+  Sparkles,
   UploadCloud,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,6 +43,7 @@ interface PlaybookBundleImportDialogProps {
   onOpenChange: (open: boolean) => void;
   lang: string;
   initialFile?: File | null;
+  initialMode?: SourceMode;
   onCommitted?: (result: CommitPlaybookBundleResponse) => void;
   onOpenPlaybook?: (playbookId: number) => void;
 }
@@ -53,6 +55,7 @@ export function PlaybookBundleImportDialog({
   onOpenChange,
   lang,
   initialFile,
+  initialMode = "gitlab",
   onCommitted,
   onOpenPlaybook,
 }: PlaybookBundleImportDialogProps) {
@@ -69,6 +72,13 @@ export function PlaybookBundleImportDialog({
   const archive = usePlaybookBundleImport({ onCommitted: handleCommitted });
   const gitlab = usePlaybookGitLabImport({ onCommitted: handleCommitted });
   const selectArchiveFile = archive.selectFile;
+  const active = mode === "gitlab" ? gitlab : archive;
+  const preview = active.preview;
+  const metadata = active.metadata;
+  const result = active.result;
+  const error = active.error;
+  const busy = active.busy;
+  const progress = active.progress;
 
   useEffect(() => {
     if (!open || !initialFile || initialFileRef.current === initialFile) return;
@@ -77,23 +87,20 @@ export function PlaybookBundleImportDialog({
     void selectArchiveFile(initialFile);
   }, [initialFile, open, selectArchiveFile]);
 
+  useEffect(() => {
+    if (open && !initialFile && !preview && !result) setMode(initialMode);
+  }, [initialFile, initialMode, open, preview, result]);
+
   const close = (nextOpen: boolean) => {
     if (!nextOpen) {
       archive.reset();
       gitlab.reset();
       initialFileRef.current = null;
       setDragging(false);
-      setMode("gitlab");
+      setMode(initialMode);
     }
     onOpenChange(nextOpen);
   };
-  const active = mode === "gitlab" ? gitlab : archive;
-  const preview = active.preview;
-  const metadata = active.metadata;
-  const result = active.result;
-  const error = active.error;
-  const busy = active.busy;
-  const progress = active.progress;
 
   const selectFile = (file: File) => {
     initialFileRef.current = file;
@@ -121,8 +128,8 @@ export function PlaybookBundleImportDialog({
           </div>
           <DialogDescription>
             {tr(
-              "Возьмём snapshot из GitLab или архива, проверим его и добавим в библиотеку.",
-              "Take a snapshot from GitLab or an archive, validate it, and add it to the library.",
+              "Импортируем snapshot, проверим безопасность, а затем проведём AI-анализ совместимости.",
+              "Import a snapshot, scan it for safety, then continue with AI compatibility analysis.",
             )}
           </DialogDescription>
           {progress > 0 ? <Progress value={progress} className="mt-3 h-1" /> : null}
@@ -191,6 +198,12 @@ export function PlaybookBundleImportDialog({
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <LockKeyhole className="h-3.5 w-3.5" />
                   {tr("Токен используется один раз и не сохраняется.", "The token is used once and never stored.")}
+                </p>
+                <p className="text-xs leading-5 text-muted-foreground">
+                  {tr(
+                    "Подключение работает через GitLab API. Обычный Git, GitHub и SSH-репозитории пока не поддерживаются.",
+                    "Connection uses the GitLab API. Generic Git, GitHub, and SSH repositories are not supported yet.",
+                  )}
                 </p>
               </div>
             </section>
@@ -261,9 +274,9 @@ export function PlaybookBundleImportDialog({
             <div role="status" className="flex items-start gap-3 rounded-sm border border-success/30 bg-success/8 px-4 py-4">
               <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
               <div>
-                <p className="text-sm font-semibold text-foreground">{tr("Проект добавлен", "Project added")}</p>
+                <p className="text-sm font-semibold text-foreground">{tr("Проект добавлен — следующий шаг AI-проверка", "Project added — AI analysis is next")}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {result.playbook.name} · revision #{result.revision.number} · {result.bundle.file_count} {tr("файлов", "files")}
+                  {tr("Откройте проект: WebTerm проверит совместимость и предложит минимальную адаптацию перед запуском.", "Open the project to check compatibility and prepare a minimal adaptation before running.")}
                 </p>
               </div>
             </div>
@@ -275,7 +288,7 @@ export function PlaybookBundleImportDialog({
             {result ? tr("Закрыть", "Close") : tr("Отмена", "Cancel")}
           </Button>
           {result ? (
-            <Button onClick={openImportedPlaybook}>{tr("Открыть", "Open")}</Button>
+            <Button className="gap-1.5" onClick={openImportedPlaybook}><Sparkles className="h-4 w-4" />{tr("Перейти к AI-проверке", "Continue to AI analysis")}</Button>
           ) : !preview && mode === "gitlab" ? (
             <Button className="gap-1.5" disabled={!gitlab.canPreview} onClick={() => void gitlab.previewProject()}>
               {gitlab.status === "previewing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}

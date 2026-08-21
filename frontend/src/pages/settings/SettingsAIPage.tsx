@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import { AiSettingsPanel } from "../settings-page/AiSettingsPanel";
 import { useAiSettingsForm } from "../settings-page/useAiSettingsForm";
+import { canManageAiRouting } from "@/lib/featureAccess";
 
 export default function SettingsAIPage() {
   const queryClient = useQueryClient();
@@ -22,18 +23,20 @@ export default function SettingsAIPage() {
     staleTime: 60_000,
     retry: false,
   });
-  const isAdmin = authData?.user?.is_staff ?? false;
+  const isAdmin = canManageAiRouting(authData?.user);
 
   const { data: settingsData, isLoading: settingsLoading, error: settingsError } = useQuery({
     queryKey: ["settings", "config"],
     queryFn: fetchSettings,
     staleTime: 30_000,
+    enabled: isAdmin,
   });
 
   const { data: modelsData } = useQuery({
     queryKey: ["settings", "models"],
     queryFn: fetchModels,
     staleTime: 30_000,
+    enabled: isAdmin,
   });
 
   const currentConfig = settingsData?.config;

@@ -58,6 +58,7 @@ export function CreateAgentDialog({
     toolsConfig,
     setToolsConfig,
     canConfigureMutatingTools,
+    canManageAiRouting,
     mutatingToolsAcknowledged,
     setMutatingToolsAcknowledged,
     mutatingToolsEnabled,
@@ -73,6 +74,9 @@ export function CreateAgentDialog({
     setProviderBinding,
     providerMode,
     selectedServers,
+    targetScope,
+    changeTargetScope,
+    serverRequirementReasons,
     schedule,
     setSchedule,
     scheduleConfig,
@@ -147,16 +151,16 @@ export function CreateAgentDialog({
           <div className="relative min-w-0 pr-10">
             <DialogTitle className="font-display text-xl font-bold tracking-tight sm:text-2xl">
               {isEditing
-                ? localize(lang, "Редактирование агента", "Edit agent")
-                : localize(lang, "Создание агента", "Create agent")}
+                ? localize(lang, "Настройка цифрового сотрудника", "Configure digital employee")
+                : localize(lang, "Новый цифровой сотрудник", "New digital employee")}
             </DialogTitle>
             <DialogDescription className="mt-1.5 max-w-2xl text-sm leading-6 text-muted-foreground">
               {isEditing
-                ? localize(lang, "Обновите цель, серверы или права — и сохраните.", "Update goal, servers, or access — then save.")
+                ? localize(lang, "Измените задачу, знания, системы, границы или способ запуска.", "Change the task, knowledge, systems, boundaries, or trigger.")
                 : localize(
                   lang,
-                  "По умолчанию: диагностика read-only, один сервер и сохранение без запуска.",
-                  "Default: read-only diagnostics, one server, and save without running.",
+                  "Простой мастер проведёт от задачи до результата. Безопасные значения уже выбраны; технические параметры находятся в Advanced.",
+                  "The guided setup goes from task to result. Safe defaults are selected; technical settings live under Advanced.",
                 )}
             </DialogDescription>
           </div>
@@ -199,6 +203,7 @@ export function CreateAgentDialog({
             providerBinding={providerBinding}
             setProviderBinding={setProviderBinding}
             providerMode={providerMode}
+            canManageAiRouting={canManageAiRouting}
             sudoPolicy={sudoPolicy}
             setSudoPolicy={setSudoPolicy}
             servers={visibleServers}
@@ -206,6 +211,9 @@ export function CreateAgentDialog({
             serverSearch={serverSearch}
             setServerSearch={setServerSearch}
             selectedServers={selectedServers}
+            targetScope={targetScope}
+            changeTargetScope={changeTargetScope}
+            serverRequirementReasons={serverRequirementReasons}
             toggleServer={toggleServer}
             selectAll={selectAll}
             hasAllServersSelected={hasAllServersSelected}

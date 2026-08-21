@@ -32,7 +32,7 @@ FEATURE_CHOICES = [
 
 # Features allowed by default for non-staff users (aligned with pilot_user).
 # Settings remain opt-in, and the admin dashboard stays staff-only.
-DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard", "chat", "ai_connections_personal"}
+DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard", "chat"}
 # Features that must be granted explicitly even for staff users.
 EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes",

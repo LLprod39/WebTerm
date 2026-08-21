@@ -388,6 +388,7 @@ def ai_analyze_server(request, server_id):
 
     full_prompt = "\n".join(prompt_parts)
     provider = LLMProvider()
+    from core_ui.ai_model_policy import stored_operational_provider_binding
     from core_ui.services.ai_execution_context import build_execution_context
 
     execution_context = build_execution_context(
@@ -396,7 +397,7 @@ def ai_analyze_server(request, server_id):
         purpose="opssummary",
         source_kind="server_monitoring_analysis",
         source_id=server.pk,
-        stored_binding=data.get("provider_binding"),
+        stored_binding=stored_operational_provider_binding(request.user, data.get("provider_binding")),
         idempotency_key=f"server-monitoring:{server.pk}:{getattr(last_check, 'pk', 'none')}",
     )
 

@@ -13,7 +13,6 @@ interface VariablesPolicyStepProps {
   extraVarsText: string;
   extraVarsError: ExtraVarsParseError;
   availableVariableNames: string[];
-  requiredVariableNames: string[];
   policy: RunPolicyOptions;
   onExtraVarsChange: (source: string) => void;
   onPolicyChange: (patch: Partial<RunPolicyOptions>) => void;
@@ -25,13 +24,11 @@ export function VariablesPolicyStep({
   extraVarsText,
   extraVarsError,
   availableVariableNames,
-  requiredVariableNames,
   policy,
   onExtraVarsChange,
   onPolicyChange,
 }: VariablesPolicyStepProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
-  const missingNames = requiredVariableNames.filter((name) => !availableVariableNames.includes(name));
   const jsonError = extraVarsError === "invalid_json"
     ? tr("Некорректный JSON: проверьте кавычки, запятые и скобки.", "Invalid JSON: check quotes, commas, and braces.")
     : extraVarsError === "object_required"
@@ -44,7 +41,7 @@ export function VariablesPolicyStep({
         <div className="flex items-center gap-2">
           <Braces className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">
-            {tr("Typed runtime variables", "Typed runtime variables")}
+            {tr("Raw runtime variables", "Raw runtime variables")}
           </h3>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -97,11 +94,6 @@ export function VariablesPolicyStep({
           )}
         </div>
 
-        {missingNames.length ? (
-          <div className="mt-3 rounded-sm border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-            {tr("Пока не заданы", "Not provided yet")}: {missingNames.join(", ")}
-          </div>
-        ) : null}
       </section>
 
       <section className="space-y-4 rounded-sm border border-border bg-card p-4 shadow-elev-1">
@@ -133,18 +125,6 @@ export function VariablesPolicyStep({
           <span>
             <span className="block text-sm font-medium text-foreground">become (sudo)</span>
             <span className="mt-1 block text-xs text-muted-foreground">ansible-playbook --become</span>
-          </span>
-        </label>
-
-        <label className="flex cursor-pointer items-start gap-3 rounded-sm border border-border bg-surface-0 p-3">
-          <Checkbox
-            checked={policy.dryRun}
-            onCheckedChange={(checked) => onPolicyChange({ dryRun: checked === true })}
-            className="mt-1"
-          />
-          <span>
-            <span className="block text-sm font-medium text-foreground">Check / dry-run</span>
-            <span className="mt-1 block text-xs text-muted-foreground">--check --diff</span>
           </span>
         </label>
 

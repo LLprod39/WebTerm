@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from django.test import override_settings
 
 from servers.agents.agent_inputs import (
     build_agent_materials_prompt,
@@ -46,7 +47,9 @@ def test_empty_tools_config_defaults_to_minimal_read_only_allowlist():
 
     assert set(enabled) == set(DEFAULT_READ_ONLY_AGENT_TOOLS)
     assert "ssh_execute" not in enabled
-    assert "run_script_material" not in enabled
+    assert "run_script_material" in enabled
+    assert "read_material" in enabled
+    assert "update_material_task" in enabled
     assert "send_ctrl_c" not in enabled
 
 
@@ -157,6 +160,19 @@ async def test_run_script_material_is_blocked_by_server_read_only_policy():
     assert result.success is False
     assert "read-only" in result.result
     assert called is False
+
+
+@pytest.mark.asyncio
+@override_settings(AGENT_MATERIAL_RUNNER_ENABLED=False)
+async def test_run_script_material_without_server_fails_closed_off_backend_host():
+    session = AgentSessionManager(allowed_servers=[], available_materials=SAMPLE_MATERIALS)
+    session.execution_approval_granted = True
+
+    result = await tool_run_script_material(session, material="m1")
+
+    assert result.success is False
+    assert result.data == {"code": "isolated_material_runner_unavailable", "runtime": "blocked"}
+    assert "backend host" in result.result
 
 
 @pytest.mark.asyncio

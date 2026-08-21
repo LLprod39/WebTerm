@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Layers, Server, Shield, Tag } from "lucide-react";
+import { BellRing, CalendarDays, Server, Shield, Tag, Target } from "lucide-react";
 import {
   createAgent,
   fetchAgentTemplates,
@@ -17,7 +17,7 @@ import {
   type StudioSkill,
 } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
-import { hasFeatureAccess } from "@/lib/featureAccess";
+import { canManageAiRouting, hasFeatureAccess } from "@/lib/featureAccess";
 import {
   AGENT_WIZARD_STEPS,
   type AgentSudoPolicy,
@@ -25,15 +25,18 @@ import {
   type AgentWizardStep,
   buildAgentWizardReadiness,
   buildDefaultToolsConfig,
+  buildExternalToolsConfig,
   enforceReadOnlyToolsConfig,
   FULL_AGENT_TOOL_OPTIONS,
   READ_ONLY_AGENT_TOOL_KEYS,
+  SERVER_DEPENDENT_AGENT_TOOL_KEYS,
+  type AgentTargetScope,
   defaultScheduleConfig,
   deriveScheduleMinutes,
   finalizeScheduleConfig,
   firstFailedCheckForStep,
+  formatScheduleConfigLabel,
   HIDDEN_AGENT_TEMPLATE_TYPES,
-  agentModeLabel,
   normalizeArtifactDraft,
   prepareArtifactForSave,
   readinessPercent,
@@ -57,8 +60,8 @@ export function useCreateAgentDialogState({
 }: UseCreateAgentDialogStateArgs) {
   const { t, lang } = useI18n();
   const isEditing = Boolean(initialAgent);
-  const [step, setStep] = useState<AgentWizardStep>("template");
-  // Pilot default: full agent (autonomous goal + tools). Mini stays one click away.
+  const [step, setStep] = useState<AgentWizardStep>("basics");
+  // Release default: full agent (autonomous goal + tools). Mini stays one click away.
   // Custom ("manual") scenario is pre-selected so Next works immediately.
   const [mode, setMode] = useState<"mini" | "full" | "multi">("full");
   const [selectedType, setSelectedType] = useState("custom");
@@ -70,13 +73,14 @@ export function useCreateAgentDialogState({
   // Pilot-safe quick diagnostic profile. Operators can deliberately raise the
   // budget later, but omission must not create a long-running agent.
   const [maxIter, setMaxIter] = useState(15);
-  const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildDefaultToolsConfig());
+  const [toolsConfig, setToolsConfig] = useState<Record<string, boolean>>(() => buildExternalToolsConfig());
   const [sudoPolicy, setSudoPolicy] = useState<AgentSudoPolicy>("disabled");
   const [stopConditionsText, setStopConditionsText] = useState("");
   const [sessionTimeoutSeconds, setSessionTimeoutSeconds] = useState(600);
   const [maxConnections, setMaxConnections] = useState(1);
   const [providerBinding, setProviderBinding] = useState<ProviderBinding | null>(null);
   const [selectedServers, setSelectedServers] = useState<number[]>([]);
+  const [targetScope, setTargetScope] = useState<AgentTargetScope>("external");
   const [schedule, setSchedule] = useState(0);
   const [scheduleConfig, setScheduleConfig] = useState<AgentScheduleConfig>(() => defaultScheduleConfig());
   const [selectedSkillSlugs, setSelectedSkillSlugs] = useState<string[]>([]);
@@ -97,10 +101,9 @@ export function useCreateAgentDialogState({
     staleTime: 60_000,
     retry: false,
   });
-  // Administrative access alone is not execution authority in the pilot.
-  // Mutating tools are reserved for the explicit operator profile on disposable hosts.
-  const canConfigureMutatingTools = authData?.user?.access_profile === "pilot_operator"
-    && hasFeatureAccess(authData.user, "automation");
+  // Mutating tools follow the centrally managed automation capability.
+  const canConfigureMutatingTools = hasFeatureAccess(authData?.user, "automation");
+  const canManageAiRoutingValue = canManageAiRouting(authData?.user);
   const { data: tplData } = useQuery({ queryKey: ["agents", "templates"], queryFn: fetchAgentTemplates, enabled: open });
   const { data: bootstrapData } = useQuery({ queryKey: ["frontend", "bootstrap"], queryFn: fetchFrontendBootstrap, staleTime: 30_000 });
   const { data: availableSkillsData } = useQuery<unknown>({ queryKey: ["studio", "skills", "agent-picker"], queryFn: studioSkills.list, enabled: open });
@@ -122,6 +125,19 @@ export function useCreateAgentDialogState({
   const activeArtifact = activeArtifactIndex !== null ? inputArtifacts[activeArtifactIndex] : null;
   const currentStepIndex = Math.max(0, AGENT_WIZARD_STEPS.findIndex((item) => item.key === step));
   const commandCount = commands.split("\n").map((item) => item.trim()).filter(Boolean).length;
+  const selectedSkills = availableSkills.filter((skill) => selectedSkillSlugs.includes(skill.slug));
+  const hasServerDependentTools = FULL_AGENT_TOOL_OPTIONS.some(
+    (tool) => SERVER_DEPENDENT_AGENT_TOOL_KEYS.has(tool.key) && Boolean(toolsConfig[tool.key]),
+  );
+  const hasServerDependentSkills = selectedSkills.some((skill) =>
+    (skill.recommended_tools || []).some((tool) => SERVER_DEPENDENT_AGENT_TOOL_KEYS.has(tool)),
+  );
+  const serverRequirementReasons = [
+    ...(mode === "mini" || commandCount ? [localize(lang, "Команды выполняются через SSH", "Commands run through SSH")] : []),
+    ...(sudoPolicy !== "disabled" ? [localize(lang, "Sudo требует выбранный сервер", "Sudo requires a selected server")] : []),
+    ...(hasServerDependentTools ? [localize(lang, "Выбраны SSH-инструменты", "SSH tools are enabled")] : []),
+    ...(hasServerDependentSkills ? [localize(lang, "Выбран skill с SSH-доступом", "A selected skill needs SSH access")] : []),
+  ];
   const readinessChecks = useMemo(() => buildAgentWizardReadiness({
     selectedType,
     mode,
@@ -129,6 +145,9 @@ export function useCreateAgentDialogState({
     commands,
     goal,
     selectedServers,
+    targetScope,
+    hasServerDependentTools,
+    hasServerDependentSkills,
     sudoPolicy,
     sudoRiskAcknowledged,
     scheduleConfig,
@@ -143,6 +162,9 @@ export function useCreateAgentDialogState({
     schedule,
     scheduleConfig,
     selectedServers,
+    targetScope,
+    hasServerDependentTools,
+    hasServerDependentSkills,
     selectedType,
     sudoPolicy,
     sudoRiskAcknowledged,
@@ -158,6 +180,9 @@ export function useCreateAgentDialogState({
     commands,
     goal,
     selectedServers,
+    targetScope,
+    hasServerDependentTools,
+    hasServerDependentSkills,
     sudoPolicy,
     sudoRiskAcknowledged,
     scheduleConfig,
@@ -172,6 +197,9 @@ export function useCreateAgentDialogState({
     schedule,
     scheduleConfig,
     selectedServers,
+    targetScope,
+    hasServerDependentTools,
+    hasServerDependentSkills,
     selectedType,
     sudoPolicy,
     sudoRiskAcknowledged,
@@ -197,13 +225,14 @@ export function useCreateAgentDialogState({
     setToolsExpanded(false);
     setSkillsExpanded(false);
     setMaxIter(15);
-    setToolsConfig(buildDefaultToolsConfig());
+    setToolsConfig(buildExternalToolsConfig());
     setSudoPolicy("disabled");
     setStopConditionsText("");
     setSessionTimeoutSeconds(600);
     setMaxConnections(1);
     setProviderBinding(null);
     setSelectedServers([]);
+    setTargetScope("external");
     setAiPrompt("");
     setCommands("");
     setRunAfterSave(false);
@@ -213,7 +242,7 @@ export function useCreateAgentDialogState({
     setName("");
     setGoal("");
     setSystemPrompt("");
-    setStep("template");
+    setStep("basics");
   };
   useEffect(() => {
     if (!open) return;
@@ -237,6 +266,7 @@ export function useCreateAgentDialogState({
     setMaxConnections(initialAgent.max_connections || 5);
     setProviderBinding(initialAgent.provider_binding?.target_id ? initialAgent.provider_binding : null);
     setSelectedServers(initialAgent.server_ids || []);
+    setTargetScope(initialAgent.server_ids?.length ? "servers" : "external");
     setSchedule(initialAgent.schedule_minutes || 0);
     setScheduleConfig(initialAgent.schedule_config || scheduleConfigFromMinutes(initialAgent.schedule_minutes || 0));
     setSelectedSkillSlugs(initialAgent.skill_slugs || []);
@@ -288,7 +318,6 @@ export function useCreateAgentDialogState({
         schedule_config: normalizedSchedule,
         goal,
         system_prompt: systemPrompt,
-        max_iterations: maxIter,
         allow_multi_server: selectedServers.length > 1,
         tools_config: mode === "mini"
           ? {}
@@ -300,9 +329,7 @@ export function useCreateAgentDialogState({
         skill_slugs: selectedSkillSlugs,
         input_artifacts: inputArtifacts.map(prepareArtifactForSave).filter((item) => item.name && (item.content || item.tasks?.length)),
         report_delivery: { telegram: { enabled: telegramEnabled, chat_id: telegramChatId.trim(), format: "brief", include_link: true } },
-        session_timeout_seconds: sessionTimeoutSeconds,
-        max_connections: maxConnections,
-        provider_binding: providerBinding || {},
+        ...(canManageAiRoutingValue ? { provider_binding: providerBinding || {} } : {}),
       };
       if (initialAgent) {
         await updateAgent(initialAgent.id, payload);
@@ -332,6 +359,16 @@ export function useCreateAgentDialogState({
     // the explicitly selected multi-agent mode may widen the server scope.
     return mode === "multi" ? [...prev, id] : [id];
   });
+  const changeTargetScope = (scope: AgentTargetScope) => {
+    setTargetScope(scope);
+    if (scope === "external") {
+      setSelectedServers([]);
+      setMode("full");
+      setCommands("");
+      setSudoPolicy("disabled");
+      setToolsConfig(buildExternalToolsConfig());
+    }
+  };
   const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
   const selectAll = () => setSelectedServers(
     hasAllServersSelected ? [] : mode === "multi" ? allServerIds : allServerIds.slice(0, 1),
@@ -393,9 +430,11 @@ export function useCreateAgentDialogState({
   };
   const summaryRows = [
     { icon: Tag, label: localize(lang, "Название", "Name"), value: name || localize(lang, "Новый агент", "New agent") },
-    { icon: Layers, label: localize(lang, "Тип", "Type"), value: agentModeLabel(mode, lang) },
-    { icon: Server, label: localize(lang, "Серверы", "Servers"), value: selectedServers.length ? localize(lang, `${selectedServers.length} выбрано`, `${selectedServers.length} selected`) : localize(lang, "Не выбраны", "Not selected") },
-    { icon: Shield, label: localize(lang, "Права запуска", "Run access"), value: localize(lang, sudoAgentOption(sudoPolicy).labelRu, sudoAgentOption(sudoPolicy).labelEn) },
+    { icon: Target, label: localize(lang, "Задача", "Task"), value: goal.trim() || (commandCount ? localize(lang, `${commandCount} команд`, `${commandCount} commands`) : localize(lang, "Не указана", "Not provided")) },
+    { icon: Server, label: localize(lang, "Системы", "Systems"), value: selectedServers.length ? localize(lang, `${selectedServers.length} выбрано`, `${selectedServers.length} selected`) : localize(lang, "Без серверов · внешние системы", "No servers · external systems") },
+    { icon: Shield, label: localize(lang, "Автономность", "Autonomy"), value: localize(lang, sudoAgentOption(sudoPolicy).labelRu, sudoAgentOption(sudoPolicy).labelEn) },
+    { icon: CalendarDays, label: localize(lang, "Запуск", "Trigger"), value: formatScheduleConfigLabel(scheduleConfig, schedule, lang) },
+    { icon: BellRing, label: localize(lang, "Результат", "Result"), value: telegramEnabled ? localize(lang, "Отчёт + Telegram", "Report + Telegram") : localize(lang, "Отчёт в WebTrerm", "Report in WebTrerm") },
   ];
   const enabledToolCount = Object.values(toolsConfig).filter(Boolean).length;
   const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);
@@ -425,6 +464,7 @@ export function useCreateAgentDialogState({
     toolsConfig,
     setToolsConfig,
     canConfigureMutatingTools,
+    canManageAiRouting: canManageAiRoutingValue,
     mutatingToolsAcknowledged,
     setMutatingToolsAcknowledged,
     mutatingToolsEnabled,
@@ -440,6 +480,12 @@ export function useCreateAgentDialogState({
     setProviderBinding,
     providerMode: schedule > 0 ? "unattended" as const : "interactive" as const,
     selectedServers,
+    targetScope,
+    hasServerDependentTools,
+    hasServerDependentSkills,
+    targetScope,
+    changeTargetScope,
+    serverRequirementReasons,
     schedule,
     setSchedule,
     scheduleConfig,

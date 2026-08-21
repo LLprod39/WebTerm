@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, KeyRound, Link2, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import {
@@ -80,19 +80,35 @@ export default function SettingsAIConnectionsPage() {
 
   const authQuery = useQuery({ queryKey: ["auth", "session"], queryFn: fetchAuthSession, staleTime: 60_000, retry: false });
   const canAdmin = hasFeatureAccess(authQuery.data?.user, "ai_connections_admin");
-  const connectionsQuery = useQuery({ queryKey: aiProviderQueryKeys.connections, queryFn: fetchAiProviderConnections, retry: false });
+  const runtimeEnabled = authQuery.data?.user?.ai_cli_runtime_enabled === true;
+  const connectionsQuery = useQuery({
+    queryKey: aiProviderQueryKeys.connections,
+    queryFn: fetchAiProviderConnections,
+    enabled: runtimeEnabled,
+    retry: false,
+  });
   const poolsQuery = useQuery({
     queryKey: aiProviderQueryKeys.pools,
     queryFn: fetchAiProviderPools,
-    enabled: canAdmin,
+    enabled: runtimeEnabled && canAdmin,
     retry: false,
   });
-  const preferencesQuery = useQuery({ queryKey: aiProviderQueryKeys.preferences, queryFn: fetchAiProviderPreferences, retry: false });
-  const catalogQuery = useQuery({ queryKey: aiProviderQueryKeys.catalog, queryFn: fetchAiProviderCatalog, retry: false });
+  const preferencesQuery = useQuery({
+    queryKey: aiProviderQueryKeys.preferences,
+    queryFn: fetchAiProviderPreferences,
+    enabled: runtimeEnabled,
+    retry: false,
+  });
+  const catalogQuery = useQuery({
+    queryKey: aiProviderQueryKeys.catalog,
+    queryFn: fetchAiProviderCatalog,
+    enabled: runtimeEnabled,
+    retry: false,
+  });
   const usersQuery = useQuery({
     queryKey: ["access", "users"],
     queryFn: fetchAccessUsers,
-    enabled: canAdmin,
+    enabled: runtimeEnabled && canAdmin,
     retry: false,
   });
 
@@ -214,6 +230,38 @@ export default function SettingsAIConnectionsPage() {
   const workspaceConnections = connections.filter((item) => item.scope === "workspace");
   const loading = connectionsQuery.isLoading || (canAdmin && poolsQuery.isLoading) || preferencesQuery.isLoading || catalogQuery.isLoading;
   const loadError = connectionsQuery.error || (canAdmin ? poolsQuery.error : null) || preferencesQuery.error || catalogQuery.error;
+
+  if (!authQuery.isLoading && !runtimeEnabled) {
+    return (
+      <div className="space-y-5 pb-10">
+        <SettingsPageHeader
+          icon={KeyRound}
+          title={text("CLI-подписки", "CLI subscriptions")}
+          description={text(
+            "Codex CLI и Grok CLI работают через изолированные подключения без скрытого fallback.",
+            "Codex CLI and Grok CLI use isolated connections with no hidden fallback.",
+          )}
+          actions={<Badge variant="secondary">{text("Runtime не настроен", "Runtime not configured")}</Badge>}
+        />
+        <section className="rounded-sm border border-warning/40 bg-warning/5 p-5" role="status">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" aria-hidden />
+            <div>
+              <h2 className="font-semibold text-foreground">
+                {text("Раздел доступен, но CLI-runtime ещё не запущен", "The page is available, but the CLI runtime is not running")}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+                {text(
+                  "Для безопасного входа в Codex CLI или Grok CLI платформе нужен отдельный изолированный процесс с закреплённой версией. Сейчас он выключен, поэтому создание подключений и вход временно недоступны. Остальные функции WebTrerm продолжают работать.",
+                  "Secure Codex CLI or Grok CLI sign-in requires an isolated runtime with a pinned version. It is currently disabled, so creating connections and signing in are temporarily unavailable. Other WebTrerm features continue to work.",
+                )}
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-10">

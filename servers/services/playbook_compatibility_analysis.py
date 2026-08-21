@@ -55,10 +55,8 @@ _PLAY_CONTROL_KEYS = (
 )
 _PLAY_CONTEXT_KEYS = (
     "collections",
-    "environment",
     "module_defaults",
     "no_log",
-    "vars",
     "vars_files",
 )
 _HOST_TOKEN_RE = re.compile(r"[A-Za-z0-9_.-]+")

@@ -41,6 +41,7 @@ from servers.operator.tools_monitoring import (
     list_certificates,
     server_forecasts,
 )
+from servers.operator.tools_playbooks import resolve_playbook
 
 __all__ = [
     "extract_server_hint",
@@ -58,6 +59,7 @@ __all__ = [
     "propose_plan",
     "register_operator_tools",
     "resolve_server",
+    "resolve_playbook",
     "save_memory_lesson",
     "server_forecasts",
     "server_info",
@@ -92,6 +94,25 @@ def register_operator_tools() -> None:
                 },
             },
             handler=resolve_server,
+        ),
+        AssistantActionSpec(
+            action_type="operator.resolve_playbook",
+            label="Resolve playbook",
+            description=(
+                "Resolve and read one accessible Ansible playbook/runbook by playbook_id or name. "
+                "Use this when the user asks what a selected or named playbook does. "
+                "Never ask the user to copy an ID or YAML before calling this tool."
+            ),
+            required_feature="automation",
+            risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "playbook_id": {"type": "integer", "description": "Selected playbook id, when available"},
+                    "q": {"type": "string", "description": "Exact or partial playbook name when id is unknown"},
+                },
+            },
+            handler=resolve_playbook,
         ),
         AssistantActionSpec(
             action_type="operator.list_servers",

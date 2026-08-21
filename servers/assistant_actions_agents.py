@@ -236,6 +236,9 @@ def create_agent(ctx: AssistantActionContext) -> dict:
     )
     if denied_server_ids or not accessible:
         raise AssistantActionError("Missing server capability: execute_command", status=403)
+    project_ids = {server.project_id for server in accessible}
+    if len(project_ids) > 1:
+        raise AssistantActionError("Selected servers cannot be combined in one agent", status=400)
 
     policy_violations = pilot_agent_policy_violations(
         user=ctx.user,
@@ -257,6 +260,7 @@ def create_agent(ctx: AssistantActionContext) -> dict:
 
     agent = ServerAgent.objects.create(
         user=ctx.user,
+        project_id=next(iter(project_ids), None),
         name=name,
         mode=mode,
         agent_type=agent_type,

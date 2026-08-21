@@ -1,8 +1,6 @@
-import { useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
-  ChevronDown,
   Clock3,
   FilePlus2,
   GitBranch,
@@ -11,32 +9,21 @@ import {
   RefreshCcw,
   Search,
   Upload,
-  Wand2,
 } from "lucide-react";
 
-import { isSupportedPlaybookBundleFile } from "@/api/playbook-bundles";
-import type { AnsibleStatus, PlaybookCategory, PlaybookRun, PlaybookSummary, PlaybookTemplate } from "@/api/playbooks";
+import type { AnsibleStatus, PlaybookCategory, PlaybookRun, PlaybookSummary } from "@/api/playbooks";
 import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { EmptyState, QueryStateBlock } from "@/components/ui/page-shell";
 import { cn, relativeTime } from "@/lib/utils";
 import { PlaybookCard } from "../PlaybookCard";
 import { CATEGORIES, CATEGORY_META, RUN_STATUS_META } from "../constants";
-import { PlaybookBundleImportDialog } from "./PlaybookBundleImportDialog";
 
 export interface PlaybooksCatalogPanelProps {
   lang: string;
   tr: (ru: string, en: string) => string;
   playbooks: PlaybookSummary[];
-  templates: PlaybookTemplate[];
   recentRuns: PlaybookRun[];
   playbooksLoading: boolean;
   playbooksError: string;
@@ -50,11 +37,8 @@ export interface PlaybooksCatalogPanelProps {
   ansibleAvailable: boolean;
   onRefreshRuns: () => void;
   onRetryPlaybooks: () => void;
-  onImportClick: () => void;
-  onImportFile: (file: File) => void;
   onOpenNew: () => void;
-  onOpenGuided: () => void;
-  onInstallTemplate: (template: PlaybookTemplate) => void;
+  onOpenImport: () => void;
   onOpenEdit: (id: number) => void;
   onStartRun: (id: number) => void;
   onDuplicate: (id: number) => void;
@@ -64,40 +48,13 @@ export interface PlaybooksCatalogPanelProps {
 
 export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
   const {
-    lang, tr, playbooks, templates, recentRuns, playbooksLoading, playbooksError,
+    lang, tr, playbooks, recentRuns, playbooksLoading, playbooksError,
     search, setSearch, categoryFilter, setCategoryFilter, showHistory, setShowHistory,
-    ansible, ansibleAvailable, onRefreshRuns, onRetryPlaybooks, onImportClick, onImportFile,
-    onOpenNew, onOpenGuided, onInstallTemplate, onOpenEdit, onStartRun, onDuplicate, onDelete, onOpenRun,
+    ansible, ansibleAvailable, onRefreshRuns, onRetryPlaybooks,
+    onOpenNew, onOpenImport, onOpenEdit, onStartRun, onDuplicate, onDelete, onOpenRun,
   } = props;
-  const [projectImportOpen, setProjectImportOpen] = useState(false);
-  const [projectImportFile, setProjectImportFile] = useState<File | null>(null);
-
-  const openProjectImport = () => {
-    setProjectImportFile(null);
-    setProjectImportOpen(true);
-  };
-  const importDroppedFile = (file: File) => {
-    if (isSupportedPlaybookBundleFile(file)) {
-      setProjectImportFile(file);
-      setProjectImportOpen(true);
-    } else {
-      onImportFile(file);
-    }
-  };
 
   return (
-    <>
-      <PlaybookBundleImportDialog
-        open={projectImportOpen}
-        onOpenChange={(open) => {
-          setProjectImportOpen(open);
-          if (!open) setProjectImportFile(null);
-        }}
-        lang={lang}
-        initialFile={projectImportFile}
-        onOpenPlaybook={onOpenEdit}
-      />
-
       <section className="mx-auto w-full max-w-[1320px] space-y-5">
         <header className="flex flex-col gap-5 border-b border-border/70 pb-5 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-start gap-3.5">
@@ -114,36 +71,14 @@ export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-9 gap-1.5">
-                  <FilePlus2 className="h-4 w-4" />
-                  {tr("Создать", "Create")}
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuItem onSelect={onOpenNew}>
-                  <FilePlus2 className="h-4 w-4" />{tr("Пустой playbook", "Blank playbook")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={onOpenGuided}>
-                  <Wand2 className="h-4 w-4" />{tr("Создать по шагам", "Guided setup")}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={onImportClick}>
-                  <Upload className="h-4 w-4" />{tr("Импортировать YAML", "Import YAML")}
-                </DropdownMenuItem>
-                {templates.length ? <DropdownMenuSeparator /> : null}
-                {templates.slice(0, 5).map((template) => (
-                  <DropdownMenuItem key={template.slug} onSelect={() => onInstallTemplate(template)}>
-                    <BookOpen className="h-4 w-4" />{template.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button size="sm" className="h-9 gap-1.5" onClick={openProjectImport}>
-              <GitBranch className="h-4 w-4" />
-              {tr("Подключить проект", "Connect project")}
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" className="h-9 gap-1.5" onClick={onOpenNew}>
+              <FilePlus2 className="h-4 w-4" />
+              {tr("Создать Ansible", "Create Ansible")}
+            </Button>
+            <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={onOpenImport}>
+              <Upload className="h-4 w-4" />
+              {tr("Импортировать", "Import")}
             </Button>
           </div>
         </header>
@@ -222,14 +157,7 @@ export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
         ) : null}
 
         {!showHistory ? (
-          <div
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => {
-              event.preventDefault();
-              const file = event.dataTransfer.files[0];
-              if (file) importDroppedFile(file);
-            }}
-          >
+          <div>
             <QueryStateBlock
               loading={playbooksLoading}
               error={playbooksError || undefined}
@@ -244,11 +172,11 @@ export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
                   title={search.trim() || categoryFilter !== "all" ? tr("Ничего не найдено", "Nothing found") : tr("Подключите первый Ansible-проект", "Connect your first Ansible project")}
                   description={search.trim() || categoryFilter !== "all"
                     ? tr("Измените поиск или категорию.", "Change the search or category.")
-                    : tr("Добавьте GitLab-проект, архив или отдельный YAML.", "Add a GitLab project, archive, or individual YAML file.")}
+                    : tr("Создайте Ansible и напишите или вставьте YAML. Импорт будет доступен внутри редактора.", "Create Ansible and write or paste YAML. Import is available inside the editor.")}
                   actions={search.trim() || categoryFilter !== "all" ? (
                     <Button size="sm" variant="outline" onClick={() => { setSearch(""); setCategoryFilter("all"); }}>{tr("Сбросить", "Reset")}</Button>
                   ) : (
-                    <Button size="sm" onClick={openProjectImport}><GitBranch className="h-4 w-4" />{tr("Подключить проект", "Connect project")}</Button>
+                    <Button size="sm" onClick={onOpenNew}><FilePlus2 className="h-4 w-4" />{tr("Создать Ansible", "Create Ansible")}</Button>
                   )}
                 />
               ) : (
@@ -273,7 +201,6 @@ export function PlaybooksCatalogPanel(props: PlaybooksCatalogPanelProps) {
           <RecentRuns lang={lang} tr={tr} runs={recentRuns} onRefresh={onRefreshRuns} onOpen={onOpenRun} />
         )}
       </section>
-    </>
   );
 }
 

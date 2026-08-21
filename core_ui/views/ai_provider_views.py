@@ -16,6 +16,7 @@ from django.views.decorators.http import require_http_methods
 
 from app.ai_runtime import ExecutionMode, ProviderBinding, ProviderTarget, canonicalize_target_id
 from core_ui.activity import log_user_activity
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.context_processors import user_can_feature
 from core_ui.models.ai_providers import (
     AIConnectionAuthFlow,
@@ -87,6 +88,8 @@ def _strict_int(value: Any, *, field: str, minimum: int, maximum: int | None = N
 def _provider_surface_guard(request, *, admin: bool = False) -> JsonResponse | None:
     if os.getenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "").strip().lower() not in {"1", "true", "yes"}:
         return _error("Subscription CLI providers are disabled", 404, code="feature_disabled")
+    if not user_can_manage_ai_routing(request.user):
+        return _error("AI connection access is reserved for platform settings administrators", 403, code="permission_denied")
     feature = "ai_connections_admin" if admin else "ai_connections_personal"
     if not user_can_feature(request.user, feature, request=request):
         return _error("AI connection access is not granted", 403, code="permission_denied")

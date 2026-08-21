@@ -12,8 +12,8 @@ from core_ui.context_processors import user_can_feature
 from servers.agents.agent_tools import DEFAULT_READ_ONLY_AGENT_TOOLS
 
 PILOT_AGENT_ALLOWED_TOOLS = frozenset(
-    {
-        *DEFAULT_READ_ONLY_AGENT_TOOLS,
+    (set(DEFAULT_READ_ONLY_AGENT_TOOLS) - {"run_script_material"})
+    | {
         "ssh_execute",
         "open_connection",
         "close_connection",

@@ -23,6 +23,8 @@ def ingest_memory_event_task(
     importance_hint: float,
     actor_user_id: int | None = None,
     force_compact: bool = False,
+    event_metadata: dict[str, Any] | None = None,
+    idempotency_key_override: str = "",
 ):
     """
     Asynchronous Celery task for ingesting memory events from logs, health checks, etc.
@@ -30,7 +32,7 @@ def ingest_memory_event_task(
     """
     try:
         store = DjangoServerMemoryStore()
-        store._ingest_event_sync(
+        return store._ingest_event_sync(
             server_id,
             source_kind=source_kind,
             actor_kind=actor_kind,
@@ -42,9 +44,14 @@ def ingest_memory_event_task(
             importance_hint=importance_hint,
             actor_user_id=actor_user_id,
             force_compact=force_compact,
+            event_metadata=event_metadata,
+            idempotency_key_override=idempotency_key_override,
         )
-    except Exception as e:
-        logger.error(f"Failed to ingest memory event in Celery background task: {e}")
+    except Exception:
+        # Do not turn failed ingestion into a successful Celery result.  The
+        # traceback and failed task state are required for retries/operations.
+        logger.exception("Failed to ingest memory event in Celery background task")
+        raise
 
 
 @shared_task(name="servers.tasks.run_dream_cycle_task")

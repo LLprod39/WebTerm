@@ -25,7 +25,7 @@ def decide_server_mutation(user: Any, server: Any, *, request: Any = None) -> Se
         return ServerMutationDecision(
             allowed=False,
             code="automation_required",
-            message="Server mutations require pilot operator automation access.",
+            message="Server mutations require automation access.",
         )
     if bool(getattr(server, "ai_read_only", True)):
         return ServerMutationDecision(

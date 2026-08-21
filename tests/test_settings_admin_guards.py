@@ -13,7 +13,7 @@ def _json(payload: dict) -> str:
 
 
 @pytest.mark.django_db
-def test_non_staff_with_settings_cannot_refresh_provider_models():
+def test_explicit_platform_settings_capability_can_refresh_provider_models(monkeypatch):
     user = User.objects.create_user(username="settings-model-refresh-user", password="x")
     UserAppPermission.objects.update_or_create(
         user=user,
@@ -23,14 +23,19 @@ def test_non_staff_with_settings_cannot_refresh_provider_models():
     client = Client()
     client.force_login(user)
 
+    async def fake_fetch(self):
+        return ["llama3.2:latest"]
+
+    monkeypatch.setattr("app.core.model_config.ModelManager.fetch_available_ollama_models", fake_fetch, raising=False)
+
     refresh = client.post(
         "/api/models/refresh/",
         data=_json({"provider": "ollama"}),
         content_type="application/json",
     )
 
-    assert refresh.status_code == 403
-    assert refresh.json()["error"] == "Only admins can refresh provider models"
+    assert refresh.status_code == 200
+    assert refresh.json()["models"] == ["llama3.2:latest"]
 
 
 @pytest.mark.django_db

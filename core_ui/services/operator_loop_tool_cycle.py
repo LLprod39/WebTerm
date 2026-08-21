@@ -13,6 +13,7 @@ from core_ui.services.operator_loop_helpers import (
     _create_pending_action,
     _emit,
     _enrich_agent_create_arguments,
+    _enrich_playbook_resolve_arguments,
     _save_turn,
     _set_assistant_metadata,
 )
@@ -77,6 +78,8 @@ async def process_tool_calls(
         # Inject pinned / @-context servers into agent.create when model forgets server_ids
         if action_type in {"agent.create", "agent_create"}:
             arguments = _enrich_agent_create_arguments(session, user, arguments, user_message)
+        if action_type in {"operator.resolve_playbook", "resolve_playbook"}:
+            arguments = _enrich_playbook_resolve_arguments(session, arguments)
         # Memory promotion always needs the current chat id
         if action_type in {
             "operator.memory.promote_chat",

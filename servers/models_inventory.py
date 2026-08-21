@@ -97,7 +97,7 @@ class Server(models.Model):
     behind_firewall = models.BooleanField(default=True, help_text="Сервер за корпоративным файрволлом")
 
     ai_read_only = models.BooleanField(
-        default=True,
+        default=False,
         help_text="AI-агент может только читать состояние сервера, но не выполнять изменяющие команды.",
     )
 

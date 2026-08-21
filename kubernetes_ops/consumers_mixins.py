@@ -5,6 +5,7 @@ import urllib.parse
 from channels.db import database_sync_to_async
 from django.contrib.auth.models import AnonymousUser
 
+from kubernetes_ops.permissions import kubernetes_permission_policy
 from kubernetes_ops.services.admin_resources import AdminResourceError
 from kubernetes_ops.services.admin_streams import (
     active_admin_stream_session_status,
@@ -15,7 +16,12 @@ from kubernetes_ops.services.admin_streams import (
 class KubernetesAdminConsumerAuthMixin:
     def _authenticated(self) -> bool:
         user = self.scope.get("user")
-        return bool(user and not isinstance(user, AnonymousUser) and user.is_authenticated)
+        return bool(
+            user
+            and not isinstance(user, AnonymousUser)
+            and user.is_authenticated
+            and kubernetes_permission_policy(user)["can_read"]
+        )
 
     def _query_params(self) -> dict[str, str]:
         raw = self.scope.get("query_string", b"").decode("utf-8", errors="ignore")

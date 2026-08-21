@@ -8,7 +8,7 @@ import { I18nProvider, localize, useI18n } from "./lib/i18n";
 import { UiStyleProvider } from "./lib/ui-style";
 import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
-import { canAccessStudio, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
+import { canAccessStudio, canManageAiRouting, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
 import { FirstRunReadinessGate } from "./components/FirstRunReadinessGate";
 import { firstAllowedApplicationPath } from "./lib/navigation";
 
@@ -168,11 +168,14 @@ function FeatureGate({
   feature,
   children,
   staffOnly = false,
+  aiRoutingOnly = false,
 }: {
   feature: string | string[];
   children: ReactNode;
   /** Require an admin (is_staff) in addition to the feature. */
   staffOnly?: boolean;
+  /** Require the explicit platform AI-settings capability. */
+  aiRoutingOnly?: boolean;
 }) {
   const location = useLocation();
   const { data, isLoading } = useQuery({
@@ -190,6 +193,10 @@ function FeatureGate({
   }
 
   if (staffOnly && !data.user?.is_staff) {
+    return <PermissionDenied />;
+  }
+
+  if (aiRoutingOnly && !canManageAiRouting(data.user)) {
     return <PermissionDenied />;
   }
 
@@ -457,7 +464,7 @@ const App = () => (
                   <Route
                     path="ai"
                     element={(
-                      <FeatureGate feature="settings">
+                      <FeatureGate feature="settings" aiRoutingOnly>
                         <SettingsAIPage />
                       </FeatureGate>
                     )}
@@ -465,7 +472,7 @@ const App = () => (
                   <Route
                     path="ai-connections"
                     element={(
-                      <FeatureGate feature={["ai_connections_personal", "ai_connections_admin"]}>
+                      <FeatureGate feature={["ai_connections_personal", "ai_connections_admin"]} aiRoutingOnly>
                         <SettingsAIConnectionsPage />
                       </FeatureGate>
                     )}
@@ -537,7 +544,7 @@ const App = () => (
                   <Route
                     path="kubernetes"
                     element={(
-                      <FeatureGate feature="settings">
+                      <FeatureGate feature="kubernetes" staffOnly>
                         <SettingsKubernetesPage />
                       </FeatureGate>
                     )}

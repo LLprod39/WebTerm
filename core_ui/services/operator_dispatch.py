@@ -219,12 +219,37 @@ async def execute_operator_dispatch(dispatch_id: int, *, worker_name: str, lease
         raise
     except Exception as exc:  # noqa: BLE001
         error = f"{exc.__class__.__name__}: {exc}"
-    return await sync_to_async(_finish_operator_dispatch, thread_sensitive=True)(
+    final_status = await sync_to_async(_finish_operator_dispatch, thread_sensitive=True)(
         dispatch.pk,
         worker_name=worker_name,
         attempt_count=attempt_count,
         error=error,
     )
+    if final_status == OperatorTurnDispatch.STATUS_COMPLETED:
+        # Durable terminal acknowledgement. The loop already emits turn_done and
+        # turn_complete, but a reconnecting browser can miss both transient group
+        # events. Emit once more only after the dispatch is durably completed.
+        def _completion_payload() -> dict[str, Any]:
+            row = OperatorTurnDispatch.objects.select_related("turn", "turn__assistant_message").get(pk=dispatch.pk)
+            turn = row.turn
+            return {
+                "type": "turn_complete",
+                "status": str(turn.status if turn is not None else "done"),
+                "turn_id": turn.pk if turn is not None else None,
+                "assistant_message_id": (
+                    turn.assistant_message_id if turn is not None else None
+                ),
+                "dispatch_id": row.pk,
+                "durable_completion": True,
+            }
+
+        from core_ui.services.operator_turn_runtime import broadcast_operator_event
+
+        await broadcast_operator_event(
+            dispatch.session_id,
+            await sync_to_async(_completion_payload, thread_sensitive=True)(),
+        )
+    return final_status
 
 
 def cancel_operator_dispatches(chat_id: int) -> int:

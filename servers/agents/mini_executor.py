@@ -341,7 +341,7 @@ async def _mini_execution_context(agent: ServerAgent, user, run: AgentRun):
         source_kind="agent_run",
         source_id=run.pk,
         mode=run.provider_execution_mode,
-        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
         provider_session_id=run.provider_session_id,
         idempotency_key=f"agent:{run.pk}:mini-analysis",

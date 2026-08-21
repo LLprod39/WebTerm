@@ -16,6 +16,9 @@ const validInput: AgentWizardReadinessInput = {
   commands: "uptime",
   goal: "",
   selectedServers: [7],
+  targetScope: "servers",
+  hasServerDependentTools: false,
+  hasServerDependentSkills: false,
   sudoPolicy: "ask",
   sudoRiskAcknowledged: false,
   scheduleConfig: {
@@ -41,6 +44,37 @@ describe("agent wizard validation", () => {
     expect(readinessPercent(checks)).toBe(100);
     expect(firstFailedCheckForStep(checks, "basics")).toBeUndefined();
     expect(stepHasBlockingFailure(checks, "servers")).toBe(false);
+  });
+
+  it("accepts a non-server agent for API, MCP, document, and SaaS work", () => {
+    const externalInput: AgentWizardReadinessInput = {
+      ...validInput,
+      mode: "full",
+      commands: "",
+      goal: "Собрать отчёт из документов и отправить через подключённый API",
+      selectedServers: [],
+      targetScope: "external",
+      sudoPolicy: "disabled",
+    };
+
+    expect(validateAgentWizardSchema(externalInput)).toEqual({ isValid: true, issues: [] });
+    expect(buildAgentWizardReadiness(externalInput).find((check) => check.key === "servers")?.passed).toBe(true);
+  });
+
+  it("requires a server when an SSH-dependent capability is enabled", () => {
+    const externalSshInput: AgentWizardReadinessInput = {
+      ...validInput,
+      mode: "full",
+      commands: "",
+      goal: "Проверить журналы",
+      selectedServers: [],
+      targetScope: "external",
+      sudoPolicy: "disabled",
+      hasServerDependentTools: true,
+    };
+
+    expect(validateAgentWizardSchema(externalSshInput).isValid).toBe(false);
+    expect(buildAgentWizardReadiness(externalSshInput).find((check) => check.key === "servers")?.passed).toBe(false);
   });
 
   it("maps unsafe and incomplete configuration to actionable wizard steps", () => {

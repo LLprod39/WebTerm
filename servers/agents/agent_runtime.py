@@ -53,8 +53,6 @@ async def build_agent_execution_context(engine: Any, purpose: str, *, surface: s
             thread_sensitive=True,
         )()
     base_binding = state.get("provider_binding_snapshot") or execution_binding_snapshot(engine.execution_context)
-    if not base_binding:
-        base_binding = getattr(engine.agent, "provider_binding", {})
     run_id = getattr(run_record, "pk", None)
     return await abuild_execution_context(
         actor_user_id=getattr(engine.user, "pk", None),

@@ -5,6 +5,7 @@ import type { AgentSudoPolicy } from "./agentPageLabels";
 import { isScheduleConfigValid } from "./agentPageSchedules";
 
 export type AgentWizardStep = "template" | "basics" | "servers" | "capabilities" | "review";
+export type AgentTargetScope = "external" | "servers";
 
 export type AgentWizardCheckKey =
   | "scenario"
@@ -32,7 +33,10 @@ export type AgentWizardReadinessInput = {
   name: string;
   commands: string;
   goal: string;
+  targetScope: AgentTargetScope;
   selectedServers: number[];
+  hasServerDependentTools: boolean;
+  hasServerDependentSkills: boolean;
   sudoPolicy: AgentSudoPolicy;
   sudoRiskAcknowledged: boolean;
   scheduleConfig: AgentScheduleConfig;
@@ -73,7 +77,10 @@ export function validateAgentWizardSchema(input: AgentWizardReadinessInput): Age
       name: z.string().trim().min(1),
       commands: z.string(),
       goal: z.string(),
-      selectedServers: z.array(z.number()).min(1),
+      targetScope: z.enum(["external", "servers"]),
+      selectedServers: z.array(z.number()),
+      hasServerDependentTools: z.boolean(),
+      hasServerDependentSkills: z.boolean(),
       sudoPolicy: z.enum(["disabled", "ask", "approved"]),
       sudoRiskAcknowledged: z.boolean(),
       scheduleConfig: z.custom<AgentScheduleConfig>(),
@@ -88,6 +95,17 @@ export function validateAgentWizardSchema(input: AgentWizardReadinessInput): Age
         : commandsCount > 0 || Boolean(value.goal.trim());
       if (!hasRunnableAction) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["commands"], message: "runnable_action" });
+      }
+      const requiresServer = value.mode === "mini"
+        || commandsCount > 0
+        || value.sudoPolicy !== "disabled"
+        || value.hasServerDependentTools
+        || value.hasServerDependentSkills;
+      const serverScopeValid = value.targetScope === "external"
+        ? !requiresServer
+        : value.selectedServers.length > 0;
+      if (!serverScopeValid) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["selectedServers"], message: "server_scope_required" });
       }
       if (!isScheduleConfigValid(value.scheduleConfig, value.schedule)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["schedule"], message: "schedule_invalid" });
@@ -106,7 +124,7 @@ export function validateAgentWizardSchema(input: AgentWizardReadinessInput): Age
     if (field === "selectedType") return { step: "template", messageRu: "Выберите сценарий агента.", messageEn: "Choose an agent scenario." };
     if (field === "name") return { step: "basics", messageRu: "Укажите имя агента.", messageEn: "Enter an agent name." };
     if (field === "commands") return { step: "basics", messageRu: "Добавьте команду или цель агента.", messageEn: "Add a command or agent goal." };
-    if (field === "selectedServers") return { step: "servers", messageRu: "Выберите минимум один сервер.", messageEn: "Select at least one server." };
+    if (field === "selectedServers") return { step: "servers", messageRu: "Для выбранных SSH-возможностей нужен сервер.", messageEn: "The selected SSH capabilities require a server." };
     if (field === "schedule") return { step: "servers", messageRu: "Исправьте расписание.", messageEn: "Fix the schedule." };
     if (field === "sudo") return { step: "basics", messageRu: "Подтвердите sudo или опасные команды.", messageEn: "Acknowledge sudo or dangerous commands." };
     if (field === "telegram") return { step: "capabilities", messageRu: "Укажите Telegram Chat ID или выключите доставку.", messageEn: "Enter Telegram Chat ID or disable delivery." };
@@ -127,6 +145,14 @@ export function buildAgentWizardReadiness(input: AgentWizardReadinessInput): Age
   const sudoPassed = !sudoRisk || input.sudoRiskAcknowledged;
   const schedulePassed = isScheduleConfigValid(input.scheduleConfig, input.schedule);
   const telegramPassed = !input.telegramEnabled || Boolean(input.telegramChatId.trim());
+  const requiresServer = input.mode === "mini"
+    || commandsCount > 0
+    || input.sudoPolicy !== "disabled"
+    || input.hasServerDependentTools
+    || input.hasServerDependentSkills;
+  const serverScopePassed = input.targetScope === "external"
+    ? !requiresServer
+    : input.selectedServers.length > 0;
   return [
     {
       key: "scenario",
@@ -159,11 +185,15 @@ export function buildAgentWizardReadiness(input: AgentWizardReadinessInput): Age
     {
       key: "servers",
       step: "servers",
-      passed: input.selectedServers.length > 0,
-      labelRu: "Серверы выбраны",
-      labelEn: "Servers selected",
-      detailRu: input.selectedServers.length ? `${input.selectedServers.length} целей выбрано.` : "Выберите минимум один сервер.",
-      detailEn: input.selectedServers.length ? `${input.selectedServers.length} targets selected.` : "Select at least one server.",
+      passed: serverScopePassed,
+      labelRu: input.targetScope === "external" ? "Внешние системы" : "Серверы выбраны",
+      labelEn: input.targetScope === "external" ? "External systems" : "Servers selected",
+      detailRu: serverScopePassed
+        ? (input.targetScope === "external" ? "SSH-сервер не требуется." : `${input.selectedServers.length} целей выбрано.`)
+        : (input.targetScope === "external" ? "Команды, sudo или выбранные SSH-tools/skills требуют переключиться на серверы." : "Выберите минимум один сервер."),
+      detailEn: serverScopePassed
+        ? (input.targetScope === "external" ? "No SSH server is required." : `${input.selectedServers.length} targets selected.`)
+        : (input.targetScope === "external" ? "Commands, sudo, or selected SSH tools/skills require server scope." : "Select at least one server."),
     },
     {
       key: "schedule",
@@ -217,9 +247,8 @@ export const AGENT_WIZARD_STEPS: Array<{
   detailEn: string;
   icon: LucideIcon;
 }> = [
-  { key: "template", labelRu: "Тип", labelEn: "Type", detailRu: "Шаблон агента", detailEn: "Agent template", icon: Layers },
-  { key: "basics", labelRu: "Основное", labelEn: "Basics", detailRu: "Имя, команды, права", detailEn: "Name, commands, access", icon: Tag },
-  { key: "servers", labelRu: "Серверы", labelEn: "Servers", detailRu: "Окружения и расписание", detailEn: "Targets and schedule", icon: Server },
-  { key: "capabilities", labelRu: "Возможности", labelEn: "Capabilities", detailRu: "Скиллы и материалы", detailEn: "Skills and materials", icon: BookOpen },
-  { key: "review", labelRu: "Обзор", labelEn: "Review", detailRu: "Проверка и запуск", detailEn: "Check and launch", icon: CheckCircle2 },
+  { key: "basics", labelRu: "Задача", labelEn: "Task", detailRu: "Результат и правила", detailEn: "Outcome and rules", icon: Tag },
+  { key: "servers", labelRu: "Системы", labelEn: "Systems", detailRu: "Доступ и запуск", detailEn: "Access and trigger", icon: Server },
+  { key: "capabilities", labelRu: "Инструменты", labelEn: "Toolkit", detailRu: "Skills and context", detailEn: "Skills and context", icon: BookOpen },
+  { key: "review", labelRu: "Результат", labelEn: "Result", detailRu: "Проверка и сохранение", detailEn: "Review and save", icon: CheckCircle2 },
 ];

@@ -1,4 +1,4 @@
-"""Per-profile Operator policy (pilot = read + confirm-mutate only)."""
+"""Operator policy derived from centrally managed automation access."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ PILOT_BLOCKED_ACTION_PREFIXES = (
 
 
 def is_pilot_restricted_operator(user) -> bool:
-    """Only the exact pilot_operator profile with live automation is elevated."""
+    """Users without live automation access receive read-only tools."""
     if not user or not getattr(user, "is_authenticated", False):
         return True
     return not user_can_automate(user)
@@ -39,6 +39,6 @@ def pilot_policy_note(user) -> str:
     if not is_pilot_restricted_operator(user):
         return ""
     return (
-        "Operator policy: restricted pilot mode — only read tools are available; "
-        "mutating tools require the pilot_operator role and automation capability."
+        "Operator policy: only read tools are available; "
+        "mutating tools require the automation capability."
     )

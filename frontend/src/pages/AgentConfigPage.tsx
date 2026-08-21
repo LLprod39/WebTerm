@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { StudioHero, HeroActionButton, HeroStatChip } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioAgents, studioShareUsers, type AgentConfig } from "@/lib/api";
-import { hasFeatureAccess } from "@/lib/featureAccess";
+import { canManageAiRouting as canManageAiRoutingForUser, hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
 import { AgentForm, formatProfileDate } from "./agent-config/AgentProfileForm";
 import { sudoOption, toolLabel, visibleAllowedTools } from "./agent-config/agentConfigOptions";
@@ -33,6 +33,7 @@ export default function AgentConfigPage() {
   });
   const user = session?.user ?? null;
   const isAdmin = Boolean(user?.is_staff);
+  const canManageAiRouting = canManageAiRoutingForUser(user);
   const canUseMcp = hasFeatureAccess(user, "studio_mcp");
   const canUseSkills = hasFeatureAccess(user, "studio_skills");
 
@@ -108,8 +109,8 @@ export default function AgentConfigPage() {
         titleIcon={<Bot className="h-7 w-7 text-primary" />}
         description={localize(
           lang,
-          "Переиспользуемые конфигурации модели, инструментов, scope и доступа для pipeline-нод.",
-          "Reusable model, tool, scope, and access configs for pipeline nodes.",
+          "Переиспользуемые конфигурации инструментов, scope и доступа для pipeline-нод.",
+          "Reusable tool, scope, and access configs for pipeline nodes.",
         )}
         stats={
           <HeroStatChip
@@ -151,7 +152,7 @@ export default function AgentConfigPage() {
           <TableHeader>
             <TableRow>
               <TableHead>{localize(lang, "Профиль", "Profile")}</TableHead>
-              <TableHead>{localize(lang, "Модель", "Model")}</TableHead>
+              {canManageAiRouting ? <TableHead>{localize(lang, "Модель", "Model")}</TableHead> : null}
               <TableHead>{localize(lang, "Инструменты", "Tools")}</TableHead>
               <TableHead>Scope</TableHead>
               <TableHead>{localize(lang, "Владелец / доступ", "Owner / access")}</TableHead>
@@ -178,14 +179,14 @@ export default function AgentConfigPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  {canManageAiRouting ? <TableCell>
                     <div className="space-y-1">
                       <div className="max-w-[180px] truncate font-mono text-xs text-foreground">{agent.model}</div>
                       <Badge variant="outline" className="text-xs">
                         {localize(lang, `${agent.max_iterations} итер.`, `${agent.max_iterations} iter`)}
                       </Badge>
                     </div>
-                  </TableCell>
+                  </TableCell> : null}
                   <TableCell>
                     <div className="flex max-w-[220px] flex-wrap gap-1">
                       {visibleTools.slice(0, 3).map((tool) => (
@@ -278,8 +279,8 @@ export default function AgentConfigPage() {
             <SheetDescription>
               {localize(
                 lang,
-                "Настройте модель, инструменты, scope, MCP-серверы, skills и доступ для переиспользуемого профиля.",
-                "Configure model, tools, scope, MCP servers, skills, and access for this reusable profile.",
+                "Настройте инструменты, scope, MCP-серверы, skills и доступ для переиспользуемого профиля.",
+                "Configure tools, scope, MCP servers, skills, and access for this reusable profile.",
               )}
             </SheetDescription>
           </SheetHeader>
@@ -294,6 +295,7 @@ export default function AgentConfigPage() {
               canUseSkills={canUseSkills}
               shareUsers={shareUsers}
               isAdmin={isAdmin}
+              canManageAiRouting={canManageAiRouting}
               canEdit={(editAgent as AgentConfig | null)?.can_edit !== false}
             />
           ) : null}

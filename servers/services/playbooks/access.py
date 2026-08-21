@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Exists, OuterRef, Q, QuerySet
 from django.utils import timezone
 
-from core_ui.projects import active_project_for_user
+from core_ui.models.projects import ProjectMembership
 from servers.models import Playbook, PlaybookGrant
 
 
@@ -51,22 +51,24 @@ def _active_grants_q(now=None, *, prefix: str = "") -> Q:
 def playbooks_visible_to(user) -> QuerySet[Playbook]:
     if not getattr(user, "is_authenticated", False):
         return Playbook.objects.none()
-    project = active_project_for_user(user)
-    if project is None:
-        return Playbook.objects.none()
     group_ids = list(user.groups.values_list("id", flat=True))
-    principal_q = Q(grants__user=user) | Q(grants__workspace_shared=True)
+    principal_q = Q(grants__user=user)
     if group_ids:
         principal_q |= Q(grants__group_id__in=group_ids)
     grant_q = principal_q & Q(grants__can_view=True) & _active_grants_q(prefix="grants__")
+    workspace_grant_q = (
+        Q(project__memberships__user=user, grants__workspace_shared=True, grants__can_view=True)
+        & _active_grants_q(prefix="grants__")
+    )
     workspace_policy = PlaybookGrant.objects.filter(playbook_id=OuterRef("pk"), workspace_shared=True)
     return (
         Playbook.objects.annotate(_has_workspace_policy=Exists(workspace_policy))
-        .filter(project=project)
         .filter(
             Q(user=user)
             | grant_q
+            | workspace_grant_q
             | Q(
+                project__memberships__user=user,
                 visibility=Playbook.VISIBILITY_SHARED,
                 origin_revision__isnull=True,
                 _has_workspace_policy=False,
@@ -81,15 +83,16 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
 def capabilities_for(playbook: Playbook, user) -> PlaybookCapabilities:
     if not getattr(user, "is_authenticated", False):
         return PlaybookCapabilities()
-    if playbook.project_id != getattr(active_project_for_user(user), "id", None):
-        return PlaybookCapabilities()
     if playbook.user_id == user.id:
         return OWNER_CAPABILITIES
 
     group_ids = list(user.groups.values_list("id", flat=True))
-    principal_q = Q(user=user) | Q(workspace_shared=True)
+    principal_q = Q(user=user)
     if group_ids:
         principal_q |= Q(group_id__in=group_ids)
+    is_workspace_member = ProjectMembership.objects.filter(project_id=playbook.project_id, user=user).exists()
+    if is_workspace_member:
+        principal_q |= Q(workspace_shared=True)
     grants = PlaybookGrant.objects.filter(playbook=playbook).filter(_active_grants_q()).filter(principal_q)
 
     values = {
@@ -125,6 +128,7 @@ def capabilities_for(playbook: Playbook, user) -> PlaybookCapabilities:
     ).exists()
     if (
         playbook.visibility == Playbook.VISIBILITY_SHARED
+        and is_workspace_member
         and playbook.origin_revision_id is None
         and not has_workspace_policy
     ):

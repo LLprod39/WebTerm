@@ -291,7 +291,12 @@ async def run_operator_loop(
                     assistant_message.pk,
                     {"source": "operator_loop", "turn_id": turn.pk, "iterations": iteration},
                 )
-                await _ensure_visible_answer(assistant_message.pk)
+                fallback_text = await _ensure_visible_answer(assistant_message.pk)
+                if fallback_text:
+                    await _emit(
+                        on_event,
+                        {"type": "token", "text": fallback_text, "turn_id": turn.pk, "synthetic": True},
+                    )
             await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
             break
 
@@ -340,7 +345,12 @@ async def run_operator_loop(
                 await sync_to_async(compress_inventory_assistant_content)(assistant_message)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("operator inventory artifact compression skipped: {}", exc)
-            await _ensure_visible_answer(assistant_message.pk)
+            fallback_text = await _ensure_visible_answer(assistant_message.pk)
+            if fallback_text:
+                await _emit(
+                    on_event,
+                    {"type": "token", "text": fallback_text, "turn_id": turn.pk, "synthetic": True},
+                )
         await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages)
         await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
         break

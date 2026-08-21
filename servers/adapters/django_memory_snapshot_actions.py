@@ -13,6 +13,35 @@ from app.agent_kernel.memory.types import AUTOMATION_CANDIDATE_PREFIX, PATTERN_C
 from servers.adapters.django_memory_serializers import serialize_snapshot
 
 
+def record_revalidation_decision(
+    snapshot: Any,
+    *,
+    actor_user_id: int,
+    status: str,
+    reason: str,
+) -> int:
+    """Record the authorized human decision for open candidate reviews."""
+    from servers.models import ServerMemoryRevalidation
+
+    now = timezone.now()
+    candidates = ServerMemoryRevalidation.objects.filter(
+        server_id=snapshot.server_id,
+        memory_key=snapshot.memory_key,
+        status=ServerMemoryRevalidation.STATUS_OPEN,
+    )
+    if candidates.filter(source_snapshot_id=snapshot.pk).exists():
+        candidates = candidates.filter(source_snapshot_id=snapshot.pk)
+    else:
+        candidates = candidates.filter(source_snapshot__isnull=True)
+    return candidates.update(
+        status=status,
+        resolved_at=now,
+        decided_at=now,
+        decided_by_id=actor_user_id,
+        decision_reason=compact_text(reason, limit=500),
+    )
+
+
 def parse_trailing_int(value: Any, *, prefix: str | None = None) -> int | None:
     text = str(value or "").strip()
     if not text:
@@ -201,6 +230,15 @@ def archive_snapshot(
         raise ValueError("Memory snapshot not found")
 
     if snapshot.is_active or snapshot.layer != ServerMemorySnapshot.LAYER_ARCHIVE:
+        if actor_user_id:
+            from servers.models import ServerMemoryRevalidation
+
+            record_revalidation_decision(
+                snapshot,
+                actor_user_id=actor_user_id,
+                status=ServerMemoryRevalidation.STATUS_IGNORED_BY_HUMAN,
+                reason=reason,
+            )
         metadata = dict(snapshot.metadata or {})
         metadata.update(
             {
@@ -266,8 +304,18 @@ def promote_snapshot_to_manual_knowledge(
         )
         metadata["promoted_knowledge_id"] = knowledge.id
         metadata["promoted_to_manual_at"] = timezone.now().isoformat()
+        metadata["approved_by_user_id"] = actor_user_id
+        metadata["approval_reason"] = "promoted_to_manual_note"
         snapshot.metadata = metadata
         snapshot.save(update_fields=["metadata", "updated_at"])
+        from servers.models import ServerMemoryRevalidation
+
+        record_revalidation_decision(
+            snapshot,
+            actor_user_id=actor_user_id,
+            status=ServerMemoryRevalidation.STATUS_VERIFIED_TRUE,
+            reason="promoted_to_manual_note",
+        )
         store._sync_manual_knowledge_snapshot_sync(knowledge.id)
         store._ingest_event_sync(
             server_id,
@@ -397,8 +445,18 @@ def promote_skill_draft_to_skill(
             dirty_fields.append("updated_at")
             knowledge.save(update_fields=dirty_fields)
     metadata["promoted_knowledge_id"] = knowledge.id
+    metadata["approved_by_user_id"] = actor_user_id
+    metadata["approval_reason"] = "promoted_to_skill"
     snapshot.metadata = metadata
     snapshot.save(update_fields=["metadata", "updated_at"])
+    from servers.models import ServerMemoryRevalidation
+
+    record_revalidation_decision(
+        snapshot,
+        actor_user_id=actor_user_id,
+        status=ServerMemoryRevalidation.STATUS_VERIFIED_TRUE,
+        reason="promoted_to_skill",
+    )
     store._sync_manual_knowledge_snapshot_sync(knowledge.id)
 
     archived_snapshot = archive_snapshot(

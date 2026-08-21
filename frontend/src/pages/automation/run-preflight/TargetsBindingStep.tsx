@@ -36,6 +36,7 @@ interface TargetsBindingStepProps {
   onSelectOnline: () => void;
   onClearTargets: () => void;
   onBindingChoiceChange: (selector: string, choice: string) => void;
+  showSourceSelector?: boolean;
 }
 
 export function TargetsBindingStep({
@@ -55,6 +56,7 @@ export function TargetsBindingStep({
   onSelectOnline,
   onClearTargets,
   onBindingChoiceChange,
+  showSourceSelector = true,
 }: TargetsBindingStepProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
   const selectedProfile = bindingProfiles.find((profile) => profile.id === selectedBindingProfileId) || null;
@@ -69,7 +71,7 @@ export function TargetsBindingStep({
 
   return (
     <div className="space-y-4">
-      <section className="rounded-sm border border-border bg-card p-4 shadow-elev-1">
+      {showSourceSelector ? <section className="rounded-sm border border-border bg-card p-4 shadow-elev-1">
         <div className="grid gap-3 sm:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] sm:items-end">
           <div className="space-y-1.5">
             <Label htmlFor="run-target-source">{tr("Источник целей", "Target source")}</Label>
@@ -102,7 +104,7 @@ export function TargetsBindingStep({
                 )}
           </p>
         </div>
-      </section>
+      </section> : null}
 
       {selectedProfile ? (
         <section className="rounded-sm border border-primary/30 bg-primary/5 p-4 shadow-elev-1">

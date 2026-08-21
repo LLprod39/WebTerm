@@ -132,6 +132,11 @@ async def execute_agent_llm_query(node: dict, context: dict, node_outputs: dict[
     prompt = render_template_value(prompt_template, substitutions)
 
     owner = await _s2a_fn(lambda: run.pipeline.owner)()
+    from core_ui.ai_model_policy import user_can_manage_ai_routing
+
+    if not await _s2a_fn(user_can_manage_ai_routing)(owner):
+        config = {**config, "provider": "auto", "model": "", "provider_binding": {}}
+        provider, specific_model = "auto", None
     server_memory_prompt = await _load_pipeline_server_memory(owner, config, context)
     operational_recipes_prompt = await _load_pipeline_operational_recipes(
         owner,

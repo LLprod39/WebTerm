@@ -15,13 +15,13 @@ def test_unknown_server_fails_closed_as_read_only():
 
 
 @pytest.mark.django_db
-def test_new_server_is_read_only_by_default(django_user_model):
+def test_new_server_is_writable_by_release_default(django_user_model):
     user = django_user_model.objects.create_user("ro-default", password="x")
 
     server = Server.objects.create(user=user, name="srv", host="1.2.3.4", port=22, username="u")
 
-    assert server.ai_read_only is True
-    assert is_server_ai_read_only(server.pk) is True
+    assert server.ai_read_only is False
+    assert is_server_ai_read_only(server.pk) is False
 
 
 @pytest.mark.django_db

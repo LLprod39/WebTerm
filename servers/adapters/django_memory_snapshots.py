@@ -36,6 +36,7 @@ def upsert_snapshot(
     force_version: bool = False,
     layer: str | None = None,
     enforce_trust_gate: bool = True,
+    generation_log=None,
 ):
     from servers.models import ServerMemorySnapshot
 
@@ -97,6 +98,9 @@ def upsert_snapshot(
                 if clean_content and clean_content != existing.content:
                     existing.content = clean_content
                     dirty_fields.append("content")
+                if generation_log is not None and generation_log.pk != existing.generation_log_id:
+                    existing.generation_log = generation_log
+                    dirty_fields.append("generation_log")
                 if abs(float(existing.confidence or 0.0) - float(confidence or 0.0)) >= 0.03:
                     existing.confidence = confidence
                     dirty_fields.append("confidence")
@@ -175,6 +179,7 @@ def upsert_snapshot(
             confidence=confidence,
             last_verified_at=verified_at,
             metadata=next_metadata,
+            generation_log=generation_log,
         )
         if existing:
             existing.superseded_by = snapshot

@@ -53,20 +53,18 @@ describe("playbook editor executable source", () => {
     expect(payload).not.toHaveProperty("tasks");
   });
 
-  it("keeps structured tasks as the sole runbook payload", () => {
+  it("starts new automation as an empty Ansible YAML document", () => {
     const editor = emptyPlaybookEditor();
     editor.name = "Restart service";
-    editor.tasks = [
-      { id: "t1", command: " systemctl restart nginx ", description: " Restart ", continue_on_error: false },
-    ];
+    editor.sourceYaml = "- hosts: all\n  tasks:\n    - ansible.builtin.service:\n        name: nginx\n        state: restarted\n";
 
     const payload = buildPlaybookPayload(editor);
 
     expect(payload).toMatchObject({
-      kind: "runbook",
-      tasks: [{ id: "t1", command: "systemctl restart nginx", description: "Restart", continue_on_error: false }],
+      kind: "ansible",
+      source_yaml: editor.sourceYaml,
     });
-    expect(payload).not.toHaveProperty("source_yaml");
+    expect(payload).not.toHaveProperty("tasks");
   });
 
   it("tracks dirty state while preserving a read-only server snapshot", () => {

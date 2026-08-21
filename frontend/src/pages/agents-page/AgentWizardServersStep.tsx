@@ -1,4 +1,4 @@
-import { CalendarDays, CheckCircle2, Search, Server } from "lucide-react";
+import { CalendarDays, CheckCircle2, Globe2, Search, Server, Zap } from "lucide-react";
 import { InlineAlert } from "@/components/system/InlineAlert";
 import { Input } from "@/components/ui/input";
 import type { AgentScheduleConfig, AgentScheduleMode, FrontendServer } from "@/lib/api";
@@ -11,6 +11,7 @@ import {
   finalizeScheduleConfig,
   formatScheduleConfigLabel,
 } from "./agentPageUtils";
+import type { AgentTargetScope } from "./agentPageUtils";
 import type { StateSetter } from "./agentWizardStepTypes";
 
 type AgentWizardServersStepProps = {
@@ -21,6 +22,9 @@ type AgentWizardServersStepProps = {
   serverSearch: string;
   setServerSearch: StateSetter<string>;
   selectedServers: number[];
+  targetScope: AgentTargetScope;
+  changeTargetScope: (scope: AgentTargetScope) => void;
+  serverRequirementReasons: string[];
   toggleServer: (id: number) => void;
   selectAll: () => void;
   hasAllServersSelected: boolean;
@@ -41,6 +45,9 @@ export function AgentWizardServersStep({
   serverSearch,
   setServerSearch,
   selectedServers,
+  targetScope,
+  changeTargetScope,
+  serverRequirementReasons,
   toggleServer,
   selectAll,
   hasAllServersSelected,
@@ -54,15 +61,27 @@ export function AgentWizardServersStep({
 }: AgentWizardServersStepProps) {
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
         <div>
-          <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Выбор серверов", "Server selection")}</h3>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">
-            {localize(lang, `${selectedServers.length} выбрано из ${totalServerCount}`, `${selectedServers.length} selected of ${totalServerCount}`)}
-          </p>
+          <p className="type-label text-primary">{localize(lang, "Системы и запуск", "Systems and trigger")}</p>
+          <h3 className="mt-1 font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Где агент может работать", "Where the agent can work")}</h3>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">{localize(lang, "Серверы нужны только для SSH-задач. Email, API, MCP, документы и SaaS могут работать без них.", "Servers are only needed for SSH work. Email, API, MCP, documents, and SaaS can work without them.")}</p>
         </div>
-        <button type="button" onClick={selectAll} className={`min-h-9 rounded-md border px-3 text-sm font-semibold transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{hasAllServersSelected ? localize(lang, "Снять выбор", "Clear") : localize(lang, "Выбрать все", "Select all")}</button>
       </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {([
+          { scope: "external" as const, icon: Globe2, title: localize(lang, "Без серверов / внешние системы", "No servers / external systems"), hint: localize(lang, "API, MCP, email, документы и SaaS", "API, MCP, email, documents, and SaaS") },
+          { scope: "servers" as const, icon: Server, title: localize(lang, "Серверы / SSH", "Servers / SSH"), hint: localize(lang, "Команды, логи, файлы и sudo на хостах", "Commands, logs, files, and sudo on hosts") },
+        ]).map((option) => {
+          const active = targetScope === option.scope;
+          const Icon = option.icon;
+          return <button key={option.scope} type="button" aria-pressed={active} onClick={() => changeTargetScope(option.scope)} className={`min-h-[82px] rounded-lg border p-3 text-left transition-colors ${active ? "border-primary bg-primary/10 text-foreground" : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}><Icon className="mb-2 h-4 w-4 text-primary" /><span className="block text-sm font-semibold">{option.title}</span><span className="mt-1 block text-xs leading-4 text-muted-foreground">{option.hint}</span></button>;
+        })}
+      </div>
+      {targetScope === "external" && serverRequirementReasons.length ? <InlineAlert tone="warning" description={localize(lang, `Для текущих возможностей нужен сервер: ${serverRequirementReasons.join("; ")}. Переключитесь на «Серверы / SSH».`, `Current capabilities need a server: ${serverRequirementReasons.join("; ")}. Switch to Servers / SSH.`)} /> : null}
+      {targetScope === "external" && !serverRequirementReasons.length ? <InlineAlert tone="success" description={localize(lang, "SSH-доступ не требуется. Агент сможет работать с подключёнными внешними инструментами и материалами.", "SSH access is not required. The agent can work with connected external tools and materials.")} /> : null}
+      {targetScope === "servers" ? <>
+      <div className="flex items-center justify-between gap-3"><p className="text-sm text-muted-foreground">{localize(lang, `${selectedServers.length} выбрано из ${totalServerCount}. Это жёсткая граница доступа.`, `${selectedServers.length} selected of ${totalServerCount}. This is a hard access boundary.`)}</p><button type="button" onClick={selectAll} className={`min-h-9 rounded-md border px-3 text-sm font-semibold transition-colors ${hasAllServersSelected ? "border-primary bg-primary/10 text-primary" : "border-border/70 text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}>{hasAllServersSelected ? localize(lang, "Снять выбор", "Clear") : localize(lang, "Выбрать все", "Select all")}</button></div>
       <div className="relative">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -93,10 +112,24 @@ export function AgentWizardServersStep({
           description={localize(lang, "Под текущий поиск серверы не найдены.", "No servers match the current search.")}
         />
       ) : null}
+      </> : null}
       <div className="space-y-4 border-t border-border/50 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><CalendarDays className="h-4 w-4 text-primary" /> {t("agent.schedule")}</h4>
+          <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><CalendarDays className="h-4 w-4 text-primary" /> {localize(lang, "Как запускать", "How to trigger")}</h4>
           <span className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{formatScheduleConfigLabel(scheduleConfig, schedule, lang)}</span>
+        </div>
+        <div className="flex items-start gap-3 rounded-sm border border-info/25 bg-info/5 px-3 py-3">
+          <Zap className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">{localize(lang, "Запуск по событию", "Event trigger")}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {localize(
+                lang,
+                "События из webhook, мониторинга или внешней системы подключаются через Studio/интеграцию. Этот мастер сохраняет профиль агента; прямого event-контракта здесь пока нет.",
+                "Webhook, monitoring, and external-system events are connected through Studio/integrations. This wizard saves the agent profile; it does not yet expose a direct event contract.",
+              )}
+            </p>
+          </div>
         </div>
         <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           {SCHEDULE_MODES.map((option) => {

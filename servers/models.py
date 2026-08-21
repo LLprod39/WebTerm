@@ -33,10 +33,18 @@ from servers.models_knowledge import GlobalServerRules, ServerGroupKnowledge, Se
 from servers.models_memory import (
     ServerMemoryEpisode,
     ServerMemoryEvent,
+    ServerMemoryGenerationLog,
     ServerMemoryPolicy,
     ServerMemoryRevalidation,
     ServerMemorySnapshot,
 )
+from servers.models_memory_assets import (
+    ServerMemoryAsset,
+    ServerMemoryAssetAgentBinding,
+    ServerMemoryAssetGrant,
+    ServerMemoryRetrievalAudit,
+)
+from servers.models_memory_promotions import ServerMemoryPromotion
 from servers.models_metrics import (
     ServerAiInsight,
     ServerCertificate,
@@ -86,10 +94,16 @@ __all__ = [
     "ServerGroupTag",
     "ServerHealthCheck",
     "ServerKnowledge",
+    "ServerMemoryAsset",
+    "ServerMemoryAssetAgentBinding",
+    "ServerMemoryAssetGrant",
     "ServerMemoryEpisode",
     "ServerMemoryEvent",
+    "ServerMemoryGenerationLog",
     "ServerMemoryPolicy",
+    "ServerMemoryPromotion",
     "ServerMemoryRevalidation",
+    "ServerMemoryRetrievalAudit",
     "ServerMemorySnapshot",
     "ServerMetricRollup",
     "ServerMetricSample",

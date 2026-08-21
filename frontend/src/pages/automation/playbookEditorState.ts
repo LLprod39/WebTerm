@@ -90,7 +90,7 @@ function withSavedFingerprint(state: FingerprintableEditor): PlaybookEditorState
 }
 
 export function isSourceBackedPlaybook(state: PlaybookEditorState): boolean {
-  return Boolean(state.sourceYaml || state.originalSourceYaml);
+  return state.kind === "ansible" || Boolean(state.sourceYaml || state.originalSourceYaml);
 }
 
 export function isPlaybookEditorDirty(state: PlaybookEditorState): boolean {
@@ -159,7 +159,7 @@ export function buildPlaybookPayload(state: PlaybookEditorState): PlaybookSavePa
 
   return {
     ...base,
-    kind: "runbook",
+    kind: "ansible",
     tasks: state.tasks
       .filter((task) => task.command.trim())
       .map((task) => ({
@@ -179,7 +179,7 @@ export const emptyPlaybookEditor = (): PlaybookEditorState =>
     category: "custom",
     visibility: "private",
     tagsText: "",
-    tasks: [{ id: newLocalTaskId(), command: "", description: "", continue_on_error: false }],
+    tasks: [],
     sourceYaml: "",
     originalSourceYaml: "",
     compatibility: {},

@@ -169,9 +169,6 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             run, connected_servers=[{"server_id": c["server_id"], "server_name": c["server_name"]} for c in connected]
         )
 
-        if not engine.session.connections and not engine.mcp_tools and not engine.skills:
-            raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
-
         engine.tool_registry = ToolRegistry.from_sources(
             engine.enabled_tools,
             engine.mcp_tools,
@@ -190,7 +187,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             permission_mode=str(engine.permission_engine.mode),
         )
 
-        goal = engine.agent.goal or engine.agent.ai_prompt or "Analyze the servers."
+        goal = engine.agent.goal or engine.agent.ai_prompt or "Complete the assigned task."
         history.append({"role": "user", "content": f"Goal: {goal}"})
 
         await engine._emit("agent_status", {"status": "thinking", "iteration": 0})

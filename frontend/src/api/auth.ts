@@ -16,6 +16,8 @@ export interface AuthUser {
   email: string;
   is_staff: boolean;
   is_superuser?: boolean;
+  can_manage_ai_routing?: boolean;
+  ai_cli_runtime_enabled?: boolean;
   access_profile?: string;
   permission_sources?: Record<string, string>;
   features: Record<FeatureFlag, boolean> & Partial<Record<string, boolean>>;

@@ -42,6 +42,15 @@ function contextSystemLine(
   if (pageContext.entity?.agentName) {
     bits.push(localize(lang, `агент ${pageContext.entity.agentName}`, `agent ${pageContext.entity.agentName}`));
   }
+  if (pageContext.entity?.playbookId) {
+    bits.push(
+      localize(
+        lang,
+        `playbook #${pageContext.entity.playbookId}${pageContext.entity.playbookName ? ` (${pageContext.entity.playbookName})` : ""}`,
+        `playbook #${pageContext.entity.playbookId}${pageContext.entity.playbookName ? ` (${pageContext.entity.playbookName})` : ""}`,
+      ),
+    );
+  }
   return bits.join(" · ");
 }
 
@@ -185,7 +194,16 @@ export function AssistantDrawer() {
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
-                <Link to={chatId ? `/chat?chat=${chatId}` : "/chat"} onClick={() => setOpen(false)}>
+                <Link
+                  to={
+                    chatId
+                      ? `/chat?chat=${chatId}${pageContext.entity?.playbookId ? `&playbook_id=${pageContext.entity.playbookId}` : ""}`
+                      : pageContext.entity?.playbookId
+                        ? `/chat?playbook_id=${pageContext.entity.playbookId}`
+                        : "/chat"
+                  }
+                  onClick={() => setOpen(false)}
+                >
                   <ExternalLink className="mr-1 h-3.5 w-3.5" />
                   {localize(lang, "Полный чат", "Full chat")}
                 </Link>

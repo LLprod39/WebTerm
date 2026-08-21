@@ -159,16 +159,17 @@ export function RunResultsView({
                 check/dry-run
               </span>
             ) : null}
-            {run.summary?.engine || progress.engine ? (
-              <span className="ml-2 rounded-sm border border-border bg-secondary/40 px-1.5 py-0.5 font-mono text-2xs text-muted-foreground">
-                {String(run.summary?.engine || progress.engine)}
-                {run.summary?.ansible_method ? `/${String(run.summary.ansible_method)}` : ""}
-              </span>
-            ) : null}
-            <span className="ml-2 font-mono text-2xs text-muted-foreground">#{run.id}</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {!isLive && run.playbook_id ? (
+            <Link
+              to={`/automation/playbooks/${run.playbook_id}`}
+              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground hover:bg-secondary/40"
+            >
+              {tr("Открыть проект и доступ", "Open project & sharing")}
+            </Link>
+          ) : null}
           {isLive ? (
             <Button size="sm" variant="outline" className="h-9 gap-1.5 border-destructive/30 text-destructive" disabled={cancelling || run.cancel_requested} onClick={onCancel}>
               <Square className="h-3.5 w-3.5" />
@@ -377,14 +378,23 @@ export function RunResultsView({
         ) : null}
       </div>
 
-      {run.inventory_preview ? (
+      {run.inventory_preview || run.summary?.engine || progress.engine ? (
         <details className="rounded-sm border border-border bg-card p-3 shadow-elev-1">
           <summary className="cursor-pointer text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-            Inventory
+            {tr("Advanced · технические детали", "Advanced · technical details")}
           </summary>
-          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap font-mono text-2xs text-muted-foreground">
-            {run.inventory_preview}
-          </pre>
+          <div className="mt-3 space-y-3 text-2xs text-muted-foreground">
+            <p>
+              <span className="font-medium text-foreground">Run:</span> #{run.id}
+              {run.summary?.engine || progress.engine ? ` · ${String(run.summary?.engine || progress.engine)}` : ""}
+              {run.summary?.ansible_method ? `/${String(run.summary.ansible_method)}` : ""}
+            </p>
+            {run.inventory_preview ? (
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-sm bg-surface-0 p-2 font-mono">
+                {run.inventory_preview}
+              </pre>
+            ) : null}
+          </div>
         </details>
       ) : null}
     </section>

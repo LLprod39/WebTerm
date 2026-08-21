@@ -58,11 +58,6 @@ export function MaterialsTab({
         })}
       </div>
 
-      <p className="text-2xs text-muted-foreground">
-        Здесь технические детали. Для вывода «что случилось» вернитесь на вкладку{" "}
-        <strong className="text-foreground/80">Итог</strong>.
-      </p>
-
       {section === "events" ? <EventsTab report={report} /> : null}
       {section === "logs" ? <LogsTab report={report} logs={report.logs} /> : null}
       {section === "artifacts" ? <ArtifactsTab report={report} /> : null}

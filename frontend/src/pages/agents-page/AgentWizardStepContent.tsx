@@ -29,15 +29,6 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     setGoal,
     systemPrompt,
     setSystemPrompt,
-    maxIter,
-    setMaxIter,
-    sessionTimeoutSeconds,
-    setSessionTimeoutSeconds,
-    maxConnections,
-    setMaxConnections,
-    providerBinding,
-    setProviderBinding,
-    providerMode,
     sudoPolicy,
     setSudoPolicy,
     servers,
@@ -45,6 +36,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
     serverSearch,
     setServerSearch,
     selectedServers,
+    targetScope,
+    changeTargetScope,
+    serverRequirementReasons,
     toggleServer,
     selectAll,
     hasAllServersSelected,
@@ -128,18 +122,8 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             setGoal={setGoal}
             systemPrompt={systemPrompt}
             setSystemPrompt={setSystemPrompt}
-            maxIter={maxIter}
-            setMaxIter={setMaxIter}
-            sessionTimeoutSeconds={sessionTimeoutSeconds}
-            setSessionTimeoutSeconds={setSessionTimeoutSeconds}
-            maxConnections={maxConnections}
-            setMaxConnections={setMaxConnections}
-            providerBinding={providerBinding}
-            setProviderBinding={setProviderBinding}
-            providerMode={providerMode}
             sudoPolicy={sudoPolicy}
             setSudoPolicy={setSudoPolicy}
-            setToolsConfig={setToolsConfig}
             sudoRiskAcknowledged={sudoRiskAcknowledged}
             setSudoRiskAcknowledged={setSudoRiskAcknowledged}
           />
@@ -153,6 +137,9 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             serverSearch={serverSearch}
             setServerSearch={setServerSearch}
             selectedServers={selectedServers}
+            targetScope={targetScope}
+            changeTargetScope={changeTargetScope}
+            serverRequirementReasons={serverRequirementReasons}
             toggleServer={toggleServer}
             selectAll={selectAll}
             hasAllServersSelected={hasAllServersSelected}

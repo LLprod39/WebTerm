@@ -34,6 +34,7 @@ def _connection(user: User) -> AIProviderConnection:
 def test_manual_server_agent_run_pins_explicit_connection(monkeypatch) -> None:
     user = User.objects.create_user("agent-binding-user", password="x")
     _apply_access_profile(user, "pilot_operator")
+    grant_feature(user, "settings")
     server = create_server(user)
     connection = _connection(user)
     agent = ServerAgent.objects.create(
@@ -72,6 +73,7 @@ def test_manual_server_agent_run_pins_explicit_connection(monkeypatch) -> None:
 def test_studio_agent_and_pipeline_store_and_clear_unattended_binding() -> None:
     user = User.objects.create_user("studio-binding-user", password="x")
     grant_feature(user, "studio_agents", "studio_pipelines")
+    grant_feature(user, "settings")
     connection = _connection(user)
     client = Client()
     client.force_login(user)
@@ -112,6 +114,34 @@ def test_studio_agent_and_pipeline_store_and_clear_unattended_binding() -> None:
     assert pipeline.provider_binding == {}
 
 
+def test_staff_without_platform_settings_cannot_store_studio_model_or_provider_override() -> None:
+    user = User.objects.create_user("ordinary-staff", password="x", is_staff=True)
+    grant_feature(user, "studio_agents", "studio_pipelines")
+    connection = _connection(user)
+    binding = {"target_id": "codex_subscription", "connection_id": connection.pk}
+    client = Client()
+    client.force_login(user)
+
+    agent_response = client.post(
+        "/api/studio/agents/",
+        data=json.dumps({"name": "Central defaults", "model": "client-model", "provider_binding": binding}),
+        content_type="application/json",
+    )
+    assert agent_response.status_code == 201
+    agent = AgentConfig.objects.get(pk=agent_response.json()["id"])
+    assert agent.model != "client-model"
+    assert agent.provider_binding == {}
+
+    pipeline_response = client.post(
+        "/api/studio/pipelines/",
+        data=json.dumps({"name": "Central defaults", "provider_binding": binding}),
+        content_type="application/json",
+    )
+    assert pipeline_response.status_code == 201
+    pipeline = Pipeline.objects.get(pk=pipeline_response.json()["id"])
+    assert pipeline.provider_binding == {}
+
+
 def test_chat_binding_can_be_cleared_without_materializing_default() -> None:
     user = User.objects.create_user("chat-binding-user", password="x")
     grant_feature(user, "orchestrator")
@@ -142,6 +172,7 @@ def test_chat_binding_can_be_cleared_without_materializing_default() -> None:
 
 def test_chat_binding_change_clears_provider_session_identity() -> None:
     user = User.objects.create_user("chat-binding-switch-user", password="x")
+    grant_feature(user, "settings")
     first = _connection(user)
     second = AIProviderConnection.objects.create(
         target_id="codex_subscription",

@@ -18,6 +18,7 @@ from servers.models import (
     ServerShare,
     ServerWatcherDraft,
 )
+from servers.services.devops_memory_events import devops_memory_events_enabled
 from servers.tasks import ingest_memory_event_task
 
 SSH_CONNECTION_FIELDS = {
@@ -221,34 +222,35 @@ def _deferred_ingest_health_check(pk: int):
 
 @receiver(post_save, sender=ServerHealthCheck)
 def ingest_health_check(sender, instance: ServerHealthCheck, created: bool, **kwargs):
-    if not created:
+    if not created or devops_memory_events_enabled():
         return
     transaction.on_commit(lambda: _deferred_ingest_health_check(instance.pk))
 
 
 @receiver(post_save, sender=ServerAlert)
 def ingest_alert(sender, instance: ServerAlert, created: bool, **kwargs):
-    event_type = "alert_resolved" if instance.is_resolved else "alert_opened"
-    importance = 0.95 if instance.severity == ServerAlert.SEVERITY_CRITICAL else 0.82
-    ingest_memory_event_task.delay(
-        server_id=instance.server_id,
-        source_kind="monitoring",
-        actor_kind="watcher" if created else "system",
-        source_ref=f"alert:{instance.pk}",
-        session_id=None,
-        event_type=event_type,
-        raw_text=f"{instance.title}\n{instance.message}".strip(),
-        structured_payload={
-            "alert_id": instance.pk,
-            "alert_type": instance.alert_type,
-            "severity": instance.severity,
-            "is_resolved": instance.is_resolved,
-            "metadata": instance.metadata,
-        },
-        importance_hint=importance,
-        actor_user_id=instance.resolved_by_id,
-        force_compact=not instance.is_resolved,
-    )
+    if not devops_memory_events_enabled():
+        event_type = "alert_resolved" if instance.is_resolved else "alert_opened"
+        importance = 0.95 if instance.severity == ServerAlert.SEVERITY_CRITICAL else 0.82
+        ingest_memory_event_task.delay(
+            server_id=instance.server_id,
+            source_kind="monitoring",
+            actor_kind="watcher" if created else "system",
+            source_ref=f"alert:{instance.pk}",
+            session_id=None,
+            event_type=event_type,
+            raw_text=f"{instance.title}\n{instance.message}".strip(),
+            structured_payload={
+                "alert_id": instance.pk,
+                "alert_type": instance.alert_type,
+                "severity": instance.severity,
+                "is_resolved": instance.is_resolved,
+                "metadata": instance.metadata,
+            },
+            importance_hint=importance,
+            actor_user_id=instance.resolved_by_id,
+            force_compact=not instance.is_resolved,
+        )
     if created and not instance.is_resolved:
         transaction.on_commit(lambda: _launch_monitoring_pipelines(instance.pk))
         if instance.severity == ServerAlert.SEVERITY_CRITICAL:
@@ -316,6 +318,8 @@ def operator_resume_on_agent_run(sender, instance: AgentRun, **kwargs):
 
 @receiver(post_save, sender=ServerWatcherDraft)
 def ingest_watcher_draft(sender, instance: ServerWatcherDraft, created: bool, **kwargs):
+    if devops_memory_events_enabled():
+        return
     ingest_memory_event_task.delay(
         server_id=instance.server_id,
         source_kind="watcher",

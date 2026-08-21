@@ -21,6 +21,7 @@ from .views import (
     server_linux_ui,
     server_linux_ui_workloads,
     server_memory,
+    server_memory_search,
     server_monitoring,
     server_monitoring_actions,
     server_ops,
@@ -180,6 +181,11 @@ urlpatterns = [
     ),
     path("api/<int:server_id>/memory/purge/", server_memory.server_memory_purge_user, name="server_memory_purge_user"),
     path("api/<int:server_id>/memory/overview/", server_memory.server_memory_overview, name="server_memory_overview"),
+    path(
+        "api/<int:server_id>/memory/search/",
+        server_memory_search.server_memory_search,
+        name="server_memory_search",
+    ),
     path(
         "api/<int:server_id>/memory/run-dreams/",
         server_memory.server_memory_run_dreams,
@@ -361,6 +367,16 @@ urlpatterns = [
     path("api/playbooks/<int:playbook_id>/delete/", server_playbooks.playbook_delete, name="playbook_delete"),
     path("api/playbooks/<int:playbook_id>/restore/", server_playbooks.playbook_restore, name="playbook_restore"),
     path("api/playbooks/<int:playbook_id>/duplicate/", server_playbooks.playbook_duplicate, name="playbook_duplicate"),
+    path(
+        "api/playbooks/compatibility/analyze/",
+        server_playbook_compatibility_views.playbook_source_compatibility_analyze,
+        name="playbook_source_compatibility_analyze",
+    ),
+    path(
+        "api/playbooks/compatibility/adapt/",
+        server_playbook_compatibility_views.playbook_source_compatibility_adapt,
+        name="playbook_source_compatibility_adapt",
+    ),
     path(
         "api/playbooks/<int:playbook_id>/compatibility/analyze/",
         server_playbook_compatibility_views.playbook_compatibility_analyze,

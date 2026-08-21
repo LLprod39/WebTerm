@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 
 import { SettingsIcons } from "@/lib/app-icons";
 import type { AuthUser } from "@/lib/api";
-import { hasAnyFeatureAccess, hasFeatureAccess } from "@/lib/featureAccess";
+import { canManageAiRouting, hasAnyFeatureAccess, hasFeatureAccess } from "@/lib/featureAccess";
 
 export interface SettingsNavItem {
   id: string;
@@ -13,6 +13,7 @@ export interface SettingsNavItem {
   icon: LucideIcon;
   path: string;
   adminOnly?: boolean;
+  aiRoutingOnly?: boolean;
   feature?: string | string[];
   /** Short setup tip for readiness / hub cards */
   setupHint?: string;
@@ -57,6 +58,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         icon: SettingsIcons.ai,
         path: "/settings/ai",
         adminOnly: true,
+        aiRoutingOnly: true,
         setupHint: "Подключите LLM — чат, агенты, оркестратор",
       },
       {
@@ -67,6 +69,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         descriptionEn: "Codex CLI, Grok CLI, and routing",
         icon: SettingsIcons.ai,
         path: "/settings/ai-connections",
+        aiRoutingOnly: true,
         feature: ["ai_connections_personal", "ai_connections_admin"],
         setupHint: "Личные подключения и workspace-пулы",
       },
@@ -168,6 +171,7 @@ export const settingsNavGroups: SettingsNavGroup[] = [
         icon: SettingsIcons.kubernetes,
         path: "/settings/kubernetes",
         adminOnly: true,
+        feature: "kubernetes",
         setupHint: "Подключение k8s-кластеров",
       },
       {
@@ -195,7 +199,8 @@ export function visibleSettingsNavGroups(
       ...group,
       items: group.items.filter(
         (item) => {
-          if (item.adminOnly && !isAdmin) return false;
+          if (item.adminOnly && !isAdmin && !item.aiRoutingOnly) return false;
+          if (item.aiRoutingOnly && !canManageAiRouting(user)) return false;
           if (item.id === "plugins" && !pluginsEnabled) return false;
           const feature = item.feature ?? "settings";
           return Array.isArray(feature)
@@ -212,7 +217,8 @@ export function canViewSettingsNavItem(
   item: SettingsNavItem | undefined,
 ): boolean {
   if (!item) return true;
-  if (item.adminOnly && !user?.is_staff) return false;
+  if (item.adminOnly && !user?.is_staff && !item.aiRoutingOnly) return false;
+  if (item.aiRoutingOnly && !canManageAiRouting(user)) return false;
   const feature = item.feature ?? "settings";
   return Array.isArray(feature)
     ? hasAnyFeatureAccess(user, feature)

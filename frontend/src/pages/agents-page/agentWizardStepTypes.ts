@@ -9,7 +9,7 @@ import type {
   ProviderBinding,
   StudioSkill,
 } from "@/lib/api";
-import type { AgentSudoPolicy, AgentTaskDraft, AgentWizardCheck, AgentWizardStep } from "./agentPageUtils";
+import type { AgentSudoPolicy, AgentTargetScope, AgentTaskDraft, AgentWizardCheck, AgentWizardStep } from "./agentPageUtils";
 
 export type SummaryRow = { icon: LucideIcon; label: string; value: string };
 export type AgentMode = "mini" | "full" | "multi";
@@ -45,6 +45,7 @@ export type AgentWizardStepContentProps = {
   providerBinding: ProviderBinding | null;
   setProviderBinding: StateSetter<ProviderBinding | null>;
   providerMode: "interactive" | "unattended";
+  canManageAiRouting: boolean;
   sudoPolicy: AgentSudoPolicy;
   setSudoPolicy: StateSetter<AgentSudoPolicy>;
   servers: FrontendServer[];
@@ -52,6 +53,9 @@ export type AgentWizardStepContentProps = {
   serverSearch: string;
   setServerSearch: StateSetter<string>;
   selectedServers: number[];
+  targetScope: AgentTargetScope;
+  changeTargetScope: (scope: AgentTargetScope) => void;
+  serverRequirementReasons: string[];
   toggleServer: (id: number) => void;
   selectAll: () => void;
   hasAllServersSelected: boolean;

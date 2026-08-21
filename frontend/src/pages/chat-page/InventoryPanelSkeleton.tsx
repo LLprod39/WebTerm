@@ -34,7 +34,6 @@ export function InventoryPanelSkeleton({ kind = "list", rows = 5, className, lab
     <div
       className={cn(
         "max-w-[min(520px,100%)] overflow-hidden rounded-sm border border-border/40 bg-card/30",
-        "animate-in fade-in-0 duration-300",
         className,
       )}
       role="status"

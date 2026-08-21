@@ -275,7 +275,7 @@ describe("Servers page rules and translations", () => {
     });
   });
 
-  it("does not unlock elevated server access for team admins", async () => {
+  it("keeps server access restricted for team admins without automation", async () => {
     vi.mocked(api.fetchAuthSession).mockResolvedValue({
       authenticated: true,
       user: {
@@ -284,27 +284,27 @@ describe("Servers page rules and translations", () => {
         email: "team-admin@example.com",
         is_staff: true,
         access_profile: "team_admin",
-        features: featureMap({ automation: true }),
+        features: featureMap({ automation: false }),
       },
     });
     renderServers("en");
 
     fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Pilot access is locked");
+    expect(await screen.findByRole("status")).toHaveTextContent("Automation access is not granted");
     expect(screen.queryByRole("switch", { name: "AI read-only" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "NOPASSWD" })).not.toBeInTheDocument();
   });
 
-  it("unlocks elevated server access only for pilot_operator with automation", async () => {
+  it("unlocks elevated server access for any release profile with automation", async () => {
     vi.mocked(api.fetchAuthSession).mockResolvedValue({
       authenticated: true,
       user: {
         id: 3,
-        username: "pilot-operator",
-        email: "pilot-operator@example.com",
-        is_staff: false,
-        access_profile: "pilot_operator",
+        username: "release-admin",
+        email: "release-admin@example.com",
+        is_staff: true,
+        access_profile: "admin_full",
         features: featureMap({ automation: true }),
       },
     });
@@ -314,7 +314,7 @@ describe("Servers page rules and translations", () => {
 
     expect(await screen.findByRole("switch", { name: "AI read-only" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
-    expect(screen.queryByText("Pilot access is locked")).not.toBeInTheDocument();
+    expect(screen.queryByText("Automation access is not granted")).not.toBeInTheDocument();
   });
 
   it("tests an existing server connection without native alerts", async () => {

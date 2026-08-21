@@ -31,7 +31,6 @@ function props(overrides: Partial<PlaybooksCatalogPanelProps> = {}): PlaybooksCa
     lang: "en",
     tr: (_ru, en) => en,
     playbooks: [],
-    templates: [],
     recentRuns: [],
     playbooksLoading: false,
     playbooksError: "Request failed with status 503",
@@ -45,11 +44,8 @@ function props(overrides: Partial<PlaybooksCatalogPanelProps> = {}): PlaybooksCa
     ansibleAvailable: false,
     onRefreshRuns: vi.fn(),
     onRetryPlaybooks: vi.fn(),
-    onImportClick: vi.fn(),
-    onImportFile: vi.fn(),
     onOpenNew: vi.fn(),
-    onOpenGuided: vi.fn(),
-    onInstallTemplate: vi.fn(),
+    onOpenImport: vi.fn(),
     onOpenEdit: vi.fn(),
     onStartRun: vi.fn(),
     onDuplicate: vi.fn(),
@@ -112,5 +108,27 @@ describe("PlaybooksCatalogPanel loading states", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Security" }));
     expect(setCategoryFilter).toHaveBeenCalledWith("security");
+  });
+
+  it("offers adjacent create and import actions without a source-card funnel", () => {
+    const onOpenNew = vi.fn();
+    const onOpenImport = vi.fn();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <PlaybooksCatalogPanel {...props({ playbooksError: "", onOpenNew, onOpenImport })} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByRole("heading", { name: "Add your own automation" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/GitLab project/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Single YAML/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Project archive/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/template/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Create Ansible" })[0]);
+    expect(onOpenNew).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    expect(onOpenImport).toHaveBeenCalledTimes(1);
   });
 });

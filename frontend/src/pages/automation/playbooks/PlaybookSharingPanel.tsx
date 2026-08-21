@@ -9,7 +9,6 @@ import type {
 } from "@/api/playbooks";
 import { ConfirmDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogBody,
@@ -43,7 +42,6 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
   const [principalType, setPrincipalType] = useState<PlaybookSharePrincipalType>("user");
   const [principalId, setPrincipalId] = useState("");
   const [role, setRole] = useState<PlaybookShareRole>("viewer");
-  const [capabilities, setCapabilities] = useState<PlaybookShareCapabilities>(ROLE_CAPABILITIES.viewer);
   const [expiresAt, setExpiresAt] = useState("");
   const [formError, setFormError] = useState("");
 
@@ -51,7 +49,6 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
 
   const changeRole = (nextRole: PlaybookShareRole) => {
     setRole(nextRole);
-    setCapabilities({ ...ROLE_CAPABILITIES[nextRole] });
   };
 
   const openForm = () => {
@@ -74,21 +71,18 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
       principal_type: principalType,
       ...(principalType === "workspace" ? {} : { principal_id: parsedId }),
       role,
-      capabilities,
+      capabilities: ROLE_CAPABILITIES[role],
       expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
     });
     if (saved) setOpen(false);
   };
 
-  const capabilityLabels: Array<[keyof PlaybookShareCapabilities, string]> = [
-    ["can_view", tr("Просмотр", "View")],
-    ["can_edit", tr("Редактирование", "Edit")],
-    ["can_validate", tr("Проверка", "Validate")],
-    ["can_publish", tr("Публикация", "Publish")],
-    ["can_run", tr("Запуск", "Run")],
-    ["can_export", tr("Экспорт", "Export")],
-    ["can_manage_shares", tr("Управление доступом", "Manage access")],
-  ];
+  const roleDescription = {
+    viewer: tr("Только просмотр", "View only"),
+    editor: tr("Просмотр, редактирование и проверка", "View, edit, and validate"),
+    operator: tr("Просмотр, проверка и запуск", "View, validate, and run"),
+    manager: tr("Полное управление проектом и доступом", "Full project and access management"),
+  }[role];
 
   return (
     <section className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1" aria-labelledby="sharing-panel-title">
@@ -129,9 +123,7 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
                     {share.principal.type}{share.principal.id ? ` #${share.principal.id}` : ""}
                     {share.expires_at ? ` · ${tr("до", "until")} ${new Date(share.expires_at).toLocaleString()}` : ""}
                   </p>
-                  <p className="mt-1 text-2xs text-muted-foreground">
-                    {Object.entries(share.capabilities).filter(([, value]) => value).map(([key]) => key.replace(/^can_/, "")).join(" · ")}
-                  </p>
+                  <p className="mt-1 text-2xs text-muted-foreground">{share.role === "viewer" ? tr("Только просмотр", "View only") : share.role === "editor" ? tr("Редактирование и проверка", "Edit and validate") : share.role === "operator" ? tr("Проверка и запуск", "Validate and run") : tr("Полное управление", "Full management")}</p>
                 </div>
                 {!revoked ? (
                   <Button
@@ -194,26 +186,13 @@ export function PlaybookSharingPanel({ lang, workspace }: PlaybookSharingPanelPr
                     <SelectItem value="manager">{tr("Менеджер", "Manager")}</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">{roleDescription}</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="share-expires">{tr("Истекает (необязательно)", "Expires (optional)")}</Label>
                 <Input id="share-expires" type="datetime-local" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} />
               </div>
             </div>
-            <fieldset className="rounded-sm border border-border p-3">
-              <legend className="px-1 text-xs font-medium text-foreground">{tr("Capabilities", "Capabilities")}</legend>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {capabilityLabels.map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Checkbox
-                      checked={capabilities[key]}
-                      onCheckedChange={(checked) => setCapabilities((current) => ({ ...current, [key]: checked === true }))}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
             {formError ? <p role="alert" className="text-xs text-destructive">{formError}</p> : null}
           </DialogBody>
           <DialogFooter>

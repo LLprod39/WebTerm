@@ -46,6 +46,8 @@ def _snapshot_kind(memory_key: str) -> str:
         return "automation"
     if memory_key.startswith("skill_draft:"):
         return "skill_draft"
+    if memory_key.startswith("llm_candidate:"):
+        return "llm_candidate"
     if memory_key.startswith("manual_note:"):
         return "manual_note"
     if memory_key.startswith("knowledge_note:"):

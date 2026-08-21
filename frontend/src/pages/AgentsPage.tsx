@@ -101,7 +101,7 @@ export default function AgentsPage() {
         compact
         title={t("agent.title")}
         count={allAgents.length > 0 ? allAgents.length : undefined}
-        subtitle={localize(lang, "Команды и задачи на ваших серверах", "Commands and tasks on your servers")}
+        subtitle=""
         actions={
           <>
             <Button size="icon" variant="ghost" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
@@ -197,15 +197,20 @@ export default function AgentsPage() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium text-foreground">{result.server_name}</div>
-            <div className="text-xs text-muted-foreground">{result.status} · {formatDuration(result.duration_ms)}</div>
+            <div className="text-xs text-muted-foreground">
+              {result.status === "completed"
+                ? localize(lang, "Работа завершена · результат готов", "Work completed · result ready")
+                : localize(lang, "Запуск завершился с проблемой · откройте результат", "Run ended with an issue · open the result")}
+              {" · "}{formatDuration(result.duration_ms)}
+            </div>
           </div>
           {result.run_id > 0 ? (
             <Button size="sm" variant="outline" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => navigate(`/agents/run/${result.run_id}`)}>
-              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+              <FileText className="h-3.5 w-3.5" /> {localize(lang, "Открыть результат", "Open result")}
             </Button>
           ) : (
             <Button size="sm" className="h-9 shrink-0 gap-1.5 text-xs" onClick={() => setReportModalOpen(true)}>
-              <FileText className="h-3.5 w-3.5" /> {t("agent.report")}
+              <FileText className="h-3.5 w-3.5" /> {localize(lang, "Открыть результат", "Open result")}
             </Button>
           )}
           <Button

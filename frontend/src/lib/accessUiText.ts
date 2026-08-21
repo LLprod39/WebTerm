@@ -63,7 +63,6 @@ const PROFILE_LABELS: Record<AccessUiLang, Record<string, string>> = {
 };
 
 export const ACCESS_PROFILE_OPTIONS = [
-  "pilot_user",
   "operator_server_only",
   "operator_studio_runner",
   "team_admin_no_secrets",

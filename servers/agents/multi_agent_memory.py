@@ -33,6 +33,8 @@ async def build_multi_agent_ops_prompt_context(engine: Any) -> str:
         server_ids=server_ids,
         group_ids=list(dict.fromkeys(group_ids)),
         limit=5,
+        actor_user_id=engine.agent.user_id,
+        agent_id=engine.agent.id,
     )
     tool_registry_prompt = engine.tool_registry.build_prompt_slice(limit=10) if engine.tool_registry else ""
     return build_ops_prompt_context(

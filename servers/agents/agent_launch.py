@@ -4,8 +4,10 @@ from django.db import transaction
 
 from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_agent_run_limit_error
+from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
 from core_ui.services.ai_execution_context import build_execution_context
 from servers.agents.agent_background import launch_agent_run_background
+from servers.agents.agent_targeting import agent_server_requirement_reasons
 from servers.models import AgentDispatchControl, AgentRun
 from servers.run_events import record_run_event
 from servers.services.server_query import CAPABILITY_EXECUTE_COMMAND, resolve_servers_for_user_capability
@@ -56,18 +58,23 @@ def launch_queued_agent_run(
         else:
             server_ids = list(agent.servers.values_list("id", flat=True))
             if not server_ids:
-                return {"ok": False, "status": 400, "error": "No servers assigned to agent"}
-            accessible_servers = list(accessible_servers_queryset.filter(id__in=server_ids))
-            if not accessible_servers:
-                return {"ok": False, "status": 400, "error": "No accessible servers"}
-            servers, denied = resolve_servers_for_user_capability(
-                server_ids,
-                user,
-                CAPABILITY_EXECUTE_COMMAND,
-                base_queryset=accessible_servers_queryset,
-            )
-            if denied:
-                return {"ok": False, "status": 403, "error": "Missing server capability: execute_command"}
+                reasons = agent_server_requirement_reasons(agent)
+                if reasons:
+                    return {"ok": False, "status": 400, "error": "Selected commands or capabilities require a server", "payload": {"code": "server_scope_required", "reasons": reasons}}
+                servers = []
+                denied = []
+            else:
+                accessible_servers = list(accessible_servers_queryset.filter(id__in=server_ids))
+                if not accessible_servers:
+                    return {"ok": False, "status": 400, "error": "No accessible servers"}
+                servers, denied = resolve_servers_for_user_capability(
+                    server_ids,
+                    user,
+                    CAPABILITY_EXECUTE_COMMAND,
+                    base_queryset=accessible_servers_queryset,
+                )
+                if denied:
+                    return {"ok": False, "status": 403, "error": "Missing server capability: execute_command"}
 
         already_running = AgentRun.objects.filter(
             agent=agent,
@@ -82,7 +89,7 @@ def launch_queued_agent_run(
         if already_running:
             return {"ok": False, "status": 409, "error": "Agent is already running"}
 
-        primary_server = servers[0]
+        primary_server = servers[0] if servers else None
         execution_mode = ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE
         execution_context = build_execution_context(
             actor_user_id=user.pk,
@@ -91,8 +98,8 @@ def launch_queued_agent_run(
             source_kind="server_agent",
             source_id=agent.pk,
             mode=execution_mode,
-            explicit_binding=explicit_provider_binding,
-            stored_binding=agent.provider_binding,
+            explicit_binding=operational_provider_binding(user, explicit_provider_binding),
+            stored_binding=stored_operational_provider_binding(user, agent.provider_binding),
             requested_provider="auto",
         )
         run_result = AgentRun.objects.create(

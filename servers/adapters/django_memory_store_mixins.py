@@ -109,12 +109,14 @@ class DjangoMemoryStoreSnapshotMixin:
         patterns: list[_OperationalPattern],
         snapshots: list[Any],
         enhancements: dict[str, dict[str, Any]] | None = None,
+        generation_log=None,
     ) -> dict[str, int]:
         return perform_promote_pattern_candidates(
             server_id=server_id,
             patterns=patterns,
             snapshots=snapshots,
             enhancements=enhancements,
+            generation_log=generation_log,
         )
 
     def _archive_missing_candidate_snapshots_sync(self, server_id: int, *, active_keys: set[str]) -> int:
@@ -142,8 +144,14 @@ class DjangoMemoryStoreSnapshotMixin:
         server,
         candidates: list[_SnapshotCandidate],
         model_alias: str,
+        generation_log_out: list[Any] | None = None,
     ) -> dict[str, str]:
-        return distill_with_llm(server=server, candidates=candidates, model_alias=model_alias)
+        return distill_with_llm(
+            server=server,
+            candidates=candidates,
+            model_alias=model_alias,
+            generation_log_out=generation_log_out,
+        )
 
     def _llm_enhance_patterns_sync(
         self,
@@ -151,8 +159,14 @@ class DjangoMemoryStoreSnapshotMixin:
         server,
         patterns: list[_OperationalPattern],
         model_alias: str,
+        generation_log_out: list[Any] | None = None,
     ) -> dict[str, dict[str, Any]]:
-        return llm_enhance_patterns(server=server, patterns=patterns, model_alias=model_alias)
+        return llm_enhance_patterns(
+            server=server,
+            patterns=patterns,
+            model_alias=model_alias,
+            generation_log_out=generation_log_out,
+        )
 
     def _upsert_snapshot_sync(
         self,
@@ -173,6 +187,7 @@ class DjangoMemoryStoreSnapshotMixin:
         force_version: bool = False,
         layer: str | None = None,
         enforce_trust_gate: bool = True,
+        generation_log=None,
     ):
         return perform_upsert_snapshot(
             server_id=server_id,
@@ -191,6 +206,7 @@ class DjangoMemoryStoreSnapshotMixin:
             force_version=force_version,
             layer=layer,
             enforce_trust_gate=enforce_trust_gate,
+            generation_log=generation_log,
         )
 
     def _ensure_revalidation_sync(

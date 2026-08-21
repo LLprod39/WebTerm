@@ -75,6 +75,7 @@ vi.mock("@xyflow/react", async () => {
 });
 
 vi.mock("@/lib/api", () => ({
+  fetchAuthSession: vi.fn(),
   studioPipelines: {
     list: vi.fn(),
     get: vi.fn(),
@@ -137,6 +138,17 @@ describe("PipelineEditorPage save hydration", () => {
     document.documentElement.lang = "ru";
 
     setupPipelineEditorApiMocks();
+    vi.mocked(api.fetchAuthSession).mockResolvedValue({
+      authenticated: true,
+      user: {
+        id: 1,
+        username: "operator",
+        email: "operator@example.test",
+        is_staff: true,
+        can_manage_ai_routing: false,
+        features: { settings: false },
+      },
+    } as never);
   });
 
   it("saves the fresh server graph instead of stale cached trigger edges", async () => {
@@ -168,6 +180,13 @@ describe("PipelineEditorPage save hydration", () => {
         expect.objectContaining({ source: "schedule_start", target: "trigger_merge" }),
       ]),
     );
+  });
+
+  it("does not render an operational provider picker for ordinary staff", async () => {
+    renderPage(buildQueryClient());
+
+    await waitFor(() => expect(api.studioPipelines.get).toHaveBeenCalledWith(45));
+    expect(screen.queryByRole("combobox", { name: /AI-провайдер задачи|Task AI provider/i })).not.toBeInTheDocument();
   });
 
   it("prefers the authoritative server graph when the editor has no local changes", () => {

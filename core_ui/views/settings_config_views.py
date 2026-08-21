@@ -405,8 +405,10 @@ def api_settings(request):
                 {"success": False, "error": "Only admins can update audit logging settings"},
                 status=403,
             )
+        from core_ui.ai_model_policy import user_can_manage_ai_routing
+
         requested_api_key_update = bool(data.get("api_keys")) or bool(data.get("clear_api_keys"))
-        if requested_api_key_update and not request.user.is_staff:
+        if requested_api_key_update and not user_can_manage_ai_routing(request.user):
             return JsonResponse(
                 {"success": False, "error": "Only admins can update API keys"},
                 status=403,
@@ -424,7 +426,7 @@ def api_settings(request):
                 status=403,
             )
         requested_ai_model_keys = sorted(key for key in data if key in _ai_model_settings_keys())
-        if requested_ai_model_keys and not request.user.is_staff:
+        if requested_ai_model_keys and not user_can_manage_ai_routing(request.user):
             return JsonResponse(
                 {"success": False, "error": "Only admins can change AI models and providers"},
                 status=403,

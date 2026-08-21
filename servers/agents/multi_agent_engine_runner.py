@@ -166,10 +166,7 @@ async def run_multi_agent_engine(
             run, connected_servers=[{"server_id": c["server_id"], "server_name": c["server_name"]} for c in connected]
         )
 
-        if not engine.session.connections and not engine.mcp_tools and not engine.skills:
-            raise RuntimeError("No servers connected, no MCP tools available, and no skills attached.")
-
-        goal = engine.agent.goal or engine.agent.ai_prompt or "Analyse the servers."
+        goal = engine.agent.goal or engine.agent.ai_prompt or "Complete the assigned task."
 
         await engine._emit("agent_status", {"status": "planning"})
         await engine._emit(

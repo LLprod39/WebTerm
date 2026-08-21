@@ -95,6 +95,10 @@ x-backend-worker: &backend-worker
     WEBTERM_ANSIBLE_DOCKER_CPUS: ${WEBTERM_ANSIBLE_DOCKER_CPUS:-1.0}
     WEBTERM_ANSIBLE_DOCKER_MEMORY: ${WEBTERM_ANSIBLE_DOCKER_MEMORY:-512m}
     WEBTERM_ANSIBLE_VALIDATOR_SOCKET: /run/playbook-validator/validator.sock
+    # Optional local/pilot scope. Empty keeps the normal all-active inventory.
+    MONITOR_SERVER_ID: ${MONITOR_SERVER_ID:-}
+    # Kubernetes Ops stays off in the pilot unless explicitly enabled.
+    KUBERNETES_OPS_ENABLED: ${KUBERNETES_OPS_ENABLED:-false}
   volumes:
     - .:/workspace
     - /var/run/docker.sock:/var/run/docker.sock
@@ -204,6 +208,7 @@ services:
       DJANGO_PORT: 9000
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-web_ui.settings.production}
+      KUBERNETES_OPS_ENABLED: ${KUBERNETES_OPS_ENABLED:-false}
       MARS_AGENT_RUNTIME: ${MARS_AGENT_RUNTIME:-docker}
       MARS_AGENT_DOCKER_IMAGE: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
       MARS_AGENT_DOCKER_NETWORK: ${MARS_AGENT_DOCKER_NETWORK:-bridge}
@@ -366,6 +371,7 @@ services:
   kubernetes-ops-sync:
     <<: *backend-worker
     container_name: mini-prod-kubernetes-ops-sync
+    profiles: ["kubernetes-ops"]
     command:
       [
         "sh",
@@ -390,7 +396,7 @@ services:
       [
         "sh",
         "-lc",
-        "python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --concurrency ${MONITOR_CONCURRENCY:-5}",
+        "exec python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --concurrency ${MONITOR_CONCURRENCY:-5} $${MONITOR_SERVER_ID:+--server-id $${MONITOR_SERVER_ID}}",
       ]
 
   telegram-bot:

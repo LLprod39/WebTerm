@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bot, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   adaptPlaybookCompatibility,
+  adaptPlaybookSource,
   analyzePlaybookCompatibility,
+  analyzePlaybookSource,
   applyPlaybookCompatibility,
   type PlaybookCompatibilityReport,
-  type PlaybookCompatibilityRevision,
   type PlaybookDetail,
 } from "@/api/playbooks";
 import { Button } from "@/components/ui/button";
@@ -17,9 +18,9 @@ interface PlaybookCompatibilityPanelProps {
   playbookId: number | null;
   sourceYaml: string;
   report?: PlaybookCompatibilityReport;
-  activeRevision?: PlaybookCompatibilityRevision | null;
   canAdapt?: boolean;
   onApplied: (playbook: PlaybookDetail) => void;
+  onSourceAccepted?: (sourceYaml: string, report: PlaybookCompatibilityReport) => void;
 }
 
 export function PlaybookCompatibilityPanel({
@@ -27,9 +28,9 @@ export function PlaybookCompatibilityPanel({
   playbookId,
   sourceYaml,
   report: initialReport,
-  activeRevision,
   canAdapt = true,
   onApplied,
+  onSourceAccepted,
 }: PlaybookCompatibilityPanelProps) {
   const tr = (ru: string, en: string) => (lang === "ru" ? ru : en);
   const [report, setReport] = useState<PlaybookCompatibilityReport>(initialReport || {});
@@ -70,31 +71,38 @@ export function PlaybookCompatibilityPanel({
   if (!sourceYaml) return null;
 
   const analyze = async () => {
-    if (!playbookId) return;
     setBusy("analyze");
+    setLastFailure("");
     try {
-      const result = await analyzePlaybookCompatibility(playbookId);
+      const result = playbookId
+        ? await analyzePlaybookCompatibility(playbookId, { source_yaml: sourceYaml })
+        : await analyzePlaybookSource(sourceYaml);
       setReport(result.report || {});
       notify.success({ title: tr("Проверка завершена", "Compatibility checked") });
     } catch (error) {
-      notify.error({ title: tr("Проверка не удалась", "Compatibility check failed"), description: String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      setLastFailure(message);
+      notify.error({ title: tr("Проверка не удалась", "Compatibility check failed"), description: message });
     } finally {
       setBusy(null);
     }
   };
 
   const prepareAdaptation = async () => {
-    if (!playbookId) return;
     setBusy("adapt");
     setLastFailure("");
     try {
-      const result = await adaptPlaybookCompatibility(playbookId);
+      const result = playbookId
+        ? await adaptPlaybookCompatibility(playbookId)
+        : await adaptPlaybookSource(sourceYaml);
       const nextProposal = result.proposal;
       setReport(nextProposal.report || report);
       if (!nextProposal.semantic_guard?.passed || !nextProposal.adapted_yaml) {
+        const reason = (nextProposal.semantic_guard?.violations || []).join("; ") || tr("Предложение не прошло semantic guard.", "The proposal did not pass the semantic guard.");
+        setLastFailure(reason);
         notify.error({
           title: tr("ИИ-патч отклонён", "AI patch rejected"),
-          description: tr("Предложение изменило защищённую логику.", "The proposal changed protected logic."),
+          description: reason,
         });
         return;
       }
@@ -116,22 +124,27 @@ export function PlaybookCompatibilityPanel({
   };
 
   const applyProposal = async () => {
-    if (!playbookId || !proposal?.semantic_guard?.passed || !proposal.adapted_yaml) return;
+    if (!proposal?.semantic_guard?.passed || !proposal.adapted_yaml) return;
     setBusy("apply");
     setLastFailure("");
     try {
-      const applied = await applyPlaybookCompatibility(playbookId, {
-        adapted_yaml: proposal.adapted_yaml,
-        changes: proposal.changes,
-      });
-      onApplied(applied.playbook);
-      setReport(applied.revision.report || {});
+      if (!playbookId) {
+        onSourceAccepted?.(proposal.adapted_yaml, proposal.report || {});
+        setReport(proposal.report || {});
+      } else {
+        const applied = await applyPlaybookCompatibility(playbookId, {
+          adapted_yaml: proposal.adapted_yaml,
+          changes: proposal.changes,
+        });
+        onApplied(applied.playbook);
+        setReport(applied.revision.report || {});
+      }
       setProposal(null);
       notify.success({
-        title: tr("Адаптация сохранена в черновик", "Adaptation saved to draft"),
+        title: playbookId ? tr("Адаптация сохранена в черновик", "Adaptation saved to draft") : tr("Адаптация добавлена в редактор", "Adaptation added to the editor"),
         description: tr(
-          "Создана неизменяемая ревизия. Проверьте validation и опубликуйте её отдельно в разделе ревизий.",
-          "An immutable revision was created. Validate it and publish it separately in the revisions section.",
+          "Проверьте текст и сохраните Ansible, когда будете готовы.",
+          "Review the text and save the Ansible when ready.",
         ),
       });
     } catch (error) {
@@ -144,42 +157,27 @@ export function PlaybookCompatibilityPanel({
   };
 
   return (
-    <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1 space-y-4">
+    <div className="space-y-4 rounded-lg border border-border bg-card p-4 shadow-elev-1">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">{tr("Совместимость Ansible", "Ansible compatibility")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">{tr("AI-проверка", "AI check")}</h3>
             <span className={cn("rounded-sm border px-2 py-0.5 text-2xs font-medium", statusMeta.className)}>
               {statusMeta.label}
             </span>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {tr(
-              "Оригинал хранится отдельно. ИИ не может изменить задачи, роли, условия или порядок.",
-              "The original is preserved. AI cannot change tasks, roles, conditions, or order.",
+              "Проверим YAML. Если нужна адаптация, вы сначала увидите предложение и только потом примените его.",
+              "Check the YAML. If adaptation is needed, you review the proposal before applying it.",
             )}
           </p>
         </div>
-        <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={!playbookId || busy !== null || Boolean(proposal)} onClick={() => void analyze()}>
+        <Button size="sm" variant="outline" className="h-8 gap-1.5" disabled={busy !== null || Boolean(proposal)} onClick={() => void analyze()}>
           <RefreshCw className={cn("h-3.5 w-3.5", busy === "analyze" && "animate-spin")} />
           {tr("Проверить", "Analyze")}
         </Button>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-sm border border-border bg-surface-0 p-3">
-          <div className="text-2xs uppercase tracking-wider text-muted-foreground">{tr("Селекторы hosts", "Host selectors")}</div>
-          <div className="mt-1 font-mono text-xs text-foreground">{report.host_selectors?.join(", ") || "all"}</div>
-        </div>
-        <div className="rounded-sm border border-border bg-surface-0 p-3">
-          <div className="text-2xs uppercase tracking-wider text-muted-foreground">{tr("Переменные", "Required vars")}</div>
-          <div className="mt-1 font-mono text-xs text-foreground">{report.required_variables?.join(", ") || "—"}</div>
-        </div>
-        <div className="rounded-sm border border-border bg-surface-0 p-3">
-          <div className="text-2xs uppercase tracking-wider text-muted-foreground">{tr("Активная ревизия", "Active revision")}</div>
-          <div className="mt-1 font-mono text-xs text-foreground">{activeRevision ? `#${activeRevision.id}` : "—"}</div>
-        </div>
       </div>
 
       {(report.issues || []).length > 0 ? (
@@ -244,7 +242,7 @@ export function PlaybookCompatibilityPanel({
         </section>
       ) : null}
 
-      {canAdapt ? (
+      {canAdapt && status !== "ready" ? (
         <div className="space-y-2 border-t border-border pt-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-2xl text-xs text-muted-foreground">
@@ -260,7 +258,7 @@ export function PlaybookCompatibilityPanel({
             <Button
               size="sm"
               className="h-9 gap-1.5"
-              disabled={!playbookId || busy !== null || Boolean(proposal)}
+              disabled={busy !== null || Boolean(proposal)}
               onClick={() => void prepareAdaptation()}
             >
               <Bot className="h-3.5 w-3.5" />

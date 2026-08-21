@@ -1,22 +1,27 @@
-import { Server, UserRound, X } from "lucide-react";
+import { BookOpen, Server, UserRound, X } from "lucide-react";
 
 import { localize, useI18n } from "@/lib/i18n";
 
 import type { PinnedServer, PinnedUser } from "./ComposeCommandPalette";
+import type { PinnedPlaybook } from "./useChatPagePins";
 
 export function PinnedContextChips({
   servers,
   users,
   onUnpinServer,
   onUnpinUser,
+  playbook,
+  onUnpinPlaybook,
 }: {
   servers: PinnedServer[];
   users: PinnedUser[];
   onUnpinServer: (id: number) => void;
   onUnpinUser: (id: number) => void;
+  playbook?: PinnedPlaybook | null;
+  onUnpinPlaybook?: () => void;
 }) {
   const { lang } = useI18n();
-  if (!servers.length && !users.length) return null;
+  if (!servers.length && !users.length && !playbook) return null;
 
   return (
     <div className="mb-2 flex flex-wrap items-center gap-1.5 px-0.5">
@@ -40,6 +45,22 @@ export function PinnedContextChips({
           </button>
         </span>
       ))}
+      {playbook ? (
+        <span className="inline-flex max-w-[18rem] items-center gap-1 rounded-sm border border-info/30 bg-info/10 px-2 py-0.5 text-[11px] text-foreground">
+          <BookOpen className="h-3 w-3 shrink-0 text-info" strokeWidth={1.75} />
+          <span className="truncate font-medium tracking-tight">{playbook.name} · #{playbook.id}</span>
+          {onUnpinPlaybook ? (
+            <button
+              type="button"
+              className="rounded-sm p-0.5 opacity-70 hover:bg-info/15 hover:opacity-100"
+              onClick={onUnpinPlaybook}
+              aria-label={localize(lang, "Убрать playbook из контекста", "Remove playbook from context")}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          ) : null}
+        </span>
+      ) : null}
       {users.map((u) => (
         <span
           key={`u-${u.id}`}

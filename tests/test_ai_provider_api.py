@@ -25,12 +25,14 @@ def _enable_ai_cli_provider_api(monkeypatch):
 
 
 def _project(user: User) -> Project:
+    UserAppPermission.objects.update_or_create(user=user, feature="settings", defaults={"allowed": True})
+    UserAppPermission.objects.update_or_create(user=user, feature="ai_connections_personal", defaults={"allowed": True})
     project = Project.objects.create(name="Ops", slug=f"ops-{user.pk}", owner=user, is_default=True)
     ProjectMembership.objects.create(project=project, user=user, role=ProjectMembership.ROLE_OWNER)
     return project
 
 
-def test_user_can_create_personal_connection_without_secret_in_response(client) -> None:
+def test_platform_settings_user_can_create_connection_without_secret_in_response(client) -> None:
     user = User.objects.create_user("operator", password="pw")
     _project(user)
     client.force_login(user)

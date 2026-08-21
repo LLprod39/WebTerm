@@ -8,6 +8,7 @@ import {
   fetchAssistantChats,
   fetchAiProviderConnections,
   fetchAiProviderPools,
+  listPlaybooks,
   updateAssistantChat,
   type AssistantChatMessage,
   type AssistantChatSession,
@@ -15,7 +16,7 @@ import {
 } from "@/api";
 import type { AuthSessionResponse } from "@/api/auth";
 import { useToast } from "@/hooks/use-toast";
-import { hasFeatureAccess } from "@/lib/featureAccess";
+import { canManageAiRouting, hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
 
 import type { ComposePaletteHandle } from "./ComposeCommandPalette";
@@ -59,7 +60,9 @@ export function useChatPageController() {
   const humanTrailRef = useRef<Array<{ cmd: string; at: number }>>([]);
   const activeChatId = Number(searchParams.get("chat") || 0) || null;
   const authData = queryClient.getQueryData<AuthSessionResponse>(["auth", "session"]);
+  const canManageAiRoutingValue = canManageAiRouting(authData?.user);
   const canUseProviderPools = hasFeatureAccess(authData?.user, "ai_connections_admin");
+  const canUseAutomation = hasFeatureAccess(authData?.user, "automation");
 
   const openSessionDock = useCallback(
     (opts: { serverId: number; serverName?: string; host?: string; mode?: "agent" | "live" }) => {
@@ -171,6 +174,7 @@ export function useChatPageController() {
     queryKey: aiProviderQueryKeys.connections,
     queryFn: fetchAiProviderConnections,
     staleTime: 30_000,
+    enabled: canManageAiRoutingValue,
   });
   const providerPoolsQuery = useQuery({
     queryKey: aiProviderQueryKeys.pools,
@@ -178,12 +182,18 @@ export function useChatPageController() {
     enabled: canUseProviderPools,
     staleTime: 30_000,
   });
+  const playbooksQuery = useQuery({
+    queryKey: ["chat", "playbooks"],
+    queryFn: () => listPlaybooks(),
+    enabled: canUseAutomation,
+    staleTime: 30_000,
+  });
 
   const chats = useMemo(() => chatsQuery.data?.chats || [], [chatsQuery.data?.chats]);
   const activeChat = activeChatQuery.data;
   const messages = useMemo(() => activeChat?.messages || [], [activeChat?.messages]);
   const activeTurn = activeChat?.active_turn;
-  const providerOptions = useMemo(() => [
+  const providerOptions = useMemo(() => canManageAiRoutingValue ? [
     ...(providerConnectionsQuery.data?.connections ?? [])
       .filter((item) => item.access.interactive && item.status === "connected")
       .map((item) => ({
@@ -198,10 +208,14 @@ export function useChatPageController() {
       label: `${item.name} · пул`,
       binding: { target_id: item.target_id, pool_id: item.id } as ProviderBinding,
     })),
-  ], [providerConnectionsQuery.data?.connections, providerPoolsQuery.data?.pools]);
+  ] : [], [canManageAiRoutingValue, providerConnectionsQuery.data?.connections, providerPoolsQuery.data?.pools]);
   const selectedProviderBinding = useMemo(
     () => providerOptions.find((item) => item.key === providerOverride)?.binding ?? null,
     [providerOptions, providerOverride],
+  );
+  const playbookOptions = useMemo(
+    () => (playbooksQuery.data?.playbooks || []).map((item) => ({ id: item.id, name: item.name, kind: item.kind })),
+    [playbooksQuery.data?.playbooks],
   );
 
   useEffect(() => {
@@ -233,11 +247,27 @@ export function useChatPageController() {
       });
   }, [activeChatId, lang, queryClient, toast]);
 
-  const { pinnedServers, pinnedUsers, pinServer, unpinServer, unpinUser } = useChatPagePins({
+  const {
+    pinnedServers,
+    pinnedUsers,
+    pinServer,
+    unpinServer,
+    unpinUser,
+    pinnedPlaybook,
+    setPinnedPlaybook,
+  } = useChatPagePins({
     activeChatId,
     activeChat,
     queryClient,
   });
+
+  useEffect(() => {
+    const raw = searchParams.get("playbook_id") || searchParams.get("playbook") || "";
+    const playbookId = Number(raw);
+    if (!Number.isInteger(playbookId) || playbookId <= 0 || pinnedPlaybook?.id === playbookId) return;
+    const match = playbookOptions.find((item) => item.id === playbookId);
+    if (match) setPinnedPlaybook(match);
+  }, [pinnedPlaybook?.id, playbookOptions, searchParams, setPinnedPlaybook]);
 
   const refreshChat = useCallback(() => {
     if (activeChatId) {
@@ -263,6 +293,7 @@ export function useChatPageController() {
     setRenamingChatId,
     pinnedServers,
     pinnedUsers,
+    pinnedPlaybook,
   });
 
   const {
@@ -357,6 +388,9 @@ export function useChatPageController() {
     }
     if (pinnedUsers.length) {
       text += `\nКонтекст пользователей: ${pinnedUsers.map((u) => u.username).join(", ")}.`;
+    }
+    if (pinnedPlaybook) {
+      text += `\n\nКонтекст playbook: ${pinnedPlaybook.name} (playbook_id: ${pinnedPlaybook.id}).`;
     }
     // Human commands from the live side shell — operator must see them
     const trail = humanTrailRef.current.slice(-10);
@@ -511,6 +545,9 @@ export function useChatPageController() {
     setChatFilter,
     pinnedServers,
     pinnedUsers,
+    pinnedPlaybook,
+    setPinnedPlaybook,
+    playbookOptions,
     pendingUserText,
     actionWorkingId,
     tasksPanelOpen,

@@ -12,6 +12,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
 import { SkeletonList, SkeletonMetrics } from "@/components/ui/list-state";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ServersPageView } from "./servers/ServersPageView";
 import type { AdvancedTab, MainTab } from "./servers/types";
 import { useServerCommandController } from "./servers/useServerCommandController";
@@ -79,8 +80,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     staleTime: 60_000,
     retry: false,
   });
-  const canConfigureElevatedAccess = authData?.user?.access_profile === "pilot_operator"
-    && hasFeatureAccess(authData.user, "automation");
+  const canConfigureElevatedAccess = hasFeatureAccess(authData?.user, "automation");
   const {
     canConfigureElevatedAccess: serverAccessCanBeConfigured,
     closeHostKeyEnrollment,
@@ -131,7 +131,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
   const knowledgeController = useServerKnowledgeController(advancedServer, t, tr);
   const securityController = useServerSecurityController(advancedServer, t);
   const commandController = useServerCommandController(advancedServer, t, tr);
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["frontend", "bootstrap"],
     queryFn: fetchFrontendBootstrap,
     staleTime: 20_000,
@@ -141,7 +141,17 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
 
   const serverListUserKey = authData?.user?.id != null ? `id:${authData.user.id}` : undefined;
   const serversList = useServersListController(servers, serverListUserKey);
-  const { collapsed, filtered, grouped, onlineCount, search, setSearch, toggleGroup } = serversList;
+  const {
+    collapsed,
+    filtered,
+    groupFilter,
+    groupOptions,
+    grouped,
+    search,
+    setGroupFilter,
+    setSearch,
+    toggleGroup,
+  } = serversList;
   const groups = useMemo(() => (Array.isArray(data?.groups) ? data.groups : []), [data?.groups]);
   const manageableGroups = useMemo(
     () =>
@@ -151,9 +161,16 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       ),
     [groups],
   );
-  const sharedCount = (servers ?? []).filter((server) => server.is_shared).length;
   const groupCount = manageableGroups.length;
-  const offlineCount = Math.max(0, servers.length - onlineCount);
+  const healthyCount = useMemo(
+    () =>
+      servers.filter((server) => {
+        const health = fleetHealthByServerId.get(server.id);
+        return Boolean(health && !health.is_stale && health.status === "healthy");
+      }).length,
+    [fleetHealthByServerId, servers],
+  );
+  const attentionCount = Math.max(0, servers.length - healthyCount);
 
   const rulesController = useServerRulesController({
     activeServer: advancedServer,
@@ -203,21 +220,45 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
   if (isLoading || error || !data) {
     if (isLoading) {
       return (
-        <PageShell className="space-y-4">
-          <SkeletonMetrics count={4} />
-          <SkeletonList rows={6} />
+        <PageShell width="6xl" className="space-y-4 pb-8">
+          <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-elev-1" aria-hidden>
+            <Skeleton className="h-3 w-32" />
+            <div className="mt-3 flex items-end justify-between gap-6">
+              <div className="space-y-2">
+                <Skeleton className="h-8 w-44" />
+                <Skeleton className="h-4 w-96 max-w-full" />
+              </div>
+              <Skeleton className="h-10 w-36 rounded-lg" />
+            </div>
+          </div>
+          <SkeletonMetrics count={4} className="gap-3" />
+          <div className="rounded-xl border border-border bg-card p-2 shadow-elev-1" aria-hidden>
+            <div className="flex items-center justify-between gap-4">
+              <Skeleton className="h-10 w-80 rounded-lg" />
+              <div className="flex gap-2">
+                <Skeleton className="h-9 w-64 rounded-lg" />
+                <Skeleton className="h-9 w-44 rounded-lg" />
+              </div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-3 shadow-elev-1">
+            <SkeletonList rows={6} />
+          </div>
         </PageShell>
       );
     }
     return (
-      <QueryStateBlock
-        loading={false}
-        error={error || (!data ? new Error(t("srv.error")) : undefined)}
-        errorText={t("srv.error")}
-        className="p-6"
-      >
-        {null}
-      </QueryStateBlock>
+      <PageShell width="6xl" className="pb-8">
+        <QueryStateBlock
+          loading={false}
+          error={error || (!data ? new Error(t("srv.error")) : undefined)}
+          errorText={t("srv.error")}
+          onRetry={() => void refetch()}
+          className="rounded-xl border border-border bg-card p-8 shadow-elev-1"
+        >
+          {null}
+        </QueryStateBlock>
+      </PageShell>
     );
   }
 
@@ -231,11 +272,13 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       servers={servers}
       manageableGroups={manageableGroups}
       groupCount={groupCount}
-      sharedCount={sharedCount}
-      onlineCount={onlineCount}
-      offlineCount={offlineCount}
+      healthyCount={healthyCount}
+      attentionCount={attentionCount}
       search={search}
       setSearch={setSearch}
+      groupFilter={groupFilter}
+      groupOptions={groupOptions}
+      setGroupFilter={setGroupFilter}
       collapsed={collapsed}
       filtered={filtered}
       grouped={grouped}

@@ -21,9 +21,11 @@ import type { ChatPageController } from "./useChatPageController";
 
 type ChatThreadSidebarProps = {
   c: ChatPageController;
+  mobile?: boolean;
+  onNavigate?: () => void;
 };
 
-export function ChatThreadSidebar({ c }: ChatThreadSidebarProps) {
+export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadSidebarProps) {
   const {
     lang,
     toast,
@@ -47,7 +49,12 @@ export function ChatThreadSidebar({ c }: ChatThreadSidebarProps) {
   } = c;
 
   return (
-    <aside className="relative z-[1] hidden h-full w-[15.5rem] shrink-0 flex-col border-r border-border/60 bg-card lg:flex">
+    <aside
+      className={cn(
+        "relative z-[1] h-full shrink-0 flex-col border-r border-border/60 bg-card",
+        mobile ? "flex w-full" : "hidden w-[15.5rem] lg:flex",
+      )}
+    >
       <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3.5">
         <h1 className="truncate text-[13px] font-semibold tracking-tight text-foreground">
           {localize(lang, "Чаты", "Chats")}
@@ -166,7 +173,10 @@ export function ChatThreadSidebar({ c }: ChatThreadSidebarProps) {
                 <div key={chat.id} className="group/chat relative mb-0.5">
                   <button
                     type="button"
-                    onClick={() => setSearchParams({ chat: String(chat.id) })}
+                    onClick={() => {
+                      setSearchParams({ chat: String(chat.id) });
+                      onNavigate?.();
+                    }}
                     className={cn(
                       "grid w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] gap-2 rounded-lg px-2.5 py-2 pr-14 text-left transition-colors",
                       selected

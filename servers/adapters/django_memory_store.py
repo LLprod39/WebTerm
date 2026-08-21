@@ -75,12 +75,16 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
         server_ids: list[int] | None = None,
         group_ids: list[int] | None = None,
         limit: int = 5,
+        actor_user_id: int | None = None,
+        agent_id: int | None = None,
     ) -> str:
         return await database_sync_to_async(self._build_operational_recipes_prompt_sync, thread_sensitive=True)(
             query,
             server_ids=server_ids,
             group_ids=group_ids,
             limit=limit,
+            actor_user_id=actor_user_id,
+            agent_id=agent_id,
         )
 
     async def append_run_summary(self, run_id: int, summary: dict) -> str:
@@ -227,8 +231,17 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
         server_ids: list[int] | None = None,
         group_ids: list[int] | None = None,
         limit: int = 5,
+        actor_user_id: int | None = None,
+        agent_id: int | None = None,
     ) -> str:
-        return build_operational_recipes_prompt(query, server_ids=server_ids, group_ids=group_ids, limit=limit)
+        return build_operational_recipes_prompt(
+            query,
+            server_ids=server_ids,
+            group_ids=group_ids,
+            limit=limit,
+            actor_user_id=actor_user_id,
+            agent_id=agent_id,
+        )
 
     def _append_run_summary_sync(self, run_id: int, summary: dict) -> str:
         return perform_append_run_summary(self, run_id, summary)
@@ -283,10 +296,12 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
         raw_text: str = "",
         structured_payload: dict[str, Any] | None = None,
         source_ref: str = "",
-        session_id: str = "",
+        session_id: str | None = "",
         importance_hint: float = 0.5,
         actor_user_id: int | None = None,
         force_compact: bool = False,
+        event_metadata: dict[str, Any] | None = None,
+        idempotency_key_override: str = "",
     ) -> str:
         return perform_ingest_event(
             self,
@@ -301,6 +316,8 @@ class DjangoServerMemoryStore(DjangoMemoryStoreSnapshotMixin):
             importance_hint=importance_hint,
             actor_user_id=actor_user_id,
             force_compact=force_compact,
+            event_metadata=event_metadata,
+            idempotency_key_override=idempotency_key_override,
         )
 
     @staticmethod

@@ -176,6 +176,9 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "LLM_DAILY_TOKEN_LIMIT_PER_USER": env_int("LLM_DAILY_TOKEN_LIMIT_PER_USER", 0),
         "ANALYZE_TASK_BEFORE_RUN": os.getenv("ANALYZE_TASK_BEFORE_RUN", "1").strip().lower()
         in ("1", "true", "yes", "on"),
+        # Kubernetes Ops is opt-in for deployments. The pilot profile keeps
+        # this false, which removes the surface even for staff users.
+        "KUBERNETES_OPS_ENABLED": env_bool("KUBERNETES_OPS_ENABLED", True),
         "KUBERNETES_OPS_SYNC_INTERVAL_SECONDS": env_int("KUBERNETES_OPS_SYNC_INTERVAL_SECONDS", 300),
         "KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS": env_int("KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS", 1800),
         "KUBERNETES_OPS_STALE_AFTER_SECONDS": env_int("KUBERNETES_OPS_STALE_AFTER_SECONDS", 900),
@@ -391,6 +394,15 @@ def build_runtime_service_settings(*, base_dir: Path, agent_projects_dir: Path) 
         "AGENT_COMMAND_DOCKER_PIDS_LIMIT": env_int("AGENT_COMMAND_DOCKER_PIDS_LIMIT", 64),
         "AGENT_COMMAND_TIMEOUT_SECONDS": env_int("AGENT_COMMAND_TIMEOUT_SECONDS", 120),
         "AGENT_COMMAND_OUTPUT_MAX_CHARS": env_int("AGENT_COMMAND_OUTPUT_MAX_CHARS", 100000),
+        "AGENT_MATERIAL_RUNNER_ENABLED": env_bool("AGENT_MATERIAL_RUNNER_ENABLED", False),
+        "AGENT_MATERIAL_RUNNER_DOCKER_COMMAND": os.getenv("AGENT_MATERIAL_RUNNER_DOCKER_COMMAND", "docker"),
+        "AGENT_MATERIAL_RUNNER_IMAGE": os.getenv("AGENT_MATERIAL_RUNNER_IMAGE", ""),
+        "AGENT_MATERIAL_RUNNER_DOCKER_NETWORK": os.getenv("AGENT_MATERIAL_RUNNER_DOCKER_NETWORK", "bridge"),
+        "AGENT_MATERIAL_RUNNER_CPUS": os.getenv("AGENT_MATERIAL_RUNNER_CPUS", "0.25"),
+        "AGENT_MATERIAL_RUNNER_MEMORY": os.getenv("AGENT_MATERIAL_RUNNER_MEMORY", "128m"),
+        "AGENT_MATERIAL_RUNNER_PIDS_LIMIT": env_int("AGENT_MATERIAL_RUNNER_PIDS_LIMIT", 32),
+        "AGENT_MATERIAL_RUNNER_INPUT_MAX_BYTES": env_int("AGENT_MATERIAL_RUNNER_INPUT_MAX_BYTES", 64000),
+        "AGENT_MATERIAL_RUNNER_OUTPUT_MAX_CHARS": env_int("AGENT_MATERIAL_RUNNER_OUTPUT_MAX_CHARS", 50000),
         "CURSOR_AVAILABLE_MODELS": list(CURSOR_AVAILABLE_MODELS),
         "MODEL_RECOMMENDATIONS": dict(MODEL_RECOMMENDATIONS),
         "CLI_RUNTIME_CONFIG": _build_cli_runtime_config(),

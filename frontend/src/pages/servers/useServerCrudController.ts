@@ -104,7 +104,7 @@ export function useServerCrudController({
       notes: details.notes || "",
       group_id: details.group_id,
       is_active: details.is_active,
-      ai_read_only: details.ai_read_only ?? true,
+      ai_read_only: details.ai_read_only ?? false,
     });
     setDialogOpen(true);
   }, []);

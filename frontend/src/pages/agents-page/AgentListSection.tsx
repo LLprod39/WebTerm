@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { MoreHorizontal, Workflow } from "lucide-react";
+import { ChevronDown, MoreHorizontal, ShieldCheck, Workflow } from "lucide-react";
 import { ActionIcons, AgentIcons, NavIcons } from "@/lib/app-icons";
 
 import type { AgentItem, AgentRuntimeRunItem } from "@/lib/api";
@@ -128,12 +128,12 @@ export function AgentListSection({
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
             <NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />
           </div>
-          <h3 className="text-sm font-semibold text-foreground">{t("agent.empty")}</h3>
-          <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
+          <h3 className="font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Здесь появятся ваши цифровые сотрудники", "Your digital employees will appear here")}</h3>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {localize(
               lang,
-              "Создайте агента: выберите тип (мини, полный или мульти), цель или команды и серверы.",
-              "Create an agent: pick a type (mini, full, or multi), a goal or commands, and servers.",
+              "Опишите реальную IT-задачу, подключите нужные системы и знания, задайте права, запуск и формат результата. Технический runtime можно оставить по умолчанию.",
+              "Describe a real IT task, connect the required systems and knowledge, then set permissions, trigger, and result format. You can leave the technical runtime at its default.",
             )}
           </p>
         </div>
@@ -145,10 +145,10 @@ export function AgentListSection({
           >
             <ActionIcons.add className="mb-2 h-4 w-4 text-primary" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "С нуля", "From scratch")}
+              {localize(lang, "Поручить свою задачу", "Assign your task")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Мастер создания агента", "Agent creation wizard")}
+              {localize(lang, "Цель, инструкции и результат", "Goal, instructions, and result")}
             </div>
           </button>
           <button
@@ -156,26 +156,27 @@ export function AgentListSection({
             onClick={() => onCreate()}
             className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
           >
-            <AgentIcons.schedule className="mb-2 h-4 w-4 text-info" strokeWidth={1.5} />
+            <ShieldCheck className="mb-2 h-4 w-4 text-info" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Шаблон «бэкапы»", "“Backups” template")}
+              {localize(lang, "Задать границы", "Set boundaries")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Проверка резервных копий", "Verify backups regularly")}
+              {localize(lang, "Системы, права и подтверждения", "Systems, permissions, approvals")}
             </div>
           </button>
-          <Link
-            to="/studio"
+          <button
+            type="button"
+            onClick={() => onCreate()}
             className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
           >
             <Workflow className="mb-2 h-4 w-4 text-ai" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Пайплайн в Studio", "Pipeline in Studio")}
+              {localize(lang, "Дать инструменты", "Provide tools")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Сложные сценарии с узлами", "Complex multi-node flows")}
+              {localize(lang, "Skills, материалы и интеграции", "Skills, materials, integrations")}
             </div>
-          </Link>
+          </button>
         </div>
       </div>
     );
@@ -184,7 +185,12 @@ export function AgentListSection({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2.5">
-        <div className="flex items-center gap-0.5 rounded-sm border border-border bg-surface-0 p-0.5 text-sm">
+        <details className="group rounded-sm border border-border bg-surface-0 text-sm">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 text-xs font-semibold text-muted-foreground">
+            {localize(lang, "Advanced: фильтр runtime", "Advanced: runtime filter")}
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="flex items-center gap-0.5 border-t border-border p-0.5">
           {(["all", "mini", "full", "multi"] as const).map((m) => (
             <button
               key={m}
@@ -201,7 +207,8 @@ export function AgentListSection({
               {agentModeLabel(m, lang)}
             </button>
           ))}
-        </div>
+          </div>
+        </details>
         <div className="relative w-full max-w-64 sm:w-64">
           <ActionIcons.search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
           <Input

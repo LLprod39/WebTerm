@@ -117,6 +117,7 @@ export function AgentForm({
   canUseSkills,
   shareUsers,
   isAdmin,
+  canManageAiRouting,
   canEdit,
 }: {
   initial: Partial<AgentConfig>;
@@ -127,6 +128,7 @@ export function AgentForm({
   canUseSkills: boolean;
   shareUsers: Array<{ id: number; username: string; email?: string }>;
   isAdmin: boolean;
+  canManageAiRouting: boolean;
   canEdit: boolean;
 }) {
   const { lang } = useI18n();
@@ -268,11 +270,11 @@ export function AgentForm({
                 form={form}
                 lang={lang}
                 readOnly={readOnly}
-                canSelectModels={isAdmin}
+                canSelectModels={canManageAiRouting}
                 onFieldChange={setField}
                 isAdmin={isAdmin}
               />
-              <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-4">
+              {canManageAiRouting ? <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-4">
                 <div className="text-sm font-medium text-foreground">
                   {localize(lang, "AI-провайдер запусков", "Run AI provider")}
                 </div>
@@ -290,7 +292,7 @@ export function AgentForm({
                   lang={lang}
                   disabled={readOnly}
                 />
-              </div>
+              </div> : null}
             </>
           ) : null}
 

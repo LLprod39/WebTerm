@@ -91,10 +91,13 @@ class DockerCliRuntime:
         self.config = config
         self._processes: dict[str, asyncio.subprocess.Process] = {}
         self._process_connections: dict[str, str] = {}
+        self._runner_names: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def stream(self, request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
-        command = build_cli_runner_docker_command(self.config, request)
+        runner_id = secrets.token_hex(16)
+        runner_name = f"webterm-ai-cli-{runner_id}"
+        command = build_cli_runner_docker_command(self.config, request, runner_id=runner_id)
         encoded = json.dumps(request.to_dict(), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(encoded) > _INPUT_LIMIT:
             yield error_event("provider_request_too_large", "CLI runner request exceeds 1 MiB")
@@ -112,6 +115,7 @@ class DockerCliRuntime:
                 return
             self._processes[request.invocation_id] = process
             self._process_connections[request.invocation_id] = request.connection_ref
+            self._runner_names[request.invocation_id] = runner_name
         total_output = 0
         stderr_task: asyncio.Task[bool] | None = None
         stderr_exceeded = asyncio.Event()
@@ -174,15 +178,20 @@ class DockerCliRuntime:
                 await asyncio.gather(stderr_task, return_exceptions=True)
             if process.returncode is None:
                 await _stop_process(process, drain_stderr=True)
+            await self._remove_runner_container(runner_name)
             async with self._lock:
                 self._processes.pop(request.invocation_id, None)
                 self._process_connections.pop(request.invocation_id, None)
+                self._runner_names.pop(request.invocation_id, None)
 
     async def cancel(self, invocation_id: str) -> bool:
         async with self._lock:
             process = self._processes.get(invocation_id)
+            runner_name = self._runner_names.get(invocation_id)
         if process is None or process.returncode is not None:
             return False
+        if runner_name:
+            await self._remove_runner_container(runner_name)
         process.terminate()
         try:
             await asyncio.wait_for(process.wait(), timeout=5)
@@ -197,13 +206,15 @@ class DockerCliRuntime:
             raise CliRunnerRuntimeError("Connection reference has an invalid format")
         async with self._lock:
             processes = [
-                process
+                (process, self._runner_names.get(invocation_id))
                 for invocation_id, process in self._processes.items()
                 if self._process_connections.get(invocation_id) == normalized and process.returncode is None
             ]
-        for process in processes:
+        for process, runner_name in processes:
+            if runner_name:
+                await self._remove_runner_container(runner_name)
             process.terminate()
-        for process in processes:
+        for process, _runner_name in processes:
             try:
                 await asyncio.wait_for(process.wait(), timeout=5)
             except TimeoutError:
@@ -216,6 +227,24 @@ class DockerCliRuntime:
             "volume",
             "rm",
             volume_name,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        try:
+            return await asyncio.wait_for(process.wait(), timeout=15) == 0
+        except TimeoutError:
+            process.kill()
+            await process.wait()
+            return False
+
+    async def _remove_runner_container(self, runner_name: str) -> bool:
+        if _RUNNER_ID.fullmatch(runner_name.removeprefix("webterm-ai-cli-")) is None:
+            return False
+        process = await asyncio.create_subprocess_exec(
+            self.config.docker_command,
+            "rm",
+            "--force",
+            runner_name,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )

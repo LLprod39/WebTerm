@@ -1,5 +1,7 @@
 """Layered server memory models."""
 
+import hashlib
+
 from django.contrib.auth.models import User
 from django.db import models
 
@@ -113,6 +115,10 @@ class ServerMemoryEvent(models.Model):
             models.Index(fields=["server", "source_kind", "-created_at"]),
             models.Index(fields=["server", "session_id", "-created_at"]),
             models.Index(fields=["server", "source_ref", "-created_at"]),
+            models.Index(
+                fields=["server", "event_type", "-created_at"],
+                name="mem_evt_server_type_time_idx",
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -201,6 +207,21 @@ class ServerMemorySnapshot(models.Model):
     layer = models.CharField(max_length=20, choices=LAYER_CHOICES, default=LAYER_CANONICAL)
     title = models.CharField(max_length=200)
     content = models.TextField()
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    generation_log = models.ForeignKey(
+        "ServerMemoryGenerationLog",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="snapshots",
+    )
+    asset = models.ForeignKey(
+        "ServerMemoryAsset",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="snapshots",
+    )
     source_kind = models.CharField(max_length=30, blank=True)
     source_ref = models.CharField(max_length=255, blank=True)
     version_group_id = models.CharField(max_length=64)
@@ -239,6 +260,68 @@ class ServerMemorySnapshot(models.Model):
 
     def __str__(self):
         return f"{self.server.name}: {self.memory_key} v{self.version}"
+
+    def save(self, *args, **kwargs):
+        """Hash content on future writes without fabricating hashes for legacy rows."""
+        self.content_hash = hashlib.sha256((self.content or "").encode("utf-8")).hexdigest()
+        update_fields = kwargs.get("update_fields")
+        if update_fields is not None and "content" in update_fields:
+            kwargs["update_fields"] = set(update_fields) | {"content_hash"}
+        return super().save(*args, **kwargs)
+
+
+class ServerMemoryGenerationLog(models.Model):
+    """Redacted provenance for one LLM-assisted memory generation attempt."""
+
+    KIND_DISTILLATION = "distillation"
+    KIND_PATTERN_ENHANCEMENT = "pattern_enhancement"
+    KIND_CHOICES = [
+        (KIND_DISTILLATION, "Memory Distillation"),
+        (KIND_PATTERN_ENHANCEMENT, "Pattern Enhancement"),
+    ]
+
+    STATUS_STARTED = "started"
+    STATUS_SUCCEEDED = "succeeded"
+    STATUS_FAILED = "failed"
+    STATUS_FALLBACK = "fallback"
+    STATUS_CHOICES = [
+        (STATUS_STARTED, "Started"),
+        (STATUS_SUCCEEDED, "Succeeded"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_FALLBACK, "Heuristic Fallback"),
+    ]
+
+    server = models.ForeignKey(Server, on_delete=models.CASCADE, related_name="memory_generation_logs")
+    invocation = models.ForeignKey(
+        "core_ui.AIProviderInvocation",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="server_memory_generation_logs",
+    )
+    generation_kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_STARTED)
+    model_alias = models.CharField(max_length=80, blank=True, default="")
+    prompt_template_key = models.CharField(max_length=80, blank=True, default="")
+    prompt_template_version = models.CharField(max_length=32, blank=True, default="")
+    prompt_sha256 = models.CharField(max_length=64, db_index=True)
+    output_sha256 = models.CharField(max_length=64, blank=True, default="", db_index=True)
+    prompt_redacted_ref = models.CharField(max_length=255, blank=True, default="")
+    output_redacted_ref = models.CharField(max_length=255, blank=True, default="")
+    error_code = models.CharField(max_length=80, blank=True, default="")
+    error_redacted_ref = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["server", "generation_kind", "-created_at"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.server.name}: {self.generation_kind}/{self.status}"
 
 
 class ServerMemoryRevalidation(models.Model):
@@ -280,6 +363,15 @@ class ServerMemoryRevalidation(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="server_memory_revalidation_decisions",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=500, blank=True, default="")
 
     class Meta:
         ordering = ["status", "-updated_at"]

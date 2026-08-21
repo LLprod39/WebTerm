@@ -123,7 +123,7 @@ async def _run_agent_background(
         source_kind="agent_run",
         source_id=run.pk,
         mode=run.provider_execution_mode,
-        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
         provider_session_id=run.provider_session_id,
     )
@@ -133,10 +133,10 @@ async def _run_agent_background(
     )()
     if denied_server_ids:
         raise PermissionError("Missing server capability: execute_command")
-    if not servers:
+    if not servers and not agent.is_full and not agent.is_multi:
         await sync_to_async(_mark_background_failure, thread_sensitive=True)(
             run_id,
-            RuntimeError("No servers available for agent run"),
+            RuntimeError("Mini agents require an available server"),
             phase="launch",
         )
         return
@@ -216,7 +216,7 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         source_kind="agent_run",
         source_id=run.pk,
         mode=run.provider_execution_mode,
-        stored_binding=run.provider_binding_snapshot or agent.provider_binding,
+        stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
         provider_session_id=run.provider_session_id,
     )

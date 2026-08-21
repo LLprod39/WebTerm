@@ -7,6 +7,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
+from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
 from core_ui.services.ai_execution_context import (
     abuild_execution_context,
     active_project_for_execution,
@@ -16,14 +17,16 @@ from core_ui.services.ai_execution_context import (
 
 def prepare_operator_turn_context(*, session: Any, user: Any, provider_binding: dict[str, Any] | None):
     project = active_project_for_execution(user)
+    explicit_binding = operational_provider_binding(user, provider_binding)
+    stored_binding = stored_operational_provider_binding(user, session.provider_binding)
     context = build_execution_context(
         actor_user_id=user.pk,
         project_id=project.pk if project else None,
         purpose="orchestrator",
         source_kind="chat_session",
         source_id=session.pk,
-        explicit_binding=provider_binding,
-        stored_binding=session.provider_binding,
+        explicit_binding=explicit_binding,
+        stored_binding=stored_binding,
         requested_provider="auto",
         provider_session_id=session.provider_session_id,
     )
@@ -52,13 +55,17 @@ async def build_operator_iteration_context(*, session: Any, turn: Any, user: Any
         lambda: getattr(active_project_for_execution(user), "pk", None),
         thread_sensitive=True,
     )()
+    stored_binding = await sync_to_async(
+        stored_operational_provider_binding,
+        thread_sensitive=True,
+    )(user, state["provider_binding"] or turn.provider_binding_snapshot)
     return await abuild_execution_context(
         actor_user_id=user.pk,
         project_id=project_id,
         purpose="orchestrator",
         source_kind="chat_session",
         source_id=session.pk,
-        stored_binding=state["provider_binding"] or turn.provider_binding_snapshot,
+        stored_binding=stored_binding,
         requested_provider="auto",
         # An empty durable session id is authoritative: falling back to the turn
         # snapshot would resurrect a session belonging to an earlier connection.

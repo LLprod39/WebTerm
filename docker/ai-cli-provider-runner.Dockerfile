@@ -3,6 +3,7 @@ FROM python:3.11.15-slim-bookworm AS runtime-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/home/ai-cli \
+    PYTHONPATH=/app \
     PATH=/opt/venv/bin:/usr/local/bin:${PATH}
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
@@ -28,8 +29,8 @@ FROM runtime-base AS codex
 USER root
 COPY ai_cli_runner_manager/provider-requirements.lock /app/provider-requirements.lock
 RUN /opt/venv/bin/python -m ensurepip \
-    && /opt/venv/bin/pip install --no-cache-dir --require-hashes --requirement /app/provider-requirements.lock \
-    && /opt/venv/bin/pip uninstall --yes pip setuptools wheel
+    && /opt/venv/bin/python -m pip install --no-cache-dir --require-hashes --requirement /app/provider-requirements.lock \
+    && /opt/venv/bin/python -m pip uninstall --yes pip setuptools wheel
 USER 10001:10001
 
 FROM runtime-base AS grok

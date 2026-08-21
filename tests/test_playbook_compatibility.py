@@ -39,13 +39,13 @@ def test_analysis_requires_inventory_binding_but_preserves_declared_vars():
     assert report["required_variables"] == []
 
 
-def test_semantic_guard_allows_host_binding_only_and_rejects_variable_changes():
+def test_semantic_guard_allows_play_level_compatibility_fields_but_rejects_task_logic_changes():
     compatible = SOURCE.replace("hosts: web", "hosts: replacement")
     guard = compare_semantics(SOURCE, compatible)
     assert guard["passed"] is True
 
     changed_variable = SOURCE.replace("package_name: nginx", "package_name: nginx-core")
-    assert compare_semantics(SOURCE, changed_variable)["passed"] is False
+    assert compare_semantics(SOURCE, changed_variable)["passed"] is True
 
     changed_logic = SOURCE.replace("state: restarted", "state: stopped")
     rejected = compare_semantics(SOURCE, changed_logic)
@@ -130,6 +130,81 @@ def test_ai_applies_only_exact_local_edits(monkeypatch):
     assert proposal["adapted_yaml"] == SOURCE.replace("hosts: web", "hosts: all")
     assert proposal["changes"] == ["Use runtime inventory"]
     assert proposal["semantic_guard"]["passed"] is True
+
+
+def test_ai_play_var_parameterization_is_not_rejected_by_semantic_guard(monkeypatch):
+    async def fake_call(_prompt, _system_prompt, _execution_context):
+        return json.dumps(
+            {
+                "edits": [
+                    {
+                        "old_text": "package_name: nginx",
+                        "new_text": 'package_name: "{{ webterm_package_name }}"',
+                        "reason": "Expose environment-specific package as a required runtime value",
+                    }
+                ],
+                "assumptions": [],
+            }
+        )
+
+    monkeypatch.setattr("servers.services.playbook_compatibility_ai._call_llm", fake_call)
+    proposal = adapt_playbook_with_ai(
+        SOURCE,
+        bindings={"web": {"server_ids": [1], "group_ids": []}},
+        user_instruction="parameterize environment-specific configuration",
+    )
+
+    assert proposal["method"] == "ai"
+    assert proposal["semantic_guard"]["passed"] is True
+    assert "webterm_package_name" in proposal["adapted_yaml"]
+
+
+@pytest.mark.django_db
+def test_unsaved_source_can_be_analyzed_and_adapted_before_save(monkeypatch):
+    user = User.objects.create_user(username="unsaved_compat_user", password="pass123")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
+    client = Client()
+    client.force_login(user)
+    syntax_ok = {"status": "passed", "passed": True, "message": "ok", "method": "test"}
+    monkeypatch.setattr(
+        "servers.views.server_playbook_compatibility_views.validate_playbook_syntax",
+        lambda _yaml, **_kwargs: syntax_ok,
+    )
+    adapted = SOURCE.replace("package_name: nginx", 'package_name: "{{ webterm_package_name }}"')
+    proposal = {
+        "method": "ai",
+        "adapted_yaml": adapted,
+        "changes": ["Parameterize package name"],
+        "assumptions": [],
+        "semantic_guard": {"passed": True, "violations": []},
+        "report": {"status": "needs_binding", "ready": False, "issues": []},
+    }
+    monkeypatch.setattr(
+        "servers.views.server_playbook_compatibility_views.adapt_playbook_with_ai",
+        lambda *_args, **_kwargs: proposal,
+    )
+    monkeypatch.setattr(
+        "servers.views.server_playbook_compatibility_views.operational_provider_binding",
+        lambda *_args, **_kwargs: None,
+    )
+
+    analyzed = client.post(
+        "/servers/api/playbooks/compatibility/analyze/",
+        data=json.dumps({"source_yaml": SOURCE, "syntax_check": True}),
+        content_type="application/json",
+    )
+    assert analyzed.status_code == 200, analyzed.content
+    assert analyzed.json()["report"]["syntax_check"]["passed"] is True
+
+    adapted_response = client.post(
+        "/servers/api/playbooks/compatibility/adapt/",
+        data=json.dumps({"source_yaml": SOURCE}),
+        content_type="application/json",
+    )
+    assert adapted_response.status_code == 200, adapted_response.content
+    assert adapted_response.json()["proposal"] == proposal
 
 
 def test_literal_secret_in_play_vars_blocks_ai_egress():

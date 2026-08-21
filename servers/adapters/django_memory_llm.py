@@ -10,6 +10,7 @@ from app.agent_kernel.memory.compaction import compact_text
 from app.agent_kernel.memory.snapshot_utils import content_delta, render_snapshot_lines
 from app.agent_kernel.memory.types import OperationalPattern, SnapshotCandidate
 from app.ai_runtime import ExecutionMode
+from servers.adapters.django_memory_provenance import finish_generation_log, start_generation_log
 
 
 def should_distill_with_llm(
@@ -67,6 +68,7 @@ def distill_with_llm(
     server,
     candidates: list[SnapshotCandidate],
     model_alias: str,
+    generation_log_out: list[Any] | None = None,
 ) -> dict[str, str]:
     from app.core.llm import LLMProvider
 
@@ -102,6 +104,18 @@ def distill_with_llm(
         requested_specific_model=model_alias,
         idempotency_key=f"server-memory:{server.pk}:distill:{sha256(prompt.encode('utf-8')).hexdigest()}",
     )
+    from servers.models import ServerMemoryGenerationLog
+
+    generation_log = start_generation_log(
+        server_id=server.pk,
+        generation_kind=ServerMemoryGenerationLog.KIND_DISTILLATION,
+        model_alias=model_alias,
+        prompt_template_key="server_memory_distillation",
+        prompt_template_version="v1",
+        prompt=prompt,
+    )
+    if generation_log_out is not None:
+        generation_log_out.append(generation_log)
     try:
         chunks: list[str] = []
 
@@ -119,16 +133,51 @@ def distill_with_llm(
         start = raw.find("{")
         end = raw.rfind("}")
         if start == -1 or end == -1 or end <= start:
+            finish_generation_log(
+                generation_log,
+                status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+                output=raw,
+                execution_context=execution_context,
+                error_code="invalid_generation_output",
+                error_type="missing_json_object",
+            )
             return {}
         parsed = json.loads(raw[start : end + 1])
         if not isinstance(parsed, dict):
+            finish_generation_log(
+                generation_log,
+                status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+                output=raw,
+                execution_context=execution_context,
+                error_code="invalid_generation_output",
+                error_type="unexpected_json_type",
+            )
             return {}
         cleaned: dict[str, str] = {}
         for key, value in parsed.items():
             if key in sections:
                 cleaned[key] = render_snapshot_lines(value, fallback=sections[key])
+        finish_generation_log(
+            generation_log,
+            status=(
+                ServerMemoryGenerationLog.STATUS_SUCCEEDED
+                if cleaned
+                else ServerMemoryGenerationLog.STATUS_FALLBACK
+            ),
+            output=raw,
+            execution_context=execution_context,
+            error_code="" if cleaned else "empty_generation_output",
+            error_type="empty_sections" if not cleaned else "",
+        )
         return cleaned
-    except Exception:
+    except Exception as exc:
+        finish_generation_log(
+            generation_log,
+            status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+            execution_context=execution_context,
+            error_code="generation_failed",
+            error_type=type(exc).__name__,
+        )
         return {}
 
 
@@ -137,6 +186,7 @@ def llm_enhance_patterns(
     server,
     patterns: list[OperationalPattern],
     model_alias: str,
+    generation_log_out: list[Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     from app.core.llm import LLMProvider
 
@@ -193,6 +243,18 @@ def llm_enhance_patterns(
         requested_specific_model=model_alias,
         idempotency_key=f"server-memory:{server.pk}:patterns:{sha256(prompt.encode('utf-8')).hexdigest()}",
     )
+    from servers.models import ServerMemoryGenerationLog
+
+    generation_log = start_generation_log(
+        server_id=server.pk,
+        generation_kind=ServerMemoryGenerationLog.KIND_PATTERN_ENHANCEMENT,
+        model_alias=model_alias,
+        prompt_template_key="server_memory_pattern_enhancement",
+        prompt_template_version="v1",
+        prompt=prompt,
+    )
+    if generation_log_out is not None:
+        generation_log_out.append(generation_log)
     try:
         chunks: list[str] = []
 
@@ -210,9 +272,25 @@ def llm_enhance_patterns(
         start = raw.find("[")
         end = raw.rfind("]")
         if start == -1 or end == -1 or end <= start:
+            finish_generation_log(
+                generation_log,
+                status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+                output=raw,
+                execution_context=execution_context,
+                error_code="invalid_generation_output",
+                error_type="missing_json_array",
+            )
             return {}
         parsed = json.loads(raw[start : end + 1])
         if not isinstance(parsed, list):
+            finish_generation_log(
+                generation_log,
+                status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+                output=raw,
+                execution_context=execution_context,
+                error_code="invalid_generation_output",
+                error_type="unexpected_json_type",
+            )
             return {}
         cleaned: dict[str, dict[str, Any]] = {}
         for item in parsed:
@@ -238,6 +316,25 @@ def llm_enhance_patterns(
                     if str(signal or "").strip()
                 ][:3],
             }
+        finish_generation_log(
+            generation_log,
+            status=(
+                ServerMemoryGenerationLog.STATUS_SUCCEEDED
+                if cleaned
+                else ServerMemoryGenerationLog.STATUS_FALLBACK
+            ),
+            output=raw,
+            execution_context=execution_context,
+            error_code="" if cleaned else "empty_generation_output",
+            error_type="empty_patterns" if not cleaned else "",
+        )
         return cleaned
-    except Exception:
+    except Exception as exc:
+        finish_generation_log(
+            generation_log,
+            status=ServerMemoryGenerationLog.STATUS_FALLBACK,
+            execution_context=execution_context,
+            error_code="generation_failed",
+            error_type=type(exc).__name__,
+        )
         return {}

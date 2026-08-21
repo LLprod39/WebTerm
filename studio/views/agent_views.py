@@ -52,7 +52,7 @@ def api_agents(request):
         if not name:
             return _err("name is required")
         provider_binding = {}
-        if data.get("provider_binding"):
+        if user_can_select_models(request.user) and data.get("provider_binding"):
             try:
                 project = active_project_for_user(request.user)
                 context = build_execution_context(
@@ -138,7 +138,9 @@ def api_agent_detail(request, agent_id: int):
             agent.model = forced_agent_model_value()
         if "sudo_policy" in data:
             agent.sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
-        if "provider_binding" in data:
+        if not user_can_select_models(request.user):
+            agent.provider_binding = {}
+        elif "provider_binding" in data:
             if data.get("provider_binding") in ({}, None):
                 agent.provider_binding = {}
             else:

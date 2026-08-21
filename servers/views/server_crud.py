@@ -101,7 +101,9 @@ def server_create(request):
             return error_response
 
         automation_allowed = user_can_automate(request.user, request=request)
-        raw_ai_read_only = data.get("ai_read_only", True)
+        # Release default is writable for users explicitly granted automation;
+        # users without that capability continue to fail closed.
+        raw_ai_read_only = data.get("ai_read_only", not automation_allowed)
         if not isinstance(raw_ai_read_only, bool):
             return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
         if not automation_allowed and raw_ai_read_only is False:

@@ -44,6 +44,7 @@ Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-st
 
 - **UI body:** `IBM Plex Mono` (`font-sans` / `font-mono`) — catalog default language
 - **Display:** `Syne` (`font-display`) — titles, metrics, dialog titles
+- **Flow / Flow dark:** UI `Inter`, display `Manrope`, technical values `JetBrains Mono`
 - **ASHITA:** UI `Manrope`, display `Space Grotesk`, mono `JetBrains Mono`
 - **Scale utilities** (`index.css`):
   - `.type-display` — large metric / hero number
@@ -89,7 +90,7 @@ Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-st
 
 - Avoid teal→violet gradients and purple “AI SaaS” chrome
 - Avoid large soft blur overlays on every panel
-- Avoid Inter / generic rounded-xl card stacks as the default look
+- Avoid relying on Inter and rounded card stacks alone; information hierarchy and operational semantics must give each screen a clear product identity
 - Avoid mixing random English into Russian UI
 - **ASHITA anti-patterns:** pink/blue cyberpunk wash; anime chrome; neon on every control; constant flicker; album-cover background; random kanji; glass on every card; glitch inside terminal
 
@@ -98,3 +99,13 @@ Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-st
 Tokens live in `src/index.css`. Most pages use `PageShell`, shadcn primitives, and semantic colors — they pick up this system automatically. One-off pages with hard-coded teal/violet classes may still need local cleanup.
 
 New skins **only** add `html[data-ui-style="…"]` blocks — never rewrite other skins. ASHITA decorative layers live in `AshitaAtmosphere` (`aria-hidden`, `pointer-events: none`) and only mount when the active style is `ashita`.
+
+## 9. Pilot-to-beta product UI contract
+
+- Build new release-facing desktop screens in the `flow` and `flow-dark` pair first. Both themes are one interface expressed through semantic tokens, not separate page implementations.
+- Start with the operator's decision: what is healthy, what needs attention, and what action is safe now. Never use decorative KPIs or session state as a substitute for real monitoring state.
+- Use `PageShell`, semantic surface/status tokens, Lucide controls, and the shared OS badge. Literal brand colors are allowed only inside documented vendor marks.
+- Operational lists should remain information-dense and calm. Do not add stock photography, AI illustrations, large gradients, glass stacks, or decorative charts when they do not improve a decision.
+- Every screen must define loading, error/retry, true-empty, filtered-empty, permission-limited, and stale-data behavior before it is considered beta-ready.
+- Russian copy is the primary product voice; English is the supported counterpart. Labels describe state; buttons start actions. A non-clickable badge must not sound like a command.
+- The current desktop reference implementation is documented in [`SERVERS_DESIGN_SPEC.md`](./SERVERS_DESIGN_SPEC.md). Third-party visual assets and release checks are documented in [`ASSET_LICENSES.md`](./ASSET_LICENSES.md).

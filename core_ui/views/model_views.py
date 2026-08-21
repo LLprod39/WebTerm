@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 from loguru import logger
 
 from app.core.model_config import model_manager
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.managed_secrets import has_llm_api_key
@@ -43,9 +44,10 @@ def api_tools_list(request):
 
 
 @login_required
-@require_feature("orchestrator")
 def api_models_list(request):
     """Get list of available models for dropdowns."""
+    if not user_can_manage_ai_routing(request.user):
+        return JsonResponse({"error": "Forbidden"}, status=403)
     try:
         gemini_models = model_manager.get_available_models("gemini")
         grok_models = model_manager.get_available_models("grok")
@@ -99,7 +101,7 @@ def api_models_refresh(request):
 
     Body: { "provider": "gemini|grok|openai|claude|ollama" }
     """
-    if not request.user.is_staff:
+    if not user_can_manage_ai_routing(request.user):
         return JsonResponse({"error": "Only admins can refresh provider models"}, status=403)
 
     try:

@@ -40,7 +40,7 @@ export function AgentWizardReviewStep({
   const extras: string[] = [];
   if (commandCount) extras.push(localize(lang, `${commandCount} команд`, `${commandCount} commands`));
   if (selectedSkillSlugs.length) extras.push(localize(lang, `${selectedSkillSlugs.length} скиллов`, `${selectedSkillSlugs.length} skills`));
-  if (inputArtifacts.length) extras.push(localize(lang, `${inputArtifacts.length} материалов`, `${inputArtifacts.length} materials`));
+  if (inputArtifacts.length) extras.push(localize(lang, `${inputArtifacts.length} материалов контекста`, `${inputArtifacts.length} context materials`));
   if (telegramEnabled) extras.push("Telegram");
 
   const failed = readinessChecks.filter((check) => !check.passed);
@@ -49,13 +49,13 @@ export function AgentWizardReviewStep({
     <section className="space-y-5">
       <div>
         <h3 className="font-display text-sm font-bold tracking-tight text-foreground">
-          {localize(lang, "Проверьте перед созданием", "Check before creating")}
+          {localize(lang, "Как будет работать цифровой сотрудник", "How this digital employee will work")}
         </h3>
         <p className="mt-1 text-sm leading-5 text-muted-foreground">
           {localize(
             lang,
-            "Краткий обзор. Безопасный вариант по умолчанию — сохранить профиль без запуска.",
-            "Quick review. The safe default is to save the profile without running it.",
+            "Проверьте задачу, системы, границы, запуск и канал результата. Безопасный вариант — сначала сохранить профиль.",
+            "Review the task, systems, boundaries, trigger, and result channel. The safe option is to save the profile first.",
           )}
         </p>
       </div>
@@ -85,7 +85,7 @@ export function AgentWizardReviewStep({
 
         <aside className="flex flex-col justify-between gap-3 rounded-sm border border-border bg-surface-0 p-4">
           <div>
-            <p className="type-label text-muted-foreground">{localize(lang, "Готовность", "Readiness")}</p>
+            <p className="type-label text-muted-foreground">{localize(lang, "Конфигурация", "Configuration")}</p>
             <p
               className={cn(
                 "mt-2 font-display text-3xl font-bold tracking-tight",
@@ -141,8 +141,8 @@ export function AgentWizardReviewStep({
             <span className="mt-1 block text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Требует явного выбора. Для пилота рекомендуется сохранить и запустить позже после проверки параметров.",
-                "Requires an explicit choice. For the pilot, save first and run later after reviewing the settings.",
+                "Явное действие: после сохранения агент сразу начнёт работу в выбранных системах.",
+                "Explicit action: after saving, the agent immediately starts work in the selected systems.",
               )}
             </span>
           </span>
@@ -170,7 +170,7 @@ export function AgentWizardReviewStep({
           description={
             runAfterSave && !isEditing
               ? localize(lang, "Агент будет создан и сразу запущен на выбранных серверах.", "The agent will be created and started on the selected servers.")
-              : localize(lang, "Можно сохранять профиль агента.", "You can save the agent profile.")
+              : localize(lang, "Профиль будет сохранён. Запустить его можно из списка цифровых сотрудников.", "The profile will be saved. You can start it from the digital employees list.")
           }
         />
       )}

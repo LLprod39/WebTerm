@@ -15,7 +15,6 @@ from django.views.decorators.http import require_http_methods
 from core_ui.activity import log_user_activity
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from core_ui.projects import active_project_for_user
 from servers.models import BackgroundWorkerState, Playbook, PlaybookRevision
 from servers.playbooks.dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
 from servers.services.ansible_engine import (
@@ -147,7 +146,6 @@ def playbook_update(request, playbook_id: int):
         Playbook.objects.select_for_update(),
         id=playbook_id,
         user=request.user,
-        project=active_project_for_user(request.user),
     )
     ensure_playbook_workspace(pb, actor=request.user)
     data = json.loads(request.body or "{}")
@@ -221,7 +219,7 @@ def playbook_update(request, playbook_id: int):
 @require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_delete(request, playbook_id: int):
-    pb = get_object_or_404(Playbook, id=playbook_id, user=request.user, project=active_project_for_user(request.user))
+    pb = get_object_or_404(Playbook, id=playbook_id, user=request.user)
     name = pb.name
     pid = pb.id
     record_playbook_event(
@@ -256,7 +254,6 @@ def playbook_restore(request, playbook_id: int):
         Playbook,
         id=playbook_id,
         user=request.user,
-        project=active_project_for_user(request.user),
         is_archived=True,
     )
     pb.is_archived = False

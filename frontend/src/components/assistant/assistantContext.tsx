@@ -21,6 +21,8 @@ export type AssistantPageContext = {
     agentName?: string;
     runId?: number;
     pipelineId?: number;
+    playbookId?: number;
+    playbookName?: string;
   };
   /** Suggested quick chips for this surface */
   chips?: Array<{ id: string; labelRu: string; labelEn: string; promptRu: string; promptEn: string }>;
@@ -164,6 +166,24 @@ function surfaceFromPath(pathname: string): AssistantPageContext {
           labelEn: "Preventive",
           promptRu: "Что сделать превентивно по текущим прогнозам?",
           promptEn: "What preventive actions should we take from current forecasts?",
+        },
+      ],
+    };
+  }
+
+  if (root === "automation") {
+    const playbookId = parts[1] === "playbooks" ? Number(parts[2]) : Number.NaN;
+    return {
+      surface: "automation",
+      title: "Ansible",
+      entity: Number.isInteger(playbookId) && playbookId > 0 ? { playbookId } : undefined,
+      chips: [
+        {
+          id: "explain-playbook",
+          labelRu: "Что делает playbook?",
+          labelEn: "What does it do?",
+          promptRu: "Кратко объясни, что делает выбранный playbook, его риски и что нужно перед запуском.",
+          promptEn: "Briefly explain what the selected playbook does, its risks, and prerequisites.",
         },
       ],
     };

@@ -149,7 +149,7 @@ Hard constraints:
 - Do not add, remove, reorder, or alter tasks, handlers, roles, blocks, rescue/always sections.
 - Do not alter module arguments, commands, when/failed_when/changed_when, notify/register, loops, tags,
   delegate_to, run_once, become, serial, strategy, or failure controls.
-- You may change play names, host selectors, vars, vars_files, environment declarations and fully-qualified
+- You may change play names, host selectors, play-level vars, play-level environment declarations and fully-qualified
   aliases only when behavior is preserved.
 - Inventory credentials and real hosts are supplied by WebTerm. Never invent servers, secrets, files or roles.
 - If an external role/template/file is missing, leave it intact and list the blocker in assumptions.

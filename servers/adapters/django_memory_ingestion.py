@@ -16,6 +16,27 @@ from app.agent_kernel.memory.trust import (
     stable_payload_hash,
 )
 
+_DEVOPS_METADATA_KEYS = {
+    "schema_version",
+    "event_family",
+    "source_object_type",
+    "source_object_id",
+    "source_state",
+    "source_version",
+    "idempotency_sha256",
+    "contract_sha256",
+}
+_DEVOPS_EVENT_FAMILIES = {"incident", "alert", "monitoring", "deploy", "pipeline", "playbook", "agent_run"}
+_DEVOPS_SOURCE_TYPES = {
+    "servers.server_watcher_draft",
+    "servers.server_alert",
+    "servers.server_health_check",
+    "servers.server_command_history",
+    "servers.playbook_run",
+    "servers.agent_run",
+    "studio.pipeline_run",
+}
+
 
 def ingest_event(
     store,
@@ -27,14 +48,20 @@ def ingest_event(
     raw_text: str = "",
     structured_payload: dict[str, Any] | None = None,
     source_ref: str = "",
-    session_id: str = "",
+    session_id: str | None = "",
     importance_hint: float = 0.5,
     actor_user_id: int | None = None,
     force_compact: bool = False,
+    event_metadata: dict[str, Any] | None = None,
+    idempotency_key_override: str = "",
 ) -> str:
     from servers.models import Server, ServerMemoryEvent
 
     structured_payload = structured_payload or {}
+    # Monitoring events intentionally have no terminal/session identity and
+    # pass ``None``.  Normalize that supported input before length-bounding it
+    # for the model field.
+    session_id = str(session_id or "")
     server = Server.objects.filter(pk=server_id).select_related("user").first()
     if server is None:
         return ""
@@ -42,13 +69,32 @@ def ingest_event(
     policy = store._get_or_create_policy_sync(user_id=server.user_id)
     if not bool(getattr(policy, "is_enabled", True)):
         return ""
+    if event_metadata is not None and (
+        not isinstance(event_metadata, dict)
+        or set(event_metadata) != {"devops_event"}
+        or not isinstance(event_metadata.get("devops_event"), dict)
+    ):
+        raise ValueError("event_metadata must contain only a devops_event object")
+    if event_metadata:
+        _validate_devops_event_metadata(event_metadata["devops_event"])
     redacted_text, redacted_payload, redaction_report, redaction_hashes = redact_for_storage(
         raw_text=raw_text,
         payload=structured_payload,
     )
+    redacted_metadata: dict[str, Any] = {}
+    if event_metadata:
+        _unused_text, redacted_metadata_value, metadata_report, metadata_hashes = redact_for_storage(
+            payload=event_metadata,
+        )
+        if not isinstance(redacted_metadata_value, dict):
+            raise ValueError("event_metadata must redact to an object")
+        redacted_metadata = redacted_metadata_value
+        for key, value in metadata_report.items():
+            redaction_report[key] = redaction_report.get(key, 0) + int(value)
+        redaction_hashes = list(dict.fromkeys([*redaction_hashes, *metadata_hashes]))
     redacted_text = compact_text(redacted_text, limit=8000 if policy.allow_sensitive_raw else 4000)
-    event_metadata = enrich_metadata_with_trust(
-        {},
+    storage_metadata = enrich_metadata_with_trust(
+        redacted_metadata,
         source_kind=source_kind,
         actor_kind=actor_kind,
         event_type=event_type,
@@ -56,7 +102,21 @@ def ingest_event(
         source_ref=source_ref,
     )
     payload_hash = stable_payload_hash(raw_text=redacted_text, payload=redacted_payload)
-    idempotency_key = build_idempotency_key(
+    normalized_override = str(idempotency_key_override or "").strip().lower()
+    if normalized_override and (
+        not normalized_override.startswith("devops:v1:")
+        or len(normalized_override) != 74
+        or any(character not in "0123456789abcdef" for character in normalized_override[10:])
+    ):
+        raise ValueError("Invalid DevOps event idempotency key")
+    if normalized_override and not event_metadata:
+        raise ValueError("DevOps idempotency override requires validated devops_event metadata")
+    if event_metadata and (
+        not normalized_override
+        or event_metadata["devops_event"]["idempotency_sha256"] != normalized_override[10:]
+    ):
+        raise ValueError("DevOps metadata idempotency digest does not match the override")
+    idempotency_key = normalized_override or build_idempotency_key(
         server_id=server_id,
         source_kind=source_kind,
         source_ref=source_ref,
@@ -77,7 +137,7 @@ def ingest_event(
             "event_type": event_type[:80],
             "raw_text_redacted": redacted_text,
             "structured_payload": redacted_payload,
-            "metadata": event_metadata,
+            "metadata": storage_metadata,
             "payload_hash": payload_hash,
             "importance_hint": max(0.0, min(float(importance_hint or 0.5), 1.0)),
             "redaction_report": redaction_report,
@@ -89,6 +149,32 @@ def ingest_event(
             event, threshold=max(int(policy.nearline_event_threshold or 6), 2), force=force_compact
         )
     return str(event.pk)
+
+
+def _validate_devops_event_metadata(metadata: dict[str, Any]) -> None:
+    if set(metadata) != _DEVOPS_METADATA_KEYS:
+        raise ValueError("devops_event metadata has unknown or missing keys")
+    if metadata.get("schema_version") != "devops_event.v1":
+        raise ValueError("devops_event metadata has an invalid schema version")
+    if metadata.get("event_family") not in _DEVOPS_EVENT_FAMILIES:
+        raise ValueError("devops_event metadata has an invalid event family")
+    if metadata.get("source_object_type") not in _DEVOPS_SOURCE_TYPES:
+        raise ValueError("devops_event metadata has an invalid source object type")
+    source_id = metadata.get("source_object_id")
+    if not isinstance(source_id, int) or isinstance(source_id, bool) or source_id <= 0:
+        raise ValueError("devops_event metadata has an invalid source object id")
+    for key in ("source_state", "source_version"):
+        value = metadata.get(key)
+        if not isinstance(value, str) or not value or len(value) > 80:
+            raise ValueError(f"devops_event metadata has an invalid {key}")
+    for key in ("idempotency_sha256", "contract_sha256"):
+        value = metadata.get(key)
+        if (
+            not isinstance(value, str)
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise ValueError(f"devops_event metadata has an invalid {key}")
 
 
 def maybe_compact_event_group(event, *, threshold: int, force: bool) -> None:

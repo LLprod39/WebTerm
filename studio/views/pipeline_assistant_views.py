@@ -7,6 +7,7 @@ import asyncio
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
 from core_ui.decorators import require_feature
 from core_ui.services.ai_execution_context import active_project_for_execution, build_execution_context
 from studio.capability_registry import build_studio_capability_registry
@@ -55,8 +56,11 @@ def _pipeline_assistant_execution_context(request, data: dict, pipeline):
         purpose="chat",
         source_kind="pipeline_assistant",
         source_id=pipeline.pk if pipeline is not None else f"user-{request.user.pk}",
-        explicit_binding=data.get("provider_binding"),
-        stored_binding=pipeline.provider_binding if pipeline is not None else {},
+        explicit_binding=operational_provider_binding(request.user, data.get("provider_binding")),
+        stored_binding=stored_operational_provider_binding(
+            request.user,
+            pipeline.provider_binding if pipeline is not None else {},
+        ),
         requested_provider="auto",
         idempotency_key=str(data.get("idempotency_key") or ""),
         tool_policy={"surface": "pipeline_assistant", "webtrerm_tools_only": True},

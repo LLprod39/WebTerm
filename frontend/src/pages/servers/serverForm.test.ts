@@ -3,10 +3,16 @@ import { describe, expect, it } from "vitest";
 import { asPayload, enforcePilotServerAccess, initialForm } from "./serverForm";
 
 describe("server form AI access defaults", () => {
-  it("creates servers with AI read-only access enabled", () => {
+  it("creates servers writable for authorized automation by default", () => {
     const form = initialForm();
 
-    expect(form.ai_read_only).toBe(true);
+    expect(form.ai_read_only).toBe(false);
+    expect(asPayload(form, true).ai_read_only).toBe(false);
+  });
+
+  it("keeps unprivileged payloads read-only", () => {
+    const form = initialForm();
+
     expect(asPayload(form).ai_read_only).toBe(true);
   });
 
@@ -16,7 +22,7 @@ describe("server form AI access defaults", () => {
     expect(asPayload(form).ai_read_only).toBe(true);
   });
 
-  it("removes unsafe AI and sudo access from ordinary pilot payloads", () => {
+  it("removes unsafe AI and sudo access without the automation capability", () => {
     const unsafeForm = {
       ...initialForm(),
       ai_read_only: false,

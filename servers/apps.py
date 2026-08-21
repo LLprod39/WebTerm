@@ -16,5 +16,6 @@ class ServersConfig(AppConfig):
 
         from . import (
             checks,  # noqa: F401
+            lifecycle_memory_events,  # noqa: F401
             signals,  # noqa: F401
         )

@@ -251,7 +251,7 @@ def execute_action(
 
             if not user_can_automate(action.user, request=request):
                 action.status = AssistantAction.STATUS_FAILED
-                action.error = "Mutating actions require the pilot_operator role and automation capability"
+                action.error = "Mutating actions require the automation capability"
                 action.completed_at = timezone.now()
                 action.save(update_fields=["status", "error", "completed_at", "updated_at"])
                 return action

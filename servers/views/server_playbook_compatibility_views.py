@@ -11,8 +11,8 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
+from core_ui.ai_model_policy import operational_provider_binding
 from core_ui.decorators import require_feature
-from core_ui.services.ai_execution_context import active_project_for_execution
 from servers.models import Playbook, PlaybookCompatibilityRevision
 from servers.services.playbook_compatibility_ai import PlaybookAdaptationError, adapt_playbook_with_ai
 from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility, compare_semantics
@@ -68,6 +68,60 @@ def _compatibility_failure_message(guard: dict[str, Any], report: dict[str, Any]
     return "Adaptation failed an unknown compatibility check"
 
 
+def _source_from_payload(data: dict[str, Any]) -> str:
+    return str(data.get("source_yaml") or "").strip()
+
+
+def _validate_source_payload(source: str) -> JsonResponse | None:
+    if not source:
+        return JsonResponse({"success": False, "error": "Ansible YAML is required"}, status=400)
+    if len(source) > 200_000:
+        return JsonResponse({"success": False, "error": "Playbook YAML is too large"}, status=413)
+    return None
+
+
+@login_required
+@require_feature("automation")
+@require_http_methods(["POST"])
+def playbook_source_compatibility_analyze(request):
+    data = _json_body(request)
+    source = _source_from_payload(data)
+    invalid = _validate_source_payload(source)
+    if invalid:
+        return invalid
+    bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
+    report = analyze_playbook_compatibility(source, bindings=bindings, target_servers=target_servers)
+    if bool(data.get("syntax_check", True)) and not any(
+        item.get("severity") == "error" for item in report.get("issues") or []
+    ):
+        report["syntax_check"] = validate_playbook_syntax(source, allow_dependency_setup=False)
+    return JsonResponse({"success": True, "report": report})
+
+
+@login_required
+@require_feature("automation")
+@require_http_methods(["POST"])
+def playbook_source_compatibility_adapt(request):
+    data = _json_body(request)
+    source = _source_from_payload(data)
+    invalid = _validate_source_payload(source)
+    if invalid:
+        return invalid
+    bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
+    try:
+        proposal = adapt_playbook_with_ai(
+            source,
+            bindings=bindings,
+            target_servers=target_servers,
+            user_instruction=str(data.get("instruction") or ""),
+            user=request.user,
+            provider_binding=operational_provider_binding(request.user, data.get("provider_binding")),
+        )
+    except PlaybookAdaptationError as exc:
+        return JsonResponse({"success": False, "error": str(exc)}, status=400)
+    return JsonResponse({"success": True, "proposal": proposal})
+
+
 @login_required
 @require_feature("automation")
 @require_http_methods(["POST"])
@@ -108,9 +162,7 @@ def playbook_compatibility_analyze(request, playbook_id: int):
 @require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_adapt(request, playbook_id: int):
-    playbook = get_object_or_404(
-        Playbook, id=playbook_id, user=request.user, project=active_project_for_execution(request.user)
-    )
+    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
     data = _json_body(request)
     bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
     source = (playbook.source_yaml or "").strip()
@@ -123,7 +175,7 @@ def playbook_compatibility_adapt(request, playbook_id: int):
             target_servers=target_servers,
             user_instruction=str(data.get("instruction") or ""),
             user=request.user,
-            provider_binding=data.get("provider_binding"),
+            provider_binding=operational_provider_binding(request.user, data.get("provider_binding")),
         )
     except PlaybookAdaptationError as exc:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
@@ -134,9 +186,7 @@ def playbook_compatibility_adapt(request, playbook_id: int):
 @require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_apply(request, playbook_id: int):
-    playbook = get_object_or_404(
-        Playbook, id=playbook_id, user=request.user, project=active_project_for_execution(request.user)
-    )
+    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
     # Establish the legacy source as the published origin before activating a
     # newly accepted compatibility record. Otherwise lazy workspace migration
     # could mistake this new proposal for historical published state.

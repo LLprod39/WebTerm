@@ -4,11 +4,13 @@ import {
   Check,
   ListChecks,
   Loader2,
+  Menu,
   Plus,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -24,9 +26,10 @@ import type { ChatPageController } from "./useChatPageController";
 
 type ChatMessagesPaneProps = {
   c: ChatPageController;
+  onOpenHistory?: () => void;
 };
 
-export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
+export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
   const {
     lang,
     selectedTitle,
@@ -51,6 +54,7 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
     handleSaveRunbook,
     handleRetry,
     pinnedServers,
+    pinnedPlaybook,
     pinServer,
     unpinServer,
     openSessionDock,
@@ -65,8 +69,18 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
 
   return (
     <>
-      <header className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 sm:px-6">
-        <div className="min-w-0">
+      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border/50 bg-card/95 px-3 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9 shrink-0 rounded-xl lg:hidden"
+            onClick={onOpenHistory}
+            aria-label={localize(lang, "Открыть историю чатов", "Open chat history")}
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0">
           <h2 className="truncate text-[14px] font-medium tracking-tight text-foreground">
             {selectedTitle}
           </h2>
@@ -83,7 +97,16 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
             <p className="text-[11px] text-muted-foreground">
               {localize(lang, "Работает в фоне…", "Working in background…")}
             </p>
-          ) : null}
+          ) : (
+            <p className="text-[11px] text-muted-foreground/70">
+              {pinnedPlaybook
+                ? localize(lang, `Playbook в контексте: ${pinnedPlaybook.name} · #${pinnedPlaybook.id}`, `Playbook in context: ${pinnedPlaybook.name} · #${pinnedPlaybook.id}`)
+                : pinnedServers.length
+                ? localize(lang, `${pinnedServers.length} сервер(а) в контексте`, `${pinnedServers.length} server(s) in context`)
+                : localize(lang, "Контекст: весь доступный флот", "Context: all accessible servers")}
+            </p>
+          )}
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {sessionTokens ? (
@@ -158,6 +181,17 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
                   </button>
                 ))}
               </div>
+              <div className="mt-5 flex w-full flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-4">
+                <Link to="/agents" className="rounded-full border border-border/70 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                  {localize(lang, "Создать агента", "Create an agent")}
+                </Link>
+                <Link to="/automation" className="rounded-full border border-border/70 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                  {localize(lang, "Импортировать Ansible", "Import Ansible")}
+                </Link>
+                <Link to="/agents" className="rounded-full border border-border/70 px-3 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground">
+                  {localize(lang, "Открыть прогресс", "Open progress")}
+                </Link>
+              </div>
             </div>
           </div>
         ) : (
@@ -229,7 +263,7 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
             ))}
 
             {pendingUserText ? (
-              <div className="group flex justify-end gap-3 animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+              <div className="group flex justify-end gap-3">
                 <div className="min-w-0 max-w-[min(560px,85%)]">
                   <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm opacity-90">
                     <div className="whitespace-pre-wrap break-words">{pendingUserText}</div>
@@ -242,7 +276,7 @@ export function ChatMessagesPane({ c }: ChatMessagesPaneProps) {
             ) : null}
 
             {showLiveStream || isBusy ? (
-              <div className="min-w-0 space-y-2.5 animate-in fade-in-0 duration-200">
+              <div className="min-w-0 space-y-2.5">
                 {(operatorWs.phase !== "idle" || isBusy) &&
                 (operatorWs.hasReasoningStream || operatorWs.toolSteps.length > 0 || !operatorWs.streamText) ? (
                   <OperatorThinkingPanel

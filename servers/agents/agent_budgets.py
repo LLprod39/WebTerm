@@ -7,6 +7,8 @@ loops stay bounded even when agent settings are misconfigured.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 # ---------------------------------------------------------------------------
 # Full ReAct agent (Agents tab → Полный)
 # ---------------------------------------------------------------------------
@@ -44,6 +46,24 @@ NOVA_MAX_HISTORY_TURNS = 30
 
 FAST_PLANNER_COMMAND_CAP = 10
 FAST_PLANNER_COMMAND_HARD_MAX = 12
+
+
+@dataclass(frozen=True)
+class AgentRuntimeBudget:
+    max_iterations: int
+    session_timeout_seconds: int
+    max_connections: int
+
+
+def resolve_agent_runtime_budget(*, mode: str, goal: str = "", system_prompt: str = "", commands=None, skill_slugs=None, input_artifacts=None) -> AgentRuntimeBudget:
+    """Choose a bounded runtime budget from task complexity, without asking end users."""
+    complexity = len((goal or "").strip()) + len((system_prompt or "").strip())
+    complexity += 180 * len(commands or []) + 220 * len(skill_slugs or []) + 240 * len(input_artifacts or [])
+    if mode == "multi" or complexity >= 1200:
+        return AgentRuntimeBudget(max_iterations=60, session_timeout_seconds=1800, max_connections=5)
+    if complexity >= 400:
+        return AgentRuntimeBudget(max_iterations=50, session_timeout_seconds=1500, max_connections=3)
+    return AgentRuntimeBudget(max_iterations=40, session_timeout_seconds=1200, max_connections=1)
 
 
 def clamp_command_timeout(seconds: int | float | None, *, default: int = FULL_DEFAULT_COMMAND_TIMEOUT_SEC) -> int:

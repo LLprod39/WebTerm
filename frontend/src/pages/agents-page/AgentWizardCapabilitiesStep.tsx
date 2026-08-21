@@ -1,4 +1,4 @@
-import { BookOpen } from "lucide-react";
+import { BookOpen, ChevronDown, PlugZap, Settings2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import type { AgentInputArtifact, StudioSkill } from "@/lib/api";
 import { localize } from "@/lib/i18n";
@@ -86,9 +86,30 @@ export function AgentWizardCapabilitiesStep({
 }: AgentWizardCapabilitiesStepProps) {
   return (
     <section className="space-y-4">
-      <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Возможности", "Capabilities")}</h3>
+      <div>
+        <p className="type-label text-primary">{localize(lang, "Контекст и возможности", "Context and capabilities")}</p>
+        <h3 className="mt-1 font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Что агент знает и чем может пользоваться", "What the agent knows and can use")}</h3>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          {localize(lang, "Добавьте skills, материалы и способ получить результат. Доступ остаётся ограничен выбранными правами и системами.", "Add skills, materials, and result delivery. Access remains limited by the selected permissions and systems.")}
+        </p>
+      </div>
+      <div className="flex items-start gap-3 rounded-sm border border-info/25 bg-info/5 px-3 py-3">
+        <PlugZap className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+        <p className="text-xs leading-5 text-muted-foreground">
+          {localize(
+            lang,
+            "Skills могут давать агенту инструкции и подключённые инструменты, включая MCP. В этом мастере выбираются только уже доступные skills; отдельного контракта выбора MCP-сервера пока нет.",
+            "Skills can provide instructions and connected tools, including MCP. This wizard only selects skills that are already available; it does not yet expose a separate MCP-server binding contract.",
+          )}
+        </p>
+      </div>
       {(mode === "full" || mode === "multi") && (
-        <div className="space-y-3 border-t border-border/50 pt-4">
+        <details className="group rounded-sm border border-border bg-surface-0/35">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-foreground">
+            <span className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-primary" /> {localize(lang, "Advanced: raw tools и условия остановки", "Advanced: raw tools and stop conditions")}</span>
+            <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+        <div className="space-y-3 border-t border-border px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h4 className="text-sm font-semibold text-foreground">{localize(lang, "Доступ к инструментам", "Tool access")}</h4>
@@ -157,11 +178,12 @@ export function AgentWizardCapabilitiesStep({
             </>
           )}
         </div>
+        </details>
       )}
       <div className="space-y-3 border-t border-border/50 pt-4">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Скиллы агента", "Agent skills")}</h4>
+            <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground"><BookOpen className="h-4 w-4 text-primary" /> {localize(lang, "Навыки и подключённые инструменты", "Skills and connected tools")}</h4>
             <p className="mt-1 text-xs leading-4 text-muted-foreground">
               {localize(lang, `${selectedSkillSlugs.length} выбрано · ${availableSkills.length} доступно`, `${selectedSkillSlugs.length} selected · ${availableSkills.length} available`)}
             </p>
@@ -184,7 +206,7 @@ export function AgentWizardCapabilitiesStep({
               );
             })}
           </div>
-        ) : <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs text-muted-foreground">{localize(lang, "Доступных скиллов пока нет.", "No available skills yet.")}</div>}
+        ) : <div className="rounded-lg border border-dashed border-border/70 px-3 py-3 text-xs leading-5 text-muted-foreground">{localize(lang, "Доступных skills пока нет. Подключите нужную интеграцию или skill, затем вернитесь в мастер.", "No skills are available yet. Connect the required integration or skill, then return to the wizard.")}</div>}
       </div>
       <AgentMaterialsSection
         lang={lang}

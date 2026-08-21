@@ -271,7 +271,7 @@ def execute_tool(
         if not user_can_automate(user, request=request):
             return {
                 "ok": False,
-                "error": "Mutating tools require the pilot_operator role and automation capability",
+                "error": "Mutating tools require the automation capability",
                 "code": "automation_required",
                 "status": 403,
             }

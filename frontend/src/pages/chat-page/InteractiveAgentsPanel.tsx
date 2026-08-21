@@ -281,7 +281,7 @@ export function InteractiveAgentsPanel({ title, items, actions }: Props) {
   if (!rows.length) return null;
 
   return (
-    <div className="max-w-[min(520px,100%)] animate-in fade-in-0 duration-300 overflow-hidden rounded-sm border border-border/40 bg-card/30">
+    <div className="w-full max-w-[520px] overflow-hidden rounded-sm border border-border/40 bg-card/30">
       <div className="flex items-baseline justify-between gap-3 px-3.5 pt-2.5 pb-1">
         <span className="text-[11px] font-medium tracking-wide text-muted-foreground">
           {title?.replace(/\s*·\s*\d+\s*$/, "") || localize(lang, "Агенты", "Agents")}

@@ -39,7 +39,7 @@ def _studio_models():
     )
 
 
-def test_resources_follow_active_project_and_queries_do_not_cross_boundary():
+def test_operational_resources_do_not_require_project_switching():
     AgentConfig, MCPServerPool, Pipeline = _studio_models()
     owner = _user("tenant-owner", staff=True)
     personal = ensure_default_project(owner)
@@ -58,23 +58,23 @@ def test_resources_follow_active_project_and_queries_do_not_cross_boundary():
     team_studio_agent = AgentConfig.objects.create(owner=owner, name="team-studio-agent")
     team_pipeline = Pipeline.objects.create(owner=owner, name="team-pipeline")
 
-    assert {item.id for item in get_servers_for_user(owner)} == {team_server.id}
-    assert {item.id for item in playbooks_visible_to(owner)} == {team_playbook.id}
+    assert {item.id for item in get_servers_for_user(owner)} == {personal_server.id, team_server.id}
+    assert {item.id for item in playbooks_visible_to(owner)} == {personal_playbook.id, team_playbook.id}
     assert {item.id for item in _mcp_read_queryset_for_user(owner)} == {team_mcp.id}
     assert {item.id for item in _agent_read_queryset_for_user(owner)} == {team_studio_agent.id}
     assert {item.id for item in _pipeline_queryset_for_user(owner)} == {team_pipeline.id}
     assert team_agent.project_id == team.id
 
     activate_project(owner, personal)
-    assert {item.id for item in get_servers_for_user(owner)} == {personal_server.id}
-    assert {item.id for item in playbooks_visible_to(owner)} == {personal_playbook.id}
+    assert {item.id for item in get_servers_for_user(owner)} == {personal_server.id, team_server.id}
+    assert {item.id for item in playbooks_visible_to(owner)} == {personal_playbook.id, team_playbook.id}
     assert {item.id for item in _mcp_read_queryset_for_user(owner)} == {personal_mcp.id}
     assert {item.id for item in _agent_read_queryset_for_user(owner)} == {personal_studio_agent.id}
     assert {item.id for item in _pipeline_queryset_for_user(owner)} == {personal_pipeline.id}
     assert personal_agent.project_id == personal.id
 
 
-def test_legacy_server_share_adds_membership_but_requires_project_activation():
+def test_legacy_server_share_is_visible_without_project_activation():
     owner = _user("share-owner")
     member = _user("share-member")
     owner_project = ensure_default_project(owner)
@@ -87,7 +87,7 @@ def test_legacy_server_share_adds_membership_but_requires_project_activation():
     assert membership.role == ProjectMembership.ROLE_OPERATOR
     assert active_project_for_user(member).id == member_project.id
     assert get_servers_for_user(member).filter(pk=personal_server.pk).exists()
-    assert not get_servers_for_user(member).filter(pk=server.pk).exists()
+    assert get_servers_for_user(member).filter(pk=server.pk).exists()
 
     activate_project(member, owner_project)
     assert get_servers_for_user(member).filter(pk=server.pk).exists()

@@ -1,4 +1,4 @@
-import { Eye, FileCode2, FileText, ListChecks, Plus, Send, Trash2, Upload, X } from "lucide-react";
+import { AlertTriangle, Eye, FileCode2, FileText, ListChecks, Plus, Send, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,7 +59,7 @@ export function AgentMaterialsSection({
       <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Upload className="h-4 w-4 text-primary" /> {localize(lang, "Материалы агента", "Agent materials")}
+            <Upload className="h-4 w-4 text-primary" /> {localize(lang, "Материалы для контекста ИИ", "Materials for AI context")}
           </h4>
           <div className="flex flex-wrap gap-2">
             <label className="inline-flex min-h-8 cursor-pointer items-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
@@ -79,7 +79,7 @@ export function AgentMaterialsSection({
               <FileText className="mr-1 inline h-3 w-3" /> {localize(lang, "Документ", "Document")}
             </button>
             <button type="button" onClick={() => addArtifact("script")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
-              <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Скрипт", "Script")}
+              <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Код как контекст", "Code as context")}
             </button>
             <button type="button" onClick={() => addArtifact("task_list")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
               <ListChecks className="mr-1 inline h-3 w-3" /> {localize(lang, "Задачи", "Tasks")}
@@ -87,9 +87,20 @@ export function AgentMaterialsSection({
           </div>
         </div>
 
+        <div role="note" className="flex items-start gap-3 rounded-sm border border-warning/30 bg-warning/10 px-3 py-3">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <p className="text-xs leading-5 text-muted-foreground">
+            {localize(
+              lang,
+              "Сохраняются первые 12 КБ текста. Документы доступны для чтения, а распознанные shell/bash-скрипты запускаются только в отдельном ограниченном Docker-контейнере. Репозитории и Ansible используют соответствующую автоматизацию.",
+              "The first 12 KB of text is stored. Documents are readable, while identifiable shell/bash scripts run only in a separate restricted Docker container. Repositories and Ansible use their dedicated automation flows.",
+            )}
+          </p>
+        </div>
+
         {inputArtifacts.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
-            {localize(lang, "Материалы не добавлены.", "No materials added.")}
+            {localize(lang, "Материалы не обязательны. Добавьте регламент, список задач или небольшой текстовый фрагмент кода, если агенту нужен контекст.", "Materials are optional. Add a procedure, task list, or a small code excerpt when the agent needs context.")}
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)]">
@@ -173,7 +184,14 @@ export function AgentMaterialsSection({
                     </Button>
                   </div>
                 ) : (
-                  <Textarea value={activeArtifact.content} onChange={(e) => updateArtifact(activeArtifactIndex, { content: e.target.value })} rows={activeArtifact.kind === "script" ? 10 : 8} className={`bg-secondary/50 text-xs ${activeArtifact.kind === "script" ? "font-mono" : ""}`} />
+                  <>
+                    {activeArtifact.kind === "script" ? (
+                      <p className="rounded-sm border border-warning/25 bg-warning/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                        {localize(lang, "Shell/bash можно запустить без SSH в отдельном ограниченном Docker-контейнере с обычным интернет-доступом. Контейнер не получает файлы, секреты, Docker socket или сеть хоста; запуск всё равно требует подтверждения.", "Shell/bash can run without SSH in a restricted Docker container with regular internet access. It receives no host files, secrets, Docker socket, or host network; execution still requires approval.")}
+                      </p>
+                    ) : null}
+                    <Textarea value={activeArtifact.content} onChange={(e) => updateArtifact(activeArtifactIndex, { content: e.target.value })} rows={activeArtifact.kind === "script" ? 10 : 8} className={`bg-secondary/50 text-xs ${activeArtifact.kind === "script" ? "font-mono" : ""}`} />
+                  </>
                 )}
               </div>
             ) : (
@@ -189,7 +207,7 @@ export function AgentMaterialsSection({
         <label className="flex cursor-pointer items-center gap-3">
           <input type="checkbox" checked={telegramEnabled} onChange={(e) => setTelegramEnabled(e.target.checked)} className="rounded" />
           <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Send className="h-4 w-4 text-primary" /> {localize(lang, "Отправлять отчет в Telegram", "Send report to Telegram")}
+            <Send className="h-4 w-4 text-primary" /> {localize(lang, "Уведомить о результате в Telegram", "Notify about the result in Telegram")}
           </span>
         </label>
         {telegramEnabled && <Input value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="mt-3 h-9 bg-background/60 text-sm" placeholder="Chat ID" />}

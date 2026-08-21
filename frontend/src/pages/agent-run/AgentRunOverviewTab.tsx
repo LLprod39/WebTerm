@@ -107,6 +107,17 @@ function FinishedSummary({
             <MetaChip icon={<ListChecks className="h-3.5 w-3.5" />} label={`${nActions} действий`} />
           ) : null}
         </div>
+        {report.report.kpis.length ? (
+          <dl className="mt-4 grid gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            {report.report.kpis.slice(0, 8).map((item) => (
+              <div key={item.id} className="min-w-0 bg-surface-0 px-3 py-2.5">
+                <dt className="truncate text-2xs text-muted-foreground">{item.label}</dt>
+                <dd className="mt-0.5 truncate font-mono text-sm font-semibold text-foreground">{item.value}</dd>
+                {item.hint ? <p className="mt-0.5 truncate text-2xs text-muted-foreground">{item.hint}</p> : null}
+              </div>
+            ))}
+          </dl>
+        ) : null}
       </section>
 
       {/* What found · What to do */}
@@ -198,7 +209,7 @@ function FinishedSummary({
         </summary>
         <div className="border-t border-border px-5 py-4">
           {markdown ? (
-            <div className="prose prose-invert max-w-none prose-sm prose-p:text-foreground/85 prose-li:text-foreground/85 prose-headings:text-foreground">
+            <div className="prose prose-invert max-w-none prose-sm prose-headings:scroll-mt-20 prose-headings:text-foreground prose-p:text-foreground/85 prose-li:text-foreground/85 prose-pre:max-h-[32rem] prose-pre:overflow-auto prose-table:block prose-table:overflow-x-auto prose-th:whitespace-nowrap prose-td:align-top">
               <ReactMarkdown>{markdown}</ReactMarkdown>
             </div>
           ) : (

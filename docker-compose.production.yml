@@ -60,6 +60,8 @@ x-backend-worker-environment: &backend-worker-environment
   PILOT_SSH_ALLOWED_HOSTS: ${PILOT_SSH_ALLOWED_HOSTS:-}
   PILOT_SSH_ALLOWED_CIDRS: ${PILOT_SSH_ALLOWED_CIDRS:-}
   PILOT_SSH_ALLOWED_PORTS: ${PILOT_SSH_ALLOWED_PORTS:-}
+  # Kubernetes Ops is excluded from the controlled pilot unless opted in.
+  KUBERNETES_OPS_ENABLED: ${KUBERNETES_OPS_ENABLED:-false}
   WEBTERM_OTEL_REQUIRED: ${WEBTERM_OTEL_REQUIRED:-false}
   OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
   OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-webterm-worker}
@@ -285,6 +287,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-30000}
       WEBTERM_ENVIRONMENT: ${WEBTERM_ENVIRONMENT:-production}
+      KUBERNETES_OPS_ENABLED: ${KUBERNETES_OPS_ENABLED:-false}
       WEBTERM_PROCESS_ROLE: web
       CLI_RUNTIME_TIMEOUT_SECONDS: ${CLI_RUNTIME_TIMEOUT_SECONDS:-600}
       CLI_FIRST_OUTPUT_TIMEOUT_SECONDS: ${CLI_FIRST_OUTPUT_TIMEOUT_SECONDS:-120}
@@ -1060,6 +1063,7 @@ services:
   kubernetes-ops-sync:
     <<: *backend-worker
     container_name: mini-prod-kubernetes-ops-sync
+    profiles: ["kubernetes-ops"]
     command:
       [
         "sh",

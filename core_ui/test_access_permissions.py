@@ -1,7 +1,7 @@
 from unittest import mock
 
 from django.contrib.auth.models import Group, User
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from core_ui.access import PILOT_USER_FEATURES, access_profile_permissions, build_user_access_payload
@@ -31,13 +31,16 @@ class AccessPermissionsTests(TestCase):
             is_staff=is_staff,
         )
 
-    def auth_features(self, user: User) -> dict[str, bool]:
+    def auth_user(self, user: User) -> dict:
         self.client.force_login(user)
         response = self.client.get(reverse("api_auth_session"))
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["authenticated"])
-        return payload["user"]["features"]
+        return payload["user"]
+
+    def auth_features(self, user: User) -> dict[str, bool]:
+        return self.auth_user(user)["features"]
 
     def test_studio_permission_is_not_coupled_to_agents(self):
         user = self.create_user("operator")
@@ -70,7 +73,7 @@ class AccessPermissionsTests(TestCase):
         self.assertFalse(features["kubernetes"])
         self.assertFalse(features["mars"])
         self.assertFalse(features.get("knowledge_base", False))
-        self.assertTrue(features["ai_connections_personal"])
+        self.assertFalse(features["ai_connections_personal"])
         self.assertFalse(features["ai_connections_admin"])
         self.assertFalse(features["automation"])
         self.assertTrue(features["chat"])
@@ -98,15 +101,18 @@ class AccessPermissionsTests(TestCase):
         ide_request.user = user
         self.assertEqual(api_ide_list_files(ide_request).status_code, 403)
 
-    def test_ai_connection_capabilities_are_hidden_when_runtime_profile_is_disabled(self):
-        user = self.create_user("ai-runtime-disabled")
-        UserAppPermission.objects.create(user=user, feature="ai_connections_admin", allowed=True)
+    def test_ai_connection_page_stays_visible_with_clear_runtime_status_when_runtime_is_disabled(self):
+        user = self.create_user("ai-runtime-disabled", is_staff=True)
+        for feature in ("settings", "ai_connections_personal", "ai_connections_admin"):
+            UserAppPermission.objects.create(user=user, feature=feature, allowed=True)
 
         with mock.patch.dict("os.environ", {"AI_CLI_SUBSCRIPTIONS_ENABLED": "false"}):
-            features = self.auth_features(user)
+            auth_user = self.auth_user(user)
 
-        self.assertFalse(features["ai_connections_personal"])
-        self.assertFalse(features["ai_connections_admin"])
+        self.assertTrue(auth_user["features"]["ai_connections_personal"])
+        self.assertTrue(auth_user["features"]["ai_connections_admin"])
+        self.assertTrue(auth_user["can_manage_ai_routing"])
+        self.assertFalse(auth_user["ai_cli_runtime_enabled"])
 
     def test_pilot_operator_profile_gets_explicit_automation_without_staff(self):
         user = self.create_user("pilot-operator")
@@ -116,7 +122,7 @@ class AccessPermissionsTests(TestCase):
 
         self.assertFalse(user.is_staff)
         self.assertTrue(features["automation"])
-        self.assertTrue(features["ai_connections_admin"])
+        self.assertFalse(features["ai_connections_admin"])
         self.assertTrue(features["chat"])
         self.assertFalse(features["orchestrator"])
         self.assertEqual(build_user_access_payload(user)["access_profile"], "pilot_operator")
@@ -130,6 +136,14 @@ class AccessPermissionsTests(TestCase):
         self.assertFalse(user_can_automate(custom))
         self.assertFalse(user_can_automate(staff))
 
+    def test_release_mode_uses_automation_capability_without_a_named_pilot_profile(self):
+        user = self.create_user("release-automation", is_staff=True)
+        UserAppPermission.objects.create(user=user, feature="automation", allowed=True)
+
+        with mock.patch.dict("os.environ", {"PILOT_RESTRICTED_MODE": "false"}):
+            self.assertTrue(user_can_automate(user))
+            self.assertTrue(self.auth_features(user)["automation"])
+
     def test_dashboard_access_is_not_tied_to_agents_for_staff(self):
         user = self.create_user("staffer", is_staff=True)
         UserAppPermission.objects.create(user=user, feature="agents", allowed=False)
@@ -141,6 +155,7 @@ class AccessPermissionsTests(TestCase):
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 200)
 
+    @override_settings(KUBERNETES_OPS_ENABLED=True)
     def test_mars_and_kubernetes_are_not_staff_defaults(self):
         user = self.create_user("staff-opt-in", is_staff=True)
 
@@ -155,6 +170,17 @@ class AccessPermissionsTests(TestCase):
 
         self.assertTrue(features["mars"])
         self.assertTrue(features["kubernetes"])
+
+    @override_settings(KUBERNETES_OPS_ENABLED=False)
+    def test_deployment_kubernetes_switch_overrides_staff_and_explicit_access(self):
+        user = self.create_user("kubernetes-disabled", is_staff=True)
+        UserAppPermission.objects.create(user=user, feature="kubernetes", allowed=True)
+
+        features = self.auth_features(user)
+
+        self.assertFalse(features["kubernetes"])
+        self.client.force_login(user)
+        self.assertEqual(self.client.get(reverse("api_kubernetes_overview")).status_code, 403)
 
     def test_group_settings_permission_does_not_grant_access_management_without_staff(self):
         user = self.create_user("manager")

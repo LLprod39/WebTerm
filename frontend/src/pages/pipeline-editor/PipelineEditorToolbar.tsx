@@ -23,6 +23,7 @@ export function PipelineEditorToolbar({
   pipelineId,
   pipelineName,
   providerBinding,
+  canManageAiRouting,
   resolvedLastRun,
   runDisabled,
   runPending,
@@ -45,6 +46,7 @@ export function PipelineEditorToolbar({
   pipelineId: number | null;
   pipelineName: string;
   providerBinding: ProviderBinding | null;
+  canManageAiRouting: boolean;
   resolvedLastRun: PipelineLastRun | null;
   runDisabled: boolean;
   runPending: boolean;
@@ -94,13 +96,13 @@ export function PipelineEditorToolbar({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:ml-auto lg:justify-end">
-        <ProviderBindingSelect
+        {canManageAiRouting ? <ProviderBindingSelect
           value={providerBinding}
           onChange={onProviderBindingChange}
           mode="unattended"
           lang={lang}
           className="h-9 min-w-48 max-w-64"
-        />
+        /> : null}
         <Button
           size="sm"
           variant="outline"
