@@ -220,12 +220,16 @@ async def _run_auth_flow(flow_id: int, *, worker_name: str, fencing_token: int) 
             if lease_lost.is_set():
                 return
             if event.type is ProviderEventType.AUTH_REQUIRED:
-                await _record_device_code(
-                    flow_id,
-                    event.payload,
-                    worker_name=worker_name,
-                    fencing_token=fencing_token,
-                )
+                if flow.flow_kind == "verification":
+                    terminal_type = event.type
+                    error_code = str(event.payload.get("code") or "provider_auth_required")
+                else:
+                    await _record_device_code(
+                        flow_id,
+                        event.payload,
+                        worker_name=worker_name,
+                        fencing_token=fencing_token,
+                    )
             if event.type in {
                 ProviderEventType.COMPLETED,
                 ProviderEventType.ERROR,

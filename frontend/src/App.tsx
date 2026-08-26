@@ -10,6 +10,7 @@ import AppLayout from "./components/AppLayout";
 import { fetchAuthSession } from "./lib/api";
 import { canAccessStudio, canManageAiRouting, hasAnyFeatureAccess, hasFeatureAccess } from "./lib/featureAccess";
 import { FirstRunReadinessGate } from "./components/FirstRunReadinessGate";
+import { AppMotionProvider } from "./components/AppMotionProvider";
 import { firstAllowedApplicationPath } from "./lib/navigation";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const SettingsIndexRedirect = lazy(() =>
   import("./components/settings/SettingsLayout").then((mod) => ({ default: mod.SettingsIndexRedirect })),
 );
 const SettingsReadinessPage = lazy(() => import("./pages/settings/SettingsReadinessPage"));
+const SettingsAppearancePage = lazy(() => import("./pages/settings/SettingsAppearancePage"));
 const SettingsLimitsPage = lazy(() => import("./pages/settings/SettingsLimitsPage"));
 const SettingsAIPage = lazy(() => import("./pages/settings/SettingsAIPage"));
 const SettingsAIConnectionsPage = lazy(() => import("./pages/settings/SettingsAIConnectionsPage"));
@@ -215,11 +217,12 @@ function FeatureGate({
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <UiStyleProvider>
-    <I18nProvider>
-      <TooltipProvider>
-        <Toaster />
-        <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/"}>
+    <AppMotionProvider>
+      <UiStyleProvider>
+      <I18nProvider>
+        <TooltipProvider>
+          <Toaster />
+          <BrowserRouter basename={(import.meta.env.BASE_URL || "/").replace(/\/$/, "") || "/"}>
           <Suspense fallback={<RouteLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
@@ -446,6 +449,14 @@ const App = () => (
                 >
                   <Route index element={<SettingsIndexRedirect />} />
                   <Route
+                    path="appearance"
+                    element={(
+                      <FeatureGate feature="settings">
+                        <SettingsAppearancePage />
+                      </FeatureGate>
+                    )}
+                  />
+                  <Route
                     path="readiness"
                     element={(
                       <FeatureGate feature="settings">
@@ -578,10 +589,11 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </I18nProvider>
-    </UiStyleProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </I18nProvider>
+      </UiStyleProvider>
+    </AppMotionProvider>
   </QueryClientProvider>
 );
 

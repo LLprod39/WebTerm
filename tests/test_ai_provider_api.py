@@ -208,6 +208,75 @@ def test_preference_is_default_deny_until_workspace_grant_exists(client) -> None
     assert allowed.json()["preference"]["binding"]["connection_id"] == connection.pk
 
 
+def test_preference_saves_supported_codex_model_and_reasoning(client) -> None:
+    user = User.objects.create_user("model-picker", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        name="Personal Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_model_picker",
+    )
+    client.force_login(user)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "codex_subscription",
+                    "connection_id": connection.pk,
+                    "model_id": "gpt-5.6-terra",
+                    "reasoning_effort": "xhigh",
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["preference"]["binding"]["model_id"] == "gpt-5.6-terra"
+    assert response.json()["preference"]["binding"]["reasoning_effort"] == "xhigh"
+
+
+def test_preference_rejects_reasoning_unsupported_by_model(client) -> None:
+    user = User.objects.create_user("bad-model-picker", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope="personal",
+        owner=user,
+        name="Personal Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_bad_picker",
+    )
+    client.force_login(user)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "codex_subscription",
+                    "connection_id": connection.pk,
+                    "model_id": "gpt-5.5",
+                    "reasoning_effort": "ultra",
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_request"
+
+
 def test_invalid_concurrency_is_a_bounded_client_error(client) -> None:
     user = User.objects.create_user("operator", password="pw")
     _project(user)

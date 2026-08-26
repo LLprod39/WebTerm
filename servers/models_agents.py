@@ -223,6 +223,14 @@ class AgentRun(models.Model):
         blank=True,
         help_text="Canonical structured report payload rendered by the agent run UI.",
     )
+    execution_outcome = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Durable kernel outcome facts for the run: outcome, reason, exit_reason, "
+            "verification summary and task/tool counters."
+        ),
+    )
 
     # Multi-agent pipeline fields
     plan_tasks = models.JSONField(

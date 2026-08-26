@@ -190,11 +190,11 @@ export default function SettingsAccessPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {tr("Управление доступом", "Access Control")}
+              {tr("Доступ", "Access Control")}
             </h1>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
               {tr(
-                "Сводка по пользователям, группам и точечным исключениям.",
+                "Пользователи, группы и точечные исключения.",
                 "Summary of users, groups, and explicit access exceptions.",
               )}
             </p>
@@ -224,33 +224,33 @@ export default function SettingsAccessPage() {
           <div className="border-b border-border/60 px-4 py-3">
             <h2 className="text-base font-semibold text-foreground">{tr("Риски доступа", "Access Risks")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {tr("Показывает состояния, которые стоит проверить перед изменением правил.", "States to review before changing policy.")}
+              {tr("Проверьте перед изменением правил.", "Review before changing policy.")}
             </p>
           </div>
           <RiskRow
             href="/settings/users"
             label={tr("Отключённые аккаунты с доступом", "Inactive accounts with access")}
-            detail={tr("Пользователь выключен, но effective permissions всё ещё содержат allow.", "User is disabled while effective permissions still include allow.")}
+            detail={tr("Аккаунт отключён, но у пользователя остались разрешения.", "The account is disabled but still has permissions.")}
             value={metrics.inactiveWithAccess}
             tone="danger"
           />
           <RiskRow
             href="/settings/users"
             label={tr("Пользователи без группы", "Users without a group")}
-            detail={tr("Активные пользователи без групп сложнее сопровождать через RBAC.", "Active users without groups are harder to manage through RBAC.")}
+            detail={tr("Права таких пользователей сложнее поддерживать централизованно.", "These users are harder to manage centrally.")}
             value={metrics.usersWithoutGroup}
             tone="warning"
           />
           <RiskRow
             href="/settings/permissions"
             label={tr("Пользователи с прямыми исключениями", "Users with direct exceptions")}
-            detail={tr("Прямые overrides должны быть временными и понятными.", "Direct overrides should be temporary and explainable.")}
+            detail={tr("Прямые исключения должны быть временными и понятными.", "Direct exceptions should be temporary and explainable.")}
             value={metrics.directOverrideUsers}
             tone="warning"
           />
           <RiskRow
             href="/settings/permissions"
-            label={tr("Deny-исключения", "Deny exceptions")}
+            label={tr("Запреты-исключения", "Deny exceptions")}
             detail={tr("Запреты могут перекрывать ожидаемые права профиля или группы.", "Denies can override expected profile or group access.")}
             value={metrics.deniedOverrides}
             tone="info"
@@ -260,15 +260,12 @@ export default function SettingsAccessPage() {
         <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="border-b border-border/60 px-4 py-3">
             <h2 className="text-base font-semibold text-foreground">{tr("Разделы", "Sections")}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {tr("Откройте конкретный объект вместо повторных быстрых действий.", "Open the specific object instead of duplicate quick actions.")}
-            </p>
           </div>
           <NavRow
             href="/settings/users"
             icon={Users}
             title={tr("Пользователи", "Users")}
-            description={tr("Аккаунты, профиль доступа, группы и reset password.", "Accounts, access profile, groups, and password reset.")}
+            description={tr("Аккаунты, профили, группы и смена пароля.", "Accounts, profiles, groups, and password reset.")}
           />
           <NavRow
             href="/settings/groups"
@@ -280,7 +277,7 @@ export default function SettingsAccessPage() {
             href="/settings/permissions"
             icon={Shield}
             title={tr("Разрешения", "Permissions")}
-            description={tr("Матрица effective access и точечные allow/deny исключения.", "Effective access matrix and explicit allow/deny exceptions.")}
+            description={tr("Итоговые права и точечные разрешения или запреты.", "Effective access and explicit allow or deny exceptions.")}
           />
           <div className="border-t border-border/60 px-4 py-3 text-sm leading-6 text-muted-foreground">
             <KeyRound className="mr-2 inline h-4 w-4 text-primary" />

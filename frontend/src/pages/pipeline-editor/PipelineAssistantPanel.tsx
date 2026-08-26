@@ -90,7 +90,7 @@ export function PipelineAssistantPanel({
     {
       intent: "create" as const,
       label: localize(lang, "Собрать", "Build"),
-      prompt: localize(lang, "Собери рабочий pipeline по моему описанию. Если граф пустой, создай полный стартовый workflow.", "Build a working pipeline from my request. If the graph is empty, create a complete starter workflow."),
+      prompt: localize(lang, "Собери рабочий пайплайн по моему описанию. Если схема пустая, создай все необходимые шаги.", "Build a working pipeline from my request. If the graph is empty, add every required step."),
     },
     {
       intent: "edit" as const,
@@ -100,7 +100,7 @@ export function PipelineAssistantPanel({
     {
       intent: "validate" as const,
       label: localize(lang, "Проверить", "Validate"),
-      prompt: localize(lang, "Проверь текущий pipeline и предложи минимальные исправления, чтобы его можно было сохранить и запустить.", "Validate the current pipeline and propose the smallest fixes needed to save and run."),
+      prompt: localize(lang, "Проверь текущий пайплайн и предложи минимальные исправления для сохранения и запуска.", "Validate the current pipeline and propose the smallest fixes needed to save and run it."),
     },
     {
       intent: "fix_run" as const,
@@ -118,7 +118,7 @@ export function PipelineAssistantPanel({
               <Wand2 className="h-4 w-4 text-primary" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "AI pipeline", "Pipeline AI")}</h3>
+              <h3 className="text-sm font-semibold text-foreground">{localize(lang, "Помощник", "Assistant")}</h3>
               <p className="text-xs text-muted-foreground">{selectedLabel}</p>
             </div>
           </div>
@@ -170,7 +170,7 @@ export function PipelineAssistantPanel({
             <div className="rounded-xl border border-dashed border-border px-3 py-4 text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
-                "Опишите рабочий процесс: что запускает pipeline, какие серверы или MCP использовать, где нужно подтверждение и куда отправить результат.",
+                "Опишите процесс: что запускает пайплайн, какие серверы и инструменты использовать, где нужно подтверждение и куда отправить результат.",
                 "Describe the workflow: what should trigger it, which servers or MCPs it should use, where approval is required, and where to send the result.",
               )}
             </div>

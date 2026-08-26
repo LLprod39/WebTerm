@@ -57,9 +57,9 @@ export function MemorySettingsPanel({
 
   return (
     <SectionCard
-      title="Автозаметки и Dreams"
+      title="Долгосрочная память"
       icon={ScrollText}
-      description="Админская зона для настройки снов, canonical snapshots и learned operational patterns."
+      description="Сбор, проверка и объединение полезных записей."
       actions={
         <div className="flex flex-wrap gap-2">
           <Button
@@ -79,7 +79,7 @@ export function MemorySettingsPanel({
             disabled={!selectedMemoryServerId || memoryDreamRunning}
           >
             <Sparkles className={cn("h-3 w-3", memoryDreamRunning && "animate-spin")} />
-            {memoryDreamRunning ? "Dreaming..." : "Run Dreams Now"}
+            {memoryDreamRunning ? "Объединение…" : "Объединить записи"}
           </Button>
         </div>
       }
@@ -108,17 +108,16 @@ export function MemorySettingsPanel({
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">{selectedMemoryServer?.name || "Сервер не выбран"}</Badge>
               <Badge variant={memoryOverview?.daemon_state?.status === "running" ? "default" : "secondary"}>
-                Dreams daemon: {memoryOverview?.daemon_state?.status || "unknown"}
+                Служба: {memoryOverview?.daemon_state?.status === "running" ? "работает" : memoryOverview?.daemon_state?.status || "неизвестно"}
               </Badge>
-              {memoryOverview?.daemon_state?.is_stale ? <Badge variant="outline">Lease stale</Badge> : null}
+              {memoryOverview?.daemon_state?.is_stale ? <Badge variant="outline">нет отклика</Badge> : null}
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Здесь живут только системные AI memory controls. Пользовательские текстовые заметки остаются в карточке
-              сервера.
+              Здесь настраивается автоматическая память. Ручные заметки остаются в карточке сервера.
             </p>
             {memoryOverview?.daemon_state?.heartbeat_at ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                Heartbeat: {new Date(memoryOverview.daemon_state.heartbeat_at).toLocaleString()}
+                Последний отклик: {new Date(memoryOverview.daemon_state.heartbeat_at).toLocaleString()}
               </p>
             ) : null}
           </div>
@@ -128,9 +127,9 @@ export function MemorySettingsPanel({
           <div className="rounded-xl border border-border/60 bg-background/40 p-4 space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <p className="text-sm font-medium text-foreground">Dream Policy</p>
+                <p className="text-sm font-medium text-foreground">Правила памяти</p>
                 <p className="text-xs text-muted-foreground">
-                  Управляет nearline compaction, nightly distillation и тем, что реально попадает в server brain.
+                  Определяет, когда объединять записи и что сохранять в памяти сервера.
                 </p>
               </div>
               <Button
@@ -140,13 +139,13 @@ export function MemorySettingsPanel({
                 disabled={memoryPolicySaving || !selectedMemoryServerId}
               >
                 <Save className="mr-1 h-3 w-3" />
-                {memoryPolicySaving ? "Saving..." : "Save Memory Policy"}
+                {memoryPolicySaving ? "Сохранение…" : "Сохранить правила"}
               </Button>
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-1.5">
-                <Label className="text-xs">Dream mode</Label>
+                <Label className="text-xs">Режим объединения</Label>
                 <Select
                   value={memoryPolicyDraft.dream_mode}
                   onValueChange={(value) => updatePolicy("dream_mode", value as MemoryPolicy["dream_mode"])}
@@ -155,14 +154,14 @@ export function MemorySettingsPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="heuristic">Heuristic</SelectItem>
-                    <SelectItem value="nightly_llm">Nightly LLM</SelectItem>
-                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                    <SelectItem value="heuristic">По правилам</SelectItem>
+                    <SelectItem value="nightly_llm">Ночная обработка</SelectItem>
+                    <SelectItem value="hybrid">Комбинированный</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Nightly model</Label>
+                <Label className="text-xs">Модель для ночной обработки</Label>
                 <Input
                   value={memoryPolicyDraft.nightly_model_alias}
                   onChange={(event) => updatePolicy("nightly_model_alias", event.target.value)}
@@ -170,7 +169,7 @@ export function MemorySettingsPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Nearline threshold</Label>
+                <Label className="text-xs">Событий до объединения</Label>
                 <Input
                   type="number"
                   min={2}
@@ -181,7 +180,7 @@ export function MemorySettingsPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Sleep start</Label>
+                <Label className="text-xs">Начало ночного окна</Label>
                 <Input
                   type="number"
                   min={0}
@@ -192,7 +191,7 @@ export function MemorySettingsPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Sleep end</Label>
+                <Label className="text-xs">Конец ночного окна</Label>
                 <Input
                   type="number"
                   min={0}
@@ -203,7 +202,7 @@ export function MemorySettingsPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Raw retention</Label>
+                <Label className="text-xs">Хранить события, дней</Label>
                 <Input
                   type="number"
                   min={7}
@@ -214,7 +213,7 @@ export function MemorySettingsPanel({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs">Episode retention</Label>
+                <Label className="text-xs">Хранить сессии, дней</Label>
                 <Input
                   type="number"
                   min={14}
@@ -233,7 +232,7 @@ export function MemorySettingsPanel({
                   checked={memoryPolicyDraft.is_enabled}
                   onChange={(event) => updatePolicy("is_enabled", event.target.checked)}
                 />
-                AI memory enabled
+                Долгосрочная память
               </label>
               <label className="flex items-center gap-2 text-xs text-muted-foreground">
                 <input
@@ -241,12 +240,12 @@ export function MemorySettingsPanel({
                   checked={memoryPolicyDraft.human_habits_capture_enabled}
                   onChange={(event) => updatePolicy("human_habits_capture_enabled", event.target.checked)}
                 />
-                Human habits capture
+                Запоминать рабочие привычки
               </label>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Если выключить AI memory, новый layered memory pipeline и dreams перестанут собирать события. Останется
-              старый формат: очень короткая автоматическая выжимка после рабочей сессии.
+              Если выключить долгосрочную память, новые события перестанут накапливаться. Краткая выжимка после
+              рабочей сессии останется доступна.
             </p>
           </div>
         ) : null}
@@ -261,7 +260,7 @@ export function MemorySettingsPanel({
           />
         ) : (
           <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-            {selectedMemoryServerId ? "Загрузка обзора записей..." : "Выберите сервер, чтобы увидеть настройки автозаметок."}
+            {selectedMemoryServerId ? "Загрузка записей…" : "Выберите сервер, чтобы открыть настройки памяти."}
           </div>
         )}
       </div>

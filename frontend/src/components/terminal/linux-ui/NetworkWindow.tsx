@@ -14,6 +14,7 @@ import {
   type FrontendServer,
   type LinuxUiNetworkInterface,
 } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const EMPTY_NETWORK_INTERFACES: LinuxUiNetworkInterface[] = [];
@@ -27,6 +28,7 @@ function NetworkInterfaceRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const { lang } = useI18n();
   return (
     <button
       type="button"
@@ -56,7 +58,7 @@ function NetworkInterfaceRow({
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5">
-          {item.addresses.length} addr
+          {localize(lang, `Адресов: ${item.addresses.length}`, `${item.addresses.length} addresses`)}
         </span>
         {item.mtu != null ? (
           <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5">
@@ -77,6 +79,7 @@ export function NetworkWindow({
   active: boolean;
   networkEnabled: boolean;
 }) {
+  const { lang } = useI18n();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
   const [selectedInterfaceName, setSelectedInterfaceName] = useState<string | null>(null);
@@ -178,45 +181,43 @@ export function NetworkWindow({
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-sm font-medium text-foreground">network center</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Inspect interfaces, routes, and listening sockets without leaving the workspace shell.
-            </div>
+            <div className="text-sm font-medium text-foreground">{localize(lang, "Сеть", "Network")}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{localize(lang, "Интерфейсы, маршруты и открытые порты.", "Interfaces, routes, and listening ports.")}</div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter interfaces, ports, routes..."
+              placeholder={localize(lang, "Найти интерфейс, порт или маршрут...", "Filter interfaces, ports, or routes...")}
               className="h-9 min-w-[16rem] bg-background/95 text-sm"
             />
             <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => void networkQuery.refetch()}>
               <RefreshCw className={cn("h-3.5 w-3.5", networkQuery.isFetching && "animate-spin")} />
-              Refresh
+              {localize(lang, "Обновить", "Refresh")}
             </Button>
           </div>
         </div>
         {!networkEnabled ? (
           <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Network tooling is limited on this host. The workspace will show whatever is available from `ip`, `ss`, or fallbacks.
+            {localize(lang, "Данные ограничены возможностями ip, ss и резервных команд.", "Data is limited to what ip, ss, and fallback commands can provide.")}
           </div>
         ) : null}
         <div className="mt-4 grid gap-2 md:grid-cols-4">
-          <SummaryCard label="Interfaces" value={networkPayload?.summary.interfaces || 0} hint="Detected links" />
-          <SummaryCard label="Addresses" value={networkPayload?.summary.addresses || 0} hint="IPv4 and IPv6 addresses" />
-          <SummaryCard label="Routes" value={networkPayload?.summary.routes || 0} hint="Visible route entries" />
-          <SummaryCard label="Listening" value={networkPayload?.summary.listening || 0} hint="Open listening sockets" alert={(networkPayload?.summary.listening || 0) > 0} />
+          <SummaryCard label={localize(lang, "Интерфейсы", "Interfaces")} value={networkPayload?.summary.interfaces || 0} hint={localize(lang, "Обнаруженные подключения", "Detected links")} />
+          <SummaryCard label={localize(lang, "Адреса", "Addresses")} value={networkPayload?.summary.addresses || 0} hint={localize(lang, "IPv4 и IPv6", "IPv4 and IPv6")} />
+          <SummaryCard label={localize(lang, "Маршруты", "Routes")} value={networkPayload?.summary.routes || 0} hint={localize(lang, "Записи таблицы маршрутизации", "Route entries")} />
+          <SummaryCard label={localize(lang, "Слушают", "Listening")} value={networkPayload?.summary.listening || 0} hint={localize(lang, "Открытые сокеты", "Listening sockets")} alert={(networkPayload?.summary.listening || 0) > 0} />
         </div>
         <div className="mt-4 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant={showUpOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowUpOnly((current) => !current)}>
-              Up only
+              {localize(lang, "Только активные", "Up only")}
             </Button>
             <Button type="button" size="sm" variant={showExposedOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowExposedOnly((current) => !current)}>
-              Exposed only
+              {localize(lang, "Только внешние", "Exposed only")}
             </Button>
             {([
-              { value: "all", label: "All protocols" },
+              { value: "all", label: localize(lang, "Все протоколы", "All protocols") },
               { value: "tcp", label: "TCP" },
               { value: "udp", label: "UDP" },
             ] as const).map((item) => (
@@ -234,13 +235,13 @@ export function NetworkWindow({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span className="rounded-full border border-border/70 bg-background/94 px-2 py-1">
-              ip {networkPayload?.tools.ip ? "ready" : "missing"}
+              ip {networkPayload?.tools.ip ? localize(lang, "доступен", "ready") : localize(lang, "нет", "missing")}
             </span>
             <span className="rounded-full border border-border/70 bg-background/94 px-2 py-1">
-              ss {networkPayload?.tools.ss ? "ready" : "missing"}
+              ss {networkPayload?.tools.ss ? localize(lang, "доступен", "ready") : localize(lang, "нет", "missing")}
             </span>
             <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive">
-              exposed {exposedCount}
+              {localize(lang, `Внешних: ${exposedCount}`, `Exposed: ${exposedCount}`)}
             </span>
           </div>
         </div>
@@ -250,9 +251,9 @@ export function NetworkWindow({
         <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Interfaces</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{localize(lang, "Интерфейсы", "Interfaces")}</div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {filteredInterfaces.length} of {interfaces.length} visible
+                {localize(lang, `Показано ${filteredInterfaces.length} из ${interfaces.length}`, `${filteredInterfaces.length} of ${interfaces.length} visible`)}
               </div>
             </div>
             <ScrollArea className="h-full max-h-full">
@@ -264,12 +265,12 @@ export function NetworkWindow({
                 ) : null}
                 {networkQuery.isLoading ? (
                   <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading network data...
+                    {localize(lang, "Загружаем данные сети...", "Loading network data...")}
                   </div>
                 ) : null}
                 {!networkQuery.isLoading && filteredInterfaces.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No interfaces match the current filter.
+                    {localize(lang, "Ничего не найдено.", "No interfaces match the current filter.")}
                   </div>
                 ) : null}
                 {filteredInterfaces.map((item) => (
@@ -288,9 +289,9 @@ export function NetworkWindow({
             <div className="rounded-3xl border border-border/70 bg-background/88 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 {([
-                  { value: "interfaces", label: `Interfaces (${filteredInterfaces.length})` },
-                  { value: "sockets", label: `Sockets (${filteredListening.length})` },
-                  { value: "routes", label: `Routes (${filteredRoutes.length})` },
+                  { value: "interfaces", label: localize(lang, `Интерфейсы (${filteredInterfaces.length})`, `Interfaces (${filteredInterfaces.length})`) },
+                  { value: "sockets", label: localize(lang, `Сокеты (${filteredListening.length})`, `Sockets (${filteredListening.length})`) },
+                  { value: "routes", label: localize(lang, `Маршруты (${filteredRoutes.length})`, `Routes (${filteredRoutes.length})`) },
                 ] as const).map((item) => (
                   <Button
                     key={item.value}
@@ -323,7 +324,7 @@ export function NetworkWindow({
                     </div>
                     <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedInterface.name)}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />
-                      Copy iface
+                      {localize(lang, "Копировать имя", "Copy interface")}
                     </Button>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
@@ -331,7 +332,7 @@ export function NetworkWindow({
                   </div>
                   <div className="mt-4 grid gap-2 lg:grid-cols-2">
                     <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Addresses</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{localize(lang, "Адреса", "Addresses")}</div>
                       <div className="mt-2 space-y-2">
                         {selectedInterface.addresses.length > 0 ? selectedInterface.addresses.map((address) => (
                           <div key={`${address.family}-${address.address}`} className="rounded-xl border border-border/70 bg-background/94 px-3 py-2">
@@ -341,19 +342,19 @@ export function NetworkWindow({
                             </div>
                           </div>
                         )) : (
-                          <div className="text-xs text-muted-foreground">No addresses detected.</div>
+                          <div className="text-xs text-muted-foreground">{localize(lang, "Адресов нет.", "No addresses detected.")}</div>
                         )}
                       </div>
                     </div>
                     <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Flags</div>
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">{localize(lang, "Флаги", "Flags")}</div>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {selectedInterface.flags.length > 0 ? selectedInterface.flags.map((flag) => (
                           <span key={flag} className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
                             {flag}
                           </span>
                         )) : (
-                          <div className="text-xs text-muted-foreground">No flags reported.</div>
+                          <div className="text-xs text-muted-foreground">{localize(lang, "Флагов нет.", "No flags reported.")}</div>
                         )}
                       </div>
                     </div>
@@ -370,24 +371,24 @@ export function NetworkWindow({
                       </span>
                       {isSocketExposed(selectedSocket.local_address) ? (
                         <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-xs uppercase tracking-wide text-destructive">
-                          exposed
+                          {localize(lang, "внешний", "exposed")}
                         </span>
                       ) : null}
                     </div>
                     <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedSocket.local_address)}>
                       <Copy className="mr-1.5 h-3.5 w-3.5" />
-                      Copy socket
+                      {localize(lang, "Копировать сокет", "Copy socket")}
                     </Button>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-3">
-                    <SummaryCard label="Port" value={selectedSocketPort || "N/A"} hint="Parsed from bind address" />
-                    <SummaryCard label="State" value={selectedSocket.state || "unknown"} hint="Reported listener state" />
-                    <SummaryCard label="Exposure" value={isSocketExposed(selectedSocket.local_address) ? "Public" : "Local"} hint="Bind scope" alert={isSocketExposed(selectedSocket.local_address)} />
+                    <SummaryCard label={localize(lang, "Порт", "Port")} value={selectedSocketPort || "N/A"} hint={localize(lang, "Из адреса привязки", "From bind address")} />
+                    <SummaryCard label={localize(lang, "Состояние", "State")} value={selectedSocket.state || "unknown"} hint={localize(lang, "Состояние слушателя", "Listener state")} />
+                    <SummaryCard label={localize(lang, "Доступ", "Exposure")} value={isSocketExposed(selectedSocket.local_address) ? localize(lang, "Внешний", "Public") : localize(lang, "Локальный", "Local")} hint={localize(lang, "Область привязки", "Bind scope")} alert={isSocketExposed(selectedSocket.local_address)} />
                   </div>
                   <div className="rounded-2xl border border-border/70 bg-card/88 p-3">
-                    <div className="text-xs uppercase tracking-wide text-muted-foreground">Process</div>
-                    <div className="mt-2 font-mono text-xs text-foreground">{selectedSocket.process || "Process metadata unavailable"}</div>
-                    <div className="mt-2 text-xs text-muted-foreground">{selectedSocket.peer_address || "No peer metadata"}</div>
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">{localize(lang, "Процесс", "Process")}</div>
+                    <div className="mt-2 font-mono text-xs text-foreground">{selectedSocket.process || localize(lang, "Процесс не определён", "Process metadata unavailable")}</div>
+                    <div className="mt-2 text-xs text-muted-foreground">{selectedSocket.peer_address || localize(lang, "Нет данных об удалённой стороне", "No peer metadata")}</div>
                   </div>
                 </div>
               ) : null}
@@ -395,10 +396,10 @@ export function NetworkWindow({
                 selectedRoute ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-medium text-foreground">Selected route</h3>
+                      <h3 className="text-sm font-medium text-foreground">{localize(lang, "Выбранный маршрут", "Selected route")}</h3>
                       <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedRoute)}>
                         <Copy className="mr-1.5 h-3.5 w-3.5" />
-                        Copy route
+                        {localize(lang, "Копировать маршрут", "Copy route")}
                       </Button>
                     </div>
                     <pre className="whitespace-pre-wrap break-words rounded-2xl border border-border/70 bg-card/88 px-3 py-3 font-mono text-xs leading-5 text-foreground">
@@ -406,16 +407,16 @@ export function NetworkWindow({
                     </pre>
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">Select a route to inspect it.</div>
+                  <div className="text-sm text-muted-foreground">{localize(lang, "Выберите маршрут.", "Select a route.")}</div>
                 )
               ) : null}
             </div>
 
             <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
               <div className="border-b border-border/60 px-4 py-3">
-                <div className="text-sm font-medium text-foreground">Listening sockets</div>
+                <div className="text-sm font-medium text-foreground">{localize(lang, "Слушающие сокеты", "Listening sockets")}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {filteredListening.length} sockets visible
+                  {localize(lang, `Показано: ${filteredListening.length}`, `${filteredListening.length} sockets visible`)}
                 </div>
               </div>
               <ScrollArea className="h-full max-h-full">
@@ -435,7 +436,7 @@ export function NetworkWindow({
                     );
                   }) : (
                     <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                      No listening sockets match the current filter.
+                      {localize(lang, "Ничего не найдено.", "No listening sockets match the current filter.")}
                     </div>
                   )}
                 </div>
@@ -444,9 +445,9 @@ export function NetworkWindow({
 
             <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
               <div className="border-b border-border/60 px-4 py-3">
-                <div className="text-sm font-medium text-foreground">Routes</div>
+                <div className="text-sm font-medium text-foreground">{localize(lang, "Маршруты", "Routes")}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {filteredRoutes.length} routes visible
+                  {localize(lang, `Показано: ${filteredRoutes.length}`, `${filteredRoutes.length} routes visible`)}
                 </div>
               </div>
               <ScrollArea className="h-full">
@@ -470,7 +471,7 @@ export function NetworkWindow({
                     </button>
                   )) : (
                     <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                      No route entries match the current filter.
+                      {localize(lang, "Ничего не найдено.", "No routes match the current filter.")}
                     </div>
                   )}
                 </div>

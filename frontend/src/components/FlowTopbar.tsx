@@ -7,7 +7,7 @@ import { openCommandPalette } from "@/components/FlowChrome";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { localize, useI18n } from "@/lib/i18n";
-import { useUiStyle } from "@/lib/ui-style";
+import { useUiStyle, type UiStyleId } from "@/lib/ui-style";
 import { cn } from "@/lib/utils";
 
 /** First path segment → nav i18n key (Flow breadcrumb). */
@@ -28,11 +28,11 @@ const SECTION_TITLE_KEY: Record<string, string> = {
  * Global topbar rendered only under the Flow skin: breadcrumb, search,
  * date chip and the black "Ask AI" CTA (FlowAI reference shell).
  */
-export function FlowTopbar() {
+export function FlowTopbar({ effectiveStyle }: { effectiveStyle?: UiStyleId } = {}) {
   const location = useLocation();
   const { lang, t } = useI18n();
   const { style, setStyle } = useUiStyle();
-  const isDark = style === "flow-dark";
+  const isDark = (effectiveStyle ?? style) === "flow-dark";
 
   const section = location.pathname.split("/").filter(Boolean)[0] ?? "dashboard";
   const titleKey = SECTION_TITLE_KEY[section];

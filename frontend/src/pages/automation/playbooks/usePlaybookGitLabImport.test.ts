@@ -84,4 +84,44 @@ describe("usePlaybookGitLabImport", () => {
     expect(result.current.canCommit).toBe(false);
     expect(result.current.status).toBe("idle");
   });
+
+  it("re-previews the same GitLab snapshot when the entrypoint changes", async () => {
+    const multiEntrypointPreview = {
+      ...preview,
+      entrypoints: [
+        ...preview.entrypoints,
+        { path: "deploy.yml", play_count: 1, task_count: 3, plays: [] },
+      ],
+    };
+    const refreshedPreview = {
+      ...multiEntrypointPreview,
+      content_hash: "deploy-preview-hash",
+      selected_entrypoint: "deploy.yml",
+    };
+    const source = { type: "gitlab" as const, host: "gitlab.com", project: "team/ops", ref: "main" };
+    vi.mocked(previewGitLabPlaybookProject)
+      .mockResolvedValueOnce({ success: true, preview: multiEntrypointPreview, source })
+      .mockResolvedValueOnce({ success: true, preview: refreshedPreview, source });
+    vi.mocked(commitGitLabPlaybookProject).mockResolvedValue({ ...committed, preview: refreshedPreview });
+    const { result } = renderHook(() => usePlaybookGitLabImport());
+    act(() => result.current.updateSource({ project_url: "https://gitlab.com/team/ops", ref: "main" }));
+    await act(async () => { await result.current.previewProject(); });
+
+    await act(async () => { await result.current.selectEntrypoint("deploy.yml"); });
+
+    expect(previewGitLabPlaybookProject).toHaveBeenLastCalledWith(expect.objectContaining({
+      project_url: "https://gitlab.com/team/ops",
+      ref: "main",
+      entrypoint: "deploy.yml",
+    }));
+    expect(result.current.preview?.content_hash).toBe("deploy-preview-hash");
+    expect(result.current.metadata.entrypoint).toBe("deploy.yml");
+
+    await act(async () => { await result.current.commit(); });
+    expect(commitGitLabPlaybookProject).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ entrypoint: "deploy.yml", visibility: "private" }),
+      "deploy-preview-hash",
+    );
+  });
 });

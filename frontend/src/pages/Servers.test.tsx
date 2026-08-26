@@ -108,11 +108,11 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open settings for prod-web-01" }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Advanced" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
 
     fireEvent.click(await screen.findByRole("button", { name: "Server Rules" }));
     expect(await screen.findByText("Scope: Server")).toBeInTheDocument();
@@ -191,11 +191,11 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open settings for prod-web-01" }), {
       button: 0,
       ctrlKey: false,
     });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Advanced" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
     fireEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
 
     expect(screen.getByText("Canonical Profile")).toBeInTheDocument();
@@ -209,7 +209,7 @@ describe("Servers page rules and translations", () => {
   it("switches new servers UI strings between Russian and English", async () => {
     renderServers("ru");
 
-    expect(await screen.findByText("Инфраструктура")).toBeInTheDocument();
+    expect(await screen.findByText("Серверы")).toBeInTheDocument();
     await activateTab("Правила");
     expect(await screen.findByText("Инструкции по умолчанию")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Глобально" })).toBeInTheDocument();
@@ -243,7 +243,7 @@ describe("Servers page rules and translations", () => {
     });
   });
 
-  it("locks and sanitizes unsafe legacy server access for a pilot user", async () => {
+  it("normalizes legacy read-only access without hiding sudo settings", async () => {
     vi.mocked(api.fetchServerDetails).mockResolvedValue({
       ...serverDetails,
       ai_read_only: false,
@@ -253,29 +253,28 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open settings for prod-web-01" }), {
       button: 0,
       ctrlKey: false,
     });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Edit Server" }));
 
-    const warning = await screen.findByRole("alert");
-    expect(warning).toHaveTextContent("unsafe legacy access");
-    expect(screen.queryByRole("switch", { name: "AI read-only" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "NOPASSWD" })).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Sudo password")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "AI: read-only" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Stored sudo password" }));
+    expect(screen.getByLabelText("Sudo password")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     await waitFor(() => {
       expect(api.updateServer).toHaveBeenCalledWith(1, expect.objectContaining({
-        ai_read_only: true,
-        sudo_auth_mode: "none",
+        ai_read_only: false,
+        sudo_auth_mode: "stored_password",
         sudo_password: "",
       }));
     });
   });
 
-  it("keeps server access restricted for team admins without automation", async () => {
+  it("does not expose pilot or read-only modes without automation", async () => {
     vi.mocked(api.fetchAuthSession).mockResolvedValue({
       authenticated: true,
       user: {
@@ -291,12 +290,12 @@ describe("Servers page rules and translations", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Automation access is not granted");
-    expect(screen.queryByRole("switch", { name: "AI read-only" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "NOPASSWD" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "AI: read-only" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Automation access is not granted")).not.toBeInTheDocument();
   });
 
-  it("unlocks elevated server access for any release profile with automation", async () => {
+  it("uses the same server access UI for release profiles with automation", async () => {
     vi.mocked(api.fetchAuthSession).mockResolvedValue({
       authenticated: true,
       user: {
@@ -312,8 +311,8 @@ describe("Servers page rules and translations", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "Add Server" }));
 
-    expect(await screen.findByRole("switch", { name: "AI read-only" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
+    expect(screen.queryByRole("switch", { name: "AI: read-only" })).not.toBeInTheDocument();
     expect(screen.queryByText("Automation access is not granted")).not.toBeInTheDocument();
   });
 
@@ -322,7 +321,7 @@ describe("Servers page rules and translations", () => {
     renderServers("en");
 
     await screen.findByText("prod-web-01");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open settings for prod-web-01" }), {
       button: 0,
       ctrlKey: false,
     });
@@ -351,7 +350,7 @@ describe("Servers page rules and translations", () => {
 
     renderServers("en");
     await screen.findByText("prod-web-01");
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Open advanced settings for prod-web-01" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Open settings for prod-web-01" }), {
       button: 0,
       ctrlKey: false,
     });

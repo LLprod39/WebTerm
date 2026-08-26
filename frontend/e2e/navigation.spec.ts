@@ -208,7 +208,7 @@ test("sidebar navigation opens key sections", async ({ page }) => {
   });
 
   await page.goto("/servers");
-  await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
   await page.getByRole("link", { name: "Dashboard" }).first().click();
   await expect(page).toHaveURL(/\/dashboard$/);
@@ -228,7 +228,7 @@ test("sidebar navigation opens key sections", async ({ page }) => {
 
   await page.getByRole("link", { name: "Servers" }).first().click();
   await expect(page).toHaveURL(/\/servers$/);
-  await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 });
 
 test("pilot personal AI capability cannot direct-load administrative settings", async ({ page }) => {

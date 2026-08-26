@@ -86,7 +86,7 @@ export const SUDO_AGENT_OPTIONS = [
     value: "approved",
     labelRu: "Разрешить на запуск",
     labelEn: "Approve for run",
-    hintRu: "Sudo разрешён для запусков этого профиля; backend выполняет его как sudo -n.",
+    hintRu: "Sudo разрешён для запусков этого профиля; система выполняет его как sudo -n.",
     hintEn: "Sudo is approved for this profile's runs; backend enforces sudo -n.",
   },
 ] as const;

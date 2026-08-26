@@ -413,3 +413,34 @@ def analyze_playbook_compatibility(
 
 def contains_literal_secrets(report: dict[str, Any]) -> bool:
     return any(item.get("code") == "literal_secret" for item in report.get("issues") or [])
+
+
+def merge_syntax_check(
+    report: dict[str, Any],
+    syntax_check: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge the authoritative Ansible syntax result into a compatibility report.
+
+    The static analyzer intentionally does not execute Ansible and therefore cannot
+    recognize every Jinja/argument parsing error. A failed or unavailable runtime
+    check must never leave the combined report in the ``ready`` state.
+    """
+
+    merged = dict(report)
+    merged["syntax_check"] = dict(syntax_check)
+    if syntax_check.get("passed") is True:
+        return merged
+
+    issues = [dict(item) for item in report.get("issues") or []]
+    code = "ansible_syntax_failed" if syntax_check.get("passed") is False else "ansible_runtime_unavailable"
+    if not any(item.get("code") == code for item in issues):
+        issues.append(
+            _issue(
+                code,
+                "error",
+                str(syntax_check.get("message") or "Ansible syntax validation did not complete"),
+                "runtime",
+            )
+        )
+    merged.update({"status": "blocked", "ready": False, "issues": issues})
+    return merged

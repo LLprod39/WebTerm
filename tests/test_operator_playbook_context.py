@@ -10,8 +10,8 @@ from core_ui.models import ChatSession, OperatorTurnDispatch
 from core_ui.services.operator_dispatch import execute_operator_dispatch
 from core_ui.services.operator_loop_helpers import _enrich_playbook_resolve_arguments
 from core_ui.services.operator_loop_prompt import build_operator_system_prompt
-from servers.models import Playbook
-from servers.operator.tools_playbooks import resolve_playbook
+from servers.models import Playbook, PlaybookRun
+from servers.operator.tools_playbooks import list_playbooks, playbook_runs, resolve_playbook
 
 
 def _playbook(user, name: str, *, description: str = "") -> Playbook:
@@ -64,6 +64,59 @@ def test_resolve_playbook_requires_choice_for_ambiguous_accessible_name():
     assert result["ambiguous"] is True
     assert {row["id"] for row in result["matches"]} == {first.id, second.id}
     assert all("source_yaml" not in row for row in result["matches"])
+
+
+@pytest.mark.django_db
+def test_chat_lists_accessible_playbooks_without_manual_composer_selection():
+    user = User.objects.create_user(username="playbook-catalog-owner", password="x")
+    other = User.objects.create_user(username="playbook-catalog-other", password="x")
+    visible = _playbook(user, "Linux hardening")
+    _playbook(other, "Private database maintenance")
+
+    result = list_playbooks(AssistantActionContext(user=user, input_payload={}))
+
+    assert result["count"] == 1
+    assert result["playbooks"][0]["id"] == visible.id
+    assert "source_yaml" not in result["playbooks"][0]
+
+
+@pytest.mark.django_db
+def test_chat_reads_owned_playbook_run_report_and_bounded_log_tail():
+    user = User.objects.create_user(username="playbook-run-owner", password="x")
+    other = User.objects.create_user(username="playbook-run-other", password="x")
+    playbook = _playbook(user, "Linux hardening")
+    private_playbook = _playbook(other, "Private maintenance")
+    run = PlaybookRun.objects.create(
+        user=user,
+        playbook=playbook,
+        status=PlaybookRun.STATUS_COMPLETED,
+        playbook_snapshot={"name": playbook.name},
+        target_server_ids=[7],
+        summary={"ok": 4, "failed": 0},
+        host_results=[{"server_id": 7, "status": "ok"}],
+        live_log="begin\nTASK [harden ssh]\nok\nPLAY RECAP\n",
+    )
+    private_run = PlaybookRun.objects.create(
+        user=other,
+        playbook=private_playbook,
+        status=PlaybookRun.STATUS_FAILED,
+        live_log="private log",
+    )
+
+    listed = playbook_runs(AssistantActionContext(user=user, input_payload={}))
+    detail = playbook_runs(
+        AssistantActionContext(user=user, input_payload={"run_id": run.id, "log_tail_chars": 18})
+    )
+
+    assert listed["count"] == 1
+    assert listed["runs"][0]["id"] == run.id
+    assert "live_log_tail" not in listed["runs"][0]
+    assert detail["run"]["summary"] == {"ok": 4, "failed": 0}
+    assert detail["run"]["live_log_tail"].endswith("ok\nPLAY RECAP\n")
+
+    with pytest.raises(AssistantActionError, match="not found") as exc:
+        playbook_runs(AssistantActionContext(user=user, input_payload={"run_id": private_run.id}))
+    assert exc.value.status == 404
 
 
 @pytest.mark.django_db

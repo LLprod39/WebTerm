@@ -12,12 +12,40 @@ from app.plugins.agent_tools import execute_plugin_agent_tool
 from app.sudo_policy import prepare_sudo_command_args
 from servers.agents.agent_tools import get_all_agent_tools
 
+_SAFE_TOOL_RESULT_DATA_KEYS = {
+    "code",
+    "dry_run",
+    "duration_ms",
+    "exit_code",
+    "exit_status",
+    "runtime",
+    "script_exit",
+}
+
+
+def _store_tool_result_facts(
+    engine: Any,
+    *,
+    success: bool | None,
+    data: dict[str, Any] | None = None,
+    error: str = "",
+) -> None:
+    raw_data = data if isinstance(data, dict) else {}
+    safe_data = {key: raw_data[key] for key in _SAFE_TOOL_RESULT_DATA_KEYS if key in raw_data}
+    engine._last_tool_result_facts = {
+        "success": success,
+        "status": "succeeded" if success is True else "failed" if success is False else "unknown",
+        "error": str(error or "")[:500],
+        **safe_data,
+    }
+
 
 def sync_to_async(func, thread_sensitive=False):
     return _s2a(func, thread_sensitive=thread_sensitive)
 
 
 async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
+    _store_tool_result_facts(engine, success=None)
     logger.info(
         "agent_run {} execute_tool start: tool={} args={}",
         engine.run_record.pk if engine.run_record else "?",
@@ -31,6 +59,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             "or set interaction_mode=interactive on the agent node."
         )
         engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
+        _store_tool_result_facts(engine, success=False, error=message)
         return message
 
     spec = engine.tool_registry.get(name) if engine.tool_registry else None
@@ -42,6 +71,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             name,
             schema_error,
         )
+        _store_tool_result_facts(engine, success=False, error=schema_error)
         return schema_error
 
     decision = engine.permission_engine.evaluate(spec, args) if spec else None
@@ -64,6 +94,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             )
         except Exception as exc:
             logger.warning("Failed to persist audit trail for tool denial: {}", exc)
+        _store_tool_result_facts(engine, success=False, error=decision.reason)
         return decision.reason
 
     prepared_args, _sudo_notes = (
@@ -73,6 +104,7 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
     if decision and spec:
         sandbox_decision = engine.sandbox_manager.validate(spec, args, decision.sandbox_profile)
         if not sandbox_decision.allowed:
+            _store_tool_result_facts(engine, success=False, error=sandbox_decision.reason)
             return sandbox_decision.reason
     if name in engine.mcp_tools:
         binding = engine.mcp_tools[name]
@@ -83,9 +115,11 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
         else:
             prepared_args, policy_messages, policy_error = args, [], None
         if policy_error:
+            _store_tool_result_facts(engine, success=False, error=policy_error)
             return policy_error
         result = await execute_mcp_binding(engine._mcp_runtime_provider, engine.mcp_tools, name, prepared_args)
-        if not result.startswith("MCP tool error"):
+        mcp_success = not result.startswith("MCP tool error")
+        if mcp_success:
             engine._executed_mcp_tools.add(binding.tool_name)
             if spec:
                 engine.permission_engine.record_success(spec, prepared_args, result)
@@ -100,15 +134,22 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             name,
             len(result or ""),
         )
+        _store_tool_result_facts(engine, success=mcp_success, error="" if mcp_success else result)
         return result
     if name in engine.disabled_mcp_tools:
-        return f"Tool '{name}' is disabled for this agent."
+        message = f"Tool '{name}' is disabled for this agent."
+        _store_tool_result_facts(engine, success=False, error=message)
+        return message
 
     tool_meta = get_all_agent_tools().get(name)
     if tool_meta is None:
-        return f"Unknown tool: {name}"
+        message = f"Unknown tool: {name}"
+        _store_tool_result_facts(engine, success=False, error=message)
+        return message
     if name not in engine.enabled_tools:
-        return f"Tool '{name}' is disabled for this agent."
+        message = f"Tool '{name}' is disabled for this agent."
+        _store_tool_result_facts(engine, success=False, error=message)
+        return message
     if tool_meta.get("plugin_id"):
         result = await sync_to_async(execute_plugin_agent_tool, thread_sensitive=True)(
             {
@@ -120,6 +161,13 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             }
         )
         result_text = str(result.get("result") or result.get("error") or "")
+        plugin_success = bool(result.get("success"))
+        _store_tool_result_facts(
+            engine,
+            success=plugin_success,
+            data=result.get("data") if isinstance(result.get("data"), dict) else None,
+            error="" if plugin_success else str(result.get("error") or result_text),
+        )
         if spec and result.get("success"):
             engine.permission_engine.record_success(spec, args, result_text)
         if decision and decision.notes:
@@ -137,6 +185,12 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
         if decision and decision.notes:
             result_text = "\n".join([*decision.notes, result_text])
         result_text = await engine.hook_manager.post_tool_use(name, result_text)
+        _store_tool_result_facts(
+            engine,
+            success=bool(result.success),
+            data=result.data,
+            error="" if result.success else result.result,
+        )
         logger.info(
             "agent_run {} execute_tool done: tool={} result_chars={} via=agent_tool",
             engine.run_record.pk if engine.run_record else "?",
@@ -150,7 +204,9 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
             engine.run_record.pk if engine.run_record else "?",
             name,
         )
-        return await engine.hook_manager.post_tool_use(name, f"Tool error ({name}): {exc}")
+        message = f"Tool error ({name}): {exc}"
+        _store_tool_result_facts(engine, success=False, error=message)
+        return await engine.hook_manager.post_tool_use(name, message)
 
 
 async def _record_agent_ssh_history(engine: Any, *, args: dict, result: Any) -> None:

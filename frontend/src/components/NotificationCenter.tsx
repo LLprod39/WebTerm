@@ -221,25 +221,7 @@ export function NotificationCenter() {
               <SheetTitle className="text-base">
                 {localize(lang, "Уведомления", "Notifications")}
               </SheetTitle>
-              <p className="text-xs text-muted-foreground">
-                {localize(
-                  lang,
-                  "Алерты мониторинга и завершённые прогоны",
-                  "Monitoring alerts and finished runs",
-                )}
-              </p>
             </div>
-            {items.length > 0 ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 shrink-0 text-xs text-muted-foreground"
-                onClick={() => markItemsSeen(items)}
-              >
-                {localize(lang, "Прочитать все", "Mark all read")}
-              </Button>
-            ) : null}
           </div>
         </SheetHeader>
 
@@ -320,7 +302,7 @@ export function NotificationCenter() {
         <div className="border-t border-border p-3">
           <Button variant="outline" size="sm" className="w-full" asChild>
             <Link to="/monitoring" onClick={() => setOpen(false)}>
-              {localize(lang, "Открыть Insights", "Open Insights")}
+              {localize(lang, "Открыть мониторинг", "Open monitoring")}
             </Link>
           </Button>
         </div>

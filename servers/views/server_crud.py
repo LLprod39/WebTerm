@@ -15,7 +15,6 @@ from core_ui.activity import log_user_activity
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import UserActivityLog
-from servers.agents.agent_pilot_policy import user_can_automate
 from servers.models import Server, ServerGroup
 from servers.secret_utils import (
     clear_server_sudo_secret,
@@ -100,26 +99,15 @@ def server_create(request):
         if error_response:
             return error_response
 
-        automation_allowed = user_can_automate(request.user, request=request)
-        # Release default is writable for users explicitly granted automation;
-        # users without that capability continue to fail closed.
-        raw_ai_read_only = data.get("ai_read_only", not automation_allowed)
+        raw_ai_read_only = data.get("ai_read_only", False)
         if not isinstance(raw_ai_read_only, bool):
             return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
-        if not automation_allowed and raw_ai_read_only is False:
-            return JsonResponse(
-                {"error": "Disabling AI read-only requires automation access", "code": "automation_required"},
-                status=403,
-            )
-        ai_read_only = True if not automation_allowed else raw_ai_read_only
+        # Legacy clients may still send the field. Interactive server sessions
+        # now use the normal confirmation gate instead of a separate mode.
+        ai_read_only = False
         password = str(data.get("password", "") or "").strip()
         sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
         sudo_password = str(data.get("sudo_password", "") or "").strip()
-        if not automation_allowed and (sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD or bool(sudo_password)):
-            return JsonResponse(
-                {"error": "Stored sudo credentials require automation access", "code": "automation_required"},
-                status=403,
-            )
         if sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD and not sudo_password:
             return JsonResponse({"error": "sudo_password is required when sudo_auth_mode=stored_password"}, status=400)
 
@@ -203,7 +191,6 @@ def server_update(request, server_id):
     try:
         server = get_object_or_404(Server, id=server_id, user=request.user)
         data = json.loads(request.body)
-        automation_allowed = user_can_automate(request.user, request=request)
         host_changed = False
 
         if "name" in data:
@@ -243,26 +230,11 @@ def server_update(request, server_id):
             server.corporate_context = data["corporate_context"]
         if "is_active" in data:
             server.is_active = data["is_active"]
-        if "ai_read_only" in data:
-            if not isinstance(data["ai_read_only"], bool):
-                return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
-            if not automation_allowed and data["ai_read_only"] is False:
-                return JsonResponse(
-                    {"error": "Disabling AI read-only requires automation access", "code": "automation_required"},
-                    status=403,
-                )
-            server.ai_read_only = data["ai_read_only"]
+        if "ai_read_only" in data and not isinstance(data["ai_read_only"], bool):
+            return JsonResponse({"error": "ai_read_only must be a boolean"}, status=400)
+        server.ai_read_only = False
         if "sudo_auth_mode" in data:
             server.sudo_auth_mode = normalize_sudo_auth_mode(data.get("sudo_auth_mode"))
-
-        if not automation_allowed and (
-            ("sudo_auth_mode" in data and server.sudo_auth_mode == SUDO_AUTH_MODE_STORED_PASSWORD)
-            or bool(str(data.get("sudo_password") or "").strip())
-        ):
-            return JsonResponse(
-                {"error": "Stored sudo credentials require automation access", "code": "automation_required"},
-                status=403,
-            )
 
         if "group_id" in data:
             group, error_response = _normalize_group_for_user(data.get("group_id"), request.user)
@@ -464,7 +436,7 @@ def server_get(request, server_id):
             "corporate_context": server.corporate_context if can_access_context else "",
             "group_id": server.group_id,
             "is_active": server.is_active,
-            "ai_read_only": bool(getattr(server, "ai_read_only", False)),
+            "ai_read_only": False,
             "sudo_auth_mode": getattr(server, "sudo_auth_mode", "none") or "none",
             "network_config": server.network_config if can_access_context else {},
             "has_saved_password": bool(is_owner and has_saved_server_secret(server)),

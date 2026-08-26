@@ -34,6 +34,13 @@ type Props = {
   onOpenAssistant?: () => void;
 };
 
+function agentModeLabel(mode: string, lang: string) {
+  if (mode === "mini") return localize(lang, "Мини", "Mini");
+  if (mode === "full") return localize(lang, "Полный", "Full");
+  if (mode === "multi") return localize(lang, "Несколько серверов", "Multi-server");
+  return mode;
+}
+
 export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
@@ -199,7 +206,7 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
               >
                 <Bot className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{agent.name}</span>
-                <CommandShortcut>{agent.mode}</CommandShortcut>
+                <CommandShortcut>{agentModeLabel(agent.mode, lang)}</CommandShortcut>
               </CommandItem>
             ))}
           </CommandGroup>
@@ -237,7 +244,7 @@ export function CommandPalette({ open, onOpenChange, onOpenAssistant }: Props) {
               onSelect={() => run(() => setStyle("flow"))}
             >
               <Palette className="mr-2 h-4 w-4" />
-              {localize(lang, "Тема Flow", "Flow skin")}
+              {localize(lang, "Стандартная тема", "Standard theme")}
             </CommandItem>
           )}
         </CommandGroup>

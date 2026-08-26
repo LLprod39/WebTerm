@@ -11,9 +11,6 @@ Safety
 ------
 - the shared fail-closed execution gate auto-runs only classified read-only
   commands and pauses every other command for one-command operator approval.
-- :func:`servers.services.terminal_ai.server_ai_policy.is_server_ai_read_only`
-  short-circuits the tool on read-only servers (2.11) unless the command
-  is itself read-only.
 """
 
 from __future__ import annotations
@@ -25,7 +22,6 @@ from asgiref.sync import sync_to_async
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.command_execution_gate import evaluate_command_execution_gate
-from app.shell_commands import is_read_only_command
 from app.sudo_policy import command_uses_sudo, evaluate_sudo_command, prepare_sudo_command
 from servers.services.terminal_ai.agent.schemas import ToolResult
 from servers.services.terminal_ai.agent.tools.base import (
@@ -36,7 +32,6 @@ from servers.services.terminal_ai.agent.tools.base import (
     tool_err,
     tool_ok,
 )
-from servers.services.terminal_ai.server_ai_policy import is_terminal_ai_read_only_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -182,20 +177,6 @@ class ShellTool:
             )
 
         gate = evaluate_command_execution_gate(cmd)
-
-        # Read-only is an immutable target boundary, not an approval prompt.
-        effective_read_only = target.read_only or await sync_to_async(
-            is_terminal_ai_read_only_for_user,
-            thread_sensitive=True,
-        )(target.server_id, ctx.user_id)
-        if effective_read_only and not is_read_only_command(cmd):
-            return tool_err(
-                f"target '{target.name}' is in read-only mode",
-                output=(
-                    f"Server '{target.display_name or target.name}' only allows "
-                    "commands from the built-in read-only allowlist."
-                ),
-            )
 
         if gate.requires_approval and not await self._approve_command_once(
             cmd=cmd,

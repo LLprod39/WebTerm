@@ -43,12 +43,12 @@ export default function UserDashboard() {
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
-        kicker={localize(lang, "Операции", "Operations")}
-        title={localize(lang, "Мой воркспейс", "My workspace")}
+        kicker={localize(lang, "Главная", "Home")}
+        title={localize(lang, "Рабочая сводка", "Workspace overview")}
         description={localize(
           lang,
-          "Обзор активных задач, доступных серверов и последних событий в вашей рабочей среде.",
-          "Overview of active tasks, available servers and recent events in your workspace.",
+          "Серверы, активные задачи и последние события.",
+          "Servers, active tasks, and recent events.",
         )}
         actions={
           <div className="flex items-center gap-2">
@@ -56,18 +56,18 @@ export default function UserDashboard() {
               {isFullWidth ? (
                 <>
                   <Minimize2 className="h-3.5 w-3.5" />
-                  <span>{localize(lang, "Обычный экран", "Normal width")}</span>
+                  <span>{localize(lang, "Сузить", "Narrow")}</span>
                 </>
               ) : (
                 <>
                   <Maximize2 className="h-3.5 w-3.5" />
-                  <span>{localize(lang, "На весь экран", "Full width")}</span>
+                  <span>{localize(lang, "Расширить", "Expand")}</span>
                 </>
               )}
             </Button>
             <Button variant="outline" size="sm" asChild>
               <Link to="/servers/hub">
-                <Server className="mr-1.5 h-3.5 w-3.5" /> {localize(lang, "Хаб серверов", "Server hub")}
+                <Server className="mr-1.5 h-3.5 w-3.5" /> {localize(lang, "Серверы", "Servers")}
               </Link>
             </Button>
             <Button size="sm" asChild>
@@ -102,7 +102,7 @@ export default function UserDashboard() {
                 .map((r) => (isRunSuccess(r.status) ? 1 : isRunFailure(r.status) ? 0 : 0.5))
             }
             activeAlerts={mon?.summary?.active_alerts ?? 0}
-            tokensHint={localize(lang, "из LLM-слоя", "from LLM layer")}
+            tokensHint={localize(lang, "учёт не подключён", "tracking is unavailable")}
           />
           <QueryStateBlock loading={false}>
             <CustomizableDashboard type="user" availableWidgets={availableWidgets} />

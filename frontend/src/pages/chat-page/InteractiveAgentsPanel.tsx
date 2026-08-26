@@ -347,7 +347,7 @@ export function InteractiveAgentsPanel({ title, items, actions }: Props) {
                   className={cn(
                     "h-1 w-1 shrink-0 rounded-full",
                     statusDotClass(status, active),
-                    active && "animate-pulse",
+                    active && "animate-pulse motion-reduce:animate-none",
                   )}
                   aria-hidden
                 />
@@ -383,14 +383,14 @@ export function InteractiveAgentsPanel({ title, items, actions }: Props) {
                     }}
                     className={cn(
                       "flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground",
-                      "transition-all hover:bg-foreground/[0.06] hover:text-foreground",
+                      "transition-all hover:bg-foreground/[0.06] hover:text-foreground motion-reduce:transition-none",
                       "disabled:opacity-40",
                       // Always visible when active or busy; otherwise only on row hover
                       active || busy || hover || open ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                     )}
                   >
                     {busy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                     ) : active ? (
                       <Square className="h-3 w-3 fill-current" />
                     ) : (
@@ -405,7 +405,7 @@ export function InteractiveAgentsPanel({ title, items, actions }: Props) {
                   {active ? (
                     <div className="mb-1.5 h-px overflow-hidden rounded-full bg-foreground/[0.06]">
                       <div
-                        className="h-full bg-foreground/35 transition-all duration-700 ease-out"
+                        className="h-full bg-foreground/35 transition-all duration-700 ease-out motion-reduce:transition-none"
                         style={{ width: `${Math.max(6, pct)}%` }}
                       />
                     </div>

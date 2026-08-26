@@ -13,6 +13,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { localize, useI18n } from "@/lib/i18n";
 import type {
   AiAssistantSettings,
   AiChatMode,
@@ -50,31 +51,39 @@ interface AiPanelProps {
 
 const quickPrompts = ["Объясни вывод", "Предложи команду", "Проверь синтаксис", "Что означает ошибка"];
 
-const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; label: string; desc: string }> = {
-  auto: { icon: Wand2, label: "Авто", desc: "Режим выбирается автоматически" },
+const modeConfig: Record<AiExecutionMode, { icon: typeof Zap; labelRu: string; labelEn: string; descRu: string; descEn: string }> = {
+  auto: { icon: Wand2, labelRu: "Авто", labelEn: "Auto", descRu: "Режим выбирается автоматически", descEn: "Mode is selected automatically" },
   fast: {
     icon: Zap,
-    label: "Fast",
-    desc: "Короткие линейные задачи (до ~10 команд). Сложные multi-step ops лучше в Nova",
+    labelRu: "Быстро",
+    labelEn: "Fast",
+    descRu: "Короткие задачи",
+    descEn: "Short tasks",
   },
-  step: { icon: Footprints, label: "Step", desc: "Пошаговый и более подробный режим" },
+  step: { icon: Footprints, labelRu: "Пошагово", labelEn: "Step", descRu: "Подробное пошаговое выполнение", descEn: "Detailed step-by-step execution" },
   // Nova: ReAct agent — no pre-plan, picks tools one at a time. Can
   // operate on extra servers (see settings → Agent → Extra targets).
   agent: {
     icon: Sparkles,
-    label: "Nova",
-    desc: "Сложные задачи: разведка → действие → проверка, todo, multi-server, адаптивный ReAct",
+    labelRu: "Nova",
+    labelEn: "Nova",
+    descRu: "Сложные задачи с проверкой результата",
+    descEn: "Complex tasks with result verification",
   },
 };
 
-const chatModeConfig: Record<AiChatMode, { label: string; desc: string }> = {
+const chatModeConfig: Record<AiChatMode, { labelRu: string; labelEn: string; descRu: string; descEn: string }> = {
   ask: {
-    label: "Ask",
-    desc: "Объясняет и предлагает команды. Запуск только после вашего подтверждения.",
+    labelRu: "Совет",
+    labelEn: "Ask",
+    descRu: "Объясняет и предлагает команды. Запуск — только после подтверждения.",
+    descEn: "Explains and suggests commands. Execution requires approval.",
   },
   agent: {
-    label: "Agent",
-    desc: "Сразу запускает безопасные команды в терминале. Опасные действия требуют подтверждения.",
+    labelRu: "Агент",
+    labelEn: "Agent",
+    descRu: "Запускает безопасные команды. Опасные действия требуют подтверждения.",
+    descEn: "Runs safe commands. Risky actions require approval.",
   },
 };
 
@@ -88,6 +97,7 @@ function ChatModeSelector({
   mode: AiChatMode;
   onChange: (mode: AiChatMode) => void;
 }) {
+  const { lang } = useI18n();
   return (
     <div className="grid min-w-[132px] grid-cols-2 rounded-md border border-border/60 bg-background/50 p-0.5">
       {exposedChatModes.map((item) => {
@@ -97,7 +107,7 @@ function ChatModeSelector({
           <button
             key={item}
             type="button"
-            title={config.desc}
+            title={localize(lang, config.descRu, config.descEn)}
             aria-pressed={active}
             onClick={() => onChange(item)}
             className={`h-7 rounded px-2 text-xs font-medium transition-colors ${
@@ -106,7 +116,7 @@ function ChatModeSelector({
                 : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
             }`}
           >
-            {config.label}
+            {localize(lang, config.labelRu, config.labelEn)}
           </button>
         );
       })}
@@ -121,6 +131,7 @@ function ModeSelector({
   mode: AiExecutionMode;
   onChange: (mode: AiExecutionMode) => void;
 }) {
+  const { lang } = useI18n();
   return (
     <div className="grid min-w-[132px] grid-cols-2 rounded-md border border-border/60 bg-background/50 p-0.5">
       {exposedExecutionModes.map((item) => {
@@ -131,7 +142,7 @@ function ModeSelector({
           <button
             key={item}
             type="button"
-            title={config.desc}
+            title={localize(lang, config.descRu, config.descEn)}
             aria-pressed={active}
             onClick={() => onChange(item)}
             className={`flex h-7 items-center justify-center gap-1 rounded px-2 text-xs font-medium transition-colors ${
@@ -141,7 +152,7 @@ function ModeSelector({
             }`}
           >
             <Icon className="h-3 w-3" />
-            <span>{config.label}</span>
+            <span>{localize(lang, config.labelRu, config.labelEn)}</span>
           </button>
         );
       })}
@@ -171,6 +182,7 @@ export function AiPanel({
   settings,
   onModeChange,
 }: AiPanelProps) {
+  const { lang } = useI18n();
   const [input, setInput] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -271,7 +283,7 @@ export function AiPanel({
                 <Bot className="h-3 w-3 text-muted-foreground" />
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] font-medium text-foreground">AI</span>
+                <span className="text-[13px] font-medium text-foreground">{localize(lang, "ИИ", "AI")}</span>
                 <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span
                     aria-hidden="true"
@@ -281,7 +293,7 @@ export function AiPanel({
                         : "bg-success"
                     }`}
                   />
-                  {isGenerating ? "думает…" : "готов"}
+                  {isGenerating ? localize(lang, "думает…", "thinking…") : localize(lang, "готов", "ready")}
                 </span>
               </div>
             </div>
@@ -293,25 +305,25 @@ export function AiPanel({
                   variant="ghost"
                   className="h-9 w-9 text-muted-foreground hover:text-foreground"
                   onClick={() => setSettingsOpen(true)}
-                  title="Настройки"
-                  aria-label="AI settings"
+                  title={localize(lang, "Настройки", "Settings")}
+                  aria-label={localize(lang, "Настройки ИИ", "AI settings")}
                 >
                 <Settings2 className="h-3.5 w-3.5" />
               </Button>
 
               {isGenerating ? (
-                <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-warning hover:bg-warning/10" onClick={onStop} title="Стоп" aria-label="Stop">
+                <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-warning hover:bg-warning/10" onClick={onStop} title={localize(lang, "Остановить", "Stop")} aria-label={localize(lang, "Остановить", "Stop")}>
                   <Square className="h-3.5 w-3.5" />
                 </Button>
               ) : null}
 
               {messages.length > 0 ? (
-                <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={onClearChat} title="Очистить" aria-label="Clear">
+                <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-destructive" onClick={onClearChat} title={localize(lang, "Очистить", "Clear")} aria-label={localize(lang, "Очистить", "Clear")}>
                   <Trash2 className="h-3 w-3" />
                 </Button>
               ) : null}
 
-              <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label="Close">
+              <Button type="button" size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-foreground" onClick={onClose} aria-label={localize(lang, "Закрыть", "Close")}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -326,7 +338,7 @@ export function AiPanel({
           <div className="flex items-center gap-1.5">
             {settings.dryRun ? (
               <span className="inline-flex items-center rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-warning">
-                dry-run
+                {localize(lang, "без запуска", "dry run")}
               </span>
             ) : null}
             <ModeSelector mode={executionMode} onChange={onModeChange} />
@@ -345,9 +357,9 @@ export function AiPanel({
                 <Sparkles className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="space-y-1">
-                <p className="text-[13px] font-medium text-foreground">Чем могу помочь?</p>
+                <p className="text-[13px] font-medium text-foreground">{localize(lang, "Чем помочь?", "How can I help?")}</p>
                 <p className="text-[12px] leading-relaxed text-muted-foreground">
-                  Задайте вопрос о терминале, сервере или текущем выводе.
+                  {localize(lang, "Спросите о терминале, сервере или текущем выводе.", "Ask about the terminal, server, or current output.")}
                 </p>
               </div>
               <div className="flex flex-wrap justify-center gap-1.5">
@@ -408,7 +420,7 @@ export function AiPanel({
                   />
                 ))}
               </div>
-              <span>думает…</span>
+              <span>{localize(lang, "думает…", "thinking…")}</span>
             </div>
           ) : null}
 
@@ -418,10 +430,10 @@ export function AiPanel({
         <div className="shrink-0 border-t border-border p-2">
           {messages.length > 0 ? (
             <div className="mb-1.5 flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5">
-              <span className="text-xs text-muted-foreground">Сформировать отчёт</span>
+              <span className="text-xs text-muted-foreground">{localize(lang, "Отчёт по сессии", "Session report")}</span>
               <Button type="button" size="xs" variant="ghost" onClick={() => onGenerateReport?.(false)} disabled={!canGenerateReport} className="h-8 gap-1 px-2">
                 <FileText className="h-3 w-3" />
-                Отчёт
+                {localize(lang, "Создать", "Create")}
               </Button>
             </div>
           ) : null}
@@ -432,8 +444,8 @@ export function AiPanel({
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              aria-label="AI message"
-              placeholder="Сообщение… (Enter — отправить)"
+              aria-label={localize(lang, "Сообщение для ИИ", "AI message")}
+              placeholder={localize(lang, "Сообщение…", "Message…")}
               rows={1}
               className="min-h-10 max-h-[120px] flex-1 resize-none rounded-md border border-border bg-background/60 px-3 py-2 text-[13px] text-foreground transition-colors placeholder:text-muted-foreground/50 focus:border-primary/60 focus:bg-background focus:outline-none"
             />
@@ -443,7 +455,7 @@ export function AiPanel({
               onClick={() => handleSend()}
               disabled={!input.trim() || isGenerating}
               className="h-10 w-10 shrink-0 rounded-md"
-              aria-label="Send"
+              aria-label={localize(lang, "Отправить", "Send")}
             >
               <Send className="h-3.5 w-3.5" />
             </Button>

@@ -90,7 +90,7 @@ export function AgentWizardCapabilitiesStep({
         <p className="type-label text-primary">{localize(lang, "Контекст и возможности", "Context and capabilities")}</p>
         <h3 className="mt-1 font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Что агент знает и чем может пользоваться", "What the agent knows and can use")}</h3>
         <p className="mt-1 text-sm leading-6 text-muted-foreground">
-          {localize(lang, "Добавьте skills, материалы и способ получить результат. Доступ остаётся ограничен выбранными правами и системами.", "Add skills, materials, and result delivery. Access remains limited by the selected permissions and systems.")}
+          {localize(lang, "Добавьте навыки, материалы и способ получить результат. Агент сохранит выбранные ограничения доступа.", "Add skills, materials, and result delivery. The agent will keep the selected access limits.")}
         </p>
       </div>
       <div className="flex items-start gap-3 rounded-sm border border-info/25 bg-info/5 px-3 py-3">
@@ -98,15 +98,15 @@ export function AgentWizardCapabilitiesStep({
         <p className="text-xs leading-5 text-muted-foreground">
           {localize(
             lang,
-            "Skills могут давать агенту инструкции и подключённые инструменты, включая MCP. В этом мастере выбираются только уже доступные skills; отдельного контракта выбора MCP-сервера пока нет.",
-            "Skills can provide instructions and connected tools, including MCP. This wizard only selects skills that are already available; it does not yet expose a separate MCP-server binding contract.",
+            "Навыки добавляют инструкции и подключённые инструменты, включая MCP. Здесь можно выбрать только уже доступные навыки.",
+            "Skills add instructions and connected tools, including MCP. Only skills already available to you can be selected here.",
           )}
         </p>
       </div>
       {(mode === "full" || mode === "multi") && (
         <details className="group rounded-sm border border-border bg-surface-0/35">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-foreground">
-            <span className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-primary" /> {localize(lang, "Advanced: raw tools и условия остановки", "Advanced: raw tools and stop conditions")}</span>
+            <span className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-primary" /> {localize(lang, "Дополнительные настройки", "Additional settings")}</span>
             <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
           </summary>
         <div className="space-y-3 border-t border-border px-4 py-4">
@@ -118,7 +118,7 @@ export function AgentWizardCapabilitiesStep({
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Read-only набор", "Read-only defaults")}</button>
+              <button type="button" className="min-h-8 rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/10" onClick={() => setToolsConfig(buildDefaultToolsConfig())}>{localize(lang, "Включить все", "Enable all")}</button>
               <button type="button" className="min-h-8 rounded-md border border-border/70 px-3 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground" onClick={() => setToolsExpanded((current) => !current)}>
                 {toolsExpanded ? localize(lang, "Свернуть", "Collapse") : localize(lang, "Развернуть", "Expand")}
               </button>
@@ -142,7 +142,7 @@ export function AgentWizardCapabilitiesStep({
                       {tool.label}
                       {!READ_ONLY_AGENT_TOOL_KEYS.has(tool.key) ? (
                         <span className="ml-2 text-warning">
-                          {localize(lang, "изменяющий", "mutating")}
+                          {localize(lang, "может изменять", "can modify")}
                         </span>
                       ) : null}
                     </span>
@@ -153,8 +153,8 @@ export function AgentWizardCapabilitiesStep({
                 <p role="note" className="rounded-md border border-primary/25 bg-primary/5 px-3 py-2 text-xs leading-5 text-muted-foreground">
                   {localize(
                     lang,
-                    "Изменяющие инструменты заблокированы для пилотного пользователя.",
-                    "Mutating tools are locked for pilot users.",
+                    "Инструменты, которые могут вносить изменения, недоступны для вашей роли.",
+                    "Tools that can make changes are unavailable for your role.",
                   )}
                 </p>
               ) : mutatingToolsEnabled ? (

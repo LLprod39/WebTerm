@@ -40,6 +40,7 @@ import {
   StatusBadge,
 } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { PluginCatalogItem, PluginInstallation, PluginManifestSurfaceMap, PluginPermission } from "@/plugins/types";
 import { PrivateCatalogPanel } from "./PrivateCatalogPanel";
@@ -75,6 +76,7 @@ function surfaceEntries(surfaces: PluginManifestSurfaceMap) {
 
 function PluginCard({
   installation,
+  lang,
   selected,
   busy,
   onSelect,
@@ -82,6 +84,7 @@ function PluginCard({
   onDisable,
 }: {
   installation: PluginInstallation;
+  lang: string;
   selected: boolean;
   busy: boolean;
   onSelect: () => void;
@@ -110,7 +113,9 @@ function PluginCard({
             <Badge variant="outline">{installation.package.signature_status}</Badge>
             <Badge variant="secondary">{installation.package.publisher.name}</Badge>
             <Badge variant={installation.scope?.mode === "groups" ? "default" : "outline"}>
-              {installation.scope?.mode === "groups" ? `${installation.scope.groups.length} groups` : "global"}
+              {installation.scope?.mode === "groups"
+                ? localize(lang, `${installation.scope.groups.length} групп`, `${installation.scope.groups.length} groups`)
+                : localize(lang, "для всех", "global")}
             </Badge>
             <PluginInstallationHealthBadge installation={installation} />
           </div>
@@ -120,12 +125,12 @@ function PluginCard({
           {enabled ? (
             <Button size="sm" variant="secondary" onClick={onDisable} disabled={busy}>
               <PowerOff className="h-4 w-4" />
-              Disable
+              {localize(lang, "Выключить", "Disable")}
             </Button>
           ) : (
             <Button size="sm" onClick={onEnable} disabled={busy}>
               <Power className="h-4 w-4" />
-              Enable
+              {localize(lang, "Включить", "Enable")}
             </Button>
           )}
         </div>
@@ -136,11 +141,13 @@ function PluginCard({
 
 function PermissionRow({
   permission,
+  lang,
   busy,
   onGrant,
   onRevoke,
 }: {
   permission: PluginPermission;
+  lang: string;
   busy: boolean;
   onGrant: () => void;
   onRevoke: () => void;
@@ -151,19 +158,21 @@ function PermissionRow({
         <div className="flex flex-wrap items-center gap-2">
           <span className="break-all font-mono text-xs font-semibold text-foreground">{permission.scope}</span>
           <StatusBadge label={permission.risk_tier} tone={riskTone(permission.risk_tier)} dot={false} />
-          {permission.granted ? <StatusBadge label="granted" tone="success" /> : <StatusBadge label="not granted" tone="neutral" />}
+          {permission.granted
+            ? <StatusBadge label={localize(lang, "разрешено", "granted")} tone="success" />
+            : <StatusBadge label={localize(lang, "не разрешено", "not granted")} tone="neutral" />}
         </div>
         <p className="mt-1 text-xs leading-5 text-muted-foreground">{permission.reason}</p>
       </div>
       {permission.granted ? (
         <Button size="sm" variant="secondary" onClick={onRevoke} disabled={busy}>
           <LockKeyhole className="h-4 w-4" />
-          Revoke
+          {localize(lang, "Отозвать", "Revoke")}
         </Button>
       ) : (
         <Button size="sm" variant="outline" onClick={onGrant} disabled={busy}>
           <ShieldCheck className="h-4 w-4" />
-          Grant
+          {localize(lang, "Разрешить", "Grant")}
         </Button>
       )}
     </div>
@@ -172,6 +181,7 @@ function PermissionRow({
 
 function AccessScopePanel({
   installation,
+  lang,
   scope,
   availableGroups,
   busy,
@@ -179,6 +189,7 @@ function AccessScopePanel({
   onToggleGroup,
 }: {
   installation: PluginInstallation | null;
+  lang: string;
   scope: PluginInstallation["scope"] | null;
   availableGroups: Array<{ id: number; name: string }>;
   busy: boolean;
@@ -188,18 +199,18 @@ function AccessScopePanel({
   const groupIds = scope?.group_ids ?? [];
   return (
     <SectionCard
-      title="Access scope"
-      description={installation ? `${installation.plugin_id} visibility by access group.` : "Select an installation."}
+      title={localize(lang, "Доступ", "Access")}
+      description={installation ? installation.plugin_id : localize(lang, "Выберите плагин.", "Select a plugin.")}
       icon={<Users className="h-4 w-4" />}
       actions={
         <Button size="sm" variant={groupIds.length ? "outline" : "secondary"} onClick={onGlobal} disabled={!installation || busy}>
-          Global
+          {localize(lang, "Для всех", "Global")}
         </Button>
       }
     >
       {!installation ? (
         <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-          Select an installation to scope plugin visibility.
+          {localize(lang, "Выберите плагин, чтобы настроить доступ.", "Select a plugin to configure access.")}
         </p>
       ) : availableGroups.length ? (
         <div className="grid gap-2 md:grid-cols-2">
@@ -218,14 +229,14 @@ function AccessScopePanel({
         </div>
       ) : (
         <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-          No access groups exist. The plugin remains globally visible.
+          {localize(lang, "Групп доступа нет. Плагин доступен всем.", "No access groups exist. The plugin is available to everyone.")}
         </p>
       )}
     </SectionCard>
   );
 }
 
-function CatalogCard({ plugin }: { plugin: PluginCatalogItem }) {
+function CatalogCard({ plugin, lang }: { plugin: PluginCatalogItem; lang: string }) {
   const surfaces = surfaceEntries(plugin.surfaces);
   return (
     <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
@@ -233,7 +244,7 @@ function CatalogCard({ plugin }: { plugin: PluginCatalogItem }) {
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">{plugin.name}</h3>
-            <StatusBadge label={plugin.enabled ? "enabled" : "inactive surfaces"} tone={plugin.enabled ? "success" : "neutral"} />
+            <StatusBadge label={plugin.enabled ? localize(lang, "включён", "enabled") : localize(lang, "выключен", "disabled")} tone={plugin.enabled ? "success" : "neutral"} />
           </div>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">{plugin.summary}</p>
         </div>
@@ -257,7 +268,7 @@ function CatalogCard({ plugin }: { plugin: PluginCatalogItem }) {
             ))}
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">Surface descriptors stay hidden until the plugin is enabled.</p>
+          <p className="text-xs text-muted-foreground">{localize(lang, "Доступные функции появятся после включения плагина.", "Available features will appear after the plugin is enabled.")}</p>
         )}
       </div>
     </div>
@@ -267,6 +278,7 @@ function CatalogCard({ plugin }: { plugin: PluginCatalogItem }) {
 export default function InstalledPluginsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const sessionQuery = useQuery({
@@ -317,7 +329,7 @@ export default function InstalledPluginsPage() {
     mutationFn: enablePlugin,
     onSuccess: () => {
       invalidatePlugins();
-      toast({ description: "Plugin enabled." });
+      toast({ description: localize(lang, "Плагин включён.", "Plugin enabled.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -325,7 +337,7 @@ export default function InstalledPluginsPage() {
     mutationFn: disablePlugin,
     onSuccess: () => {
       invalidatePlugins();
-      toast({ description: "Plugin disabled." });
+      toast({ description: localize(lang, "Плагин выключен.", "Plugin disabled.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -333,7 +345,7 @@ export default function InstalledPluginsPage() {
     mutationFn: ({ installationId, scope }: { installationId: number; scope: string }) => grantPluginPermission(installationId, scope),
     onSuccess: () => {
       invalidatePlugins();
-      toast({ description: "Plugin permission granted." });
+      toast({ description: localize(lang, "Разрешение выдано.", "Plugin permission granted.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -341,7 +353,7 @@ export default function InstalledPluginsPage() {
     mutationFn: ({ installationId, scope }: { installationId: number; scope: string }) => revokePluginPermission(installationId, scope),
     onSuccess: () => {
       invalidatePlugins();
-      toast({ description: "Plugin permission revoked." });
+      toast({ description: localize(lang, "Разрешение отозвано.", "Plugin permission revoked.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -350,13 +362,13 @@ export default function InstalledPluginsPage() {
       updatePluginInstallationScope(installationId, groupIds),
     onSuccess: () => {
       invalidatePlugins();
-      toast({ description: "Plugin access scope updated." });
+      toast({ description: localize(lang, "Доступ обновлён.", "Plugin access updated.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
   const demoMutation = useMutation({
     mutationFn: runDemoPluginAction,
-    onSuccess: () => toast({ description: "Demo plugin action executed." }),
+    onSuccess: () => toast({ description: localize(lang, "Тестовое действие выполнено.", "Test action completed.") }),
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
 
@@ -383,32 +395,33 @@ export default function InstalledPluginsPage() {
             <Puzzle className="h-4 w-4 text-primary" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Plugin Extensions</h1>
-            <p className="text-sm leading-6 text-muted-foreground">Self-hosted plugins, permissions, private catalogs, and active surfaces.</p>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">{localize(lang, "Плагины", "Plugins")}</h1>
+            <p className="text-sm leading-6 text-muted-foreground">{localize(lang, "Установка, доступ и настройки расширений.", "Install, configure, and manage extension access.")}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => invalidatePlugins()}>
           <RefreshCw className="h-4 w-4" />
-          Refresh
+          {localize(lang, "Обновить", "Refresh")}
         </Button>
       </div>
 
       <MetricGrid className="xl:grid-cols-3">
-        <MetricCard label="Registered" value={summary.registered} description="Runtime manifests available to this instance." icon={<Box className="h-5 w-5" />} />
-        <MetricCard label="Enabled" value={summary.enabled} description="Plugins exposing surfaces through the active registry." tone="success" icon={<CheckCircle2 className="h-5 w-5" />} />
-        <MetricCard label="Granted" value={permissionCount} description="Permissions granted for the selected installation." tone="info" icon={<ShieldCheck className="h-5 w-5" />} />
+        <MetricCard label={localize(lang, "Установлено", "Installed")} value={summary.registered} icon={<Box className="h-5 w-5" />} />
+        <MetricCard label={localize(lang, "Включено", "Enabled")} value={summary.enabled} tone="success" icon={<CheckCircle2 className="h-5 w-5" />} />
+        <MetricCard label={localize(lang, "Разрешений", "Permissions")} value={permissionCount} tone="info" icon={<ShieldCheck className="h-5 w-5" />} />
       </MetricGrid>
 
       <QueryStateBlock loading={catalogQuery.isLoading || installedQuery.isLoading} error={catalogQuery.error || installedQuery.error}>
         <LocalPackageInstallPanel />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <SectionCard title="Installed extensions" description="Install team packages disabled first; enabling never grants permissions automatically." icon={<PackageCheck className="h-4 w-4" />}>
+          <SectionCard title={localize(lang, "Установленные плагины", "Installed plugins")} description={localize(lang, "Новые плагины выключены по умолчанию. Разрешения выдаются отдельно.", "New plugins are disabled by default. Permissions are granted separately.")} icon={<PackageCheck className="h-4 w-4" />}>
             <div className="space-y-3">
               {installations.map((installation) => (
                 <PluginCard
                   key={installation.id}
                   installation={installation}
+                  lang={lang}
                   selected={installation.id === activeInstallationId}
                   busy={isBusy}
                   onSelect={() => setSelectedId(installation.id)}
@@ -420,8 +433,8 @@ export default function InstalledPluginsPage() {
           </SectionCard>
 
           <SectionCard
-            title="Permissions"
-            description={selectedInstallation ? selectedInstallation.plugin_id : "Select an installation."}
+            title={localize(lang, "Разрешения", "Permissions")}
+            description={selectedInstallation ? selectedInstallation.plugin_id : localize(lang, "Выберите плагин.", "Select a plugin.")}
             icon={<LockKeyhole className="h-4 w-4" />}
             actions={
               <Button
@@ -430,7 +443,7 @@ export default function InstalledPluginsPage() {
                 disabled={!demoPlugin || demoPlugin.status !== "enabled" || !demoPermissionGranted || demoMutation.isPending}
               >
                 <Send className="h-4 w-4" />
-                Demo action
+                {localize(lang, "Проверить", "Test")}
               </Button>
             }
           >
@@ -440,13 +453,14 @@ export default function InstalledPluginsPage() {
                   <PermissionRow
                     key={permission.scope}
                     permission={permission}
+                    lang={lang}
                     busy={isBusy}
                     onGrant={() => selectedInstallation && grantMutation.mutate({ installationId: selectedInstallation.id, scope: permission.scope })}
                     onRevoke={() => selectedInstallation && revokeMutation.mutate({ installationId: selectedInstallation.id, scope: permission.scope })}
                   />
                 )) : (
                   <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-                    This plugin does not request explicit permissions.
+                    {localize(lang, "Плагин не запрашивает дополнительных разрешений.", "This plugin does not request additional permissions.")}
                   </p>
                 )}
               </div>
@@ -457,6 +471,7 @@ export default function InstalledPluginsPage() {
         <QueryStateBlock loading={scopeQuery.isLoading} error={scopeQuery.error}>
           <AccessScopePanel
             installation={selectedInstallation}
+            lang={lang}
             scope={scope}
             availableGroups={availableGroups}
             busy={isBusy}
@@ -471,9 +486,9 @@ export default function InstalledPluginsPage() {
           />
         </QueryStateBlock>
 
-        <SectionCard title="Runtime projection" description="Enabled extensions expose surfaces; disabled extensions show metadata only." icon={<Plug className="h-4 w-4" />}>
+        <SectionCard title={localize(lang, "Функции плагинов", "Plugin features")} description={localize(lang, "Функции доступны только у включённых плагинов.", "Features are available only for enabled plugins.")} icon={<Plug className="h-4 w-4" />}>
           <div className="grid gap-3 lg:grid-cols-2">
-            {catalogPlugins.map((plugin) => <CatalogCard key={plugin.id} plugin={plugin} />)}
+            {catalogPlugins.map((plugin) => <CatalogCard key={plugin.id} plugin={plugin} lang={lang} />)}
           </div>
         </SectionCard>
 

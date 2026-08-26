@@ -6,12 +6,12 @@ import { SectionCard } from "./SectionCard";
 const ACCESS_PAGES = [
   { title: "Пользователи", desc: "Аккаунты, профили доступа и группы пользователя", icon: Users, url: "/settings/users" },
   { title: "Группы", desc: "Команды, участники и общая политика доступа", icon: FolderOpen, url: "/settings/groups" },
-  { title: "Разрешения", desc: "Точечные allow/deny правила для исключений", icon: Shield, url: "/settings/permissions" },
+  { title: "Разрешения", desc: "Точечные разрешения и запреты", icon: Shield, url: "/settings/permissions" },
 ];
 
 export function AccessSettingsPanel() {
   return (
-    <SectionCard title="Настройки доступа" icon={Shield} description="Три понятных шага: пользователи, группы, затем точечные исключения.">
+    <SectionCard title="Настройки доступа" icon={Shield} description="Пользователи, группы и точечные исключения">
       <div className="workspace-subtle rounded-xl px-4 py-3 text-sm leading-6 text-muted-foreground">
         Базовую модель прав лучше собирать через профили и группы. Раздел разрешений используй только там, где действительно нужно сделать исключение.
       </div>

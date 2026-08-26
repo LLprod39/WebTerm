@@ -29,7 +29,6 @@ from servers.services.terminal_ai.agent.tools.base import (
     tool_err,
     tool_ok,
 )
-from servers.services.terminal_ai.server_ai_policy import is_terminal_ai_read_only_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -229,16 +228,6 @@ class EditFileTool:
         path = args.path.strip()
         if not path:
             return tool_err("empty path")
-
-        effective_read_only = target.read_only or await sync_to_async(
-            is_terminal_ai_read_only_for_user,
-            thread_sensitive=True,
-        )(target.server_id, ctx.user_id)
-        if effective_read_only:
-            return tool_err(
-                f"target '{target.name}' is read-only; edit_file refused",
-                output=(f"Server '{target.display_name or target.name}' is in read-only mode."),
-            )
 
         if ctx.dry_run:
             return tool_ok(

@@ -21,6 +21,7 @@ from app.tools.ssh_tools import SSHExecuteTool, ssh_manager
 from servers.models import PlaybookRun, PlaybookRunDispatch, Server
 from servers.secret_utils import get_server_auth_secret, get_server_sudo_secret
 from servers.services.playbook_parser import build_inventory_ini
+from servers.services.playbook_progress_state import evolve_playbook_progress, redact_playbook_run_fields
 from servers.services.playbook_run_state import (
     TERMINAL_PLAYBOOK_RUN_STATUSES,
     transition_playbook_run,
@@ -192,9 +193,24 @@ def playbook_run_fence_is_owned(fence: PlaybookRunExecutionFence) -> bool:
 
 
 def _write_run_fields(run_id: int, fields: dict[str, Any], *, fenced: bool) -> bool:
+    fields = redact_playbook_run_fields(fields)
     status = fields.pop("status", None)
     if status in TERMINAL_PLAYBOOK_RUN_STATUSES:
         return transition_playbook_run(run_id, status, **fields).transitioned
+    current = PlaybookRun.objects.only("status", "cancel_requested", "progress", "live_log").get(pk=run_id)
+    next_status = str(status or current.status)
+    progress_kwargs: dict[str, Any] = {
+        "status": next_status,
+        "cancel_requested": bool(fields.get("cancel_requested", current.cancel_requested)),
+        "previous_log": current.live_log,
+    }
+    if "live_log" in fields:
+        progress_kwargs["current_log"] = fields.get("live_log")
+    fields["progress"] = evolve_playbook_progress(
+        current.progress,
+        fields.get("progress"),
+        **progress_kwargs,
+    )
     if status is not None:
         fields["status"] = status
     queryset = PlaybookRun.objects.filter(pk=run_id)

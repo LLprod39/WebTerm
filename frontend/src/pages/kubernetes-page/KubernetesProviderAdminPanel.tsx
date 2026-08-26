@@ -164,7 +164,7 @@ export function KubernetesProviderAdminPanel({
     onSuccess: async (result) => {
       setLastResults(result.results);
       await invalidate();
-      toast({ description: result.success ? localize(lang, "Sync завершён.", "Sync finished.") : localize(lang, "Sync завершился с ошибкой.", "Sync failed.") });
+      toast({ description: result.success ? localize(lang, "Синхронизация завершена.", "Sync finished.") : localize(lang, "Синхронизация завершилась с ошибкой.", "Sync failed.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -174,7 +174,7 @@ export function KubernetesProviderAdminPanel({
       setLastProbes((items) => [result.probe, ...items.filter((item) => item.provider_id !== result.probe.provider_id)].slice(0, 4));
       toast({
         variant: result.success ? "default" : "destructive",
-        description: result.success ? localize(lang, "Provider probe прошёл.", "Provider probe passed.") : result.probe.error || "Provider probe failed.",
+        description: result.success ? localize(lang, "Подключение проверено.", "Provider probe passed.") : result.probe.error || localize(lang, "Не удалось проверить подключение.", "Provider probe failed."),
       });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
@@ -191,7 +191,7 @@ export function KubernetesProviderAdminPanel({
     try {
       labels = parseLabels(form.labels);
     } catch (error) {
-      toast({ variant: "destructive", description: error instanceof Error ? error.message : "Labels JSON is invalid." });
+      toast({ variant: "destructive", description: error instanceof Error ? error.message : localize(lang, "JSON меток содержит ошибку.", "Labels JSON is invalid.") });
       return;
     }
     const payload: KubernetesProviderPayload = {
@@ -214,43 +214,43 @@ export function KubernetesProviderAdminPanel({
   return (
     <SectionCard
       title={localize(lang, "Настройка провайдеров", "Provider setup")}
-      description={localize(lang, "Admin-only: external secret refs, endpoint paths и ручная read-only синхронизация.", "Admin-only: external secret refs, endpoint paths, and manual read-only sync.")}
+      description={localize(lang, "Подключения, секреты и ручная синхронизация. Только для администраторов.", "Connections, secrets, and manual sync. Administrators only.")}
       icon={<CloudCog className="h-4 w-4" />}
-      actions={<StatusBadge label="admin" tone="info" />}
+      actions={<StatusBadge label={localize(lang, "администратор", "admin")} tone="info" />}
     >
       <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
         <div className="space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input value={form.name} onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))} placeholder="rancher-main" aria-label="Provider name" />
-            <Input value={form.base_url} onChange={(event) => setForm((state) => ({ ...state, base_url: event.target.value }))} placeholder="https://rancher.example" aria-label="Provider base URL" />
+            <Input value={form.name} onChange={(event) => setForm((state) => ({ ...state, name: event.target.value }))} placeholder="rancher-main" aria-label={localize(lang, "Имя подключения", "Provider name")} />
+            <Input value={form.base_url} onChange={(event) => setForm((state) => ({ ...state, base_url: event.target.value }))} placeholder="https://rancher.example" aria-label={localize(lang, "Базовый URL подключения", "Provider base URL")} />
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <Select value={form.kind} onValueChange={setKind}>
-              <SelectTrigger aria-label="Provider kind"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={localize(lang, "Тип подключения", "Provider kind")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="rancher">Rancher/Fleet</SelectItem>
                 <SelectItem value="devtron">Devtron</SelectItem>
               </SelectContent>
             </Select>
             <Select value={form.auth_mode} onValueChange={(value) => setForm((state) => ({ ...state, auth_mode: value }))}>
-              <SelectTrigger aria-label="Provider auth mode"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={localize(lang, "Способ входа", "Provider auth mode")}><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="secret_ref">Secret ref</SelectItem>
+                <SelectItem value="secret_ref">{localize(lang, "Ссылка на секрет", "Secret ref")}</SelectItem>
                 <SelectItem value="oidc">OIDC</SelectItem>
-                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="none">{localize(lang, "Без авторизации", "None")}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={form.enabled ? "enabled" : "disabled"} onValueChange={(value) => setForm((state) => ({ ...state, enabled: value === "enabled" }))}>
-              <SelectTrigger aria-label="Provider enabled"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label={localize(lang, "Состояние подключения", "Provider enabled")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="enabled">{localize(lang, "Включён", "Enabled")}</SelectItem>
                 <SelectItem value="disabled">{localize(lang, "Выключен", "Disabled")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Input value={form.secret_ref} onChange={(event) => setForm((state) => ({ ...state, secret_ref: event.target.value }))} placeholder="env:RANCHER_TOKEN" aria-label="Provider secret reference" />
-          <Input value={form.secret_value} type="password" onChange={(event) => setForm((state) => ({ ...state, secret_value: event.target.value }))} placeholder={localize(lang, "Managed token для rotate", "Managed token for rotation")} aria-label="Provider managed token" />
-          <Textarea value={form.labels} onChange={(event) => setForm((state) => ({ ...state, labels: event.target.value }))} className="min-h-[132px] font-mono text-xs" aria-label="Provider labels JSON" />
+          <Input value={form.secret_ref} onChange={(event) => setForm((state) => ({ ...state, secret_ref: event.target.value }))} placeholder="env:RANCHER_TOKEN" aria-label={localize(lang, "Ссылка на секрет подключения", "Provider secret reference")} />
+          <Input value={form.secret_value} type="password" onChange={(event) => setForm((state) => ({ ...state, secret_value: event.target.value }))} placeholder={localize(lang, "Новый защищённый токен", "Managed token for rotation")} aria-label={localize(lang, "Защищённый токен подключения", "Provider managed token")} />
+          <Textarea value={form.labels} onChange={(event) => setForm((state) => ({ ...state, labels: event.target.value }))} className="min-h-[132px] font-mono text-xs" aria-label={localize(lang, "Метки подключения в JSON", "Provider labels JSON")} />
           <div className="flex flex-wrap gap-2">
             <Button onClick={saveProvider} disabled={createMutation.isPending || updateMutation.isPending} className="gap-2">
               {form.id ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -274,8 +274,17 @@ export function KubernetesProviderAdminPanel({
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">{provider.name}</span>
                     <StatusBadge label={provider.kind} tone="info" />
-                    <StatusBadge label={provider.enabled ? "enabled" : "disabled"} tone={provider.enabled ? "success" : "neutral"} />
-                    <StatusBadge label={provider.secret_storage} tone={provider.secret_storage === "managed" ? "success" : "neutral"} />
+                    <StatusBadge label={provider.enabled ? localize(lang, "включено", "enabled") : localize(lang, "выключено", "disabled")} tone={provider.enabled ? "success" : "neutral"} />
+                    <StatusBadge
+                      label={provider.secret_storage === "managed"
+                        ? localize(lang, "защищённый секрет", "managed secret")
+                        : provider.secret_storage === "external"
+                          ? localize(lang, "внешний секрет", "external secret")
+                          : provider.secret_storage === "none"
+                            ? localize(lang, "без секрета", "no secret")
+                            : provider.secret_storage}
+                      tone={provider.secret_storage === "managed" ? "success" : "neutral"}
+                    />
                   </div>
                   <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{provider.base_url}</div>
                 </button>
@@ -298,7 +307,7 @@ export function KubernetesProviderAdminPanel({
           ))}
           {!providers.length ? (
             <div className="rounded-lg border border-dashed border-border/70 bg-secondary/15 px-4 py-6 text-sm text-muted-foreground">
-              {localize(lang, "Создайте Rancher и Devtron providers, затем запустите dry-run sync.", "Create Rancher and Devtron providers, then run dry-run sync.")}
+              {localize(lang, "Добавьте подключения Rancher и Devtron, затем проверьте синхронизацию.", "Add Rancher and Devtron connections, then test the sync.")}
             </div>
           ) : null}
           {editingProvider ? <div className="text-xs text-muted-foreground">{localize(lang, "Редактируется:", "Editing:")} {editingProvider.name}</div> : null}

@@ -28,7 +28,7 @@ export function usePipelineEditorTriggers({
   const activeWebhookTriggers = useMemo(() => getActiveStoredTriggers(triggers, "webhook"), [triggers]);
   const activeScheduleTriggers = useMemo(() => getActiveStoredTriggers(triggers, "schedule"), [triggers]);
   const activeMonitoringTriggers = useMemo(() => getActiveStoredTriggers(triggers, "monitoring"), [triggers]);
-  const runRiskSummary = useMemo(() => buildPipelineRiskSummary(nodes, edges), [edges, nodes]);
+  const runRiskSummary = useMemo(() => buildPipelineRiskSummary(nodes, edges, lang), [edges, lang, nodes]);
   const runDialogMode: PipelineRunDialogMode = manualTriggerOptions.length
     ? "manual"
     : webhookTriggerNodes.length

@@ -28,8 +28,10 @@ function formatSummaries(violations: readonly A11yViolationSummary[]): string {
     .join("; ");
 }
 
-export async function collectSeriousAndCriticalViolations(page: Page): Promise<A11yViolationSummary[]> {
-  const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+export async function collectSeriousAndCriticalViolations(page: Page, include?: string): Promise<A11yViolationSummary[]> {
+  const builder = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]);
+  if (include) builder.include(include);
+  const results = await builder.analyze();
   return results.violations
     .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
     .map((violation) => ({

@@ -8,7 +8,7 @@ from typing import Any
 
 from servers.models import PlaybookAssetBundle
 from servers.services.playbooks.bundle_archive import BundleLimits, inspect_project_bundle
-from servers.services.playbooks.bundle_storage import get_playbook_bundle_storage
+from servers.services.playbooks.bundle_storage import PlaybookBundleStorage, get_playbook_bundle_storage
 from servers.services.playbooks.controller_policy import analyze_project_files_controller_policy
 
 
@@ -23,7 +23,11 @@ class RuntimeProjectBundle:
     content_hash: str
 
 
-def load_revision_runtime_bundle(revision: Any) -> RuntimeProjectBundle | None:
+def load_revision_runtime_bundle(
+    revision: Any,
+    *,
+    storage: PlaybookBundleStorage | None = None,
+) -> RuntimeProjectBundle | None:
     if not getattr(revision, "asset_bundle_id", None):
         return None
     asset = revision.asset_bundle
@@ -33,7 +37,7 @@ def load_revision_runtime_bundle(revision: Any) -> RuntimeProjectBundle | None:
     limits = BundleLimits.from_settings()
     stored_limit = max(limits.max_archive_bytes, limits.max_total_bytes + limits.max_files * 1024)
     try:
-        archive = get_playbook_bundle_storage().read(asset.storage_key, max_bytes=stored_limit)
+        archive = (storage or get_playbook_bundle_storage()).read(asset.storage_key, max_bytes=stored_limit)
         inspected = inspect_project_bundle(archive, limits=limits)
     except Exception as exc:
         raise BundleRuntimeError("The stored project bundle could not be verified") from exc

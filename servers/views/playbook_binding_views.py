@@ -45,6 +45,7 @@ def playbook_bindings(request, playbook_id: int):
             variable_values=data.get("variable_values") or {},
             secret_references=data.get("secret_references") or {},
             secret_values=data.get("secret_values") if "secret_values" in data else None,
+            remove_secret_names=data.get("remove_secret_names") if "remove_secret_names" in data else None,
             options=data.get("options") or {},
             is_default=bool(data.get("is_default")),
         )
@@ -81,6 +82,7 @@ def playbook_binding_detail(request, playbook_id: int, binding_id: int):
                 data.get("secret_references") if "secret_references" in data else profile.secret_references
             ),
             secret_values=data.get("secret_values") if "secret_values" in data else None,
+            remove_secret_names=data.get("remove_secret_names") if "remove_secret_names" in data else None,
             options=data.get("options") if "options" in data else profile.options,
             is_default=bool(data.get("is_default") if "is_default" in data else profile.is_default),
         )

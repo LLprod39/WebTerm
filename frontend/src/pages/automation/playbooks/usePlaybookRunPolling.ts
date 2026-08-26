@@ -19,22 +19,30 @@ export function usePlaybookRunPolling({ view, queryClient, setActiveRun }: RunPo
     const runId = view.runId;
     let cancelled = false;
     let timer: number | undefined;
+    let consecutiveFailures = 0;
     setRunLoadError("");
     setActiveRun((current) => (current?.id === runId ? current : null));
     const tick = async () => {
       try {
         const res = await getPlaybookRun(runId);
         if (cancelled) return;
+        consecutiveFailures = 0;
+        setRunLoadError("");
         setActiveRun(res.run);
         if (res.run.status === "pending" || res.run.status === "running") {
-          timer = window.setTimeout(() => void tick(), 1200);
+          timer = window.setTimeout(() => void tick(), 1_500);
         } else {
           void queryClient.invalidateQueries({ queryKey: ["playbooks"] });
           void queryClient.invalidateQueries({ queryKey: ["playbook-runs"] });
         }
       } catch (error) {
         if (!cancelled) {
+          consecutiveFailures += 1;
           setRunLoadError(error instanceof Error ? error.message : String(error));
+          timer = window.setTimeout(
+            () => void tick(),
+            [3_000, 6_000, 12_000][Math.min(consecutiveFailures - 1, 2)],
+          );
         }
       }
     };

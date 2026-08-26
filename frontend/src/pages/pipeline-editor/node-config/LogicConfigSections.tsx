@@ -60,7 +60,7 @@ function ConditionConfig({ data, lang, onSet }: LogicProps) {
           <Input value={(data.check_value as string) || ""} onChange={(event) => onSet("check_value", event.target.value)} placeholder="error" className="h-8 text-xs" />
           {!String(data.check_value || "").trim() ? (
             <p className="text-xs text-red-400">
-              {localize(lang, "Обязательное поле для contains/not_contains.", "Required for contains/not_contains checks.")}
+              {localize(lang, "Обязательное поле для проверок «содержит» и «не содержит».", "Required for contains/not_contains checks.")}
             </p>
           ) : null}
         </div>
@@ -82,13 +82,13 @@ function MergeConfig({ data, lang, onSet }: LogicProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{localize(lang, "all: ждать все активные ветки", "all: wait for every activated branch")}</SelectItem>
-            <SelectItem value="any">{localize(lang, "any: продолжить после первой готовой ветки", "any: continue after the first completed branch")}</SelectItem>
+            <SelectItem value="all">{localize(lang, "Все: ждать каждую активную ветку", "all: wait for every activated branch")}</SelectItem>
+            <SelectItem value="any">{localize(lang, "Любая: продолжить после первой готовой ветки", "any: continue after the first completed branch")}</SelectItem>
           </SelectContent>
         </Select>
       </div>
       <FieldHint>
-        {localize(lang, "Используйте Merge вместо нескольких входящих связей прямо в action/output ноду.", "Use merge nodes instead of wiring multiple incoming edges directly into an action or output node.")}
+        {localize(lang, "Объединяйте несколько входящих веток узлом Merge перед действием или выводом.", "Use merge nodes instead of wiring multiple incoming edges directly into an action or output node.")}
       </FieldHint>
     </NodeFormSection>
   );
@@ -119,7 +119,7 @@ function HumanApprovalConfig({ data, lang, onSet, onSetMany }: SecretLogicProps)
     <>
       <NodeFormSection
         title={localize(lang, "Доставка", "Delivery")}
-        description={localize(lang, "Куда отправить approve/reject запрос оператору.", "Where to send the operator approve/reject request.")}
+        description={localize(lang, "Куда отправить оператору запрос на подтверждение или отклонение.", "Where to send the operator approve/reject request.")}
       >
         <div className="space-y-1.5">
           <Label className="text-xs">Кому (email)</Label>
@@ -148,9 +148,9 @@ function HumanApprovalConfig({ data, lang, onSet, onSetMany }: SecretLogicProps)
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")}>
         <TelegramSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} tokenKey="tg_bot_token" chatKey="tg_chat_id" tokenPlaceholder="Bot Token (from @BotFather)" chatPlaceholder="Chat ID (e.g. -100123456)" />
         <div className="space-y-1.5">
-          <Label className="text-xs">{localize(lang, "Base URL для ссылок подтверждения", "Base URL for approval links")}</Label>
+          <Label className="text-xs">{localize(lang, "Базовый URL ссылок подтверждения", "Base URL for approval links")}</Label>
           <Input value={(data.base_url as string) || ""} onChange={(event) => onSet("base_url", event.target.value)} placeholder="https://your-server.example.com" className="h-8 text-xs" />
-          <FieldHint>{localize(lang, "Используется в approve/reject ссылках из уведомлений.", "Used in approve/reject URLs sent in notifications.")}</FieldHint>
+          <FieldHint>{localize(lang, "Используется в ссылках подтверждения и отклонения из уведомлений.", "Used in approve/reject URLs sent in notifications.")}</FieldHint>
         </div>
         <TextTemplateField label="Сообщение в Telegram (шаблон)" value={(data.message as string) || ""} placeholder="{approve_url}, {reject_url}..." textarea rows={4} onChange={(value) => onSet("message", value)} />
         <SmtpSettings data={data} lang={lang} onSet={onSet} onSetMany={onSetMany} />
@@ -182,7 +182,7 @@ function TelegramInputConfig({ data, lang, onSet, onSetMany }: SecretLogicProps)
 function TimeoutField({ data, lang, onSet, min }: LogicProps & { min: number }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs">{localize(lang, "Timeout, минут", "Timeout (minutes)")}</Label>
+      <Label className="text-xs">{localize(lang, "Время ожидания, мин", "Timeout (minutes)")}</Label>
       <Input type="number" value={(data.timeout_minutes as number) ?? 120} onChange={(event) => onSet("timeout_minutes", parseFloat(event.target.value) || 120)} className="h-8 text-xs" min={min} max={10080} />
     </div>
   );
@@ -225,14 +225,14 @@ function TelegramSettings({
     <>
       <ManagedSecretInput
         data={data}
-        label="Bot Token"
+        label={localize(lang, "Токен бота", "Bot Token")}
         lang={lang}
         onSetMany={onSetMany}
         placeholder={tokenPlaceholder}
         secretKey={tokenKey}
       />
       <div className="space-y-1.5">
-        <Label className="text-xs">Chat ID</Label>
+        <Label className="text-xs">{localize(lang, "ID чата", "Chat ID")}</Label>
         <Input value={(data[chatKey] as string) || ""} onChange={(event) => onSet(chatKey, event.target.value)} placeholder={chatPlaceholder} className="h-8 text-xs font-mono" />
       </div>
     </>
@@ -249,10 +249,10 @@ function SmtpSettings({ data, lang, onSet, onSetMany }: SecretLogicProps) {
         <div className="w-44 shrink-0">
           <ManagedSecretInput
             data={data}
-            label="SMTP password"
+            label={localize(lang, "Пароль SMTP", "SMTP password")}
             lang={lang}
             onSetMany={onSetMany}
-            placeholder="app password"
+            placeholder={localize(lang, "пароль приложения", "app password")}
             secretKey="smtp_password"
           />
         </div>

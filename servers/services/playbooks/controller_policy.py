@@ -9,9 +9,12 @@ from __future__ import annotations
 
 import ipaddress
 import re
+import shlex
 from collections.abc import Mapping
 from pathlib import PurePosixPath
 from typing import Any
+
+from servers.services.ansible_project import is_runtime_reserved_path
 
 _SAFE_DATA_LOOKUPS = frozenset(
     {
@@ -58,6 +61,17 @@ _LITERAL_PLUGIN_RE = re.compile(r"\s*(['\"])([A-Za-z0-9_.-]+)\1\s*(?:,|\))")
 _DRIVE_RE = re.compile(r"^[A-Za-z]:[/\\]")
 _SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 _JINJA_MARKERS = ("{{", "{%", "{#")
+_SAFE_CONNECTIONS = frozenset(
+    {
+        "smart",
+        "ssh",
+        "ansible.builtin.ssh",
+        "paramiko",
+        "paramiko_ssh",
+        "ansible.builtin.paramiko_ssh",
+    }
+)
+_ROLE_FILE_FIELDS = frozenset({"tasks_from", "vars_from", "defaults_from", "handlers_from"})
 
 
 def analyze_playbook_controller_policy(plays: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -128,6 +142,7 @@ def _scan_value(
     scan_lookups: bool,
 ) -> None:
     if isinstance(value, dict):
+        sibling_args = value.get("args") if isinstance(value.get("args"), dict) else {}
         for raw_key in sorted(value, key=str):
             child = value[raw_key]
             key = str(raw_key)
@@ -144,6 +159,8 @@ def _scan_value(
                     "local_action executes on the Ansible control node",
                     child_path,
                 )
+            elif normalized == "action":
+                _check_action(child, child_path, findings, sibling_args=sibling_args)
             elif normalized.startswith("with_") and normalized not in _SAFE_WITH_ITERATORS:
                 _add(
                     findings,
@@ -155,7 +172,7 @@ def _scan_value(
                 _check_hosts(child, child_path, findings)
             elif normalized in {"vars_files", "import_playbook"}:
                 _check_path_values(child, child_path, findings)
-            elif normalized == "roles":
+            elif normalized in {"roles", "dependencies"}:
                 _check_role_values(child, child_path, findings)
 
             module = normalized.rsplit(".", 1)[-1]
@@ -167,9 +184,9 @@ def _scan_value(
                     child_path,
                 )
             if module in _CONTROLLER_FILE_MODULE_FIELDS and not (
-                module in {"copy", "unarchive"} and _remote_source(child)
+                module in {"copy", "unarchive"} and _remote_source(_merge_module_payload(child, sibling_args))
             ):
-                _check_module_paths(module, child, child_path, findings)
+                _check_module_paths(module, _merge_module_payload(child, sibling_args), child_path, findings)
             if module in {"include_role", "import_role"}:
                 _check_role_values(child, child_path, findings)
 
@@ -205,11 +222,11 @@ def _check_connection(value: Any, path: str, findings: list[dict[str, Any]]) -> 
             "Dynamic Ansible connection selection is not allowed",
             path,
         )
-    elif normalized in {"local", "ansible.builtin.local"}:
+    elif normalized not in _SAFE_CONNECTIONS:
         _add(
             findings,
             "controller_connection_forbidden",
-            "The local connection plugin executes on the Ansible control node",
+            "Only WebTerm-approved SSH connection plugins are allowed",
             path,
         )
 
@@ -277,25 +294,133 @@ def _scan_lookup_text(text: str, path: str, findings: list[dict[str, Any]]) -> N
             _add(
                 findings,
                 "controller_lookup_forbidden",
-                f"Controller-side lookup plugin '{plugin}' is not allowed",
+                "This controller-side lookup plugin is not allowed",
                 path,
-                details={"plugin": plugin},
             )
 
 
 def _check_module_paths(module: str, payload: Any, path: str, findings: list[dict[str, Any]]) -> None:
     if isinstance(payload, str):
-        candidate = payload.split(maxsplit=1)[0] if module == "script" else payload
-        _check_path(candidate, path, findings)
+        arguments = _parse_free_form_arguments(payload)
+        if module == "script":
+            _check_path(arguments.pop("__positional__", ""), path, findings)
+        elif module in {"import_tasks", "include_tasks", "include_vars"} and "__positional__" in arguments:
+            _check_path(arguments.pop("__positional__"), path, findings)
+        for field in _CONTROLLER_FILE_MODULE_FIELDS[module]:
+            if field in arguments:
+                _check_path(arguments[field], f"{path}.{field}", findings)
         return
     if not isinstance(payload, dict):
         return
+    if module in {"script", "import_tasks", "include_tasks", "include_vars"} and "__positional__" in payload:
+        _check_path(payload["__positional__"], path, findings)
     for field in _CONTROLLER_FILE_MODULE_FIELDS[module]:
         if field in payload:
             candidate = payload[field]
             if module == "script" and isinstance(candidate, str):
                 candidate = candidate.split(maxsplit=1)[0]
             _check_path(candidate, f"{path}.{field}", findings)
+
+
+def _merge_module_payload(payload: Any, sibling_args: Mapping[str, Any]) -> Any:
+    if not sibling_args:
+        return payload
+    if isinstance(payload, dict):
+        return {**sibling_args, **payload}
+    if payload is None:
+        return dict(sibling_args)
+    if isinstance(payload, str):
+        parsed = _parse_free_form_arguments(payload)
+        return {**sibling_args, **parsed}
+    return payload
+
+
+def _check_action(
+    payload: Any,
+    path: str,
+    findings: list[dict[str, Any]],
+    *,
+    sibling_args: Mapping[str, Any],
+) -> None:
+    module = ""
+    arguments: Any = {}
+    if isinstance(payload, str):
+        try:
+            tokens = shlex.split(payload.replace("\\", "/"), posix=True)
+        except ValueError:
+            tokens = []
+        if not tokens:
+            _add(
+                findings,
+                "controller_action_invalid",
+                "Legacy action syntax could not be validated",
+                path,
+            )
+            return
+        module = tokens[0].casefold().rsplit(".", 1)[-1]
+        arguments = _merge_module_payload(" ".join(tokens[1:]), sibling_args)
+    elif isinstance(payload, dict):
+        raw_module = payload.get("module")
+        nested_args = payload.get("args") if isinstance(payload.get("args"), dict) else {}
+        if isinstance(raw_module, str):
+            try:
+                module_tokens = shlex.split(raw_module.replace("\\", "/"), posix=True)
+            except ValueError:
+                module_tokens = []
+            module = module_tokens[0].casefold().rsplit(".", 1)[-1] if module_tokens else ""
+            common_args = {
+                **sibling_args,
+                **nested_args,
+                **{key: value for key, value in payload.items() if key not in {"module", "args"}},
+            }
+            arguments = _merge_module_payload(" ".join(module_tokens[1:]), common_args)
+        else:
+            candidates = [key for key in payload if key != "args"]
+            if len(candidates) == 1:
+                raw_key = str(candidates[0])
+                module = raw_key.casefold().rsplit(".", 1)[-1]
+                arguments = _merge_module_payload(payload[candidates[0]], {**sibling_args, **nested_args})
+    if not module or _is_dynamic(module):
+        _add(
+            findings,
+            "controller_action_invalid",
+            "Legacy action module selection must be static and recognizable",
+            path,
+        )
+        return
+    if module == "add_host":
+        _add(
+            findings,
+            "controller_dynamic_inventory_forbidden",
+            "add_host can expand execution beyond the frozen WebTerm target set",
+            path,
+        )
+    if module in _CONTROLLER_FILE_MODULE_FIELDS and not (
+        module in {"copy", "unarchive"} and _remote_source(arguments)
+    ):
+        _check_module_paths(module, arguments, path, findings)
+    if module in {"include_role", "import_role"}:
+        _check_role_values(arguments, path, findings)
+
+
+def _parse_free_form_arguments(value: str) -> dict[str, str]:
+    normalized_value = str(value or "").replace("\\", "/")
+    try:
+        tokens = shlex.split(normalized_value, posix=True)
+    except ValueError:
+        return {"__positional__": normalized_value}
+    parsed: dict[str, str] = {}
+    positional: list[str] = []
+    for token in tokens:
+        if "=" in token:
+            key, raw_value = token.split("=", 1)
+            if key:
+                parsed[key.casefold()] = raw_value
+                continue
+        positional.append(token)
+    if positional:
+        parsed["__positional__"] = " ".join(positional)
+    return parsed
 
 
 def _check_path_values(value: Any, path: str, findings: list[dict[str, Any]]) -> None:
@@ -305,11 +430,19 @@ def _check_path_values(value: Any, path: str, findings: list[dict[str, Any]]) ->
 
 
 def _check_role_values(value: Any, path: str, findings: list[dict[str, Any]]) -> None:
+    if isinstance(value, str) and "=" in value:
+        value = _parse_free_form_arguments(value)
     values = value if isinstance(value, list) else [value]
     for index, candidate in enumerate(values):
+        item_path = f"{path}[{index}]" if len(values) > 1 else path
         if isinstance(candidate, dict):
-            candidate = candidate.get("role") or candidate.get("name")
-        _check_path(candidate, f"{path}[{index}]" if len(values) > 1 else path, findings)
+            role_name = candidate.get("role") or candidate.get("name")
+            _check_path(role_name, item_path, findings)
+            for field in _ROLE_FILE_FIELDS:
+                if field in candidate:
+                    _check_path(candidate[field], f"{item_path}.{field}", findings)
+            continue
+        _check_path(candidate, item_path, findings)
 
 
 def _check_path(value: Any, path: str, findings: list[dict[str, Any]]) -> None:
@@ -317,12 +450,15 @@ def _check_path(value: Any, path: str, findings: list[dict[str, Any]]) -> None:
         return
     text = value.strip()
     normalized = text.replace("\\", "/")
+    relative = PurePosixPath(normalized)
     unsafe = (
         _is_dynamic(text)
+        or not relative.parts
         or normalized.startswith(("/", "//", "~"))
         or bool(_DRIVE_RE.match(text))
         or bool(_SCHEME_RE.match(text))
-        or ".." in PurePosixPath(normalized).parts
+        or ".." in relative.parts
+        or is_runtime_reserved_path(normalized)
     )
     if unsafe:
         _add(
@@ -334,6 +470,8 @@ def _check_path(value: Any, path: str, findings: list[dict[str, Any]]) -> None:
 
 
 def _remote_source(payload: Any) -> bool:
+    if isinstance(payload, str):
+        payload = _parse_free_form_arguments(payload)
     if not isinstance(payload, dict):
         return False
     value = payload.get("remote_src")

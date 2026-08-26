@@ -123,7 +123,7 @@ export function CreateUserSidebar({
           <InlineAlert
             tone="warning"
             description={lang === "ru"
-              ? "Staff получает широкие права по умолчанию. Для пилота безопаснее выбрать профиль без доступа к секретам или задать явные запреты."
+              ? "Этот флаг даёт широкие права. Безопаснее выбрать профиль без секретов или задать явные запреты."
               : "Staff receives broad default access. For a pilot, prefer a no-secrets profile or explicit denies."}
           />
         ) : null}

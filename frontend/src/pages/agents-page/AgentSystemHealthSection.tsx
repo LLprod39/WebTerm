@@ -124,15 +124,15 @@ export function AgentSystemHealthSection({
             {showScheduledWorker ? (
               <WorkerRuntimePanel
                 title={localize(lang, "Планировщик", "Scheduler")}
-                description={localize(lang, "Автозапуск агентов по расписанию", "Scheduled agent dispatcher runtime")}
+                description={localize(lang, "Автоматический запуск агентов по расписанию", "Automatic scheduled agent runs")}
                 statusTitle={localize(
                   lang,
                   scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
                     ? "Планировщик принимает расписания"
                     : "Планировщик не подтверждён",
                   scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-                    ? "Scheduler is accepting due agents"
-                    : "Scheduler is not confirmed",
+                    ? "Scheduler is active"
+                    : "Scheduler is unavailable",
                 )}
                 statusDescription={localize(
                   lang,
@@ -140,8 +140,8 @@ export function AgentSystemHealthSection({
                     ? "Агенты с расписанием будут запущены автоматически."
                     : "Агенты с расписанием не стартуют автоматически, пока процесс не активен.",
                   scheduledWorker?.status === "running" && !scheduledWorker?.is_stale
-                    ? "Due agents will be picked up by the background process."
-                    : "Scheduled agents will not launch automatically until the worker is active.",
+                    ? "Agents will start automatically when their schedules are due."
+                    : "Scheduled agents will not start automatically until the service is restored.",
                 )}
                 worker={scheduledWorker}
                 command="python manage.py run_scheduled_agents --daemon --worker-key default"
@@ -154,8 +154,8 @@ export function AgentSystemHealthSection({
               <Wrench className="h-3 w-3" aria-hidden />
               {localize(
                 lang,
-                "Эта секция нужна администраторам: здесь диагностика фоновых процессов и команды для их запуска.",
-                "This section is for administrators: diagnostics for background processes and commands to start them.",
+                "Диагностика и команды восстановления доступны администраторам.",
+                "Diagnostics and recovery commands are available to administrators.",
               )}
             </p>
           </div>

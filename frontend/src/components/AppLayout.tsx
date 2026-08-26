@@ -1,14 +1,21 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useLayoutEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { FlowChrome } from "./FlowChrome";
 import { FlowTopbar } from "./FlowTopbar";
+import { EnterpriseTopbar } from "./EnterpriseTopbar";
 import { PageTransition } from "@/components/PageTransition";
 import { Outlet, useLocation, Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { localize, useI18n } from "@/lib/i18n";
-import { isFlowStyle, useUiStyle } from "@/lib/ui-style";
+import {
+  applyUiStyleToDocument,
+  isEnterpriseStyle,
+  isFlowStyle,
+  resolveDocumentUiStyle,
+  useUiStyle,
+} from "@/lib/ui-style";
 import { prefetchCoreRoutes } from "@/lib/route-prefetch";
 import { SkeletonMetrics, SkeletonList } from "@/components/ui/list-state";
 import { fetchMonitoringDashboard } from "@/lib/api";
@@ -18,7 +25,7 @@ import { AshitaAtmosphere } from "@/components/AshitaAtmosphere";
 const immersiveMeta: Array<{ match: RegExp; titleRu: string; titleEn: string; backTo: string; hideHeader?: boolean }> = [
   { match: /^\/servers\/hub$/, titleRu: "Терминалы", titleEn: "Terminal Hub", backTo: "/servers", hideHeader: true },
   { match: /^\/servers\/\d+\/terminal$/, titleRu: "Терминал", titleEn: "Terminal", backTo: "/servers", hideHeader: true },
-  { match: /^\/agents\/run\/\d+$/, titleRu: "Отчёт агента", titleEn: "Agent Run", backTo: "/agents" },
+  { match: /^\/agents\/run\/\d+$/, titleRu: "Отчёт агента", titleEn: "Agent Run", backTo: "/agents", hideHeader: true },
   { match: /^\/studio\/pipeline\/(?:new|\d+)$/, titleRu: "Редактор пайплайна", titleEn: "Pipeline Editor", backTo: "/studio", hideHeader: true },
 ];
 
@@ -37,8 +44,12 @@ export default function AppLayout() {
   const { lang } = useI18n();
   const { style } = useUiStyle();
   const queryClient = useQueryClient();
-  const isFlow = isFlowStyle(style);
+  const isChatRoute = location.pathname === "/chat" || location.pathname.startsWith("/chat/");
+  const effectiveStyle = resolveDocumentUiStyle(style, location.pathname);
+  const isFlow = isFlowStyle(effectiveStyle);
+  const isEnterprise = isEnterpriseStyle(style) && !isChatRoute;
   const isAshita = style === "ashita";
+  const routeSection = location.pathname.split("/").filter(Boolean)[0] ?? "dashboard";
   const immersive = immersiveMeta.find(({ match }) => match.test(location.pathname));
   const openNavigationLabel = localize(lang, "Открыть навигацию", "Open navigation");
 
@@ -46,6 +57,12 @@ export default function AppLayout() {
   useEffect(() => {
     prefetchCoreRoutes();
   }, []);
+
+  // Keep Chat pixel-compatible with the current flow-dark UI without changing
+  // the saved Enterprise preference. Leaving Chat restores Enterprise instantly.
+  useLayoutEffect(() => {
+    applyUiStyleToDocument(style, location.pathname);
+  }, [location.pathname, style]);
 
   // Prefetch fleet monitoring as soon as the shell mounts so dashboard/servers
   // open with last-known numbers instead of a "нет связи" flash.
@@ -79,14 +96,14 @@ export default function AppLayout() {
 
   if (immersive) {
     return (
-      <SidebarProvider>
+      <SidebarProvider data-ui-shell={isEnterprise ? "enterprise" : isFlow ? "flow" : "legacy"}>
         <FlowChrome>
           <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only">
             {localize(lang, "Перейти к содержимому", "Skip to content")}
           </a>
           {isAshita ? <AshitaAtmosphere /> : null}
           {mobileSidebarTrigger}
-          <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
+          <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden" data-ui-slot="app-shell">
             <AppSidebar />
             <div className="flex min-h-0 min-w-0 flex-1 flex-col">
               {!immersive.hideHeader && (
@@ -102,7 +119,14 @@ export default function AppLayout() {
                   <span className="text-xs font-medium text-foreground">{localize(lang, immersive.titleRu, immersive.titleEn)}</span>
                 </header>
               )}
-              <main id="main-content" tabIndex={-1} className="flex min-h-0 flex-1 flex-col overflow-hidden pt-16 md:pt-0">
+              <main
+                id="main-content"
+                tabIndex={-1}
+                data-enterprise-content={isEnterprise ? "true" : undefined}
+                data-route-section={routeSection}
+                data-route-path={location.pathname}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden pt-16 md:pt-0"
+              >
                 <Suspense fallback={<ContentFallback />}>
                   <PageTransition>
                     <Outlet />
@@ -116,25 +140,28 @@ export default function AppLayout() {
     );
   }
 
-  const isChatRoute = location.pathname === "/chat" || location.pathname.startsWith("/chat/");
-
   return (
-    <SidebarProvider>
+    <SidebarProvider data-ui-shell={isEnterprise ? "enterprise" : isFlow ? "flow" : "legacy"}>
       <FlowChrome>
         <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only">
           {localize(lang, "Перейти к содержимому", "Skip to content")}
         </a>
         {isAshita ? <AshitaAtmosphere /> : null}
         {mobileSidebarTrigger}
-        <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden">
+        <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden" data-ui-slot="app-shell">
           <AppSidebar />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {isFlow && <FlowTopbar />}
+            {isEnterprise ? <EnterpriseTopbar /> : isFlow ? <FlowTopbar effectiveStyle={effectiveStyle} /> : null}
             <main
               id="main-content"
               tabIndex={-1}
+              data-enterprise-content={isEnterprise ? "true" : undefined}
+              data-route-section={routeSection}
+              data-route-path={location.pathname}
               className={
-                isFlow
+                isEnterprise
+                  ? "enterprise-sheet min-h-0 flex-1 overflow-auto pt-16 md:pt-0"
+                  : isFlow
                   ? isChatRoute
                     ? "flow-sheet min-h-0 flex-1 overflow-hidden pt-16 md:pt-0"
                     : "flow-sheet min-h-0 flex-1 overflow-auto pt-16 md:pt-0"

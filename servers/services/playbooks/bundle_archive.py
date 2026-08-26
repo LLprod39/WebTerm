@@ -7,7 +7,10 @@ ZIP with fixed permissions can be persisted.
 
 from __future__ import annotations
 
+import bz2
+import gzip
 import hashlib
+import lzma
 import re
 import stat
 import tarfile
@@ -36,6 +39,7 @@ TEXT_EXTENSIONS = frozenset(
         ".ps1",
         ".py",
         ".service",
+        ".sha256",
         ".sh",
         ".socket",
         ".timer",
@@ -48,11 +52,32 @@ TEXT_EXTENSIONS = frozenset(
 )
 BINARY_EXTENSIONS = frozenset({".bin", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".ttf", ".webp", ".woff", ".woff2"})
 ALLOWED_EXTENSIONS = TEXT_EXTENSIONS | BINARY_EXTENSIONS
-ALLOWED_TOP_LEVEL_DIRS = frozenset({"files", "group_vars", "roles", "templates", "vars"})
+ALLOWED_TOP_LEVEL_DIRS = frozenset(
+    {"files", "group_vars", "inventory", "playbooks", "roles", "templates", "vars"}
+)
 ALLOWED_ROLE_DIRS = frozenset({"defaults", "files", "handlers", "meta", "tasks", "templates", "vars"})
 YAML_EXTENSIONS = frozenset({".yml", ".yaml"})
+KNOWN_REPOSITORY_METADATA_DIRS = frozenset({".github", ".gitlab", "docs"})
+KNOWN_REPOSITORY_METADATA_FILES = frozenset(
+    {
+        ".ansible-lint",
+        ".gitattributes",
+        ".gitignore",
+        ".gitlab-ci.yml",
+        ".yamllint",
+        "codeowners",
+        "contributing",
+        "contributing.md",
+        "license",
+        "license.md",
+        "license.txt",
+        "changelog",
+        "changelog.md",
+    }
+)
 
 MANIFEST_NAME = "manifest.json"
+CHECKSUMS_NAME = "checksums.sha256"
 MANIFEST_KIND = "webterm.playbook.bundle"
 MANIFEST_SCHEMA_VERSION = 1
 _DRIVE_PATH_RE = re.compile(r"^[A-Za-z]:")
@@ -123,6 +148,9 @@ class InspectedBundle:
     manifest: dict[str, Any]
     entrypoints: tuple[dict[str, Any], ...]
     secret_findings: tuple[dict[str, str], ...]
+    ignored_files: tuple[str, ...]
+    dependencies: dict[str, tuple[str, ...]]
+    project_path: str
 
     def file_map(self) -> dict[str, BundleFile]:
         return {item.path: item for item in self.files}
@@ -162,40 +190,67 @@ def inspect_project_bundle(
     *,
     limits: BundleLimits | None = None,
     allow_single_root: bool = False,
+    allow_repository_metadata: bool = False,
+    project_path: str = "",
 ) -> InspectedBundle:
     from servers.services.playbooks.bundle_content import (
         build_entrypoint_previews,
+        collect_bundle_dependencies,
         parse_manifest,
         safe_json_load,
         safe_yaml_load,
         scan_bundle_secrets,
+        validate_bundle_checksums,
         validate_requirements,
     )
 
     limits = limits or BundleLimits.from_settings()
+    selected_project_path = normalize_project_path(project_path)
     if not isinstance(data, bytes) or not data:
         raise BundleValidationError("Archive is empty", code="empty_archive")
     if len(data) > limits.max_archive_bytes:
         raise _limit_error("Archive exceeds the upload size limit", "archive_size_limit")
 
     stream = BytesIO(data)
+    ignored_files: list[str] = []
     try:
         if zipfile.is_zipfile(stream):
             archive_format = "zip"
-            files = _read_zip(data, limits, allow_single_root=allow_single_root)
+            files = _read_zip(
+                data,
+                limits,
+                allow_single_root=allow_single_root,
+                allow_repository_metadata=allow_repository_metadata,
+                project_path=selected_project_path,
+                ignored_files=ignored_files,
+            )
         else:
             archive_format = "tar"
-            files = _read_tar(data, limits, allow_single_root=allow_single_root)
+            files = _read_tar(
+                _bounded_tar_stream(data, limits),
+                limits,
+                allow_single_root=allow_single_root,
+                allow_repository_metadata=allow_repository_metadata,
+                project_path=selected_project_path,
+                ignored_files=ignored_files,
+            )
     except BundleValidationError:
         raise
     except (OSError, tarfile.TarError, zipfile.BadZipFile, RuntimeError) as exc:
         raise BundleValidationError("Archive is malformed or unsupported", code="malformed_archive") from exc
 
+    if not files and selected_project_path:
+        raise BundleValidationError(
+            "Selected project directory contains no supported files",
+            code="project_path_not_found",
+            status_code=422,
+        )
     if not files:
         raise BundleValidationError("Archive contains no supported files", code="empty_archive")
 
     file_map = {item.path: item for item in files}
     manifest = parse_manifest(file_map.get(MANIFEST_NAME))
+    validate_bundle_checksums(file_map, manifest)
     yaml_documents: dict[str, Any] = {}
     json_documents: dict[str, Any] = {}
     for item in files:
@@ -206,6 +261,7 @@ def inspect_project_bundle(
             json_documents[item.path] = safe_json_load(item.path, item.content)
 
     validate_requirements(yaml_documents)
+    dependencies = collect_bundle_dependencies(yaml_documents, manifest)
     entrypoints = build_entrypoint_previews(yaml_documents)
     if not entrypoints:
         raise BundleValidationError(
@@ -228,6 +284,9 @@ def inspect_project_bundle(
         manifest=manifest,
         entrypoints=tuple(entrypoints),
         secret_findings=tuple(secret_findings),
+        ignored_files=tuple(sorted(set(ignored_files))),
+        dependencies={key: tuple(value) for key, value in dependencies.items()},
+        project_path=selected_project_path,
     )
 
 
@@ -286,15 +345,26 @@ def normalize_bundle_path(raw_name: str) -> str:
     return "/".join(parts)
 
 
-def _read_zip(data: bytes, limits: BundleLimits, *, allow_single_root: bool = False) -> list[BundleFile]:
+def _read_zip(
+    data: bytes,
+    limits: BundleLimits,
+    *,
+    allow_single_root: bool = False,
+    allow_repository_metadata: bool = False,
+    project_path: str = "",
+    ignored_files: list[str] | None = None,
+) -> list[BundleFile]:
     files: list[BundleFile] = []
     seen: set[str] = set()
     total = 0
+    _preflight_zip_directory(data, limits)
     with zipfile.ZipFile(BytesIO(data), mode="r") as archive:
         members = archive.infolist()
         if len(members) > limits.max_files:
             raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
-        normalized_paths = [normalize_bundle_path(info.filename) for info in members]
+        normalized_paths = [
+            _normalize_archive_member_path(info.filename, allow_hidden=allow_repository_metadata) for info in members
+        ]
         root_prefix = (
             _single_root_prefix(
                 [path for info, path in zip(members, normalized_paths, strict=True) if not info.is_dir()]
@@ -316,28 +386,61 @@ def _read_zip(data: bytes, limits: BundleLimits, *, allow_single_root: bool = Fa
                 raise BundleValidationError("Archive contains a non-regular file", code="unsafe_member")
             if info.flag_bits & 0x1:
                 raise BundleValidationError("Encrypted archive members are not supported", code="encrypted_member")
+            archive_path = path
+            selected_path = _select_project_member_path(path, project_path)
+            if selected_path is None:
+                if not info.is_dir() and ignored_files is not None:
+                    ignored_files.append(archive_path)
+                continue
+            path = selected_path
             if info.is_dir():
+                if not path:
+                    continue
+                if allow_repository_metadata and _is_known_repository_metadata(path):
+                    continue
+                path = normalize_bundle_path(path)
                 _validate_directory_layout(path)
                 continue
-            _validate_file_layout(path)
-            _check_duplicate(path, seen)
+            if not path:
+                raise BundleValidationError("Selected project path must be a directory", code="invalid_project_path")
+            ignored_metadata = allow_repository_metadata and _is_known_repository_metadata(path)
+            if not ignored_metadata:
+                path = normalize_bundle_path(path)
+                _validate_file_layout(path)
+                _check_duplicate(path, seen)
             _check_declared_limits(info.file_size, len(files) + 1, total, limits)
             with archive.open(info, mode="r") as member:
                 content = member.read(limits.max_file_bytes + 1)
             total = _check_actual_limits(content, len(files) + 1, total, limits)
+            if ignored_metadata:
+                if ignored_files is not None:
+                    ignored_files.append(archive_path)
+                continue
             files.append(_bundle_file(path, content))
     return files
 
 
-def _read_tar(data: bytes, limits: BundleLimits, *, allow_single_root: bool = False) -> list[BundleFile]:
+def _read_tar(
+    data: bytes,
+    limits: BundleLimits,
+    *,
+    allow_single_root: bool = False,
+    allow_repository_metadata: bool = False,
+    project_path: str = "",
+    ignored_files: list[str] | None = None,
+) -> list[BundleFile]:
     files: list[BundleFile] = []
     seen: set[str] = set()
     total = 0
-    with tarfile.open(fileobj=BytesIO(data), mode="r:*") as archive:
-        members = archive.getmembers()
-        if len(members) > limits.max_files:
-            raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
-        normalized_paths = [normalize_bundle_path(member.name) for member in members]
+    with tarfile.open(fileobj=BytesIO(data), mode="r:") as archive:
+        members: list[tarfile.TarInfo] = []
+        for member in archive:
+            members.append(member)
+            if len(members) > limits.max_files:
+                raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
+        normalized_paths = [
+            _normalize_archive_member_path(member.name, allow_hidden=allow_repository_metadata) for member in members
+        ]
         root_prefix = (
             _single_root_prefix(
                 [path for member, path in zip(members, normalized_paths, strict=True) if member.isfile()]
@@ -358,21 +461,132 @@ def _read_tar(data: bytes, limits: BundleLimits, *, allow_single_root: bool = Fa
                 raise BundleValidationError("Archive root contains an invalid file", code="unsafe_path")
             if member.issym() or member.islnk():
                 raise BundleValidationError("Archive links are not allowed", code="unsafe_link")
+            archive_path = path
+            selected_path = _select_project_member_path(path, project_path)
+            if selected_path is None:
+                if not member.isdir() and ignored_files is not None:
+                    ignored_files.append(archive_path)
+                continue
+            path = selected_path
             if member.isdir():
+                if not path:
+                    continue
+                if allow_repository_metadata and _is_known_repository_metadata(path):
+                    continue
+                path = normalize_bundle_path(path)
                 _validate_directory_layout(path)
                 continue
+            if not path:
+                raise BundleValidationError("Selected project path must be a directory", code="invalid_project_path")
             if not member.isfile() or getattr(member, "sparse", None):
                 raise BundleValidationError("Archive contains a non-regular file", code="unsafe_member")
-            _validate_file_layout(path)
-            _check_duplicate(path, seen)
+            ignored_metadata = allow_repository_metadata and _is_known_repository_metadata(path)
+            if not ignored_metadata:
+                path = normalize_bundle_path(path)
+                _validate_file_layout(path)
+                _check_duplicate(path, seen)
             _check_declared_limits(member.size, len(files) + 1, total, limits)
             source = archive.extractfile(member)
             if source is None:
                 raise BundleValidationError("Archive member cannot be read", code="malformed_archive")
             content = source.read(limits.max_file_bytes + 1)
             total = _check_actual_limits(content, len(files) + 1, total, limits)
+            if ignored_metadata:
+                if ignored_files is not None:
+                    ignored_files.append(archive_path)
+                continue
             files.append(_bundle_file(path, content))
     return files
+
+
+def _preflight_zip_directory(data: bytes, limits: BundleLimits) -> None:
+    """Bound central-directory work before ``zipfile`` creates ZipInfo objects."""
+
+    eocd_offset = data.rfind(b"PK\x05\x06", max(0, len(data) - (65_535 + 22)))
+    if eocd_offset < 0 or eocd_offset + 22 > len(data):
+        raise BundleValidationError("Archive is malformed or unsupported", code="malformed_archive")
+    comment_length = int.from_bytes(data[eocd_offset + 20 : eocd_offset + 22], "little")
+    if eocd_offset + 22 + comment_length != len(data):
+        raise BundleValidationError("Archive is malformed or unsupported", code="malformed_archive")
+
+    disk_number = int.from_bytes(data[eocd_offset + 4 : eocd_offset + 6], "little")
+    directory_disk = int.from_bytes(data[eocd_offset + 6 : eocd_offset + 8], "little")
+    entries_on_disk = int.from_bytes(data[eocd_offset + 8 : eocd_offset + 10], "little")
+    entry_count = int.from_bytes(data[eocd_offset + 10 : eocd_offset + 12], "little")
+    directory_size = int.from_bytes(data[eocd_offset + 12 : eocd_offset + 16], "little")
+    directory_offset = int.from_bytes(data[eocd_offset + 16 : eocd_offset + 20], "little")
+    directory_end_limit = eocd_offset
+    if disk_number or directory_disk:
+        raise BundleValidationError("Multi-disk ZIP archives are not supported", code="malformed_archive")
+
+    zip64 = (
+        entries_on_disk == 0xFFFF
+        or entry_count == 0xFFFF
+        or directory_size == 0xFFFFFFFF
+        or directory_offset == 0xFFFFFFFF
+    )
+    if zip64:
+        locator_offset = eocd_offset - 20
+        if locator_offset < 0 or data[locator_offset : locator_offset + 4] != b"PK\x06\x07":
+            raise BundleValidationError("ZIP64 directory metadata is malformed", code="malformed_archive")
+        if int.from_bytes(data[locator_offset + 4 : locator_offset + 8], "little") != 0:
+            raise BundleValidationError("Multi-disk ZIP archives are not supported", code="malformed_archive")
+        zip64_offset = int.from_bytes(data[locator_offset + 8 : locator_offset + 16], "little")
+        if zip64_offset + 56 > locator_offset or data[zip64_offset : zip64_offset + 4] != b"PK\x06\x06":
+            raise BundleValidationError("ZIP64 directory metadata is malformed", code="malformed_archive")
+        if int.from_bytes(data[zip64_offset + 16 : zip64_offset + 20], "little") != 0 or int.from_bytes(
+            data[zip64_offset + 20 : zip64_offset + 24], "little"
+        ) != 0:
+            raise BundleValidationError("Multi-disk ZIP archives are not supported", code="malformed_archive")
+        entries_on_disk = int.from_bytes(data[zip64_offset + 24 : zip64_offset + 32], "little")
+        entry_count = int.from_bytes(data[zip64_offset + 32 : zip64_offset + 40], "little")
+        directory_size = int.from_bytes(data[zip64_offset + 40 : zip64_offset + 48], "little")
+        directory_offset = int.from_bytes(data[zip64_offset + 48 : zip64_offset + 56], "little")
+        directory_end_limit = zip64_offset
+
+    if entries_on_disk != entry_count or entry_count > limits.max_files:
+        raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
+    directory_end = directory_offset + directory_size
+    if directory_end > directory_end_limit:
+        raise BundleValidationError("ZIP central directory is malformed", code="malformed_archive")
+
+    cursor = directory_offset
+    parsed_entries = 0
+    while cursor < directory_end:
+        if cursor + 46 > directory_end or data[cursor : cursor + 4] != b"PK\x01\x02":
+            raise BundleValidationError("ZIP central directory is malformed", code="malformed_archive")
+        name_length = int.from_bytes(data[cursor + 28 : cursor + 30], "little")
+        extra_length = int.from_bytes(data[cursor + 30 : cursor + 32], "little")
+        item_comment_length = int.from_bytes(data[cursor + 32 : cursor + 34], "little")
+        cursor += 46 + name_length + extra_length + item_comment_length
+        parsed_entries += 1
+        if parsed_entries > limits.max_files:
+            raise _limit_error("Archive contains too many files or directory members", "file_count_limit")
+    if cursor != directory_end or parsed_entries != entry_count:
+        raise BundleValidationError("ZIP central directory is malformed", code="malformed_archive")
+
+
+def _bounded_tar_stream(data: bytes, limits: BundleLimits) -> bytes:
+    """Bound compressed TAR expansion, including PAX/GNU metadata payloads."""
+
+    max_stream_bytes = limits.max_total_bytes + limits.max_files * 4096 + 1024 * 1024
+    try:
+        if data.startswith(b"\x1f\x8b"):
+            with gzip.GzipFile(fileobj=BytesIO(data), mode="rb") as source:
+                expanded = source.read(max_stream_bytes + 1)
+        elif data.startswith(b"BZh"):
+            with bz2.BZ2File(BytesIO(data), mode="rb") as source:
+                expanded = source.read(max_stream_bytes + 1)
+        elif data.startswith(b"\xfd7zXZ\x00"):
+            with lzma.LZMAFile(BytesIO(data), mode="rb") as source:
+                expanded = source.read(max_stream_bytes + 1)
+        else:
+            expanded = data
+    except (EOFError, OSError, lzma.LZMAError) as exc:
+        raise BundleValidationError("Archive is malformed or unsupported", code="malformed_archive") from exc
+    if len(expanded) > max_stream_bytes:
+        raise _limit_error("TAR metadata and content exceed the extracted size limit", "total_size_limit")
+    return expanded
 
 
 def _single_root_prefix(file_paths: list[str]) -> str:
@@ -394,6 +608,56 @@ def _strip_root_prefix(path: str, root_prefix: str) -> str:
         return ""
     prefix = f"{root_prefix}/"
     return path[len(prefix) :] if path.startswith(prefix) else path
+
+
+def _select_project_member_path(path: str, project_path: str) -> str | None:
+    if not project_path:
+        return path
+    if path == project_path:
+        return ""
+    prefix = f"{project_path}/"
+    if path.startswith(prefix):
+        return path[len(prefix) :]
+    return None
+
+
+def _normalize_archive_member_path(raw_name: str, *, allow_hidden: bool) -> str:
+    """Apply traversal checks before provider metadata can be ignored."""
+
+    if not allow_hidden:
+        return normalize_bundle_path(raw_name)
+    if not isinstance(raw_name, str) or not raw_name or "\x00" in raw_name:
+        raise BundleValidationError("Archive contains an invalid path", code="unsafe_path")
+    if any(ord(char) < 32 for char in raw_name):
+        raise BundleValidationError("Archive path contains control characters", code="unsafe_path")
+    name = raw_name.replace("\\", "/").rstrip("/")
+    if not name or name.startswith("/") or name.startswith("//") or _DRIVE_PATH_RE.match(name) or ":" in name:
+        raise BundleValidationError("Absolute archive paths are not allowed", code="unsafe_path")
+    parts = name.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise BundleValidationError("Archive path traversal is not allowed", code="unsafe_path")
+    if any(len(part) > 120 for part in parts) or len(name) > 300:
+        raise BundleValidationError("Archive path is too long", code="unsafe_path")
+    if any(PurePosixPath(part).stem.casefold() in _WINDOWS_RESERVED for part in parts):
+        raise BundleValidationError("Archive path uses a reserved filename", code="unsafe_path")
+    return "/".join(parts)
+
+
+def normalize_project_path(raw_path: str) -> str:
+    """Normalize an optional archive subdirectory without applying layout rules."""
+
+    value = str(raw_path or "").strip().replace("\\", "/").strip("/")
+    if not value:
+        return ""
+    return normalize_bundle_path(value)
+
+
+def _is_known_repository_metadata(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    if not parts:
+        return False
+    first = parts[0].casefold()
+    return first in KNOWN_REPOSITORY_METADATA_DIRS or (len(parts) == 1 and first in KNOWN_REPOSITORY_METADATA_FILES)
 
 
 def _bundle_file(path: str, content: bytes) -> BundleFile:
@@ -423,7 +687,7 @@ def _validate_directory_layout(path: str) -> None:
 def _validate_file_layout(path: str) -> None:
     parts = PurePosixPath(path).parts
     suffix = PurePosixPath(path).suffix.lower()
-    if path == MANIFEST_NAME:
+    if path in {MANIFEST_NAME, CHECKSUMS_NAME}:
         return
     if suffix not in ALLOWED_EXTENSIONS:
         raise BundleValidationError(
@@ -446,6 +710,12 @@ def _validate_file_layout(path: str) -> None:
             raise BundleValidationError("Role directory is not allowlisted", code="disallowed_path")
     if parts[0] in {"group_vars", "vars"} and suffix not in YAML_EXTENSIONS | {".json"}:
         raise BundleValidationError("Variable files must be YAML or JSON", code="disallowed_extension")
+    if parts[0] == "playbooks" and suffix not in YAML_EXTENSIONS:
+        raise BundleValidationError("Playbooks must be YAML", code="disallowed_extension")
+    if parts[0] == "inventory" and suffix not in YAML_EXTENSIONS | {".ini", ".json"}:
+        raise BundleValidationError(
+            "Inventory reference files must be YAML, INI, or JSON", code="disallowed_extension"
+        )
     if parts[0] == "templates" and suffix not in TEXT_EXTENSIONS:
         raise BundleValidationError("Templates must be UTF-8 text", code="disallowed_extension")
 

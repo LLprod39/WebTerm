@@ -150,7 +150,7 @@ describe("MarsPage", () => {
   it("walks through project creation, clarification, spec approval, and build controls", async () => {
     renderMarsPage();
 
-    expect(await screen.findByText("MARS beta - AI-разработка")).toBeInTheDocument();
+    expect(await screen.findByText("Разработка с MARS")).toBeInTheDocument();
     expect(screen.getByText("История проектов")).toBeInTheDocument();
     expect(screen.queryByText("План выполнения")).not.toBeInTheDocument();
     expect(screen.queryByText(/Skill routing/i)).not.toBeInTheDocument();

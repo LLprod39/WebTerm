@@ -19,6 +19,7 @@ export type PlaybookBundleImportStatus =
 
 const emptyMetadata = (): CommitPlaybookBundleMetadata => ({
   entrypoint: "",
+  project_path: "",
   name: "",
   description: "",
   category: "custom",
@@ -92,8 +93,68 @@ export function usePlaybookBundleImport(options: UsePlaybookBundleImportOptions 
     return selectFile(file);
   }, [file, selectFile]);
 
+  const selectEntrypoint = useCallback(async (entrypoint: string) => {
+    if (!file || !entrypoint || entrypoint === metadata.entrypoint) return preview;
+    const sequence = requestSequence.current + 1;
+    requestSequence.current = sequence;
+    setStatus("previewing");
+    setPreview(null);
+    setError("");
+    setErrorStage(null);
+    try {
+      const response = await previewPlaybookBundle(file, entrypoint, metadata.project_path || "");
+      if (requestSequence.current !== sequence) return null;
+      const selectedEntrypoint = response.preview.selected_entrypoint || entrypoint;
+      setPreview(response.preview);
+      setMetadata((current) => ({
+        ...current,
+        entrypoint: selectedEntrypoint,
+        project_path: response.preview.project_path || current.project_path || "",
+      }));
+      setStatus("ready");
+      return response.preview;
+    } catch (caught) {
+      if (requestSequence.current !== sequence) return null;
+      setStatus("error");
+      setErrorStage("preview");
+      setError(errorMessage(caught));
+      return null;
+    }
+  }, [file, metadata.entrypoint, metadata.project_path, preview]);
+
+  const selectProjectPath = useCallback(async (projectPath: string) => {
+    const normalized = projectPath.trim().replace(/^\/+|\/+$/g, "");
+    if (!file || normalized === (metadata.project_path || "")) return preview;
+    const sequence = requestSequence.current + 1;
+    requestSequence.current = sequence;
+    setStatus("previewing");
+    setPreview(null);
+    setError("");
+    setErrorStage(null);
+    try {
+      const response = await previewPlaybookBundle(file, "", normalized);
+      if (requestSequence.current !== sequence) return null;
+      const selectedEntrypoint = response.preview.selected_entrypoint
+        || (response.preview.entrypoints.length === 1 ? response.preview.entrypoints[0].path : "");
+      setPreview(response.preview);
+      setMetadata((current) => ({
+        ...current,
+        entrypoint: selectedEntrypoint,
+        project_path: response.preview.project_path || normalized,
+      }));
+      setStatus("ready");
+      return response.preview;
+    } catch (caught) {
+      if (requestSequence.current !== sequence) return null;
+      setStatus("error");
+      setErrorStage("preview");
+      setError(errorMessage(caught));
+      return null;
+    }
+  }, [file, metadata.project_path, preview]);
+
   const updateMetadata = useCallback((patch: Partial<CommitPlaybookBundleMetadata>) => {
-    setMetadata((current) => ({ ...current, ...patch }));
+    setMetadata((current) => ({ ...current, ...patch, visibility: "private" }));
     setError((current) => (current ? "" : current));
     setErrorStage((current) => (current === "commit" ? null : current));
     setStatus((current) => (current === "error" && preview ? "ready" : current));
@@ -109,7 +170,7 @@ export function usePlaybookBundleImport(options: UsePlaybookBundleImportOptions 
     setError("");
     setErrorStage(null);
     try {
-      const response = await commitPlaybookBundle(file, metadata);
+      const response = await commitPlaybookBundle(file, { ...metadata, visibility: "private" }, preview.content_hash);
       if (requestSequence.current !== sequence) return null;
       setResult(response);
       setStatus("success");
@@ -155,6 +216,8 @@ export function usePlaybookBundleImport(options: UsePlaybookBundleImportOptions 
     reset,
     selectFile,
     retryPreview,
+    selectEntrypoint,
+    selectProjectPath,
     updateMetadata,
     commit,
   };
@@ -167,6 +230,7 @@ function metadataFromPreview(
 ): CommitPlaybookBundleMetadata {
   return {
     entrypoint,
+    project_path: preview.project_path || "",
     name: preview.manifest.name?.trim() || filename.replace(/\.(?:tar\.gz|tar|zip)$/i, ""),
     description: preview.manifest.description?.trim() || "",
     category: "custom",

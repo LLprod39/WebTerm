@@ -9,9 +9,9 @@ interface PlaybookYamlWorkspaceProps {
   tr: (ru: string, en: string) => string;
   state: PlaybookEditorState;
   readOnly: boolean;
-  yamlTab: "working" | "original";
+  yamlTab: "working" | "original" | "changes";
   diagnostics: CodeEditorDiagnostic[];
-  onYamlTabChange: (tab: "working" | "original") => void;
+  onYamlTabChange: (tab: "working" | "original" | "changes") => void;
   onSourceChange: (sourceYaml: string) => void;
   onSave: () => void;
   onDiagnosticsChange: (diagnostics: CodeEditorDiagnostic[]) => void;
@@ -32,7 +32,7 @@ export function PlaybookYamlWorkspace({
 
   return (
     <section className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1">
-      <Tabs value={yamlTab} onValueChange={(value) => onYamlTabChange(value as "working" | "original")}>
+      <Tabs value={yamlTab} onValueChange={(value) => onYamlTabChange(value as "working" | "original" | "changes")}>
         <div className="flex flex-col gap-3 border-b border-border bg-surface-2/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -54,6 +54,9 @@ export function PlaybookYamlWorkspace({
             </TabsTrigger>
             <TabsTrigger value="original" disabled={!state.originalSourceYaml} className="flex-1 sm:flex-none">
               {tr("Оригинал", "Original")}
+            </TabsTrigger>
+            <TabsTrigger value="changes" disabled={!state.originalSourceYaml} className="flex-1 sm:flex-none">
+              {tr("Изменения", "Changes")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -81,6 +84,9 @@ export function PlaybookYamlWorkspace({
             />
           </div>
         </TabsContent>
+        <TabsContent value="changes" className="m-0">
+          <YamlChanges before={state.originalSourceYaml} after={state.sourceYaml} tr={tr} />
+        </TabsContent>
 
         <div
           role="status"
@@ -94,6 +100,11 @@ export function PlaybookYamlWorkspace({
             <div className="flex items-center gap-2 text-muted-foreground">
               <FileCode2 className="h-3.5 w-3.5" />
               {tr("Неизменяемый исходник · только чтение", "Immutable source · read only")}
+            </div>
+          ) : yamlTab === "changes" ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <FileCode2 className="h-3.5 w-3.5" />
+              {tr("Сравнение оригинала с рабочей копией", "Original compared with working copy")}
             </div>
           ) : syntaxErrors.length ? (
             <div>
@@ -121,5 +132,30 @@ export function PlaybookYamlWorkspace({
         </div>
       </Tabs>
     </section>
+  );
+}
+
+function YamlChanges({
+  before,
+  after,
+  tr,
+}: {
+  before: string;
+  after: string;
+  tr: (ru: string, en: string) => string;
+}) {
+  if (before === after) {
+    return (
+      <div className="flex h-[min(66vh,720px)] min-h-[520px] items-center justify-center bg-terminal-bg p-6 text-sm text-muted-foreground">
+        {tr("Рабочая копия совпадает с оригиналом.", "The working copy matches the original.")}
+      </div>
+    );
+  }
+  return (
+    <div className="h-[min(66vh,720px)] min-h-[520px] overflow-auto bg-terminal-bg p-4 font-mono text-xs leading-5" role="region" aria-label={tr("Изменения YAML", "YAML changes")}>
+      <p className="mb-3 font-sans text-xs text-muted-foreground">{tr("Неизменяемый оригинал → рабочая копия", "Immutable original → working copy")}</p>
+      <pre className="whitespace-pre-wrap text-destructive">{before.split("\n").map((line) => `- ${line}`).join("\n")}</pre>
+      <pre className="mt-3 whitespace-pre-wrap text-success">{after.split("\n").map((line) => `+ ${line}`).join("\n")}</pre>
+    </div>
   );
 }

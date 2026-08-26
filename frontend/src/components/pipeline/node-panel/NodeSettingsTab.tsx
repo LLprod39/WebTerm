@@ -218,7 +218,7 @@ export function NodeSettingsTab({
 
         <div className="space-y-2">
           <Label htmlFor="sudo-policy" className="text-xs text-muted-foreground">
-            {t(lang, "Controlled sudo", "Controlled sudo")}
+            {t(lang, "Контролируемый sudo", "Controlled sudo")}
           </Label>
           <Select value={sudoPolicy} onValueChange={(value) => onSet("sudo_policy", value)}>
             <SelectTrigger id="sudo-policy" className="h-10 rounded-lg border-border/70 bg-background/70">
@@ -330,6 +330,7 @@ export function NodeSettingsTab({
                 {t(lang, "Максимум шагов", "Max iterations")}
               </Label>
               <IterationStepper
+                lang={lang}
                 value={maxIterations}
                 onChange={(nextValue) => onSet("max_iterations", nextValue)}
               />
@@ -447,7 +448,7 @@ export function NodeSettingsTab({
                     )
                   : t(
                       lang,
-                      "Выбранные политики дополняют промпт и runtime-ограничения этой ноды.",
+                      "Выбранные политики дополняют инструкции и ограничения этой ноды.",
                       "Selected policies extend this node's prompts and runtime guardrails.",
                     )}
               </p>

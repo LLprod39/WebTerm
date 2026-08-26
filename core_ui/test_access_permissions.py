@@ -128,13 +128,13 @@ class AccessPermissionsTests(TestCase):
         self.assertEqual(build_user_access_payload(user)["access_profile"], "pilot_operator")
         self.assertTrue(user_can_automate(user))
 
-    def test_custom_or_staff_automation_grant_is_not_pilot_operator_authority(self):
+    def test_automation_capability_does_not_require_a_named_pilot_profile(self):
         custom = self.create_user("custom-automation")
         staff = self.create_user("staff-automation", is_staff=True)
         UserAppPermission.objects.create(user=custom, feature="automation", allowed=True)
 
-        self.assertFalse(user_can_automate(custom))
-        self.assertFalse(user_can_automate(staff))
+        self.assertTrue(user_can_automate(custom))
+        self.assertTrue(user_can_automate(staff))
 
     def test_release_mode_uses_automation_capability_without_a_named_pilot_profile(self):
         user = self.create_user("release-automation", is_staff=True)

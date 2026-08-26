@@ -3,7 +3,7 @@
 Each tool is exercised through a fake SSH connection so we cover:
   - argument validation via pydantic schemas
   - target resolution (primary vs extras vs unknown)
-  - safety vetos (shell), read-only guards, dry-run
+  - safety vetos (shell), operator approvals, dry-run
   - success + error paths with structured output
 
 The fake SSH connection captures the command string and returns a
@@ -39,20 +39,6 @@ from servers.services.terminal_ai.agent.tools import (
     default_tool_set,
 )
 from tests.agent_tool_fakes import FakeRunResult, FakeSSHConn, primary_target, tool_context
-
-
-@pytest.fixture(autouse=True)
-def _stub_live_terminal_ai_policy_for_unit_tools(monkeypatch):
-    """These pure tool tests exercise mechanics; policy integration has DB-backed coverage."""
-    monkeypatch.setattr(
-        "servers.services.terminal_ai.agent.tools.shell.is_terminal_ai_read_only_for_user",
-        lambda _server_id, _user_id: False,
-    )
-    monkeypatch.setattr(
-        "servers.services.terminal_ai.agent.tools.files.is_terminal_ai_read_only_for_user",
-        lambda _server_id, _user_id: False,
-    )
-
 
 # ---------------------------------------------------------------------------
 # ShellTool
@@ -125,14 +111,17 @@ class TestShellTool:
         assert conn.calls == []  # no SSH call
 
     @pytest.mark.asyncio
-    async def test_readonly_target_blocks_write(self):
-        conn = FakeSSHConn()
+    async def test_legacy_readonly_target_uses_standard_approval(self):
+        conn = FakeSSHConn(default=FakeRunResult(stdout="ok", exit_status=0))
         primary = primary_target(read_only=True, ssh_conn=conn)
-        ctx = ToolContext(primary=primary)
+
+        async def prompt_user(_request):
+            return "allow_once"
+
+        ctx = ToolContext(primary=primary, prompt_user=prompt_user)
         result = await ShellTool().run(ShellArgs(cmd="echo hi > /tmp/x"), ctx)
-        assert result.ok is False
-        assert "read-only" in result.error.lower()
-        assert conn.calls == []
+        assert result.ok is True
+        assert conn.calls == ["echo hi > /tmp/x"]
 
     @pytest.mark.asyncio
     async def test_extra_target_routing(self):
@@ -261,12 +250,12 @@ class TestEditFileTool:
         assert "not found" in result.error.lower()
 
     @pytest.mark.asyncio
-    async def test_readonly_target_refuses(self):
+    async def test_legacy_readonly_target_does_not_create_a_separate_mode(self):
         conn = FakeSSHConn()
-        ctx = ToolContext(primary=primary_target(read_only=True, ssh_conn=conn), user_id=1)
+        ctx = ToolContext(primary=primary_target(read_only=True, ssh_conn=conn), user_id=1, dry_run=True)
         result = await EditFileTool().run(EditFileArgs(path="/etc/nginx.conf", content="x"), ctx)
-        assert result.ok is False
-        assert "read-only" in result.error.lower()
+        assert result.ok is True
+        assert "DRY-RUN" in result.output
         assert conn.calls == []  # no SSH touched
 
     @pytest.mark.asyncio

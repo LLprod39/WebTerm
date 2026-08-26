@@ -1,4 +1,4 @@
-"""Read-only Operator tools for resolving accessible playbooks."""
+"""Read-only Operator tools for playbooks, their runs, reports, and logs."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any
 from django.db.models import Q
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
+from servers.models import PlaybookRun
 from servers.services.playbooks.access import playbooks_visible_to
 
 
@@ -55,6 +56,126 @@ def _match_rows(queryset, query: str):
         queryset.filter(Q(name__icontains=query) | Q(description__icontains=query)).order_by("name", "id")[:20]
     )
     return partial, False
+
+
+def _catalog_row(playbook) -> dict[str, Any]:
+    return {
+        "id": int(playbook.id),
+        "name": str(playbook.name),
+        "description": str(playbook.description or "")[:500],
+        "kind": str(playbook.kind),
+        "category": str(playbook.category),
+        "tags": [str(tag) for tag in (playbook.tags or [])[:20]],
+        "task_count": int(playbook.task_count),
+        "last_run_at": playbook.last_run_at.isoformat() if playbook.last_run_at else None,
+        "last_run_status": str(playbook.last_run_status or ""),
+        "target_url": f"/automation/playbooks/{playbook.id}",
+    }
+
+
+def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
+    """List the authenticated user's accessible playbook catalog without YAML bodies."""
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    query = str(payload.get("q") or payload.get("name") or "").strip()
+    try:
+        limit = min(50, max(1, int(payload.get("limit") or 20)))
+    except (TypeError, ValueError) as exc:
+        raise AssistantActionError("limit must be an integer") from exc
+
+    queryset = playbooks_visible_to(ctx.user).order_by("name", "id")
+    if query:
+        queryset = queryset.filter(Q(name__icontains=query) | Q(description__icontains=query))
+    rows = [_catalog_row(playbook) for playbook in queryset[:limit]]
+    return {
+        "count": len(rows),
+        "query": query,
+        "playbooks": rows,
+        "reply_hint": "Summarize the accessible catalog or ask which playbook to inspect. Use operator.resolve_playbook for full details.",
+    }
+
+
+def _run_row(run: PlaybookRun, *, include_detail: bool, log_tail_chars: int = 0) -> dict[str, Any]:
+    snapshot = run.playbook_snapshot if isinstance(run.playbook_snapshot, dict) else {}
+    row: dict[str, Any] = {
+        "id": int(run.id),
+        "playbook_id": run.playbook_id,
+        "playbook_name": str(snapshot.get("name") or (run.playbook.name if run.playbook_id else "Playbook")),
+        "status": str(run.status),
+        "target_server_ids": [int(value) for value in (run.target_server_ids or [])[:50]],
+        "options": dict(run.options) if isinstance(run.options, dict) else {},
+        "summary": dict(run.summary) if isinstance(run.summary, dict) else {},
+        "progress": dict(run.progress) if isinstance(run.progress, dict) else {},
+        "error_message": str(run.error_message or "")[:4000],
+        "started_at": run.started_at.isoformat() if run.started_at else None,
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "target_url": f"/automation/runs/{run.id}",
+    }
+    if include_detail:
+        host_results = run.host_results if isinstance(run.host_results, list) else []
+        row["host_results"] = host_results[-30:]
+        row["live_log_tail"] = str(run.live_log or "")[-log_tail_chars:] if log_tail_chars else ""
+        row["execution_fingerprint"] = (
+            dict(run.execution_fingerprint) if isinstance(run.execution_fingerprint, dict) else {}
+        )
+    return row
+
+
+def playbook_runs(ctx: AssistantActionContext) -> dict[str, Any]:
+    """List playbook runs or return one bounded report with a redacted log tail."""
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    queryset = PlaybookRun.objects.filter(user=ctx.user).select_related("playbook").order_by("-created_at", "-id")
+
+    raw_run_id = payload.get("run_id") or payload.get("id")
+    if raw_run_id not in (None, ""):
+        try:
+            run_id = int(raw_run_id)
+        except (TypeError, ValueError) as exc:
+            raise AssistantActionError("run_id must be an integer") from exc
+        run = queryset.filter(pk=run_id).first()
+        if run is None:
+            raise AssistantActionError("Playbook run not found", status=404)
+        try:
+            tail_chars = min(20_000, max(0, int(payload.get("log_tail_chars") or 8_000)))
+        except (TypeError, ValueError) as exc:
+            raise AssistantActionError("log_tail_chars must be an integer") from exc
+        return {
+            "found": True,
+            "run": _run_row(run, include_detail=True, log_tail_chars=tail_chars),
+            "reply_hint": "Report status, key summary/error, affected hosts, and the important end of the log. Do not dump the full raw log.",
+        }
+
+    raw_playbook_id = payload.get("playbook_id")
+    if raw_playbook_id not in (None, ""):
+        try:
+            playbook_id = int(raw_playbook_id)
+        except (TypeError, ValueError) as exc:
+            raise AssistantActionError("playbook_id must be an integer") from exc
+        queryset = queryset.filter(playbook_id=playbook_id)
+
+    query = str(payload.get("q") or payload.get("playbook_name") or "").strip()
+    if query:
+        queryset = queryset.filter(playbook__name__icontains=query)
+
+    status = str(payload.get("status") or "").strip().lower()
+    valid_statuses = {choice[0] for choice in PlaybookRun.STATUS_CHOICES}
+    if status:
+        if status not in valid_statuses:
+            raise AssistantActionError(f"status must be one of: {', '.join(sorted(valid_statuses))}")
+        queryset = queryset.filter(status=status)
+
+    try:
+        limit = min(50, max(1, int(payload.get("limit") or 20)))
+    except (TypeError, ValueError) as exc:
+        raise AssistantActionError("limit must be an integer") from exc
+    rows = [_run_row(run, include_detail=False) for run in queryset[:limit]]
+    return {
+        "count": len(rows),
+        "query": query,
+        "status": status,
+        "runs": rows,
+        "reply_hint": "Summarize recent run statuses. For logs or a full report, call this tool again with run_id.",
+    }
 
 
 def resolve_playbook(ctx: AssistantActionContext) -> dict[str, Any]:

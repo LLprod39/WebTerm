@@ -2,6 +2,15 @@ import { apiFetch } from "@/lib/api";
 
 export type AiSubscriptionTarget = "codex_subscription" | "grok_subscription";
 export type AiPurpose = "assistant" | "agents" | "terminal" | "internal";
+export type AiReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
+
+export interface AiProviderModel {
+  id: string;
+  label: string;
+  default_reasoning_effort: AiReasoningEffort;
+  reasoning_efforts: AiReasoningEffort[];
+  deprecated?: boolean;
+}
 
 export const aiProviderQueryKeys = {
   all: ["ai-providers"] as const,
@@ -17,6 +26,7 @@ export interface ProviderBinding {
   connection_id?: number | null;
   pool_id?: number | null;
   model_id?: string | null;
+  reasoning_effort?: AiReasoningEffort | null;
 }
 
 export interface AiProviderGrant {
@@ -84,6 +94,7 @@ export const fetchAiProviderCatalog = () => apiFetch<{
   success: boolean;
   targets: Array<{ id: string; label: string; kind: string }>;
   purposes: AiPurpose[];
+  models_by_target: Record<string, AiProviderModel[]>;
 }>("/api/ai/providers/catalog/");
 
 export const fetchAiProviderConnections = () => apiFetch<{ success: boolean; connections: AiProviderConnection[] }>(

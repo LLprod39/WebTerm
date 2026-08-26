@@ -160,7 +160,7 @@ function GraphNodes({
     if (graphCounts?.nodes) {
       return (
         <EmptyLine>
-          {localize(lang, "Граф показан на canvas превью.", "The graph is shown on the canvas preview.")}
+          {localize(lang, "Схема показана в редакторе.", "The graph is shown in the editor.")}
         </EmptyLine>
       );
     }
@@ -333,7 +333,7 @@ export function PipelineDraftReview({
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">
-            {localize(lang, "Проверенный черновик", "Verified draft")}
+            {localize(lang, "Черновик", "Draft")}
           </h3>
           <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground">
             {response.patch_summary || response.reply || localize(lang, "Изменения графа подготовлены.", "Graph changes are ready.")}

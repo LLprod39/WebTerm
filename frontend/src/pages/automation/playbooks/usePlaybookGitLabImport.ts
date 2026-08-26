@@ -55,28 +55,29 @@ export function usePlaybookGitLabImport(options: {
     setStatus("idle");
   }, []);
 
-  const previewProject = useCallback(async () => {
+  const previewProject = useCallback(async (requestedEntrypoint = "") => {
     if (!source.project_url.trim()) return null;
     const request = sequence.current + 1;
     sequence.current = request;
     setStatus("previewing");
     setError("");
     try {
-      const response = await previewGitLabPlaybookProject(source);
+      if (requestedEntrypoint) setPreview(null);
+      const response = await previewGitLabPlaybookProject({ ...source, ...(requestedEntrypoint ? { entrypoint: requestedEntrypoint } : {}) });
       if (sequence.current !== request) return null;
       const entrypoint = response.preview.selected_entrypoint ||
         (response.preview.entrypoints.length === 1 ? response.preview.entrypoints[0].path : "");
       const fallbackName = response.source.project.split("/").pop() || "Ansible project";
       setResolvedSource(response.source);
       setPreview(response.preview);
-      setMetadata({
-        entrypoint,
-        name: response.preview.manifest.name?.trim() || fallbackName,
-        description: response.preview.manifest.description?.trim() || "",
-        category: "custom",
-        visibility: "private",
-        tags: Array.isArray(response.preview.manifest.tags) ? response.preview.manifest.tags : [],
-      });
+      setMetadata((current) => requestedEntrypoint ? { ...current, entrypoint } : {
+          entrypoint,
+          name: response.preview.manifest.name?.trim() || fallbackName,
+          description: response.preview.manifest.description?.trim() || "",
+          category: "custom",
+          visibility: "private",
+          tags: Array.isArray(response.preview.manifest.tags) ? response.preview.manifest.tags : [],
+        });
       setStatus("ready");
       return response.preview;
     } catch (caught) {
@@ -87,8 +88,10 @@ export function usePlaybookGitLabImport(options: {
     }
   }, [source]);
 
+  const selectEntrypoint = useCallback((entrypoint: string) => previewProject(entrypoint), [previewProject]);
+
   const updateMetadata = useCallback((patch: Partial<CommitPlaybookBundleMetadata>) => {
-    setMetadata((current) => ({ ...current, ...patch }));
+    setMetadata((current) => ({ ...current, ...patch, visibility: "private" }));
     setError("");
     setStatus((current) => current === "error" && preview ? "ready" : current);
   }, [preview]);
@@ -100,7 +103,7 @@ export function usePlaybookGitLabImport(options: {
     setStatus("committing");
     setError("");
     try {
-      const response = await commitGitLabPlaybookProject(source, metadata, preview.content_hash);
+      const response = await commitGitLabPlaybookProject(source, { ...metadata, visibility: "private" }, preview.content_hash);
       if (sequence.current !== request) return null;
       setResult(response);
       setStatus("success");
@@ -140,6 +143,7 @@ export function usePlaybookGitLabImport(options: {
     reset,
     updateSource,
     previewProject,
+    selectEntrypoint,
     updateMetadata,
     commit,
   };

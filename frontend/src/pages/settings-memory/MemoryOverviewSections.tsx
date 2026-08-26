@@ -19,11 +19,11 @@ type MemoryOverviewSectionsProps = {
 
 function MemoryStats({ stats }: { stats: ServerMemoryOverviewResponse["stats"] }) {
   const items = [
-    { label: "Канонические", value: stats.canonical },
+    { label: "Проверенные", value: stats.canonical },
     { label: "Паттерны", value: stats.patterns },
     { label: "Автоматизация", value: stats.automation_candidates },
     { label: "Навыки", value: stats.skill_drafts },
-    { label: "Верификация", value: stats.revalidation_open },
+    { label: "На проверке", value: stats.revalidation_open },
     { label: "Эпизоды", value: stats.episodes },
     { label: "Архив", value: stats.archive },
   ];
@@ -83,7 +83,7 @@ export function MemoryOverviewSections({
     return (
       <QueryStateBlock loading={!!(selectedMemoryServerId && memoryLoading)}>
         <div className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-          Выберите сервер в списке слева для просмотра сведений долгосрочной памяти.
+          Выберите сервер, чтобы открыть его память.
         </div>
       </QueryStateBlock>
     );
@@ -99,7 +99,7 @@ export function MemoryOverviewSections({
     <>
       <MemoryStats stats={memoryOverview.stats} />
 
-      <SectionCard title="Состояние фоновых служб" icon={Activity} description="Мониторинг фоновых процессов анализа, расписания и выполнения">
+      <SectionCard title="Фоновые службы" icon={Activity} description="Анализ, расписание и выполнение">
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
           <MemoryWorkerStateCard label="Консолидация памяти" state={memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state} />
           <MemoryWorkerStateCard label="Выполнение агентов" state={memoryOverview.worker_states?.agent_execution} />
@@ -109,7 +109,7 @@ export function MemoryOverviewSections({
       </SectionCard>
 
       {memoryOverview.canonical.length > 0 ? (
-        <SectionCard title="Канонические записи" icon={Database} description="Подтвержденные и структурированные факты о сервере">
+        <SectionCard title="Проверенные записи" icon={Database} description="Подтверждённые факты о сервере">
           <div className="space-y-2">
             {memoryOverview.canonical.map((item) => (
               <MemorySnapshotCard key={item.id} item={item} />
@@ -119,7 +119,7 @@ export function MemoryOverviewSections({
       ) : null}
 
       {candidateSnapshots.length > 0 ? (
-        <SectionCard title="Выявленные паттерны и предложения" icon={Bot} description="Кандидаты для пополнения базы знаний">
+        <SectionCard title="Найденные закономерности" icon={Bot} description="Предложения для базы знаний">
           <div className="space-y-3">
             {candidateSnapshots.map((item) => (
               <CandidateSnapshotCard
@@ -136,7 +136,7 @@ export function MemoryOverviewSections({
       ) : null}
 
       {memoryOverview.revalidation.length > 0 ? (
-        <SectionCard title="Очередь верификации" icon={RefreshCw} description="Записи и утверждения, требующие повторного подтверждения">
+        <SectionCard title="Нужно проверить" icon={RefreshCw} description="Записи, требующие подтверждения">
           <div className="space-y-2">
             {memoryOverview.revalidation.map((item) => (
               <div key={item.id} className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-3">
@@ -152,7 +152,7 @@ export function MemoryOverviewSections({
       ) : null}
 
       {memoryOverview.episodes.length > 0 ? (
-        <SectionCard title="Недавние сессии активности" icon={Clock} description="Сводная хроника сессий и выполненных операций">
+        <SectionCard title="Недавняя активность" icon={Clock} description="Сессии и выполненные операции">
           <div className="space-y-2">
             {memoryOverview.episodes.slice(0, 6).map((item) => (
               <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
@@ -169,7 +169,7 @@ export function MemoryOverviewSections({
       ) : null}
 
       {memoryOverview.archive.length > 0 ? (
-        <SectionCard title="Архив памяти" icon={FolderOpen} description="Устаревшие версии канонических записей и деактивированные артефакты">
+        <SectionCard title="Архив" icon={FolderOpen} description="Старые и отключённые записи">
           <div className="space-y-2">
             {memoryOverview.archive.slice(0, 6).map((item) => (
               <div key={`${item.kind}-${item.id}`} className="rounded-lg border border-border/60 bg-secondary/5 px-3 py-3">

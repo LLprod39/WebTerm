@@ -150,6 +150,7 @@ class AnsibleLiveParser:
             "task": self.current_task,
             "task_number": self.task_seq,
             "tasks_total": self.tasks_total or None,
+            "total_kind": "estimated" if self.tasks_total else "unknown",
             "counts": dict(self.counts),
             "hosts_seen": len(self._hosts),
             "hosts_total": len(self._servers),

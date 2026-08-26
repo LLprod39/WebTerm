@@ -7,25 +7,47 @@ import json
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
 from core_ui.ai_model_policy import operational_provider_binding
 from core_ui.decorators import require_feature
-from servers.models import Playbook, PlaybookCompatibilityRevision
-from servers.services.playbook_compatibility_ai import PlaybookAdaptationError, adapt_playbook_with_ai
-from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility, compare_semantics
+from servers.services.playbook_compatibility_ai import (
+    PlaybookAdaptationError,
+    adapt_playbook_with_ai,
+    adapt_yaml_fragment_with_ai,
+    validate_yaml_fragment_safety,
+)
+from servers.services.playbook_compatibility_analysis import (
+    analyze_playbook_compatibility,
+    merge_syntax_check,
+)
 from servers.services.playbook_compatibility_inventory import normalize_inventory_bindings
 from servers.services.playbook_compatibility_validation import validate_playbook_syntax
 from servers.services.playbook_runner import resolve_target_servers
 from servers.services.playbooks.access import capabilities_for, playbooks_visible_to
-from servers.services.playbooks.revisions import (
-    create_compatibility_adaptation_revision,
-    ensure_playbook_workspace,
+from servers.services.playbooks.bundle_archive import BundleValidationError, calculate_bundle_content_hash
+from servers.services.playbooks.bundle_storage import BundleStorageError
+from servers.services.playbooks.draft_files import (
+    get_draft_text_file,
+    is_editable_draft_yaml_path,
 )
-from servers.services.playbooks.serialization import serialize_revision
-from servers.views.server_playbook_serializers import _playbooks_for_user, _serialize_playbook
+from servers.services.playbooks.revisions import DraftConflict, ensure_playbook_workspace
+from servers.services.playbooks.serialization import serialize_draft
+from servers.views.playbook_compatibility_apply_helpers import (
+    CompatibilityApplyEvaluationError,
+    CompatibilityApplyInputError,
+    compatibility_failure_message,
+    compatibility_revision_payload,
+    evaluate_compatibility_apply,
+    expectation_is_stale,
+    parse_base_expectation,
+    persist_compatibility_apply,
+)
+from servers.views.playbook_workspace_helpers import get_playbook_for_action
+from servers.views.server_playbook_serializers import _playbooks_for_user
 
 
 def _json_body(request) -> dict[str, Any]:
@@ -53,21 +75,6 @@ def _binding_context(
     return normalized, resolved, list(servers_by_id.values())
 
 
-def _compatibility_failure_message(guard: dict[str, Any], report: dict[str, Any]) -> str:
-    if not guard.get("passed"):
-        violations = [str(item) for item in guard.get("violations") or [] if str(item).strip()]
-        detail = "; ".join(violations[:3]) or "protected playbook logic changed"
-        return f"AI patch rejected: {detail}"
-    blockers = [
-        str(item.get("message") or item.get("code") or "Unknown blocker")
-        for item in report.get("issues") or []
-        if item.get("severity") == "error"
-    ]
-    if blockers:
-        return "Adaptation blocked: " + "; ".join(blockers[:3])
-    return "Adaptation failed an unknown compatibility check"
-
-
 def _source_from_payload(data: dict[str, Any]) -> str:
     return str(data.get("source_yaml") or "").strip()
 
@@ -75,9 +82,49 @@ def _source_from_payload(data: dict[str, Any]) -> str:
 def _validate_source_payload(source: str) -> JsonResponse | None:
     if not source:
         return JsonResponse({"success": False, "error": "Ansible YAML is required"}, status=400)
-    if len(source) > 200_000:
+    try:
+        source_size = len(source.encode("utf-8"))
+    except UnicodeEncodeError:
+        return JsonResponse(
+            {"success": False, "error": "Ansible YAML must be valid UTF-8", "code": "playbook_source_encoding"},
+            status=400,
+        )
+    if source_size > 200_000:
         return JsonResponse({"success": False, "error": "Playbook YAML is too large"}, status=413)
     return None
+
+
+def _editable_draft_base(playbook, *, actor, path: str = ""):
+    _revision, draft = ensure_playbook_workspace(playbook, actor=actor)
+    draft = type(draft).objects.select_related("asset_bundle", "base_revision").get(pk=draft.pk)
+    snapshot = get_draft_text_file(draft, path=path)
+    if not is_editable_draft_yaml_path(snapshot.path):
+        raise BundleValidationError(
+            "This project file is read-only",
+            code="draft_file_read_only",
+            status_code=422,
+        )
+    return draft, snapshot, {
+        "path": snapshot.path,
+        "content_hash": snapshot.sha256,
+        "draft_version": draft.version,
+        "version": draft.version,
+        "bundle_hash": draft.bundle_hash
+        or calculate_bundle_content_hash({snapshot.path: snapshot.content.encode("utf-8")}),
+        "base_revision_id": draft.base_revision_id,
+    }
+
+
+def _stale_response(*, current: dict[str, Any]) -> JsonResponse:
+    return JsonResponse(
+        {
+            "success": False,
+            "error": "The draft changed after compatibility analysis; analyze it again",
+            "code": "playbook_compatibility_stale",
+            "details": {"current": current},
+        },
+        status=409,
+    )
 
 
 @login_required
@@ -94,7 +141,10 @@ def playbook_source_compatibility_analyze(request):
     if bool(data.get("syntax_check", True)) and not any(
         item.get("severity") == "error" for item in report.get("issues") or []
     ):
-        report["syntax_check"] = validate_playbook_syntax(source, allow_dependency_setup=False)
+        report = merge_syntax_check(
+            report,
+            validate_playbook_syntax(source, allow_dependency_setup=False),
+        )
     return JsonResponse({"success": True, "report": report})
 
 
@@ -138,124 +188,197 @@ def playbook_compatibility_analyze(request, playbook_id: int):
         group_ids=[int(item) for item in data.get("group_ids") or [] if str(item).isdigit()],
     )
     target_servers = list({server.id: server for server in [*binding_servers, *explicit_servers]}.values())
-    published_source = (
-        playbook.published_revision.source_yaml if playbook.published_revision_id else playbook.source_yaml
-    )
-    source = str(
-        data.get("source_yaml") if capabilities.can_edit and "source_yaml" in data else published_source or ""
-    ).strip()
+    base = None
+    snapshot = None
+    if capabilities.can_edit:
+        try:
+            _draft, snapshot, base = _editable_draft_base(
+                playbook,
+                actor=request.user,
+                path=str(data.get("path") or ""),
+            )
+        except (BundleValidationError, BundleStorageError) as exc:
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": getattr(exc, "code", "bundle_unavailable")},
+                status=getattr(exc, "status_code", 409),
+            )
+        source = snapshot.content
+    else:
+        source = playbook.published_revision.source_yaml if playbook.published_revision_id else playbook.source_yaml
+        source = str(source or "")
+        base = {
+            "path": "playbook.yml",
+            "content_hash": hashlib.sha256(source.encode("utf-8")).hexdigest(),
+            "draft_version": None,
+            "version": None,
+            "bundle_hash": str(getattr(playbook.published_revision, "bundle_hash", "") or ""),
+            "base_revision_id": playbook.published_revision_id,
+        }
     if not source:
         return JsonResponse({"success": False, "error": "Playbook has no imported Ansible YAML"}, status=400)
-    if len(source) > 200_000:
+    if len(source.encode("utf-8")) > 200_000:
         return JsonResponse({"success": False, "error": "Playbook YAML is too large"}, status=413)
-    report = analyze_playbook_compatibility(source, bindings=bindings, target_servers=target_servers)
-    if bool(data.get("syntax_check", True)) and not any(
-        item.get("severity") == "error" for item in report.get("issues") or []
-    ):
-        report["syntax_check"] = validate_playbook_syntax(source, allow_dependency_setup=False)
-    if playbook.user_id == request.user.id and source == (playbook.source_yaml or "").strip():
-        Playbook.objects.filter(pk=playbook.pk).update(compatibility=report)
-    return JsonResponse({"success": True, "report": report})
+    if snapshot is not None and not snapshot.is_entrypoint:
+        try:
+            validate_yaml_fragment_safety(source, path=snapshot.path)
+        except PlaybookAdaptationError as exc:
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": "playbook_fragment_invalid"},
+                status=422,
+            )
+        report = {
+            "status": "ready",
+            "ready": True,
+            "issues": [],
+            "syntax_check": {"status": "passed", "passed": True, "method": "safe-yaml"},
+        }
+    else:
+        report = analyze_playbook_compatibility(source, bindings=bindings, target_servers=target_servers)
+        if bool(data.get("syntax_check", True)) and not any(
+            item.get("severity") == "error" for item in report.get("issues") or []
+        ):
+            report = merge_syntax_check(
+                report,
+                validate_playbook_syntax(source, allow_dependency_setup=False),
+            )
+    return JsonResponse({"success": True, "report": report, "base": base})
 
 
 @login_required
 @require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_adapt(request, playbook_id: int):
-    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
+    try:
+        playbook = get_playbook_for_action(request.user, playbook_id, "edit")
+    except PermissionDenied as exc:
+        return JsonResponse({"success": False, "error": str(exc), "code": "playbook_forbidden"}, status=403)
     data = _json_body(request)
     bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
-    source = (playbook.source_yaml or "").strip()
+    try:
+        _draft, snapshot, base = _editable_draft_base(
+            playbook,
+            actor=request.user,
+            path=str(data.get("path") or ""),
+        )
+    except (BundleValidationError, BundleStorageError) as exc:
+        return JsonResponse(
+            {"success": False, "error": str(exc), "code": getattr(exc, "code", "bundle_unavailable")},
+            status=getattr(exc, "status_code", 409),
+        )
+    source = snapshot.content
     if not source:
         return JsonResponse({"success": False, "error": "Playbook has no imported Ansible YAML"}, status=400)
     try:
-        proposal = adapt_playbook_with_ai(
-            source,
-            bindings=bindings,
-            target_servers=target_servers,
-            user_instruction=str(data.get("instruction") or ""),
-            user=request.user,
-            provider_binding=operational_provider_binding(request.user, data.get("provider_binding")),
-        )
+        common = {
+            "user_instruction": str(data.get("instruction") or ""),
+            "user": request.user,
+            "provider_binding": operational_provider_binding(request.user, data.get("provider_binding")),
+        }
+        if snapshot.is_entrypoint:
+            proposal = adapt_playbook_with_ai(
+                source,
+                bindings=bindings,
+                target_servers=target_servers,
+                **common,
+            )
+        else:
+            proposal = adapt_yaml_fragment_with_ai(source, path=snapshot.path, **common)
     except PlaybookAdaptationError as exc:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
-    return JsonResponse({"success": True, "proposal": proposal})
+    return JsonResponse({"success": True, "proposal": proposal, "base": base})
 
 
 @login_required
 @require_feature("automation")
 @require_http_methods(["POST"])
 def playbook_compatibility_apply(request, playbook_id: int):
-    playbook = get_object_or_404(Playbook, id=playbook_id, user=request.user)
-    # Establish the legacy source as the published origin before activating a
-    # newly accepted compatibility record. Otherwise lazy workspace migration
-    # could mistake this new proposal for historical published state.
-    ensure_playbook_workspace(playbook, actor=request.user)
+    try:
+        playbook = get_playbook_for_action(request.user, playbook_id, "edit")
+    except PermissionDenied as exc:
+        return JsonResponse({"success": False, "error": str(exc), "code": "playbook_forbidden"}, status=403)
     data = _json_body(request)
-    source = (playbook.source_yaml or "").strip()
-    adapted_yaml = str(data.get("adapted_yaml") or "").strip()
-    if not source or not adapted_yaml:
-        return JsonResponse({"success": False, "error": "source and adapted YAML are required"}, status=400)
-    if len(adapted_yaml) > 200_000:
-        return JsonResponse({"success": False, "error": "Adapted YAML is too large"}, status=400)
-    bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
-    guard = compare_semantics(source, adapted_yaml)
-    report = analyze_playbook_compatibility(adapted_yaml, bindings=bindings, target_servers=target_servers)
-    if guard["passed"] and not any(item.get("severity") == "error" for item in report.get("issues") or []):
-        report["syntax_check"] = validate_playbook_syntax(adapted_yaml, allow_dependency_setup=False)
-        if report["syntax_check"].get("passed") is False:
-            report.setdefault("issues", []).append(
-                {
-                    "code": "ansible_syntax_check",
-                    "severity": "error",
-                    "message": report["syntax_check"].get("message") or "Ansible syntax check failed",
-                    "path": "playbook",
-                }
-            )
-    has_blocker = any(item.get("severity") == "error" for item in report.get("issues") or [])
-    status = (
-        PlaybookCompatibilityRevision.STATUS_VALIDATED
-        if guard["passed"] and not has_blocker
-        else PlaybookCompatibilityRevision.STATUS_REJECTED
-    )
-    revision = PlaybookCompatibilityRevision.objects.create(
-        playbook=playbook,
-        user=request.user,
-        source_hash=hashlib.sha256(source.encode("utf-8")).hexdigest(),
-        adapted_yaml=adapted_yaml,
-        inventory_bindings=bindings,
-        report=report,
-        semantic_guard=guard,
-        change_summary=[str(item) for item in data.get("changes") or []][:20],
-        status=status,
-    )
-    result_revision = None
-    if status == PlaybookCompatibilityRevision.STATUS_VALIDATED:
-        playbook.active_compatibility_revision = revision
-        playbook.compatibility = report
-        playbook.save(update_fields=["active_compatibility_revision", "compatibility", "updated_at"])
-        result_revision = create_compatibility_adaptation_revision(playbook, revision, actor=request.user)
-    payload = {
-        "id": revision.id,
-        "status": revision.status,
-        "report": revision.report,
-        "semantic_guard": revision.semantic_guard,
-        "change_summary": revision.change_summary,
-        "created_at": revision.created_at.isoformat(),
-    }
-    if status != PlaybookCompatibilityRevision.STATUS_VALIDATED:
+    try:
+        expectation = parse_base_expectation(data)
+    except CompatibilityApplyInputError as exc:
         return JsonResponse(
-            {"success": False, "error": _compatibility_failure_message(guard, report), "revision": payload},
+            {
+                "success": False,
+                "error": str(exc),
+                "code": "playbook_compatibility_base_required",
+            },
             status=400,
         )
-    playbook.refresh_from_db()
+    try:
+        draft, snapshot, current_base = _editable_draft_base(
+            playbook,
+            actor=request.user,
+            path=expectation.path,
+        )
+    except (BundleValidationError, BundleStorageError) as exc:
+        return JsonResponse(
+            {"success": False, "error": str(exc), "code": getattr(exc, "code", "bundle_unavailable")},
+            status=getattr(exc, "status_code", 409),
+        )
+    if expectation_is_stale(expectation, current=current_base, selected_path=snapshot.path):
+        return _stale_response(current=current_base)
+    source = snapshot.content
+    adapted_yaml = str(data.get("adapted_yaml") or "")
+    if not source or not adapted_yaml:
+        return JsonResponse({"success": False, "error": "source and adapted YAML are required"}, status=400)
+    bindings, _resolved, target_servers = _binding_context(request.user, data.get("inventory_bindings"))
+    try:
+        evaluation = evaluate_compatibility_apply(
+            source=source,
+            adapted_yaml=adapted_yaml,
+            snapshot=snapshot,
+            bindings=bindings,
+            target_servers=target_servers,
+            syntax_validator=validate_playbook_syntax,
+        )
+    except CompatibilityApplyEvaluationError as exc:
+        payload = {"success": False, "error": str(exc), "code": exc.code}
+        if exc.details:
+            payload["details"] = exc.details
+        return JsonResponse(payload, status=exc.status)
+    try:
+        revision, saved_draft = persist_compatibility_apply(
+            playbook=playbook,
+            actor=request.user,
+            draft=draft,
+            snapshot=snapshot,
+            current_base=current_base,
+            data=data,
+            bindings=bindings,
+            source=source,
+            evaluation=evaluation,
+        )
+    except (DraftConflict, BundleValidationError) as exc:
+        if isinstance(exc, BundleValidationError) and exc.code != "playbook_draft_conflict":
+            return JsonResponse(
+                {"success": False, "error": str(exc), "code": exc.code, "details": exc.details},
+                status=exc.status_code,
+            )
+        _latest, latest_snapshot, latest_base = _editable_draft_base(
+            playbook, actor=request.user, path=expectation.path
+        )
+        del latest_snapshot
+        return _stale_response(current=latest_base)
+    payload = compatibility_revision_payload(revision)
+    if evaluation.status != "validated":
+        return JsonResponse(
+            {
+                "success": False,
+                "error": compatibility_failure_message(evaluation.guard, evaluation.report),
+                "revision": payload,
+            },
+            status=400,
+        )
     return JsonResponse(
         {
             "success": True,
             "revision": payload,
-            "result_revision_id": result_revision.id,
-            "content_revision": serialize_revision(result_revision, include_content=True),
-            "playbook": _serialize_playbook(playbook, viewer=request.user),
+            "draft": serialize_draft(saved_draft),
+            "applied_from": current_base,
         }
     )
 

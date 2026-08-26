@@ -92,6 +92,7 @@ def _event_title(event_type: str, payload: dict[str, Any], message: str) -> str:
         "agent_completed": "Агент завершил запуск",
         "agent_control_stop_requested": "Остановка запрошена",
         "agent_report_delivered": "Отчёт доставлен",
+        "agent_report_delivery_accepted": "Доставка отчёта принята",
         "agent_report_delivery_sent": "Отчёт доставлен",
         "agent_report_delivery_skipped": "Доставка отчёта пропущена",
         "agent_report_delivery_failed": "Доставка отчёта не удалась",
@@ -123,6 +124,8 @@ def _event_summary(event_type: str, payload: dict[str, Any], message: str) -> st
         channel_label = "Telegram" if channel == "telegram" else channel
         if event_type in {"agent_report_delivered", "agent_report_delivery_sent"}:
             return f"Отчёт отправлен в {channel_label}."
+        if event_type == "agent_report_delivery_accepted":
+            return f"Доставка в {channel_label} поставлена в очередь."
         if event_type == "agent_report_delivery_skipped":
             reason = str(payload.get("reason") or "").strip()
             if reason == "telegram_not_configured":
@@ -161,6 +164,7 @@ def _event_important(event_type: str, severity: str, payload: dict[str, Any]) ->
         "agent_report",
         "agent_completed",
         "agent_report_delivered",
+        "agent_report_delivery_accepted",
         "agent_report_delivery_sent",
         "agent_report_delivery_skipped",
         "agent_report_delivery_failed",
@@ -300,6 +304,19 @@ def _build_delivery_state(run: AgentRun, events: list[dict[str, Any]], report_st
                     "title": "Отчёт доставлен",
                     "description": latest.get("summary") or "Отчёт успешно отправлен во внешний канал.",
                     "next_action": "",
+                }
+            )
+            return base
+        if event_type == "agent_report_delivery_accepted":
+            base.update(
+                {
+                    "enabled": True,
+                    "status": "in_progress",
+                    "severity": "info",
+                    "label": "В очереди",
+                    "title": "Доставка принята",
+                    "description": latest.get("summary") or "Доставка отчёта поставлена в очередь.",
+                    "next_action": "Дождитесь подтверждения внешнего канала.",
                 }
             )
             return base

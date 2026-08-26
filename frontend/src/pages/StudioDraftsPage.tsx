@@ -273,8 +273,8 @@ export default function StudioDraftsPage() {
       queryClient.setQueryData(["studio", "pipeline-draft", draft.id], draft);
       toast({
         description: validation.ok
-          ? localize(lang, "Dry-run validate прошел без запуска actions.", "Dry-run validate passed without executing actions.")
-          : localize(lang, "Dry-run validate нашел ошибки графа.", "Dry-run validate found graph errors."),
+          ? localize(lang, "Проверка пройдена. Действия не запускались.", "Validation passed. No actions were executed.")
+          : localize(lang, "Проверка нашла ошибки в схеме пайплайна.", "Validation found errors in the pipeline graph."),
       });
       if (!dry_run.executed) {
         queryClient.invalidateQueries({ queryKey: ["studio", "pipeline-draft", draft.id] });
@@ -290,7 +290,7 @@ export default function StudioDraftsPage() {
         throw new Error(localize(lang, "Выберите черновик для смены шаблона.", "Select a draft before changing template."));
       }
       if (!selectedSkeletonSlug) {
-        throw new Error(localize(lang, "Выберите пилотный шаблон.", "Select a pilot template."));
+        throw new Error(localize(lang, "Выберите шаблон.", "Select a template."));
       }
       return studioPipelineDrafts.useTemplate(activeDraft.id, selectedSkeletonSlug);
     },

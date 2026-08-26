@@ -43,7 +43,7 @@ export function InventoryPanelSkeleton({ kind = "list", rows = 5, className, lab
       <div className="flex items-center justify-between gap-3 px-3.5 pt-2.5 pb-1.5">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-medium tracking-wide text-muted-foreground">{title}</span>
-          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60" />
+          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/60 motion-reduce:animate-none" />
         </div>
         <span className="text-[11px] text-muted-foreground/50">
           {localize(lang, "загрузка", "loading")}

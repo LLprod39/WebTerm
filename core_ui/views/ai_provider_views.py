@@ -39,6 +39,18 @@ from core_ui.services.ai_provider_auth import (
 
 logger = logging.getLogger(__name__)
 
+# The runner image is pinned, so this catalog matches the Codex SDK shipped in
+# that image. Unsupported model/effort pairs are rejected before a run starts.
+CODEX_SUBSCRIPTION_MODELS = [
+    {"id": "gpt-5.6-sol", "label": "GPT-5.6 Sol", "default_reasoning_effort": "low", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"]},
+    {"id": "gpt-5.6-terra", "label": "GPT-5.6 Terra", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"]},
+    {"id": "gpt-5.6-luna", "label": "GPT-5.6 Luna", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max"]},
+    {"id": "gpt-5.5", "label": "GPT-5.5", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+    {"id": "gpt-5.4", "label": "GPT-5.4", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"], "deprecated": True},
+    {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"], "deprecated": True},
+    {"id": "gpt-5.3-codex-spark", "label": "GPT-5.3 Codex Spark", "default_reasoning_effort": "high", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+]
+
 
 def _body(request) -> dict[str, Any]:
     try:
@@ -256,6 +268,10 @@ def api_ai_provider_catalog(request):
             ],
             "purposes": [item[0] for item in AIProviderPreference.PURPOSE_CHOICES],
             "scopes": [item[0] for item in AIProviderConnection.SCOPE_CHOICES],
+            "models_by_target": {
+                ProviderTarget.CODEX_SUBSCRIPTION.value: CODEX_SUBSCRIPTION_MODELS,
+                ProviderTarget.GROK_SUBSCRIPTION.value: [],
+            },
         }
     )
 
@@ -800,6 +816,7 @@ def _serialize_preference(preference: AIProviderPreference) -> dict[str, Any]:
             "connection_id": preference.connection_id,
             "pool_id": preference.pool_id,
             "model_id": preference.model_id or None,
+            "reasoning_effort": preference.reasoning_effort or None,
         },
     }
 
@@ -816,6 +833,16 @@ def _save_preference(
         binding = ProviderBinding.from_dict(data.get("binding") or {})
     except ValueError as exc:
         return _error(str(exc))
+    if binding.target_id == ProviderTarget.CODEX_SUBSCRIPTION.value:
+        model = next((item for item in CODEX_SUBSCRIPTION_MODELS if item["id"] == binding.model_id), None)
+        if binding.model_id and model is None:
+            return _error("Unknown Codex subscription model")
+        if binding.reasoning_effort:
+            supported = model["reasoning_efforts"] if model else CODEX_SUBSCRIPTION_MODELS[0]["reasoning_efforts"]
+            if binding.reasoning_effort not in supported:
+                return _error("Reasoning effort is not supported by the selected Codex model")
+    elif binding.reasoning_effort:
+        return _error("Reasoning effort is currently supported only for Codex subscriptions")
     if binding.connection_id is not None:
         connection = AIProviderConnection.objects.filter(pk=binding.connection_id).first()
         if connection is None or connection.target_id != binding.target_id:
@@ -844,6 +871,7 @@ def _save_preference(
         "connection_id": binding.connection_id,
         "pool_id": binding.pool_id,
         "model_id": binding.model_id or "",
+        "reasoning_effort": binding.reasoning_effort or "",
     }
     preference, _ = AIProviderPreference.objects.update_or_create(defaults=defaults, **filters)
     return JsonResponse({"success": True, "preference": _serialize_preference(preference)})

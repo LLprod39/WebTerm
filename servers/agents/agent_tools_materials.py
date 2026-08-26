@@ -168,10 +168,6 @@ async def tool_run_script_material(
     sid = None if local_run else session.resolve_server(server)
     if not local_run and sid is None:
         return ToolResult(False, f"Server '{server}' not found or not connected. Use open_connection first.")
-    server_obj = None if sid is None else getattr(session, "allowed_servers", {}).get(sid)
-    if not local_run and not dry and bool(getattr(server_obj, "ai_read_only", False)):
-        return ToolResult(False, f"Blocked: server '{server}' allows read-only AI commands only.")
-
     # The material content is evaluated at the same enforcement boundary as an
     # SSH command. A short blocklist alone is not an execution authorization.
     gate = evaluate_command_execution_gate(content)

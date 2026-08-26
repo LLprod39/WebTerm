@@ -106,7 +106,7 @@ export function McpCallConfigSection({
       />
       <AdvancedDisclosure title={localize(lang, "Дополнительно", "Advanced")} defaultOpen>
         <div className="space-y-1.5">
-          <Label className="text-xs">Arguments (JSON)</Label>
+          <Label className="text-xs">{localize(lang, "Аргументы (JSON)", "Arguments (JSON)")}</Label>
           <Textarea
             value={mcpArgsText}
             onChange={(event) => {
@@ -121,7 +121,7 @@ export function McpCallConfigSection({
             rows={8}
           />
           <FieldHint>
-            {localize(lang, "Аргументы поддерживают переменные pipeline вроде", "Arguments support pipeline variables like")} <code>{"{branch}"}</code> {localize(lang, "и", "and")} <code>{"{node_2_output}"}</code>.
+            {localize(lang, "Можно использовать переменные сценария, например", "Arguments support pipeline variables like")} <code>{"{branch}"}</code> {localize(lang, "и", "and")} <code>{"{node_2_output}"}</code>.
           </FieldHint>
           {mcpArgsError && <p className="text-xs text-red-400">{mcpArgsError}</p>}
         </div>
@@ -212,8 +212,8 @@ function McpToolSelect({ data, lang, selectedMcpId, mcpTools, isFetchingMcpTools
 function TypedMcpArguments({ lang, properties, requiredFields, values, onSetMcpArgument }: TypedMcpArgumentsProps) {
   return (
     <NodeFormSection
-      title={localize(lang, "Typed arguments", "Typed arguments")}
-      description={localize(lang, "Форма собрана из MCP tool schema и синхронизируется с JSON ниже.", "Generated from the MCP tool schema and synced to the JSON editor below.")}
+      title={localize(lang, "Поля аргументов", "Typed arguments")}
+      description={localize(lang, "Форма собрана из схемы MCP-инструмента и синхронизируется с JSON ниже.", "Generated from the MCP tool schema and synced to the JSON editor below.")}
     >
       <div className="grid gap-2">
         {Object.entries(properties).map(([key, property]) => {
@@ -225,7 +225,7 @@ function TypedMcpArguments({ lang, properties, requiredFields, values, onSetMcpA
             <div key={key} className="rounded-lg border border-border/70 bg-background/40 px-3 py-2">
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                 <Label className="text-xs">{key}</Label>
-                {required && <Badge variant="secondary" className="text-xs">required</Badge>}
+                {required && <Badge variant="secondary" className="text-xs">{localize(lang, "обязательно", "required")}</Badge>}
                 <Badge variant="outline" className="text-xs">{schemaType}</Badge>
               </div>
               {schemaType === "boolean" ? (
@@ -250,15 +250,15 @@ function TypedMcpArguments({ lang, properties, requiredFields, values, onSetMcpA
 function McpPolicySection({ data, lang, selectedMcp, mcpLooksMutating, mcpRiskReasons, skillList, selectedSkillSlugs, selectedSkills, onSet, onBrowseCatalog }: McpPolicySectionProps) {
   return (
     <NodeFormSection
-      title={localize(lang, "Policy and risk", "Policy and risk")}
-      description={localize(lang, "Для сервисных изменений привяжите skill/policy и держите подтверждение перед этой нодой.", "For service changes, attach a skill/policy and place approval before this node.")}
+      title={localize(lang, "Политика и риск", "Policy and risk")}
+      description={localize(lang, "Для изменений привяжите навык или политику и добавьте подтверждение перед этим узлом.", "For service changes, attach a skill/policy and place approval before this node.")}
     >
       <div className="rounded-lg border border-border/70 bg-background/40 px-3 py-2">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <Badge variant={mcpLooksMutating ? "secondary" : "outline"} className="text-xs">
-            {mcpLooksMutating ? localize(lang, "Review required", "Review required") : localize(lang, "Low/unknown risk", "Low/unknown risk")}
+            {mcpLooksMutating ? localize(lang, "Нужна проверка", "Review required") : localize(lang, "Низкий или неизвестный риск", "Low/unknown risk")}
           </Badge>
-          {selectedMcp?.last_test_ok === true && <Badge variant="outline" className="text-xs">MCP tested</Badge>}
+          {selectedMcp?.last_test_ok === true && <Badge variant="outline" className="text-xs">{localize(lang, "MCP проверен", "MCP tested")}</Badge>}
           {selectedSkillSlugs.length > 0 && <Badge variant="outline" className="text-xs">{selectedSkillSlugs.length} skills</Badge>}
         </div>
         <ul className="space-y-1 text-xs text-muted-foreground">
@@ -266,7 +266,7 @@ function McpPolicySection({ data, lang, selectedMcp, mcpLooksMutating, mcpRiskRe
         </ul>
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">{localize(lang, "Permission mode", "Permission mode")}</Label>
+        <Label className="text-xs">{localize(lang, "Режим разрешений", "Permission mode")}</Label>
         <Select value={(data.permission_mode as string) || "SAFE"} onValueChange={(value) => onSet("permission_mode", value)}>
           <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -278,7 +278,7 @@ function McpPolicySection({ data, lang, selectedMcp, mcpLooksMutating, mcpRiskRe
       {skillList.length > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <Label className="text-xs">{localize(lang, "Skills / политики", "Skills / policies")}</Label>
+            <Label className="text-xs">{localize(lang, "Навыки и политики", "Skills / policies")}</Label>
             <Button variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={onBrowseCatalog}>
               <BookOpen className="h-3 w-3" />
               {localize(lang, "Каталог", "Browse Catalog")}
@@ -307,7 +307,7 @@ function SkillChecklist({ skills, selectedSkillSlugs, selectedSkills, onSet }: {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs font-medium">{skill.name}</span>
                 {skill.service ? <Badge variant="outline" className="text-xs">{skill.service}</Badge> : null}
-                {skill.runtime_enforced ? <Badge variant="secondary" className="text-xs">runtime</Badge> : null}
+                {skill.runtime_enforced ? <Badge variant="secondary" className="text-xs">{localize(lang, "обязательно при запуске", "runtime")}</Badge> : null}
                 {skill.safety_level ? <Badge variant="outline" className="text-xs">{skill.safety_level}</Badge> : null}
               </div>
               {skill.guardrail_summary?.length ? <p className="mt-1 text-xs text-muted-foreground">{skill.guardrail_summary.slice(0, 2).join(" • ")}</p> : null}

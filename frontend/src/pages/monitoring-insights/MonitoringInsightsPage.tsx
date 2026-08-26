@@ -76,14 +76,18 @@ export default function MonitoringInsightsPage() {
 
   if (sessionQuery.isSuccess && !isStaff) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8">
+      <div
+        data-ui-slot="monitoring-insights-page"
+        data-page-kind="monitoring-insights"
+        className="mx-auto max-w-3xl px-4 py-8"
+      >
         <EmptyState
           icon={<ShieldAlert className="h-5 w-5" />}
-          title={localize(lang, "Только для администраторов", "Admins only")}
+          title={localize(lang, "Нет доступа", "Access denied")}
           description={localize(
             lang,
-            "Раздел «Метрики и прогнозы» доступен пользователям со статусом администратора.",
-            "The Metrics & Forecasts section is available to admin users only.",
+            "Метрики и прогнозы доступны только администраторам.",
+            "Metrics and forecasts are available to administrators only.",
           )}
         />
       </div>
@@ -94,7 +98,11 @@ export default function MonitoringInsightsPage() {
   const summary = data?.summary;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1800px] flex-col px-4 py-4 md:px-5 xl:h-[calc(100dvh-3rem)] xl:min-h-0">
+    <div
+      data-ui-slot="monitoring-insights-page"
+      data-page-kind="monitoring-insights"
+      className="mx-auto flex w-full max-w-[1800px] flex-col px-4 py-4 md:px-5 xl:h-[calc(100dvh-3rem)] xl:min-h-0"
+    >
       <QueryStateBlock
         loading={insightsQuery.isLoading || sessionQuery.isLoading}
         error={insightsQuery.error}
@@ -115,8 +123,8 @@ export default function MonitoringInsightsPage() {
               aiEnabled={data.ai.enabled}
             />
 
-            <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
-              <div className="flex min-h-0 flex-col gap-3 xl:col-span-8">
+            <div data-ui-slot="monitoring-insights-grid" className="grid min-h-0 flex-1 gap-3 xl:grid-cols-12">
+              <div data-ui-slot="monitoring-insights-primary" className="flex min-h-0 flex-col gap-3 xl:col-span-8">
                 <ForecastTimeline predictions={data.predictions} />
                 <FleetMetricsTable servers={data.servers} className="min-h-[16rem] xl:min-h-0 xl:flex-1" />
               </div>
@@ -132,8 +140,8 @@ export default function MonitoringInsightsPage() {
             title={localize(lang, "Нет данных", "No data")}
             description={localize(
               lang,
-              "Запустите run_monitor, чтобы начать сбор расширенных метрик.",
-              "Start run_monitor to begin collecting extended metrics.",
+              "Настройте сбор метрик в системных настройках.",
+              "Configure metric collection in system settings.",
             )}
           />
         )}

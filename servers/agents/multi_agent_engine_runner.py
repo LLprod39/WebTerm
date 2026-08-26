@@ -85,6 +85,7 @@ async def run_multi_agent_engine(
             runtime_control=reset_runtime_control_state(),
             pending_question="",
             final_report="",
+            execution_outcome={},
             plan_tasks=[],
             orchestrator_log=[],
             started_at=timezone.now(),
@@ -232,6 +233,10 @@ async def run_multi_agent_engine(
         )
         report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         run.report_payload = merge_outcome_into_report_payload(report_payload, failed_outcome)
+        run.execution_outcome = {
+            **failed_outcome.to_payload(),
+            "report_generation": {"status": "failed", "generated_at": None, "error": run.ai_analysis},
+        }
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -352,6 +357,10 @@ async def execute_existing_multi_agent_plan(engine: Any, run: AgentRun) -> Agent
         )
         report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
         run.report_payload = merge_outcome_into_report_payload(report_payload, failed_outcome)
+        run.execution_outcome = {
+            **failed_outcome.to_payload(),
+            "report_generation": {"status": "failed", "generated_at": None, "error": run.ai_analysis},
+        }
         await sync_to_async(run.save)()
         await engine._persist_ops_summary(
             run=run,
@@ -411,6 +420,15 @@ async def _finalize_multi_agent_run(
     report_payload = merge_outcome_into_report_payload(report_payload, outcome)
     report_payload["policy_blocked_count"] = int(getattr(engine, "_policy_blocked_count", 0) or 0)
     report_payload["disconnected_servers"] = list(getattr(engine, "_disconnected_servers", []) or [])
+    execution_outcome = outcome.to_payload()
+    execution_outcome["policy_blocked_count"] = report_payload["policy_blocked_count"]
+    execution_outcome["disconnected_servers"] = report_payload["disconnected_servers"]
+    execution_outcome["report_generation"] = {
+        "status": "ready" if final_report else "failed",
+        "generated_at": run.completed_at.isoformat() if final_report and run.completed_at else None,
+        "error": "" if final_report else "Final report is empty.",
+    }
+    run.execution_outcome = execution_outcome
     details = report_payload.get("outcome_details")
     if isinstance(details, dict):
         details = dict(details)

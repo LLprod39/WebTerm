@@ -15,9 +15,9 @@ import { localize, useI18n } from "@/lib/i18n";
 const NAV = [
   { to: "/kubernetes", end: true, icon: Boxes, ru: "Пульт", en: "Cockpit" },
   { to: "/kubernetes/fleet", end: false, icon: GitBranch, ru: "Fleet", en: "Fleet" },
-  { to: "/kubernetes/devtron", end: false, icon: Layers3, ru: "Apps", en: "Apps" },
-  { to: "/kubernetes/admin", end: false, icon: ShieldCheck, ru: "Admin", en: "Admin" },
-  { to: "/settings/kubernetes", end: false, icon: Settings2, ru: "Setup", en: "Setup" },
+  { to: "/kubernetes/devtron", end: false, icon: Layers3, ru: "Приложения", en: "Apps" },
+  { to: "/kubernetes/admin", end: false, icon: ShieldCheck, ru: "Администрирование", en: "Admin" },
+  { to: "/settings/kubernetes", end: false, icon: Settings2, ru: "Настройка", en: "Setup" },
 ] as const;
 
 const DENSITY_KEY = "webterm.k8s.density";
@@ -84,8 +84,10 @@ export function KubernetesShell({
       />
 
       <nav
+        data-ui-slot="kubernetes-nav"
+        data-page-kind="kubernetes"
         className="sticky top-0 z-20 -mx-1 flex flex-wrap items-center gap-1 rounded-sm border border-border bg-card/95 p-1 shadow-elev-1 backdrop-blur-sm"
-        aria-label={localize(lang, "Kubernetes навигация", "Kubernetes navigation")}
+        aria-label={localize(lang, "Навигация Kubernetes", "Kubernetes navigation")}
       >
         {NAV.map((item) => {
           const Icon = item.icon;
@@ -152,7 +154,11 @@ export function KubernetesPageHeader({
   meta?: ReactNode;
 }) {
   return (
-    <header className="relative overflow-hidden rounded-sm border border-border bg-card px-5 py-5 shadow-elev-1 sm:px-6">
+    <header
+      data-ui-slot="kubernetes-page-header"
+      data-page-kind="kubernetes"
+      className="relative overflow-hidden rounded-sm border border-border bg-card px-5 py-5 shadow-elev-1 sm:px-6"
+    >
       <div className="absolute left-0 top-0 h-full w-1 bg-primary" />
       <div
         aria-hidden

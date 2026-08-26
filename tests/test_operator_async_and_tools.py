@@ -120,6 +120,8 @@ def test_list_servers_lookup_mode_no_ui_table_and_resolve_registered():
 
     register_operator_tools()
     assert get_action_spec("operator.resolve_server") is not None
+    assert get_action_spec("operator.list_playbooks") is not None
+    assert get_action_spec("operator.playbook_runs") is not None
     user = User.objects.create_user(username="inv-lookup", password="x")
     _grant(user, "servers")
     Server.objects.create(name="lunix", host="127.0.0.1", port=22, user=user, username="u")
@@ -267,6 +269,53 @@ def test_maybe_attach_table_respects_ui_table_false():
     assert msg2.metadata["tables"][0]["kind"] == "servers"
 
 
+def test_maybe_attach_table_persists_playbook_catalog_without_duplicates():
+    from core_ui.services.operator_artifacts import maybe_attach_table_metadata
+
+    msg = MagicMock()
+    msg.metadata = {}
+    result = {
+        "ok": True,
+        "result": {
+            "count": 2,
+            "playbooks": [
+                {
+                    "id": 25,
+                    "name": "Base Linux hardening",
+                    "description": "Базовая защита Linux",
+                    "kind": "ansible",
+                    "category": "security",
+                    "task_count": 4,
+                    "last_run_status": "completed",
+                    "target_url": "/automation/playbooks/25",
+                },
+                {
+                    "id": 3,
+                    "name": "Docker prune (safe)",
+                    "description": "Безопасная очистка Docker",
+                    "kind": "runbook",
+                    "category": "maintenance",
+                    "task_count": 2,
+                    "last_run_status": "failed",
+                    "target_url": "/automation/playbooks/3",
+                },
+            ],
+        },
+    }
+
+    maybe_attach_table_metadata(msg, result, action_type="operator.list_playbooks")
+    maybe_attach_table_metadata(msg, result, action_type="operator.list_playbooks")
+
+    assert msg.save.call_count == 2
+    assert len(msg.metadata["tables"]) == 1
+    table = msg.metadata["tables"][0]
+    assert table["kind"] == "playbooks"
+    assert table["headers"] == ["Playbook / runbook", "Назначение и последний запуск"]
+    assert table["rows"][0][0] == "Base Linux hardening"
+    assert "completed" in table["rows"][0][1]
+    assert table["items"][1]["target_url"] == "/automation/playbooks/3"
+
+
 @pytest.mark.django_db
 def test_save_runbook_creates_playbook():
     register_operator_mutate_tools()
@@ -322,6 +371,43 @@ def test_create_playbook_accepts_command_steps():
     # With nothing usable it still fails cleanly.
     with pytest.raises(AssistantActionError):
         create_playbook(AssistantActionContext(user=user, input_payload={"name": "empty"}))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("source_yaml", "expected_code"),
+    [
+        (
+            "- hosts: all\n  tasks:\n    - debug:\n        msg: glpat-0123456789abcdefghij\n",
+            "secret_material_detected",
+        ),
+        (
+            "- hosts: all\n  tasks:\n    - copy:\n        src: extra_vars.json\n        dest: /tmp/leak\n",
+            "controller_policy_violation",
+        ),
+        ("- hosts: all\n  tasks: [\n", "malformed_yaml"),
+    ],
+)
+def test_operator_create_playbook_rejects_unsafe_yaml_without_persisting(source_yaml, expected_code):
+    from app.assistant_actions import AssistantActionContext, AssistantActionError
+    from servers.models import Playbook
+    from servers.operator.mutate_tools import create_playbook
+
+    user = User.objects.create_user(username=f"unsafe-operator-{expected_code}", password="x")
+    _grant(user, "servers")
+    before = Playbook.objects.count()
+
+    with pytest.raises(AssistantActionError) as caught:
+        create_playbook(
+            AssistantActionContext(
+                user=user,
+                input_payload={"name": "Unsafe operator YAML", "yaml": source_yaml},
+            )
+        )
+
+    assert caught.value.details == {"code": expected_code}
+    assert "glpat-0123456789abcdefghij" not in str(caught.value)
+    assert Playbook.objects.count() == before
 
 
 @pytest.mark.django_db

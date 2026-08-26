@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 
 function schemaProperties(schema: Record<string, unknown>) {
   const properties = schema.properties;
@@ -19,6 +20,7 @@ function schemaProperties(schema: Record<string, unknown>) {
 export function PluginSettingsPanel({ installationId }: { installationId: number | null }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [settings, setSettings] = useState<Record<string, string>>({});
   const [secretRefs, setSecretRefs] = useState<Record<string, string>>({});
 
@@ -50,7 +52,7 @@ export function PluginSettingsPanel({ installationId }: { installationId: number
     mutationFn: () => updatePluginSettings(installationId as number, settings),
     onSuccess: () => {
       invalidate();
-      toast({ description: "Plugin settings saved." });
+      toast({ description: localize(lang, "Настройки сохранены.", "Plugin settings saved.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -60,17 +62,17 @@ export function PluginSettingsPanel({ installationId }: { installationId: number
     onSuccess: () => {
       setSecretRefs({});
       invalidate();
-      toast({ description: "Secret reference bound." });
+      toast({ description: localize(lang, "Секрет подключён.", "Secret reference bound.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
 
   return (
-    <SectionCard title="Settings and secrets" description="Schema-backed settings and masked secret references." icon={<Settings2 className="h-4 w-4" />}>
+    <SectionCard title={localize(lang, "Настройки и секреты", "Settings and secrets")} description={localize(lang, "Параметры выбранного плагина.", "Settings for the selected plugin.")} icon={<Settings2 className="h-4 w-4" />}>
       <QueryStateBlock loading={settingsQuery.isLoading} error={settingsQuery.error}>
         {!installationId ? (
           <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-            Select an installation to edit plugin settings.
+            {localize(lang, "Выберите плагин, чтобы изменить настройки.", "Select a plugin to edit its settings.")}
           </p>
         ) : (
           <div className="grid gap-4 xl:grid-cols-2">
@@ -89,13 +91,13 @@ export function PluginSettingsPanel({ installationId }: { installationId: number
                 </label>
               )) : (
                 <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-                  This plugin does not declare configurable settings.
+                  {localize(lang, "У этого плагина нет настраиваемых параметров.", "This plugin has no configurable settings.")}
                 </p>
               )}
               {propertyEntries.length ? (
                 <Button size="sm" onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending}>
                   <Save className="h-4 w-4" />
-                  Save settings
+                  {localize(lang, "Сохранить", "Save")}
                 </Button>
               ) : null}
             </div>
@@ -108,14 +110,14 @@ export function PluginSettingsPanel({ installationId }: { installationId: number
                       <div className="text-xs font-semibold text-foreground">{secret.label}</div>
                       <div className="mt-0.5 text-xs text-muted-foreground">{secret.key}</div>
                     </div>
-                    <StatusBadge label={secret.bound ? "bound" : "unbound"} tone={secret.bound ? "success" : secret.required ? "warning" : "neutral"} />
+                    <StatusBadge label={secret.bound ? localize(lang, "подключён", "bound") : localize(lang, "не подключён", "unbound")} tone={secret.bound ? "success" : secret.required ? "warning" : "neutral"} />
                   </div>
-                  {secret.bound ? <div className="mt-2 text-xs text-muted-foreground">Current ref: {secret.secret_ref}</div> : null}
+                  {secret.bound ? <div className="mt-2 text-xs text-muted-foreground">{localize(lang, "Текущая ссылка:", "Current reference:")} {secret.secret_ref}</div> : null}
                   <div className="mt-3 flex gap-2">
                     <Input
                       value={secretRefs[secret.key] ?? ""}
                       onChange={(event) => setSecretRefs((prev) => ({ ...prev, [secret.key]: event.target.value }))}
-                      placeholder="managed secret reference"
+                      placeholder={localize(lang, "Ссылка на управляемый секрет", "Managed secret reference")}
                     />
                     <Button
                       size="icon"
@@ -129,7 +131,7 @@ export function PluginSettingsPanel({ installationId }: { installationId: number
                 </div>
               )) : (
                 <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-                  This plugin does not declare secret requirements.
+                  {localize(lang, "Плагину не нужны секреты.", "This plugin does not require secrets.")}
                 </p>
               )}
             </div>

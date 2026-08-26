@@ -18,12 +18,13 @@ export function SettingsSectionCard({
 }) {
   return (
     <section
+      data-ui-slot="settings-section-card"
       className={cn(
         "overflow-hidden rounded-sm border border-border bg-card shadow-elev-1",
         className,
       )}
     >
-      <div className="flex flex-col gap-3 border-b border-border bg-surface-0/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div data-ui-slot="settings-section-card-header" className="flex flex-col gap-3 border-b border-border bg-surface-0/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-primary/25 bg-primary/10 text-primary">
             <Icon className="h-4 w-4" />

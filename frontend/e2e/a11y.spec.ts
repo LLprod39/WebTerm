@@ -47,7 +47,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: true, isStaff: false });
 
     await page.goto("/servers");
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {});
@@ -57,7 +57,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/studio/notifications");
-    await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {});
@@ -67,7 +67,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/servers");
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
     await page.getByRole("button", { name: /Add Server/i }).click();
     await expect(page.getByRole("dialog").filter({ hasText: "Create Server" })).toBeVisible();
 
@@ -81,7 +81,7 @@ test.describe("Accessibility", () => {
     await page.goto("/agents");
     await expect(page.getByRole("heading", { name: "Agents", level: 1 })).toBeVisible();
     await page.getByRole("button", { name: "New agent" }).click();
-    await expect(page.getByRole("dialog").getByRole("heading", { name: "Agent type" })).toBeVisible();
+    await expect(page.getByRole("dialog").getByRole("heading", { name: "What work should this agent own?" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {});
@@ -103,7 +103,7 @@ test.describe("Accessibility", () => {
     await installPlatformMocks(page, { authenticated: true, features: { mars: true } });
 
     await page.goto("/mars");
-    await expect(page.getByRole("heading", { name: /MARS beta/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build with MARS" })).toBeVisible();
 
     const violations = await collectSeriousAndCriticalViolations(page);
     expectViolationsWithinBudget(violations, {});
@@ -114,7 +114,7 @@ test.describe("Accessibility", () => {
     await page.setViewportSize({ width: 390, height: 844 });
 
     const mobileScreens = [
-      { path: "/servers", ready: () => page.getByRole("heading", { name: "Infrastructure" }) },
+      { path: "/servers", ready: () => page.getByRole("heading", { name: "Servers" }) },
       { path: "/agents", ready: () => page.getByRole("heading", { name: "Agents", level: 1 }) },
       { path: "/chat", ready: () => page.getByPlaceholder("Ask anything…") },
     ];

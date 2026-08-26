@@ -138,7 +138,7 @@ export function GroupSheet({
           </SheetTitle>
           <SheetDescription>
             {lang === "ru"
-              ? "Задайте участников и групповые правила. Не задано означает наследование от профиля или системных defaults."
+              ? "Добавьте участников и задайте исключения. Остальные права наследуются от профиля."
               : "Set members and group rules. Unset means access falls back to profile or system defaults."}
           </SheetDescription>
         </SheetHeader>
@@ -160,7 +160,7 @@ export function GroupSheet({
               <div>
                 <h3 className="text-base font-semibold text-foreground">{common.members}</h3>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {lang === "ru" ? "Фильтруйте пользователей и добавляйте их в группу." : "Filter users and add them to the group."}
+                  {lang === "ru" ? "Выберите пользователей для группы." : "Choose users for this group."}
                 </p>
               </div>
               <StatusBadge label={String(draft.members.length)} tone="info" dot={false} />
@@ -170,7 +170,7 @@ export function GroupSheet({
               <Input
                 value={memberSearch}
                 onChange={(event) => onMemberSearchChange(event.target.value)}
-                placeholder={lang === "ru" ? "Поиск по логину, email или группе" : "Search by username, email, or group"}
+                placeholder={lang === "ru" ? "Логин, почта или группа" : "Username, email, or group"}
                 className="h-10 pl-9"
               />
             </div>
@@ -211,7 +211,7 @@ export function GroupSheet({
               <h3 className="text-base font-semibold text-foreground">{copy.policyTitle}</h3>
               <p className="mt-0.5 text-sm text-muted-foreground">
                 {lang === "ru"
-                  ? "Показывайте только явные групповые исключения. Остальное оставляйте наследоваться."
+                  ? "Задавайте только необходимые исключения. Остальные права наследуются."
                   : "Only set explicit group exceptions. Leave everything else inherited."}
               </p>
             </div>

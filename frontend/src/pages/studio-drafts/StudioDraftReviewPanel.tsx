@@ -63,13 +63,13 @@ export function StudioDraftReviewPanel({
           {hasOpenQuestions ? (
             <div className="rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-3 text-xs leading-5 text-sky-100">
               <ShieldCheck className="mr-2 inline h-3.5 w-3.5" />
-              {localize(lang, "Apply заблокирован: ответьте на вопросы во вкладке «Запрос».", "Apply is blocked: answer the questions in the Request tab.")}
+              {localize(lang, "Сначала ответьте на вопросы во вкладке «Запрос».", "Answer the questions in the Request tab first.")}
             </div>
           ) : null}
           {dangerousRisk ? (
             <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-3 text-xs leading-5 text-red-100">
               <AlertTriangle className="mr-2 inline h-3.5 w-3.5" />
-              {localize(lang, "Apply заблокирован: risk level dangerous. Исправьте команды или scope перед применением.", "Apply is blocked: risk level is dangerous. Fix commands or scope before applying.")}
+              {localize(lang, "Черновик содержит опасные действия. Исправьте команды или область выполнения.", "This draft contains dangerous actions. Fix the commands or execution scope.")}
             </div>
           ) : null}
           <PipelineDraftReview
@@ -97,14 +97,14 @@ export function StudioDraftReviewPanel({
                     onClick={onValidate}
                   >
                     {validatePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
-                    {localize(lang, "Проверить dry-run", "Validate dry-run")}
+                    {localize(lang, "Проверить без запуска", "Validate without running")}
                   </Button>
                   {activeTemplateRecommendations.length ? (
                     <div className="rounded-lg border border-border/70 bg-background/45 p-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                            {localize(lang, "Пилотный шаблон", "Pilot template")}
+                            {localize(lang, "Шаблон", "Template")}
                           </div>
                           <div className="mt-0.5 truncate text-xs text-muted-foreground/80">
                             {activeResponse.selected_template?.name || localize(lang, "Рекомендованный шаблон", "Recommended template")}
@@ -118,7 +118,7 @@ export function StudioDraftReviewPanel({
                       </div>
                       <div className="grid gap-2">
                         <Select value={selectedSkeletonSlug} onValueChange={onSelectedSkeletonSlugChange} disabled={!activeCanSwitchTemplate || useTemplatePending}>
-                          <SelectTrigger className="h-9 bg-card/70 text-xs" aria-label={localize(lang, "Пилотный шаблон", "Pilot template")}>
+                          <SelectTrigger className="h-9 bg-card/70 text-xs" aria-label={localize(lang, "Шаблон", "Template")}>
                             <SelectValue placeholder={localize(lang, "Выберите шаблон", "Select template")} />
                           </SelectTrigger>
                           <SelectContent>

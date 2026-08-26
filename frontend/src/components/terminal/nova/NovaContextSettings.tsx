@@ -1,5 +1,5 @@
 import { Switch } from "@/components/ui/switch";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import type { AiAssistantSettings, NovaSudoPolicy } from "../ai-types";
 
 const SUDO_OPTIONS: Array<{ value: NovaSudoPolicy; titleKey: string; descKey: string }> = [
@@ -26,7 +26,7 @@ interface NovaContextSettingsProps {
 }
 
 export function NovaContextSettings({ settings, onChange }: NovaContextSettingsProps) {
-  const { t } = useI18n();
+  const { lang, t } = useI18n();
 
   return (
     <section className="space-y-2.5">
@@ -62,9 +62,11 @@ export function NovaContextSettings({ settings, onChange }: NovaContextSettingsP
           </div>
           {settings.novaSudoPolicy === "disabled" ? (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs leading-snug text-amber-100/95">
-              Sudo выключен: Nova не сможет выполнять systemctl/apt/service fix без прав.
-              Для сложных ops включите <span className="font-semibold">Ask</span> (подтверждение на команду)
-              или <span className="font-semibold">Approved</span> (если доверяете сессии).
+              {localize(
+                lang,
+                "Sudo выключен. Nova не сможет управлять сервисами и пакетами. Выберите «Запрашивать» для подтверждения каждой команды или «Разрешено» только для доверенной сессии.",
+                "Sudo is disabled. Nova cannot manage services or packages. Choose Ask to approve each command, or Approved only for a trusted session.",
+              )}
             </div>
           ) : null}
           <div className="grid grid-cols-3 gap-1.5">

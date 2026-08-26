@@ -28,6 +28,11 @@ def serialize_revision(revision, *, include_content: bool = False) -> dict:
 
 
 def serialize_draft(draft) -> dict:
+    scan_report = (
+        draft.asset_bundle.scan_report
+        if draft.asset_bundle_id and draft.asset_bundle and isinstance(draft.asset_bundle.scan_report, dict)
+        else {}
+    )
     return {
         "id": draft.id,
         "base_revision_id": draft.base_revision_id,
@@ -36,6 +41,8 @@ def serialize_draft(draft) -> dict:
         "tasks": draft.tasks if isinstance(draft.tasks, list) else [],
         "content_hash": draft.content_hash,
         "bundle_hash": draft.bundle_hash,
+        "asset_bundle_id": draft.asset_bundle_id,
+        "entrypoint": str(scan_report.get("entrypoint") or "playbook.yml"),
         "version": draft.version,
         "last_editor_id": draft.last_editor_id,
         "updated_at": draft.updated_at.isoformat(),

@@ -119,7 +119,7 @@ export function KubernetesCockpitBody({
             ? freeformDiagnosisMutation.error.message
             : localize(lang, "Не удалось запустить диагностику", "Failed to start diagnosis")}
           <Button asChild variant="link" className="ml-2 h-auto p-0 text-destructive">
-            <Link to="/agents">{localize(lang, "Открыть Agents", "Open Agents")}</Link>
+            <Link to="/agents">{localize(lang, "Открыть агентов", "Open Agents")}</Link>
           </Button>
         </div>
       ) : null}
@@ -147,15 +147,14 @@ export function KubernetesCockpitBody({
       {/* Health + KPI strip */}
       <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.1fr)]">
         <SectionCard
-          title={localize(lang, "Здоровье", "Health")}
-          description={localize(lang, "Сводка inventory без лишних виджетов.", "Inventory summary without clutter.")}
+          title={localize(lang, "Состояние", "Health")}
           icon={<Sparkles className="h-4 w-4" />}
         >
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
             <HealthDonut
               slices={healthSlices}
               centerValue={`${healthyPct}%`}
-              centerLabel={localize(lang, "healthy", "healthy")}
+              centerLabel={localize(lang, "в норме", "healthy")}
             />
             <HealthLegend slices={healthSlices} lang={lang} />
           </div>
@@ -163,7 +162,6 @@ export function KubernetesCockpitBody({
 
         <SectionCard
           title={localize(lang, "Сейчас", "Now")}
-          description={localize(lang, "Ключевые цифры за один взгляд.", "Key numbers at a glance.")}
           icon={<Boxes className="h-4 w-4" />}
         >
           <div className="grid grid-cols-2 gap-3">
@@ -178,7 +176,7 @@ export function KubernetesCockpitBody({
             <KpiTile
               label={localize(lang, "Проблемы", "Issues")}
               value={summary.incidents}
-              hint={localize(lang, `${summary.warnings} warn`, `${summary.warnings} warn`)}
+              hint={localize(lang, `${summary.warnings} предупреждений`, `${summary.warnings} warnings`)}
               tone={summary.incidents ? "danger" : "success"}
             />
           </div>
@@ -186,8 +184,8 @@ export function KubernetesCockpitBody({
             <div className="mt-3 rounded-sm border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
               {localize(
                 lang,
-                "Данные частично устарели — экран показывает last known state.",
-                "Some data is stale — showing last known state.",
+                "Часть данных устарела. Показано последнее известное состояние.",
+                "Some data is stale. Showing the last known state.",
               )}
             </div>
           ) : null}
@@ -195,7 +193,6 @@ export function KubernetesCockpitBody({
 
         <SectionCard
           title={localize(lang, "Быстрые действия", "Quick actions")}
-          description={localize(lang, "Развернуть, проверить, администрировать.", "Deploy, inspect, administer.")}
           icon={<Rocket className="h-4 w-4" />}
         >
           <div className="grid gap-2 sm:grid-cols-2">
@@ -203,12 +200,12 @@ export function KubernetesCockpitBody({
               href="/kubernetes/fleet"
               icon={<GitBranch className="h-4 w-4" />}
               title={localize(lang, "Fleet / GitOps", "Fleet / GitOps")}
-              description={localize(lang, "Выкатки и bundles", "Rollouts and bundles")}
+              description={localize(lang, "Выкатки и пакеты", "Rollouts and bundles")}
             />
             <QuickLinkTile
               href="/kubernetes/devtron"
               icon={<Package className="h-4 w-4" />}
-              title={localize(lang, "Devtron / apps", "Devtron / apps")}
+              title={localize(lang, "Devtron", "Devtron")}
               description={localize(lang, "Приложения и версии", "Apps and versions")}
             />
             <button
@@ -221,14 +218,14 @@ export function KubernetesCockpitBody({
                 <span className="font-display text-sm font-semibold text-foreground">Helm</span>
               </div>
               <p className="mt-2 text-2xs leading-snug text-muted-foreground">
-                {localize(lang, "Ownership + request install", "Ownership + request install")}
+                {localize(lang, "Запрос на установку", "Request an installation")}
               </p>
             </button>
             <QuickLinkTile
               href="/kubernetes/admin"
               icon={<Wrench className="h-4 w-4" />}
-              title={localize(lang, "Ручной fix", "Hands-on fix")}
-              description={localize(lang, "YAML, logs, resources", "YAML, logs, resources")}
+              title={localize(lang, "Ресурсы", "Resources")}
+              description={localize(lang, "YAML, логи и события", "YAML, logs, and events")}
             />
           </div>
         </SectionCard>
@@ -236,7 +233,7 @@ export function KubernetesCockpitBody({
 
       {diagnosisMutation.error ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {localize(lang, "Не удалось создать Studio draft:", "Failed to create Studio draft:")}{" "}
+          {localize(lang, "Не удалось подготовить диагностику:", "Failed to prepare the diagnosis:")}{" "}
           {diagnosisMutation.error instanceof Error
             ? diagnosisMutation.error.message
             : localize(lang, "неизвестная ошибка", "unknown error")}
@@ -420,7 +417,7 @@ export function KubernetesCockpitBody({
             <EmptyState
               icon={<GitBranch className="h-5 w-5" />}
               title={localize(lang, "Выкатки не найдены", "No rollouts found")}
-              description={localize(lang, "Нет активных rollouts.", "No active rollouts.")}
+              description={localize(lang, "Нет активных развёртываний.", "No active rollouts.")}
             />
           )}
         </SectionCard>

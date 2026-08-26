@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { MarsInterviewQuestion } from "@/lib/api";
+import { localize } from "@/lib/i18n";
 
 export type WizardStepId = "brief" | "interview" | "plan" | "run";
 
@@ -91,6 +92,19 @@ export function statusTone(status?: string): "neutral" | "success" | "warning" |
   if (status === "running" || status === "queued") return "info";
   if (status === "plan_ready") return "warning";
   return "neutral";
+}
+
+export function statusLabel(status: string | undefined, lang: string): string {
+  if (status === "draft") return localize(lang, "Черновик", "Draft");
+  if (status === "interview") return localize(lang, "Уточнение", "Clarifying");
+  if (status === "plan_ready") return localize(lang, "План готов", "Plan ready");
+  if (status === "approved") return localize(lang, "Готов к запуску", "Ready to run");
+  if (status === "queued") return localize(lang, "В очереди", "Queued");
+  if (status === "running") return localize(lang, "Выполняется", "Running");
+  if (status === "completed") return localize(lang, "Завершено", "Completed");
+  if (status === "failed") return localize(lang, "Ошибка", "Failed");
+  if (status === "stopped") return localize(lang, "Остановлено", "Stopped");
+  return status ? status.replaceAll("_", " ") : localize(lang, "Не начато", "Not started");
 }
 
 export function isMultiQuestion(question: MarsInterviewQuestion): boolean {

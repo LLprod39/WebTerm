@@ -7,11 +7,10 @@ import {
   type ServerGroupRole,
 } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
-import { hasFeatureAccess } from "@/lib/featureAccess";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageShell, QueryStateBlock } from "@/components/ui/page-shell";
-import { SkeletonList, SkeletonMetrics } from "@/components/ui/list-state";
+import { SkeletonList } from "@/components/ui/list-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ServersPageView } from "./servers/ServersPageView";
 import type { AdvancedTab, MainTab } from "./servers/types";
@@ -80,9 +79,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     staleTime: 60_000,
     retry: false,
   });
-  const canConfigureElevatedAccess = hasFeatureAccess(authData?.user, "automation");
   const {
-    canConfigureElevatedAccess: serverAccessCanBeConfigured,
     closeHostKeyEnrollment,
     confirmHostKeyEnrollment,
     dialogOpen,
@@ -105,7 +102,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     testConnection,
     testingConnection,
   } = useServerCrudController({
-    canConfigureElevatedAccess,
     onServerDeleted: closeAdvancedServerIfDeleted,
     reload,
     t,
@@ -162,15 +158,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
     [groups],
   );
   const groupCount = manageableGroups.length;
-  const healthyCount = useMemo(
-    () =>
-      servers.filter((server) => {
-        const health = fleetHealthByServerId.get(server.id);
-        return Boolean(health && !health.is_stale && health.status === "healthy");
-      }).length,
-    [fleetHealthByServerId, servers],
-  );
-  const attentionCount = Math.max(0, servers.length - healthyCount);
 
   const rulesController = useServerRulesController({
     activeServer: advancedServer,
@@ -220,7 +207,7 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
   if (isLoading || error || !data) {
     if (isLoading) {
       return (
-        <PageShell width="6xl" className="space-y-4 pb-8">
+        <PageShell width="full" className="max-w-[1500px] space-y-3 pb-8">
           <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-elev-1" aria-hidden>
             <Skeleton className="h-3 w-32" />
             <div className="mt-3 flex items-end justify-between gap-6">
@@ -231,7 +218,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
               <Skeleton className="h-10 w-36 rounded-lg" />
             </div>
           </div>
-          <SkeletonMetrics count={4} className="gap-3" />
           <div className="rounded-xl border border-border bg-card p-2 shadow-elev-1" aria-hidden>
             <div className="flex items-center justify-between gap-4">
               <Skeleton className="h-10 w-80 rounded-lg" />
@@ -272,8 +258,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       servers={servers}
       manageableGroups={manageableGroups}
       groupCount={groupCount}
-      healthyCount={healthyCount}
-      attentionCount={attentionCount}
       search={search}
       setSearch={setSearch}
       groupFilter={groupFilter}
@@ -299,7 +283,6 @@ function ServersWorkspace({ requestedTab }: { requestedTab?: MainTab }) {
       testConnection={testConnection}
       saving={saving}
       testingConnection={testingConnection}
-      canConfigureElevatedAccess={serverAccessCanBeConfigured}
       serverDeleteTarget={serverDeleteTarget}
       clearServerDeleteTarget={clearServerDeleteTarget}
       confirmDeleteServer={confirmDeleteServer}

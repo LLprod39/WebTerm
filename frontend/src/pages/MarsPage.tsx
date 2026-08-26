@@ -18,6 +18,7 @@ import {
   joinAnswer,
   mutationMessage,
   splitAnswer,
+  statusLabel,
   statusTone,
   type WizardStepId,
   type WizardStepMeta,
@@ -175,7 +176,6 @@ export default function MarsPage() {
   const goalText = (answers.success_criteria || session?.task_brief || taskBrief || "").trim();
   const projectTitle = (session?.task_brief || taskBrief || localize(lang, "Новый проект", "New project")).trim();
   const shortProjectTitle = projectTitle.length > 22 ? `${projectTitle.slice(0, 22).trim()}...` : projectTitle;
-  const projectId = latestRunId ? `RUN-${String(latestRunId).padStart(3, "0")}` : session ? `MARS-${String(session.id).padStart(3, "0")}` : "MARS-NEW";
 
   const canStartInterview = Boolean(selectedWorkspace && taskBrief.trim()) && !createSession.isPending;
   const canSaveAnswers = interviewReady && !answerSession.isPending;
@@ -194,8 +194,8 @@ export default function MarsPage() {
       {
         id: "brief",
         label: localize(lang, "Задача", "Task"),
-        title: localize(lang, "Что создать", "What to build"),
-        description: localize(lang, "Опишите результат и ограничения.", "Describe the result and limits."),
+        title: localize(lang, "Опишите задачу", "Describe the task"),
+        description: localize(lang, "Укажите результат и ограничения.", "State the result and constraints."),
         done: Boolean(session),
         available: true,
         icon: Target,
@@ -203,8 +203,8 @@ export default function MarsPage() {
       {
         id: "interview",
         label: localize(lang, "Уточнения", "Clarify"),
-        title: localize(lang, "MARS должен понять детали", "MARS understands details"),
-        description: localize(lang, "Ответьте по шагам, чтобы убрать догадки.", "Answer step by step to remove guesswork."),
+        title: localize(lang, "Уточните детали", "Clarify the details"),
+        description: localize(lang, "Ответьте на несколько вопросов.", "Answer a few questions."),
         done: interviewReady,
         available: Boolean(session),
         icon: ClipboardList,
@@ -221,8 +221,8 @@ export default function MarsPage() {
       {
         id: "run",
         label: localize(lang, "Выполнение", "Run"),
-        title: localize(lang, "MARS пишет и проверяет", "MARS builds and checks"),
-        description: localize(lang, "Результат показывается внутри этого шага.", "The result appears inside this step."),
+        title: localize(lang, "Запустите работу", "Start the work"),
+        description: localize(lang, "MARS внесёт изменения и выполнит проверки.", "MARS will make changes and run checks."),
         done: Boolean(latestRunId),
         available: session?.status === "approved" || Boolean(latestRunId),
         icon: Rocket,
@@ -371,23 +371,22 @@ export default function MarsPage() {
   return (
     <PageShell width="full" className="space-y-5">
       <PageHero
-        kicker={localize(lang, "WebTerm workspace", "WebTerm workspace")}
-        title={localize(lang, "MARS beta - AI-разработка", "MARS beta - AI development")}
+        kicker="MARS"
+        title={localize(lang, "Разработка с MARS", "Build with MARS")}
         description={localize(
           lang,
-          "Соберите задачу через описание, уточнения, план и проверяемое выполнение внутри общего WebTerm workspace.",
-          "Shape a task through description, clarifying questions, plan, and verifiable execution inside the shared WebTerm workspace.",
+          "Опишите задачу, согласуйте план и запустите работу.",
+          "Describe the task, review the plan, and start the work.",
         )}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge
-              label={localize(lang, `Проект: ${shortProjectTitle}`, `Project: ${shortProjectTitle}`)}
+              label={shortProjectTitle}
               tone="neutral"
               className="h-9 px-3"
             />
-            <StatusBadge label={`ID: ${projectId}`} tone="neutral" dot={false} className="h-9 px-3" />
             <StatusBadge
-              label={session ? session.status.replaceAll("_", " ") : localize(lang, "Готов к работе", "Ready")}
+              label={session ? statusLabel(session.status, lang) : localize(lang, "Готов к работе", "Ready")}
               tone={session ? statusTone(session.status) : "success"}
               className="h-9 px-3"
             />

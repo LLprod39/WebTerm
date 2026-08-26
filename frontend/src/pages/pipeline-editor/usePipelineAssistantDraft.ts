@@ -176,7 +176,7 @@ export function usePipelineAssistantDraft({
         });
         return;
       }
-      toast({ description: localize(lang, "Черновик применён локально. Нажмите Save, чтобы сохранить pipeline.", "Draft applied locally. Click Save to persist the pipeline.") });
+      toast({ description: localize(lang, "Черновик применён. Нажмите «Сохранить», чтобы записать изменения.", "Draft applied. Select Save to persist the changes.") });
     },
     [
       assistantProposal,

@@ -144,22 +144,22 @@ export function resourceFreshness(lang: string, item: Record<string, unknown>) {
   return resourceVersion ? `rv ${resourceVersion}` : localize(lang, "нет данных", "no data");
 }
 
-export function resourceFactRows(resource: Record<string, unknown>) {
+export function resourceFactRows(lang: string, resource: Record<string, unknown>) {
   const metadata = metadataOf(resource);
   const status = objectValue(resource.status);
   const spec = objectValue(resource.spec);
   const rows: Array<[string, string]> = [
-    ["Kind", stringValue(resource.kind) || "-"],
-    ["API version", stringValue(resource.apiVersion) || stringValue(resource.api_version) || "-"],
-    ["Name", stringValue(metadata.name) || "-"],
-    ["Namespace", stringValue(metadata.namespace) || "cluster"],
-    ["Resource version", stringValue(metadata.resourceVersion) || "-"],
-    ["Created", stringValue(metadata.creationTimestamp) || "-"],
+    [localize(lang, "Тип", "Kind"), stringValue(resource.kind) || "-"],
+    [localize(lang, "Версия API", "API version"), stringValue(resource.apiVersion) || stringValue(resource.api_version) || "-"],
+    [localize(lang, "Имя", "Name"), stringValue(metadata.name) || "-"],
+    [localize(lang, "Пространство имён", "Namespace"), stringValue(metadata.namespace) || localize(lang, "кластер", "cluster")],
+    [localize(lang, "Версия ресурса", "Resource version"), stringValue(metadata.resourceVersion) || "-"],
+    [localize(lang, "Создан", "Created"), stringValue(metadata.creationTimestamp) || "-"],
   ];
   const phase = stringValue(status.phase) || stringValue(status.status);
   const replicas = stringValue(spec.replicas);
-  if (phase) rows.push(["Status", phase]);
-  if (replicas) rows.push(["Replicas", replicas]);
+  if (phase) rows.push([localize(lang, "Состояние", "Status"), phase]);
+  if (replicas) rows.push([localize(lang, "Реплики", "Replicas"), replicas]);
   return rows.slice(0, 10);
 }
 

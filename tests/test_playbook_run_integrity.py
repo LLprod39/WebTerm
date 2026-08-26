@@ -11,17 +11,19 @@ from django.test import Client
 from django.utils import timezone
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
-from core_ui.managed_secrets import PLAYBOOK_RUN_VARIABLES_NAMESPACE
+from core_ui.managed_secrets import PLAYBOOK_RUN_VARIABLES_NAMESPACE, set_playbook_run_variables
 from core_ui.models import ManagedSecret
 from servers.models import (
     Playbook,
     PlaybookCompatibilityRevision,
+    PlaybookRevision,
     PlaybookRun,
     PlaybookRunDispatch,
     Server,
     ServerGroup,
 )
 from servers.services.playbook_runner_support import PlaybookRunExecutionFence
+from servers.services.playbooks.content import calculate_content_hash
 
 ANSIBLE_SOURCE = """
 - name: Deploy
@@ -155,6 +157,49 @@ def test_skipped_syntax_and_missing_bindings_are_distinct_run_blockers(monkeypat
 
 
 @pytest.mark.django_db
+def test_unsafe_historical_revision_is_blocked_before_run_snapshot():
+    from servers.services.playbook_run_preparation import PlaybookRunPreparationError, prepare_playbook_run
+
+    user = User.objects.create_user(username="unsafe-run-revision", password="x")
+    server = _server(user)
+    token = "glpat-0123456789abcdefghij"
+    source = f"- hosts: all\n  tasks:\n    - debug:\n        msg: {token}\n"
+    playbook = Playbook.objects.create(
+        user=user,
+        name="Unsafe legacy run",
+        kind=Playbook.KIND_ANSIBLE,
+        source_yaml=source,
+    )
+    revision = PlaybookRevision.objects.create(
+        playbook=playbook,
+        revision_number=1,
+        author=user,
+        content_format=PlaybookRevision.FORMAT_ANSIBLE_YAML,
+        source_yaml=source,
+        tasks=[],
+        content_hash=calculate_content_hash(
+            content_format=PlaybookRevision.FORMAT_ANSIBLE_YAML,
+            source_yaml=source,
+            tasks=[],
+        ),
+    )
+    playbook.origin_revision = revision
+    playbook.published_revision = revision
+    playbook.save(update_fields=["origin_revision", "published_revision"])
+
+    with pytest.raises(PlaybookRunPreparationError, match="safety validation") as caught:
+        prepare_playbook_run(
+            user=user,
+            playbook=playbook,
+            payload={"server_ids": [server.id], "inventory_bindings": {"all": {"server_ids": [server.id]}}},
+        )
+
+    assert caught.value.status == 422
+    assert caught.value.compatibility["issues"][0]["code"] == "secret_material_detected"
+    assert PlaybookRun.objects.count() == 0
+
+
+@pytest.mark.django_db
 def test_operator_surfaces_preparation_readiness_details(monkeypatch):
     from servers.operator.mutate_playbooks import run_playbook
 
@@ -254,6 +299,93 @@ def test_ansible_source_in_auto_mode_never_falls_back_to_shell(monkeypatch):
     assert run.status == PlaybookRun.STATUS_FAILED
     assert "Ansible unavailable" in run.error_message
     assert shell_calls == []
+
+
+@pytest.mark.django_db(transaction=True)
+def test_managed_secret_values_are_redacted_before_run_state_is_persisted(monkeypatch):
+    from servers.services import playbook_runner
+    from servers.services.playbooks.target_identity import target_connection_identity_hashes
+
+    secret = "opaque-value-without-a-secret-looking-prefix"
+    user = User.objects.create_user(username="storage-redaction", password="x")
+    server = _server(user)
+    playbook = Playbook.objects.create(
+        user=user,
+        name="Storage redaction",
+        kind=Playbook.KIND_ANSIBLE,
+        source_yaml=ANSIBLE_SOURCE,
+    )
+    run = PlaybookRun.objects.create(
+        playbook=playbook,
+        user=user,
+        playbook_snapshot={
+            "name": playbook.name,
+            "source_yaml": ANSIBLE_SOURCE,
+            "tasks": [],
+            "target_connection_identities": target_connection_identity_hashes([server]),
+        },
+        target_server_ids=[server.id],
+        options={"engine": "ansible"},
+        variable_manifest={
+            "names": ["deployment_credential", "region"],
+            "secret_names": ["deployment_credential"],
+            "managed_secret_names": ["deployment_credential"],
+            "values_redacted": True,
+        },
+    )
+    set_playbook_run_variables(run.id, {"deployment_credential": secret, "region": "eu-west"})
+    monkeypatch.setattr("servers.services.ansible_engine.detect_ansible", lambda: {"available": True, "method": "test"})
+
+    def fake_ansible(**kwargs):
+        assert kwargs["extra_vars"]["deployment_credential"] == secret
+        kwargs["progress_callback"](
+            {
+                "line": f"remote output: {secret}",
+                "progress": {"engine": "ansible", "task": f"echo {secret}"},
+            }
+        )
+        return {
+            "ok": False,
+            "method": "test",
+            "error": f"task returned {secret}",
+            "inventory_preview": f"inventory note {secret}",
+            "host_results": [
+                {
+                    "server_id": server.id,
+                    "server_name": server.name,
+                    "host": server.host,
+                    "status": "error",
+                    "task_results": [
+                        {
+                            "task_id": "one",
+                            "status": "error",
+                            "command": "echo",
+                            "output": f"stdout {secret}",
+                        }
+                    ],
+                }
+            ],
+            "summary": {"hosts_failed": 1, "diagnostic": secret},
+        }
+
+    monkeypatch.setattr("servers.services.ansible_engine.run_ansible_playbook", fake_ansible)
+
+    playbook_runner.execute_playbook_run(run.id)
+
+    run.refresh_from_db()
+    persisted = json.dumps(
+        {
+            "live_log": run.live_log,
+            "error_message": run.error_message,
+            "inventory_preview": run.inventory_preview,
+            "host_results": run.host_results,
+            "summary": run.summary,
+            "progress": run.progress,
+        },
+        ensure_ascii=False,
+    )
+    assert secret not in persisted
+    assert "[REDACTED:managed_secret]" in persisted
 
 
 @pytest.mark.django_db(transaction=True)
@@ -490,3 +622,33 @@ def test_inventory_aliases_include_server_ids_and_trusted_keys_are_enforced(tmp_
     assert "host_key_checking = True" in config
     assert "StrictHostKeyChecking=no" not in config
     assert runtime_secrets == ["ssh-never-log", "sudo-never-log", "ssh-never-log", "sudo-never-log"]
+
+
+def test_short_server_credentials_are_collected_and_redacted(tmp_path, monkeypatch):
+    from servers.services import ansible_engine, ansible_host_keys, ansible_setup
+
+    server = SimpleNamespace(
+        id=91,
+        name="short-secret-host",
+        host="192.0.2.91",
+        port=22,
+        username="root",
+        auth_method="password",
+        key_path="",
+        group=None,
+    )
+    monkeypatch.setattr(ansible_setup, "get_server_auth_secret", lambda *_a, **_k: "x")
+    monkeypatch.setattr(ansible_setup, "get_server_sudo_secret", lambda *_a, **_k: "yz")
+    monkeypatch.setattr(
+        ansible_host_keys,
+        "get_server_trusted_host_keys",
+        lambda _server: [{"public_key": "ssh-ed25519 AAAATEST trusted"}],
+    )
+    runtime_secrets: list[str] = []
+
+    ansible_setup._write_inventory(Path(tmp_path), [server], secret_collector=runtime_secrets)
+    redacted = ansible_engine._redact_runtime_output("password=x become=yz", runtime_secrets)
+
+    assert runtime_secrets == ["x", "yz"]
+    assert "password=x" not in redacted
+    assert "become=yz" not in redacted

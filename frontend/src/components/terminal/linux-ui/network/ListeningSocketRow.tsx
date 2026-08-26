@@ -1,4 +1,5 @@
 import type { LinuxUiListeningSocket } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { extractSocketPort, isSocketExposed } from "./socketUtils";
 
@@ -11,6 +12,7 @@ export function ListeningSocketRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const { lang } = useI18n();
   const exposed = isSocketExposed(item.local_address);
 
   return (
@@ -33,17 +35,17 @@ export function ListeningSocketRow({
         </span>
         {exposed ? (
           <span className="rounded-full border border-destructive/20 bg-destructive/10 px-2 py-0.5 text-xs uppercase tracking-wide text-destructive">
-            exposed
+            {localize(lang, "внешний", "exposed")}
           </span>
         ) : null}
         {extractSocketPort(item.local_address) ? (
           <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
-            port {extractSocketPort(item.local_address)}
+            {localize(lang, "порт", "port")} {extractSocketPort(item.local_address)}
           </span>
         ) : null}
       </div>
       <div className="mt-2 font-mono text-xs text-foreground">{item.local_address || "n/a"}</div>
-      <div className="mt-1 text-xs text-muted-foreground">{item.process || item.peer_address || "Process metadata unavailable"}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{item.process || item.peer_address || localize(lang, "Процесс не определён", "Process metadata unavailable")}</div>
     </button>
   );
 }

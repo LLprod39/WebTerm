@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from ai_cli_runner_manager.adapters.codex import codex_notification_events
-from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_response_events
+from ai_cli_runner_manager.adapters.codex import codex_account_is_chatgpt, codex_notification_events
+from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_output_schema, tool_response_events
 from ai_cli_runner_manager.adapters.grok import (
     _grok_device_auth,
     grok_update_event,
@@ -64,6 +64,25 @@ def test_codex_delta_and_completion_are_normalized() -> None:
     assert complete_event.to_dict()["payload"]["provider_session_id"] == "thread-1"
 
 
+def test_codex_chatgpt_account_is_authenticated_when_openai_auth_is_required() -> None:
+    response = SimpleNamespace(
+        requires_openai_auth=True,
+        account=SimpleNamespace(root=SimpleNamespace(type="chatgpt")),
+    )
+
+    assert codex_account_is_chatgpt(response)
+
+
+def test_codex_subscription_rejects_non_chatgpt_account_modes() -> None:
+    assert not codex_account_is_chatgpt(
+        SimpleNamespace(
+            requires_openai_auth=False,
+            account=SimpleNamespace(root=SimpleNamespace(type="apiKey")),
+        )
+    )
+    assert not codex_account_is_chatgpt(SimpleNamespace(requires_openai_auth=True, account=None))
+
+
 def test_grok_device_auth_parser_never_returns_surrounding_text() -> None:
     url, code = parse_grok_device_auth_line(
         "Open https://accounts.x.ai/device and enter ABCD-1234.",
@@ -98,6 +117,40 @@ def test_unknown_tool_call_fails_closed() -> None:
     )
 
     assert len(events) == 1
+    assert events[0].to_dict()["type"] == "error"
+    assert events[0].to_dict()["payload"]["code"] == "provider_tool_protocol_invalid"
+
+
+def test_codex_tool_schema_uses_json_text_for_open_ended_arguments() -> None:
+    request = replace(_request(), tools=[{"name": "server.read"}])
+
+    schema = tool_output_schema(request)
+
+    assert schema is not None
+    arguments = schema["properties"]["tool_calls"]["items"]["properties"]["arguments"]
+    assert arguments == {"type": "string"}
+
+
+def test_json_encoded_tool_arguments_are_decoded() -> None:
+    request = replace(_request(), tools=[{"name": "server.read"}])
+
+    events = tool_response_events(
+        '{"text":"","tool_calls":[{"name":"server.read","arguments":"{\\"server_id\\":7}"}]}',
+        request,
+    )
+
+    assert events[0].to_dict()["type"] == "tool_request"
+    assert events[0].to_dict()["payload"]["arguments"] == {"server_id": 7}
+
+
+def test_invalid_json_encoded_tool_arguments_fail_closed() -> None:
+    request = replace(_request(), tools=[{"name": "server.read"}])
+
+    events = tool_response_events(
+        '{"text":"","tool_calls":[{"name":"server.read","arguments":"not-json"}]}',
+        request,
+    )
+
     assert events[0].to_dict()["type"] == "error"
     assert events[0].to_dict()["payload"]["code"] == "provider_tool_protocol_invalid"
 

@@ -17,7 +17,7 @@ class ServerMutationDecision:
 
 
 def decide_server_mutation(user: Any, server: Any, *, request: Any = None) -> ServerMutationDecision:
-    """Allow a server mutation only for an automation operator on a writable target."""
+    """Require automation capability for direct mutation endpoints."""
 
     from servers.agents.agent_pilot_policy import user_can_automate
 
@@ -31,7 +31,7 @@ def decide_server_mutation(user: Any, server: Any, *, request: Any = None) -> Se
         return ServerMutationDecision(
             allowed=False,
             code="server_ai_read_only",
-            message="Server is configured as AI read-only.",
+            message="Direct server mutations are disabled for this legacy server record.",
         )
     return ServerMutationDecision(allowed=True)
 
@@ -51,6 +51,6 @@ def decide_server_command(
 
 
 def is_unprivileged_read_only_command(command: str) -> bool:
-    """Read-only command class available to a non-operator pilot user."""
+    """Classify commands which do not require mutation authorization."""
 
     return is_read_only_command(command) and not command_uses_sudo(command)

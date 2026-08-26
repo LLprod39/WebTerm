@@ -40,8 +40,12 @@ export function StudioNav() {
   });
 
   return (
-    <nav className="flex min-h-14 items-center gap-1 overflow-x-auto border-b border-border/60 bg-card/70 py-0 pl-16 pr-4 sm:px-4">
-      <span className="mr-4 flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-xs font-bold uppercase tracking-[0.14em] text-primary/80">
+    <nav
+      data-ui-slot="studio-nav"
+      data-page-kind="studio"
+      className="flex min-h-14 items-center gap-1 overflow-x-auto border-b border-border/60 bg-card/70 py-0 pl-16 pr-4 sm:px-4"
+    >
+      <span data-ui-slot="studio-nav-brand" className="mr-4 flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-1 text-xs font-bold uppercase tracking-[0.14em] text-primary/80">
         <span className="h-1.5 w-1.5 rounded-full bg-primary/70" />
         Studio
       </span>
@@ -52,6 +56,7 @@ export function StudioNav() {
         return (
           <button
             type="button"
+            data-ui-slot="studio-nav-item"
             key={item.path}
             onClick={() => navigate(item.path)}
             aria-current={active ? "page" : undefined}

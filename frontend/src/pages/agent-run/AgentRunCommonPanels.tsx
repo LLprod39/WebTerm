@@ -221,10 +221,10 @@ export function LiveRunBanner({
         </div>
 
         <div className="grid min-w-[min(100%,28rem)] gap-2 sm:grid-cols-2">
-          <LiveMetric label="Dispatch" value={state?.dispatch?.status || report.run.dispatch?.status || "—"} />
-          <LiveMetric label="Worker" value={state?.worker?.worker_key || state?.worker?.status || "—"} tone={state?.worker_ready ? "success" : "warning"} />
-          <LiveMetric label="Runtime" value={state?.runtime_age || "—"} tone={state?.is_stale_candidate ? "warning" : "info"} />
-          <LiveMetric label="Stale after" value={state?.stale_after || "—"} tone={state?.is_stale_candidate ? "warning" : "info"} />
+          <LiveMetric label="Назначение" value={state?.dispatch?.status || report.run.dispatch?.status || "—"} />
+          <LiveMetric label="Исполнитель" value={state?.worker?.worker_key || state?.worker?.status || "—"} tone={state?.worker_ready ? "success" : "warning"} />
+          <LiveMetric label="В работе" value={state?.runtime_age || "—"} tone={state?.is_stale_candidate ? "warning" : "info"} />
+          <LiveMetric label="Просрочится через" value={state?.stale_after || "—"} tone={state?.is_stale_candidate ? "warning" : "info"} />
           <LiveMetric label="Сигналы" value={String(problemEvents + failedLogs)} tone={problemEvents + failedLogs > 0 ? "warning" : "success"} />
           <LiveMetric label="Шаги" value={String(activeSteps)} />
         </div>
@@ -244,7 +244,7 @@ export function LiveRunBanner({
           {state?.can_cleanup ? (
             <Button size="sm" variant="outline" className="h-9 gap-1.5 border-amber-500/30 text-amber-200 hover:text-amber-100" onClick={onCleanupStale} disabled={cleaningStale}>
               {cleaningStale ? <RefreshCw className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-              {cleaningStale ? "Очищаем" : "Очистить stale"}
+              {cleaningStale ? "Очищаем" : "Очистить зависший запуск"}
             </Button>
           ) : null}
           <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => onOpenTab("events")}>

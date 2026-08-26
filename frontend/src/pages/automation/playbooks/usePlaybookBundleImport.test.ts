@@ -139,11 +139,92 @@ describe("usePlaybookBundleImport", () => {
         entrypoint: "site.yml",
         name: "Web project",
         category: "deploy",
-        visibility: "shared",
+        visibility: "private",
       }),
+      preview.content_hash,
     );
     expect(result.current.status).toBe("success");
     expect(result.current.result).toEqual(committed);
     expect(onCommitted).toHaveBeenCalledWith(committed);
+  });
+
+  it("re-previews a selected entrypoint and commits only its refreshed hash", async () => {
+    const multiEntrypointPreview: PlaybookBundlePreview = {
+      ...preview,
+      entrypoints: [
+        ...preview.entrypoints,
+        { path: "ops.yml", play_count: 1, task_count: 2, plays: [{ name: "Ops", hosts: "ops", task_count: 2 }] },
+      ],
+    };
+    const refreshedPreview: PlaybookBundlePreview = {
+      ...multiEntrypointPreview,
+      content_hash: "ops-preview-hash",
+      selected_entrypoint: "ops.yml",
+    };
+    vi.mocked(previewPlaybookBundle)
+      .mockResolvedValueOnce({ success: true, preview: multiEntrypointPreview })
+      .mockResolvedValueOnce({ success: true, preview: refreshedPreview });
+    vi.mocked(commitPlaybookBundle).mockResolvedValue({ ...committed, preview: refreshedPreview });
+    const { result } = renderHook(() => usePlaybookBundleImport());
+    const file = new File(["archive"], "project.zip", { type: "application/zip" });
+
+    await act(async () => {
+      await result.current.selectFile(file);
+    });
+    await act(async () => {
+      await result.current.selectEntrypoint("ops.yml");
+    });
+
+    expect(previewPlaybookBundle).toHaveBeenLastCalledWith(file, "ops.yml", "");
+    expect(result.current.metadata.entrypoint).toBe("ops.yml");
+    expect(result.current.preview?.content_hash).toBe("ops-preview-hash");
+
+    await act(async () => {
+      await result.current.commit();
+    });
+    expect(commitPlaybookBundle).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ entrypoint: "ops.yml", visibility: "private" }),
+      "ops-preview-hash",
+    );
+  });
+
+  it("re-previews a safe archive subdirectory and binds commit to its rebased hash", async () => {
+    const repositoryPreview: PlaybookBundlePreview = {
+      ...preview,
+      files: [
+        { path: "README.md", size_bytes: 10, sha256: "readme", is_text: true },
+        { path: "ansible/site.yml", size_bytes: 512, sha256: "yaml", is_text: true },
+      ],
+      entrypoints: [{ ...preview.entrypoints[0], path: "ansible/site.yml" }],
+      selected_entrypoint: "ansible/site.yml",
+      project_path: "",
+    };
+    const ansiblePreview: PlaybookBundlePreview = {
+      ...preview,
+      content_hash: "ansible-subdir-hash",
+      files: [{ path: "site.yml", size_bytes: 512, sha256: "yaml", is_text: true }],
+      entrypoints: [{ ...preview.entrypoints[0], path: "site.yml" }],
+      selected_entrypoint: "site.yml",
+      project_path: "ansible",
+    };
+    vi.mocked(previewPlaybookBundle)
+      .mockResolvedValueOnce({ success: true, preview: repositoryPreview })
+      .mockResolvedValueOnce({ success: true, preview: ansiblePreview });
+    vi.mocked(commitPlaybookBundle).mockResolvedValue({ ...committed, preview: ansiblePreview });
+    const { result } = renderHook(() => usePlaybookBundleImport());
+    const file = new File(["archive"], "repository.zip", { type: "application/zip" });
+
+    await act(async () => { await result.current.selectFile(file); });
+    await act(async () => { await result.current.selectProjectPath("ansible/"); });
+
+    expect(previewPlaybookBundle).toHaveBeenLastCalledWith(file, "", "ansible");
+    expect(result.current.metadata).toMatchObject({ project_path: "ansible", entrypoint: "site.yml" });
+    await act(async () => { await result.current.commit(); });
+    expect(commitPlaybookBundle).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({ project_path: "ansible", entrypoint: "site.yml", visibility: "private" }),
+      "ansible-subdir-hash",
+    );
   });
 });

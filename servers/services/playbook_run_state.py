@@ -12,9 +12,11 @@ from django.utils import timezone
 from loguru import logger
 
 from app.core.redacted_logging import redacted_log_text
+from app.playbook_run_notifications import notify_playbook_run_terminal
 from core_ui.activity import log_user_activity
 from core_ui.models import UserActivityLog
 from servers.models import Playbook, PlaybookRun
+from servers.services.playbook_progress_state import evolve_playbook_progress, redact_playbook_run_fields
 
 TERMINAL_PLAYBOOK_RUN_STATUSES = frozenset(
     {
@@ -47,12 +49,6 @@ class PlaybookRunNotificationClaim:
     run_id: int
     claimed_at: datetime
     attempt: int
-
-
-def _notify_operator(run_id: int) -> None:
-    from core_ui.services.operator_async import notify_playbook_run_terminal
-
-    notify_playbook_run_terminal(run_id)
 
 
 def _cleanup_runtime_secrets(run_id: int) -> None:
@@ -139,7 +135,7 @@ def deliver_playbook_run_terminal_notification(
         return False
 
     try:
-        _notify_operator(run_id)
+        notify_playbook_run_terminal(run_id)
     except Exception as exc:  # noqa: BLE001
         error = redacted_log_text(exc, limit=4000)
         try:
@@ -226,6 +222,7 @@ def transition_playbook_run(
 
     if status not in TERMINAL_PLAYBOOK_RUN_STATUSES:
         raise ValueError(f"Not a terminal playbook run status: {status}")
+    fields = redact_playbook_run_fields(fields)
     fields.pop("status", None)
     fields.setdefault("finished_at", timezone.now())
 
@@ -250,6 +247,16 @@ def transition_playbook_run(
         run.terminal_notified_at = None
         run.terminal_notification_claimed_at = None
         run.terminal_notification_last_error = ""
+        incoming_progress = fields.pop("progress", None)
+        run.progress = evolve_playbook_progress(
+            run.progress,
+            incoming_progress,
+            status=status,
+            cancel_requested=bool(run.cancel_requested),
+            previous_log=run.live_log,
+            current_log=fields.get("live_log", run.live_log),
+        )
+        update_fields.append("progress")
         for name, value in fields.items():
             try:
                 model_field = run._meta.get_field(name)

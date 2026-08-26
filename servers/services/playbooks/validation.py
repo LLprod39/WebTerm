@@ -171,6 +171,8 @@ def _enrich_issue(issue: dict[str, Any]) -> dict[str, Any]:
         "unbound_host_selector": "bindings",
         "required_variables": "variables",
         "target_os_mismatch": "targets",
+        "ansible_syntax_failed": "runtime",
+        "ansible_runtime_unavailable": "runtime",
         "runtime_mismatch": "runtime",
     }.get(code, "static_analysis")
     return {
@@ -374,6 +376,30 @@ def validate_revision(
                         "message": syntax_check["message"],
                         "path": "runtime",
                         "retryable": True,
+                    }
+                )
+            )
+        elif syntax_check.get("passed") is not True:
+            issues.append(
+                _enrich_issue(
+                    {
+                        "code": (
+                            "ansible_syntax_failed"
+                            if syntax_check.get("passed") is False
+                            else "ansible_runtime_unavailable"
+                        ),
+                        "severity": "error",
+                        "message": str(
+                            syntax_check.get("message") or "Ansible syntax validation did not complete"
+                        ),
+                        "remediation": (
+                            "Fix the reported Ansible/Jinja syntax in the draft, publish a new revision, "
+                            "and run validation again."
+                            if syntax_check.get("passed") is False
+                            else "Restore the Ansible validator runtime and run validation again."
+                        ),
+                        "path": "runtime",
+                        "retryable": syntax_check.get("passed") is None,
                     }
                 )
             )

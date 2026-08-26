@@ -235,8 +235,44 @@ def build_agent_run_events_payload(
     return _build_events(run, event_rows)
 
 
+def _preserved_structured_report(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    preserved: dict[str, Any] = {}
+    model_report = payload.get("model_report")
+    if isinstance(model_report, dict):
+        preserved["model_report"] = _json_safe(model_report)
+    report = payload.get("report") if isinstance(payload.get("report"), dict) else {}
+    report_fields: dict[str, Any] = {}
+    for key in ("indicators", "domain_indicators", "actions", "model_actions", "model_findings", "model_risks"):
+        if isinstance(report.get(key), list):
+            report_fields[key] = _json_safe(report[key])
+    for key, markers in (
+        ("findings", {"confidence", "scope", "evidence_refs"}),
+        ("risks", {"confidence", "scope", "evidence_refs"}),
+        ("recommendations", {"cta", "safety", "evidence_refs"}),
+    ):
+        value = report.get(key)
+        if isinstance(value, list) and any(
+            isinstance(item, dict) and any(marker in item for marker in markers) for item in value
+        ):
+            report_fields[key] = _json_safe(value)
+    if report_fields:
+        preserved["report"] = report_fields
+    return preserved
+
+
 def refresh_agent_run_report_payload(run: AgentRun) -> dict[str, Any]:
+    preserved = _preserved_structured_report(run.report_payload)
     payload = build_agent_run_report_payload(run, prefer_persisted_artifacts=False)
+    if isinstance(preserved.get("model_report"), dict):
+        payload["model_report"] = preserved["model_report"]
+    if isinstance(preserved.get("report"), dict):
+        payload["report"].update(preserved["report"])
+    if isinstance(run.execution_outcome, dict) and run.execution_outcome:
+        payload["outcome"] = run.execution_outcome.get("outcome")
+        payload["outcome_reason"] = run.execution_outcome.get("reason")
+        payload["outcome_details"] = dict(run.execution_outcome)
     if payload.get("report_state", {}).get("artifacts_ready"):
         _sync_agent_run_artifacts(run, payload.get("artifacts") or [])
         payload["artifacts"] = _build_persisted_artifacts(run)

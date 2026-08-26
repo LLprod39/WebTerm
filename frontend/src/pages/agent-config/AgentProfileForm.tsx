@@ -96,9 +96,9 @@ function getRiskItems(form: Partial<AgentConfig>, lang: "ru" | "en") {
   }
 
   if (serverScopeCount === 0) {
-    items.push({ tone: "warn", label: localize(lang, "scope: все доступные серверы", "scope: all accessible servers") });
+    items.push({ tone: "warn", label: localize(lang, "Серверы: все доступные", "Servers: all accessible") });
   } else {
-    items.push({ tone: "ok", label: localize(lang, `scope: ${serverScopeCount} серверов`, `scope: ${serverScopeCount} servers`) });
+    items.push({ tone: "ok", label: localize(lang, `Серверы: ${serverScopeCount}`, `Servers: ${serverScopeCount}`) });
   }
 
   if (!items.length) {
@@ -209,7 +209,7 @@ export function AgentForm({
   const sectionItems: Array<{ id: ProfileSection; label: string; icon: ElementType }> = [
     { id: "main", label: localize(lang, "Основное", "Basics"), icon: SlidersHorizontal },
     { id: "tools", label: localize(lang, "Инструменты", "Tools"), icon: Wrench },
-    { id: "scope", label: "Scope", icon: ServerIcon },
+    { id: "scope", label: localize(lang, "Серверы", "Servers"), icon: ServerIcon },
     { id: "access", label: localize(lang, "Доступ", "Access"), icon: Share2 },
   ];
 
@@ -276,12 +276,12 @@ export function AgentForm({
               />
               {canManageAiRouting ? <div className="space-y-2 rounded-lg border border-border/70 bg-background/45 p-4">
                 <div className="text-sm font-medium text-foreground">
-                  {localize(lang, "AI-провайдер запусков", "Run AI provider")}
+                  {localize(lang, "Провайдер модели для запусков", "Run AI provider")}
                 </div>
                 <p className="text-xs leading-5 text-muted-foreground">
                   {localize(
                     lang,
-                    "Studio-запуски считаются фоновыми: доступны только подключения с unattended-доступом.",
+                    "Запуски Студии идут в фоне: доступны только подключения с фоновым доступом.",
                     "Studio runs are unattended, so only connections with background access are available.",
                   )}
                 </p>
@@ -364,7 +364,7 @@ export function AgentForm({
 
           {form.skill_errors?.length ? (
             <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-              <div className="text-sm font-medium text-amber-200">{localize(lang, "Предупреждения skills", "Skill warnings")}</div>
+              <div className="text-sm font-medium text-amber-200">{localize(lang, "Предупреждения навыков", "Skill warnings")}</div>
               <div className="mt-2 space-y-1">
                 {form.skill_errors.map((error) => (
                   <p key={error} className="text-xs text-amber-100">

@@ -49,4 +49,50 @@ describe("normalizeOperatorMarkdown", () => {
     expect(stripped).toContain("Outro");
     expect(stripped).not.toContain("| A | B |");
   });
+
+  it("repairs glued Russian sentence boundaries without changing URLs or versions", () => {
+    const raw = "Запрашиваю список.Доступно 15 записей. API: example.com, версия 1.2.3.";
+    expect(normalizeOperatorMarkdown(raw)).toBe(
+      "Запрашиваю список. Доступно 15 записей. API: example.com, версия 1.2.3.",
+    );
+  });
+
+  it("never rewrites fenced or inline code while normalizing surrounding prose", () => {
+    const raw = [
+      "До.После",
+      "",
+      "```bash",
+      'echo "готово.Да"',
+      "ID    Name    Host    Port",
+      "```",
+      "",
+      "Команда `echo готово.Да` завершена.Итог готов.",
+    ].join("\n");
+    const out = normalizeOperatorMarkdown(raw);
+
+    expect(out).toContain('```bash\necho "готово.Да"\nID    Name    Host    Port\n```');
+    expect(out).toContain("До. После\n\n```bash");
+    expect(out).toContain("```\n\nКоманда");
+    expect(out).toContain("`echo готово.Да`");
+    expect(out).toContain("До. После");
+    expect(out).toContain("завершена. Итог");
+  });
+
+  it("does not strip table examples inside fenced code", () => {
+    const raw = [
+      "Intro",
+      "```md",
+      "| A | B |",
+      "| --- | --- |",
+      "| 1 | 2 |",
+      "```",
+      "| X | Y |",
+      "| --- | --- |",
+      "| 3 | 4 |",
+    ].join("\n");
+    const out = stripMarkdownTables(raw);
+
+    expect(out).toContain("```md\n| A | B |\n| --- | --- |\n| 1 | 2 |\n```");
+    expect(out).not.toContain("| X | Y |");
+  });
 });

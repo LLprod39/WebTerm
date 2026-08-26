@@ -197,12 +197,12 @@ export function FleetMetricsTable({ servers, className }: { servers: InsightServ
         <div className="flex items-center gap-2">
           <ServerIcon className="h-3.5 w-3.5 text-primary" aria-hidden />
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-            {localize(lang, "Флот", "Fleet")}
+            {localize(lang, "Серверы", "Servers")}
           </h2>
           <span className="font-mono text-2xs text-muted-foreground">{servers.length}</span>
         </div>
         <span className="hidden text-2xs text-muted-foreground sm:block">
-          {localize(lang, "худшие сверху · клик по строке — детали", "worst first · click a row for details")}
+          {localize(lang, "сначала требуют внимания", "needs attention first")}
         </span>
       </div>
 
@@ -223,7 +223,7 @@ export function FleetMetricsTable({ servers, className }: { servers: InsightServ
                   <th className={cn(headerCell, "text-right")}>RAM</th>
                   <th className={cn(headerCell, "text-right")}>{localize(lang, "Диск", "Disk")}</th>
                   <th className={cn(headerCell, "text-right")}>Swap</th>
-                  <th className={cn(headerCell, "text-right")}>{localize(lang, "Ошиб/10м", "Err/10m")}</th>
+                  <th className={cn(headerCell, "text-right")}>{localize(lang, "Ошибки / 10 мин", "Errors / 10 min")}</th>
                   <th className={cn(headerCell, "text-center")}>{localize(lang, "Сигналы", "Signals")}</th>
                   <th className={cn(headerCell, "px-4 text-right")}>{localize(lang, "Прогнозы", "Forecasts")}</th>
                 </tr>

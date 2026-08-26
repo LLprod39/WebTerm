@@ -31,17 +31,17 @@ export type MetricTone = "default" | "success" | "warning" | "danger" | "info";
 
 export function checkTitle(id: string, lang: string) {
   const labels: Record<string, { ru: string; en: string }> = {
-    architecture_guard: { ru: "Architecture guard", en: "Architecture guard" },
-    rancher_provider: { ru: "Rancher provider", en: "Rancher provider" },
-    devtron_provider: { ru: "Devtron provider", en: "Devtron provider" },
-    read_only_sync: { ru: "Read-only sync", en: "Read-only sync" },
-    sync_worker: { ru: "Sync worker", en: "Sync worker" },
-    provider_health: { ru: "Provider health", en: "Provider health" },
-    identity_runtime: { ru: "OIDC/Keycloak runtime", en: "OIDC/Keycloak runtime" },
-    sidebar_release_scope: { ru: "Sidebar release scope", en: "Sidebar release scope" },
-    release_evidence_artifact: { ru: "Release evidence artifact", en: "Release evidence artifact" },
-    studio_automation: { ru: "Studio automation", en: "Studio automation" },
-    frontend_e2e: { ru: "Frontend e2e", en: "Frontend e2e" },
+    architecture_guard: { ru: "Защита архитектуры", en: "Architecture guard" },
+    rancher_provider: { ru: "Подключение Rancher", en: "Rancher provider" },
+    devtron_provider: { ru: "Подключение Devtron", en: "Devtron provider" },
+    read_only_sync: { ru: "Синхронизация только для чтения", en: "Read-only sync" },
+    sync_worker: { ru: "Служба синхронизации", en: "Sync worker" },
+    provider_health: { ru: "Состояние подключения", en: "Provider health" },
+    identity_runtime: { ru: "Служба OIDC/Keycloak", en: "OIDC/Keycloak runtime" },
+    sidebar_release_scope: { ru: "Доступность раздела в меню", en: "Sidebar release scope" },
+    release_evidence_artifact: { ru: "Подтверждение выпуска", en: "Release evidence artifact" },
+    studio_automation: { ru: "Автоматизация Studio", en: "Studio automation" },
+    frontend_e2e: { ru: "Сквозная проверка интерфейса", en: "Frontend e2e" },
   };
   const item = labels[id];
   return item ? localize(lang, item.ru, item.en) : id.replace(/_/g, " ");
@@ -71,23 +71,23 @@ export function readinessLabel(lang: string, status?: KubernetesReadinessStatus,
 export function statusLabel(lang: string, status: string) {
   const labels: Record<string, { ru: string; en: string }> = {
     ready: { ru: "Готово", en: "Ready" },
-    healthy: { ru: "Healthy", en: "Healthy" },
+    healthy: { ru: "Исправно", en: "Healthy" },
     warning: { ru: "Внимание", en: "Warning" },
     degraded: { ru: "Проблема", en: "Degraded" },
     missing: { ru: "Нет", en: "Missing" },
-    manual: { ru: "Manual", en: "Manual" },
+    manual: { ru: "Вручную", en: "Manual" },
     rolling: { ru: "Идёт", en: "Rolling" },
     paused: { ru: "Пауза", en: "Paused" },
-    unknown: { ru: "Unknown", en: "Unknown" },
-    configured: { ru: "Configured", en: "Configured" },
-    not_configured: { ru: "Not configured", en: "Not configured" },
-    running: { ru: "Running", en: "Running" },
-    idle: { ru: "Idle", en: "Idle" },
-    stopped: { ru: "Stopped", en: "Stopped" },
+    unknown: { ru: "Неизвестно", en: "Unknown" },
+    configured: { ru: "Настроено", en: "Configured" },
+    not_configured: { ru: "Не настроено", en: "Not configured" },
+    running: { ru: "Работает", en: "Running" },
+    idle: { ru: "Ожидает", en: "Idle" },
+    stopped: { ru: "Остановлено", en: "Stopped" },
     fresh: { ru: "Свежие", en: "Fresh" },
     stale: { ru: "Устарело", en: "Stale" },
-    disabled: { ru: "Disabled", en: "Disabled" },
-    error: { ru: "Error", en: "Error" },
+    disabled: { ru: "Выключено", en: "Disabled" },
+    error: { ru: "Ошибка", en: "Error" },
   };
   const item = labels[status];
   return item ? localize(lang, item.ru, item.en) : status;
@@ -109,30 +109,30 @@ export function WorkerStateCard({ worker, lang }: { worker: KubernetesWorkerStat
             <CloudCog className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-semibold text-foreground">{worker.worker_kind}</h3>
             <StatusBadge label={statusLabel(lang, worker.status)} tone={worker.is_stale ? "warning" : statusTone(worker.status)} />
-            {worker.is_stale ? <StatusBadge label={localize(lang, "Stale", "Stale")} tone="warning" /> : null}
+            {worker.is_stale ? <StatusBadge label={localize(lang, "Данные устарели", "Stale")} tone="warning" /> : null}
           </div>
           <div className="mt-2 break-all font-mono text-xs text-muted-foreground">
             {worker.command || "python manage.py run_kubernetes_ops_sync_worker --daemon"}
           </div>
         </div>
         <div className="shrink-0 text-xs text-muted-foreground lg:text-right">
-          <div>{localize(lang, "Heartbeat:", "Heartbeat:")} {formatSync(lang, worker.heartbeat_at)}</div>
-          <div>{localize(lang, "Last cycle:", "Last cycle:")} {formatSync(lang, worker.last_cycle_finished_at)}</div>
+          <div>{localize(lang, "Сигнал:", "Heartbeat:")} {formatSync(lang, worker.heartbeat_at)}</div>
+          <div>{localize(lang, "Последний цикл:", "Last cycle:")} {formatSync(lang, worker.last_cycle_finished_at)}</div>
         </div>
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2 text-xs md:grid-cols-4 xl:grid-cols-8">
         {[
-          ["matched", summaryValue(summary, "matched")],
-          ["ok", summaryValue(summary, "ok")],
-          ["failed", summaryValue(summary, "failed")],
-          ["clusters", summaryValue(summary, "clusters")],
-          ["namespaces", summaryValue(summary, "namespaces")],
-          ["workloads", summaryValue(summary, "workloads")],
-          ["pods", summaryValue(summary, "pods")],
-          ["services", summaryValue(summary, "services")],
-          ["ingresses", summaryValue(summary, "ingresses")],
-          ["events", summaryValue(summary, "events")],
-          ["apps", summaryValue(summary, "apps")],
+          [localize(lang, "найдено", "matched"), summaryValue(summary, "matched")],
+          [localize(lang, "успешно", "ok"), summaryValue(summary, "ok")],
+          [localize(lang, "ошибки", "failed"), summaryValue(summary, "failed")],
+          [localize(lang, "кластеры", "clusters"), summaryValue(summary, "clusters")],
+          [localize(lang, "пространства", "namespaces"), summaryValue(summary, "namespaces")],
+          [localize(lang, "нагрузки", "workloads"), summaryValue(summary, "workloads")],
+          [localize(lang, "поды", "pods"), summaryValue(summary, "pods")],
+          [localize(lang, "сервисы", "services"), summaryValue(summary, "services")],
+          ["Ingress", summaryValue(summary, "ingresses")],
+          [localize(lang, "события", "events"), summaryValue(summary, "events")],
+          [localize(lang, "приложения", "apps"), summaryValue(summary, "apps")],
         ].map(([label, value]) => (
           <div key={label} className="rounded-md bg-secondary/30 px-3 py-2">
             <div className="font-semibold text-foreground">{value}</div>
@@ -170,7 +170,7 @@ export function ReadinessCard({ check, lang }: { check: KubernetesReadinessCheck
         )}
         <h3 className="text-sm font-semibold text-foreground">{checkTitle(check.id, lang)}</h3>
         <StatusBadge label={statusLabel(lang, check.status)} tone={statusTone(check.status)} />
-        {!check.required ? <StatusBadge label={localize(lang, "Optional", "Optional")} tone="neutral" /> : null}
+        {!check.required ? <StatusBadge label={localize(lang, "Необязательно", "Optional")} tone="neutral" /> : null}
       </div>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">{check.detail}</p>
     </div>
@@ -338,11 +338,11 @@ export function AppRow({
               variant="outline"
               className="h-8 gap-1.5"
               disabled={restartPending}
-              aria-label={localize(lang, `Запросить restart ${app.name}`, `Request restart for ${app.name}`)}
+              aria-label={localize(lang, `Запросить перезапуск ${app.name}`, `Request restart for ${app.name}`)}
               onClick={() => onRequestRestart(app)}
             >
               <RotateCcw className="h-3.5 w-3.5" />
-              {restartPending ? localize(lang, "Заявка", "Requesting") : localize(lang, "Запрос restart", "Request restart")}
+              {restartPending ? localize(lang, "Создаю заявку", "Requesting") : localize(lang, "Запросить перезапуск", "Request restart")}
             </Button>
           ) : null}
         </div>

@@ -2,23 +2,32 @@
 Server agent run history, control, and task editing endpoints.
 """
 
+import hashlib
 import io
 import json
+import uuid
 import zipfile
 from urllib.parse import quote
 
-from asgiref.sync import async_to_sync
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
+from servers.agents.agent_cleanup_service import cleanup_stale_agent_run_for_user
 from servers.agents.agent_dispatch import serialize_agent_dispatch
 from servers.agents.agent_run_report import (
     build_agent_run_events_payload,
     build_agent_run_report_response,
     refresh_agent_run_report_payload,
+)
+from servers.agents.agent_run_report_v2 import (
+    build_agent_run_activity_response,
+    build_agent_run_artifacts_response,
+    build_agent_run_events_v2,
+    build_agent_run_report_v2,
+    redacted_full_document,
 )
 from servers.agents.agent_service import (
     approve_agent_plan_for_user,
@@ -26,8 +35,9 @@ from servers.agents.agent_service import (
     stop_agent_run_for_user,
 )
 from servers.models import AgentRun, AgentRunArtifact, AgentRunEvent, ServerAgent
-from servers.report_delivery import deliver_agent_report_async
+from servers.run_events import record_run_event
 from servers.services.agent_audit import iter_agent_audit_export, verify_agent_audit_chain
+from servers.tasks import deliver_agent_report_task
 from servers.views.server_helpers import _accessible_servers_queryset
 
 
@@ -132,6 +142,36 @@ def agent_run_report(request, run_id):
 
 @login_required
 @require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_report_v2(request, run_id):
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+    return JsonResponse(build_agent_run_report_v2(run))
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_report_document(request, run_id):
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+    content = redacted_full_document(run)
+    if not content:
+        return JsonResponse({"success": False, "error": "Report document not found"}, status=404)
+    checksum = hashlib.sha256(content.encode("utf-8", errors="replace")).hexdigest()
+    title = f"agent-run-{run.id}-report.md"
+    response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
+    disposition = "attachment" if str(request.GET.get("download") or "").lower() in {"1", "true", "yes"} else "inline"
+    response["Content-Disposition"] = f"{disposition}; filename*=UTF-8''{quote(title)}"
+    response["ETag"] = f'"{checksum}"'
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@login_required
+@require_feature("agents")
 @require_http_methods(["POST"])
 def agent_run_report_deliver(request, run_id):
     """Retry external delivery for a completed agent report."""
@@ -139,22 +179,133 @@ def agent_run_report_deliver(request, run_id):
     if not run:
         return JsonResponse({"success": False, "error": "Run not found"}, status=404)
 
-    payload = build_agent_run_report_response(run)
-    if not payload.get("report_state", {}).get("report_ready"):
+    report_v2 = build_agent_run_report_v2(run)
+    report_generation = report_v2["report_generation"]
+    delivery = report_v2["delivery"]
+    blocked_reason = str(delivery.get("blocked_reason") or "")
+    if not report_generation.get("ready") or not delivery.get("can_retry"):
+        code = blocked_reason or ("report_not_ready" if not report_generation.get("ready") else "delivery_blocked")
         return JsonResponse(
             {
                 "success": False,
-                "error": "Report is not ready",
-                "report_state": payload.get("report_state", {}),
-                "delivery_state": payload.get("delivery_state", {}),
+                "code": code,
+                "error": {
+                    "report_not_ready": "Report is not ready",
+                    "delivery_disabled": "External delivery is disabled",
+                    "telegram_not_configured": "Telegram delivery is not configured",
+                    "already_sent": "Report has already been delivered",
+                    "delivery_in_progress": "Report delivery is already in progress",
+                }.get(code, "Report delivery is blocked"),
+                "report_generation": report_generation,
+                "delivery": delivery,
             },
             status=409,
         )
-
-    async_to_sync(deliver_agent_report_async)(run)
+    attempt_id = str(uuid.uuid4())
+    record_run_event(
+        run.id,
+        "agent_report_delivery_accepted",
+        {
+            "channel": delivery.get("channel") or "telegram",
+            "attempt_id": attempt_id,
+            "source": "http",
+            "message": "Report delivery accepted for background processing.",
+        },
+    )
+    try:
+        deliver_agent_report_task.delay(run.id, attempt_id)
+    except Exception as exc:
+        record_run_event(
+            run.id,
+            "agent_report_delivery_failed",
+            {
+                "channel": delivery.get("channel") or "telegram",
+                "attempt_id": attempt_id,
+                "source": "dispatch",
+                "error": str(exc),
+            },
+        )
+        run.refresh_from_db()
+        refresh_agent_run_report_payload(run)
+        return JsonResponse(
+            {
+                "success": False,
+                "code": "delivery_dispatch_failed",
+                "error": "Delivery task could not be queued",
+                "attempt_id": attempt_id,
+                "delivery": build_agent_run_report_v2(run)["delivery"],
+            },
+            status=503,
+        )
     run.refresh_from_db()
     refresh_agent_run_report_payload(run)
-    return JsonResponse(build_agent_run_report_response(run))
+    return JsonResponse(
+        {
+            "success": True,
+            "code": "delivery_accepted",
+            "data": None,
+            "accepted": True,
+            "attempt_id": attempt_id,
+            "delivery": build_agent_run_report_v2(run)["delivery"],
+        },
+        status=202,
+    )
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_artifacts(request, run_id):
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+    return JsonResponse(build_agent_run_artifacts_response(run))
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_activity(request, run_id):
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+    try:
+        limit = int(request.GET.get("limit", 50))
+    except (TypeError, ValueError):
+        limit = 50
+    return JsonResponse(
+        build_agent_run_activity_response(
+            run,
+            limit=limit,
+            cursor=str(request.GET.get("cursor") or ""),
+            direction=str(request.GET.get("direction") or "older"),
+            kind=str(request.GET.get("kind") or ""),
+            status=str(request.GET.get("status") or ""),
+        )
+    )
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["POST"])
+def agent_run_cleanup_stale(request, run_id):
+    result = cleanup_stale_agent_run_for_user(request.user, run_id)
+    if not result.get("ok"):
+        return JsonResponse(
+            {"success": False, "code": result.get("code"), "error": result.get("error"), **{key: value for key, value in result.items() if key not in {"ok", "status", "code", "error"}}},
+            status=int(result.get("status") or 409),
+        )
+    cleaned_run = result["run"]
+    return JsonResponse(
+        {
+            "success": True,
+            "code": result["code"],
+            "run_id": cleaned_run["run_id"],
+            "cleaned": True,
+            "canceled_dispatches": cleaned_run["canceled_dispatches"],
+            "run": cleaned_run,
+        }
+    )
 
 
 @login_required
@@ -292,6 +443,10 @@ def agent_run_events(request, run_id):
     if not run:
         return JsonResponse({"success": False, "error": "Run not found"}, status=404)
 
+    cursor_params = {"cursor", "direction", "severity", "phase", "category", "important", "q", "v"}
+    if any(key in request.GET for key in cursor_params):
+        return _agent_run_events_v2_response(request, run)
+
     try:
         limit = max(1, min(int(request.GET.get("limit", 200)), 500))
     except (TypeError, ValueError):
@@ -316,6 +471,41 @@ def agent_run_events(request, run_id):
             "integrity": verify_agent_audit_chain(run.id),
         }
     )
+
+
+def _agent_run_events_v2_response(request, run: AgentRun) -> JsonResponse:
+    try:
+        limit = int(request.GET.get("limit", 50))
+    except (TypeError, ValueError):
+        limit = 50
+    raw_event_types = request.GET.getlist("event_type")
+    event_type = ",".join(str(item) for item in raw_event_types if str(item).strip())
+    if not event_type:
+        event_type = str(request.GET.get("event_type") or "")
+    return JsonResponse(
+        build_agent_run_events_v2(
+            run,
+            limit=limit,
+            cursor=str(request.GET.get("cursor") or ""),
+            direction=str(request.GET.get("direction") or "older"),
+            severity=str(request.GET.get("severity") or ""),
+            phase=str(request.GET.get("phase") or ""),
+            category=str(request.GET.get("category") or ""),
+            event_type=event_type,
+            important=str(request.GET.get("important") or ""),
+            query=str(request.GET.get("q") or ""),
+        )
+    )
+
+
+@login_required
+@require_feature("agents")
+@require_http_methods(["GET"])
+def agent_run_events_v2(request, run_id):
+    run = _owned_agent_run(request.user, run_id)
+    if not run:
+        return JsonResponse({"success": False, "error": "Run not found"}, status=404)
+    return _agent_run_events_v2_response(request, run)
 
 
 @login_required

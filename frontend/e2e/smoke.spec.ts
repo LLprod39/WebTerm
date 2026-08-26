@@ -13,14 +13,14 @@ test.describe("Smoke scenarios", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(/\/servers$/);
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
   });
 
   test("@smoke opens key sections from sidebar", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true });
 
     await page.goto("/servers");
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
     await page.getByRole("link", { name: "Dashboard" }).first().click();
     await expect(page.getByRole("heading", { name: "My workspace" })).toBeVisible();

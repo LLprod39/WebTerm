@@ -43,7 +43,7 @@ export function buildUserServerWidgets(ctx: ServerWidgetCtx): WidgetDefinition[]
             className={sectionToneStyles[tone]}
             description={
               liveConnected
-                ? localize(lang, "Live · CPU / RAM / Disk ~2с", "Live · CPU / RAM / Disk ~2s")
+                ? localize(lang, "Онлайн · CPU / RAM / диск · около 2 с", "Live · CPU / RAM / disk · about 2s")
                 : localize(lang, "Снимок + обновление…", "Snapshot + updating…")
             }
             actions={
@@ -56,7 +56,7 @@ export function buildUserServerWidgets(ctx: ServerWidgetCtx): WidgetDefinition[]
                 )}
               >
                 <Radio className={cn("h-3 w-3", liveConnected && "animate-pulse")} />
-                {liveConnected ? "Live" : localize(lang, "кэш", "cache")}
+                {liveConnected ? localize(lang, "Онлайн", "Live") : localize(lang, "Сохранённые данные", "Saved data")}
               </span>
             }
           >
@@ -159,7 +159,7 @@ export function buildUserServerWidgets(ctx: ServerWidgetCtx): WidgetDefinition[]
           <SectionCard
             title={title}
             icon={<TerminalIcon className="h-4 w-4" />}
-            description={localize(lang, "Один клик — и вы в терминале", "One click to a live terminal")}
+            description={localize(lang, "Быстрый переход к терминалу", "Open a terminal quickly")}
             className={sectionToneStyles[tone]}
           >
             <div className="grid gap-2 sm:grid-cols-2">

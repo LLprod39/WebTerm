@@ -14,22 +14,29 @@ interface MotionDivProps extends PropsWithChildren<HTMLAttributes<HTMLDivElement
   whileTap?: unknown;
 }
 
+function motionElement(tag: "button" | "div" | "p" | "span") {
+  return ({
+    animate: _animate,
+    children,
+    exit: _exit,
+    initial: _initial,
+    layout: _layout,
+    layoutId: _layoutId,
+    transition: _transition,
+    whileHover: _whileHover,
+    whileTap: _whileTap,
+    ...props
+  }: MotionDivProps) => createElement(tag, props, children);
+}
+
 vi.mock("framer-motion", () => ({
   AnimatePresence: ({ children }: PropsWithChildren) => children,
   useReducedMotion: () => true,
   motion: {
-    div: ({
-      animate: _animate,
-      children,
-      exit: _exit,
-      initial: _initial,
-      layout: _layout,
-      layoutId: _layoutId,
-      transition: _transition,
-      whileHover: _whileHover,
-      whileTap: _whileTap,
-      ...props
-    }: MotionDivProps) => createElement("div", props, children),
+    button: motionElement("button"),
+    div: motionElement("div"),
+    p: motionElement("p"),
+    span: motionElement("span"),
   },
 }));
 

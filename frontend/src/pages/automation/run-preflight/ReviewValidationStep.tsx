@@ -66,7 +66,7 @@ export function ReviewValidationStep({
           </span>
           <p className="mt-4 text-sm font-medium text-foreground">{tr("Проверяем конфигурацию…", "Checking configuration…")}</p>
           <p className="mt-1 max-w-md text-xs leading-5 text-muted-foreground">
-            {tr("Синтаксис, доступность runtime, привязки и выбранные серверы.", "Syntax, runtime availability, bindings, and selected servers.")}
+            {tr("Синтаксис, готовность запуска, параметры и выбранные серверы.", "Syntax, execution readiness, settings, and selected servers.")}
           </p>
         </div>
       ) : validationError ? (
@@ -96,12 +96,12 @@ export function ReviewValidationStep({
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">
               {ready
                 ? tr("Проверка пройдена. Конфигурация зафиксирована для этого запуска.", "All checks passed. This configuration is locked for the run.")
-                : tr("WebTerm не запустит playbook, пока остаются блокирующие проблемы.", "WebTerm will not run the playbook while blockers remain.")}
+                : tr("Проект нельзя запустить, пока остаются блокирующие проблемы.", "The project cannot run while blocking issues remain.")}
             </p>
           </div>
 
           <dl className="grid border-y border-border/70 sm:grid-cols-2 lg:grid-cols-4">
-            <SummaryItem label="Playbook" value={playbookName} />
+            <SummaryItem label={tr("Проект", "Project")} value={playbookName} />
             <SummaryItem label={tr("Версия", "Revision")} value={revision ? `#${revision.revision_number}` : "—"} />
             <SummaryItem label={tr("Цели", "Targets")} value={tr(`${targetCount} выбрано`, `${targetCount} selected`)} />
             <SummaryItem label={tr("Режим", "Mode")} value={policy.dryRun ? "Dry-run" : tr("Обычный", "Standard")} />
@@ -169,7 +169,7 @@ function ValidationStageRow({ lang, name, stage }: { lang: string; name: string;
     compatibility: ["Совместимость", "Compatibility"],
     bindings: ["Привязки", "Bindings"],
     variables: ["Переменные", "Variables"],
-    runtime: ["Ansible runtime", "Ansible runtime"],
+    runtime: ["Готовность Ansible", "Ansible readiness"],
     targets: ["Цели", "Targets"],
     readiness: ["Готовность", "Readiness"],
     bundle: ["Файлы проекта", "Project files"],

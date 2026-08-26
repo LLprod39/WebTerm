@@ -150,7 +150,7 @@ async def test_ssh_connection_manager_rejects_tunnel_before_asyncssh(
     assert reached_connect is False
 
 
-def test_pilot_user_cannot_disable_server_read_only_or_store_sudo(client, monkeypatch) -> None:
+def test_server_create_retires_read_only_mode_and_accepts_managed_sudo(client, monkeypatch) -> None:
     _enable_policy(monkeypatch)
     user = User.objects.create_user("restricted-server-owner", password="x")
     client.force_login(user)
@@ -179,11 +179,11 @@ def test_pilot_user_cannot_disable_server_read_only_or_store_sudo(client, monkey
         content_type="application/json",
     )
 
-    assert disable.status_code == 403
-    assert disable.json()["code"] == "automation_required"
+    assert disable.status_code == 200
     assert string_false.status_code == 400
-    assert stored_sudo.status_code == 403
-    assert Server.objects.count() == 0
+    assert stored_sudo.status_code == 200
+    assert Server.objects.count() == 2
+    assert not Server.objects.filter(ai_read_only=True).exists()
 
 
 def test_server_create_rejects_unsafe_bastion_before_persistence(client, monkeypatch) -> None:
@@ -362,7 +362,7 @@ def test_only_operator_on_writable_server_can_cross_mutation_boundary(monkeypatc
     assert decide_server_mutation(user, read_only).allowed is False
 
 
-def test_server_update_rechecks_read_only_capability_and_destination(client, monkeypatch) -> None:
+def test_server_update_retires_read_only_mode_and_rechecks_destination(client, monkeypatch) -> None:
     _enable_policy(monkeypatch)
     user = User.objects.create_user("restricted-server-update", password="x")
     server = Server.objects.create(
@@ -401,14 +401,14 @@ def test_server_update_rechecks_read_only_capability_and_destination(client, mon
         content_type="application/json",
     )
 
-    assert denied.status_code == 403
+    assert denied.status_code == 200
     assert invalid.status_code == 400
     assert metadata.status_code == 403
     assert bastion_userinfo.status_code == 400
     assert bastion_metadata.status_code == 403
     server.refresh_from_db()
     assert server.host == "10.20.0.10"
-    assert server.ai_read_only is True
+    assert server.ai_read_only is False
     assert server.network_config == {}
 
     _apply_access_profile(user, "pilot_operator")

@@ -21,5 +21,12 @@ def mark_agent_run_stopped(run: AgentRun, *, completed_at=None) -> AgentRun:
     run.status = AgentRun.STATUS_STOPPED
     run.completed_at = finished_at
     run.duration_ms = compute_run_duration_ms(run, completed_at=finished_at)
-    run.save(update_fields=["status", "completed_at", "duration_ms"])
+    run.execution_outcome = {
+        "outcome": "stopped",
+        "status": AgentRun.STATUS_STOPPED,
+        "reason": "Stopped by operator.",
+        "exit_reason": "stopped",
+        "report_generation": {"status": "failed", "generated_at": None, "error": "Run stopped before report completion."},
+    }
+    run.save(update_fields=["status", "completed_at", "duration_ms", "execution_outcome"])
     return run

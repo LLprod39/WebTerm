@@ -251,8 +251,8 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
       <div className="flex-1 overflow-auto">
         <PageShell width="6xl">
           <SectionCard
-            title={localize(lang, "Настройки оповещений", "Notification Settings")}
-            description={localize(lang, "Студия использует эти значения для согласований, оповещений и отчетов.", "Studio uses these defaults for approvals, alerts, and reports.")}
+            title={localize(lang, "Оповещения", "Notifications")}
+            description={localize(lang, "Telegram, почта и ссылки согласования.", "Telegram, email, and approval links.")}
             icon={<Bell className="h-5 w-5 text-primary" />}
             actions={
               <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !isDirty} className="gap-2">
@@ -262,14 +262,6 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
             }
           >
             <div className="space-y-5">
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 px-4 py-4 text-sm leading-6 text-muted-foreground">
-                {localize(
-                  lang,
-                  "Эти значения работают как настройки по умолчанию для всей Студии. Отдельные сценарии могут переопределять их при необходимости.",
-                  "These values act as Studio-wide defaults. Individual workflows can still override them when needed.",
-                )}
-              </div>
-
               <div className="grid gap-3 md:grid-cols-3">
                 <DeliveryStatusRow
                   icon={Bot}
@@ -279,14 +271,14 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
                 />
                 <DeliveryStatusRow
                   icon={Mail}
-                  title="Email"
-                  description={localize(lang, "Отчеты, эскалации и длинные сообщения.", "Reports, escalation, and longer messages.")}
+                  title={localize(lang, "Почта", "Email")}
+                  description={localize(lang, "Отчёты и подробные оповещения.", "Reports and detailed alerts.")}
                   ready={emailReady}
                 />
                 <DeliveryStatusRow
                   icon={ExternalLink}
-                  title={localize(lang, "Публичный URL", "Public URL")}
-                  description={localize(lang, "Ссылки согласования будут вести сюда.", "Approval links point here.")}
+                  title={localize(lang, "Внешний адрес", "Public URL")}
+                  description={localize(lang, "Адрес для ссылок согласования.", "Address for approval links.")}
                   ready={siteReady}
                 />
               </div>
@@ -295,7 +287,7 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
 
           <SectionCard
             title="Telegram"
-            description={localize(lang, "Используйте Telegram для быстрых подтверждений и срочных оповещений.", "Use Telegram for quick approvals and immediate alerts.")}
+            description={localize(lang, "Быстрые подтверждения и срочные оповещения.", "Quick approvals and immediate alerts.")}
             icon={<Bot className="h-5 w-5 text-primary" />}
           >
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -336,14 +328,14 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
           </SectionCard>
 
           <SectionCard
-            title="Email"
-            description={localize(lang, "Используйте SMTP для отчетов, эскалаций и ссылок, которым нужен журнал подтверждений.", "Use SMTP for reports, escalations, and links that need an audit trail.")}
+            title={localize(lang, "Почта", "Email")}
+            description={localize(lang, "Отчёты и подробные оповещения через SMTP.", "Reports and detailed alerts over SMTP.")}
             icon={<Mail className="h-5 w-5 text-primary" />}
           >
             <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2 md:col-span-2">
-                  <Label>{localize(lang, "Email получателя", "Recipient email")}</Label>
+                  <Label>{localize(lang, "Получатель", "Recipient email")}</Label>
                   <Input
                     type="email"
                     value={form.notify_email || ""}
@@ -399,7 +391,7 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
 
                 <div className="md:col-span-2">
                   <TestButton
-                    label={localize(lang, "Отправить тестовый email", "Send test email")}
+                    label={localize(lang, "Отправить тестовое письмо", "Send test email")}
                     disabled={!emailReady}
                     onTest={() => studioNotifications.testEmail()}
                   />
@@ -422,28 +414,21 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
           </SectionCard>
 
           <SectionCard
-            title={localize(lang, "Публичный URL", "Public URL")}
-            description={localize(lang, "Ссылки согласования из email и Telegram будут вести на этот адрес.", "Approval links sent by email and Telegram will point to this address.")}
+            title={localize(lang, "Внешний адрес", "Public URL")}
+            description={localize(lang, "Используется в ссылках из Telegram и писем.", "Used in links sent through Telegram and email.")}
             icon={<ExternalLink className="h-5 w-5 text-primary" />}
           >
-            <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="max-w-3xl">
               <div className="space-y-2">
-                <Label>{localize(lang, "URL приложения", "Application URL")}</Label>
+                <Label>{localize(lang, "Адрес приложения", "Application URL")}</Label>
                 <Input
                   value={form.site_url || ""}
                   onChange={(event) => setField("site_url", event.target.value)}
                   placeholder="https://your-server.example.com"
                 />
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {localize(lang, "Укажите реальный внешний адрес, который смогут открыть согласующие.", "Use the real external address that approvers can open from their network.")}
+                  {localize(lang, "Укажите адрес, доступный всем согласующим.", "Use an address all approvers can open.")}
                 </p>
-              </div>
-
-              <div className="workspace-subtle rounded-2xl px-4 py-4 text-sm leading-6 text-muted-foreground">
-                <p className="font-medium text-foreground">{localize(lang, "Как Студия использует адрес", "How Studio uses it")}</p>
-                <p className="mt-3">{localize(lang, "1. Ссылки согласования для email и Telegram собираются от этого базового URL.", "1. Email and Telegram approval links are generated from this base URL.")}</p>
-                <p>{localize(lang, "2. Если адрес неверный, операторы попадут на сломанную или локальную ссылку.", "2. If this is wrong, operators will land on a broken or local-only address.")}</p>
-                <p>{localize(lang, "3. Держите его синхронизированным с реальным хостом приложения.", "3. Keep it aligned with the actual host that serves your app.")}</p>
               </div>
             </div>
           </SectionCard>
@@ -456,9 +441,6 @@ export default function NotificationsSettingsPage({ showStudioNav = true }: { sh
                   <div>
                     <div className="font-medium text-foreground">
                       {localize(lang, "Есть несохранённые изменения", "You have unsaved changes")}
-                    </div>
-                    <div className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                      {localize(lang, "Сохраните настройки каналов или откатите черновик.", "Save the channel settings or discard the draft.")}
                     </div>
                   </div>
                 </div>

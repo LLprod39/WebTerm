@@ -68,6 +68,7 @@ export interface PlaybookRunRequest {
   skip_tags: string;
   limit: string;
   engine: "ansible";
+  rerun_of?: number;
 }
 
 export async function validatePlaybookRevision(

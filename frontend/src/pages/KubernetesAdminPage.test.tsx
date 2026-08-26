@@ -259,10 +259,10 @@ describe("KubernetesAdminPage", () => {
   it("creates a read session, uses resource_catalog for list/detail, and renders redacted YAML", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Live resource workspace" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Ресурсы кластера" })).toBeInTheDocument();
     expect((await screen.findAllByText("prod-kz-1")).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("button", { name: /Создать read session|Create read session/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Создать сессию чтения|Create read session/ }));
     expect(await screen.findByText(session.id)).toBeInTheDocument();
 
     await waitFor(() => expect(fetchKubernetesAdminDiscovery).toHaveBeenCalledWith("cluster_1", session.id));
@@ -304,16 +304,16 @@ describe("KubernetesAdminPage", () => {
   it("runs a pod logs snapshot from the selected catalog resource", async () => {
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Создать read session|Create read session/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Создать сессию чтения|Create read session/ }));
     expect(await screen.findByText(session.id)).toBeInTheDocument();
     await screen.findByText("payments-api");
 
     fireEvent.click(screen.getByRole("button", { name: /Pod\s+pods/i }));
     expect(await screen.findByText("payments-api-abc123")).toBeInTheDocument();
     fireEvent.click(screen.getByText("payments-api-abc123"));
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Logs" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Логи" }));
 
-    expect(await screen.findByText("Logs snapshot")).toBeInTheDocument();
+    expect((await screen.findAllByText("Логи")).length).toBeGreaterThan(0);
     expect((await screen.findAllByText(/token=\[redacted\]/)).length).toBeGreaterThan(0);
     expect(fetchKubernetesAdminPodLogs).toHaveBeenCalledWith("cluster_1", {
       session_id: session.id,
@@ -326,16 +326,16 @@ describe("KubernetesAdminPage", () => {
   it("preserves exact CRD resource plural for list/detail/watch", async () => {
     renderPage();
 
-    fireEvent.click(await screen.findByRole("button", { name: /Создать read session|Create read session/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /Создать сессию чтения|Create read session/ }));
     expect(await screen.findByText(session.id)).toBeInTheDocument();
     await screen.findByText("payments-api");
 
     fireEvent.click(screen.getByRole("button", { name: /Widget\s+widgets/i }));
     expect(await screen.findByText("main-widget")).toBeInTheDocument();
     fireEvent.click(screen.getByText("main-widget"));
-    fireEvent.mouseDown(screen.getByRole("tab", { name: "Watch" }));
+    fireEvent.mouseDown(screen.getByRole("tab", { name: "Изменения" }));
 
-    expect(await screen.findByText("1 events")).toBeInTheDocument();
+    expect(await screen.findByText("1 событий")).toBeInTheDocument();
     expect(fetchKubernetesAdminResources).toHaveBeenCalledWith("cluster_1", {
       session_id: session.id,
       api_version: "example.com/v1",

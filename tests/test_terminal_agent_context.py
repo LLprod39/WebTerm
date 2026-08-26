@@ -72,7 +72,7 @@ async def test_build_agent_extra_targets_skips_primary_and_shapes_targets():
     assert target.server_id == 2
     assert target.display_name == "extra"
     assert target.host == "10.0.0.2"
-    assert target.read_only is True
+    assert target.read_only is False
     assert target.is_primary is False
     assert target.description == "readonly db"
 
@@ -89,7 +89,7 @@ def test_accessible_server_sync_helpers_include_owned_server_only():
             "id": server.id,
             "name": "agent-srv",
             "host": "10.0.0.50",
-            "ai_read_only": True,
+            "ai_read_only": False,
             "sudo_auth_mode": "none",
             "description": "ops target",
         }

@@ -59,9 +59,6 @@ function SettingsSideNav({
         <div key={group.id}>
           <div className="mb-2 px-2">
             <div className="type-label text-muted-foreground">{localize(lang, group.label, group.labelEn ?? group.label)}</div>
-            {group.description ? (
-              <p className="mt-1 text-xs leading-4 text-muted-foreground">{localize(lang, group.description, group.descriptionEn ?? group.description)}</p>
-            ) : null}
           </div>
           <ul className="space-y-0.5">
             {group.items.map((item) => {
@@ -93,9 +90,6 @@ function SettingsSideNav({
                       <span className={cn("block font-medium leading-5", active && "text-foreground")}>
                         {localize(lang, item.label, item.labelEn ?? item.label)}
                       </span>
-                      <span className="mt-0.5 block text-xs leading-4 text-muted-foreground">
-                        {localize(lang, item.description, item.descriptionEn ?? item.description)}
-                      </span>
                     </span>
                   </NavLink>
                 </li>
@@ -126,7 +120,6 @@ function SettingsMobileMenu({
           </div>
           <div className="min-w-0">
             <h2 className="font-display text-base font-bold text-foreground">{t("nav.settings")}</h2>
-            <p className="text-sm text-muted-foreground">{t("settings.subtitle")}</p>
           </div>
         </div>
       </div>
@@ -157,7 +150,7 @@ export default function SettingsLayout() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div data-ui-slot="settings-layout" className="flex h-full min-h-0 flex-col bg-background">
       {/* Mobile top bar */}
       <header className="flex h-14 items-center gap-3 border-b border-border bg-card px-4 lg:hidden">
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -183,7 +176,7 @@ export default function SettingsLayout() {
 
       <div className="mx-auto flex min-h-0 w-full max-w-[1400px] flex-1">
         {/* Desktop sidebar */}
-        <aside className="hidden w-72 shrink-0 border-r border-border bg-surface-0/40 lg:flex lg:flex-col">
+        <aside data-ui-slot="settings-sidebar" className="hidden w-72 shrink-0 border-r border-border bg-surface-0/40 lg:flex lg:flex-col">
           <div className="border-b border-border px-4 py-5">
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-primary/30 bg-primary/10 text-primary">
@@ -193,14 +186,8 @@ export default function SettingsLayout() {
                 <h1 className="font-display text-lg font-bold tracking-tight text-foreground">
                   {t("nav.settings")}
                 </h1>
-                <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                  {t("settings.subtitle")}
-                </p>
               </div>
             </div>
-            <p className="mt-3 rounded-sm border border-border bg-card/80 px-3 py-2 text-2xs leading-4 text-muted-foreground">
-              {t("settings.hint")}
-            </p>
           </div>
           <ScrollArea className="min-h-0 flex-1 px-2 py-4">
             <SettingsSideNav user={user} />
@@ -208,7 +195,7 @@ export default function SettingsLayout() {
         </aside>
 
         {/* Content */}
-        <div role="region" aria-label={t("nav.settings")} className="min-h-0 min-w-0 flex-1 overflow-auto">
+        <div data-ui-slot="settings-content" role="region" aria-label={t("nav.settings")} className="min-h-0 min-w-0 flex-1 overflow-auto">
           <div className="px-4 py-5 sm:px-6 lg:px-8 lg:py-6">
             <Outlet />
           </div>

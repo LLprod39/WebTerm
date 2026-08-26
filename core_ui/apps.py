@@ -1,4 +1,12 @@
 from django.apps import AppConfig
+from django.utils.module_loading import import_string
+
+
+def _notify_operator_playbook_run_terminal(run_id: int) -> None:
+    """Resolve the delivery adapter lazily so the provider remains patchable in tests."""
+
+    notifier = import_string("core_ui.services.operator_async.notify_playbook_run_terminal")
+    notifier(int(run_id))
 
 
 class CoreUiConfig(AppConfig):
@@ -15,6 +23,7 @@ class CoreUiConfig(AppConfig):
         from app.core.llm_budget import register_llm_budget_status_provider, register_llm_budget_user_provider
         from app.core.llm_secrets import register_llm_api_key_provider
         from app.core.llm_usage_sink import register_llm_usage_context_provider, register_llm_usage_recorder
+        from app.playbook_run_notifications import register_playbook_run_terminal_notifier
         from app.prometheus_registry import register_prometheus_provider
         from app.tools.activity_provider import register_tool_activity_logger, register_tool_audit_context_provider
         from core_ui.activity import log_user_activity_async
@@ -33,6 +42,7 @@ class CoreUiConfig(AppConfig):
         register_llm_budget_status_provider(get_user_daily_budget_status)
         register_llm_usage_context_provider(capture_llm_usage_audit_context)
         register_llm_usage_recorder(record_llm_usage)
+        register_playbook_run_terminal_notifier(_notify_operator_playbook_run_terminal)
         register_tool_audit_context_provider(get_audit_context)
         register_tool_activity_logger(log_user_activity_async)
         register_operator_web_tools()

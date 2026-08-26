@@ -32,7 +32,7 @@ export function AgentRuntimeOverviewPanel({
 
   return (
     <SectionCard
-      title={localize(lang, "Agent runtime", "Agent runtime")}
+      title={localize(lang, "Система запуска агентов", "Agent execution")}
       description={localize(
         lang,
         "Очередь запусков, расписание и блокеры выполнения",
@@ -45,32 +45,32 @@ export function AgentRuntimeOverviewPanel({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={overview.status} tone={severityTone(overview.severity)} />
-            {hasIssues ? <StatusBadge label={`${summary.issues} issues`} tone="warning" /> : <StatusBadge label="clear" tone="success" />}
-            {staleCount ? <StatusBadge label={`${staleCount} stale`} tone="warning" /> : null}
+            {hasIssues ? <StatusBadge label={localize(lang, `проблем: ${summary.issues}`, `${summary.issues} issues`)} tone="warning" /> : <StatusBadge label={localize(lang, "без проблем", "clear")} tone="success" />}
+            {staleCount ? <StatusBadge label={localize(lang, `зависли: ${staleCount}`, `${staleCount} stale`)} tone="warning" /> : null}
             <span className="text-sm font-semibold text-foreground">
               {hasIssues
-                ? localize(lang, "Есть runtime-блокеры", "Runtime blockers detected")
-                : localize(lang, "Очередь без блокеров", "Queue has no blockers")}
+                ? localize(lang, "Есть проблемы с запусками", "Execution issues detected")
+                : localize(lang, "Запуски работают без ошибок", "Runs have no blockers")}
             </span>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
             {localize(
               lang,
-              `${summary.active_runs} активных запусков, ${dispatchQueue} dispatch в очереди, ${summary.scheduled_due_now} due по расписанию.`,
-              `${summary.active_runs} active runs, ${dispatchQueue} queued dispatches, ${summary.scheduled_due_now} due scheduled agents.`,
+              `Активных запусков: ${summary.active_runs}. В очереди: ${dispatchQueue}. По расписанию ожидают: ${summary.scheduled_due_now}.`,
+              `Active runs: ${summary.active_runs}. Queued: ${dispatchQueue}. Due on schedule: ${summary.scheduled_due_now}.`,
             )}
           </p>
         </div>
         <div className="flex min-w-0 flex-col gap-3 lg:min-w-[520px]">
           <div className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-2 text-xs text-muted-foreground sm:grid-cols-4">
-            <WorkerFact label="active" value={String(summary.active_runs)} />
-            <WorkerFact label="pending" value={String(summary.pending_runs)} />
-            <WorkerFact label="queued" value={String(summary.queued_dispatches)} />
-            <WorkerFact label="claimed" value={String(summary.claimed_dispatches)} />
-            <WorkerFact label="running" value={String(summary.running_runs)} />
-            <WorkerFact label="waiting" value={String(summary.waiting_runs)} />
-            <WorkerFact label="scheduled" value={String(summary.scheduled_agents)} />
-            <WorkerFact label="due" value={String(summary.scheduled_due_now)} />
+            <WorkerFact label={localize(lang, "активные", "active")} value={String(summary.active_runs)} />
+            <WorkerFact label={localize(lang, "ожидают", "pending")} value={String(summary.pending_runs)} />
+            <WorkerFact label={localize(lang, "в очереди", "queued")} value={String(summary.queued_dispatches)} />
+            <WorkerFact label={localize(lang, "взяты", "claimed")} value={String(summary.claimed_dispatches)} />
+            <WorkerFact label={localize(lang, "выполняются", "running")} value={String(summary.running_runs)} />
+            <WorkerFact label={localize(lang, "ждут ответа", "waiting")} value={String(summary.waiting_runs)} />
+            <WorkerFact label={localize(lang, "по расписанию", "scheduled")} value={String(summary.scheduled_agents)} />
+            <WorkerFact label={localize(lang, "пора запустить", "due")} value={String(summary.scheduled_due_now)} />
           </div>
           {staleCount ? (
             <div className="flex justify-start sm:justify-end">
@@ -84,7 +84,7 @@ export function AgentRuntimeOverviewPanel({
                 {cleaningStale ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <AlertTriangle className="h-3.5 w-3.5" />}
                 {cleaningStale
                   ? localize(lang, "Очищаем", "Cleaning")
-                  : localize(lang, "Очистить stale", "Clean stale")}
+                  : localize(lang, "Убрать зависшие", "Clear stale")}
               </Button>
             </div>
           ) : null}
@@ -95,13 +95,13 @@ export function AgentRuntimeOverviewPanel({
           <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                {localize(lang, "Рекомендуемый production worker", "Recommended production worker")}
+                {localize(lang, "Рекомендуемый сервис запуска", "Recommended execution service")}
               </p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
                 {localize(
                   lang,
-                  "Supervisor держит execution-plane, расписания и watchers одним управляемым процессом.",
-                  "Supervisor keeps execution-plane, schedules, and watchers under one managed process.",
+                  "Один управляемый процесс обслуживает запуски, расписания и отслеживание состояния.",
+                  "One managed process handles runs, schedules, and status tracking.",
                 )}
               </p>
             </div>
@@ -176,7 +176,7 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
       {activeRuns.length ? (
         <RuntimeItemList
           title={localize(lang, "Активные запуски", "Active runs")}
-          description={localize(lang, "Что сейчас занимает execution slot", "Currently occupying execution slots")}
+          description={localize(lang, "Выполняются сейчас", "Running now")}
         >
           {activeRuns.slice(0, 5).map((run) => (
             <RuntimeItemRow
@@ -198,8 +198,8 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
 
       {queuedDispatches.length ? (
         <RuntimeItemList
-          title={localize(lang, "Очередь dispatch", "Dispatch queue")}
-          description={localize(lang, "Что ждёт или взято worker'ом", "Queued or claimed by a worker")}
+          title={localize(lang, "Очередь запусков", "Run queue")}
+          description={localize(lang, "Ожидают или уже приняты в работу", "Waiting or already claimed")}
         >
           {queuedDispatches.slice(0, 5).map((dispatch) => (
             <RuntimeItemRow
@@ -212,9 +212,9 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
                 `run #${dispatch.run_id}`,
                 localize(lang, `в очереди ${formatRuntimeAge(dispatch.queued_age_seconds)}`, `queued ${formatRuntimeAge(dispatch.queued_age_seconds)}`),
               ]}
-              detail={dispatch.claimed_by ? `worker: ${dispatch.claimed_by}` : ""}
+              detail={dispatch.claimed_by ? `${localize(lang, "обработчик", "worker")}: ${dispatch.claimed_by}` : ""}
               to={`/agents/run/${dispatch.run_id}`}
-              linkLabel={localize(lang, "Run", "Run")}
+              linkLabel={localize(lang, "Запуск", "Run")}
             />
           ))}
         </RuntimeItemList>
@@ -222,8 +222,8 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
 
       {scheduledDue.length ? (
         <RuntimeItemList
-          title={localize(lang, "Due расписание", "Due schedule")}
-          description={localize(lang, "Кого пора запускать по расписанию", "Agents due for scheduled launch")}
+          title={localize(lang, "Ожидают по расписанию", "Due on schedule")}
+          description={localize(lang, "Агенты, которых пора запустить", "Agents ready for a scheduled run")}
         >
           {scheduledDue.slice(0, 5).map((agent) => (
             <RuntimeItemRow
@@ -232,9 +232,9 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
               tone={agent.active_run_id ? "info" : "warning"}
               title={agent.agent_name}
               meta={[
-                agent.server_names?.[0] || `${agent.server_count} servers`,
+                agent.server_names?.[0] || localize(lang, `${agent.server_count} серверов`, `${agent.server_count} servers`),
                 formatScheduleConfigLabel(agent.schedule_config, agent.schedule_minutes, lang),
-                agent.due_age_seconds ? localize(lang, `due ${formatRuntimeAge(agent.due_age_seconds)}`, `due ${formatRuntimeAge(agent.due_age_seconds)}`) : "due now",
+                agent.due_age_seconds ? localize(lang, `ожидает ${formatRuntimeAge(agent.due_age_seconds)}`, `due ${formatRuntimeAge(agent.due_age_seconds)}`) : localize(lang, "пора запускать", "due now"),
               ]}
               to={agent.active_run_id ? `/agents/run/${agent.active_run_id}` : undefined}
               linkLabel={agent.active_run_id ? localize(lang, "Открыть", "Open") : undefined}
@@ -245,8 +245,8 @@ function AgentRuntimeItems({ overview, lang }: { overview: AgentRuntimeOverview;
 
       {staleCandidates.length ? (
         <RuntimeItemList
-          title={localize(lang, "Зависшие кандидаты", "Stale candidates")}
-          description={localize(lang, "Активные строки старше runtime threshold", "Active rows older than runtime threshold")}
+          title={localize(lang, "Возможно зависли", "Possibly stale")}
+          description={localize(lang, "Запуски без обновлений дольше ожидаемого", "Runs without updates longer than expected")}
         >
           {staleCandidates.slice(0, 5).map((run) => (
             <RuntimeItemRow

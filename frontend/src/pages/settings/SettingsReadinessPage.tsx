@@ -17,7 +17,6 @@ import {
   type SettingsReadinessSeverity,
 } from "@/api";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
-import { settingsNavGroups } from "@/components/settings/settings-nav-items";
 import { Button } from "@/components/ui/button";
 import { MetricCard, MetricGrid, QueryStateBlock, StatusBadge } from "@/components/ui/page-shell";
 import { canUseDemoMode, isDemoMode } from "@/lib/demo";
@@ -101,14 +100,13 @@ function ReadinessCheckRow({ check }: { check: SettingsReadinessCheck }) {
   );
 }
 
-/** First-run path: configure in UI after deploy, no env hunting. */
 const SETUP_PATH = [
-  { path: "/settings/ai", title: "1. AI и модели", body: "Провайдеры, API-ключи, модели для чата и агентов" },
-  { path: "/settings/notifications", title: "2. Оповещения", body: "Telegram / email и публичный URL платформы" },
+  { path: "/settings/ai", title: "1. ИИ и модели", body: "Провайдеры, ключи и модели" },
+  { path: "/settings/notifications", title: "2. Оповещения", body: "Telegram, почта и внешний адрес" },
   { path: "/settings/users", title: "3. Пользователи", body: "Аккаунты команды и профили доступа" },
-  { path: "/settings/limits", title: "4. Лимиты", body: "Runs, SSH-сессии, бюджет токенов" },
-  { path: "/settings/sso", title: "5. SSO (опц.)", body: "Доменный вход и LDAP без правки env-файлов" },
-  { path: "/settings/plugins", title: "6. Плагины", body: "Marketplace и локальные расширения" },
+  { path: "/settings/limits", title: "4. Лимиты", body: "Запуски, SSH-сессии и токены" },
+  { path: "/settings/sso", title: "5. SSO (необязательно)", body: "Корпоративный вход и LDAP" },
+  { path: "/settings/plugins", title: "6. Плагины", body: "Каталог и локальные расширения" },
 ];
 
 export default function SettingsReadinessPage() {
@@ -131,12 +129,12 @@ export default function SettingsReadinessPage() {
   const clientChecks: SettingsReadinessCheck[] = [
     {
       key: "frontend_demo_mode",
-      title: "Режим demo на frontend",
+      title: "Демонстрационный режим",
       status: canUseDemoMode() ? "warning" : "ready",
       severity: canUseDemoMode() ? "warning" : "ready",
       message: canUseDemoMode()
-        ? "VITE_ENABLE_DEMO_MODE=true в сборке frontend. Для production demo fallback лучше выключить."
-        : "Demo mode на frontend выключен — ок для production.",
+        ? "Демонстрационный вход включён в сборке. Перед рабочим запуском отключите его."
+        : "Демонстрационный вход выключен.",
       details: {
         vite_enable_demo_mode: canUseDemoMode(),
         demo_mode_active: isDemoMode(),
@@ -157,7 +155,6 @@ export default function SettingsReadinessPage() {
     data?.status || "warning",
   );
 
-  const launchItems = settingsNavGroups.find((g) => g.id === "launch")?.items || [];
   const setupPath = authData?.user?.features.plugins
     ? SETUP_PATH
     : SETUP_PATH.filter((step) => step.path !== "/settings/plugins");
@@ -185,13 +182,13 @@ export default function SettingsReadinessPage() {
               <p className="mt-2 text-sm leading-6 text-muted-foreground">
                 {localize(
                   lang,
-                  "Проверьте обязательные настройки, затем добавьте первый сервер. Мастер использует фактический readiness backend и не скрывает ошибки.",
+                  "Проверьте обязательные настройки, затем добавьте первый сервер. Ошибки останутся видимыми.",
                   "Review the required settings, then add your first server. This wizard uses live backend readiness and does not hide failures.",
                 )}
               </p>
               {degradedFirstRun ? (
                 <p className="mt-3 rounded-sm border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning-foreground" role="alert">
-                  {localize(lang, "Readiness API недоступен. Исправьте соединение или продолжите в ограниченном режиме.", "The readiness API is unavailable. Restore connectivity or continue in degraded mode.")}
+                  {localize(lang, "Проверка готовности недоступна. Восстановите соединение или продолжите с ограничениями.", "The readiness check is unavailable. Restore connectivity or continue in degraded mode.")}
                 </p>
               ) : null}
             </div>
@@ -206,7 +203,7 @@ export default function SettingsReadinessPage() {
       <SettingsPageHeader
         icon={Gauge}
         title="Готовность платформы"
-        description="После развёртывания настраивайте WebTerm здесь: AI, доступы, лимиты, оповещения — без правок env «на глаз»."
+        description="Проверьте обязательные настройки перед началом работы."
         actions={
           <>
             <StatusBadge label={severityLabel(status)} tone={severityTone(status)} />
@@ -230,7 +227,7 @@ export default function SettingsReadinessPage() {
             Порядок настройки
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Пройдите шаги слева направо — этого достаточно, чтобы команда могла работать в production.
+            Настройте основные разделы по порядку.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -255,35 +252,9 @@ export default function SettingsReadinessPage() {
         </div>
       </section>
 
-      {/* Quick jump for launch group */}
-      <section className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {launchItems
-          .filter((item) => item.id !== "readiness")
-          .map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.id}
-                to={item.path}
-                className="flex items-start gap-3 rounded-sm border border-border bg-card px-3.5 py-3 transition-colors hover:border-primary/40 hover:bg-surface-1"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border bg-surface-0 text-primary">
-                  <Icon className="h-4 w-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-foreground">{item.label}</span>
-                  <span className="mt-0.5 block text-2xs leading-4 text-muted-foreground">
-                    {item.setupHint || item.description}
-                  </span>
-                </span>
-              </Link>
-            );
-          })}
-      </section>
-
       <QueryStateBlock
         loading={isLoading}
-        error={error || (!isLoading && !data?.success ? new Error("Не удалось загрузить readiness report") : undefined)}
+        error={error || (!isLoading && !data?.success ? new Error("Не удалось загрузить отчёт о готовности") : undefined)}
         errorText="Не удалось загрузить проверку готовности"
         onRetry={() => queryClient.invalidateQueries({ queryKey: ["settings", "readiness"] })}
       >
@@ -307,7 +278,7 @@ export default function SettingsReadinessPage() {
               <MetricCard
                 label="Внимание"
                 value={summary.warning}
-                description="Проверьте перед PROD"
+                description="Требуют проверки"
                 tone="warning"
                 icon={<AlertTriangle className="h-4 w-4" />}
               />
@@ -322,10 +293,7 @@ export default function SettingsReadinessPage() {
 
             <section className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1">
               <div className="border-b border-border bg-surface-0/50 px-5 py-4">
-                <h2 className="text-sm font-semibold text-foreground">Проблемные зоны</h2>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Сначала ошибки, потом предупреждения. Кнопка «Настроить» ведёт в нужный раздел UI.
-                </p>
+                <h2 className="text-sm font-semibold text-foreground">Что требует внимания</h2>
               </div>
               <div className="space-y-3 p-4 sm:p-5">
                 {checks

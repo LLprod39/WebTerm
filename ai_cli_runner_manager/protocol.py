@@ -14,6 +14,7 @@ _INVOCATION_REF = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{7,159}$")
 _MAX_MESSAGES = 200
 _MAX_TOOLS = 200
 _MAX_TEXT_CHARS = 500_000
+_REASONING_EFFORTS = {"low", "medium", "high", "xhigh", "max", "ultra"}
 
 
 class RunnerProtocolError(ValueError):
@@ -34,6 +35,7 @@ class RunnerRequestV1:
     target_id: str
     invocation_id: str
     model_id: str | None = None
+    reasoning_effort: str | None = None
     provider_session_id: str | None = None
     system_prompt: str | None = None
     messages: list[dict[str, Any]] = field(default_factory=list)
@@ -68,6 +70,11 @@ class RunnerRequestV1:
         )
         if text_chars > _MAX_TEXT_CHARS:
             raise RunnerProtocolError("Runner request text exceeds the 500000 character limit")
+        if self.reasoning_effort is not None:
+            reasoning_effort = self.reasoning_effort.strip().lower()
+            if reasoning_effort not in _REASONING_EFFORTS:
+                raise RunnerProtocolError("reasoning_effort is not supported")
+            object.__setattr__(self, "reasoning_effort", reasoning_effort)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> RunnerRequestV1:
@@ -81,6 +88,7 @@ class RunnerRequestV1:
                 target_id=str(value.get("target_id") or ""),
                 invocation_id=str(value.get("invocation_id") or ""),
                 model_id=_optional_string(value.get("model_id")),
+                reasoning_effort=_optional_string(value.get("reasoning_effort")),
                 provider_session_id=_optional_string(value.get("provider_session_id")),
                 system_prompt=_optional_string(value.get("system_prompt")),
                 messages=_dict_list(value.get("messages"), "messages"),
@@ -102,6 +110,7 @@ class RunnerRequestV1:
             "target_id": self.target_id,
             "invocation_id": self.invocation_id,
             "model_id": self.model_id,
+            "reasoning_effort": self.reasoning_effort,
             "provider_session_id": self.provider_session_id,
             "system_prompt": self.system_prompt,
             "messages": self.messages,

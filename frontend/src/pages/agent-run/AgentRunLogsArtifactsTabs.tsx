@@ -41,13 +41,13 @@ export function LogsTab({ report, logs }: { report: AgentRunReportResponse; logs
               setQuery(event.target.value);
               setVisibleCount(LOG_PAGE_SIZE);
             }}
-            placeholder="Поиск по командам и output"
+            placeholder="Поиск по командам и выводу"
             className="pl-9"
           />
         </div>
         <Button variant={wrap ? "default" : "outline"} size="sm" className="h-10 gap-1.5" onClick={() => setWrap((value) => !value)}>
           <WrapText className="h-4 w-4" />
-          Wrap
+          Перенос строк
         </Button>
       </div>
       <div className="space-y-3 p-4">
@@ -57,7 +57,7 @@ export function LogsTab({ report, logs }: { report: AgentRunReportResponse; logs
               <StatusBadge label={log.exit_code === 0 ? "Завершено" : `Код ${log.exit_code}`} tone={log.exit_code === 0 ? "success" : "danger"} />
               <span className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">{log.command || log.title}</span>
               <span className="text-xs text-muted-foreground">{formatDuration(log.duration_ms)}</span>
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void copyLog(log)} aria-label="Copy log">
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => void copyLog(log)} aria-label="Скопировать лог">
                 {copied === log.id ? <Check className="h-3.5 w-3.5 text-success" /> : <Clipboard className="h-3.5 w-3.5" />}
               </Button>
             </div>
@@ -150,7 +150,7 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
               </span>
             ) : null}
             {report.artifact_state?.manifest_ready ? (
-              <span className="ml-2 text-success">manifest проверен</span>
+              <span className="ml-2 text-success">манифест проверен</span>
             ) : null}
           </p>
         </div>
@@ -178,7 +178,7 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="break-all font-mono text-sm font-medium text-foreground">{artifact.name}</span>
                   <span className="rounded-md border border-border/70 bg-background/45 px-2 py-0.5 text-xs text-muted-foreground">{artifact.type}</span>
-                  {artifact.truncated ? <span className="text-xs text-warning">truncated</span> : null}
+                  {artifact.truncated ? <span className="text-xs text-warning">обрезан</span> : null}
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{artifact.description}</p>
                 <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-muted-foreground">
@@ -212,7 +212,7 @@ function EmptyRunDataPanel({ report, kind }: { report: AgentRunReportResponse; k
   const terminalTitle = kind === "logs" ? "Логи не найдены" : "Шаги агента не найдены";
   const description = active
     ? report.report_state?.next_expected || "Данные появятся после того, как агент начнёт выполнять команды и задачи."
-    : "В этом запуске backend не сохранил данные для этой вкладки.";
+    : "В этом запуске сервер не сохранил данные для этой вкладки.";
 
   return (
     <div className="workspace-empty text-sm text-muted-foreground">

@@ -11,7 +11,7 @@ from django.core.management import call_command
 from django.db import OperationalError
 from django.utils import timezone
 
-from app.ai_runtime import ProviderEventType
+from app.ai_runtime import ProviderEventType, ProviderEventV1
 from core_ui.models.ai_providers import AIConnectionAuthFlow, AIProviderConnection
 from core_ui.services import ai_provider_auth as provider_auth
 from core_ui.services.ai_provider_auth import (
@@ -187,6 +187,36 @@ def test_device_code_update_preserves_current_owned_flow() -> None:
     assert flow.status == AIConnectionAuthFlow.STATUS_PENDING
     assert flow.verification_uri == "https://auth.openai.com/device"
     assert flow.user_code == "CURRENT-CODE"
+
+
+def test_verification_auth_required_is_not_treated_as_device_url(monkeypatch) -> None:
+    flow = _flow("VerifyLoggedOut")
+    flow.flow_kind = "verification"
+    flow.save(update_fields=["flow_kind"])
+    fencing_token = claim_auth_flow(flow.pk, worker_name="verify-worker")
+    assert fencing_token == 1
+
+    class _Client:
+        async def stream(self, _request):
+            yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
+
+        async def cancel(self, _invocation_ref: str) -> bool:
+            return True
+
+    monkeypatch.setattr(provider_auth, "AiCliRunnerClient", _Client)
+
+    async_to_sync(provider_auth._run_auth_flow)(
+        flow.pk,
+        worker_name="verify-worker",
+        fencing_token=fencing_token,
+    )
+
+    flow.refresh_from_db()
+    flow.connection.refresh_from_db()
+    assert flow.status == AIConnectionAuthFlow.STATUS_FAILED
+    assert flow.error_code == "provider_auth_required"
+    assert flow.connection.status == AIProviderConnection.STATUS_AUTH_REQUIRED
+    assert flow.connection.last_error_code == "provider_auth_required"
 
 
 @pytest.mark.asyncio

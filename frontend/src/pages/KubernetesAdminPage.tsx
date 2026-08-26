@@ -269,21 +269,21 @@ export default function KubernetesAdminPage() {
   return (
     <KubernetesShell width="full">
       <KubernetesPageHeader
-        kicker={localize(lang, "Admin Mode", "Admin Mode")}
-        title={localize(lang, "Live resource workspace", "Live resource workspace")}
+        kicker="Kubernetes"
+        title={localize(lang, "Ресурсы кластера", "Cluster resources")}
         description={localize(
           lang,
-          "Catalog · table · YAML · events · logs · watch. Чище Freelens: один поток, без хаоса панелей. Read-only по умолчанию.",
-          "Catalog · table · YAML · events · logs · watch. Cleaner than Freelens: one flow, no panel chaos. Read-only by default.",
+          "Просмотр ресурсов, YAML, событий и логов. Изменения отключены.",
+          "Browse resources, YAML, events, and logs. Changes are disabled.",
         )}
         meta={
           <>
             <StatusBadge
-              label={canAdminRead ? localize(lang, "Admin read", "Admin read") : localize(lang, "Нет admin read", "No admin read")}
+              label={canAdminRead ? localize(lang, "Доступ есть", "Access granted") : localize(lang, "Нет доступа", "No access")}
               tone={canAdminRead ? "success" : "warning"}
             />
             <StatusBadge
-              label={sessionId ? localize(lang, "Session active", "Session active") : localize(lang, "Нужна session", "Session required")}
+              label={sessionId ? localize(lang, "Сеанс активен", "Session active") : localize(lang, "Создайте сеанс", "Session required")}
               tone={sessionId ? "success" : "warning"}
             />
           </>
@@ -293,7 +293,7 @@ export default function KubernetesAdminPage() {
             <Button asChild variant="outline" size="sm" className="h-10 gap-2">
               <Link to="/kubernetes">
                 <ArrowLeft className="h-4 w-4" />
-                {localize(lang, "Пульт", "Cockpit")}
+                {localize(lang, "К обзору", "Back to overview")}
               </Link>
             </Button>
             <K8sRefreshButton onClick={refreshAll} label={localize(lang, "Обновить", "Refresh")} />
@@ -304,24 +304,24 @@ export default function KubernetesAdminPage() {
       <QueryStateBlock
         loading={loading}
         error={error}
-        errorText={localize(lang, "Не удалось загрузить Kubernetes Admin Mode", "Failed to load Kubernetes Admin Mode")}
+        errorText={localize(lang, "Не удалось загрузить ресурсы Kubernetes", "Failed to load Kubernetes resources")}
         onRetry={refreshAll}
       >
         {!canAdminRead ? (
           <EmptyState
             icon={<ShieldCheck className="h-5 w-5" />}
-            title={localize(lang, "Admin Mode read не включён", "Admin Mode read is not enabled")}
+            title={localize(lang, "Нет доступа к ресурсам", "No resource access")}
             description={localize(
               lang,
-              "Обычный Kubernetes доступ остаётся read-only cockpit. Для live explorer нужен отдельный флаг kubernetes_admin_read.",
-              "Regular Kubernetes access remains a read-only cockpit. The live explorer requires the separate kubernetes_admin_read flag.",
+              "Для просмотра ресурсов нужно разрешение kubernetes_admin_read.",
+              "Browsing resources requires the kubernetes_admin_read permission.",
             )}
           />
         ) : !clusters.length ? (
           <EmptyState
             icon={<Database className="h-5 w-5" />}
             title={localize(lang, "Кластеры не найдены", "No clusters found")}
-            description={localize(lang, "Сначала нужен Rancher/provider sync.", "Rancher/provider sync is required first.")}
+            description={localize(lang, "Настройте подключение Rancher и запустите синхронизацию.", "Configure the Rancher connection and run a sync.")}
           />
         ) : (
           <div className="space-y-4">
@@ -348,28 +348,28 @@ export default function KubernetesAdminPage() {
             {!sessionId ? (
               <EmptyState
                 icon={<ShieldCheck className="h-5 w-5" />}
-                title={localize(lang, "Создайте read session", "Create a read session")}
+                title={localize(lang, "Создайте сеанс просмотра", "Create a read-only session")}
                 description={localize(
                   lang,
-                  "После session WebTerm загрузит discovery catalog и откроет read-only resource workspace.",
-                  "After a session, WebTerm will load the discovery catalog and open the read-only resource workspace.",
+                  "Сеанс действует один час и разрешает только чтение.",
+                  "The session lasts one hour and allows read-only access.",
                 )}
               />
             ) : (
               <QueryStateBlock
                 loading={discoveryQuery.isLoading}
                 error={discoveryQuery.error}
-                errorText={localize(lang, "Не удалось загрузить resource catalog", "Failed to load resource catalog")}
+                errorText={localize(lang, "Не удалось загрузить каталог ресурсов", "Failed to load the resource catalog")}
                 onRetry={() => void discoveryQuery.refetch()}
               >
                 {!catalog ? (
                   <EmptyState
                     icon={<ListTree className="h-5 w-5" />}
-                    title={localize(lang, "Resource catalog недоступен", "Resource catalog unavailable")}
+                    title={localize(lang, "Каталог ресурсов недоступен", "Resource catalog unavailable")}
                     description={localize(
                       lang,
-                      "Frontend не будет угадывать Kubernetes API paths. Нужен backend resource_catalog contract.",
-                      "The frontend will not guess Kubernetes API paths. The backend resource_catalog contract is required.",
+                      "Обновите страницу или проверьте подключение к кластеру.",
+                      "Refresh the page or check the cluster connection.",
                     )}
                   />
                 ) : (

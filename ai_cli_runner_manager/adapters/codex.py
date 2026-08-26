@@ -15,6 +15,7 @@ class CodexSubscriptionAdapter:
     async def stream(self, request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
         try:
             from openai_codex import ApprovalMode, AsyncCodex, Sandbox
+            from openai_codex.types import ReasoningEffort
         except ImportError:
             yield error_event("provider_runtime_missing", "Pinned Codex SDK is not installed")
             return
@@ -27,7 +28,7 @@ class CodexSubscriptionAdapter:
                     return
                 if request.action in {RunnerAction.AUTH_STATUS, RunnerAction.VERIFY}:
                     account = await codex.account()
-                    authenticated = not bool(account.requires_openai_auth) and account.account is not None
+                    authenticated = codex_account_is_chatgpt(account)
                     if not authenticated:
                         yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
                     else:
@@ -55,12 +56,14 @@ class CodexSubscriptionAdapter:
                     prompt_from_request(request),
                     approval_mode=ApprovalMode.deny_all,
                     cwd="/workspace",
+                    effort=ReasoningEffort(request.reasoning_effort) if request.reasoning_effort else None,
                     model=request.model_id,
                     output_schema=tool_output_schema(request),
                     sandbox=Sandbox.read_only,
                 )
                 buffered_text: list[str] = []
                 terminal_event: ProviderEventV1 | None = None
+                provider_failed = False
                 async for notification in turn.stream():
                     for event in codex_notification_events(notification, thread_id=thread.id):
                         if request.tools and event.type is ProviderEventType.TEXT_DELTA:
@@ -68,8 +71,15 @@ class CodexSubscriptionAdapter:
                         elif request.tools and event.type is ProviderEventType.COMPLETED:
                             terminal_event = event
                         else:
+                            if request.tools and event.type in {
+                                ProviderEventType.AUTH_REQUIRED,
+                                ProviderEventType.CANCELLED,
+                                ProviderEventType.ERROR,
+                                ProviderEventType.LIMIT,
+                            }:
+                                provider_failed = True
                             yield event
-                if request.tools:
+                if request.tools and not provider_failed:
                     tool_events = tool_response_events("".join(buffered_text), request)
                     for event in tool_events:
                         yield event
@@ -150,3 +160,15 @@ def _safe_codex_error(exc: Exception) -> ProviderEventV1:
     if any(marker in value for marker in ("429", "rate limit", "usage limit")):
         return ProviderEventV1(ProviderEventType.LIMIT, {"code": "provider_limit_reached"})
     return error_event("provider_runtime_error", "Codex runtime failed")
+
+
+def codex_account_is_chatgpt(response: Any) -> bool:
+    """Return whether Codex reports a ChatGPT subscription account.
+
+    ``requires_openai_auth`` describes the provider requirement and remains
+    true for a valid ChatGPT login, so it is not a logged-out indicator.
+    """
+
+    account = getattr(response, "account", None)
+    root = getattr(account, "root", None)
+    return getattr(root, "type", None) == "chatgpt"

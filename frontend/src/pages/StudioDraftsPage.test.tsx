@@ -302,7 +302,7 @@ describe("StudioDraftsPage", () => {
     renderPage("/studio/drafts?draft=5");
 
     expect((await screen.findAllByText("Existing draft")).length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole("button", { name: /Validate dry-run/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Validate without running/i }));
 
     await waitFor(() => {
       expect(draftApi.studioPipelineDrafts.validate).toHaveBeenCalledWith(5);
@@ -329,7 +329,9 @@ describe("StudioDraftsPage", () => {
 
     renderPage("/studio/drafts?draft=5");
 
-    expect(await screen.findByText("Pilot template")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Template" })).toHaveTextContent(
+      "Pilot: Service Config Validate And Restart",
+    );
     fireEvent.click(screen.getByRole("button", { name: /Use template/i }));
 
     await waitFor(() => {

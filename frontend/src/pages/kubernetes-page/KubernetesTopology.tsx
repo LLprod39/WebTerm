@@ -62,7 +62,7 @@ export function KubernetesTopology({
       id: `ns:${activeNs}`,
       kind: "namespace",
       label: activeNs || "namespace",
-      sub: localize(lang, "namespace", "namespace"),
+      sub: localize(lang, "пространство имён", "namespace"),
       x: 48,
       y: height / 2,
     });
@@ -107,7 +107,7 @@ export function KubernetesTopology({
   if (!nsNames.length) {
     return (
       <div className="rounded-sm border border-dashed border-border px-4 py-8 text-center text-xs text-muted-foreground">
-        {localize(lang, "Нет данных для topology — синхронизируйте inventory.", "No topology data — sync inventory first.")}
+        {localize(lang, "Нет данных для топологии. Запустите синхронизацию.", "No topology data. Run a sync first.")}
       </div>
     );
   }
@@ -126,7 +126,7 @@ export function KubernetesTopology({
           viewBox={`0 0 ${graph.width} ${graph.height}`}
           className="h-[280px] w-full min-w-[520px]"
           role="img"
-          aria-label="Kubernetes topology"
+          aria-label={localize(lang, "Топология Kubernetes", "Kubernetes topology")}
         >
           {graph.edges.map((e) => {
             const a = graph.nodes.find((n) => n.id === e.from);

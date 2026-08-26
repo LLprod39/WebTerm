@@ -59,7 +59,7 @@ export function AgentMaterialsSection({
       <div className="space-y-3 rounded-lg border border-border/70 bg-background/25 p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h4 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Upload className="h-4 w-4 text-primary" /> {localize(lang, "Материалы для контекста ИИ", "Materials for AI context")}
+            <Upload className="h-4 w-4 text-primary" /> {localize(lang, "Материалы для агента", "Agent materials")}
           </h4>
           <div className="flex flex-wrap gap-2">
             <label className="inline-flex min-h-8 cursor-pointer items-center rounded-md border border-primary/40 bg-primary/10 px-2 text-xs font-semibold text-primary transition-colors hover:bg-primary/15">
@@ -79,7 +79,7 @@ export function AgentMaterialsSection({
               <FileText className="mr-1 inline h-3 w-3" /> {localize(lang, "Документ", "Document")}
             </button>
             <button type="button" onClick={() => addArtifact("script")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
-              <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Код как контекст", "Code as context")}
+              <FileCode2 className="mr-1 inline h-3 w-3" /> {localize(lang, "Фрагмент кода", "Code snippet")}
             </button>
             <button type="button" onClick={() => addArtifact("task_list")} className="min-h-8 rounded-md border border-border px-2 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground">
               <ListChecks className="mr-1 inline h-3 w-3" /> {localize(lang, "Задачи", "Tasks")}
@@ -92,8 +92,8 @@ export function AgentMaterialsSection({
           <p className="text-xs leading-5 text-muted-foreground">
             {localize(
               lang,
-              "Сохраняются первые 12 КБ текста. Документы доступны для чтения, а распознанные shell/bash-скрипты запускаются только в отдельном ограниченном Docker-контейнере. Репозитории и Ansible используют соответствующую автоматизацию.",
-              "The first 12 KB of text is stored. Documents are readable, while identifiable shell/bash scripts run only in a separate restricted Docker container. Repositories and Ansible use their dedicated automation flows.",
+              "Сохраняются первые 12 КБ текста. Shell-скрипты запускаются только после подтверждения в отдельном ограниченном контейнере. Для репозиториев и Ansible используйте раздел автоматизации.",
+              "The first 12 KB of text is stored. Shell scripts run only after approval in a separate restricted container. Use Automation for repositories and Ansible projects.",
             )}
           </p>
         </div>
@@ -210,7 +210,7 @@ export function AgentMaterialsSection({
             <Send className="h-4 w-4 text-primary" /> {localize(lang, "Уведомить о результате в Telegram", "Notify about the result in Telegram")}
           </span>
         </label>
-        {telegramEnabled && <Input value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="mt-3 h-9 bg-background/60 text-sm" placeholder="Chat ID" />}
+        {telegramEnabled && <Input value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="mt-3 h-9 bg-background/60 text-sm" placeholder={localize(lang, "ID чата", "Chat ID")} />}
       </div>
     </>
   );

@@ -1,7 +1,8 @@
-import { Shield } from "lucide-react";
+import { Brain, Layers, Shield, Terminal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { localize } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 import { type AgentSudoPolicy, SUDO_AGENT_OPTIONS } from "./agentPageUtils";
 import type { AgentMode, StateSetter } from "./agentWizardStepTypes";
 
@@ -9,6 +10,7 @@ type AgentWizardBasicsStepProps = {
   lang: string;
   t: (key: string) => string;
   mode: AgentMode;
+  setMode: StateSetter<AgentMode>;
   name: string;
   setName: StateSetter<string>;
   commands: string;
@@ -29,6 +31,7 @@ export function AgentWizardBasicsStep({
   lang,
   t,
   mode,
+  setMode,
   name,
   setName,
   commands,
@@ -55,6 +58,56 @@ export function AgentWizardBasicsStep({
           {localize(lang, "Назовите профиль, опишите ожидаемый результат и правила, которые нельзя нарушать.", "Name the profile, describe the expected outcome, and state the rules it must not break.")}
         </p>
       </div>
+      <fieldset className="space-y-2">
+        <legend className="text-sm font-medium text-foreground">
+          {localize(lang, "Режим агента", "Agent mode")}
+        </legend>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {[
+            {
+              key: "mini" as const,
+              icon: Terminal,
+              label: localize(lang, "Мини", "Mini"),
+              hint: localize(lang, "Заданные команды на выбранных серверах", "Fixed commands on selected servers"),
+            },
+            {
+              key: "full" as const,
+              icon: Brain,
+              label: localize(lang, "Полный", "Full"),
+              hint: localize(lang, "Сам строит шаги и использует инструменты", "Plans steps and uses tools"),
+            },
+            {
+              key: "multi" as const,
+              icon: Layers,
+              label: localize(lang, "Мульти", "Multi"),
+              hint: localize(lang, "Координирует несколько агентов и целей", "Coordinates multiple agents and targets"),
+            },
+          ].map((option) => {
+            const Icon = option.icon;
+            const active = mode === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setMode(option.key)}
+                className={cn(
+                  "flex min-h-[76px] items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+                  active
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground",
+                )}
+              >
+                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{option.label}</span>
+                  <span className="mt-1 block text-xs leading-4 text-muted-foreground">{option.hint}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </fieldset>
       <div className="space-y-2">
         <label htmlFor="agent-name" className="text-sm font-medium text-foreground">
           {localize(lang, "Имя цифрового сотрудника", "Digital employee name")} <span className="text-primary">*</span>

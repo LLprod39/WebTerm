@@ -267,6 +267,7 @@ class AIProviderPreference(models.Model):
         related_name="preferences",
     )
     model_id = models.CharField(max_length=120, blank=True, default="")
+    reasoning_effort = models.CharField(max_length=16, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

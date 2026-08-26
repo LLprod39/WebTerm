@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 
 function tone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (status === "verified" || status === "signed" || status === "builtin") return "success";
@@ -28,6 +29,7 @@ function tone(status: string): "neutral" | "success" | "warning" | "danger" | "i
 export function PluginReviewQueuePanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
   const reviewQuery = useQuery({ queryKey: ["plugins", "review", "packages"], queryFn: fetchPluginReviewPackages });
   const retentionQuery = useQuery({ queryKey: ["plugins", "packages", "retention"], queryFn: fetchPluginPackageRetention });
   const invalidate = async () => {
@@ -43,7 +45,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: ({ packageId, status }: { packageId: number; status: string }) => reviewPluginPackage(packageId, { status }),
     onSuccess: () => {
       invalidate();
-      toast({ description: "Package review updated." });
+      toast({ description: localize(lang, "Решение по пакету сохранено.", "Package review updated.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -51,7 +53,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: signPluginPackage,
     onSuccess: () => {
       invalidate();
-      toast({ description: "Package signed." });
+      toast({ description: localize(lang, "Пакет подписан.", "Package signed.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -59,7 +61,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: verifyPluginPackageSignature,
     onSuccess: () => {
       invalidate();
-      toast({ description: "Package signature verified." });
+      toast({ description: localize(lang, "Подпись пакета проверена.", "Package signature verified.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -67,7 +69,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: attestPluginPackage,
     onSuccess: () => {
       invalidate();
-      toast({ description: "Package attestation recorded." });
+      toast({ description: localize(lang, "Аттестация пакета записана.", "Package attestation recorded.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -75,7 +77,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: securityScanPluginPackage,
     onSuccess: () => {
       invalidate();
-      toast({ description: "Security scan recorded." });
+      toast({ description: localize(lang, "Проверка безопасности записана.", "Security scan recorded.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -83,7 +85,7 @@ export function PluginReviewQueuePanel() {
     mutationFn: replayPluginPackageProvenance,
     onSuccess: () => {
       invalidate();
-      toast({ description: "Remote provenance replay finished." });
+      toast({ description: localize(lang, "Проверка происхождения завершена.", "Remote provenance replay finished.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -92,7 +94,7 @@ export function PluginReviewQueuePanel() {
     onSuccess: (result) => {
       invalidate();
       const summary = result.result.summary as { delete_count?: number; delete_bytes?: number } | undefined;
-      toast({ description: `Retention cleanup: ${Number(summary?.delete_count || 0)} file(s), ${Number(summary?.delete_bytes || 0)} bytes.` });
+      toast({ description: localize(lang, `Очистка: ${Number(summary?.delete_count || 0)} файлов, ${Number(summary?.delete_bytes || 0)} байт.`, `Retention cleanup: ${Number(summary?.delete_count || 0)} file(s), ${Number(summary?.delete_bytes || 0)} bytes.`) });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -101,18 +103,18 @@ export function PluginReviewQueuePanel() {
 
   return (
     <SectionCard
-      title="Review and signing"
-      description="Local package review gate before enabled runtime surfaces."
+      title={localize(lang, "Проверка и подпись", "Review and signing")}
+      description={localize(lang, "Пакет нельзя включить, пока он не прошёл проверку.", "Local package review gate before enabled runtime surfaces.")}
       icon={<FileCheck2 className="h-4 w-4" />}
       actions={
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => retentionCleanupMutation.mutate({ dry_run: true })} disabled={retentionCleanupMutation.isPending}>
             <Archive className="h-4 w-4" />
-            Dry run
+            {localize(lang, "Показать, что удалится", "Dry run")}
           </Button>
           <Button size="sm" variant="outline" onClick={() => retentionCleanupMutation.mutate({ dry_run: false })} disabled={retentionCleanupMutation.isPending}>
             <Trash2 className="h-4 w-4" />
-            Cleanup
+            {localize(lang, "Очистить", "Cleanup")}
           </Button>
         </div>
       }
@@ -120,10 +122,10 @@ export function PluginReviewQueuePanel() {
       <QueryStateBlock loading={reviewQuery.isLoading} error={reviewQuery.error}>
         {retentionSummary ? (
           <div className="mb-3 flex flex-wrap gap-2 rounded-lg border border-border/70 bg-secondary/15 px-4 py-3 text-xs text-muted-foreground">
-            <span>retained: {Number(retentionSummary.file_count || 0)}</span>
-            <span>referenced: {Number(retentionSummary.referenced_count || 0)}</span>
-            <span>unreferenced: {Number(retentionSummary.unreferenced_count || 0)}</span>
-            <span>bytes: {Number(retentionSummary.total_bytes || 0)}</span>
+            <span>{localize(lang, "хранится", "retained")}: {Number(retentionSummary.file_count || 0)}</span>
+            <span>{localize(lang, "используется", "referenced")}: {Number(retentionSummary.referenced_count || 0)}</span>
+            <span>{localize(lang, "не используется", "unreferenced")}: {Number(retentionSummary.unreferenced_count || 0)}</span>
+            <span>{localize(lang, "байт", "bytes")}: {Number(retentionSummary.total_bytes || 0)}</span>
           </div>
         ) : null}
         <div className="grid gap-3 lg:grid-cols-2">
@@ -148,21 +150,21 @@ export function PluginReviewQueuePanel() {
                     <Badge variant="outline">{item.source}</Badge>
                     {lastAttestation ? (
                       <StatusBadge
-                        label={`attested: ${String(lastAttestation.status || "unknown")}`}
+                        label={`${localize(lang, "аттестация", "attested")}: ${String(lastAttestation.status || localize(lang, "неизвестно", "unknown"))}`}
                         tone={tone(String(lastAttestation.status || ""))}
                       />
                     ) : null}
-                    {sbomSummary ? <Badge variant="outline">files: {Number(sbomSummary.file_count || 0)}</Badge> : null}
-                    {dependencySummary ? <Badge variant="outline">deps: {Number(sbomSummary?.component_count || 0)}</Badge> : null}
-                    {dependencySummary?.dependency_manifest_count ? <StatusBadge label="dependency manifest" tone="warning" /> : null}
+                    {sbomSummary ? <Badge variant="outline">{localize(lang, "файлы", "files")}: {Number(sbomSummary.file_count || 0)}</Badge> : null}
+                    {dependencySummary ? <Badge variant="outline">{localize(lang, "зависимости", "deps")}: {Number(sbomSummary?.component_count || 0)}</Badge> : null}
+                    {dependencySummary?.dependency_manifest_count ? <StatusBadge label={localize(lang, "есть файл зависимостей", "dependency manifest")} tone="warning" /> : null}
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-2">
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Approve package"
-                    title="Approve package"
+                    aria-label={localize(lang, "Одобрить пакет", "Approve package")}
+                    title={localize(lang, "Одобрить пакет", "Approve package")}
                     onClick={() => reviewMutation.mutate({ packageId: item.id, status: "verified" })}
                     disabled={reviewMutation.isPending}
                   >
@@ -171,8 +173,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Reject package"
-                    title="Reject package"
+                    aria-label={localize(lang, "Отклонить пакет", "Reject package")}
+                    title={localize(lang, "Отклонить пакет", "Reject package")}
                     onClick={() => reviewMutation.mutate({ packageId: item.id, status: "rejected" })}
                     disabled={reviewMutation.isPending}
                   >
@@ -181,8 +183,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Sign package"
-                    title="Sign package"
+                    aria-label={localize(lang, "Подписать пакет", "Sign package")}
+                    title={localize(lang, "Подписать пакет", "Sign package")}
                     onClick={() => signMutation.mutate(item.id)}
                     disabled={signMutation.isPending || item.review_status !== "verified"}
                   >
@@ -191,8 +193,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Verify signature"
-                    title="Verify signature"
+                    aria-label={localize(lang, "Проверить подпись", "Verify signature")}
+                    title={localize(lang, "Проверить подпись", "Verify signature")}
                     onClick={() => verifyMutation.mutate(item.id)}
                     disabled={verifyMutation.isPending}
                   >
@@ -201,8 +203,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Export SBOM"
-                    title="Export SBOM"
+                    aria-label={localize(lang, "Скачать SBOM", "Export SBOM")}
+                    title={localize(lang, "Скачать SBOM", "Export SBOM")}
                     onClick={() => window.open(pluginPackageSbomUrl(item.id), "_blank", "noopener,noreferrer")}
                   >
                     <FileDown className="h-4 w-4" />
@@ -210,8 +212,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Record package attestation"
-                    title="Record package attestation"
+                    aria-label={localize(lang, "Записать аттестацию", "Record package attestation")}
+                    title={localize(lang, "Записать аттестацию", "Record package attestation")}
                     onClick={() => attestMutation.mutate(item.id)}
                     disabled={attestMutation.isPending}
                   >
@@ -220,8 +222,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Run security scan"
-                    title="Run security scan"
+                    aria-label={localize(lang, "Проверить безопасность", "Run security scan")}
+                    title={localize(lang, "Проверить безопасность", "Run security scan")}
                     onClick={() => securityScanMutation.mutate(item.id)}
                     disabled={securityScanMutation.isPending}
                   >
@@ -230,8 +232,8 @@ export function PluginReviewQueuePanel() {
                   <Button
                     size="icon"
                     variant="outline"
-                    aria-label="Replay remote provenance"
-                    title="Replay remote provenance"
+                    aria-label={localize(lang, "Проверить происхождение", "Replay remote provenance")}
+                    title={localize(lang, "Проверить происхождение", "Replay remote provenance")}
                     onClick={() => replayMutation.mutate(item.id)}
                     disabled={replayMutation.isPending || !hasRemoteProvenance}
                   >
@@ -244,7 +246,7 @@ export function PluginReviewQueuePanel() {
             </div>
           )) : (
             <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-              No plugin packages are waiting for review.
+              {localize(lang, "Пакетов на проверке нет.", "No plugin packages are waiting for review.")}
             </p>
           )}
         </div>

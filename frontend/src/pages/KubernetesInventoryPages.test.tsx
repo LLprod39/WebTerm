@@ -397,13 +397,13 @@ describe("Kubernetes inventory pages", () => {
     expect(fetchKubernetesCluster).toHaveBeenCalledWith("cluster_1");
 
     fireEvent.click(screen.getByRole("button", { name: /Describe payments-api|Описать payments-api/ }));
-    expect(await screen.findByText("Read-only describe")).toBeInTheDocument();
+    expect(await screen.findByText("Сведения о нагрузке")).toBeInTheDocument();
     expect(screen.getByText("Unhealthy")).toBeInTheDocument();
     expect(fetchKubernetesWorkloadDescribe).toHaveBeenCalledWith("app_1");
 
-    fireEvent.click(screen.getByRole("button", { name: /Запросить restart payments-api|Request restart for payments-api/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Запросить перезапуск payments-api|Request restart for payments-api/ }));
     expect(await screen.findByText("Заявка на действие")).toBeInTheDocument();
-    expect(screen.getByText("execution off")).toBeInTheDocument();
+    expect(screen.getByText("выполнение выключено")).toBeInTheDocument();
     expect(await screen.findByText("Заявка создана")).toBeInTheDocument();
     expect(fetchKubernetesActionReport).toHaveBeenCalledWith("11111111-1111-1111-1111-111111111111");
     expect(createKubernetesActionRequest).toHaveBeenCalledWith({
@@ -412,8 +412,8 @@ describe("Kubernetes inventory pages", () => {
       target: { workload_id: "app_1" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Logs payments-api-abc123" }));
-    expect(await screen.findByText("Read-only pod logs")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Логи payments-api-abc123" }));
+    expect(await screen.findByText("Логи пода")).toBeInTheDocument();
     expect(screen.getByText(/boot ok/)).toBeInTheDocument();
     expect(fetchKubernetesPodLogs).toHaveBeenCalledWith("pod_1");
   });

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections import defaultdict
 from typing import Any
 
@@ -177,7 +176,6 @@ def feature_allowed_for_user(
         explicit,
         grouped,
     )
-    _apply_pilot_automation_boundary(user, effective, explicit)
     return bool(effective.get(feature, False))
 
 
@@ -244,24 +242,6 @@ def _access_profile_for(user, effective: dict[str, bool]) -> str:
     return "custom"
 
 
-def _pilot_restricted_mode() -> bool:
-    return os.getenv("PILOT_RESTRICTED_MODE", "").strip().lower() in {"1", "true", "yes"}
-
-
-def _apply_pilot_automation_boundary(
-    user,
-    effective: dict[str, bool],
-    explicit: dict[str, bool] | None = None,
-) -> None:
-    """In a restricted pilot, write automation belongs only to the exact pilot role."""
-    if not _pilot_restricted_mode() or not effective.get("automation"):
-        return
-    target = access_profile_permissions("pilot_operator")
-    is_materialized_profile = explicit is not None and all(explicit.get(feature) is allowed for feature, allowed in target.items())
-    if _access_profile_for(user, effective) != "pilot_operator" or not is_materialized_profile:
-        effective["automation"] = False
-
-
 def build_user_access_payload(
     user,
     explicit_permissions: dict[str, bool] | None = None,
@@ -286,12 +266,6 @@ def build_user_access_payload(
     grouped = summarize_group_permissions(group_sources)
 
     effective, sources = _effective_feature_access(user, features, explicit, grouped)
-    _apply_pilot_automation_boundary(user, effective, explicit)
-    if _pilot_restricted_mode() and not effective.get("automation") and sources.get("automation") not in {
-        None,
-        "explicit_opt_in",
-    }:
-        sources["automation"] = "pilot_operator_required"
     profile = _access_profile_for(user, effective)
 
     payload = {

@@ -25,7 +25,7 @@ export function runBlockedReason(agent: AgentItem, lang: "ru" | "en", options?: 
   const readiness = agent.execution_readiness;
   if (readiness?.required && !readiness.ready) {
     if (options?.isAdmin) {
-      return readiness.next_action || readiness.description || localize(lang, "Execution worker не готов.", "Execution worker is not ready.");
+      return readiness.next_action || readiness.description || localize(lang, "Сервис запуска недоступен.", "Execution service is unavailable.");
     }
     // Operators should not see manage.py / ops commands — only a clear user-facing reason.
     return localize(

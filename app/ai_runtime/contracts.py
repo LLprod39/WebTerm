@@ -20,6 +20,7 @@ class ProviderBinding:
     connection_id: int | None = None
     pool_id: int | None = None
     model_id: str | None = None
+    reasoning_effort: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target_id", canonicalize_target_id(self.target_id))
@@ -32,6 +33,9 @@ class ProviderBinding:
         if self.model_id is not None:
             model_id = self.model_id.strip()
             object.__setattr__(self, "model_id", model_id or None)
+        if self.reasoning_effort is not None:
+            reasoning_effort = self.reasoning_effort.strip().lower()
+            object.__setattr__(self, "reasoning_effort", reasoning_effort or None)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> ProviderBinding:
@@ -40,6 +44,7 @@ class ProviderBinding:
             connection_id=value.get("connection_id"),
             pool_id=value.get("pool_id"),
             model_id=value.get("model_id"),
+            reasoning_effort=value.get("reasoning_effort"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -48,6 +53,7 @@ class ProviderBinding:
             "connection_id": self.connection_id,
             "pool_id": self.pool_id,
             "model_id": self.model_id,
+            "reasoning_effort": self.reasoning_effort,
         }
 
 

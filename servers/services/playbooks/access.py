@@ -55,7 +55,12 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
     principal_q = Q(grants__user=user)
     if group_ids:
         principal_q |= Q(grants__group_id__in=group_ids)
-    grant_q = principal_q & Q(grants__can_view=True) & _active_grants_q(prefix="grants__")
+    grant_q = (
+        Q(project__memberships__user=user)
+        & principal_q
+        & Q(grants__can_view=True)
+        & _active_grants_q(prefix="grants__")
+    )
     workspace_grant_q = (
         Q(project__memberships__user=user, grants__workspace_shared=True, grants__can_view=True)
         & _active_grants_q(prefix="grants__")
@@ -75,7 +80,7 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
             )
         )
         .filter(is_archived=False)
-        .select_related("origin_revision", "published_revision", "active_compatibility_revision")
+        .select_related("origin_revision", "published_revision", "active_compatibility_revision", "draft")
         .distinct()
     )
 
@@ -86,13 +91,15 @@ def capabilities_for(playbook: Playbook, user) -> PlaybookCapabilities:
     if playbook.user_id == user.id:
         return OWNER_CAPABILITIES
 
+    is_workspace_member = ProjectMembership.objects.filter(project_id=playbook.project_id, user=user).exists()
+    if not is_workspace_member:
+        return PlaybookCapabilities()
+
     group_ids = list(user.groups.values_list("id", flat=True))
     principal_q = Q(user=user)
     if group_ids:
         principal_q |= Q(group_id__in=group_ids)
-    is_workspace_member = ProjectMembership.objects.filter(project_id=playbook.project_id, user=user).exists()
-    if is_workspace_member:
-        principal_q |= Q(workspace_shared=True)
+    principal_q |= Q(workspace_shared=True)
     grants = PlaybookGrant.objects.filter(playbook=playbook).filter(_active_grants_q()).filter(principal_q)
 
     values = {

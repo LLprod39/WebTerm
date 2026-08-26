@@ -58,9 +58,6 @@ async def tool_ssh_execute(session: AgentSessionManager, *, server: str, command
         return ToolResult(False, f"Blocked: command matches forbidden pattern — {command}")
 
     gate = evaluate_command_execution_gate(command)
-    server_obj = getattr(session, "allowed_servers", {}).get(sid)
-    if bool(getattr(server_obj, "ai_read_only", False)) and not gate.auto_run_allowed:
-        return ToolResult(False, f"Blocked: server '{server}' allows read-only AI commands only.")
     if gate.requires_approval and not bool(getattr(session, "execution_approval_granted", False)):
         approval = await tool_ask_user(
             session,

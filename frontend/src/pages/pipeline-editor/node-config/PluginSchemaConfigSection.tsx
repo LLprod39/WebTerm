@@ -104,7 +104,7 @@ export function PluginSchemaConfigSection({
   return (
     <NodeFormSection
       title={localize(lang, "Параметры плагина", "Plugin parameters")}
-      description={localize(lang, "Поля объявлены в manifest input_schema этого плагина.", "Fields are declared by this plugin manifest input_schema.")}
+      description={localize(lang, "Поля берутся из схемы входных данных плагина.", "Fields are declared by this plugin manifest input_schema.")}
     >
       <div className="space-y-3">
         {Object.entries(properties).map(renderField)}

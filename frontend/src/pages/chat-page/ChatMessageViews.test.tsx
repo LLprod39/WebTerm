@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AssistantAction } from "@/api";
 
-import { ActionCard, MetricSeriesReportCard } from "./ChatMessageViews";
+import { ActionCard, MessageBubble, MetricSeriesReportCard } from "./ChatMessageViews";
 
 
 function dangerousAction(): AssistantAction {
@@ -88,5 +88,41 @@ describe("MetricSeriesReportCard", () => {
     expect(report).toHaveClass("w-full", "max-w-[640px]", "min-h-[190px]", "sm:min-h-[220px]");
     expect(screen.getByText("31%")).toBeInTheDocument();
     expect(screen.getByText(/Рост на 13%|Up 13%/i)).toBeInTheDocument();
+  });
+});
+
+describe("MessageBubble structured evidence", () => {
+  it("renders one readable durable playbook table instead of a duplicate markdown table", () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 91,
+          role: "assistant",
+          content: "Доступно 2 playbook/runbook; полный каталог приведён в таблице.",
+          created_at: "2026-08-25T12:00:00Z",
+          metadata: {
+            tables: [
+              {
+                title: "Playbook / runbook · 2",
+                kind: "playbooks",
+                headers: ["Playbook / runbook", "Назначение и последний запуск"],
+                rows: [
+                  ["Base Linux hardening", "Базовая защита Linux · последний запуск: completed"],
+                  ["Docker prune (safe)", "Безопасная очистка Docker · последний запуск: failed"],
+                ],
+              },
+            ],
+          },
+        }}
+        actionWorkingId={null}
+        onConfirmAction={vi.fn()}
+        onCancelAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("Playbook / runbook · 2")).toHaveLength(1);
+    expect(screen.getByText("Base Linux hardening")).toBeInTheDocument();
+    expect(screen.getByText(/Базовая защита Linux/)).toBeInTheDocument();
+    expect(screen.getAllByRole("table")).toHaveLength(1);
   });
 });

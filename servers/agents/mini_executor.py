@@ -13,7 +13,6 @@ from asgiref.sync import sync_to_async as _s2a
 from django.utils import timezone
 from loguru import logger
 
-from app.shell_commands import is_read_only_command
 from app.sudo_policy import evaluate_sudo_command, prepare_sudo_command
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
@@ -41,9 +40,15 @@ MINI_AI_ANALYSIS_TIMEOUT_SEC = 180
 
 async def _persist_run(run: AgentRun, *, fields: list[str] | None = None) -> None:
     run.report_payload = await sync_to_async(build_agent_run_report_payload, thread_sensitive=True)(run)
+    if isinstance(run.execution_outcome, dict) and run.execution_outcome:
+        run.report_payload["outcome"] = run.execution_outcome.get("outcome")
+        run.report_payload["outcome_reason"] = run.execution_outcome.get("reason")
+        run.report_payload["outcome_details"] = dict(run.execution_outcome)
     update_fields = list(fields or [])
     if "report_payload" not in update_fields:
         update_fields.append("report_payload")
+    if "execution_outcome" not in update_fields:
+        update_fields.append("execution_outcome")
     await sync_to_async(run.save)(update_fields=update_fields if fields else None)
 
 
@@ -56,9 +61,28 @@ async def _finalize_failed_run(
     run.ai_analysis = message
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
+    lowered_message = message.lower()
+    exit_reason = "timeout" if "timeout" in lowered_message else "connection_error" if "ssh" in lowered_message else "exception"
+    run.execution_outcome = {
+        "outcome": "failed",
+        "status": AgentRun.STATUS_FAILED,
+        "reason": message,
+        "exit_reason": exit_reason,
+        "tool_call_count": len(outputs or []),
+        "failed_task_count": sum(1 for item in (outputs or []) if item.get("exit_code") != 0),
+        "report_generation": {"status": "failed", "generated_at": None, "error": message},
+    }
     await _persist_run(
         run,
-        fields=["status", "commands_output", "ai_analysis", "completed_at", "duration_ms", "report_payload"],
+        fields=[
+            "status",
+            "commands_output",
+            "ai_analysis",
+            "completed_at",
+            "duration_ms",
+            "execution_outcome",
+            "report_payload",
+        ],
     )
     await deliver_agent_report_async(run)
     return run
@@ -91,7 +115,10 @@ async def run_agent(
         run.status = AgentRun.STATUS_RUNNING
         run.completed_at = None
         run.duration_ms = 0
-        await sync_to_async(run.save)(update_fields=["server", "user", "status", "completed_at", "duration_ms"])
+        run.execution_outcome = {}
+        await sync_to_async(run.save)(
+            update_fields=["server", "user", "status", "completed_at", "duration_ms", "execution_outcome"]
+        )
 
     try:
         return await asyncio.wait_for(
@@ -131,17 +158,6 @@ async def _run_agent_body(
 
     try:
         for cmd in commands:
-            if getattr(server, "ai_read_only", False) and not is_read_only_command(cmd):
-                outputs.append(
-                    {
-                        "cmd": cmd,
-                        "stdout": "",
-                        "stderr": "BLOCKED: server allows read-only AI commands only",
-                        "exit_code": -1,
-                        "duration_ms": 0,
-                    }
-                )
-                continue
             if is_dangerous_command(cmd):
                 outputs.append(
                     {
@@ -270,9 +286,56 @@ async def _run_agent_body(
     run.ai_analysis = ai_analysis
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
+    known_results = [item for item in outputs if item.get("exit_code") is not None]
+    failed_count = sum(1 for item in known_results if item.get("exit_code") != 0)
+    succeeded_count = sum(1 for item in known_results if item.get("exit_code") == 0)
+    analysis_fallback = str(ai_analysis or "").startswith("AI analysis timed out")
+    if analysis_fallback:
+        public_outcome = "partial"
+        outcome_reason = ai_analysis
+        exit_reason = "llm_timeout"
+    elif failed_count and succeeded_count:
+        public_outcome = "partial"
+        outcome_reason = f"{failed_count} of {len(known_results)} commands failed."
+        exit_reason = "command_failure"
+    elif failed_count:
+        public_outcome = "failed"
+        outcome_reason = f"All {failed_count} commands failed."
+        exit_reason = "command_failure"
+    elif known_results:
+        public_outcome = "success"
+        outcome_reason = "All commands completed successfully."
+        exit_reason = "completed"
+    else:
+        public_outcome = "inconclusive"
+        outcome_reason = "No command exit status was recorded."
+        exit_reason = "insufficient_evidence"
+    report_generation_status = "ready_with_fallback" if analysis_fallback else "ready" if ai_analysis else "failed"
+    run.execution_outcome = {
+        "outcome": public_outcome,
+        "status": run.status,
+        "reason": outcome_reason,
+        "exit_reason": exit_reason,
+        "tool_call_count": len(outputs),
+        "failed_task_count": failed_count,
+        "done_task_count": succeeded_count,
+        "report_generation": {
+            "status": report_generation_status,
+            "generated_at": run.completed_at.isoformat() if ai_analysis else None,
+            "error": ai_analysis if analysis_fallback else "" if ai_analysis else "AI analysis is empty.",
+        },
+    }
     await _persist_run(
         run,
-        fields=["status", "commands_output", "ai_analysis", "completed_at", "duration_ms", "report_payload"],
+        fields=[
+            "status",
+            "commands_output",
+            "ai_analysis",
+            "completed_at",
+            "duration_ms",
+            "execution_outcome",
+            "report_payload",
+        ],
     )
     await deliver_agent_report_async(run)
 

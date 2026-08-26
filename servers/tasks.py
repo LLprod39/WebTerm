@@ -3,11 +3,21 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from celery import shared_task
 
 from servers.adapters.memory_store import DjangoServerMemoryStore
 
 logger = logging.getLogger(__name__)
+
+
+@shared_task(name="servers.tasks.deliver_agent_report_task")
+def deliver_agent_report_task(run_id: int, attempt_id: str) -> None:
+    from servers.models import AgentRun
+    from servers.report_delivery import deliver_agent_report_async
+
+    run = AgentRun.objects.select_related("agent", "server").get(pk=run_id)
+    async_to_sync(deliver_agent_report_async)(run, attempt_id=str(attempt_id or "")[:80])
 
 
 @shared_task(name="servers.tasks.ingest_memory_event_task")

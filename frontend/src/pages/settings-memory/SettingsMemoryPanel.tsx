@@ -60,8 +60,8 @@ function MemoryPolicyControls({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
           <div>
-            <p className="text-xs font-medium">Автозаметки</p>
-            <p className="text-xs text-muted-foreground">Включить долгосрочную память</p>
+            <p className="text-xs font-medium">Долгосрочная память</p>
+            <p className="text-xs text-muted-foreground">Сохранять полезные факты</p>
           </div>
           <Switch
             checked={memoryPolicyDraft.ai_memory_enabled}
@@ -71,8 +71,8 @@ function MemoryPolicyControls({
 
         <label className="flex cursor-pointer items-center justify-between rounded-lg border border-border px-3 py-3 transition-colors hover:bg-secondary/30">
           <div>
-            <p className="text-xs font-medium">Операционная память</p>
-            <p className="text-xs text-muted-foreground">Оперативный контекст</p>
+            <p className="text-xs font-medium">Рабочий контекст</p>
+            <p className="text-xs text-muted-foreground">Учитывать недавние действия</p>
           </div>
           <Switch
             checked={memoryPolicyDraft.operational_memory_enabled}
@@ -159,13 +159,13 @@ export function SettingsMemoryPanel({
           <ScrollText className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Память AI по серверу</h1>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Память сервера</h1>
           <p className="text-sm leading-6 text-muted-foreground">{t("mem.subtitle")}</p>
         </div>
       </div>
 
       <SectionCard
-        title="Панели долгосрочной памяти"
+        title="Долгосрочная память"
         icon={ScrollText}
         description={t("mem.section_desc")}
         actions={
@@ -187,7 +187,7 @@ export function SettingsMemoryPanel({
               disabled={!selectedMemoryServerId || memoryDreamRunning}
             >
               <RefreshCw className={cn("h-3 w-3", memoryDreamRunning && "animate-spin")} />
-              {memoryDreamRunning ? "Консолидация..." : "Запустить консолидацию"}
+              {memoryDreamRunning ? "Объединение…" : "Объединить записи"}
             </Button>
           </div>
         }

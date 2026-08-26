@@ -1,22 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  aiProviderQueryKeys,
   fetchAssistantChat,
   fetchAssistantChats,
-  fetchAiProviderConnections,
-  fetchAiProviderPools,
-  listPlaybooks,
   updateAssistantChat,
   type AssistantChatMessage,
   type AssistantChatSession,
-  type ProviderBinding,
 } from "@/api";
-import type { AuthSessionResponse } from "@/api/auth";
 import { useToast } from "@/hooks/use-toast";
-import { canManageAiRouting, hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
 
 import type { ComposePaletteHandle } from "./ComposeCommandPalette";
@@ -30,6 +31,29 @@ import {
 import { useChatPageMutations } from "./useChatPageMutations";
 import { useChatPageOperatorRuntime } from "./useChatPageOperatorRuntime";
 import { useChatPagePins } from "./useChatPagePins";
+import {
+  getScopedPending,
+  promotePendingChat,
+  setScopedPending,
+  type ScopedPendingMap,
+  type ScopedPendingSend,
+  type ScopedPendingUser,
+} from "./chatPendingState";
+
+export function shouldDropOptimisticOnStop(pendingSend: string | null) {
+  // A queued payload has not reached the socket yet. Once dispatched, the
+  // optimistic row must stay until the matching durable REST message arrives.
+  return pendingSend != null;
+}
+
+/**
+ * Wait for the previous optimistic user row to reconcile before another turn.
+ * Without a server-provided user-message id, a late identical row from turn A
+ * cannot otherwise be distinguished from an immediate retry B.
+ */
+export function isOperatorSendBlocked(isBusy: boolean, pendingUserText: string | null) {
+  return isBusy || Boolean(pendingUserText?.trim());
+}
 
 export function useChatPageController() {
   const { lang } = useI18n();
@@ -40,13 +64,13 @@ export function useChatPageController() {
   const [caret, setCaret] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [chatFilter, setChatFilter] = useState("");
-  /** Keep live stream shell visible until final message lands (avoids flash). */
-  const [streamHold, setStreamHold] = useState(false);
-  /** Optimistic user bubble until server history refreshes. */
-  const [pendingUserText, setPendingUserText] = useState<string | null>(null);
+  /** Handoff tails are scoped so an active shell cannot flash in another chat. */
+  const [streamHolds, setStreamHolds] = useState<ScopedPendingMap<boolean>>({});
+  /** Optimistic and queued state is isolated per chat during navigation. */
+  const pendingEpochRef = useRef(0);
+  const [pendingUsers, setPendingUsers] = useState<ScopedPendingMap<ScopedPendingUser>>({});
+  const [pendingSends, setPendingSends] = useState<ScopedPendingMap<ScopedPendingSend>>({});
   const [actionWorkingId, setActionWorkingId] = useState<number | null>(null);
-  const [pendingSend, setPendingSend] = useState<string | null>(null);
-  const [providerOverride, setProviderOverride] = useState("");
   const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
   /** True while the view is pinned to the newest message — gates autoscroll. */
   const [atBottom, setAtBottom] = useState(true);
@@ -59,10 +83,69 @@ export function useChatPageController() {
   const paletteRef = useRef<ComposePaletteHandle | null>(null);
   const humanTrailRef = useRef<Array<{ cmd: string; at: number }>>([]);
   const activeChatId = Number(searchParams.get("chat") || 0) || null;
-  const authData = queryClient.getQueryData<AuthSessionResponse>(["auth", "session"]);
-  const canManageAiRoutingValue = canManageAiRouting(authData?.user);
-  const canUseProviderPools = hasFeatureAccess(authData?.user, "ai_connections_admin");
-  const canUseAutomation = hasFeatureAccess(authData?.user, "automation");
+  const activePendingUser = getScopedPending(pendingUsers, activeChatId);
+  const activePendingSend = getScopedPending(pendingSends, activeChatId);
+  const pendingUserText = activePendingUser?.text ?? null;
+  const pendingUserEpoch = activePendingUser?.epoch ?? 0;
+  const pendingUserBaselineIds = activePendingUser?.baselineIds ?? [];
+  const pendingSend = activePendingSend?.text ?? null;
+  const streamHold = Boolean(getScopedPending(streamHolds, activeChatId));
+
+  const setStreamHold = useCallback<Dispatch<SetStateAction<boolean>>>(
+    (nextValue) => {
+      setStreamHolds((current) => {
+        const currentValue = Boolean(getScopedPending(current, activeChatId));
+        const next = typeof nextValue === "function" ? nextValue(currentValue) : nextValue;
+        return setScopedPending(current, activeChatId, next ? true : null);
+      });
+    },
+    [activeChatId],
+  );
+
+  const setPendingUserText = useCallback<Dispatch<SetStateAction<string | null>>>(
+    (nextValue) => {
+      setPendingUsers((current) => {
+        const scoped = getScopedPending(current, activeChatId);
+        const currentText = scoped?.text ?? null;
+        const nextText = typeof nextValue === "function" ? nextValue(currentText) : nextValue;
+        if (nextText == null) return setScopedPending(current, activeChatId, null);
+        const epoch = scoped?.epoch ?? (pendingEpochRef.current += 1);
+        return setScopedPending(current, activeChatId, {
+          chatId: activeChatId,
+          text: nextText,
+          epoch,
+          baselineIds: scoped?.baselineIds ?? [],
+        });
+      });
+    },
+    [activeChatId],
+  );
+
+  const setPendingSend = useCallback<Dispatch<SetStateAction<string | null>>>(
+    (nextValue) => {
+      setPendingSends((current) => {
+        const scoped = getScopedPending(current, activeChatId);
+        const currentText = scoped?.text ?? null;
+        const nextText = typeof nextValue === "function" ? nextValue(currentText) : nextValue;
+        if (nextText == null) return setScopedPending(current, activeChatId, null);
+        return setScopedPending(current, activeChatId, {
+          chatId: activeChatId,
+          text: nextText,
+          epoch: activePendingUser?.epoch ?? scoped?.epoch ?? pendingEpochRef.current,
+        });
+      });
+    },
+    [activeChatId, activePendingUser?.epoch],
+  );
+
+  const promoteNewPendingChat = useCallback((chatId: number) => {
+    setPendingUsers((current) => promotePendingChat(current, chatId));
+    setPendingSends((current) => promotePendingChat(current, chatId));
+    setStreamHolds((current) => {
+      if (!getScopedPending(current, null)) return current;
+      return setScopedPending(setScopedPending(current, null, null), chatId, true);
+    });
+  }, []);
 
   const openSessionDock = useCallback(
     (opts: { serverId: number; serverName?: string; host?: string; mode?: "agent" | "live" }) => {
@@ -170,83 +253,10 @@ export function useChatPageController() {
     enabled: Boolean(activeChatId),
     staleTime: 10_000,
   });
-  const providerConnectionsQuery = useQuery({
-    queryKey: aiProviderQueryKeys.connections,
-    queryFn: fetchAiProviderConnections,
-    staleTime: 30_000,
-    enabled: canManageAiRoutingValue,
-  });
-  const providerPoolsQuery = useQuery({
-    queryKey: aiProviderQueryKeys.pools,
-    queryFn: fetchAiProviderPools,
-    enabled: canUseProviderPools,
-    staleTime: 30_000,
-  });
-  const playbooksQuery = useQuery({
-    queryKey: ["chat", "playbooks"],
-    queryFn: () => listPlaybooks(),
-    enabled: canUseAutomation,
-    staleTime: 30_000,
-  });
-
   const chats = useMemo(() => chatsQuery.data?.chats || [], [chatsQuery.data?.chats]);
   const activeChat = activeChatQuery.data;
   const messages = useMemo(() => activeChat?.messages || [], [activeChat?.messages]);
   const activeTurn = activeChat?.active_turn;
-  const providerOptions = useMemo(() => canManageAiRoutingValue ? [
-    ...(providerConnectionsQuery.data?.connections ?? [])
-      .filter((item) => item.access.interactive && item.status === "connected")
-      .map((item) => ({
-        key: `connection:${item.id}`,
-        label: `${item.name} · ${item.target_id}`,
-        binding: { target_id: item.target_id, connection_id: item.id } as ProviderBinding,
-      })),
-    ...(providerPoolsQuery.data?.pools ?? [])
-      .filter((item) => item.enabled && item.members.some((member) => member.access?.interactive))
-      .map((item) => ({
-      key: `pool:${item.id}`,
-      label: `${item.name} · пул`,
-      binding: { target_id: item.target_id, pool_id: item.id } as ProviderBinding,
-    })),
-  ] : [], [canManageAiRoutingValue, providerConnectionsQuery.data?.connections, providerPoolsQuery.data?.pools]);
-  const selectedProviderBinding = useMemo(
-    () => providerOptions.find((item) => item.key === providerOverride)?.binding ?? null,
-    [providerOptions, providerOverride],
-  );
-  const playbookOptions = useMemo(
-    () => (playbooksQuery.data?.playbooks || []).map((item) => ({ id: item.id, name: item.name, kind: item.kind })),
-    [playbooksQuery.data?.playbooks],
-  );
-
-  useEffect(() => {
-    const binding = activeChat?.provider_binding;
-    if (binding?.connection_id) setProviderOverride(`connection:${binding.connection_id}`);
-    else if (binding?.pool_id) setProviderOverride(`pool:${binding.pool_id}`);
-    else setProviderOverride("");
-  }, [activeChatId, activeChat?.provider_binding]);
-
-  const handleProviderOverrideChange = useCallback((nextValue: string) => {
-    if (nextValue || !activeChatId) {
-      setProviderOverride(nextValue);
-      return;
-    }
-    void updateAssistantChat(activeChatId, { provider_binding: {} })
-      .then((updated) => {
-        queryClient.setQueryData(["assistant", "chat", activeChatId], (current: AssistantChatSession | undefined) => ({
-          ...(current || updated),
-          ...updated,
-        }));
-        setProviderOverride("");
-      })
-      .catch((error: unknown) => {
-        toast({
-          title: localize(lang, "Не удалось сбросить провайдера", "Could not reset provider"),
-          description: error instanceof Error ? error.message : String(error),
-          variant: "destructive",
-        });
-      });
-  }, [activeChatId, lang, queryClient, toast]);
-
   const {
     pinnedServers,
     pinnedUsers,
@@ -254,26 +264,21 @@ export function useChatPageController() {
     unpinServer,
     unpinUser,
     pinnedPlaybook,
-    setPinnedPlaybook,
   } = useChatPagePins({
     activeChatId,
     activeChat,
     queryClient,
   });
 
-  useEffect(() => {
-    const raw = searchParams.get("playbook_id") || searchParams.get("playbook") || "";
-    const playbookId = Number(raw);
-    if (!Number.isInteger(playbookId) || playbookId <= 0 || pinnedPlaybook?.id === playbookId) return;
-    const match = playbookOptions.find((item) => item.id === playbookId);
-    if (match) setPinnedPlaybook(match);
-  }, [pinnedPlaybook?.id, playbookOptions, searchParams, setPinnedPlaybook]);
-
-  const refreshChat = useCallback(() => {
+  const refreshChat = useCallback(async () => {
+    const refreshes: Promise<unknown>[] = [];
     if (activeChatId) {
-      void queryClient.invalidateQueries({ queryKey: ["assistant", "chat", activeChatId] });
+      refreshes.push(
+        queryClient.invalidateQueries({ queryKey: ["assistant", "chat", activeChatId] }),
+      );
     }
-    void queryClient.invalidateQueries({ queryKey: ["assistant", "chats"] });
+    refreshes.push(queryClient.invalidateQueries({ queryKey: ["assistant", "chats"] }));
+    await Promise.all(refreshes);
   }, [activeChatId, queryClient]);
 
   const {
@@ -289,6 +294,10 @@ export function useChatPageController() {
     queryClient,
     setSearchParams,
     setDraft,
+    pendingUserText,
+    setPendingUserText,
+    setPendingSend,
+    promoteNewPendingChat,
     setActionWorkingId,
     setRenamingChatId,
     pinnedServers,
@@ -304,6 +313,10 @@ export function useChatPageController() {
     scrollToEnd,
     isBusy,
     showLiveStream,
+    operatorTurn,
+    liveTurnKey,
+    liveAssistantMessageId,
+    settledLiveMessage,
     activePlan,
     displayMessages,
     streamInventoryKind,
@@ -316,22 +329,26 @@ export function useChatPageController() {
     activeTurn,
     activeChat,
     pendingUserText,
+    pendingUserEpoch,
+    pendingUserBaselineIds,
     setPendingUserText,
     streamHold,
     setStreamHold,
     setPendingSend,
     pendingSend,
+    pendingSendChatId: activePendingSend?.chatId ?? null,
     setActionWorkingId,
     setDraft,
     openSessionDock,
     pushSessionLine,
     refreshChat,
     scrollerRef,
+    bottomSentinelRef: endRef,
     atBottom,
     setAtBottom,
     sendMutationPending: sendMutation.isPending,
     createChatMutationPending: createChatMutation.isPending,
-    providerBinding: selectedProviderBinding,
+    providerBinding: null,
   });
 
   const sessionTokens = useMemo(() => {
@@ -405,17 +422,21 @@ export function useChatPageController() {
     const displayText = raw.trim();
     // Enrich for the model (pins + human shell trail) — never show that junk in the bubble.
     const text = opts?.skipPins ? raw : buildMessageWithPins(raw);
-    if (!text.trim() || isBusy) return;
+    if (!text.trim() || isOperatorSendBlocked(isBusy, pendingUserText)) return;
 
     // Instant feedback: show clean user text only.
-    setPendingUserText(displayText);
+    const epoch = pendingEpochRef.current + 1;
+    pendingEpochRef.current = epoch;
+    setPendingUsers((current) => setScopedPending(current, activeChatId, {
+      chatId: activeChatId,
+      text: displayText,
+      epoch,
+      baselineIds: messages.filter((message) => message.role === "user").map((message) => message.id),
+    }));
     setAtBottom(true);
     setDraft("");
     setPaletteOpen(false);
-    requestAnimationFrame(() => {
-      const el = scrollerRef.current;
-      if (el) el.scrollTop = el.scrollHeight;
-    });
+    requestAnimationFrame(() => scrollToEnd(true));
 
     // Prefer WS always for operator chat — HTTP path used to leave orphan user messages
     // when the loop failed mid-request. Queue until socket is ready after chat switch.
@@ -424,7 +445,7 @@ export function useChatPageController() {
       createChatMutation.mutate();
       return;
     }
-    if (operatorWs.ready && operatorWs.sendMessage(text, selectedProviderBinding)) {
+    if (operatorWs.ready && operatorWs.sendMessage(text)) {
       return;
     }
     // Socket not ready yet (just switched chat / reconnecting) — queue for WS effect
@@ -433,25 +454,26 @@ export function useChatPageController() {
 
   const submitMessage = () => {
     const raw = draft.trim();
-    if (!raw || isBusy) return;
+    if (!raw || isOperatorSendBlocked(isBusy, pendingUserText)) return;
     dispatchMessage(raw);
   };
 
   const handleStop = useCallback(() => {
+    const queuedOnly = shouldDropOptimisticOnStop(pendingSend);
     setPendingSend(null);
-    setPendingUserText(null);
-    if (operatorReady) stopOperatorTurn();
-  }, [operatorReady, stopOperatorTurn]);
+    if (queuedOnly) setPendingUserText(null);
+    if (!queuedOnly && operatorReady) stopOperatorTurn();
+  }, [operatorReady, pendingSend, setPendingSend, setPendingUserText, stopOperatorTurn]);
 
   /** Re-send the latest user message (retry after error / weak answer). */
   const handleRetry = useCallback(() => {
-    if (isBusy) return;
+    if (isOperatorSendBlocked(isBusy, pendingUserText)) return;
     const lastUser = [...messages].reverse().find((m) => m.role === "user");
     if (lastUser?.content?.trim()) {
       // Message already carries pinned context from the original send
       dispatchMessage(lastUser.content.trim(), { skipPins: true });
     }
-  }, [isBusy, messages]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isBusy, messages, pendingUserText]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startRename = (chat: AssistantChatSession) => {
     setRenamingChatId(chat.id);
@@ -546,9 +568,9 @@ export function useChatPageController() {
     pinnedServers,
     pinnedUsers,
     pinnedPlaybook,
-    setPinnedPlaybook,
-    playbookOptions,
     pendingUserText,
+    pendingUserEpoch,
+    pendingUserBaselineIds,
     actionWorkingId,
     tasksPanelOpen,
     setTasksPanelOpen,
@@ -582,10 +604,11 @@ export function useChatPageController() {
     filteredChats,
     chatGroups,
     sessionTokens,
-    providerOptions,
-    providerOverride,
-    setProviderOverride: handleProviderOverrideChange,
     showLiveStream,
+    operatorTurn,
+    liveTurnKey,
+    liveAssistantMessageId,
+    settledLiveMessage,
     activePlan,
     displayMessages,
     streamInventoryKind,

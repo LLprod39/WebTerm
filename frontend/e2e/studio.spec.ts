@@ -484,7 +484,7 @@ test("manages MCP registry and notification test actions", async ({ page }) => {
   await expect(page.getByText("PagerDuty MCP")).toBeVisible();
   await expect.poll(() => harness.getCalls("/api/studio/mcp/", "POST").length).toBe(1);
   await page.goto("/studio/notifications");
-  await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
   await page.locator('input[type="password"]').first().fill("tg-token");
   await page.locator('input[placeholder="123456789"]').fill("123456789");
   await expect(page.getByText("You have unsaved changes")).toBeVisible();

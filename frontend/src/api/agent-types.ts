@@ -3,6 +3,7 @@ import type { AgentRunReportSeverity } from "@/api/agent-report-types";
 import type { ProviderBinding } from "@/api/aiProviders";
 
 export type * from "@/api/agent-report-types";
+export type * from "@/api/agent-report-v2-types";
 
 // ---------------------------------------------------------------------------
 // Agents API (mini + full)

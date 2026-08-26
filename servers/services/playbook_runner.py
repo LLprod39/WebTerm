@@ -12,6 +12,7 @@ from typing import Any
 from django.db import close_old_connections
 from django.utils import timezone
 
+from app.core.redacted_logging import redacted_log_text
 from core_ui.managed_secrets import get_playbook_run_variables
 from servers.models import PlaybookRun, Server
 from servers.services.playbook_runner_support import (
@@ -40,6 +41,64 @@ __all__ = [
 ]
 
 
+def _secret_text_values(value: Any) -> list[str]:
+    if isinstance(value, dict):
+        return [item for nested in value.values() for item in _secret_text_values(nested)]
+    if isinstance(value, (list, tuple, set)):
+        return [item for nested in value for item in _secret_text_values(nested)]
+    if isinstance(value, str) and value:
+        return [value]
+    return []
+
+
+def _redact_runtime_value(value: Any, *, secret_values: tuple[str, ...]) -> Any:
+    if isinstance(value, dict):
+        return {key: _redact_runtime_value(item, secret_values=secret_values) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_redact_runtime_value(item, secret_values=secret_values) for item in value]
+    if not isinstance(value, str):
+        return value
+    text = redacted_log_text(value)
+    for secret in secret_values:
+        text = text.replace(secret, "[REDACTED:managed_secret]")
+    return text
+
+
+def _runtime_secret_context(
+    run: PlaybookRun,
+    run_id: int,
+    *,
+    master_password: str | None,
+) -> tuple[dict[str, Any], tuple[str, ...]]:
+    runtime_variables = get_playbook_run_variables(run_id)
+    variable_manifest = run.variable_manifest if isinstance(run.variable_manifest, dict) else {}
+    secret_names = {
+        str(name)
+        for key in ("secret_names", "managed_secret_names")
+        for name in (variable_manifest.get(key) if isinstance(variable_manifest.get(key), list) else [])
+    }
+    secret_payload = {name: runtime_variables[name] for name in secret_names if name in runtime_variables}
+    secret_values = tuple(
+        sorted(
+            {str(master_password or ""), *_secret_text_values(secret_payload)} - {""},
+            key=len,
+            reverse=True,
+        )
+    )
+    return runtime_variables, secret_values
+
+
+def _redacted_run_fields(fields: dict[str, Any], *, secret_values: tuple[str, ...]) -> dict[str, Any]:
+    return {
+        name: _redact_runtime_value(value, secret_values=secret_values)
+        for name, value in fields.items()
+    }
+
+
+def _estimated_total_kind(total: int) -> str:
+    return "estimated" if total else "unknown"
+
+
 def execute_playbook_run(
     run_id: int,
     *,
@@ -53,6 +112,12 @@ def execute_playbook_run(
     except PlaybookRun.DoesNotExist:
         return
 
+    runtime_variables, secret_values = _runtime_secret_context(
+        run,
+        run_id,
+        master_password=master_password,
+    )
+
     def _lease_owned() -> bool:
         return lease_check is None or bool(lease_check())
 
@@ -62,7 +127,8 @@ def execute_playbook_run(
     def _save_run(**fields: Any) -> bool:
         if not _lease_owned():
             return False
-        return _persist_run(run_id, execution_fence=execution_fence, **fields)
+        safe_fields = _redacted_run_fields(fields, secret_values=secret_values)
+        return _persist_run(run_id, execution_fence=execution_fence, **safe_fields)
 
     snapshot = run.playbook_snapshot if isinstance(run.playbook_snapshot, dict) else {}
     tasks = normalize_tasks(snapshot.get("tasks") or [])
@@ -179,10 +245,12 @@ def execute_playbook_run(
                     return
                 playbook_yaml = ""
             if playbook_yaml:
+                estimated_tasks = estimate_total_tasks(playbook_yaml)
                 initial_progress = {
                     "engine": "ansible",
                     "task_number": 0,
-                    "tasks_total": estimate_total_tasks(playbook_yaml) or None,
+                    "tasks_total": estimated_tasks or None,
+                    "total_kind": _estimated_total_kind(estimated_tasks),
                     "hosts_total": len(servers),
                 }
                 _save_run(
@@ -236,7 +304,7 @@ def execute_playbook_run(
                     tags=str(options.get("tags") or ""),
                     skip_tags=str(options.get("skip_tags") or ""),
                     limit=str(options.get("limit") or ""),
-                    extra_vars=get_playbook_run_variables(run_id),
+                    extra_vars=runtime_variables,
                     master_password=master_password,
                     forks=concurrency,
                     cancel_check=_should_cancel,
@@ -302,7 +370,13 @@ def execute_playbook_run(
         inventory_preview=inventory,
         error_message="",
         live_log="",
-        progress={"engine": "shell", "tasks_total": shell_tasks_total, "tasks_done": 0, "hosts_total": len(servers)},
+        progress={
+            "engine": "shell",
+            "tasks_total": shell_tasks_total,
+            "tasks_done": 0,
+            "total_kind": "exact",
+            "hosts_total": len(servers),
+        },
     )
 
     results_by_id: dict[int, dict[str, Any]] = {hr["server_id"]: hr for hr in host_results}
@@ -334,6 +408,7 @@ def execute_playbook_run(
                 "engine": "shell",
                 "tasks_total": shell_tasks_total,
                 "tasks_done": done,
+                "total_kind": "exact",
                 "task": current,
                 "hosts_total": len(servers),
             },
@@ -341,7 +416,7 @@ def execute_playbook_run(
 
     def _log_line(text: str) -> None:
         with progress_lock:
-            log_lines.append(text)
+            log_lines.append(redacted_log_text(text))
             if len(log_lines) > 4000:
                 del log_lines[: len(log_lines) - 3000]
 
@@ -453,6 +528,7 @@ def execute_playbook_run(
                     "engine": "shell",
                     "tasks_total": shell_tasks_total,
                     "tasks_done": done,
+                    "total_kind": "exact",
                     "hosts_total": len(servers),
                     "finished": True,
                 },
@@ -476,16 +552,18 @@ def execute_playbook_run(
                     "engine": "shell",
                     "tasks_total": shell_tasks_total,
                     "tasks_done": shell_tasks_total,
+                    "total_kind": "exact",
                     "hosts_total": len(servers),
                     "finished": True,
                 },
             )
 
     except Exception as exc:
-        logger.exception("Playbook run failed run=%s", run_id)
+        safe_error = _redact_runtime_value(str(exc), secret_values=secret_values)
+        logger.error("Playbook run failed run=%s: %s", run_id, safe_error)
         _save_run(
             status=PlaybookRun.STATUS_FAILED,
-            error_message=str(exc)[:2000],
+            error_message=str(safe_error)[:2000],
             finished_at=timezone.now(),
         )
     finally:

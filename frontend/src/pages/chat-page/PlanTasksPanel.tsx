@@ -80,7 +80,7 @@ export function PlanTasksPanel({
         <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={cn(
-              "h-full rounded-full transition-all duration-500",
+              "h-full rounded-full transition-all duration-500 motion-reduce:transition-none",
               failed ? "bg-destructive" : complete ? "bg-success" : "bg-primary",
             )}
             style={{ width: `${Math.max(pct, failed ? 8 : 0)}%` }}
@@ -105,7 +105,7 @@ export function PlanTasksPanel({
                 ) : state === "failed" ? (
                   <X className="h-3.5 w-3.5 text-destructive" />
                 ) : state === "running" ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-primary motion-reduce:animate-none" />
                 ) : (
                   <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
                 )}

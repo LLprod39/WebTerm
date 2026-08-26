@@ -316,21 +316,26 @@ def test_agent_run_report_delivery_retry_endpoint_sends_and_refreshes_payload(mo
         "servers.report_delivery.load_notification_config",
         lambda: {"telegram_bot_token": "bot-token-secret", "telegram_chat_id": "", "site_url": "http://127.0.0.1:9000"},
     )
+    monkeypatch.setattr(
+        "servers.agents.agent_run_report_v2.load_notification_config",
+        lambda: {"telegram_bot_token": "bot-token-secret", "telegram_chat_id": "", "site_url": "http://127.0.0.1:9000"},
+    )
     monkeypatch.setattr("servers.report_delivery.httpx.AsyncClient", FakeAsyncClient)
 
     response = client.post(f"/servers/api/agents/runs/{run.id}/report/deliver/")
-    assert response.status_code == 200
+    assert response.status_code == 202
     payload = response.json()
     assert payload["success"] is True
-    assert payload["delivery_state"]["status"] == "sent"
-    assert payload["delivery_state"]["target"] == "***6789"
-    assert payload["delivery_state"]["event"]["event_type"] == "agent_report_delivery_sent"
+    assert payload["accepted"] is True
+    assert payload["attempt_id"]
+    assert payload["delivery"]["status"] == "sent"
+    assert payload["delivery"]["target"] == "***6789"
     assert captured["json"]["chat_id"] == "123456789"
     assert "bot-token-secret" not in str(payload)
 
 
 @pytest.mark.django_db
-def test_agent_run_report_delivery_retry_endpoint_requires_ready_report():
+def test_agent_run_report_delivery_retry_endpoint_requires_ready_report(monkeypatch):
     user = User.objects.create_user(username="report-delivery-not-ready", password="x")
     _grant_feature(user, "agents")
     client = Client()
@@ -348,12 +353,17 @@ def test_agent_run_report_delivery_retry_endpoint_requires_ready_report():
     run = AgentRun.objects.create(
         agent=agent, server=server, user=user, status=AgentRun.STATUS_RUNNING, report_payload={}
     )
+    monkeypatch.setattr(
+        "servers.agents.agent_run_report_v2.load_notification_config",
+        lambda: {"telegram_bot_token": "bot-token-secret", "telegram_chat_id": ""},
+    )
 
     response = client.post(f"/servers/api/agents/runs/{run.id}/report/deliver/")
     assert response.status_code == 409
     payload = response.json()
     assert payload["success"] is False
-    assert payload["delivery_state"]["status"] == "waiting_report"
+    assert payload["code"] == "report_not_ready"
+    assert payload["delivery"]["status"] == "waiting_report"
 
 
 @pytest.mark.django_db

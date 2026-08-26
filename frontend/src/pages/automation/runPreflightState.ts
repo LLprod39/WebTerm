@@ -87,6 +87,7 @@ export function buildRunRequest(args: {
   context: RunTargetContext;
   extraVars: Record<string, unknown>;
   policy: RunPolicyOptions;
+  rerunOf?: number;
 }): PlaybookRunRequest {
   return {
     revision_id: args.revisionId,
@@ -103,6 +104,7 @@ export function buildRunRequest(args: {
     skip_tags: args.policy.skipTags.trim(),
     limit: args.policy.limit.trim(),
     engine: "ansible",
+    ...(args.rerunOf ? { rerun_of: args.rerunOf } : {}),
   };
 }
 

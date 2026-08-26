@@ -55,21 +55,21 @@ export default function KubernetesDevtronPage() {
   }, [apps, filter, q]);
 
   const slices = [
-    { key: "healthy", label: "Healthy", value: buckets.healthy, color: "#34d399" },
-    { key: "warning", label: "Warning", value: buckets.warning, color: "#fbbf24" },
-    { key: "degraded", label: "Degraded", value: buckets.degraded, color: "#f87171" },
-    { key: "unknown", label: "Unknown", value: buckets.unknown, color: "#64748b" },
+    { key: "healthy", label: localize(lang, "В норме", "Healthy"), value: buckets.healthy, color: "#34d399" },
+    { key: "warning", label: localize(lang, "Внимание", "Warning"), value: buckets.warning, color: "#fbbf24" },
+    { key: "degraded", label: localize(lang, "Проблемы", "Degraded"), value: buckets.degraded, color: "#f87171" },
+    { key: "unknown", label: localize(lang, "Нет данных", "Unknown"), value: buckets.unknown, color: "#64748b" },
   ];
 
   return (
     <KubernetesShell>
       <KubernetesPageHeader
-        kicker={localize(lang, "AppOps", "AppOps")}
-        title={localize(lang, "Devtron · приложения", "Devtron · applications")}
+        kicker="Devtron"
+        title={localize(lang, "Приложения", "Applications")}
         description={localize(
           lang,
-          "Версии, ownership, health. Deploy/rollback — через approval, не с этой карточки.",
-          "Versions, ownership, health. Deploy/rollback via approval — not from this card.",
+          "Версии, владельцы и состояние приложений. Развёртывание и откат требуют подтверждения.",
+          "Application versions, owners, and health. Deployments and rollbacks require approval.",
         )}
         actions={<K8sRefreshButton onClick={refresh} label={localize(lang, "Обновить", "Refresh")} />}
       />
@@ -77,29 +77,29 @@ export default function KubernetesDevtronPage() {
       <QueryStateBlock
         loading={appsQuery.isLoading}
         error={appsQuery.error}
-        errorText={localize(lang, "Не удалось загрузить Devtron apps", "Failed to load Devtron apps")}
+        errorText={localize(lang, "Не удалось загрузить приложения Devtron", "Failed to load Devtron applications")}
         onRetry={refresh}
       >
         <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
-          <SectionCard title={localize(lang, "Здоровье apps", "App health")} icon={<Layers3 className="h-4 w-4" />}>
+          <SectionCard title={localize(lang, "Состояние приложений", "Application health")} icon={<Layers3 className="h-4 w-4" />}>
             <div className="flex flex-col items-center gap-4 sm:flex-row">
               <HealthDonut
                 slices={slices}
                 centerValue={apps.length}
-                centerLabel="apps"
+                centerLabel={localize(lang, "приложений", "apps")}
               />
               <HealthLegend slices={slices} />
             </div>
           </SectionCard>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiTile label="Apps" value={apps.length} tone="info" />
-            <KpiTile label="Healthy" value={buckets.healthy} tone="success" />
+            <KpiTile label={localize(lang, "Приложения", "Apps")} value={apps.length} tone="info" />
+            <KpiTile label={localize(lang, "В норме", "Healthy")} value={buckets.healthy} tone="success" />
             <KpiTile
-              label="Issues"
+              label={localize(lang, "Проблемы", "Issues")}
               value={buckets.degraded + buckets.warning}
               tone={buckets.degraded + buckets.warning ? "danger" : "success"}
             />
-            <KpiTile label="Teams" value={teams} />
+            <KpiTile label={localize(lang, "Команды", "Teams")} value={teams} />
           </div>
         </div>
 
@@ -108,9 +108,9 @@ export default function KubernetesDevtronPage() {
             {(
               [
                 ["all", localize(lang, "Все", "All")],
-                ["healthy", "Healthy"],
-                ["warning", "Warning"],
-                ["degraded", "Degraded"],
+                ["healthy", localize(lang, "В норме", "Healthy")],
+                ["warning", localize(lang, "Внимание", "Warning")],
+                ["degraded", localize(lang, "Проблемы", "Degraded")],
               ] as const
             ).map(([id, label]) => (
               <CockpitChip key={id} active={filter === id} onClick={() => setFilter(id)}>
@@ -123,7 +123,7 @@ export default function KubernetesDevtronPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={localize(lang, "Поиск app / ns / team…", "Search app / ns / team…")}
+              placeholder={localize(lang, "Приложение, namespace или команда", "Application, namespace, or team")}
               className="h-9 w-full rounded-sm border border-border bg-surface-0 pl-9 pr-3 font-mono text-xs outline-none focus:ring-2 focus:ring-primary/40"
             />
           </label>
@@ -131,7 +131,7 @@ export default function KubernetesDevtronPage() {
 
         <SectionCard
           title={localize(lang, "Приложения", "Applications")}
-          description={localize(lang, "Клик → внешний deep link / diagnose с пульта.", "Click → deep link / diagnose from cockpit.")}
+          description={localize(lang, "Откройте приложение или запустите диагностику.", "Open an application or start a diagnosis.")}
           icon={<Layers3 className="h-4 w-4" />}
         >
           {filtered.length ? (
@@ -143,11 +143,11 @@ export default function KubernetesDevtronPage() {
           ) : (
             <EmptyState
               icon={<Layers3 className="h-5 w-5" />}
-              title={localize(lang, "Devtron apps не найдены", "No Devtron apps")}
+              title={localize(lang, "Приложения Devtron не найдены", "No Devtron applications")}
               description={localize(
                 lang,
-                "Синхронизируйте Devtron provider после credentials.",
-                "Sync Devtron after credentials are configured.",
+                "Настройте подключение Devtron и запустите синхронизацию.",
+                "Configure the Devtron connection and run a sync.",
               )}
             />
           )}

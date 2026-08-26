@@ -39,6 +39,8 @@ export function DataTableCard({ table }: { table: DataTable }) {
   const headers = table.headers || [];
   const rows = table.rows || [];
   if (!rows.length) return null;
+  const columnCount = Math.max(headers.length, ...rows.map((row) => row.length));
+  const proseTable = columnCount <= 2;
 
   return (
     <div className="max-w-[min(960px,100%)] overflow-hidden rounded-sm border border-border/60 bg-card/50">
@@ -48,13 +50,28 @@ export function DataTableCard({ table }: { table: DataTable }) {
           <div className="shrink-0 font-mono text-[10px] text-muted-foreground">{rows.length}</div>
         </div>
       ) : null}
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] border-collapse text-left text-[11.5px] leading-4">
+      <div className={cn(proseTable ? "min-w-0 overflow-hidden" : "overflow-x-auto")}>
+        <table
+          className={cn(
+            "w-full border-collapse text-left",
+            proseTable
+              ? "min-w-0 table-fixed text-[13px] leading-5"
+              : "min-w-[420px] text-[11.5px] leading-4",
+          )}
+        >
           {headers.length ? (
             <thead>
               <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground">
                 {headers.map((h) => (
-                  <th key={h} className="whitespace-nowrap px-2 py-1 font-medium first:pl-2.5 last:pr-2.5">
+                  <th
+                    key={h}
+                    className={cn(
+                      "px-2 py-1 font-medium first:pl-2.5 last:pr-2.5",
+                      proseTable
+                        ? "whitespace-normal break-words align-top [overflow-wrap:anywhere] first:w-[40%] sm:first:w-[32%]"
+                        : "whitespace-nowrap",
+                    )}
+                  >
                     {h}
                   </th>
                 ))}
@@ -72,8 +89,24 @@ export function DataTableCard({ table }: { table: DataTable }) {
                   const value = cell == null || cell === "" ? "—" : String(cell);
                   const serverish = looksLikeServerName(value, header);
                   return (
-                    <td key={ci} className="whitespace-nowrap px-2 py-0.5 align-middle first:pl-2.5 last:pr-2.5">
-                      <span className={cn("inline-flex max-w-[14rem] items-center gap-1 truncate", cellTone(value, header))}>
+                    <td
+                      key={ci}
+                      className={cn(
+                        "px-2 first:pl-2.5 last:pr-2.5",
+                        proseTable
+                          ? "whitespace-normal break-words py-1.5 align-top [overflow-wrap:anywhere] first:w-[40%] sm:first:w-[32%]"
+                          : "whitespace-nowrap py-0.5 align-middle",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1",
+                          proseTable
+                            ? "max-w-full min-w-0 items-start whitespace-normal break-words [overflow-wrap:anywhere]"
+                            : "max-w-[14rem] truncate",
+                          cellTone(value, header),
+                        )}
+                      >
                         {serverish ? <Server className="h-2.5 w-2.5 shrink-0 opacity-70" /> : null}
                         {value}
                       </span>

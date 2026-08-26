@@ -87,7 +87,7 @@ export function ArtifactWorkbench({
         <div className="w-36 shrink-0 overflow-y-auto border-r border-border/60 p-2">
           {query.isLoading ? (
             <div className="flex items-center gap-1 p-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" />
             </div>
           ) : null}
           {!artifacts.length && !query.isLoading ? (
@@ -126,7 +126,7 @@ export function ArtifactWorkbench({
                   onClick={() => saveMutation.mutate()}
                 >
                   {saveMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
                   ) : (
                     <Save className="h-3.5 w-3.5" />
                   )}

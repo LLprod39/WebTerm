@@ -51,16 +51,29 @@ def _steps_to_runbook_tasks(steps: Any) -> list[dict[str, Any]]:
 def create_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
     from servers.models import Playbook, PlaybookRevision
     from servers.services.playbooks.revisions import initialize_created_playbook
+    from servers.services.playbooks.source_guard import PlaybookSourceSafetyError, validate_ansible_source
 
     name = str(ctx.input_payload.get("name") or ctx.input_payload.get("title") or "Operator playbook").strip()[:200]
-    yaml_text = str(ctx.input_payload.get("yaml") or ctx.input_payload.get("source_yaml") or "").strip()
+    yaml_text = str(ctx.input_payload.get("yaml") or ctx.input_payload.get("source_yaml") or "")
     raw_tasks = ctx.input_payload.get("tasks") if isinstance(ctx.input_payload.get("tasks"), list) else []
     # Models represent a runbook as a step/command list under various keys — accept them all.
     raw_steps = ctx.input_payload.get("steps") or ctx.input_payload.get("commands") or []
     runbook_tasks = _steps_to_runbook_tasks(raw_tasks or raw_steps)
-    if not yaml_text and not runbook_tasks:
+    has_yaml = bool(yaml_text.strip())
+    if not has_yaml and not runbook_tasks:
         raise AssistantActionError("Provide yaml, or steps/tasks as a list of {command, description}.")
-    kind = Playbook.KIND_ANSIBLE if yaml_text else Playbook.KIND_RUNBOOK
+    if has_yaml:
+        try:
+            yaml_text = validate_ansible_source(yaml_text).source_yaml
+        except PlaybookSourceSafetyError as exc:
+            raise AssistantActionError(
+                "Playbook YAML failed safety validation",
+                status=exc.status_code,
+                details={"code": exc.code},
+            ) from exc
+    else:
+        yaml_text = ""
+    kind = Playbook.KIND_ANSIBLE if has_yaml else Playbook.KIND_RUNBOOK
     pb = Playbook.objects.create(
         user=ctx.user,
         name=name,

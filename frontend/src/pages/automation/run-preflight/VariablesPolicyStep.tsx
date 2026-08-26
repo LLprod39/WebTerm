@@ -41,7 +41,7 @@ export function VariablesPolicyStep({
         <div className="flex items-center gap-2">
           <Braces className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">
-            {tr("Raw runtime variables", "Raw runtime variables")}
+            {tr("Переменные запуска", "Run variables")}
           </h3>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -74,7 +74,7 @@ export function VariablesPolicyStep({
         ) : null}
 
         <div className="mt-4 space-y-1.5">
-          <Label htmlFor="run-extra-vars">extra_vars JSON</Label>
+          <Label htmlFor="run-extra-vars">{tr("Переменные в JSON", "Variables as JSON")}</Label>
           <Textarea
             id="run-extra-vars"
             value={extraVarsText}
@@ -123,21 +123,21 @@ export function VariablesPolicyStep({
             className="mt-1"
           />
           <span>
-            <span className="block text-sm font-medium text-foreground">become (sudo)</span>
+            <span className="block text-sm font-medium text-foreground">{tr("Повышенные права (sudo)", "Elevated access (sudo)")}</span>
             <span className="mt-1 block text-xs text-muted-foreground">ansible-playbook --become</span>
           </span>
         </label>
 
         <div className="space-y-1.5">
-          <Label htmlFor="run-tags">tags</Label>
+          <Label htmlFor="run-tags">{tr("Теги", "Tags")}</Label>
           <Input id="run-tags" value={policy.tags} onChange={(event) => onPolicyChange({ tags: event.target.value })} placeholder="deploy,config" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="run-skip-tags">skip_tags</Label>
+          <Label htmlFor="run-skip-tags">{tr("Пропустить теги", "Skip tags")}</Label>
           <Input id="run-skip-tags" value={policy.skipTags} onChange={(event) => onPolicyChange({ skipTags: event.target.value })} placeholder="dangerous" />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="run-limit">limit</Label>
+          <Label htmlFor="run-limit">{tr("Ограничить узлы", "Limit hosts")}</Label>
           <Input id="run-limit" value={policy.limit} onChange={(event) => onPolicyChange({ limit: event.target.value })} placeholder="web:&online" />
         </div>
       </section>

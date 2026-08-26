@@ -73,7 +73,7 @@ export function KubernetesHelmWizard({
                 {localize(lang, "Helm · мастер", "Helm · wizard")}
               </div>
               <div className="text-2xs text-muted-foreground">
-                {localize(lang, "Ownership check → request install", "Ownership check → request install")}
+                {localize(lang, "Проверка владельца → запрос установки", "Ownership check → request install")}
               </div>
             </div>
           </div>
@@ -121,12 +121,12 @@ export function KubernetesHelmWizard({
               </label>
               <div className="rounded-sm border border-border bg-surface-0 p-3">
                 <div className="mb-2 flex items-center justify-between text-xs">
-                  <span className="font-semibold">{localize(lang, "Известные releases", "Known releases")}</span>
+                  <span className="font-semibold">{localize(lang, "Известные релизы", "Known releases")}</span>
                   <StatusBadge
                     label={
                       conflicts.length
-                        ? localize(lang, `${conflicts.length} conflict`, `${conflicts.length} conflict`)
-                        : localize(lang, "ok", "ok")
+                        ? localize(lang, `${conflicts.length} конфликтов`, `${conflicts.length} conflict`)
+                        : localize(lang, "готово", "ok")
                     }
                     tone={conflicts.length ? "warning" : "success"}
                   />
@@ -146,7 +146,7 @@ export function KubernetesHelmWizard({
                   </ul>
                 ) : (
                   <div className="text-2xs text-muted-foreground">
-                    {localize(lang, "Inventory не нашёл Helm labels — можно всё равно запросить install.", "No Helm labels in inventory — you can still request install.")}
+                    {localize(lang, "Метки Helm не найдены, но запрос на установку всё равно можно отправить.", "No Helm labels were found, but you can still request an installation.")}
                   </div>
                 )}
               </div>
@@ -160,7 +160,7 @@ export function KubernetesHelmWizard({
             <>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="space-y-1 text-xs">
-                  <span className="text-muted-foreground">Release</span>
+                  <span className="text-muted-foreground">{localize(lang, "Релиз", "Release")}</span>
                   <input
                     value={releaseName}
                     onChange={(e) => setReleaseName(e.target.value)}
@@ -169,7 +169,7 @@ export function KubernetesHelmWizard({
                   />
                 </label>
                 <label className="space-y-1 text-xs">
-                  <span className="text-muted-foreground">Namespace</span>
+                  <span className="text-muted-foreground">{localize(lang, "Пространство имён", "Namespace")}</span>
                   <input
                     value={namespace}
                     onChange={(e) => setNamespace(e.target.value)}
@@ -178,7 +178,7 @@ export function KubernetesHelmWizard({
                 </label>
               </div>
               <label className="block space-y-1 text-xs">
-                <span className="text-muted-foreground">Chart ref</span>
+                <span className="text-muted-foreground">{localize(lang, "Ссылка на chart", "Chart ref")}</span>
                 <input
                   value={chartRef}
                   onChange={(e) => setChartRef(e.target.value)}
@@ -186,7 +186,7 @@ export function KubernetesHelmWizard({
                 />
               </label>
               <label className="block space-y-1 text-xs">
-                <span className="text-muted-foreground">{localize(lang, "Values / заметка", "Values / note")}</span>
+                <span className="text-muted-foreground">{localize(lang, "Параметры / заметка", "Values / note")}</span>
                 <textarea
                   value={valuesNote}
                   onChange={(e) => setValuesNote(e.target.value)}
@@ -210,21 +210,21 @@ export function KubernetesHelmWizard({
             <>
               <div className="space-y-2 rounded-sm border border-border bg-surface-0 p-3 font-mono text-2xs leading-relaxed text-muted-foreground">
                 <div>
-                  <span className="text-foreground">release</span> {releaseName}
+                  <span className="text-foreground">{localize(lang, "релиз", "release")}</span> {releaseName}
                 </div>
                 <div>
-                  <span className="text-foreground">chart</span> {chartRef}
+                  <span className="text-foreground">{localize(lang, "пакет Helm", "chart")}</span> {chartRef}
                 </div>
                 <div>
-                  <span className="text-foreground">ns</span> {namespace}
+                  <span className="text-foreground">{localize(lang, "пространство", "namespace")}</span> {namespace}
                 </div>
                 <div>
-                  <span className="text-foreground">cluster</span> {clusterId}
+                  <span className="text-foreground">{localize(lang, "кластер", "cluster")}</span> {clusterId}
                 </div>
                 <p className="pt-2 text-amber-200/90">
                   {localize(
                     lang,
-                    "Прямой helm install из UI заблокирован политикой. Создаётся approval request для оператора.",
+                    "Прямая установка Helm из интерфейса запрещена политикой. Будет создан запрос оператору на подтверждение.",
                     "Direct helm install from UI is policy-blocked. Creates an operator approval request.",
                   )}
                 </p>
@@ -255,7 +255,7 @@ export function KubernetesHelmWizard({
                   onClick={() => requestMutation.mutate()}
                 >
                   <Rocket className="h-3.5 w-3.5" />
-                  {localize(lang, "Запросить install", "Request install")}
+                  {localize(lang, "Запросить установку", "Request install")}
                 </Button>
               </div>
             </>

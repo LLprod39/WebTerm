@@ -223,7 +223,7 @@ export function CreateSkillDialog({
                 <AccordionContent className="space-y-4 pb-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">Slug</Label>
+                      <Label className="text-xs text-muted-foreground">{tr("Идентификатор", "Identifier")}</Label>
                       <Input
                         className="h-9 font-mono text-xs"
                         value={wizard.slug}
@@ -281,7 +281,7 @@ export function CreateSkillDialog({
                     </div>
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                       <div>
-                        <span className="text-xs font-medium text-destructive">{tr("Перезаписать существующий slug", "Overwrite existing slug")}</span>
+                        <span className="text-xs font-medium text-destructive">{tr("Перезаписать существующий идентификатор", "Overwrite existing identifier")}</span>
                         <p className="mt-0.5 text-xs text-muted-foreground">{tr("Только если обновляете свой скилл.", "Only when updating your own skill.")}</p>
                       </div>
                       <Switch checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
@@ -289,7 +289,7 @@ export function CreateSkillDialog({
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">{tr("Политика выполнения JSON", "Runtime policy JSON")}</Label>
+                    <Label className="text-xs text-muted-foreground">{tr("Правила выполнения (JSON)", "Execution rules (JSON)")}</Label>
                     <Textarea rows={6} value={wizard.runtime_policy_text} onChange={(event) => setWizard((prev) => ({ ...prev, runtime_policy_text: event.target.value }))} className="font-mono text-xs leading-5" spellCheck={false} />
                   </div>
                 </AccordionContent>
@@ -361,7 +361,7 @@ export function CreateFileDialog({
             <Textarea rows={16} value={content} onChange={(event) => onContentChange(event.target.value)} className="font-mono text-[12px] leading-5" />
           </div>
           <div className="rounded-xl border border-border/70 bg-background/24 px-4 py-4 text-xs leading-5 text-muted-foreground">
-            {tr("Разрешены только относительные пути и текстовые расширения. Абсолютные пути, скрытые файлы и выход за пределы папки скилла backend отклоняет.", "Only relative paths and text extensions are allowed. Absolute paths, hidden files, and escaping the skill directory are rejected by the backend.")}
+            {tr("Разрешены только относительные пути и текстовые файлы. WebTerm отклонит скрытые файлы, абсолютные пути и выход за папку скилла.", "Only relative paths and text files are allowed. WebTerm rejects hidden files, absolute paths, and paths outside the skill folder.")}
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -402,7 +402,7 @@ export function SkillValidationDialog({
       <DialogContent closeLabel={tr("Закрыть", "Close")} className="max-h-[85vh] max-w-4xl overflow-auto rounded-md border-border bg-background/95">
         <DialogHeader>
           <DialogTitle>{tr("Валидация библиотеки скиллов", "Skill Library Validation")}</DialogTitle>
-          <DialogDescription>{tr("Проверьте структурные и policy-проблемы в текущей библиотеке скиллов Studio.", "Review structural and policy issues across the current Studio skill library.")}</DialogDescription>
+          <DialogDescription>{tr("Проверьте структуру и правила скиллов Studio.", "Review the structure and rules of Studio skills.")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-4">

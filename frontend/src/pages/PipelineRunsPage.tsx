@@ -121,10 +121,10 @@ export default function PipelineRunsPage() {
     <div className="flex flex-col h-full">
       <StudioNav />
       <StudioHero
-        kicker={localize(lang, "Studio / Запуски", "Studio / Runs")}
-        title={localize(lang, "История запусков", "Execution History")}
+        kicker={localize(lang, "Пайплайны", "Pipelines")}
+        title={localize(lang, "История запусков", "Run history")}
         titleIcon={<Workflow className="h-7 w-7 text-primary" />}
-        description={localize(lang, "Следите за запусками пайплайнов, проверяйте ошибки и открывайте подробный вывод по каждому шагу.", "Monitor pipeline runs, inspect failures, and open detailed output for each step.")}
+        description={localize(lang, "Статусы, ошибки и вывод каждого шага.", "Statuses, errors, and output for every step.")}
         stats={
           <>
             <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${statusCount("completed")} ${localize(lang, "выполнено", "completed")}`} />
@@ -146,7 +146,7 @@ export default function PipelineRunsPage() {
             <Input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder={localize(lang, "Поиск по pipeline, ID, ошибке или инициатору", "Search pipeline, ID, error, or actor")}
+              placeholder={localize(lang, "Пайплайн, ID, ошибка или инициатор", "Pipeline, ID, error, or actor")}
               aria-label={localize(lang, "Поиск запусков", "Search runs")}
               className="h-10 bg-background/70 pl-9"
             />

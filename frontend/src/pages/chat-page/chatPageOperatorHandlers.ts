@@ -6,6 +6,7 @@ import type { useToast } from "@/hooks/use-toast";
 import { localize } from "@/lib/i18n";
 
 import { replaceActionInChat } from "./chatHelpers";
+import { visibleOperatorUserText } from "./operatorUserText";
 import { isSshToolName, type OperatorSessionLine } from "./operatorSessionTypes";
 
 type ToastFn = ReturnType<typeof useToast>["toast"];
@@ -33,7 +34,8 @@ export type ChatOperatorHandlerCtx = {
   setActionWorkingId: Dispatch<SetStateAction<number | null>>;
   openSessionDock: OpenSessionDock;
   pushSessionLine: PushSessionLine;
-  refreshChat: () => void;
+  refreshChat: () => Promise<void>;
+  refreshTerminalChat: () => Promise<void>;
 };
 
 /** Build operator WS event handlers (same behavior as former ChatPage inline callbacks). */
@@ -52,6 +54,7 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
     openSessionDock,
     pushSessionLine,
     refreshChat,
+    refreshTerminalChat,
   } = ctx;
 
   return {
@@ -131,8 +134,9 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
         }
       }
       setStreamHold(true);
-      refreshChat();
-      setPendingUserText(null);
+      void refreshChat();
+      // Keep the optimistic user row until its durable REST counterpart lands.
+      // Clearing here creates a visible gap before the confirmation card/query refresh.
     },
     onActionUpdate: (action: AssistantAction) => {
       queryClient.setQueryData<AssistantChatSession | undefined>(
@@ -182,9 +186,12 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
           );
         }
       }
-      refreshChat();
+      void refreshTerminalChat();
       setPendingSend(null);
-      setPendingUserText(null);
+      // Keep the optimistic user row mounted until the matching durable REST
+      // message arrives. Clearing it on the WebSocket completion event can
+      // create a blank frame when the final query invalidation is still in
+      // flight; the runtime reconciliation effect owns the actual handoff.
     },
     onSnapshot: (payload: {
       status?: string;
@@ -193,12 +200,15 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
       userText?: string;
       action?: AssistantAction | null;
     }) => {
-      if (payload.userText && !pendingUserText) {
+      const visibleUserText = visibleOperatorUserText(payload.userText || "");
+      if (visibleUserText && !pendingUserText) {
         // User already in history after reconnect — only show optimistic if missing
         const hasUser = messages.some(
-          (m) => m.role === "user" && m.content?.trim() === payload.userText?.trim(),
+          (m) =>
+            m.role === "user" &&
+            visibleOperatorUserText(m.content) === visibleUserText,
         );
-        if (!hasUser && payload.busy) setPendingUserText(payload.userText);
+        if (!hasUser && payload.busy) setPendingUserText(visibleUserText);
       }
       if (payload.busy) setStreamHold(true);
       if (payload.action && "id" in payload.action && payload.action.id) {
@@ -208,7 +218,13 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
         );
       }
       if (payload.busy || payload.status === "awaiting_confirm") {
-        refreshChat();
+        void refreshChat();
+      } else if (
+        ["done", "completed", "failed", "limit", "cancelled", "stopped", "error"].includes(
+          String(payload.status || "").toLowerCase(),
+        )
+      ) {
+        void refreshTerminalChat();
       }
     },
     onError: (message: string) => {
@@ -219,8 +235,9 @@ export function createChatOperatorHandlers(ctx: ChatOperatorHandlerCtx) {
       });
       setPendingSend(null);
       setStreamHold(false);
-      setPendingUserText(null);
-      refreshChat();
+      // The server persists the user message before provider execution. Let the
+      // shared REST handoff effect retire the optimistic row without a blank frame.
+      void refreshTerminalChat();
     },
   };
 }

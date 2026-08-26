@@ -4,6 +4,7 @@ import type { AdminDashboardData } from "@/api";
 import { SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { getWidgetNumberProp, getWidgetStringProp } from "@/components/dashboard/widgetProps";
 import type { WidgetDefinition } from "@/components/dashboard/CustomizableDashboard";
+import { localize } from "@/lib/i18n";
 import { relativeTime } from "@/lib/utils";
 import {
   activityActionLabel,
@@ -151,7 +152,7 @@ export function buildAdminListWidgets(d: AdminDashboardData, lang: string): Widg
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="font-bold text-foreground/95">{connection.user}</span>
-                      <span className="text-xs text-muted-foreground">connected to</span>
+                      <span className="text-xs text-muted-foreground">{localize(lang, "подключён к", "connected to")}</span>
                     </div>
                     <p className="mt-0.5 truncate text-xs font-semibold text-primary font-mono">{connection.server}</p>
                   </div>

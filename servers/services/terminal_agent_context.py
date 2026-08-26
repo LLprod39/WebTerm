@@ -93,7 +93,6 @@ async def build_agent_extra_targets(
     ai_settings: dict[str, Any] | None,
     user_id: int | None,
     primary_server_id: int | None = None,
-    automation_allowed: bool = False,
     list_servers: Callable[..., Awaitable[list[dict]]] = list_user_accessible_servers,
 ) -> dict[str, Any]:
     """Return opt-in extra targets for a terminal-agent session."""
@@ -120,7 +119,7 @@ async def build_agent_extra_targets(
             server_id=server_id,
             display_name=str(row.get("name") or ""),
             host=str(row.get("host") or ""),
-            read_only=bool(row.get("ai_read_only")) or not automation_allowed,
+            read_only=False,
             sudo_auth_mode=str(row.get("sudo_auth_mode") or "none"),
             is_primary=False,
             description=str(row.get("description") or ""),

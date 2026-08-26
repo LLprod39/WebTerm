@@ -36,7 +36,7 @@ export const SUDO_POLICY_OPTIONS: Array<{
     value: "approved",
     labelRu: "Разрешить",
     labelEn: "Approved",
-    hintRu: "Sudo разрешён на этот запуск; backend выполнит его как sudo -n.",
+    hintRu: "Sudo разрешён на этот запуск; система выполнит его как sudo -n.",
     hintEn: "Sudo is approved for this run; backend enforces sudo -n.",
   },
 ];

@@ -1,7 +1,9 @@
 import { useState } from "react";
 
+import { analyzePlaybookCompatibility } from "@/api/playbooks";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { notify } from "@/lib/notify";
 import { GuidedBuilder } from "./GuidedBuilder";
 import { PlaybookEditor } from "./PlaybookEditor";
 import { RunResultsView } from "./RunResultsView";
@@ -21,7 +23,6 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     lang,
     tr,
     queryClient,
-    fileInputRef,
     view,
     setView,
     search,
@@ -39,6 +40,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     running,
     cancelling,
     activeRun,
+    retryContext,
     setActiveRun,
     runLoadError,
     retryRunLoad,
@@ -58,7 +60,6 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     onSave,
     onDelete,
     onDuplicate,
-    onLoadYamlFile,
     startRunWizard,
     onConfirmRun,
     onCancelRun,
@@ -73,21 +74,39 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
     routePlaybookId && openedPlaybook?.id !== routePlaybookId,
   );
   const [projectImportOpen, setProjectImportOpen] = useState(false);
+  const [projectImportMode, setProjectImportMode] = useState<"yaml" | "archive" | "gitlab">("yaml");
+  const [workspaceValidating, setWorkspaceValidating] = useState(false);
+
+  const openImport = (mode: "yaml" | "archive" | "gitlab" = "yaml") => {
+    setProjectImportMode(mode);
+    setProjectImportOpen(true);
+  };
+  const validateWorkspace = async () => {
+    if (view.mode !== "edit" || !view.playbookId) return;
+    setWorkspaceValidating(true);
+    try {
+      const response = await analyzePlaybookCompatibility(view.playbookId, { source_yaml: editor.sourceYaml });
+      updateEditor({ compatibility: response.report });
+      await queryClient.invalidateQueries({ queryKey: ["playbooks"] });
+      notify.success({ title: tr("Проверка завершена", "Validation complete") });
+    } catch (caught) {
+      notify.error({ title: tr("Проверка не удалась", "Validation failed"), description: String(caught) });
+    } finally {
+      setWorkspaceValidating(false);
+    }
+  };
+  const openAdaptation = () => {
+    const target = document.getElementById("playbook-ai-adaptation");
+    if (!target) return;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+    window.requestAnimationFrame(() => {
+      target.querySelector<HTMLElement>("button:not([disabled]), textarea:not([disabled])")?.focus({ preventScroll: true });
+    });
+  };
 
   return (
     <div className="space-y-3">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".yml,.yaml,.json"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) void onLoadYamlFile(file);
-          e.target.value = "";
-        }}
-      />
-
       {view.mode === "catalog" ? (
         <PlaybooksCatalogPanel
           lang={lang}
@@ -115,7 +134,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
             void queryClient.invalidateQueries({ queryKey: ["playbook-runs"] });
           }}
           onOpenNew={openNew}
-          onOpenImport={() => setProjectImportOpen(true)}
+          onOpenImport={() => openImport("yaml")}
           onOpenEdit={(id) => void openEdit(id)}
           onStartRun={(id) => void startRunWizard(id)}
           onDuplicate={(id) => void onDuplicate(id)}
@@ -142,11 +161,11 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
 
       {playbookSurfaceLoading ? (
         <div className="py-12 text-center text-sm text-muted-foreground" role="status">
-          {tr("Загрузка playbook…", "Loading playbook…")}
+          {tr("Загрузка проекта…", "Loading project…")}
         </div>
       ) : null}
 
-      {view.mode === "edit" && !playbookSurfaceLoading ? (
+      {view.mode === "edit" && !playbookSurfaceLoading && !view.playbookId ? (
         <PlaybookEditor
           lang={lang}
           state={editor}
@@ -154,10 +173,10 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           dirty={editorDirty}
           saveError={saveError}
           readOnly={Boolean(view.playbookId) && (!workspace.capabilityReady || !workspace.canEditContent)}
-          metadataReadOnly={Boolean(view.playbookId) && !workspace.capabilities.is_owner}
+          metadataReadOnly={Boolean(view.playbookId) && !workspace.capabilities.can_edit}
           canRun={!view.playbookId || (workspace.capabilityReady && workspace.capabilities.can_run)}
           canValidate={!view.playbookId || workspace.capabilities.can_validate}
-          canAdapt={!view.playbookId || workspace.capabilities.is_owner}
+          canAdapt={!view.playbookId || workspace.capabilities.can_edit}
           onChange={updateEditor}
           onSave={() => void onSave()}
           onBack={leaveEditor}
@@ -166,13 +185,54 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           }}
           playbookId={view.playbookId}
           onCompatibilityApplied={onCompatibilityApplied}
-          onImportYaml={() => fileInputRef.current?.click()}
-          onImportProject={() => setProjectImportOpen(true)}
+          onImportYaml={() => openImport("yaml")}
+          onImportProject={() => openImport("archive")}
         />
       ) : null}
 
       {view.mode === "edit" && view.playbookId && !playbookSurfaceLoading ? (
-        <PlaybookWorkspacePanels lang={lang} playbookId={view.playbookId} workspace={workspace} />
+        <PlaybookWorkspacePanels
+          lang={lang}
+          playbookId={view.playbookId}
+          workspace={workspace}
+          playbookName={editor.name || tr("Проект Ansible", "Ansible project")}
+          canRun={workspace.capabilityReady && workspace.capabilities.can_run && !editorDirty && !saving}
+          compatibilityReady={Boolean(editor.activeCompatibilityRevision?.status === "validated" || editor.compatibility?.ready)}
+          validating={workspaceValidating}
+          adaptationAvailable={Boolean(editor.sourceYaml.trim()) && workspace.capabilities.can_validate && workspace.capabilities.can_edit}
+          onValidate={() => void validateWorkspace()}
+          onOpenAdaptation={openAdaptation}
+          gitLabSource={openedPlaybook?.source?.type === "gitlab"
+            ? { type: "gitlab", host: openedPlaybook.source.host || "GitLab", project: openedPlaybook.source.project || "project", ref: openedPlaybook.source.ref, path: openedPlaybook.source.path }
+            : null}
+          servers={servers}
+          groups={groupsWithId}
+          hostSelectors={editor.activeCompatibilityRevision?.report?.host_selectors || editor.compatibility?.host_selectors || []}
+          onBack={leaveEditor}
+          onRun={() => setView({ mode: "run-wizard", playbookId: view.playbookId })}
+        >
+          <PlaybookEditor
+            embedded
+            lang={lang}
+            state={editor}
+            saving={saving}
+            dirty={editorDirty}
+            saveError={saveError}
+            readOnly={!workspace.capabilityReady || !workspace.canEditContent}
+            metadataReadOnly={!workspace.capabilities.can_edit}
+            canRun={workspace.capabilityReady && workspace.capabilities.can_run}
+            canValidate={workspace.capabilities.can_validate}
+            canAdapt={workspace.capabilities.can_edit}
+            onChange={updateEditor}
+            onSave={() => void onSave()}
+            onBack={leaveEditor}
+            onRun={() => setView({ mode: "run-wizard", playbookId: view.playbookId })}
+            playbookId={view.playbookId}
+            onCompatibilityApplied={onCompatibilityApplied}
+            onImportYaml={() => openImport("yaml")}
+            onImportProject={() => openImport("archive")}
+          />
+        </PlaybookWorkspacePanels>
       ) : null}
 
       {view.mode === "run-wizard" && !playbookSurfaceLoading ? (
@@ -188,7 +248,10 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
           revisions={workspace.revisions}
           publishedRevisionId={workspace.publishedRevisionId}
           revisionsLoading={workspace.revisionsLoading}
+          bindingProfiles={workspace.bindings}
+          bindingsLoading={workspace.bindingsLoading}
           capabilities={workspace.capabilities}
+          retryContext={retryContext}
           workerReady={Boolean(ansible?.worker_ready)}
           onBack={() => setView({ mode: "edit", playbookId: view.playbookId })}
           onConfirm={(opts) => void onConfirmRun(opts)}
@@ -237,7 +300,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
 
       {view.mode === "run-results" && activeRun?.id !== view.runId && !runLoadError ? (
         <div className="py-12 text-center text-sm text-muted-foreground" role="status">
-          {tr("Загрузка run…", "Loading run…")}
+          {tr("Загрузка запуска…", "Loading run…")}
         </div>
       ) : null}
 
@@ -246,7 +309,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-        title={tr("Удалить playbook?", "Delete playbook?")}
+        title={tr("Удалить проект?", "Delete project?")}
         description={
           deleteTarget
             ? tr(`«${deleteTarget.name}» будет удалён.`, `"${deleteTarget.name}" will be deleted.`)
@@ -261,6 +324,7 @@ export function PlaybooksWorkspace(props: PlaybooksWorkspaceProps) {
         open={projectImportOpen}
         onOpenChange={setProjectImportOpen}
         lang={lang}
+        initialMode={projectImportMode}
         onOpenPlaybook={(playbookId) => void openEdit(playbookId)}
       />
     </div>

@@ -30,18 +30,18 @@ export function PoliciesTab({
           <h3 className="text-sm font-semibold text-foreground">
             {selectedAgent
               ? t(lang, "Дополнительные политики", "Extra policies")
-              : t(lang, "Skills / Policies", "Skills / Policies")}
+              : t(lang, "Навыки и политики", "Skills / Policies")}
           </h3>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {selectedAgent
               ? t(
                   lang,
-                "Политики этой ноды будут объединены с правилами выбранного конфига агента во время выполнения.",
+                "Политики этой ноды будут объединены с правилами выбранного профиля агента при запуске.",
                   "Node-level policies will be merged with the selected Agent Config at runtime.",
                 )
               : t(
                   lang,
-                "Подключайте playbooks, ограничения и runtime-политики прямо к этой ноде.",
+                "Подключайте сценарии, ограничения и политики прямо к этой ноде.",
                   "Attach playbooks, guardrails, and runtime policies directly to this node.",
                 )}
           </p>

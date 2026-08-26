@@ -180,8 +180,8 @@ export default function MCPHubPage() {
         titleIcon={<Server className="h-7 w-7 text-primary" />}
         description={localize(
           lang,
-          "Подключайте инструменты для OPS-пайплайнов Studio. UI/code skills здесь не хранятся.",
-          "Manage tools for Studio OPS pipelines. UI/code skills are not stored here.",
+          "Подключайте внешние инструменты к сценариям Studio.",
+          "Connect external tools to Studio workflows.",
         )}
         stats={
           <>
@@ -231,7 +231,7 @@ export default function MCPHubPage() {
                 <EmptyState
                   icon={<Server className="h-5 w-5" />}
                   title={localize(lang, "MCP-серверы ещё не подключены", "No MCP servers yet")}
-                  description={localize(lang, "Выберите шаблон или добавьте stdio/SSE endpoint для интеграции с внешними инструментами.", "Start from a template or add a stdio/SSE endpoint for external tools.")}
+                  description={localize(lang, "Выберите шаблон или добавьте команду stdio либо адрес SSE.", "Choose a template or add a stdio command or SSE address.")}
                   actions={
                     <Button type="button" className="gap-1.5" onClick={openCreateDialog}>
                       <Plus className="h-4 w-4" />
@@ -356,7 +356,7 @@ export default function MCPHubPage() {
               <EmptyState
                 icon={<Zap className="h-5 w-5" />}
                 title={localize(lang, "Шаблонов пока нет", "No templates available")}
-                description={localize(lang, "Они появятся здесь, когда backend отдаст список готовых подключений.", "Template suggestions will appear here when the backend provides them.")}
+                description={localize(lang, "Шаблоны появятся здесь, когда будут доступны.", "Templates will appear here when available.")}
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

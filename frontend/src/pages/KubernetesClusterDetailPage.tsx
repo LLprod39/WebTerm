@@ -132,11 +132,11 @@ export default function KubernetesClusterDetailPage() {
     <KubernetesShell>
       <KubernetesPageHeader
         kicker={localize(lang, "Кластер", "Cluster")}
-        title={cluster?.name || localize(lang, "Cluster detail", "Cluster detail")}
+        title={cluster?.name || localize(lang, "Кластер", "Cluster")}
         description={localize(
           lang,
-          "Namespaces, workloads, pods, network, events — read-only inventory + describe/logs.",
-          "Namespaces, workloads, pods, network, events — read-only inventory + describe/logs.",
+          "Пространства имён, нагрузки, поды, сеть и события. Только просмотр.",
+          "Namespaces, workloads, pods, networking, and events. Read-only.",
         )}
         meta={
           cluster ? (
@@ -145,7 +145,7 @@ export default function KubernetesClusterDetailPage() {
               <StatusBadge label={statusLabel(lang, cluster.health)} tone={statusTone(cluster.health)} />
               <StatusBadge label={cluster.environment || "env"} tone="neutral" />
               <span className="font-mono text-2xs text-muted-foreground">
-                {localize(lang, "Sync:", "Sync:")} {formatSync(lang, cluster.last_sync_at)}
+                {localize(lang, "Синхронизация:", "Synced:")} {formatSync(lang, cluster.last_sync_at)}
               </span>
             </>
           ) : null
@@ -155,7 +155,7 @@ export default function KubernetesClusterDetailPage() {
             <Button asChild variant="outline" size="sm" className="h-10 gap-2">
               <Link to="/kubernetes">
                 <ArrowLeft className="h-4 w-4" />
-                {localize(lang, "Пульт", "Cockpit")}
+                {localize(lang, "К обзору", "Back to overview")}
               </Link>
             </Button>
             <K8sRefreshButton onClick={refresh} label={localize(lang, "Обновить", "Refresh")} />
@@ -166,31 +166,31 @@ export default function KubernetesClusterDetailPage() {
       <QueryStateBlock
         loading={loading}
         error={error || (!clusterQuery.isLoading && clusterQuery.data && !clusterQuery.data.success ? new Error("Cluster request failed") : undefined)}
-        errorText={localize(lang, "Не удалось загрузить cluster detail", "Failed to load cluster detail")}
+        errorText={localize(lang, "Не удалось загрузить данные кластера", "Failed to load cluster data")}
         onRetry={refresh}
       >
         {cluster ? (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <KpiTile
-                label={localize(lang, "Health", "Health")}
+                label={localize(lang, "Состояние", "Health")}
                 value={statusLabel(lang, cluster.health)}
                 hint={formatSync(lang, cluster.last_sync_at)}
                 tone={statusTone(cluster.health) === "danger" ? "danger" : statusTone(cluster.health) === "warning" ? "warning" : "success"}
               />
               <KpiTile
-                label={localize(lang, "Nodes", "Nodes")}
+                label={localize(lang, "Ноды", "Nodes")}
                 value={`${cluster.nodes_ready}/${cluster.nodes_total}`}
                 tone={cluster.nodes_total && cluster.nodes_ready < cluster.nodes_total ? "warning" : "success"}
               />
               <KpiTile
-                label={localize(lang, "Namespaces", "Namespaces")}
+                label={localize(lang, "Пространства", "Namespaces")}
                 value={namespaces.length || cluster.namespaces}
                 hint={`${warningNamespaces} warn · ${degradedNamespaces} deg`}
                 tone={degradedNamespaces ? "danger" : warningNamespaces ? "warning" : "success"}
               />
               <KpiTile
-                label={localize(lang, "Workloads", "Workloads")}
+                label={localize(lang, "Нагрузки", "Workloads")}
                 value={workloads.length || cluster.workloads}
                 tone="info"
               />
@@ -205,11 +205,11 @@ export default function KubernetesClusterDetailPage() {
             />
 
             <SectionCard
-              title={localize(lang, "Topology", "Topology")}
+              title={localize(lang, "Топология", "Topology")}
               description={localize(
                 lang,
-                "Namespace → workloads → services (эвристика по именам).",
-                "Namespace → workloads → services (name heuristics).",
+                "Связи пространств имён, нагрузок и сервисов.",
+                "Relationships between namespaces, workloads, and services.",
               )}
               icon={<Layers3 className="h-4 w-4" />}
             >
@@ -223,8 +223,8 @@ export default function KubernetesClusterDetailPage() {
 
             <div className="grid gap-5 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
               <SectionCard
-                title={localize(lang, "Namespaces", "Namespaces")}
-                description={localize(lang, "Native Rancher namespace inventory with Devtron app fallback.", "Native Rancher namespace inventory with Devtron app fallback.")}
+                title={localize(lang, "Пространства имён", "Namespaces")}
+                description={localize(lang, "Данные Rancher и Devtron.", "Data from Rancher and Devtron.")}
                 icon={<ShieldCheck className="h-4 w-4" />}
               >
                 {namespaces.length ? (
@@ -241,12 +241,12 @@ export default function KubernetesClusterDetailPage() {
                               ))}
                             </div>
                             <div className="mt-2 text-xs text-muted-foreground">
-                              {localize(lang, "Teams:", "Teams:")} {namespace.teams.join(", ") || localize(lang, "not set", "not set")}
+                              {localize(lang, "Команды:", "Teams:")} {namespace.teams.join(", ") || localize(lang, "не указаны", "not set")}
                             </div>
                           </div>
                           <div className="text-xs text-muted-foreground sm:text-right">
                             <div className="font-semibold text-foreground">{namespace.apps}</div>
-                            <div>{localize(lang, "apps", "apps")}</div>
+                            <div>{localize(lang, "приложений", "apps")}</div>
                           </div>
                         </div>
                         <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
@@ -268,15 +268,15 @@ export default function KubernetesClusterDetailPage() {
                 ) : (
                   <EmptyState
                     icon={<ShieldCheck className="h-5 w-5" />}
-                    title={localize(lang, "Namespaces не синхронизированы", "Namespaces are not synced")}
-                    description={localize(lang, "Появятся после Rancher namespace/workload sync или Devtron app sync.", "They will appear after Rancher namespace/workload sync or Devtron app sync.")}
+                    title={localize(lang, "Нет данных о пространствах имён", "No namespace data")}
+                    description={localize(lang, "Запустите синхронизацию Rancher или Devtron.", "Run a Rancher or Devtron sync.")}
                   />
                 )}
               </SectionCard>
 
               <SectionCard
-                title={localize(lang, "Workloads", "Workloads")}
-                description={localize(lang, "Native Rancher workload refs with Devtron app fallback.", "Native Rancher workload refs with Devtron app fallback.")}
+                title={localize(lang, "Нагрузки", "Workloads")}
+                description={localize(lang, "Данные Rancher и Devtron.", "Data from Rancher and Devtron.")}
                 icon={<Layers3 className="h-4 w-4" />}
               >
                 {workloads.length ? (
@@ -297,8 +297,8 @@ export default function KubernetesClusterDetailPage() {
                 ) : (
                   <EmptyState
                     icon={<Layers3 className="h-5 w-5" />}
-                    title={localize(lang, "Workloads не найдены", "No workloads found")}
-                    description={localize(lang, "Первый provider sync заполнит этот список.", "The first provider sync will populate this list.")}
+                    title={localize(lang, "Нагрузки не найдены", "No workloads found")}
+                    description={localize(lang, "Запустите синхронизацию кластера.", "Run a cluster sync.")}
                   />
                 )}
               </SectionCard>
@@ -347,8 +347,8 @@ export default function KubernetesClusterDetailPage() {
             ) : null}
 
             <SectionCard
-              title={localize(lang, "Cluster events", "Cluster events")}
-              description={localize(lang, "Native Kubernetes events with WebTerm audit fallback.", "Native Kubernetes events with WebTerm audit fallback.")}
+              title={localize(lang, "События кластера", "Cluster events")}
+              description={localize(lang, "События Kubernetes и журнал WebTerm.", "Kubernetes events and the WebTerm audit log.")}
               icon={<ShieldCheck className="h-4 w-4" />}
             >
               {events.length ? (
@@ -375,8 +375,8 @@ export default function KubernetesClusterDetailPage() {
               ) : (
                 <EmptyState
                   icon={<ShieldCheck className="h-5 w-5" />}
-                  title={localize(lang, "Events не найдены", "No events found")}
-                  description={localize(lang, "Cluster audit trail появится после просмотров, sync и provider actions.", "The cluster audit trail will appear after views, sync, and provider actions.")}
+                  title={localize(lang, "Событий пока нет", "No events yet")}
+                  description={localize(lang, "События появятся после синхронизации или действий в кластере.", "Events will appear after a sync or cluster activity.")}
                 />
               )}
             </SectionCard>
@@ -402,8 +402,8 @@ function DescribeEvidencePanel({
 }) {
   return (
     <SectionCard
-      title={localize(lang, "Read-only describe", "Read-only describe")}
-      description={localize(lang, "Normalized manifest snapshot, policy and related events.", "Normalized manifest snapshot, policy, and related events.")}
+      title={localize(lang, "Сведения о нагрузке", "Workload details")}
+      description={localize(lang, "Манифест, политика доступа и связанные события. Только просмотр.", "Manifest, access policy, and related events. Read-only.")}
       icon={<FileText className="h-4 w-4" />}
       actions={
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -413,11 +413,11 @@ function DescribeEvidencePanel({
     >
       {loading ? (
         <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-4 text-sm text-muted-foreground">
-          {localize(lang, "Загружаю describe snapshot", "Loading describe snapshot")}
+          {localize(lang, "Загружаю сведения", "Loading details")}
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-4 text-sm text-destructive">
-          {localize(lang, "Не удалось загрузить describe", "Failed to load describe")}
+          {localize(lang, "Не удалось загрузить сведения", "Failed to load details")}
         </div>
       ) : describe ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
@@ -431,17 +431,17 @@ function DescribeEvidencePanel({
               </div>
               <h3 className="mt-3 text-sm font-semibold text-foreground">{describe.target.name}</h3>
               <div className="mt-2 grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-                <div>{localize(lang, "Cluster:", "Cluster:")} {describe.target.cluster_name}</div>
-                <div>{localize(lang, "Owner:", "Owner:")} {describe.target.owner}</div>
-                <div>{localize(lang, "Team:", "Team:")} {describe.target.team || localize(lang, "не задана", "not set")}</div>
-                <div>{localize(lang, "Version:", "Version:")} {describe.target.version || localize(lang, "нет", "none")}</div>
+                <div>{localize(lang, "Кластер:", "Cluster:")} {describe.target.cluster_name}</div>
+                <div>{localize(lang, "Владелец:", "Owner:")} {describe.target.owner}</div>
+                <div>{localize(lang, "Команда:", "Team:")} {describe.target.team || localize(lang, "не указана", "not set")}</div>
+                <div>{localize(lang, "Версия:", "Version:")} {describe.target.version || localize(lang, "нет", "none")}</div>
               </div>
             </div>
 
             <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-4">
-              <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Policy</div>
+              <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{localize(lang, "Политика доступа", "Access policy")}</div>
               <div className="mt-2 text-sm text-foreground">
-                {describe.policy.mutates_state ? localize(lang, "Mutation allowed", "Mutation allowed") : localize(lang, "No mutation", "No mutation")}
+                {describe.policy.mutates_state ? localize(lang, "Изменения разрешены", "Changes allowed") : localize(lang, "Только просмотр", "Read-only")}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {describe.policy.blocked_actions.map((action) => (
@@ -451,7 +451,7 @@ function DescribeEvidencePanel({
             </div>
 
             <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-4">
-              <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Related events</div>
+              <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">{localize(lang, "Связанные события", "Related events")}</div>
               {describe.related_events.length ? (
                 <div className="mt-3 space-y-2">
                   {describe.related_events.map((event) => (
@@ -465,7 +465,7 @@ function DescribeEvidencePanel({
                   ))}
                 </div>
               ) : (
-                <div className="mt-2 text-xs text-muted-foreground">{localize(lang, "Нет связанных events", "No related events")}</div>
+                <div className="mt-2 text-xs text-muted-foreground">{localize(lang, "Связанных событий нет", "No related events")}</div>
               )}
             </div>
           </div>

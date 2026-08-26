@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -24,6 +25,11 @@ vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn() },
 }));
 
+function renderPanel(node: React.ReactNode) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>);
+}
+
 describe("PlaybookCompatibilityPanel guarded adaptation", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -31,6 +37,7 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
     const report = { status: "ready", ready: true, issues: [], host_selectors: ["web"] };
     vi.mocked(adaptPlaybookCompatibility).mockResolvedValue({
       success: true,
+      base: { path: "site.yml", content_hash: "source-hash", draft_version: 4, version: 4, bundle_hash: "bundle-hash", base_revision_id: 10 },
       proposal: {
         method: "ai",
         adapted_yaml: "- hosts: web\n  tasks: []\n",
@@ -47,7 +54,7 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
     });
     const onApplied = vi.fn();
 
-    render(
+    renderPanel(
       <PlaybookCompatibilityPanel
         lang="ru"
         playbookId={7}
@@ -59,24 +66,29 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Подготовить адаптацию" }));
 
-    await waitFor(() => expect(adaptPlaybookCompatibility).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(adaptPlaybookCompatibility).toHaveBeenCalledWith(7, { instruction: undefined }));
     expect(applyPlaybookCompatibility).not.toHaveBeenCalled();
     expect(await screen.findByText("Проверьте изменения перед применением")).toBeInTheDocument();
-    fireEvent.click(screen.getByText("Показать предложенный YAML"));
-    expect(screen.getByText(/hosts: web/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "YAML diff" })).toBeInTheDocument();
+    expect(screen.getAllByText(/hosts: web/).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole("button", { name: "Применить проверенное предложение" }));
 
     await waitFor(() => expect(applyPlaybookCompatibility).toHaveBeenCalled());
     expect(applyPlaybookCompatibility).toHaveBeenCalledWith(7, {
+      path: "site.yml",
       adapted_yaml: "- hosts: web\n  tasks: []\n",
       changes: ["Prepared for WebTerm runtime inventory"],
+      expected_content_hash: "source-hash",
+      expected_bundle_hash: "bundle-hash",
+      expected_draft_version: 4,
+      base_revision_id: 10,
     });
     await waitFor(() => expect(onApplied).toHaveBeenCalled());
   });
 
   it("keeps compatibility analysis read-only when adaptation is forbidden", () => {
-    render(
+    renderPanel(
       <PlaybookCompatibilityPanel
         lang="en"
         playbookId={7}
@@ -109,7 +121,7 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
     });
     const onSourceAccepted = vi.fn();
 
-    render(
+    renderPanel(
       <PlaybookCompatibilityPanel
         lang="en"
         playbookId={null}
@@ -123,7 +135,7 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Analyze" }));
     await waitFor(() => expect(analyzePlaybookSource).toHaveBeenCalledWith(source));
     fireEvent.click(screen.getByRole("button", { name: "Prepare adaptation" }));
-    await waitFor(() => expect(adaptPlaybookSource).toHaveBeenCalledWith(source));
+    await waitFor(() => expect(adaptPlaybookSource).toHaveBeenCalledWith(source, { instruction: undefined }));
     fireEvent.click(await screen.findByRole("button", { name: "Apply reviewed proposal" }));
 
     expect(onSourceAccepted).toHaveBeenCalledWith(adapted, report);
@@ -143,7 +155,7 @@ describe("PlaybookCompatibilityPanel guarded adaptation", () => {
       },
     });
 
-    render(
+    renderPanel(
       <PlaybookCompatibilityPanel
         lang="en"
         playbookId={null}

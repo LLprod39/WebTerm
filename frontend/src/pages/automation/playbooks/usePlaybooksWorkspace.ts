@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { runValidatedPlaybook, type PlaybookRunRequest } from "@/api/playbook-preflight";
@@ -9,16 +9,16 @@ import {
   duplicatePlaybook,
   fetchAnsibleStatus,
   getPlaybook,
-  importPlaybook,
+  getPlaybookRunRetryContext,
   installPlaybookTemplate,
   listPlaybookRuns,
   listPlaybookTemplates,
   listPlaybooks,
-  rerunFailedPlaybookHosts,
   updatePlaybook,
   type PlaybookCategory,
   type PlaybookDetail,
   type PlaybookRun,
+  type PlaybookRunRetryContext,
   type PlaybookSummary,
   type PlaybookTemplate,
 } from "@/api/playbooks";
@@ -50,7 +50,6 @@ export function usePlaybooksWorkspace({
   const { lang } = useI18n();
   const tr = useCallback((ru: string, en: string) => (lang === "ru" ? ru : en), [lang]);
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<PlaybookCategory | "all">("all");
   const [editor, setEditor] = useState<PlaybookEditorState>(emptyPlaybookEditor);
@@ -60,6 +59,7 @@ export function usePlaybooksWorkspace({
   const [running, setRunning] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [activeRun, setActiveRun] = useState<PlaybookRun | null>(null);
+  const [retryContext, setRetryContext] = useState<PlaybookRunRetryContext | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PlaybookSummary | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const editorDirty = useMemo(() => isPlaybookEditorDirty(editor), [editor]);
@@ -75,6 +75,10 @@ export function usePlaybooksWorkspace({
     queryClient,
     setActiveRun,
   });
+
+  useEffect(() => {
+    if (view.mode !== "run-wizard") setRetryContext(null);
+  }, [view.mode]);
 
   const needBootstrap = serversProp === undefined || groupsProp === undefined;
   const bootstrapQuery = useQuery({
@@ -283,47 +287,6 @@ export function usePlaybooksWorkspace({
     }
   };
 
-  const onImportFile = async (file: File) => {
-    try {
-      const content = await file.text();
-      const res = await importPlaybook({ content, filename: file.name, save: true });
-      if (!res.success || !res.playbook) throw new Error(res.error || "Import failed");
-      const fidelity = res.playbook.fidelity;
-      const score = typeof fidelity?.score === "number" ? Math.round(fidelity.score * 100) : null;
-      notify.success({
-        title: tr("Импортировано", "Imported"),
-        description:
-          score !== null
-            ? `${score}% · ${fidelity?.runnable}/${fidelity?.total} runnable`
-            : res.playbook.name,
-      });
-      setEditor(detailToPlaybookEditor(res.playbook));
-      setOpenedPlaybook(res.playbook);
-      setSaveError(null);
-      setView({ mode: "edit", playbookId: res.playbook.id });
-      await queryClient.invalidateQueries({ queryKey: ["playbooks"] });
-    } catch (err) {
-      notify.error({ title: tr("Импорт не удался", "Import failed"), description: String(err) });
-    }
-  };
-
-  const onLoadYamlFile = async (file: File) => {
-    try {
-      const content = await file.text();
-      const base = emptyPlaybookEditor();
-      setEditor({
-        ...base,
-        name: file.name.replace(/\.(?:ya?ml)$/i, "") || base.name,
-        sourceYaml: content,
-      });
-      setOpenedPlaybook(null);
-      setSaveError(null);
-      setView({ mode: "edit", playbookId: null });
-    } catch (err) {
-      notify.error({ title: tr("Не удалось прочитать YAML", "Could not read YAML"), description: String(err) });
-    }
-  };
-
   const onInstallTemplate = async (tmpl: PlaybookTemplate) => {
     try {
       const res = await installPlaybookTemplate(tmpl.slug);
@@ -340,6 +303,7 @@ export function usePlaybooksWorkspace({
 
   const startRunWizard = async (playbookId: number) => {
     try {
+      setRetryContext(null);
       const res = await getPlaybook(playbookId);
       setEditor(detailToPlaybookEditor(res.playbook));
       setOpenedPlaybook(res.playbook);
@@ -371,6 +335,7 @@ export function usePlaybooksWorkspace({
           setOpenedPlaybook(res.playbook);
           setEditor((current) => markPlaybookEditorMetadataSaved(current));
         }
+        setRetryContext(null);
         setView({ mode: "run-wizard", playbookId: view.playbookId });
       } else {
         const res = await createPlaybook(payload);
@@ -395,6 +360,7 @@ export function usePlaybooksWorkspace({
     setRunning(true);
     try {
       const res = await runValidatedPlaybook(playbookId, opts);
+      setRetryContext(null);
       setActiveRun(res.run);
       setView({ mode: "run-results", runId: res.run.id });
       await queryClient.invalidateQueries({ queryKey: ["playbook-runs"] });
@@ -421,11 +387,18 @@ export function usePlaybooksWorkspace({
   const onRerunFailed = async () => {
     if (view.mode !== "run-results") return;
     try {
-      const res = await rerunFailedPlaybookHosts(view.runId);
-      setActiveRun(res.run);
-      setView({ mode: "run-results", runId: res.run.id });
+      const response = await getPlaybookRunRetryContext(view.runId);
+      const context = response.retry_context;
+      if (!context.can_retry || !context.playbook_id) {
+        throw new Error(context.blockers.map((blocker) => blocker.message).join(" ") || tr("Безопасный повтор недоступен", "Safe retry is unavailable"));
+      }
+      const playbook = await getPlaybook(context.playbook_id);
+      setEditor(detailToPlaybookEditor(playbook.playbook));
+      setOpenedPlaybook(playbook.playbook);
+      setRetryContext(context);
+      setView({ mode: "run-wizard", playbookId: context.playbook_id });
     } catch (err) {
-      notify.error({ title: tr("Re-run failed", "Re-run failed"), description: String(err) });
+      notify.error({ title: tr("Повтор недоступен", "Retry unavailable"), description: String(err) });
     }
   };
 
@@ -438,7 +411,6 @@ export function usePlaybooksWorkspace({
     lang,
     tr,
     queryClient,
-    fileInputRef,
     view,
     setView,
     search,
@@ -456,6 +428,7 @@ export function usePlaybooksWorkspace({
     running,
     cancelling,
     activeRun,
+    retryContext,
     setActiveRun,
     runLoadError,
     retryRunLoad,
@@ -476,8 +449,6 @@ export function usePlaybooksWorkspace({
     onSave,
     onDelete,
     onDuplicate,
-    onImportFile,
-    onLoadYamlFile,
     onInstallTemplate,
     startRunWizard,
     ensureSavedThenWizard,

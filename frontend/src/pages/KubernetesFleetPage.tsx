@@ -56,21 +56,21 @@ export default function KubernetesFleetPage() {
   }, [bundles, filter, q]);
 
   const slices = [
-    { key: "ready", label: "Ready", value: ready, color: "#34d399" },
-    { key: "rolling", label: "Rolling", value: rolling, color: "#fbbf24" },
-    { key: "degraded", label: "Degraded", value: degraded, color: "#f87171" },
-    { key: "paused", label: "Paused", value: paused, color: "#64748b" },
+    { key: "ready", label: localize(lang, "Готово", "Ready"), value: ready, color: "#34d399" },
+    { key: "rolling", label: localize(lang, "Выкатывается", "Rolling"), value: rolling, color: "#fbbf24" },
+    { key: "degraded", label: localize(lang, "Проблемы", "Degraded"), value: degraded, color: "#f87171" },
+    { key: "paused", label: localize(lang, "Приостановлено", "Paused"), value: paused, color: "#64748b" },
   ];
 
   return (
     <KubernetesShell>
       <KubernetesPageHeader
         kicker={localize(lang, "GitOps", "GitOps")}
-        title={localize(lang, "Fleet · выкатки", "Fleet · rollouts")}
+        title={localize(lang, "Выкатки Fleet", "Fleet rollouts")}
         description={localize(
           lang,
-          "Bundles, readiness и targets. Без write-actions — только честная картина.",
-          "Bundles, readiness and targets. No write actions — just a clear picture.",
+          "Состояние пакетов и целевых кластеров. Только просмотр.",
+          "Bundle and target cluster status. Read-only.",
         )}
         actions={<K8sRefreshButton onClick={refresh} label={localize(lang, "Обновить", "Refresh")} />}
       />
@@ -78,7 +78,7 @@ export default function KubernetesFleetPage() {
       <QueryStateBlock
         loading={bundlesQuery.isLoading}
         error={bundlesQuery.error}
-        errorText={localize(lang, "Не удалось загрузить Fleet bundles", "Failed to load Fleet bundles")}
+        errorText={localize(lang, "Не удалось загрузить пакеты Fleet", "Failed to load Fleet bundles")}
         onRetry={refresh}
       >
         <div className="grid gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
@@ -87,16 +87,16 @@ export default function KubernetesFleetPage() {
               <HealthDonut
                 slices={slices}
                 centerValue={bundles.length}
-                centerLabel={localize(lang, "bundles", "bundles")}
+                centerLabel={localize(lang, "пакетов", "bundles")}
               />
               <HealthLegend slices={slices} />
             </div>
           </SectionCard>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <KpiTile label="Total" value={bundles.length} tone="info" />
-            <KpiTile label="Ready" value={ready} tone="success" />
-            <KpiTile label="Rolling" value={rolling} tone={rolling ? "warning" : "success"} />
-            <KpiTile label="Degraded" value={degraded} tone={degraded ? "danger" : "success"} />
+            <KpiTile label={localize(lang, "Всего", "Total")} value={bundles.length} tone="info" />
+            <KpiTile label={localize(lang, "Готово", "Ready")} value={ready} tone="success" />
+            <KpiTile label={localize(lang, "Выкатывается", "Rolling")} value={rolling} tone={rolling ? "warning" : "success"} />
+            <KpiTile label={localize(lang, "Проблемы", "Degraded")} value={degraded} tone={degraded ? "danger" : "success"} />
           </div>
         </div>
 
@@ -105,9 +105,9 @@ export default function KubernetesFleetPage() {
             {(
               [
                 ["all", localize(lang, "Все", "All")],
-                ["ready", "Ready"],
-                ["rolling", "Rolling"],
-                ["degraded", "Degraded"],
+                ["ready", localize(lang, "Готово", "Ready")],
+                ["rolling", localize(lang, "Выкатывается", "Rolling")],
+                ["degraded", localize(lang, "Проблемы", "Degraded")],
               ] as const
             ).map(([id, label]) => (
               <CockpitChip key={id} active={filter === id} onClick={() => setFilter(id)}>
@@ -120,15 +120,15 @@ export default function KubernetesFleetPage() {
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder={localize(lang, "Поиск bundle…", "Search bundle…")}
+              placeholder={localize(lang, "Пакет, источник или кластер", "Bundle, source, or cluster")}
               className="h-9 w-full rounded-sm border border-border bg-surface-0 pl-9 pr-3 font-mono text-xs outline-none focus:ring-2 focus:ring-primary/40"
             />
           </label>
         </div>
 
         <SectionCard
-          title={localize(lang, "Bundles", "Bundles")}
-          description={localize(lang, "Readiness по targets. Write — только через approval / Admin.", "Target readiness. Writes only via approval / Admin.")}
+          title={localize(lang, "Пакеты Fleet", "Fleet bundles")}
+          description={localize(lang, "Изменения требуют подтверждения администратора.", "Changes require administrator approval.")}
           icon={<GitBranch className="h-4 w-4" />}
         >
           {filtered.length ? (
@@ -143,11 +143,11 @@ export default function KubernetesFleetPage() {
           ) : (
             <EmptyState
               icon={<GitBranch className="h-5 w-5" />}
-              title={localize(lang, "Fleet bundles не найдены", "No Fleet bundles")}
+              title={localize(lang, "Пакеты Fleet не найдены", "No Fleet bundles")}
               description={localize(
                 lang,
-                "Синхронизируйте Rancher/Fleet provider после credentials.",
-                "Sync Rancher/Fleet after credentials are configured.",
+                "Настройте подключение Rancher/Fleet и запустите синхронизацию.",
+                "Configure the Rancher/Fleet connection and run a sync.",
               )}
             />
           )}

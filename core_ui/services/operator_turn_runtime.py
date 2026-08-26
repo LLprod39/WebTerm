@@ -17,10 +17,12 @@ from django.utils import timezone
 from loguru import logger
 
 from app.core.llm_context import operator_thinking_mode
-from core_ui.models.chat import ChatTurnState, OperatorTurnDispatch
+from core_ui.models.chat import ChatMessage, ChatTurnState, OperatorTurnDispatch
 from core_ui.services.assistant_chat import cancel_action, execute_action, serialize_action
 from core_ui.services.operator_loop import OperatorTurnResult
 from core_ui.services.operator_session import handle_operator_message, resume_after_action
+
+TERMINAL_DISPATCH_SNAPSHOT_WINDOW = timedelta(minutes=10)
 
 
 def operator_group_name(chat_id: int) -> str:
@@ -112,7 +114,7 @@ async def operator_health(*, timeout: float = 3.0) -> dict[str, Any]:
 
 
 async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any] | None:
-    """Return a reconnect snapshot if a turn is still open for this chat."""
+    """Return an active turn or a recent pre-persistence terminal acknowledgement."""
 
     def _load() -> dict[str, Any] | None:
         stale_before = timezone.now() - timedelta(seconds=90)
@@ -146,6 +148,57 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
             .order_by("-id")
             .first()
         )
+        if turn is None and dispatch is None:
+            terminal_dispatch = (
+                OperatorTurnDispatch.objects.filter(
+                    session_id=chat_id,
+                    session__user_id=user_id,
+                    kind=OperatorTurnDispatch.KIND_MESSAGE,
+                    status__in={
+                        OperatorTurnDispatch.STATUS_COMPLETED,
+                        OperatorTurnDispatch.STATUS_FAILED,
+                        OperatorTurnDispatch.STATUS_CANCELED,
+                    },
+                    completed_at__gte=timezone.now() - TERMINAL_DISPATCH_SNAPSHOT_WINDOW,
+                )
+                .order_by("-completed_at", "-id")
+                .first()
+            )
+            if terminal_dispatch is not None:
+                terminal_user_text = str(
+                    (terminal_dispatch.payload or {}).get("message") or "",
+                ).strip()
+                has_durable_user_message = bool(
+                    terminal_user_text
+                    and ChatMessage.objects.filter(
+                        session_id=chat_id,
+                        role=ChatMessage.ROLE_USER,
+                        content=terminal_user_text,
+                        created_at__gte=terminal_dispatch.queued_at,
+                    ).exists()
+                )
+                if terminal_user_text and not has_durable_user_message:
+                    # A completed message dispatch cannot be a successful turn
+                    # when it never persisted its user row. The worker already
+                    # emitted an error before swallowing the preflight failure;
+                    # reconnects need the same terminal meaning.
+                    terminal_status = (
+                        "cancelled" if terminal_dispatch.status == OperatorTurnDispatch.STATUS_CANCELED else "failed"
+                    )
+                    return {
+                        "type": "turn_snapshot",
+                        "chat_id": chat_id,
+                        "turn_id": None,
+                        "status": terminal_status,
+                        "iteration": 0,
+                        "busy": False,
+                        "assistant_message_id": None,
+                        "assistant_text": "",
+                        "user_message_id": None,
+                        "user_text": terminal_user_text,
+                        "pending_action": None,
+                        "in_process": False,
+                    }
         if turn is None and dispatch is None:
             return None
         if turn is None:

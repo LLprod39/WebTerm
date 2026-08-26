@@ -33,6 +33,10 @@ export type UseChatPageMutationsParams = {
   queryClient: QueryClient;
   setSearchParams: SetSearchParams;
   setDraft: Dispatch<SetStateAction<string>>;
+  pendingUserText: string | null;
+  setPendingUserText: Dispatch<SetStateAction<string | null>>;
+  setPendingSend: Dispatch<SetStateAction<string | null>>;
+  promoteNewPendingChat: (chatId: number) => void;
   setActionWorkingId: Dispatch<SetStateAction<number | null>>;
   setRenamingChatId: Dispatch<SetStateAction<number | null>>;
   pinnedServers: PinnedServer[];
@@ -47,6 +51,10 @@ export function useChatPageMutations({
   queryClient,
   setSearchParams,
   setDraft,
+  pendingUserText,
+  setPendingUserText,
+  setPendingSend,
+  promoteNewPendingChat,
   setActionWorkingId,
   setRenamingChatId,
   pinnedServers,
@@ -78,6 +86,7 @@ export function useChatPageMutations({
   const createChatMutation = useMutation({
     mutationFn: () => createAssistantChat(),
     onSuccess: (chat) => {
+      promoteNewPendingChat(chat.id);
       void queryClient.invalidateQueries({ queryKey: ["assistant", "chats"] });
       setSearchParams({ chat: String(chat.id) });
       // Persist pins chosen before the chat existed
@@ -91,13 +100,33 @@ export function useChatPageMutations({
               : null,
           },
         }).then((updated) => {
-          queryClient.setQueryData(["assistant", "chat", chat.id], {
-            ...chat,
-            ...updated,
-            messages: chat.messages || [],
-          });
+          queryClient.setQueryData<AssistantChatSession>(
+            ["assistant", "chat", chat.id],
+            (previous) => ({
+              ...(previous ?? chat),
+              ...updated,
+              // The pin request can finish after WebSocket/REST has already
+              // populated the new chat. Never replace that fresher turn with
+              // the empty snapshot returned by createAssistantChat().
+              messages: previous?.messages ?? chat.messages ?? [],
+              active_turn: previous?.active_turn ?? chat.active_turn,
+            }),
+          );
+        }).catch(() => {
+          // Best effort: the locally selected pins are still included in the
+          // first message context and must not break the chat if saving fails.
         });
       }
+    },
+    onError: (error) => {
+      if (pendingUserText) setDraft((current) => current || pendingUserText);
+      setPendingSend(null);
+      setPendingUserText(null);
+      toast({
+        title: localize(lang, "Чат не создан", "Chat was not created"),
+        description: error instanceof Error ? error.message : String(error),
+        variant: "destructive",
+      });
     },
   });
 

@@ -26,7 +26,7 @@ export function PolicyCard({
 
   const badges = [
     skill.runtime_enforced
-      ? { key: "runtime", label: t(lang, "runtime", "runtime"), className: "border-sky-500/30 bg-sky-500/10 text-sky-200" }
+      ? { key: "runtime", label: t(lang, "При выполнении", "Runtime"), className: "border-sky-500/30 bg-sky-500/10 text-sky-200" }
       : null,
     skill.safety_level
       ? { key: skill.safety_level, label: skill.safety_level, className: "border-amber-500/30 bg-amber-500/10 text-amber-100" }

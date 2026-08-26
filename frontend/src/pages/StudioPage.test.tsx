@@ -302,7 +302,7 @@ describe("StudioPage quick run", () => {
     fireEvent.click(runButton);
 
     expect(await screen.findByRole("heading", { name: /^Monitoring trigger$/i })).toBeInTheDocument();
-    expect(screen.getByText(/started by server monitoring alerts/i)).toBeInTheDocument();
+    expect(screen.getByText(/Monitoring triggers become active after saving/i)).toBeInTheDocument();
     expect(screen.getByText(/mini-prod-mcp-demo/)).toBeInTheDocument();
     expect(toastMock).not.toHaveBeenCalledWith(
       expect.objectContaining({

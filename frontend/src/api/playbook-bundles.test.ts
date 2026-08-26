@@ -4,10 +4,12 @@ import { apiFetch } from "@/lib/api";
 import {
   commitPlaybookBundle,
   commitGitLabPlaybookProject,
+  commitGitLabPlaybookRefresh,
   exportPlaybookRevisionBundle,
   isSupportedPlaybookBundleFile,
   previewPlaybookBundle,
   previewGitLabPlaybookProject,
+  previewGitLabPlaybookRefresh,
 } from "./playbook-bundles";
 
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn(async () => ({ success: true })) }));
@@ -29,7 +31,7 @@ describe("playbook bundle API", () => {
   it("uploads the raw archive for preview without reading file contents in the client", async () => {
     const file = new File(["archive"], "project.zip", { type: "application/zip" });
 
-    await previewPlaybookBundle(file);
+    await previewPlaybookBundle(file, "", "ansible");
 
     expect(apiFetch).toHaveBeenCalledTimes(1);
     const [path, options] = vi.mocked(apiFetch).mock.calls[0];
@@ -38,6 +40,7 @@ describe("playbook bundle API", () => {
     expect(options?.body).toBeInstanceOf(FormData);
     expect((options?.body as FormData).get("bundle")).toBe(file);
     expect((options?.body as FormData).has("entrypoint")).toBe(false);
+    expect((options?.body as FormData).get("project_path")).toBe("ansible");
   });
 
   it("sends the selected entrypoint and explicit commit metadata", async () => {
@@ -45,19 +48,23 @@ describe("playbook bundle API", () => {
 
     await commitPlaybookBundle(file, {
       entrypoint: "site.yml",
+      project_path: "ansible",
       name: " Web deploy ",
       description: " Production project ",
       category: "deploy",
       visibility: "shared",
       tags: ["nginx", "production"],
-    });
+    }, "sha256-preview");
 
     const [path, options] = vi.mocked(apiFetch).mock.calls[0];
     const form = options?.body as FormData;
     expect(path).toBe("/servers/api/playbooks/import/commit/");
     expect(options?.method).toBe("POST");
     expect(form.get("bundle")).toBe(file);
+    expect(form.get("expected_content_hash")).toBe("sha256-preview");
     expect(form.get("entrypoint")).toBe("site.yml");
+    expect(form.get("project_path")).toBe("ansible");
+    expect(form.get("expected_project_path")).toBe("ansible");
     expect(form.get("name")).toBe("Web deploy");
     expect(form.get("description")).toBe("Production project");
     expect(form.get("category")).toBe("deploy");
@@ -95,6 +102,38 @@ describe("playbook bundle API", () => {
       entrypoint: "site.yml",
       name: "Production deploy",
     }));
+  });
+
+  it("locks GitLab refresh commit to the reviewed snapshot and base revision", async () => {
+    await previewGitLabPlaybookRefresh(17, { token: "request-only", entrypoint: "site.yml" });
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      1,
+      "/servers/api/playbooks/17/gitlab/refresh/preview/",
+      {
+        method: "POST",
+        body: JSON.stringify({ token: "request-only", entrypoint: "site.yml" }),
+      },
+    );
+
+    await commitGitLabPlaybookRefresh(17, {
+      token: "request-only",
+      entrypoint: "site.yml",
+      expected_content_hash: "snapshot-hash",
+      expected_base_revision_id: 9,
+    });
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      2,
+      "/servers/api/playbooks/17/gitlab/refresh/commit/",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          token: "request-only",
+          entrypoint: "site.yml",
+          expected_content_hash: "snapshot-hash",
+          expected_base_revision_id: 9,
+        }),
+      },
+    );
   });
 
   it("downloads the exact published revision and preserves export metadata", async () => {

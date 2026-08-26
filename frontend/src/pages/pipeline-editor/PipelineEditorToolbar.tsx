@@ -73,7 +73,7 @@ export function PipelineEditorToolbar({
             value={pipelineName}
             onChange={(e) => onPipelineNameChange(e.target.value)}
             className="h-8 min-w-0 border-0 bg-transparent px-0 text-base font-semibold shadow-none focus-visible:ring-0 sm:max-w-xl"
-            placeholder={localize(lang, "Название pipeline…", "Pipeline name…")}
+            placeholder={localize(lang, "Название пайплайна…", "Pipeline name…")}
           />
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <Badge

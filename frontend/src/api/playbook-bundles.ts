@@ -60,11 +60,18 @@ export interface PlaybookBundlePreview {
   entrypoints: PlaybookBundleEntrypointPreview[];
   selected_entrypoint: string;
   secret_warnings: PlaybookBundleSecurityWarning[];
+  controller_warnings?: Array<{ path?: string; code?: string; message?: string }>;
+  complexity_warnings?: Array<{ path?: string; code?: string; message?: string }>;
+  ignored_files?: string[];
+  dependencies?: { collections?: string[]; roles?: string[]; assets?: string[] };
+  compatibility?: { ready?: boolean; status?: string; issues?: Array<{ code?: string; message?: string }> };
   safe_to_commit: boolean;
+  project_path?: string;
 }
 
 export interface CommitPlaybookBundleMetadata {
   entrypoint: string;
+  project_path?: string;
   name: string;
   description: string;
   category: PlaybookCategory;
@@ -101,6 +108,7 @@ export interface GitLabProjectSourceInput {
   ref: string;
   path: string;
   token: string;
+  entrypoint?: string;
 }
 
 export interface GitLabProjectSource {
@@ -109,6 +117,44 @@ export interface GitLabProjectSource {
   project: string;
   ref?: string;
   path?: string;
+}
+
+export interface GitLabPlaybookRefreshDiff {
+  from_bundle_hash: string;
+  to_bundle_hash: string;
+  added: string[];
+  removed: string[];
+  changed: string[];
+  unchanged_count: number;
+}
+
+export interface GitLabPlaybookRefreshPreviewResponse {
+  success: true;
+  preview: PlaybookBundlePreview;
+  source: GitLabProjectSource;
+  refresh: {
+    base_revision_id: number;
+    base_content_hash: string;
+    base_bundle_hash: string;
+    diff: GitLabPlaybookRefreshDiff;
+  };
+}
+
+export interface GitLabPlaybookRefreshCommitResponse {
+  success: true;
+  revision: {
+    id: number;
+    number: number;
+    content_hash: string;
+    bundle_hash: string;
+    origin_type: string;
+  };
+  bundle: CommitPlaybookBundleResponse["bundle"];
+  refresh: {
+    base_revision_id: number;
+    diff: GitLabPlaybookRefreshDiff;
+  };
+  preview: PlaybookBundlePreview;
 }
 
 export interface PlaybookBundleExport {
@@ -122,20 +168,28 @@ export function isSupportedPlaybookBundleFile(file: Pick<File, "name"> | string)
   return filename.endsWith(".zip") || filename.endsWith(".tar") || filename.endsWith(".tar.gz");
 }
 
-export async function previewPlaybookBundle(file: File, entrypoint = "") {
+export async function previewPlaybookBundle(file: File, entrypoint = "", projectPath = "") {
   const body = new FormData();
   body.append("bundle", file);
   if (entrypoint) body.append("entrypoint", entrypoint);
+  if (projectPath) body.append("project_path", projectPath);
   return apiFetch<{ success: true; preview: PlaybookBundlePreview }>(
     "/servers/api/playbooks/import/preview/",
     { method: "POST", body },
   );
 }
 
-export async function commitPlaybookBundle(file: File, metadata: CommitPlaybookBundleMetadata) {
+export async function commitPlaybookBundle(
+  file: File,
+  metadata: CommitPlaybookBundleMetadata,
+  expectedContentHash: string,
+) {
   const body = new FormData();
   body.append("bundle", file);
+  body.append("expected_content_hash", expectedContentHash);
   body.append("entrypoint", metadata.entrypoint);
+  body.append("project_path", metadata.project_path || "");
+  body.append("expected_project_path", metadata.project_path || "");
   body.append("name", metadata.name.trim());
   body.append("description", metadata.description.trim());
   body.append("category", metadata.category);
@@ -169,6 +223,31 @@ export async function commitGitLabPlaybookProject(
       description: metadata.description.trim(),
     }),
   });
+}
+
+export async function previewGitLabPlaybookRefresh(
+  playbookId: number,
+  payload: { token?: string; entrypoint?: string } = {},
+) {
+  return apiFetch<GitLabPlaybookRefreshPreviewResponse>(
+    `/servers/api/playbooks/${playbookId}/gitlab/refresh/preview/`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+export async function commitGitLabPlaybookRefresh(
+  playbookId: number,
+  payload: {
+    token?: string;
+    entrypoint?: string;
+    expected_content_hash: string;
+    expected_base_revision_id: number;
+  },
+) {
+  return apiFetch<GitLabPlaybookRefreshCommitResponse>(
+    `/servers/api/playbooks/${playbookId}/gitlab/refresh/commit/`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
 }
 
 export async function exportPlaybookRevisionBundle(

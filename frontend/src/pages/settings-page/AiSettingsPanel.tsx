@@ -28,15 +28,14 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
           <p className="text-sm font-medium text-foreground">Модели и маршруты</p>
           <p className="max-w-3xl text-xs text-muted-foreground">
             {isAdmin
-              ? "Сначала выберите провайдера по умолчанию. Роли настраивайте отдельно только там, где это действительно нужно."
-              : "Модели задаёт администратор. У пользователей используется workspace default без выбора модели."}
+              ? "Выберите основную модель, затем при необходимости настройте отдельные роли."
+              : "Модели задаёт администратор."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant={form.aiDraftDirty ? "default" : "secondary"}>
-            {form.aiDraftDirty ? "Есть несохраненные изменения" : "Настройки синхронизированы"}
+            {form.aiDraftDirty ? "Есть несохранённые изменения" : "Сохранено"}
           </Badge>
-          <Badge variant="outline">{form.uniqueRouteProviders.length > 1 ? "Раздельная маршрутизация" : "Один провайдер на все роли"}</Badge>
           {!isAdmin ? <Badge variant="outline">Только просмотр</Badge> : null}
         </div>
       </div>
@@ -71,11 +70,6 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   <span className={cn("h-2 w-2 rounded-full", providerItem.configured ? "bg-emerald-400" : "bg-amber-400")} />
                   <span>{providerItem.configured ? "Готов к использованию" : "Нужна настройка"}</span>
                 </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {providerItem.activeRoutes.length > 0
-                    ? `Маршруты: ${providerItem.activeRoutes.join(", ")}`
-                    : "Отдельные роли пока не используют этот провайдер"}
-                </p>
               </button>
             ))}
           </div>
@@ -106,7 +100,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   </Select>
                 ) : (
                   <div className="flex gap-2">
-                    <Input value={form.model} onChange={(e) => form.setModel(e.target.value)} placeholder="Model name" className="h-9" disabled={modelControlsDisabled} />
+                    <Input value={form.model} onChange={(e) => form.setModel(e.target.value)} placeholder="Название модели" className="h-9" disabled={modelControlsDisabled} />
                     <Button size="sm" variant="outline" className="h-9 px-3" onClick={form.onRefreshModels} disabled={modelControlsDisabled || form.refreshing}>
                       <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} />
                     </Button>
@@ -126,9 +120,6 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                       : "Для этого провайдера сейчас используется ручной ввод модели."}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="secondary">{form.availableModels.length ? `${form.availableModels.length} вариантов` : "Ручной ввод"}</Badge>
-              </div>
             </div>
 
             {isAdmin ? (
@@ -137,7 +128,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} /> Обновить каталог
                 </Button>
                 <Button size="sm" className="gap-1.5" onClick={form.onSave} disabled={form.saving}>
-                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить основную"}
+                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение…" : "Сохранить"}
                 </Button>
               </div>
             ) : null}
@@ -145,15 +136,12 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
         </div>
       </SectionCard>
 
-      <SectionCard title="Маршруты по ролям" icon={Cpu} description="Отдельные пары провайдер/модель для чата, агентов и пайплайнов">
+      <SectionCard title="Модели по назначению" icon={Cpu} description="Отдельные модели для чата, агентов и сценариев">
         <div className="space-y-4">
           {isAdmin ? (
             <div className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-secondary/20 p-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-foreground">Быстрые действия</p>
-                <p className="text-xs text-muted-foreground">
-                  Можно скопировать основную модель в роли, дозаполнить пустые поля или откатить черновик к сохраненному состоянию.
-                </p>
+                <p className="text-xs font-medium text-foreground">Настроить все роли</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" className="gap-1.5" onClick={form.applyDefaultToAll}>
@@ -166,7 +154,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   <RefreshCw className="h-3.5 w-3.5" /> Сбросить черновик
                 </Button>
                 <Button size="sm" className="gap-1.5" onClick={form.onSavePurpose} disabled={form.saving}>
-                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение..." : "Сохранить маршруты"}
+                  <Save className="h-3.5 w-3.5" /> {form.saving ? "Сохранение…" : "Сохранить"}
                 </Button>
               </div>
             </div>
@@ -190,7 +178,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               refreshing={form.refreshingPurpose === form.chatProvider}
             />
             <PurposeModelSelector
-              label="Агенты (ReAct)"
+              label="Агенты"
               description="Инструменты, планирование и итерации"
               icon={Bot}
               provider={form.agentProvider}
@@ -206,7 +194,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               refreshing={form.refreshingPurpose === form.agentProvider}
             />
             <PurposeModelSelector
-              label="Пайплайны"
+              label="Сценарии"
               description="Координация многошаговых запусков"
               icon={Workflow}
               provider={form.orchProvider}
@@ -251,7 +239,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
       />
 
       {apiKeys && isAdmin && (
-        <SectionCard title="API ключи" icon={Key} description="Подключение и ротация ключей провайдеров">
+        <SectionCard title="API-ключи" icon={Key} description="Ключи внешних провайдеров">
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
             {API_KEY_PROVIDERS.map((providerItem) => {
               const enabled =
@@ -268,16 +256,15 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-medium">{providerItem.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{providerItem.envName}</p>
                     </div>
                     <Badge variant={connected ? "default" : "secondary"} className="shrink-0">
-                      {connected ? "Подключен" : "Не задан"}
+                      {connected ? "Подключён" : "Не задан"}
                     </Badge>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className={cn("h-2.5 w-2.5 rounded-full", connected ? "bg-green-500" : "bg-red-500")} />
                     <p className="text-xs text-muted-foreground">
-                      {enabled ? "Активен" : "Отключен"} · значение ключа не выводится
+                      {enabled ? "Активен" : "Отключён"} · ключ скрыт
                     </p>
                   </div>
                   <div className="space-y-2">
@@ -307,7 +294,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
                         onClick={() => form.onSaveApiKey(providerItem.value)}
                         disabled={saving || !draft.trim()}
                       >
-                        <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить"}
+                        <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение…" : "Сохранить"}
                       </Button>
                     </div>
                   </div>
@@ -323,10 +310,10 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
           <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-border px-3 py-2.5">
               <p className="text-xs text-muted-foreground uppercase">Статус</p>
-              <p className="text-sm font-medium">{config.domain_auth_enabled ? "Включен" : "Выключен"}</p>
+              <p className="text-sm font-medium">{config.domain_auth_enabled ? "Включён" : "Выключен"}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">
-              <p className="text-xs text-muted-foreground uppercase">Header</p>
+              <p className="text-xs text-muted-foreground uppercase">Заголовок</p>
               <p className="text-sm font-mono">{config.domain_auth_header || "REMOTE_USER"}</p>
             </div>
             <div className="rounded-lg border border-border px-3 py-2.5">

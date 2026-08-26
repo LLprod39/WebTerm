@@ -56,7 +56,7 @@ describe("PlaybookCard capabilities", () => {
     expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run" })).not.toBeInTheDocument();
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Playbook actions" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Project actions" }), {
       button: 0,
       ctrlKey: false,
       pointerType: "mouse",

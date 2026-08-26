@@ -33,7 +33,7 @@ async def _record_delivery_event(run_id: int, event_type: str, payload: dict) ->
         await sync_to_async(_refresh_report_payload, thread_sensitive=True)(run_id)
 
 
-async def deliver_agent_report_async(run) -> None:
+async def deliver_agent_report_async(run, *, attempt_id: str = "") -> None:
     agent = getattr(run, "agent", None)
     delivery = normalize_report_delivery(getattr(agent, "report_delivery", {}) if agent else {})
     telegram = delivery.get("telegram") or {}
@@ -51,6 +51,7 @@ async def deliver_agent_report_async(run) -> None:
                 "channel": "telegram",
                 "reason": "telegram_not_configured",
                 "message": "Telegram bot token or chat id is not configured.",
+                "attempt_id": str(attempt_id or "")[:80],
             },
         )
         return
@@ -75,7 +76,11 @@ async def deliver_agent_report_async(run) -> None:
             await _record_delivery_event(
                 run.id,
                 "agent_report_delivery_sent",
-                {"channel": "telegram", "chat_id": _redacted_chat_id(chat_id)},
+                {
+                    "channel": "telegram",
+                    "chat_id": _redacted_chat_id(chat_id),
+                    "attempt_id": str(attempt_id or "")[:80],
+                },
             )
             return
         await _record_delivery_event(
@@ -86,11 +91,17 @@ async def deliver_agent_report_async(run) -> None:
                 "chat_id": _redacted_chat_id(chat_id),
                 "status_code": response.status_code,
                 "body": response.text[:300],
+                "attempt_id": str(attempt_id or "")[:80],
             },
         )
     except Exception as exc:
         await _record_delivery_event(
             run.id,
             "agent_report_delivery_failed",
-            {"channel": "telegram", "chat_id": _redacted_chat_id(chat_id), "error": str(exc)},
+            {
+                "channel": "telegram",
+                "chat_id": _redacted_chat_id(chat_id),
+                "error": str(exc),
+                "attempt_id": str(attempt_id or "")[:80],
+            },
         )

@@ -31,7 +31,7 @@ export function KubernetesAgentDrawer({
           role: "system",
           content: localize(
             lang,
-            `Контекст Kubernetes: ${contextHint}. Задай вопрос или опиши задачу (диагностика, rollout, Helm ownership).`,
+            `Контекст Kubernetes: ${contextHint}. Задай вопрос или опиши задачу: диагностику, развёртывание или владельца Helm.`,
             `Kubernetes context: ${contextHint}. Ask a question or describe a task (diagnosis, rollout, Helm ownership).`,
           ),
         },
@@ -78,7 +78,7 @@ export function KubernetesAgentDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40" role="dialog" aria-modal="true">
-      <button type="button" className="h-full flex-1 cursor-default" aria-label="Close" onClick={onClose} />
+      <button type="button" className="h-full flex-1 cursor-default" aria-label={localize(lang, "Закрыть", "Close")} onClick={onClose} />
       <aside className="flex h-full w-full max-w-md flex-col border-l border-border bg-card shadow-elev-3">
         <header className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
@@ -88,7 +88,7 @@ export function KubernetesAgentDrawer({
                 {localize(lang, "K8s агент", "K8s agent")}
               </div>
               <div className="text-2xs text-muted-foreground">
-                {localize(lang, "Inline · assistant chat", "Inline · assistant chat")}
+                {localize(lang, "Помощник по кластеру", "Inline · assistant chat")}
               </div>
             </div>
           </div>
@@ -150,7 +150,7 @@ export function KubernetesAgentDrawer({
             </Link>
             {" · "}
             <Link to="/agents" className="underline hover:text-foreground">
-              Agents
+              {localize(lang, "Агенты", "Agents")}
             </Link>
           </div>
         </footer>

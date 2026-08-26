@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
     success: true,
     auth_flow: { id: "verify-flow", connection_id: 7, status: "completed", verification_uri: "", user_code: "", error_code: "", expires_at: null },
   })),
+  preferences: vi.fn(async () => ({ success: true, preferences: [], workspace_defaults: [] })),
+  catalog: vi.fn(async () => ({ success: true, targets: [], purposes: [], models_by_target: {} })),
   connections: vi.fn(async () => ({
     success: true,
     connections: [{
@@ -49,13 +51,14 @@ vi.mock("@/lib/api", async (importOriginal) => {
         username: "pilot",
         email: "pilot@example.test",
         is_staff: false,
+        ai_cli_runtime_enabled: true,
         features: { ai_connections_personal: true },
       },
     })),
     fetchAiProviderConnections: mocks.connections,
     fetchAiProviderPools: mocks.pools,
-    fetchAiProviderPreferences: vi.fn(async () => ({ success: true, preferences: [], workspace_defaults: [] })),
-    fetchAiProviderCatalog: vi.fn(async () => ({ success: true, targets: [], purposes: [] })),
+    fetchAiProviderPreferences: mocks.preferences,
+    fetchAiProviderCatalog: mocks.catalog,
     fetchAccessUsers: mocks.users,
     fetchAiProviderAuthFlow: mocks.authFlow,
     revokeAiProviderConnection: mocks.revoke,
@@ -117,5 +120,89 @@ describe("SettingsAIConnectionsPage pilot safety", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Отозвать" }));
 
     await waitFor(() => expect(mocks.revoke).toHaveBeenCalledWith(7));
+  });
+
+  it("hides revoked audit records until explicitly requested", async () => {
+    mocks.connections.mockResolvedValueOnce({
+      success: true,
+      connections: [
+        {
+          id: 7,
+          public_id: "conn-7",
+          target_id: "codex_subscription" as const,
+          scope: "personal" as const,
+          owner_id: 1,
+          name: "Pilot Codex",
+          status: "connected",
+          enabled: true,
+          concurrency_limit: 1,
+          last_error_code: "",
+          last_verified_at: null,
+          access: { interactive: true, unattended: false },
+          manageable: true,
+          grants: [],
+        },
+        {
+          id: 8,
+          public_id: "conn-8",
+          target_id: "codex_subscription" as const,
+          scope: "personal" as const,
+          owner_id: 1,
+          name: "Old Codex",
+          status: "revoked",
+          enabled: false,
+          concurrency_limit: 1,
+          last_error_code: "",
+          last_verified_at: null,
+          access: { interactive: false, unattended: false },
+          manageable: true,
+          grants: [],
+        },
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Pilot Codex")).toBeInTheDocument();
+    expect(screen.queryByText("Old Codex")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Показать отозванные (1)" }));
+    expect(screen.getByText("Old Codex")).toBeInTheDocument();
+  });
+
+  it("shows the saved Codex model and reasoning mode", async () => {
+    mocks.preferences.mockResolvedValueOnce({
+      success: true,
+      preferences: [{
+        id: 1,
+        user_id: 1,
+        project_id: 1,
+        purpose: "assistant" as const,
+        binding: {
+          target_id: "codex_subscription",
+          connection_id: 7,
+          model_id: "gpt-5.6-terra",
+          reasoning_effort: "high" as const,
+        },
+      }],
+      workspace_defaults: [],
+    });
+    mocks.catalog.mockResolvedValueOnce({
+      success: true,
+      targets: [],
+      purposes: [],
+      models_by_target: {
+        codex_subscription: [{
+          id: "gpt-5.6-terra",
+          label: "GPT-5.6 Terra",
+          default_reasoning_effort: "medium" as const,
+          reasoning_efforts: ["low", "medium", "high", "xhigh"] as const,
+        }],
+      },
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole("combobox", { name: "Ассистент и чаты · модель" })).toHaveTextContent("GPT-5.6 Terra");
+    expect(screen.getByRole("combobox", { name: "Ассистент и чаты · размышление" })).toHaveTextContent("high");
   });
 });

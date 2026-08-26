@@ -2,9 +2,10 @@ import { Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
-import { clampNumber } from "./shared";
+import { clampNumber, t, type NodePanelLang } from "./shared";
 
 type IterationStepperProps = {
+  lang: NodePanelLang;
   value: number;
   min?: number;
   max?: number;
@@ -12,6 +13,7 @@ type IterationStepperProps = {
 };
 
 export function IterationStepper({
+  lang,
   value,
   min = 1,
   max = 20,
@@ -28,7 +30,7 @@ export function IterationStepper({
         variant="ghost"
         size="icon"
         className="h-8 w-8 rounded-md"
-        aria-label="Decrease iterations"
+        aria-label={t(lang, "Уменьшить число шагов", "Decrease iterations")}
         onClick={() => canDecrement && onChange(safeValue - 1)}
         disabled={!canDecrement}
       >
@@ -47,7 +49,7 @@ export function IterationStepper({
         variant="ghost"
         size="icon"
         className="h-8 w-8 rounded-md"
-        aria-label="Increase iterations"
+        aria-label={t(lang, "Увеличить число шагов", "Increase iterations")}
         onClick={() => canIncrement && onChange(safeValue + 1)}
         disabled={!canIncrement}
       >

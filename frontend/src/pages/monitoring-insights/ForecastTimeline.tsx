@@ -68,13 +68,13 @@ export function ForecastTimeline({ predictions, className }: { predictions: Insi
         <div className="flex items-center gap-2">
           <CalendarClock className="h-3.5 w-3.5 text-primary" aria-hidden />
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-            {localize(lang, "Лента будущего", "What breaks next")}
+            {localize(lang, "Прогноз событий", "Event forecast")}
           </h2>
         </div>
         <span className="hidden truncate text-2xs text-muted-foreground sm:block">
           {hidden > 0
             ? localize(lang, `+${hidden} событий в прогнозах`, `+${hidden} more in forecasts`)
-            : localize(lang, "если тренды сохранятся", "if current trends hold")}
+            : localize(lang, "при сохранении текущего тренда", "if the current trend continues")}
         </span>
       </div>
 

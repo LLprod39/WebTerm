@@ -17,16 +17,17 @@ import {
   type LinuxUiProcessActionResult,
   type LinuxUiProcessItem,
 } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const EMPTY_PROCESSES: LinuxUiProcessItem[] = [];
 
-function processActionMeta(action: LinuxUiProcessAction) {
+function processActionMeta(action: LinuxUiProcessAction, lang: string) {
   switch (action) {
     case "terminate":
-      return { label: "Terminate", confirmLabel: "Terminate Process", destructive: false };
+      return { label: localize(lang, "Завершить", "Terminate"), confirmLabel: localize(lang, "Завершить процесс", "Terminate process"), destructive: false };
     case "kill_force":
-      return { label: "Kill -9", confirmLabel: "Force Kill Process", destructive: true };
+      return { label: localize(lang, "Завершить принудительно", "Kill -9"), confirmLabel: localize(lang, "Принудительно завершить процесс", "Force kill process"), destructive: true };
     default:
       return { label: action, confirmLabel: action, destructive: false };
   }
@@ -79,6 +80,7 @@ export function ProcessesWindow({
   server: FrontendServer;
   active: boolean;
 }) {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [mode, setMode] = useState<"cpu" | "memory">("cpu");
@@ -132,48 +134,46 @@ export function ProcessesWindow({
 
   const confirmDescription = useMemo(() => {
     if (!confirmState) return "";
-    const base = `${processActionMeta(confirmState.action).label} PID ${confirmState.process.pid}?`;
+    const base = `${processActionMeta(confirmState.action, lang).label} PID ${confirmState.process.pid}?`;
     if (confirmState.action === "kill_force") {
-      return `${base} This sends SIGKILL immediately and the process cannot shut down gracefully.`;
+      return localize(lang, `${base} SIGKILL сработает сразу, без корректного завершения.`, `${base} SIGKILL is sent immediately without graceful shutdown.`);
     }
-    return `${base} This asks the process to stop gracefully first.`;
-  }, [confirmState]);
+    return localize(lang, `${base} Сначала процесс получит запрос на корректное завершение.`, `${base} The process is asked to shut down gracefully first.`);
+  }, [confirmState, lang]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-sm font-medium text-foreground">task manager</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Inspect CPU and memory consumers, then stop bad actors with typed process actions.
-            </div>
+            <div className="text-sm font-medium text-foreground">{localize(lang, "Процессы", "Processes")}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{localize(lang, "Нагрузка на процессор и память.", "CPU and memory usage by process.")}</div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="flex rounded-xl border border-border/70 bg-background/94 p-1">
               <Button type="button" size="sm" variant={mode === "cpu" ? "default" : "ghost"} className="h-8 text-xs" onClick={() => setMode("cpu")}>
-                Top CPU
+                {localize(lang, "По CPU", "Top CPU")}
               </Button>
               <Button type="button" size="sm" variant={mode === "memory" ? "default" : "ghost"} className="h-8 text-xs" onClick={() => setMode("memory")}>
-                Top Memory
+                {localize(lang, "По памяти", "Top memory")}
               </Button>
             </div>
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter by pid, command, user..."
+              placeholder={localize(lang, "Найти по PID, команде или пользователю...", "Filter by PID, command, or user...")}
               className="h-9 min-w-[16rem] bg-background/95 text-sm"
             />
             <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => void processesQuery.refetch()}>
               <RefreshCw className={cn("h-3.5 w-3.5", processesQuery.isFetching && "animate-spin")} />
-              Refresh
+              {localize(lang, "Обновить", "Refresh")}
             </Button>
           </div>
         </div>
         <div className="mt-4 grid gap-2 md:grid-cols-3">
-          <SummaryCard label="Processes" value={processPayload?.summary.total || 0} hint="Current process count" />
-          <SummaryCard label="High CPU" value={processPayload?.summary.high_cpu || 0} hint=">= 20% CPU" alert={(processPayload?.summary.high_cpu || 0) > 0} />
-          <SummaryCard label="High Memory" value={processPayload?.summary.high_memory || 0} hint=">= 10% memory" alert={(processPayload?.summary.high_memory || 0) > 0} />
+          <SummaryCard label={localize(lang, "Процессы", "Processes")} value={processPayload?.summary.total || 0} hint={localize(lang, "Сейчас запущено", "Running now")} />
+          <SummaryCard label={localize(lang, "Высокий CPU", "High CPU")} value={processPayload?.summary.high_cpu || 0} hint="≥ 20% CPU" alert={(processPayload?.summary.high_cpu || 0) > 0} />
+          <SummaryCard label={localize(lang, "Много памяти", "High memory")} value={processPayload?.summary.high_memory || 0} hint={localize(lang, "≥ 10% памяти", "≥ 10% memory")} alert={(processPayload?.summary.high_memory || 0) > 0} />
         </div>
       </div>
 
@@ -182,10 +182,10 @@ export function ProcessesWindow({
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {mode === "cpu" ? "Top CPU" : "Top Memory"}
+                {mode === "cpu" ? localize(lang, "По CPU", "Top CPU") : localize(lang, "По памяти", "Top memory")}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {filteredProcesses.length} of {sourceProcesses.length} visible
+                {localize(lang, `Показано ${filteredProcesses.length} из ${sourceProcesses.length}`, `${filteredProcesses.length} of ${sourceProcesses.length} visible`)}
               </div>
             </div>
             <ScrollArea className="h-full max-h-full">
@@ -197,12 +197,12 @@ export function ProcessesWindow({
                 ) : null}
                 {processesQuery.isLoading ? (
                   <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading processes...
+                    {localize(lang, "Загружаем процессы...", "Loading processes...")}
                   </div>
                 ) : null}
                 {!processesQuery.isLoading && filteredProcesses.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No processes match the current filter.
+                    {localize(lang, "Ничего не найдено.", "No processes match the current filter.")}
                   </div>
                 ) : null}
                 {filteredProcesses.map((process) => (
@@ -234,9 +234,9 @@ export function ProcessesWindow({
                       </div>
                       <div className="mt-2 text-sm text-muted-foreground">{selectedProcess.args}</div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <SummaryCard label="CPU" value={formatMetric(selectedProcess.cpu_percent, "%", 1)} hint="Current CPU usage" alert={(selectedProcess.cpu_percent || 0) >= 20} />
-                        <SummaryCard label="Memory" value={formatMetric(selectedProcess.memory_percent, "%", 1)} hint="Current memory usage" alert={(selectedProcess.memory_percent || 0) >= 10} />
-                        <SummaryCard label="Elapsed" value={selectedProcess.elapsed} hint="Process uptime" />
+                        <SummaryCard label="CPU" value={formatMetric(selectedProcess.cpu_percent, "%", 1)} hint={localize(lang, "Текущая нагрузка", "Current usage")} alert={(selectedProcess.cpu_percent || 0) >= 20} />
+                        <SummaryCard label={localize(lang, "Память", "Memory")} value={formatMetric(selectedProcess.memory_percent, "%", 1)} hint={localize(lang, "Текущее использование", "Current usage")} alert={(selectedProcess.memory_percent || 0) >= 10} />
+                        <SummaryCard label={localize(lang, "Работает", "Elapsed")} value={selectedProcess.elapsed} hint={localize(lang, "Время работы процесса", "Process uptime")} />
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2 xl:max-w-[16rem] xl:justify-end">
@@ -250,7 +250,7 @@ export function ProcessesWindow({
                           disabled={processActionMutation.isPending}
                           onClick={() => setConfirmState({ process: selectedProcess, action })}
                         >
-                          {processActionMeta(action).label}
+                          {processActionMeta(action, lang).label}
                         </Button>
                       ))}
                     </div>
@@ -260,10 +260,7 @@ export function ProcessesWindow({
                 <div className="grid min-h-0 flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                   <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-card/88">
                     <div className="border-b border-border/60 px-4 py-3">
-                      <div className="text-sm font-medium text-foreground">Command line</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        Full argv for the selected process.
-                      </div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Командная строка", "Command line")}</div>
                     </div>
                     <ScrollArea className="h-[16rem] lg:h-full">
                       <pre className="whitespace-pre-wrap break-words px-4 py-4 font-mono text-[12px] leading-5 text-foreground">
@@ -274,18 +271,15 @@ export function ProcessesWindow({
 
                   <div className="flex min-h-0 flex-col gap-4">
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4">
-                      <div className="text-sm font-medium text-foreground">Action state</div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Graceful terminate first, force kill only when the process ignores SIGTERM.
-                      </div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Последнее действие", "Last action")}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{localize(lang, "Принудительное завершение используйте только после SIGTERM.", "Use force kill only after SIGTERM fails.")}</div>
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/94 p-3">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Last action</div>
                         <div className="mt-2 text-sm text-foreground">
-                          {lastAction ? `${lastAction.action} pid:${lastAction.pid}` : "No process action has been executed yet."}
+                          {lastAction ? `${lastAction.action} pid:${lastAction.pid}` : localize(lang, "Действий ещё не было.", "No process action has been run yet.")}
                         </div>
                         {lastAction ? (
                           <div className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", lastAction.success ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive")}>
-                            {lastAction.success ? "success" : "failed"}
+                            {lastAction.success ? localize(lang, "успешно", "success") : localize(lang, "ошибка", "failed")}
                           </div>
                         ) : null}
                       </div>
@@ -304,16 +298,16 @@ export function ProcessesWindow({
                     </div>
 
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4 text-xs leading-5 text-muted-foreground">
-                      <div className="text-sm font-medium text-foreground">Operational notes</div>
-                      <div className="mt-2">Terminate is safer for app processes because it lets them flush state and close sockets.</div>
-                      <div className="mt-2">Force kill is a last resort for wedged workers or runaway CPU consumers.</div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Важно", "Important")}</div>
+                      <div className="mt-2">{localize(lang, "Обычное завершение позволяет процессу сохранить данные и закрыть соединения.", "Regular termination lets the process save data and close connections.")}</div>
+                      <div className="mt-2">{localize(lang, "SIGKILL — крайняя мера для зависших процессов.", "SIGKILL is a last resort for stuck processes.")}</div>
                     </div>
                   </div>
                 </div>
               </>
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                Select a process from the list to inspect command line and action state.
+                {localize(lang, "Выберите процесс.", "Select a process.")}
               </div>
             )}
           </section>
@@ -325,10 +319,10 @@ export function ProcessesWindow({
         onOpenChange={(open) => {
           if (!open) setConfirmState(null);
         }}
-        title={confirmState ? `${processActionMeta(confirmState.action).label} pid:${confirmState.process.pid}` : "Confirm process action"}
+        title={confirmState ? `${processActionMeta(confirmState.action, lang).label} pid:${confirmState.process.pid}` : localize(lang, "Подтвердите действие", "Confirm process action")}
         description={confirmDescription}
-        confirmLabel={confirmState ? processActionMeta(confirmState.action).confirmLabel : "Confirm"}
-        destructive={Boolean(confirmState && processActionMeta(confirmState.action).destructive)}
+        confirmLabel={confirmState ? processActionMeta(confirmState.action, lang).confirmLabel : localize(lang, "Подтвердить", "Confirm")}
+        destructive={Boolean(confirmState && processActionMeta(confirmState.action, lang).destructive)}
         onConfirm={async () => {
           if (!confirmState) return;
           const current = confirmState;

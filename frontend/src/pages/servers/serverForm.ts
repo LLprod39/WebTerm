@@ -31,17 +31,8 @@ export function initialGroupForm(): ServerGroupForm {
   };
 }
 
-export function enforcePilotServerAccess(form: ServerForm): ServerForm {
-  return {
-    ...form,
-    ai_read_only: true,
-    sudo_auth_mode: "none",
-    sudo_password: "",
-  };
-}
-
-export function asPayload(form: ServerForm, canConfigureElevatedAccess = false) {
-  const effectiveForm = canConfigureElevatedAccess ? form : enforcePilotServerAccess(form);
+export function asPayload(form: ServerForm) {
+  const effectiveForm = { ...form, ai_read_only: false };
   const payload: Record<string, unknown> = {
     name: effectiveForm.name,
     server_type: effectiveForm.server_type,

@@ -56,6 +56,12 @@ def validate_content(*, content_format: str, source_yaml: str, tasks: Any) -> tu
     normalized_tasks = normalize_tasks(tasks)
     if content_format == "ansible_yaml" and not source_yaml.strip():
         raise PlaybookContentError("Ansible YAML cannot be empty")
+    if content_format == "ansible_yaml":
+        # Import lazily to avoid a module cycle: the source guard shares these
+        # canonical limits and raises PlaybookContentError-compatible errors.
+        from servers.services.playbooks.source_guard import validate_ansible_source
+
+        validate_ansible_source(source_yaml)
     if content_format == "runbook_json" and not normalized_tasks:
         raise PlaybookContentError("Runbook must contain at least one task")
     return source_yaml, normalized_tasks

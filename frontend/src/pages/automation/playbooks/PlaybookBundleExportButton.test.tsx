@@ -35,7 +35,7 @@ describe("PlaybookBundleExportButton", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("downloads the selected published revision and shows progress", async () => {
+  it("downloads the selected immutable revision and shows progress", async () => {
     let resolveExport: (value: { blob: Blob; filename: string; redactionCount: number }) => void = () => {};
     vi.mocked(exportPlaybookRevisionBundle).mockImplementation(
       () => new Promise((resolve) => { resolveExport = resolve; }),
@@ -50,8 +50,8 @@ describe("PlaybookBundleExportButton", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Export published revision 4" }));
-    expect(screen.getByRole("button", { name: "Export published revision 4" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Export immutable revision 4" }));
+    expect(screen.getByRole("button", { name: "Export immutable revision 4" })).toBeDisabled();
     expect(screen.getByText("Exporting…")).toBeInTheDocument();
 
     resolveExport({ blob: new Blob(["zip"]), filename: "project-r4.zip", redactionCount: 1 });
@@ -71,10 +71,10 @@ describe("PlaybookBundleExportButton", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Export published revision 4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Export immutable revision 4" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Artifact unavailable");
-    expect(screen.getByRole("button", { name: "Export published revision 4" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Export immutable revision 4" })).toBeEnabled();
     expect(downloadPlaybookBundleExport).not.toHaveBeenCalled();
   });
 });

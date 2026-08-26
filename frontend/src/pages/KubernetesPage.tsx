@@ -66,25 +66,25 @@ export default function KubernetesPage() {
     () => [
       {
         key: "healthy",
-        label: localize(lang, "Healthy", "Healthy"),
+        label: localize(lang, "В норме", "Healthy"),
         value: healthBuckets.healthy,
         color: "#34d399",
       },
       {
         key: "warning",
-        label: localize(lang, "Warning", "Warning"),
+        label: localize(lang, "Внимание", "Warning"),
         value: healthBuckets.warning,
         color: "#fbbf24",
       },
       {
         key: "degraded",
-        label: localize(lang, "Degraded", "Degraded"),
+        label: localize(lang, "Проблемы", "Degraded"),
         value: healthBuckets.degraded,
         color: "#f87171",
       },
       {
         key: "unknown",
-        label: localize(lang, "Unknown", "Unknown"),
+        label: localize(lang, "Нет данных", "Unknown"),
         value: healthBuckets.unknown,
         color: "#64748b",
       },
@@ -122,8 +122,8 @@ export default function KubernetesPage() {
         throw new Error(
           localize(
             lang,
-            "Нет app target для диагностики. Выберите приложение ниже или откройте Agents.",
-            "No app target for diagnosis. Pick an app below or open Agents.",
+            "Нет приложения для диагностики. Выберите приложение ниже или откройте раздел «Агенты».",
+            "No application is available for diagnosis. Choose one below or open Agents.",
           ),
         );
       }
@@ -161,17 +161,16 @@ export default function KubernetesPage() {
   const totalHealth = healthItems.length || 1;
   const healthyPct = Math.round((healthBuckets.healthy / totalHealth) * 100);
   const sidebarOpen = Boolean(readiness?.ready_for_sidebar);
-  const pilotMode = Boolean((readiness as { pilot_sidebar?: boolean } | undefined)?.pilot_sidebar);
 
   return (
     <KubernetesShell>
       <KubernetesPageHeader
-        kicker={localize(lang, "Kubernetes Ops", "Kubernetes Ops")}
-        title={localize(lang, "Кластерный пульт", "Cluster cockpit")}
+        kicker="Kubernetes"
+        title={localize(lang, "Обзор кластеров", "Cluster overview")}
         description={localize(
           lang,
-          "Здоровье, проблемы, выкатки, GitOps и агент — без шума. Ручной fix и AI в одном пульте.",
-          "Health, issues, rollouts, GitOps and agent — no clutter. Hands-on fix and AI in one cockpit.",
+          "Состояние кластеров, приложений и выкаток.",
+          "Cluster, application, and rollout status.",
         )}
         meta={
           <StatusBadge
@@ -181,10 +180,8 @@ export default function KubernetesPage() {
                 : overviewQuery.error
                   ? localize(lang, "Backend недоступен", "Backend unavailable")
                   : sidebarOpen
-                    ? pilotMode
-                      ? localize(lang, "Pilot · в меню", "Pilot · in menu")
-                      : localize(lang, "В меню", "In menu")
-                    : localize(lang, "Sidebar выкл.", "Sidebar off")
+                    ? localize(lang, "Готово", "Ready")
+                    : localize(lang, "Требуется настройка", "Setup required")
             }
             tone={overviewQuery.error ? "danger" : sidebarOpen ? "success" : statusTone(readiness?.status || "not_configured")}
           />
@@ -193,7 +190,7 @@ export default function KubernetesPage() {
           <>
             <Button type="button" variant="outline" size="sm" className="h-10 gap-2" onClick={() => setAgentOpen(true)}>
               <MessageSquare className="h-4 w-4" />
-              {localize(lang, "Агент", "Agent")}
+              {localize(lang, "Диагностика", "Diagnose")}
             </Button>
             <Button type="button" variant="outline" size="sm" className="h-10 gap-2" onClick={() => setHelmOpen(true)}>
               <Package className="h-4 w-4" />
@@ -203,14 +200,14 @@ export default function KubernetesPage() {
               <Button asChild variant="outline" size="sm" className="h-10 gap-2">
                 <Link to="/kubernetes/admin">
                   <ShieldCheck className="h-4 w-4" />
-                  Admin
+                  {localize(lang, "Ресурсы", "Resources")}
                 </Link>
               </Button>
             ) : null}
             <Button asChild variant="outline" size="sm" className="h-10 gap-2">
               <Link to="/settings/kubernetes">
                 <Settings2 className="h-4 w-4" />
-                {localize(lang, "Настройка", "Setup")}
+                {localize(lang, "Настройки", "Settings")}
               </Link>
             </Button>
             <K8sRefreshButton onClick={refreshOverview} label={localize(lang, "Обновить", "Refresh")} />
@@ -224,7 +221,7 @@ export default function KubernetesPage() {
           overviewQuery.error ||
           (!overviewQuery.isLoading && data && !data.success ? new Error("Kubernetes overview failed") : undefined)
         }
-        errorText={localize(lang, "Не удалось загрузить Kubernetes overview", "Failed to load Kubernetes overview")}
+        errorText={localize(lang, "Не удалось загрузить данные Kubernetes", "Failed to load Kubernetes data")}
         onRetry={refreshOverview}
       >
         {summary && readiness && data ? (

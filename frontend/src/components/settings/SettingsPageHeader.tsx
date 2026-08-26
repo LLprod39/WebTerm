@@ -18,6 +18,7 @@ export function SettingsPageHeader({
 }) {
   return (
     <header
+      data-ui-slot="settings-page-header"
       className={cn(
         "relative mb-5 overflow-hidden rounded-sm border border-border bg-card/80 px-4 py-4 sm:px-5",
         className,

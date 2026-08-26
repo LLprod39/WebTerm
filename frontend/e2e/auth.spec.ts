@@ -141,7 +141,7 @@ test.describe("Auth flows", () => {
     await page.getByRole("button", { name: "Sign in" }).click();
 
     await expect(page).toHaveURL(/\/servers$/);
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
   });
 
   test("shows permission denied for disabled feature routes", async ({ page }) => {
@@ -157,6 +157,6 @@ test.describe("Auth flows", () => {
 
     await page.getByRole("link", { name: "Open servers" }).click();
     await expect(page).toHaveURL(/\/servers$/);
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
   });
 });

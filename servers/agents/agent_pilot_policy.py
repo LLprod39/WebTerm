@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from typing import Any
 
 from app.sudo_policy import SUDO_POLICY_DISABLED, normalize_sudo_policy
-from core_ui.access import build_user_access_payload
 from core_ui.context_processors import user_can_feature
 from servers.agents.agent_tools import DEFAULT_READ_ONLY_AGENT_TOOLS
 
@@ -24,16 +22,7 @@ PILOT_MAX_SESSION_TIMEOUT_SECONDS = 600
 
 
 def user_can_automate(user, *, request=None) -> bool:
-    if not user_can_feature(user, "automation", request=request):
-        return False
-    pilot_restricted = os.getenv("PILOT_RESTRICTED_MODE", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-    }
-    if not pilot_restricted:
-        return True
-    return build_user_access_payload(user, request=request).get("access_profile") == "pilot_operator"
+    return user_can_feature(user, "automation", request=request)
 
 
 def pilot_agent_policy_violations(
@@ -53,13 +42,6 @@ def pilot_agent_policy_violations(
     if user_can_automate(user, request=request):
         return []
     violations: list[str] = []
-    unsafe_servers = [
-        str(getattr(server, "pk", getattr(server, "id", "?")))
-        for server in servers
-        if not bool(getattr(server, "ai_read_only", False))
-    ]
-    if unsafe_servers:
-        violations.append(f"servers must be AI read-only: {', '.join(unsafe_servers[:10])}")
     if not isinstance(tools_config, dict):
         violations.append("tools_config must be an object")
     else:

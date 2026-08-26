@@ -1,9 +1,11 @@
 # WebTerm — Design System
 
-User-selectable UI styles (Dashboard → **Настроить виджеты**, per-user localStorage):
+User-selectable UI styles (Dashboard → **Настроить виджеты** or Settings → **Appearance**, per-user localStorage):
 
 | Id | Look |
 | --- | --- |
+| `enterprise-light` (**opt-in preview**) | Structural enterprise redesign: light operational canvas, dark navigation rail, IBM Plex Sans + JetBrains Mono, denser information hierarchy |
+| `enterprise-dark` (**opt-in preview**) | The same structural redesign on deep navy and graphite operational surfaces, with dark-native controls and status contrast |
 | `catalog` | Editorial ops: ink, acid lime, Syne + IBM Plex Mono, hard offset shadows |
 | `classic` | Previous console: teal, Inter + JetBrains Mono, soft elevation, violet AI |
 | `pulse` | Violet night ops: orchid primary, cyan AI, Outfit + DM Sans, soft glass + aurora glow |
@@ -14,7 +16,15 @@ User-selectable UI styles (Dashboard → **Настроить виджеты**, 
 | `flow-dark` (**default**) | Flow at night: graphite cards, white CTAs, same language |
 | `ashita` | **ASHITA // Sakura Rift** — dark Japanese atmospheric ops: navy hush, sakura primary, cyan AI, controlled glitch |
 
-Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-style.tsx`. Switcher: `DashboardUiStyleSwitcher` inside widget edit mode. Default is `flow-dark` for every account without a saved preference. Light `color-scheme` skins: `folio`, `flow`.
+Tokens: `html[data-ui-style="…"]` in `src/index.css`; the structural preview layers live in `src/styles/enterprise-light.css` and `src/styles/enterprise-dark.css`. Provider: `src/lib/ui-style.tsx`. Pickers: `DashboardUiStyleSwitcher` inside widget edit mode and Settings → Appearance. Default is `flow-dark` for every account without a saved preference; all existing themes remain available and unchanged. Light `color-scheme` skins: `folio`, `flow`, `enterprise-light`.
+
+### Enterprise preview contract
+
+- `enterprise-light` and `enterprise-dark` are explicit opt-in previews, not replacements for `flow-dark` or any existing theme.
+- It may change shell geometry, navigation, page hierarchy, density, cards, tables, forms, and typography in addition to semantic colors.
+- The saved preference remains per account. Selecting another existing theme restores its original presentation.
+- `/chat` and its descendants always resolve to the effective `flow-dark` presentation while preserving the saved Enterprise preference for every other route.
+- Both previews use self-hosted IBM Plex Sans for interface text and JetBrains Mono for technical values; no external font request is required while either is active.
 
 ## 1. Color System
 
@@ -45,6 +55,7 @@ Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-st
 - **UI body:** `IBM Plex Mono` (`font-sans` / `font-mono`) — catalog default language
 - **Display:** `Syne` (`font-display`) — titles, metrics, dialog titles
 - **Flow / Flow dark:** UI `Inter`, display `Manrope`, technical values `JetBrains Mono`
+- **Enterprise light / dark:** self-hosted `IBM Plex Sans` for UI/display and self-hosted `JetBrains Mono` for technical values
 - **ASHITA:** UI `Manrope`, display `Space Grotesk`, mono `JetBrains Mono`
 - **Scale utilities** (`index.css`):
   - `.type-display` — large metric / hero number
@@ -96,9 +107,9 @@ Tokens: `html[data-ui-style="…"]` in `src/index.css`. Provider: `src/lib/ui-st
 
 ## 8. How restyles cascade
 
-Tokens live in `src/index.css`. Most pages use `PageShell`, shadcn primitives, and semantic colors — they pick up this system automatically. One-off pages with hard-coded teal/violet classes may still need local cleanup.
+Core theme tokens live in `src/index.css`; the opt-in enterprise shell and structural component rules live in the paired `src/styles/enterprise-light.css` and `src/styles/enterprise-dark.css` layers. Most pages use `PageShell`, shadcn primitives, and semantic colors — they pick up the selected system automatically. One-off pages with hard-coded teal/violet classes may still need local cleanup.
 
-New skins **only** add `html[data-ui-style="…"]` blocks — never rewrite other skins. ASHITA decorative layers live in `AshitaAtmosphere` (`aria-hidden`, `pointer-events: none`) and only mount when the active style is `ashita`.
+Existing skins are preserved: new theme work must not rewrite their token blocks or page-specific presentation. Structural rules for the Enterprise pair must stay scoped to their document and shell attributes. ASHITA decorative layers live in `AshitaAtmosphere` (`aria-hidden`, `pointer-events: none`) and only mount when the active style is `ashita`.
 
 ## 9. Pilot-to-beta product UI contract
 

@@ -289,8 +289,8 @@ export function buildAdminCoreWidgets(
                 value={queues?.depth ?? 0}
                 description={localize(
                   lang,
-                  "Ожидают воркера",
-                  "Waiting for a worker",
+                  "Ожидают обработки",
+                  "Waiting to be processed",
                 )}
                 icon={<Workflow className="h-5 w-5" />}
                 tone={(queues?.depth ?? 0) > 0 ? "warning" : "default"}
@@ -298,13 +298,13 @@ export function buildAdminCoreWidgets(
               <MetricCard
                 label={localize(lang, "В работе", "In flight")}
                 value={queues?.in_flight ?? 0}
-                description={localize(lang, "Активные lease", "Active leases")}
+                description={localize(lang, "Выполняются сейчас", "Running now")}
                 icon={<Activity className="h-5 w-5" />}
               />
               <MetricCard
-                label={localize(lang, "Lease истёк", "Lease expired")}
+                label={localize(lang, "Время обработки истекло", "Processing time expired")}
                 value={queues?.lease_expired ?? 0}
-                description={`${queues?.stale_workers ?? 0} ${localize(lang, "зависших воркеров", "stale workers")}`}
+                description={`${queues?.stale_workers ?? 0} ${localize(lang, "зависших обработчиков", "stalled processors")}`}
                 icon={<AlertTriangle className="h-5 w-5" />}
                 tone={
                   (queues?.lease_expired ?? 0) > 0 ||

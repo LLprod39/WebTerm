@@ -138,7 +138,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
               ? localize(lang, "Webhook-триггер", "Webhook trigger")
               : target?.scheduleTriggers.length
                 ? localize(lang, "Запуск по расписанию", "Scheduled trigger")
-                : localize(lang, "Monitoring-триггер", "Monitoring trigger")}
+                : localize(lang, "Запуск по событию мониторинга", "Monitoring trigger")}
           </DialogTitle>
           <DialogDescription>
             {target?.webhookTriggers.length
@@ -146,7 +146,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
               : target?.scheduleTriggers.length
                 ? localize(lang, `Пайплайн "${target.pipeline.name}" запускается по расписанию. Ручной запуск здесь не нужен.`, `Pipeline "${target.pipeline.name}" is started by its schedule. There is nothing to launch manually.`)
                 : target
-                  ? localize(lang, `Пайплайн "${target.pipeline.name}" запускается alert-событиями мониторинга. Сохраните граф, и monitoring создаст запуск при совпадении условий.`, `Pipeline "${target.pipeline.name}" is started by server monitoring alerts. Save the graph and let monitoring create runs when a matching issue is detected.`)
+                  ? localize(lang, `Пайплайн "${target.pipeline.name}" запускается по событиям мониторинга. Сохраните граф — новый запуск появится при совпадении условий.`, `Pipeline "${target.pipeline.name}" starts from monitoring events. Save the graph and a run will be created when the conditions match.`)
                   : ""}
           </DialogDescription>
         </DialogHeader>
@@ -185,7 +185,7 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
 
           {target?.monitoringTriggers.length ? (
             <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-              {localize(lang, "Monitoring-триггеры активируются после сохранения. Новый запуск появится только когда мониторинг откроет подходящий alert.", "Monitoring triggers are armed after save. A new run appears only when server monitoring opens a matching alert.")}
+              {localize(lang, "Запуск по событию активируется после сохранения. Новый запуск появится, когда мониторинг обнаружит подходящую проблему.", "Monitoring triggers become active after saving. A new run appears when monitoring detects a matching issue.")}
             </div>
           ) : null}
 
@@ -199,11 +199,11 @@ export function TriggerInfoDialog({ lang, target, onClose, onOpenEditor }: Trigg
             const containers = Array.isArray(filters.container_names) ? filters.container_names.join(", ") : "any";
             return (
               <div key={trigger.id} className="space-y-1 rounded-xl border border-border bg-background/60 p-3">
-                <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Monitoring-триггер", "Monitoring trigger")}</div>
+                <div className="text-sm font-medium text-foreground">{trigger.name || localize(lang, "Событие мониторинга", "Monitoring trigger")}</div>
                 <div className="text-xs text-muted-foreground">Node `{trigger.node_id}`</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Серверы", "Servers")}: {serverIds}</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Важность", "Severity")}: {severities}</div>
-                <div className="text-xs text-muted-foreground">{localize(lang, "Тип alert", "Alert type")}: {alertTypes}</div>
+                <div className="text-xs text-muted-foreground">{localize(lang, "Тип события", "Alert type")}: {alertTypes}</div>
                 <div className="text-xs text-muted-foreground">{localize(lang, "Контейнеры", "Containers")}: {containers}</div>
               </div>
             );

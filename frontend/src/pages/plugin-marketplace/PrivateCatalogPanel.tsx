@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { MarketplaceCatalogItem } from "@/plugins/types";
 
@@ -27,16 +28,16 @@ function itemName(item: MarketplaceCatalogItem) {
   return String(item.manifest?.name || item.plugin_id);
 }
 
-function itemSummary(item: MarketplaceCatalogItem) {
-  return String(item.manifest?.summary || "No summary");
+function itemSummary(item: MarketplaceCatalogItem, lang: "en" | "ru") {
+  return String(item.manifest?.summary || localize(lang, "Без описания", "No summary"));
 }
 
-function itemPublisher(item: MarketplaceCatalogItem) {
+function itemPublisher(item: MarketplaceCatalogItem, lang: "en" | "ru") {
   const publisher = item.manifest?.publisher;
   if (publisher && typeof publisher === "object" && "name" in publisher) {
-    return String((publisher as { name?: unknown }).name || "Unknown publisher");
+    return String((publisher as { name?: unknown }).name || localize(lang, "Издатель не указан", "Unknown publisher"));
   }
-  return "Unknown publisher";
+  return localize(lang, "Издатель не указан", "Unknown publisher");
 }
 
 function manifestList(item: MarketplaceCatalogItem, key: string): Array<Record<string, unknown>> {
@@ -63,10 +64,12 @@ function CatalogItemCard({
   item,
   selected,
   onSelect,
+  lang,
 }: {
   item: MarketplaceCatalogItem;
   selected: boolean;
   onSelect: () => void;
+  lang: "en" | "ru";
 }) {
   const compatible = item.compatibility_report.compatible;
   return (
@@ -82,10 +85,10 @@ function CatalogItemCard({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-foreground">{itemName(item)}</h3>
-            <StatusBadge label={compatible ? "compatible" : "blocked"} tone={compatible ? "success" : "danger"} />
-            {item.installed ? <StatusBadge label="installed" tone="info" /> : null}
+            <StatusBadge label={compatible ? localize(lang, "совместим", "compatible") : localize(lang, "заблокирован", "blocked")} tone={compatible ? "success" : "danger"} />
+            {item.installed ? <StatusBadge label={localize(lang, "установлен", "installed")} tone="info" /> : null}
           </div>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{itemSummary(item)}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{itemSummary(item, lang)}</p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <StatusBadge label={item.review_status} tone={tone(item.review_status)} />
@@ -95,7 +98,7 @@ function CatalogItemCard({
       <div className="mt-3 flex flex-wrap gap-2">
         <Badge variant="outline">{item.plugin_id}</Badge>
         <Badge variant="outline">{item.version}</Badge>
-        <Badge variant="secondary">{itemPublisher(item)}</Badge>
+        <Badge variant="secondary">{itemPublisher(item, lang)}</Badge>
       </div>
     </button>
   );
@@ -107,17 +110,19 @@ function CatalogDetail({
   checking,
   onInstall,
   onRunCompatibility,
+  lang,
 }: {
   item: MarketplaceCatalogItem | null;
   installing: boolean;
   checking: boolean;
   onInstall: (itemId: number) => void;
   onRunCompatibility: (itemId: number) => void;
+  lang: "en" | "ru";
 }) {
   if (!item) {
     return (
       <div className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-6 text-sm text-muted-foreground">
-        Select a catalog plugin to inspect risk, permissions, compatibility, and install state.
+        {localize(lang, "Выберите плагин, чтобы проверить риски и разрешения.", "Select a catalog plugin to inspect risk, permissions, compatibility, and install state.")}
       </div>
     );
   }
@@ -132,7 +137,7 @@ function CatalogDetail({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-foreground">{itemName(item)}</h3>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">{itemSummary(item)}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{itemSummary(item, lang)}</p>
         </div>
         <Button
           size="sm"
@@ -140,16 +145,16 @@ function CatalogDetail({
           onClick={() => onInstall(item.id)}
         >
           <Download className="h-4 w-4" />
-          Install disabled
+          {localize(lang, "Установить выключенным", "Install disabled")}
         </Button>
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-          <div className="text-xs font-semibold text-muted-foreground">Compatibility</div>
+          <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Совместимость", "Compatibility")}</div>
           <div className="mt-2 flex items-center gap-2 text-sm text-foreground">
             {compatible ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <XCircle className="h-4 w-4 text-destructive" />}
-            {compatible ? "Supported" : "Blocked"}
+            {compatible ? localize(lang, "Поддерживается", "Supported") : localize(lang, "Заблокировано", "Blocked")}
           </div>
           {item.compatibility_report.errors.length ? (
             <ul className="mt-2 space-y-1 text-xs text-destructive">
@@ -158,11 +163,11 @@ function CatalogDetail({
           ) : null}
           <Button className="mt-3" size="sm" variant="outline" onClick={() => onRunCompatibility(item.id)} disabled={checking}>
             <CheckCircle2 className="h-4 w-4" />
-            Run compatibility
+            {localize(lang, "Проверить", "Run compatibility")}
           </Button>
         </div>
         <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-          <div className="text-xs font-semibold text-muted-foreground">Package</div>
+          <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Пакет", "Package")}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <StatusBadge label={item.review_status} tone={tone(item.review_status)} />
             <StatusBadge label={item.signature_status} tone={tone(item.signature_status)} />
@@ -171,7 +176,7 @@ function CatalogDetail({
       </div>
 
       <div>
-        <div className="text-xs font-semibold text-muted-foreground">Requested permissions</div>
+        <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Запрошенные разрешения", "Requested permissions")}</div>
         <div className="mt-2 space-y-2">
           {permissions.length ? permissions.map((permission, index) => {
             const value = permission as { scope?: unknown; reason?: unknown; risk_tier?: unknown };
@@ -185,49 +190,49 @@ function CatalogDetail({
               </div>
             );
           }) : (
-            <p className="text-xs text-muted-foreground">No explicit permissions.</p>
+            <p className="text-xs text-muted-foreground">{localize(lang, "Явных разрешений нет.", "No explicit permissions.")}</p>
           )}
         </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-          <div className="text-xs font-semibold text-muted-foreground">Secrets</div>
+          <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Секреты", "Secrets")}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {secrets.length ? secrets.map((secret, index) => (
               <Badge key={`${String(secret.id || secret.key || index)}`} variant="outline">
                 {String(secret.id || secret.key || `secret-${index + 1}`)}
               </Badge>
-            )) : <span className="text-xs text-muted-foreground">none</span>}
+            )) : <span className="text-xs text-muted-foreground">{localize(lang, "нет", "none")}</span>}
           </div>
         </div>
         <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-          <div className="text-xs font-semibold text-muted-foreground">Egress</div>
+          <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Внешние подключения", "Egress")}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             {egress.length ? egress.map((entry, index) => (
               <Badge key={`${String(entry.host || index)}`} variant="outline">
                 {String(entry.host || entry.url || `egress-${index + 1}`)}
               </Badge>
-            )) : <span className="text-xs text-muted-foreground">none</span>}
+            )) : <span className="text-xs text-muted-foreground">{localize(lang, "нет", "none")}</span>}
           </div>
         </div>
       </div>
 
       <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-        <div className="text-xs font-semibold text-muted-foreground">Surfaces</div>
+        <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Разделы интерфейса", "Surfaces")}</div>
         <div className="mt-2 flex flex-wrap gap-2">
           {surfaces.length ? surfaces.map((surface) => (
             <Badge key={surface.kind} variant="outline">{surface.kind}: {surface.count}</Badge>
-          )) : <span className="text-xs text-muted-foreground">none</span>}
+          )) : <span className="text-xs text-muted-foreground">{localize(lang, "нет", "none")}</span>}
         </div>
       </div>
 
       <div className="rounded-lg border border-border/60 bg-secondary/15 px-3 py-2">
-        <div className="text-xs font-semibold text-muted-foreground">Source and package</div>
+        <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Источник и пакет", "Source and package")}</div>
         <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-          <div className="truncate">source: {item.source.name}</div>
-          <div className="truncate">url: {item.source.source_url}</div>
-          <div className="truncate">package: {item.package_url || "metadata only"}</div>
+          <div className="truncate">{localize(lang, "источник", "source")}: {item.source.name}</div>
+          <div className="truncate">URL: {item.source.source_url}</div>
+          <div className="truncate">{localize(lang, "пакет", "package")}: {item.package_url || localize(lang, "только метаданные", "metadata only")}</div>
         </div>
       </div>
     </div>
@@ -237,7 +242,8 @@ function CatalogDetail({
 export function PrivateCatalogPanel() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [sourceName, setSourceName] = useState("Private catalog");
+  const { lang } = useI18n();
+  const [sourceName, setSourceName] = useState(() => localize(lang, "Частный каталог", "Private catalog"));
   const [sourceUrl, setSourceUrl] = useState("local://private-catalog");
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [syncPayload, setSyncPayload] = useState(EMPTY_PAYLOAD);
@@ -266,7 +272,7 @@ export function PrivateCatalogPanel() {
     mutationFn: createMarketplaceSource,
     onSuccess: () => {
       invalidateMarketplace();
-      toast({ description: "Private extension source created." });
+      toast({ description: localize(lang, "Источник добавлен.", "Private extension source created.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -274,7 +280,7 @@ export function PrivateCatalogPanel() {
     mutationFn: ({ sourceId, payload }: { sourceId: number; payload: Record<string, unknown> }) => syncMarketplaceSource(sourceId, payload),
     onSuccess: (result) => {
       invalidateMarketplace();
-      toast({ description: `Catalog synced: ${result.synced} plugin(s).` });
+      toast({ description: localize(lang, `Каталог обновлён: ${result.synced} плагинов.`, `Catalog synced: ${result.synced} plugin(s).`) });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -282,7 +288,7 @@ export function PrivateCatalogPanel() {
     mutationFn: syncFederatedMarketplaceSource,
     onSuccess: (result) => {
       invalidateMarketplace();
-      toast({ description: `Federated source synced: ${result.synced} plugin(s).` });
+      toast({ description: localize(lang, `Удалённый источник обновлён: ${result.synced} плагинов.`, `Federated source synced: ${result.synced} plugin(s).`) });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -290,7 +296,7 @@ export function PrivateCatalogPanel() {
     mutationFn: installMarketplaceItem,
     onSuccess: () => {
       invalidateMarketplace();
-      toast({ description: "Catalog plugin installed disabled." });
+      toast({ description: localize(lang, "Плагин установлен выключенным.", "Catalog plugin installed disabled.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -298,7 +304,7 @@ export function PrivateCatalogPanel() {
     mutationFn: installRemotePluginPackage,
     onSuccess: () => {
       invalidateMarketplace();
-      toast({ description: "Remote package staged disabled." });
+      toast({ description: localize(lang, "Удалённый пакет загружен и оставлен выключенным.", "Remote package staged disabled.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -306,7 +312,7 @@ export function PrivateCatalogPanel() {
     mutationFn: runMarketplaceCompatibilityJob,
     onSuccess: (result) => {
       invalidateMarketplace();
-      toast({ description: `Compatibility job ${result.job.status}.` });
+      toast({ description: localize(lang, `Проверка совместимости: ${result.job.status}.`, `Compatibility job ${result.job.status}.`) });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -314,23 +320,23 @@ export function PrivateCatalogPanel() {
   const handleSync = () => {
     const sourceId = activeSourceId;
     if (!sourceId) {
-      toast({ variant: "destructive", description: "Create a private extension source first." });
+      toast({ variant: "destructive", description: localize(lang, "Сначала добавьте источник.", "Create a private extension source first.") });
       return;
     }
     try {
       const payload = JSON.parse(syncPayload) as Record<string, unknown>;
       syncSource.mutate({ sourceId, payload });
     } catch {
-      toast({ variant: "destructive", description: "Catalog JSON is invalid." });
+      toast({ variant: "destructive", description: localize(lang, "JSON каталога содержит ошибку.", "Catalog JSON is invalid.") });
     }
   };
 
   return (
-    <SectionCard title="Private extension catalog" description="Internal catalog metadata installs plugins into disabled state." icon={<DatabaseZap className="h-4 w-4" />}>
+    <SectionCard title={localize(lang, "Частный каталог", "Private extension catalog")} description={localize(lang, "Плагины из внутренних источников устанавливаются выключенными.", "Internal catalog metadata installs plugins into disabled state.")} icon={<DatabaseZap className="h-4 w-4" />}>
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-4">
           <div className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4">
-            <div className="text-xs font-semibold text-muted-foreground">Source</div>
+            <div className="text-xs font-semibold text-muted-foreground">{localize(lang, "Источник", "Source")}</div>
             <div className="mt-3 space-y-2">
               <Input value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
               <Input value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
@@ -341,7 +347,7 @@ export function PrivateCatalogPanel() {
                 disabled={createSource.isPending}
               >
                 <Plus className="h-4 w-4" />
-                Add source
+                {localize(lang, "Добавить источник", "Add source")}
               </Button>
             </div>
             <QueryStateBlock loading={sourcesQuery.isLoading} error={sourcesQuery.error}>
@@ -363,7 +369,7 @@ export function PrivateCatalogPanel() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 text-xs font-semibold text-foreground">{source.name}</div>
                       <div className="flex shrink-0 gap-1">
-                        {source.credentials_redacted ? <Badge variant="outline">redacted</Badge> : null}
+                        {source.credentials_redacted ? <Badge variant="outline">{localize(lang, "скрыто", "redacted")}</Badge> : null}
                         <Badge variant={source.federated ? "default" : "outline"}>{source.sync_mode || "manual"}</Badge>
                       </div>
                     </div>
@@ -378,7 +384,7 @@ export function PrivateCatalogPanel() {
                         disabled={syncFederatedSource.isPending}
                       >
                         <CloudDownload className="h-4 w-4" />
-                        Sync remote
+                        {localize(lang, "Обновить источник", "Sync remote")}
                       </Button>
                     ) : null}
                   </div>
@@ -390,22 +396,22 @@ export function PrivateCatalogPanel() {
           <div className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <FileJson className="h-4 w-4" />
-              Sync payload
+              {localize(lang, "Данные синхронизации", "Sync payload")}
             </div>
             <Textarea value={syncPayload} onChange={(event) => setSyncPayload(event.target.value)} className="min-h-52 font-mono text-xs" />
             <Button className="mt-3" size="sm" onClick={handleSync} disabled={syncSource.isPending}>
-              Sync catalog
+              {localize(lang, "Обновить каталог", "Sync catalog")}
             </Button>
           </div>
 
           <div className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4">
             <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
               <CloudDownload className="h-4 w-4" />
-              Remote package
+              {localize(lang, "Удалённый пакет", "Remote package")}
             </div>
             <div className="space-y-2">
               <Input placeholder="https://example.com/plugin.wtp" value={remotePackageUrl} onChange={(event) => setRemotePackageUrl(event.target.value)} />
-              <Input placeholder="expected sha256" value={remotePackageSha} onChange={(event) => setRemotePackageSha(event.target.value)} />
+              <Input placeholder={localize(lang, "ожидаемый SHA-256", "expected sha256")} value={remotePackageSha} onChange={(event) => setRemotePackageSha(event.target.value)} />
               <Button
                 size="sm"
                 variant="outline"
@@ -413,7 +419,7 @@ export function PrivateCatalogPanel() {
                 disabled={installRemote.isPending || !remotePackageUrl || !remotePackageSha}
               >
                 <CloudDownload className="h-4 w-4" />
-                Stage disabled
+                {localize(lang, "Загрузить выключенным", "Stage disabled")}
               </Button>
             </div>
           </div>
@@ -428,10 +434,11 @@ export function PrivateCatalogPanel() {
                   item={item}
                   selected={item.id === selectedItem?.id}
                   onSelect={() => setSelectedItemId(item.id)}
+                  lang={lang}
                 />
               )) : (
                 <div className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-6 text-sm text-muted-foreground">
-                  No private catalog items synced.
+                  {localize(lang, "В каталоге пока нет плагинов.", "No private catalog items synced.")}
                 </div>
               )}
             </div>
@@ -441,6 +448,7 @@ export function PrivateCatalogPanel() {
               checking={runCompatibility.isPending}
               onInstall={(itemId) => installItem.mutate(itemId)}
               onRunCompatibility={(itemId) => runCompatibility.mutate(itemId)}
+              lang={lang}
             />
           </div>
         </QueryStateBlock>

@@ -118,7 +118,18 @@ def _fail_one_exhausted_dispatch(now) -> AgentRunDispatch | None:
     AgentRun.objects.filter(
         pk=exhausted.run_id,
         status__in=[AgentRun.STATUS_PENDING, AgentRun.STATUS_RUNNING, AgentRun.STATUS_PLAN_REVIEW],
-    ).update(status=AgentRun.STATUS_FAILED, completed_at=now, ai_analysis=error)
+    ).update(
+        status=AgentRun.STATUS_FAILED,
+        completed_at=now,
+        ai_analysis=error,
+        execution_outcome={
+            "outcome": "failed",
+            "status": AgentRun.STATUS_FAILED,
+            "reason": error,
+            "exit_reason": "dispatch_exhausted",
+            "report_generation": {"status": "failed", "generated_at": None, "error": error},
+        },
+    )
     record_run_event(
         exhausted.run_id,
         "agent_dispatch_attempts_exhausted",

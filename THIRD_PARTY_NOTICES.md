@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Last reviewed: 2026-07-23  
+Last reviewed: 2026-08-25
 Plan ID: F-10 (GER-19)
 
 This file records third-party software notices for WebTerm **before any RoutineOps / upstream agent-plane reuse** (competitive plan D0 / F-10 gate).
@@ -60,6 +60,15 @@ Exact versions and hashes: `requirements-dev.lock` (production-ish install uses 
 
 Exact versions: `frontend/package-lock.json`.
 
+### Self-hosted frontend fonts
+
+These font files are vendored as static WOFF2 assets for the opt-in `enterprise-light` UI style. Their license texts are shipped beside the assets.
+
+| Component | Version / distribution | Typical use | License | Local license text |
+| --- | --- | --- | --- | --- |
+| IBM Plex Sans (`@ibm/plex`) | 6.4.1 | Interface and display typography | SIL Open Font License 1.1 (OFL-1.1) | `frontend/public/fonts/ibm-plex-sans/OFL.txt` |
+| JetBrains Mono | 2.304 | Technical values and monospace UI | SIL Open Font License 1.1 (OFL-1.1) | `frontend/public/fonts/jetbrains-mono/OFL.txt` |
+
 ### Containers and system packages
 
 Container images built from `docker/*.Dockerfile` also include OS packages from the base image distribution. Those packages are covered by their distribution licenses and must appear in the **container SBOM** for a published release image. Stage 1 scaffolding generates application-layer SBOMs first; image-layer SBOMs are required for the `v0.1.0` artifact gate.
@@ -80,6 +89,7 @@ If you redistribute WebTerm binaries, images, or install bundles, include:
 
 - this `THIRD_PARTY_NOTICES.md` (or a generated equivalent);
 - Apache-2.0 `LICENSE` for WebTerm itself;
+- the bundled font license texts under `frontend/public/fonts/` when those font assets are included;
 - the release SBOM set and checksum file for that build.
 
 ## Updates
@@ -87,6 +97,7 @@ If you redistribute WebTerm binaries, images, or install bundles, include:
 Update this file when:
 
 - adding a dependency with a **non-Apache / non-MIT / non-BSD** license;
+- adding or replacing a self-hosted font or other redistributed static asset;
 - vendoring external source trees;
 - publishing the first container release that includes new base OS packages.
 

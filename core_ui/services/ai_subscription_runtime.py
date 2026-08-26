@@ -118,6 +118,7 @@ async def stream_persisted_subscription_events(
         target_id=invocation.target_id,
         invocation_id=invocation_ref,
         model_id=context.binding.model_id if context.binding else None,
+        reasoning_effort=context.binding.reasoning_effort if context.binding else None,
         provider_session_id=context.provider_session_id or None,
         system_prompt=system_prompt,
         messages=messages,

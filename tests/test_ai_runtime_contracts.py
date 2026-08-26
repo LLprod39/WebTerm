@@ -48,6 +48,21 @@ def test_execution_context_can_be_resolved_without_mutating_original() -> None:
     assert resolved.binding.target_id == "codex_subscription"
 
 
+def test_provider_binding_preserves_model_and_reasoning_selection() -> None:
+    binding = ProviderBinding.from_dict(
+        {
+            "target_id": "codex_subscription",
+            "connection_id": 5,
+            "model_id": " gpt-5.6-terra ",
+            "reasoning_effort": " HIGH ",
+        }
+    )
+
+    assert binding.model_id == "gpt-5.6-terra"
+    assert binding.reasoning_effort == "high"
+    assert binding.to_dict()["reasoning_effort"] == "high"
+
+
 def test_provider_event_v1_has_stable_wire_shape() -> None:
     event = ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": "hello"})
     assert event.to_dict() == {

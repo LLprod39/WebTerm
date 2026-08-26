@@ -75,7 +75,7 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
       setPreviewYaml(yaml);
       setStep(3);
     } catch (err) {
-      notify.error({ title: tr("Не удалось собрать playbook", "Failed to build"), description: String(err) });
+      notify.error({ title: tr("Не удалось собрать проект", "Failed to build project"), description: String(err) });
     } finally {
       setBusy(false);
     }
@@ -87,7 +87,7 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
     try {
       const res = await generateGuidedPlaybook({ slug: recipe.slug, params, save: true });
       if (!res.playbook) throw new Error(res.error || "Create failed");
-      notify.success({ title: tr("Playbook создан (Ansible YAML)", "Playbook created (Ansible YAML)") });
+      notify.success({ title: tr("Проект Ansible создан", "Ansible project created") });
       onCreated(res.playbook);
     } catch (err) {
       notify.error({ title: tr("Ошибка", "Error"), description: String(err) });
@@ -109,8 +109,8 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
           </h2>
           <p className="text-xs text-muted-foreground">
             {tr(
-              "Без YAML: выберите действие → заполните поля → получите настоящий Ansible playbook.",
-              "No YAML needed: pick an action → fill fields → get a real Ansible playbook.",
+              "Выберите действие, заполните поля и получите готовый Ansible YAML.",
+              "Choose an action, fill in the fields, and get a ready-to-use Ansible YAML file.",
             )}
           </p>
         </div>
@@ -164,7 +164,7 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
           </div>
           {(recipe.fields || []).length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {tr("Параметры не нужны — можно сразу собрать playbook.", "No parameters needed — build the playbook next.")}
+              {tr("Параметры не нужны — можно сразу создать проект.", "No parameters are required. You can create the project now.")}
             </p>
           ) : (
             <div className="space-y-3">
@@ -221,7 +221,7 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
               {tr("Назад", "Back")}
             </Button>
             <Button size="sm" className="h-9 gap-1" disabled={busy || fieldErrors.length > 0} onClick={() => void preview()}>
-              {busy ? tr("Сборка…", "Building…") : tr("Далее — превью YAML", "Next — YAML preview")}
+              {busy ? tr("Создание…", "Building…") : tr("Проверить YAML", "Review YAML")}
               <ArrowRight className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -232,7 +232,7 @@ export function GuidedBuilder({ lang, onBack, onCreated }: GuidedBuilderProps) {
         <div className="space-y-3">
           <div className="rounded-sm border border-border bg-card p-4 shadow-elev-1">
             <h3 className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">
-              {tr("Настоящий Ansible YAML (будет выполнен ansible-playbook)", "Real Ansible YAML (run by ansible-playbook)")}
+              {tr("Готовый Ansible YAML", "Generated Ansible YAML")}
             </h3>
             <pre className="mt-2 max-h-80 overflow-auto rounded-sm border border-border bg-surface-0 p-3 font-mono text-2xs text-muted-foreground whitespace-pre-wrap">
               {previewYaml || "—"}

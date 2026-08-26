@@ -13,6 +13,8 @@ import { fetchAuthSession } from "@/api/auth";
 
 /** Visual product skins. Stored per user in this browser. */
 export type UiStyleId =
+  | "enterprise-light"
+  | "enterprise-dark"
   | "catalog"
   | "classic"
   | "pulse"
@@ -35,7 +37,7 @@ export const DEFAULT_UI_STYLE: UiStyleId = "flow-dark";
 export const GUEST_USER_KEY = "guest";
 
 /** Skins that force light color-scheme (native inputs, scrollbars, form controls). */
-export const LIGHT_UI_STYLES = new Set<UiStyleId>(["folio", "flow"]);
+export const LIGHT_UI_STYLES = new Set<UiStyleId>(["enterprise-light", "folio", "flow"]);
 const EXPERIMENTAL_UI_STYLES = new Set<UiStyleId>([
   "catalog",
   "classic",
@@ -60,6 +62,8 @@ export function isFlowStyle(value: unknown): value is "flow" | "flow-dark" {
 }
 
 const UI_STYLE_ID_SET = new Set<UiStyleId>([
+  "enterprise-light",
+  "enterprise-dark",
   "catalog",
   "classic",
   "pulse",
@@ -80,81 +84,137 @@ export const UI_STYLE_OPTIONS: Array<{
   swatches: string[];
 }> = [
   {
+    id: "enterprise-light",
+    labelRu: "Новый интерфейс · светлый",
+    labelEn: "New interface · Light",
+    blurbRu: "Светлая рабочая среда с новой навигацией, сеткой страниц, таблицами и формами.",
+    blurbEn: "A light workspace with redesigned navigation, page layouts, tables, and forms.",
+    swatches: ["#f3f6f8", "#15324b", "#1d63d5", "#17845b"],
+  },
+  {
+    id: "enterprise-dark",
+    labelRu: "Новый интерфейс · тёмный",
+    labelEn: "New interface · Dark",
+    blurbRu: "Глубокие графитовые поверхности, спокойный контраст и тот же новый рабочий интерфейс.",
+    blurbEn: "Deep graphite surfaces, calm contrast, and the same redesigned workspace.",
+    swatches: ["#0b1118", "#152536", "#62a4ff", "#3cc68a"],
+  },
+  {
     id: "catalog",
     labelRu: "Каталог",
     labelEn: "Catalog",
-    blurbRu: "Acid lime, mono UI, острые углы, hard shadows.",
-    blurbEn: "Acid lime, mono UI, sharp edges, hard shadows.",
+    blurbRu: "Контрастная тема с лаймовым акцентом, моноширинным шрифтом и резкими тенями.",
+    blurbEn: "A high-contrast theme with lime accents, monospace type, and sharp shadows.",
     swatches: ["#09090b", "#c8f542", "#f4f1ea", "#7ec8ff"],
   },
   {
     id: "classic",
     labelRu: "Классика",
     labelEn: "Classic",
-    blurbRu: "Teal console, Inter, мягкие тени — прежний вид.",
-    blurbEn: "Teal console, Inter, soft elevation — previous look.",
+    blurbRu: "Классическая тёмная тема с бирюзовым акцентом и мягкими тенями.",
+    blurbEn: "A classic dark theme with teal accents and soft shadows.",
     swatches: ["#08111f", "#22c5b0", "#e8f0f6", "#9b87f5"],
   },
   {
     id: "pulse",
     labelRu: "Пульс",
     labelEn: "Pulse",
-    blurbRu: "Violet night ops: мягкий glass, aurora glow, Outfit + DM Sans.",
-    blurbEn: "Violet night ops: soft glass, aurora glow, Outfit + DM Sans.",
+    blurbRu: "Тёмная фиолетовая тема с полупрозрачными поверхностями и мягким свечением.",
+    blurbEn: "A dark violet theme with translucent surfaces and a soft glow.",
     swatches: ["#0c0614", "#c084fc", "#f5f0ff", "#22d3ee"],
   },
   {
     id: "signal",
     labelRu: "Сигнал",
     labelEn: "Signal",
-    blurbRu: "Жёсткий brutal ops: carbon black, amber alarm, zero radius, mono.",
-    blurbEn: "Hard brutal ops: carbon black, amber alarm, zero radius, mono.",
+    blurbRu: "Строгая чёрная тема с янтарными акцентами и прямыми углами.",
+    blurbEn: "A stark black theme with amber accents and square corners.",
     swatches: ["#050505", "#ff7a12", "#f2f2f0", "#ff2d55"],
   },
   {
     id: "folio",
     labelRu: "Фолио · светлая",
     labelEn: "Folio · Light",
-    blurbRu: "Средне-серый desk, Inter, без белого.",
-    blurbEn: "Mid-stone gray desk, Inter, no bright white.",
+    blurbRu: "Спокойная светлая тема в тёплых серых тонах.",
+    blurbEn: "A calm light theme in warm gray tones.",
     swatches: ["#8a8680", "#9a4a24", "#1f1c1a", "#1f5f58"],
   },
   {
     id: "folio-dark",
     labelRu: "Фолио · тёмная",
     labelEn: "Folio · Dark",
-    blurbRu: "Тёмный Folio desk, Inter + terracotta.",
-    blurbEn: "Dark Folio desk, Inter + terracotta.",
+    blurbRu: "Тёмная тема в тёплых серых тонах с терракотовым акцентом.",
+    blurbEn: "A dark warm-gray theme with terracotta accents.",
     swatches: ["#161310", "#e07a3d", "#f3ebe2", "#2dd4bf"],
   },
   {
     id: "flow",
     labelRu: "Флоу · светлая",
     labelEn: "Flow · Light",
-    blurbRu: "AI-native SaaS: белые карточки, чёрные кнопки, зелёные статусы.",
-    blurbEn: "AI-native SaaS: white cards, black CTAs, green statuses.",
+    blurbRu: "Чистая светлая тема с белыми карточками и зелёными статусами.",
+    blurbEn: "A clean light theme with white cards and green status accents.",
     swatches: ["#f5f4f1", "#17181c", "#22a55e", "#3b7cf6"],
   },
   {
     id: "flow-dark",
     labelRu: "Флоу · тёмная",
     labelEn: "Flow · Dark",
-    blurbRu: "Ночной Flow: графитовые карточки, белые кнопки, тот же язык.",
-    blurbEn: "Flow at night: graphite cards, white CTAs, same language.",
+    blurbRu: "Основная тёмная тема с графитовыми поверхностями и светлыми кнопками.",
+    blurbEn: "The primary dark theme with graphite surfaces and light buttons.",
     swatches: ["#101013", "#f7f7f8", "#3ec777", "#5b8ef7"],
   },
   {
     id: "ashita",
     labelRu: "ASHITA",
     labelEn: "ASHITA",
-    blurbRu: "Ночная сакура, лунный синий и контролируемый digital glitch.",
-    blurbEn: "Night sakura, moonlit blue and controlled digital glitch.",
+    blurbRu: "Тёмная тема с розовыми и бирюзовыми неоновыми акцентами.",
+    blurbEn: "A dark theme with pink and teal neon accents.",
     swatches: ["#080A10", "#D66AB5", "#49D4D1", "#E14B5F"],
   },
 ];
 
 export function isUiStyleId(value: unknown): value is UiStyleId {
   return typeof value === "string" && UI_STYLE_ID_SET.has(value as UiStyleId);
+}
+
+/** Enterprise v1 is an opt-in structural redesign, not a palette alias. */
+export function isEnterpriseStyle(value: unknown): value is "enterprise-light" | "enterprise-dark" {
+  return value === "enterprise-light" || value === "enterprise-dark";
+}
+
+/** Chat intentionally stays on the current pilot UI while Enterprise is refined. */
+export function resolveDocumentUiStyle(style: UiStyleId, pathname: string): UiStyleId {
+  if (isEnterpriseStyle(style) && /^\/chat(?:\/|$)/.test(pathname)) {
+    return "flow-dark";
+  }
+  return style;
+}
+
+const LEGACY_THEME_FONT_LINK_ID = "webterm-supported-theme-fonts";
+const LEGACY_THEME_FONT_URL =
+  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap";
+
+function ensureStylesheetLink(id: string, href: string) {
+  if (document.getElementById(id)) return;
+  const link = document.createElement("link");
+  link.id = id;
+  link.rel = "stylesheet";
+  link.href = href;
+  document.head.append(link);
+}
+
+function syncThemeFontLinks(style: UiStyleId) {
+  const experimentalFontLink = document.getElementById(EXPERIMENTAL_THEME_FONT_LINK_ID);
+  if (isEnterpriseStyle(style)) {
+    document.getElementById(LEGACY_THEME_FONT_LINK_ID)?.remove();
+    experimentalFontLink?.remove();
+    return;
+  }
+
+  ensureStylesheetLink(LEGACY_THEME_FONT_LINK_ID, LEGACY_THEME_FONT_URL);
+  if (!EXPERIMENTAL_UI_STYLES.has(style)) {
+    experimentalFontLink?.remove();
+  }
 }
 
 /** Map removed experimental ids to a safe current style. */
@@ -220,13 +280,7 @@ function loadExperimentalTheme(style: UiStyleId) {
   void experimentalThemePromise.then((themeModule) => {
     if (document.documentElement.getAttribute("data-ui-style") !== style) return;
 
-    if (!document.getElementById(EXPERIMENTAL_THEME_FONT_LINK_ID)) {
-      const fontLink = document.createElement("link");
-      fontLink.id = EXPERIMENTAL_THEME_FONT_LINK_ID;
-      fontLink.rel = "stylesheet";
-      fontLink.href = themeModule.EXPERIMENTAL_THEME_FONT_URL;
-      document.head.append(fontLink);
-    }
+    ensureStylesheetLink(EXPERIMENTAL_THEME_FONT_LINK_ID, themeModule.EXPERIMENTAL_THEME_FONT_URL);
 
     const tokenTheme = style as keyof typeof themeModule.EXPERIMENTAL_THEME_TOKENS;
     const tokens = themeModule.EXPERIMENTAL_THEME_TOKENS[tokenTheme];
@@ -241,13 +295,23 @@ function loadExperimentalTheme(style: UiStyleId) {
   });
 }
 
-export function applyUiStyleToDocument(style: UiStyleId) {
+export function applyUiStyleToDocument(
+  style: UiStyleId,
+  pathname = typeof window === "undefined" ? "/" : window.location.pathname,
+) {
   if (typeof document === "undefined") return;
+  const effectiveStyle = resolveDocumentUiStyle(style, pathname);
   clearExperimentalThemeTokens();
-  document.documentElement.setAttribute("data-ui-style", style);
-  // Only light Folio uses light color-scheme; Folio dark and all other skins stay dark.
-  document.documentElement.style.colorScheme = LIGHT_UI_STYLES.has(style) ? "light" : "dark";
-  loadExperimentalTheme(style);
+  document.documentElement.setAttribute("data-ui-preference", style);
+  document.documentElement.setAttribute("data-ui-style", effectiveStyle);
+  document.documentElement.style.colorScheme = LIGHT_UI_STYLES.has(effectiveStyle) ? "light" : "dark";
+  syncThemeFontLinks(effectiveStyle);
+  loadExperimentalTheme(effectiveStyle);
+
+  const themeColor = UI_STYLE_OPTIONS.find((option) => option.id === effectiveStyle)?.swatches[0];
+  if (themeColor) {
+    document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute("content", themeColor);
+  }
 }
 
 export function readActiveUiStyle(): UiStyleId {

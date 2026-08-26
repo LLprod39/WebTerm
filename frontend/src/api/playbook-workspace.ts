@@ -103,8 +103,40 @@ export interface SavePlaybookBindingPayload {
   secret_references?: Record<string, string>;
   /** Write-only replacements. Callers must never hydrate this from a response. */
   secret_values?: Record<string, string>;
+  /** Names explicitly removed from the encrypted store on update. */
+  remove_secret_names?: string[];
   options?: PlaybookBindingOptions;
   is_default?: boolean;
+}
+
+export interface PlaybookDraftFileSummary {
+  path: string;
+  size_bytes: number;
+  sha256: string;
+  is_text: boolean;
+  editable: boolean;
+}
+
+export interface PlaybookDraftFileTree {
+  entrypoint: string;
+  bundle_hash: string;
+  draft_version: number | null;
+  files: PlaybookDraftFileSummary[];
+}
+
+export interface PlaybookDraftFile {
+  path: string;
+  content: string;
+  sha256: string;
+  size_bytes: number;
+  is_text: boolean;
+}
+
+export interface PlaybookShareCandidate {
+  id: number;
+  label: string;
+  secondary?: string;
+  type: "user" | "group";
 }
 
 export async function getPlaybookDraft(playbookId: number) {
@@ -224,4 +256,74 @@ export async function deletePlaybookShare(playbookId: number, shareId: number) {
     `/servers/api/playbooks/${playbookId}/shares/${shareId}/`,
     { method: "DELETE", body: "{}" },
   );
+}
+
+export async function getPlaybookDraftFiles(playbookId: number) {
+  return apiFetch<{ success: true; tree: PlaybookDraftFileTree }>(
+    `/servers/api/playbooks/${playbookId}/draft/files/`,
+  );
+}
+
+export type PlaybookProjectFileView = "current" | "base" | "published";
+
+export async function getPlaybookDraftFile(
+  playbookId: number,
+  path: string,
+  view?: PlaybookProjectFileView,
+) {
+  const query = new URLSearchParams({ path });
+  if (view) query.set("view", view);
+  return apiFetch<{
+    success: true;
+    file: PlaybookDraftFile;
+    draft_version: number;
+    bundle_hash: string;
+  }>(`/servers/api/playbooks/${playbookId}/draft/file/?${query}`);
+}
+
+export async function updatePlaybookDraftFile(
+  playbookId: number,
+  payload: { path: string; content: string; expected_draft_version: number; expected_bundle_hash: string },
+) {
+  const query = new URLSearchParams({ path: payload.path });
+  return apiFetch<{
+    success: true;
+    file: PlaybookDraftFile;
+    draft: PlaybookDraft;
+    tree: PlaybookDraftFileTree;
+  }>(`/servers/api/playbooks/${playbookId}/draft/file/?${query}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function searchPlaybookShareCandidates(
+  playbookId: number,
+  query: string,
+  limit = 12,
+) {
+  const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
+  const response = await apiFetch<{
+    success: true;
+    candidates: {
+      users: Array<{ id: number; username: string; email?: string }>;
+      groups: Array<{ id: number; name: string }>;
+    };
+  }>(`/servers/api/playbooks/${playbookId}/shares/candidates/?${params}`);
+  return {
+    ...response,
+    items: [
+      ...response.candidates.users.map((user): PlaybookShareCandidate => ({
+        id: user.id,
+        type: "user",
+        label: user.username,
+        secondary: user.email,
+      })),
+      ...response.candidates.groups.map((group): PlaybookShareCandidate => ({
+        id: group.id,
+        type: "group",
+        label: group.name,
+      })),
+    ],
+  };
 }

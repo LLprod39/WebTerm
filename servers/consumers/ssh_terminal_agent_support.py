@@ -83,7 +83,6 @@ class TerminalAgentSupportOperations:
             ai_settings=self._ai_state.settings,
             user_id=self._user_id,
             primary_server_id=int(self.server.id) if self.server else None,
-            automation_allowed=self._automation_allowed,
         )
 
     async def _ai_build_agent_memory_context(self, server_ids: list[int]) -> str:

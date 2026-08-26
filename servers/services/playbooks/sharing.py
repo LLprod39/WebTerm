@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
@@ -24,7 +23,7 @@ ROLE_CAPABILITIES = {
         "can_edit": True,
         "can_validate": True,
         "can_publish": False,
-        "can_run": False,
+        "can_run": True,
         "can_export": True,
         "can_manage_shares": False,
     },
@@ -53,34 +52,25 @@ class PlaybookGrantError(ValueError):
     pass
 
 
-def _project_role_for_grant(role: str) -> str:
+def _require_existing_project_principal(playbook, *, user=None, group=None) -> None:
     from core_ui.models.projects import ProjectMembership
 
-    return ProjectMembership.ROLE_VIEWER if role == PlaybookGrant.ROLE_VIEWER else ProjectMembership.ROLE_OPERATOR
-
-
-def _enroll_playbook_principals(playbook, *, role: str, user=None, group=None, include_all_users: bool = False) -> None:
-    from core_ui.models.projects import ProjectMembership
-    from core_ui.projects import activate_first_shared_project_if_personal_empty
-
-    users = []
     if user is not None:
-        users = [user]
-    elif group is not None:
-        users = list(group.user_set.filter(is_active=True))
-    elif include_all_users:
-        users = list(get_user_model().objects.filter(is_active=True).exclude(pk=playbook.user_id))
-    project_role = _project_role_for_grant(role)
-    for principal_user in users:
-        membership, created = ProjectMembership.objects.get_or_create(
-            project_id=playbook.project_id,
-            user=principal_user,
-            defaults={"role": project_role},
+        if not ProjectMembership.objects.filter(project_id=playbook.project_id, user=user).exists():
+            raise PlaybookGrantError("User is not a member of this project")
+        return
+    if group is None:
+        return
+    active_user_ids = set(group.user_set.filter(is_active=True).values_list("id", flat=True))
+    if not active_user_ids:
+        raise PlaybookGrantError("Group has no active project members")
+    member_ids = set(
+        ProjectMembership.objects.filter(project_id=playbook.project_id, user_id__in=active_user_ids).values_list(
+            "user_id", flat=True
         )
-        if not created and project_role == ProjectMembership.ROLE_OPERATOR and membership.role == "viewer":
-            membership.role = ProjectMembership.ROLE_OPERATOR
-            membership.save(update_fields=["role", "updated_at"])
-        activate_first_shared_project_if_personal_empty(principal_user, playbook.project)
+    )
+    if member_ids != active_user_ids:
+        raise PlaybookGrantError("Every active group user must already be a project member")
 
 
 @transaction.atomic
@@ -95,11 +85,6 @@ def sync_legacy_visibility_grant(playbook, *, actor) -> PlaybookGrant | None:
         .first()
     )
     if playbook.visibility == "shared":
-        _enroll_playbook_principals(
-            playbook,
-            role=PlaybookGrant.ROLE_OPERATOR,
-            include_all_users=True,
-        )
         if existing is not None:
             if existing.is_legacy and existing.revoked_at is not None:
                 existing.revoked_at = None
@@ -148,12 +133,22 @@ def save_grant(
 ) -> PlaybookGrant:
     if role not in ROLE_CAPABILITIES:
         raise PlaybookGrantError("Unknown playbook share role")
+    if workspace_shared:
+        raise PlaybookGrantError("New workspace-wide playbook grants are not allowed")
     if user is not None and user.id == playbook.user_id:
         raise PlaybookGrantError("The owner already has every capability")
     if expires_at is not None and expires_at <= timezone.now():
         raise PlaybookGrantError("Share expiry must be in the future")
 
-    principal = _principal_kwargs(user=user, group=group, workspace_shared=workspace_shared)
+    principal = _principal_kwargs(user=user, group=group, workspace_shared=False)
+    _require_existing_project_principal(playbook, user=user, group=group)
+    from servers.services.playbooks.revision_safety import validate_revision_safety
+    from servers.services.playbooks.revisions import ensure_playbook_workspace
+
+    published = playbook.published_revision
+    if published is None:
+        published, _draft = ensure_playbook_workspace(playbook, actor=actor)
+    validate_revision_safety(published)
     lookup = {"playbook": playbook}
     if principal["user"] is not None:
         lookup["user"] = principal["user"]
@@ -164,8 +159,8 @@ def save_grant(
 
     capabilities = dict(ROLE_CAPABILITIES[role])
     for key, value in (capability_overrides or {}).items():
-        if key in capabilities:
-            capabilities[key] = bool(value)
+        if key not in capabilities or bool(value) != capabilities[key]:
+            raise PlaybookGrantError("Playbook share capabilities are fixed by role")
     grant, _created = PlaybookGrant.objects.update_or_create(
         **lookup,
         defaults={
@@ -178,7 +173,6 @@ def save_grant(
             "is_legacy": False,
         },
     )
-    _enroll_playbook_principals(playbook, role=role, user=user, group=group)
     record_playbook_event(
         playbook=playbook,
         actor=actor,

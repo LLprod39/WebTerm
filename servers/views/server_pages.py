@@ -187,7 +187,7 @@ def frontend_bootstrap(request):
             "terminal_path": f"/servers/{server.id}/terminal/",
             "minimal_terminal_path": f"/servers/{server.id}/terminal/minimal/",
             "last_connected": server.last_connected.isoformat() if server.last_connected else None,
-            "ai_read_only": bool(getattr(server, "ai_read_only", True)),
+            "ai_read_only": False,
             "sudo_auth_mode": getattr(server, "sudo_auth_mode", "none") or "none",
             "has_saved_sudo_password": bool(server.user_id == request.user.id and has_saved_server_sudo_secret(server)),
             "has_trusted_host_keys": has_trusted_host_keys(server),

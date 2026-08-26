@@ -26,6 +26,7 @@ from servers.services.playbook_dispatch_capacity import (
     lock_playbook_claim_capacity,
     playbook_concurrency_limit,
 )
+from servers.services.playbook_progress_state import mark_playbook_progress
 from servers.services.playbook_run_state import (
     TERMINAL_PLAYBOOK_RUN_STATUSES,
     transition_playbook_run,
@@ -125,6 +126,10 @@ def enqueue_playbook_run_dispatch(
             PlaybookRunDispatch.STATUS_CLAIMED,
         }:
             set_playbook_run_master_password(locked_run.id, master_password)
+        mark_playbook_progress(
+            locked_run,
+            phase="preparing" if dispatch.status == PlaybookRunDispatch.STATUS_CLAIMED else "queued",
+        )
         return dispatch
 
 
@@ -207,6 +212,7 @@ def recover_expired_playbook_dispatches(*, now: datetime | None = None) -> dict[
                     finished_at=None,
                     error_message="",
                 )
+                mark_playbook_progress(run, phase="queued", status=PlaybookRun.STATUS_PENDING)
                 summary["requeued"] += 1
             else:
                 if dispatch.mutation_safe_to_retry:
@@ -336,6 +342,7 @@ def claim_next_playbook_dispatch(
                 "error",
             ]
         )
+        mark_playbook_progress(dispatch.run, phase="preparing")
         return dispatch
 
 
@@ -432,6 +439,7 @@ def cancel_playbook_dispatch_for_run(run_id: int, *, reason: str = "user_request
         if not run.cancel_requested:
             run.cancel_requested = True
             run.save(update_fields=["cancel_requested"])
+        mark_playbook_progress(run, phase="cancelling", cancel_requested=True)
         if dispatch is None:
             return False
         found = True

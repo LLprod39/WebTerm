@@ -38,6 +38,18 @@ def _request(**overrides: object) -> RunnerRequestV1:
     return RunnerRequestV1(**values)
 
 
+def test_runner_request_round_trips_reasoning_effort() -> None:
+    request = _request(model_id="gpt-5.6-terra", reasoning_effort="XHIGH")
+
+    assert request.reasoning_effort == "xhigh"
+    assert RunnerRequestV1.from_dict(request.to_dict()).reasoning_effort == "xhigh"
+
+
+def test_runner_request_rejects_unknown_reasoning_effort() -> None:
+    with pytest.raises(RunnerProtocolError, match="reasoning_effort"):
+        _request(reasoning_effort="infinite")
+
+
 def test_protocol_rejects_api_target() -> None:
     with pytest.raises(RunnerProtocolError, match="subscription targets"):
         _request(target_id="openai_api")

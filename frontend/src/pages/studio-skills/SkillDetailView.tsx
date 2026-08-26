@@ -118,7 +118,7 @@ export function SkillDetailView({
         {isFetchingSkill && !selectedSkill ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            {tr("Загрузка рабочего пространства...", "Loading workspace...")}
+            {tr("Загрузка файлов...", "Loading files...")}
           </div>
         ) : selectedSkill ? (
           <Tabs defaultValue="overview" className="flex h-full flex-col w-full space-y-5">
@@ -135,7 +135,7 @@ export function SkillDetailView({
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                     {selectedSkill.service && <span className="inline-flex items-center gap-1.5 rounded-md bg-muted/40 px-2 py-1"><Server className="h-3 w-3" /> {selectedSkill.service}</span>}
                     {selectedSkill.category && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{selectedSkill.category}</span>}
-                    {selectedSkill.runtime_enforced && <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 dark:text-amber-400"><ShieldCheck className="h-3 w-3"/> {tr("контроль выполнения", "runtime enforced")}</span>}
+                    {selectedSkill.runtime_enforced && <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-amber-600 dark:text-amber-400"><ShieldCheck className="h-3 w-3"/> {tr("контроль запуска", "execution rules enabled")}</span>}
                     {selectedSkill.safety_level && <span className="inline-flex items-center rounded-md bg-muted/40 px-2 py-1">{tr("риск", "safety")}: {safetyLevelLabel(selectedSkill.safety_level, lang)}</span>}
                   </div>
                 </div>
@@ -151,7 +151,7 @@ export function SkillDetailView({
                 <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-border/50 bg-transparent p-0">
                   <TabsTrigger value="overview" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><BookOpen className="h-4 w-4"/> {tr("Обзор", "Overview")}</TabsTrigger>
                   <TabsTrigger value="playbook" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><BookMarked className="h-4 w-4"/> {tr("Плейбук", "Playbook")}</TabsTrigger>
-                  <TabsTrigger value="workspace" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><FileCode2 className="h-4 w-4"/> {tr("Файлы", "Workspace")}</TabsTrigger>
+                  <TabsTrigger value="workspace" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><FileCode2 className="h-4 w-4"/> {tr("Файлы", "Files")}</TabsTrigger>
                   <TabsTrigger value="settings" className="inline-flex min-h-11 items-center gap-1.5 rounded-none border-b-2 border-transparent px-5 text-sm font-medium text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"><Settings2 className="h-4 w-4"/> {tr("Настройки", "Settings")}</TabsTrigger>
                 </TabsList>
               </div>
@@ -208,7 +208,7 @@ export function SkillDetailView({
                     <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-sm backdrop-blur-md">
                       <div className="flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4 text-amber-500/80" />
-                        <p className="text-base font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Политика выполнения", "Runtime policy")}</p>
+                        <p className="text-base font-semibold text-amber-600/90 dark:text-amber-400/90">{tr("Правила выполнения", "Execution rules")}</p>
                       </div>
                       <pre className="mt-3 overflow-auto whitespace-pre-wrap rounded-lg bg-background/50 border border-amber-500/20 p-4 font-mono text-[12px] leading-6 text-foreground/80 shadow-inner">
                         {JSON.stringify(selectedSkill.runtime_policy, null, 2)}
@@ -227,7 +227,7 @@ export function SkillDetailView({
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">{tr("Плейбук скилла (SKILL.md)", "Skill Playbook (SKILL.md)")}</h3>
-                    <p className="text-sm text-muted-foreground">{tr("Ниже полный Markdown документации, который читают агенты.", "Below is the full Markdown the agents read at runtime.")}</p>
+                    <p className="text-sm text-muted-foreground">{tr("Полная инструкция, которую читают агенты.", "The full instructions read by agents.")}</p>
                   </div>
                 </div>
                 <div className="mx-auto max-w-4xl">

@@ -19,10 +19,15 @@ from servers.models import PlaybookBindingProfile, ServerGroup
 from servers.services.playbook_compatibility_inventory import normalize_inventory_bindings
 from servers.services.playbook_runner import resolve_target_servers
 from servers.services.playbooks.audit import record_playbook_event
+from servers.services.playbooks.bundle_content import contains_credential_material
 
 MAX_VARIABLES = 100
 MAX_VARIABLE_PAYLOAD_BYTES = 32_000
-SECRET_NAME_PATTERN = re.compile(r"(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)", re.IGNORECASE)
+SECRET_NAME_PATTERN = re.compile(
+    r"(?:password|passwd|secret|token|credential|vault|api[_-]?key|access[_-]?key|private[_-]?key)",
+    re.IGNORECASE,
+)
+MANAGED_REFERENCE_PATTERN = re.compile(r"^managed://playbook-binding/(?P<profile_id>\d+)/(?P<name>[^/]+)$")
 
 
 class BindingProfileError(ValueError):
@@ -50,10 +55,40 @@ def _normalize_variables(raw: Any) -> dict[str, Any]:
             raise BindingProfileError(f"'{name}' looks secret; save it through secret_values")
         if not isinstance(value, (str, int, float, bool, list, dict)) and value is not None:
             raise BindingProfileError(f"Unsupported value type for '{name}'")
+        _reject_nested_secret_keys(value, path=name)
         normalized[name] = value
-    if len(json.dumps(normalized, ensure_ascii=False).encode("utf-8")) > MAX_VARIABLE_PAYLOAD_BYTES:
+    try:
+        encoded = json.dumps(normalized, ensure_ascii=False).encode("utf-8")
+    except (TypeError, ValueError, RecursionError) as exc:
+        raise BindingProfileError("variable_values must be bounded JSON data") from exc
+    if len(encoded) > MAX_VARIABLE_PAYLOAD_BYTES:
         raise BindingProfileError("variable_values payload is too large")
     return normalized
+
+
+def _reject_nested_secret_keys(value: Any, *, path: str) -> None:
+    stack: list[tuple[Any, str, int]] = [(value, path, 0)]
+    nodes = 0
+    while stack:
+        current, current_path, depth = stack.pop()
+        nodes += 1
+        if nodes > 2_000 or depth > 20:
+            raise BindingProfileError("variable_values structure is too complex")
+        if isinstance(current, dict):
+            for raw_key, nested in current.items():
+                key = str(raw_key).strip()
+                nested_path = f"{current_path}.{key}" if key else current_path
+                if not key or len(key) > 128:
+                    raise BindingProfileError("Nested variable names must contain 1-128 characters")
+                if SECRET_NAME_PATTERN.search(key):
+                    raise BindingProfileError(f"'{nested_path}' looks secret; save it through secret_values")
+                stack.append((nested, nested_path, depth + 1))
+        elif isinstance(current, list):
+            stack.extend((nested, f"{current_path}[{index}]", depth + 1) for index, nested in enumerate(current))
+        elif isinstance(current, str) and contains_credential_material(current):
+            raise BindingProfileError("variable_values contains credential material; save it through secret_values")
+        elif not isinstance(current, (str, int, float, bool)) and current is not None:
+            raise BindingProfileError(f"Unsupported value type for '{current_path}'")
 
 
 def _normalize_secret_references(raw: Any) -> dict[str, str]:
@@ -67,8 +102,18 @@ def _normalize_secret_references(raw: Any) -> dict[str, str]:
     for raw_name, raw_reference in raw.items():
         name = str(raw_name).strip()
         reference = str(raw_reference).strip()
-        if not name or not reference or len(name) > 128 or len(reference) > 300:
+        if (
+            not name
+            or not reference
+            or len(name) > 128
+            or len(reference) > 300
+            or "/" in name
+            or any(ord(char) < 32 for char in name)
+        ):
             raise BindingProfileError("Secret references contain an invalid name or reference")
+        match = MANAGED_REFERENCE_PATTERN.fullmatch(reference)
+        if match is None or match.group("name") != name:
+            raise BindingProfileError("Only managed binding secret references are supported")
         result[name] = reference
     return result
 
@@ -83,12 +128,26 @@ def _normalize_secret_values(raw: Any) -> dict[str, str] | None:
     result: dict[str, str] = {}
     for raw_name, raw_value in raw.items():
         name = str(raw_name).strip()
-        if not name or len(name) > 128:
+        if not name or len(name) > 128 or "/" in name or any(ord(char) < 32 for char in name):
             raise BindingProfileError("Secret variable names must contain 1-128 characters")
         value = "" if raw_value is None else str(raw_value)
         if len(value.encode("utf-8")) > 16_384:
             raise BindingProfileError(f"Secret value for '{name}' is too large")
         result[name] = value
+    return result
+
+
+def _normalize_remove_secret_names(raw: Any) -> set[str]:
+    if raw is None:
+        return set()
+    if not isinstance(raw, list) or len(raw) > MAX_VARIABLES:
+        raise BindingProfileError(f"remove_secret_names must be a list of at most {MAX_VARIABLES} names")
+    result: set[str] = set()
+    for raw_name in raw:
+        name = str(raw_name).strip()
+        if not name or len(name) > 128 or "/" in name or any(ord(char) < 32 for char in name):
+            raise BindingProfileError("Secret variable names must contain 1-128 characters")
+        result.add(name)
     return result
 
 
@@ -117,13 +176,13 @@ def _validate_target_access(user, mappings: dict[str, dict[str, list[int]]]) -> 
             raise BindingProfileError("One or more mapped groups are unavailable")
 
 
-def _normalize_options(raw: Any) -> dict[str, Any]:
+def _normalize_options(raw: Any, *, default_dry_run: bool) -> dict[str, Any]:
     raw = raw if isinstance(raw, dict) else {}
     concurrency = max(1, min(int(raw.get("concurrency") or 4), 12))
     return {
         "concurrency": concurrency,
         "become": bool(raw.get("become", True)),
-        "dry_run": bool(raw.get("dry_run", False)),
+        "dry_run": bool(raw.get("dry_run", default_dry_run)),
         "tags": str(raw.get("tags") or "")[:500],
         "skip_tags": str(raw.get("skip_tags") or "")[:500],
         "limit": str(raw.get("limit") or "")[:500],
@@ -140,6 +199,7 @@ def save_binding_profile(
     variable_values: Any = None,
     secret_references: Any = None,
     secret_values: Any = None,
+    remove_secret_names: Any = None,
     options: Any = None,
     is_default: bool = False,
     profile: PlaybookBindingProfile | None = None,
@@ -150,7 +210,7 @@ def save_binding_profile(
     normalized_variables = _normalize_variables(variable_values)
     normalized_references = _normalize_secret_references(secret_references)
     normalized_secret_values = _normalize_secret_values(secret_values)
-    normalized_options = _normalize_options(options)
+    removed_secret_names = _normalize_remove_secret_names(remove_secret_names)
 
     clean_name = (name or "").strip()[:120]
     if not clean_name:
@@ -162,52 +222,65 @@ def save_binding_profile(
     else:
         profile = PlaybookBindingProfile(playbook=playbook, user=user, version=0)
 
+    existing_options = profile.options if isinstance(profile.options, dict) else {}
+    normalized_options = _normalize_options(
+        options,
+        default_dry_run=(
+            bool(existing_options.get("dry_run", True))
+            if profile.pk is not None
+            else True
+        ),
+    )
+
+    if normalized_references:
+        if profile.pk is None:
+            raise BindingProfileError("Managed secret references are assigned after the profile is created")
+        for name, reference in normalized_references.items():
+            expected = f"managed://playbook-binding/{profile.pk}/{name}"
+            if reference != expected:
+                raise BindingProfileError("Secret reference does not belong to this binding profile")
+
     if is_default:
         PlaybookBindingProfile.objects.filter(playbook=playbook, user=user, is_default=True).exclude(
             pk=profile.pk
         ).update(is_default=False)
 
-    references = dict(normalized_references)
+    managed_values = get_playbook_binding_secret_values(profile.pk) if profile.pk else {}
     if normalized_secret_values is not None:
-        references.update(
-            {
-                key: f"managed://playbook-binding/{profile.pk or 'pending'}/{key}"
-                for key, value in normalized_secret_values.items()
-                if value
-            }
-        )
-    hash_payload = {
-        "selector_mappings": normalized_mappings,
-        "variable_values": normalized_variables,
-        "secret_references": sorted(references),
-        "options": normalized_options,
-    }
+        managed_values.update(normalized_secret_values)
+    for name in removed_secret_names:
+        managed_values.pop(name, None)
+
     profile.name = clean_name
     profile.is_default = bool(is_default)
     profile.selector_mappings = normalized_mappings
     profile.variable_values = normalized_variables
-    profile.secret_references = references
+    profile.secret_references = {}
     profile.options = normalized_options
     profile.version += 1
-    profile.content_hash = _canonical_hash(hash_payload)
+    profile.content_hash = _canonical_hash(
+        {
+            "selector_mappings": normalized_mappings,
+            "variable_values": normalized_variables,
+            "secret_references": [],
+            "options": normalized_options,
+        }
+    )
     profile.save()
 
-    if normalized_secret_values is not None:
-        set_playbook_binding_secret_values(profile.id, normalized_secret_values)
-        profile.secret_references = {
-            key: f"managed://playbook-binding/{profile.id}/{key}"
-            for key, value in normalized_secret_values.items()
-            if value
-        } | normalized_references
-        profile.content_hash = _canonical_hash(
-            {
-                "selector_mappings": normalized_mappings,
-                "variable_values": normalized_variables,
-                "secret_references": sorted(profile.secret_references),
-                "options": normalized_options,
-            }
-        )
-        profile.save(update_fields=["secret_references", "content_hash", "updated_at"])
+    set_playbook_binding_secret_values(profile.id, managed_values)
+    profile.secret_references = {
+        key: f"managed://playbook-binding/{profile.id}/{key}" for key in sorted(managed_values)
+    }
+    profile.content_hash = _canonical_hash(
+        {
+            "selector_mappings": normalized_mappings,
+            "variable_values": normalized_variables,
+            "secret_references": sorted(profile.secret_references),
+            "options": normalized_options,
+        }
+    )
+    profile.save(update_fields=["secret_references", "content_hash", "updated_at"])
 
     record_playbook_event(
         playbook=playbook,

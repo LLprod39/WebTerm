@@ -107,8 +107,8 @@ export const SUDO_AGENT_OPTIONS: Array<{
     value: "approved",
     labelRu: "Разрешить на запуск",
     labelEn: "Approve for run",
-    hintRu: "Sudo разрешён для запусков этого агента; backend выполнит его как sudo -n.",
-    hintEn: "Sudo is approved for this agent's runs; backend enforces sudo -n.",
+    hintRu: "Sudo разрешён для запусков этого агента без передачи пароля модели.",
+    hintEn: "Sudo is approved for this agent's runs without sending the password to the model.",
   },
 ];
 

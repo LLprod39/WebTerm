@@ -105,18 +105,27 @@ export default defineConfig(({ mode }) => {
             return "content-vendor";
           }
           if (
-            id.includes("recharts") ||
-            id.includes("framer-motion") ||
-            id.includes("motion-dom") ||
-            id.includes("motion-utils") ||
-            id.includes("embla-carousel-react") ||
-            id.includes("d3-") ||
-            id.includes("lodash") ||
-            id.includes("decimal-js-light") ||
-            id.includes("react-smooth") ||
-            id.includes("victory-vendor")
+            moduleId.includes("/framer-motion/") ||
+            moduleId.includes("/motion-dom/") ||
+            moduleId.includes("/motion-utils/")
           ) {
-            return "visual-vendor";
+            return "motion-vendor";
+          }
+          if (
+            moduleId.includes("/recharts/") ||
+            moduleId.includes("/d3-") ||
+            moduleId.includes("/lodash/") ||
+            moduleId.includes("/decimal-js-light/") ||
+            moduleId.includes("/react-smooth/") ||
+            moduleId.includes("/victory-vendor/")
+          ) {
+            return "charts-vendor";
+          }
+          if (
+            moduleId.includes("/embla-carousel/") ||
+            moduleId.includes("/embla-carousel-react/")
+          ) {
+            return "carousel-vendor";
           }
           if (
             id.includes("@radix-ui") ||

@@ -9,6 +9,26 @@ import { SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 import { localize } from "@/lib/i18n";
 
+function scopeLabel(lang: string, scope: string) {
+  const normalized = scope.toLowerCase();
+  if (normalized === "namespaced") return localize(lang, "в пространстве имён", "namespaced");
+  if (normalized === "cluster" || normalized === "cluster-scoped") return localize(lang, "весь кластер", "cluster scoped");
+  return scope;
+}
+
+function readActionLabel(lang: string, action: string) {
+  const labels: Record<string, [string, string]> = {
+    get: ["открыть", "get"],
+    list: ["список", "list"],
+    detail: ["подробности", "details"],
+    watch: ["наблюдение", "watch"],
+    logs: ["логи", "logs"],
+    yaml: ["YAML", "YAML"],
+  };
+  const label = labels[action.toLowerCase()];
+  return label ? localize(lang, label[0], label[1]) : action;
+}
+
 export function ResourceCatalogPanel({
   lang,
   groups,
@@ -34,8 +54,8 @@ export function ResourceCatalogPanel({
 }) {
   return (
     <SectionCard
-      title={localize(lang, "Catalog", "Catalog")}
-      description={localize(lang, "Только backend resource_catalog, без угадывания API paths.", "Backend resource_catalog only, no API path guessing.")}
+      title={localize(lang, "Каталог ресурсов", "Resource catalog")}
+      description={localize(lang, "Доступные типы ресурсов Kubernetes.", "Available Kubernetes resource types.")}
       icon={<ListTree className="h-4 w-4" />}
       bodyClassName="space-y-4"
     >
@@ -45,8 +65,8 @@ export function ResourceCatalogPanel({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           className="pl-9"
-          placeholder={localize(lang, "Pods, deploy, widgets...", "Pods, deploy, widgets...")}
-          aria-label="Resource catalog search"
+          placeholder={localize(lang, "Поды, развёртывания, виджеты...", "Pods, deploy, widgets...")}
+          aria-label={localize(lang, "Поиск по каталогу ресурсов", "Resource catalog search")}
         />
       </div>
 
@@ -90,12 +110,12 @@ export function ResourceCatalogPanel({
                 {item.custom ? <Braces className="h-4 w-4 text-primary" /> : null}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <StatusBadge label={item.scope} tone="neutral" dot={false} />
+                <StatusBadge label={scopeLabel(lang, item.scope)} tone="neutral" dot={false} />
                 {item.custom ? <StatusBadge label="CRD" tone="info" dot={false} /> : null}
                 {item.safe_read_actions.slice(0, 3).map((action) => (
-                  <StatusBadge key={action} label={action} tone="neutral" dot={false} />
+                  <StatusBadge key={action} label={readActionLabel(lang, action)} tone="neutral" dot={false} />
                 ))}
-                {item.has_mutating_verbs ? <StatusBadge label="mutating verbs" tone="warning" dot={false} /> : null}
+                {item.has_mutating_verbs ? <StatusBadge label={localize(lang, "есть изменяющие действия", "mutating verbs")} tone="warning" dot={false} /> : null}
               </div>
             </button>
           ))

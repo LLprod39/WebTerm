@@ -14,11 +14,14 @@ from app.background_workers import STUDIO_WORKER_SPECS
 from app.worker_state import heartbeat_background_worker
 from core_ui.views import health_views
 from servers.models_monitoring import BackgroundWorkerState
-from web_ui.services.settings_readiness_runtime import workers_check
+from servers.playbooks.dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
+from web_ui.services import settings_readiness_runtime
+from web_ui.services.settings_readiness_runtime import ansible_runtime_check, workers_check
 
 
 @pytest.mark.django_db
 def test_ready_checks_database_and_redis(client, monkeypatch):
+    monkeypatch.setenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "false")
     monkeypatch.setattr(health_views, "_check_redis", lambda: None)
 
     response = client.get(reverse("api_ready"))
@@ -182,3 +185,32 @@ def test_settings_readiness_accepts_hostname_keyed_worker_replicas():
     workers = check["details"]["workers"]
     assert all(item["ready"] is True for item in workers)
     assert all(item["state"]["worker_key"].startswith("production-") for item in workers)
+
+
+@pytest.mark.django_db
+def test_ansible_readiness_distinguishes_validator_and_execution_worker(monkeypatch):
+    monkeypatch.setattr(settings_readiness_runtime, "validator_socket_path", lambda: "/tmp/validator.sock")
+    monkeypatch.setattr(settings_readiness_runtime, "validator_runtime_available", lambda: True)
+    heartbeat_background_worker(
+        PLAYBOOK_EXECUTION_WORKER_KIND,
+        worker_key="pilot-playbook-worker",
+        lease_seconds=60,
+    )
+
+    check = ansible_runtime_check()
+
+    assert check["severity"] == "ready"
+    assert check["details"]["validation_available"] is True
+    assert check["details"]["execution_worker_ready"] is True
+
+
+@pytest.mark.django_db
+def test_ansible_readiness_is_warning_when_validation_is_available_but_worker_is_offline(monkeypatch):
+    monkeypatch.setattr(settings_readiness_runtime, "validator_socket_path", lambda: "/tmp/validator.sock")
+    monkeypatch.setattr(settings_readiness_runtime, "validator_runtime_available", lambda: True)
+
+    check = ansible_runtime_check()
+
+    assert check["severity"] == "warning"
+    assert check["details"]["validation_available"] is True
+    assert check["details"]["execution_worker_ready"] is False

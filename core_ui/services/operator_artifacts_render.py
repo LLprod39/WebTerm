@@ -258,6 +258,57 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
             }
 
     if table is None:
+        playbooks = payload.get("playbooks")
+        if (
+            action_type in {"operator.list_playbooks", "list_playbooks"}
+            and isinstance(playbooks, list)
+            and playbooks
+            and isinstance(playbooks[0], dict)
+        ):
+            rows = []
+            items = []
+            for playbook in playbooks[:50]:
+                if not isinstance(playbook, dict):
+                    continue
+                kind = str(playbook.get("kind") or "playbook")
+                category = str(playbook.get("category") or "").strip()
+                task_count = int(playbook.get("task_count") or 0)
+                last_status = str(playbook.get("last_run_status") or "не запускался").strip()
+                description = str(playbook.get("description") or "").strip()
+                details = [description] if description else []
+                details.append(f"{kind} · {task_count} задач")
+                if category:
+                    details.append(category)
+                details.append(f"последний запуск: {last_status}")
+                rows.append(
+                    [
+                        str(playbook.get("name") or f"#{playbook.get('id', '')}"),
+                        " · ".join(details),
+                    ]
+                )
+                items.append(
+                    {
+                        "id": playbook.get("id"),
+                        "name": playbook.get("name") or "",
+                        "description": description,
+                        "kind": kind,
+                        "category": category,
+                        "tags": playbook.get("tags") if isinstance(playbook.get("tags"), list) else [],
+                        "task_count": task_count,
+                        "last_run_at": playbook.get("last_run_at"),
+                        "last_run_status": playbook.get("last_run_status") or "",
+                        "target_url": playbook.get("target_url") or "/automation",
+                    }
+                )
+            table = {
+                "title": f"Playbook / runbook · {payload.get('count', len(rows))}",
+                "headers": ["Playbook / runbook", "Назначение и последний запуск"],
+                "rows": rows,
+                "kind": "playbooks",
+                "items": items,
+            }
+
+    if table is None:
         preds = payload.get("predictions")
         forecast_action = action_type in {
             "operator.server_forecasts",
@@ -345,6 +396,14 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
     meta = dict(message.metadata or {})
     # Keep multiple tables if needed
     existing = meta.get("tables") if isinstance(meta.get("tables"), list) else []
+    if table.get("kind") == "playbooks":
+        # A model may ask for the catalog twice in one turn. Treat the second
+        # result as an in-place refresh instead of rendering duplicate cards.
+        existing = [
+            candidate
+            for candidate in existing
+            if not isinstance(candidate, dict) or candidate.get("kind") != "playbooks"
+        ]
     existing = list(existing) + [table]
     meta["tables"] = existing[-5:]
     meta["table"] = table  # latest for simple consumers

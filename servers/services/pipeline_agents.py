@@ -12,7 +12,13 @@ from servers.models import ServerAgent
 
 
 def _snapshot_from_agent_run(agent_run) -> AgentRunSnapshot:
-    outcome, reason, details = outcome_from_report_payload(getattr(agent_run, "report_payload", None))
+    stored_outcome = getattr(agent_run, "execution_outcome", None)
+    if isinstance(stored_outcome, dict) and stored_outcome.get("outcome"):
+        outcome = str(stored_outcome.get("outcome") or "")
+        reason = str(stored_outcome.get("reason") or "")
+        details = dict(stored_outcome)
+    else:
+        outcome, reason, details = outcome_from_report_payload(getattr(agent_run, "report_payload", None))
     if not outcome:
         status = str(agent_run.status or "")
         if status == "stopped":

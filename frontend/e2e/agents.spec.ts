@@ -11,21 +11,21 @@ test("creates and runs a mini agent from the agents page", async ({ page }) => {
   await page.getByRole("button", { name: "New agent" }).click();
 
   const createDialog = page.getByRole("dialog");
-  await expect(createDialog.getByText("Agent type")).toBeVisible();
+  await expect(createDialog.getByRole("heading", { name: "What work should this agent own?" })).toBeVisible();
   await createDialog.getByRole("button", { name: /Mini Agent/i }).click();
   await createDialog.getByRole("button", { name: /Custom/i }).click();
 
-  await expect(createDialog.getByRole("heading", { name: "Basics" })).toBeVisible();
+  await expect(createDialog.getByRole("heading", { name: "Brief the agent like a new employee" })).toBeVisible();
   await createDialog.getByPlaceholder("Log analysis").fill("Disk Audit");
   await createDialog.locator("textarea").nth(0).fill("hostname\nuptime");
   await createDialog.locator("textarea").nth(1).fill("Summarize the result");
   await createDialog.getByRole("button", { name: "Next" }).click();
 
-  await expect(createDialog.getByRole("heading", { name: "Server selection" })).toBeVisible();
+  await expect(createDialog.getByRole("heading", { name: "Where the agent can work" })).toBeVisible();
   await createDialog.getByRole("button", { name: /Web-01/i }).click();
   await createDialog.getByRole("button", { name: "Next" }).click();
 
-  await expect(createDialog.getByRole("heading", { name: "Capabilities" })).toBeVisible();
+  await expect(createDialog.getByRole("heading", { name: "What the agent knows and can use" })).toBeVisible();
   await createDialog.getByRole("button", { name: "Next" }).click();
 
   await expect(createDialog.getByText("Ready to save")).toBeVisible();
@@ -104,8 +104,8 @@ test("blocks full agent launch when execution worker is not ready", async ({ pag
 
   await page.goto("/agents");
   await expect(page.getByText("Worker Blocked")).toBeVisible();
-  await expect(page.getByText("Execution worker").first()).toBeVisible();
-  await expect(page.getByText("Full/multi agent queue runtime")).toBeVisible();
+  await expect(page.getByText("Execution service").first()).toBeVisible();
+  await expect(page.getByText("Autonomous agent queue status")).toBeVisible();
   await expect(page.getByText("python manage.py run_agent_execution_plane").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Copy$/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Run Worker Blocked" })).toBeDisabled();
@@ -248,25 +248,25 @@ test("shows agent runtime queue blockers", async ({ page }) => {
   );
 
   await page.goto("/agents");
-  const runtimeSection = page.locator("section").filter({ hasText: "Agent runtime" }).first();
+  const runtimeSection = page.locator("section").filter({ hasText: "Agent execution" }).first();
   await expect(runtimeSection).toBeVisible();
-  await expect(runtimeSection.getByText("Runtime blockers detected")).toBeVisible();
+  await expect(runtimeSection.getByText("Execution issues detected")).toBeVisible();
   await expect(runtimeSection.getByText("Full/multi-запуски есть в очереди")).toBeVisible();
   await expect(runtimeSection.getByText("queued", { exact: true }).first()).toBeVisible();
   await expect(runtimeSection.getByText("due", { exact: true }).first()).toBeVisible();
   await expect(runtimeSection.getByText("Active runs", { exact: true })).toBeVisible();
-  await expect(runtimeSection.getByText("Dispatch queue", { exact: true })).toBeVisible();
-  await expect(runtimeSection.getByText("Due schedule", { exact: true })).toBeVisible();
-  await expect(runtimeSection.getByText("Stale candidates", { exact: true })).toBeVisible();
+  await expect(runtimeSection.getByText("Run queue", { exact: true })).toBeVisible();
+  await expect(runtimeSection.getByText("Due on schedule", { exact: true })).toBeVisible();
+  await expect(runtimeSection.getByText("Possibly stale", { exact: true })).toBeVisible();
   await expect(runtimeSection.getByText("Queued Pipeline").first()).toBeVisible();
   await expect(runtimeSection.getByText("run #904")).toBeVisible();
-  await expect(runtimeSection.getByRole("button", { name: /Clean stale/i })).toBeVisible();
-  await expect(runtimeSection.getByText("Recommended production worker")).toBeVisible();
+  await expect(runtimeSection.getByRole("button", { name: /Clear stale/i })).toBeVisible();
+  await expect(runtimeSection.getByText("Recommended execution service")).toBeVisible();
   await expect(runtimeSection.getByText("docker compose up -d --scale agent-execution")).toBeVisible();
   await expect(runtimeSection.getByText("python manage.py run_scheduled_agents")).toBeVisible();
 
-  await runtimeSection.getByRole("button", { name: /Clean stale/i }).click();
+  await runtimeSection.getByRole("button", { name: /Clear stale/i }).click();
   await expect.poll(() => harness.getCalls("/servers/api/agents/runtime/cleanup-stale/", "POST").length).toBe(1);
   await expect(page.getByText("Cleaned stale runs: 1; canceled dispatches: 1.")).toBeVisible();
-  await expect(runtimeSection.getByRole("button", { name: /Clean stale/i })).toBeHidden();
+  await expect(runtimeSection.getByRole("button", { name: /Clear stale/i })).toBeHidden();
 });

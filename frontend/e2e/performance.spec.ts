@@ -10,13 +10,13 @@ const MAX_P95_INTERACTION_MS = 1_000;
 test("warm primary navigation stays within the interaction latency budget", async ({ page }, testInfo) => {
   await installPlatformMocks(page, { authenticated: true });
   await page.goto("/servers");
-  await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
   // Load both route chunks before measuring UI interaction latency.
   await page.getByRole("link", { name: "Dashboard" }).first().click();
   await expect(page.getByRole("heading", { name: "My workspace" })).toBeVisible();
   await page.getByRole("link", { name: "Servers" }).first().click();
-  await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
 
   const samples = [];
   for (let index = 0; index < 3; index += 1) {
@@ -27,7 +27,7 @@ test("warm primary navigation stays within the interaction latency budget", asyn
 
     startedAt = performance.now();
     await page.getByRole("link", { name: "Servers" }).first().click();
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
     samples.push({ interaction: "dashboard-to-servers", durationMs: performance.now() - startedAt });
   }
 

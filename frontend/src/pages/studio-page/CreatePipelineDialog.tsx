@@ -52,7 +52,7 @@ export function CreatePipelineDialog({ open, onClose }: CreatePipelineDialogProp
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{localize(lang, "Новый пайплайн", "New pipeline")}</DialogTitle>
-          <DialogDescription>{localize(lang, "Создать пустой runbook и открыть редактор.", "Create an empty runbook and open the editor.")}</DialogDescription>
+          <DialogDescription>{localize(lang, "Создайте пайплайн и добавьте шаги в редакторе.", "Create a pipeline, then add its steps in the editor.")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div className="flex gap-2">

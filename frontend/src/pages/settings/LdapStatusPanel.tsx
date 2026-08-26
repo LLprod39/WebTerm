@@ -53,7 +53,7 @@ export function LdapStatusPanel({ ldapStatus }: { ldapStatus?: LdapStatus }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Server className="h-4 w-4 text-primary" />
-            <h2 className="text-base font-semibold text-foreground">LDAP Login</h2>
+            <h2 className="text-base font-semibold text-foreground">Вход через LDAP</h2>
             <span
               className={`inline-flex rounded-md border px-2 py-0.5 text-xs font-semibold ${
                 broken
@@ -63,26 +63,26 @@ export function LdapStatusPanel({ ldapStatus }: { ldapStatus?: LdapStatus }) {
                     : "border-border/60 bg-secondary/30 text-muted-foreground"
               }`}
             >
-              {broken ? "Misconfigured" : enabled ? "Enabled" : "Env-only disabled"}
+              {broken ? "Ошибка настройки" : enabled ? "Включён" : "Выключен"}
             </span>
           </div>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
-            LDAP настраивается через env/startup и не переключается live из web UI. Менять эти значения нужно в окружении с перезапуском backend.
+            LDAP настраивается в окружении запуска. После изменения перезапустите сервер WebTerm.
           </p>
         </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <LdapStatusPill ok={status.backend_loaded} label="Backend loaded" />
-        <LdapStatusPill ok={status.server_configured} label="LDAP server" />
-        <LdapStatusPill ok={status.search_base_configured} label="Search base" />
-        <LdapStatusPill ok={!status.bind_dn_configured || status.bind_password_configured} label="Bind credentials" />
-        <LdapStatusPill ok={status.start_tls || status.ca_cert_configured || status.ignore_cert || !enabled} label="TLS/cert policy" />
+        <LdapStatusPill ok={status.backend_loaded} label="Модуль загружен" />
+        <LdapStatusPill ok={status.server_configured} label="Сервер LDAP" />
+        <LdapStatusPill ok={status.search_base_configured} label="Область поиска" />
+        <LdapStatusPill ok={!status.bind_dn_configured || status.bind_password_configured} label="Учётные данные" />
+        <LdapStatusPill ok={status.start_tls || status.ca_cert_configured || status.ignore_cert || !enabled} label="TLS и сертификаты" />
       </div>
 
       {status.missing.length ? (
         <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive">
-          Missing env: {status.missing.join(", ")}
+          Не заданы параметры: {status.missing.join(", ")}
         </div>
       ) : null}
     </div>

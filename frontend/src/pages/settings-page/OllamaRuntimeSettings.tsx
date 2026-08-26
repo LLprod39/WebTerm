@@ -64,13 +64,13 @@ export function OllamaRuntimeSettings({
   onRefreshPurpose,
 }: OllamaRuntimeSettingsProps) {
   return (
-    <SectionCard title="Runtime и расширенные опции" icon={Database} description="Ollama local/cloud runtime и управление reasoning">
+    <SectionCard title="Ollama и рассуждение" icon={Database} description="Локальные и облачные модели">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <div className="rounded-xl border border-border p-4 space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-medium">Ollama Runtime</p>
-              <p className="text-xs text-muted-foreground">Один провайдер для локального `ollama serve` и облачного `ollama.com/api`</p>
+              <p className="text-xs font-medium">Среда Ollama</p>
+              <p className="text-xs text-muted-foreground">Локальный сервер и облако</p>
             </div>
             <Badge variant={ollamaRoutingActive ? "default" : "secondary"}>
               {ollamaRoutingActive ? `Используется · ${ollamaRuntimeSummary}` : `Готов · ${ollamaRuntimeSummary}`}
@@ -79,7 +79,7 @@ export function OllamaRuntimeSettings({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase">Режим runtime</label>
+              <label className="text-xs font-medium text-muted-foreground uppercase">Режим запуска</label>
               <Select
                 value={ollamaRuntimeMode}
                 onValueChange={(value) => {
@@ -101,7 +101,7 @@ export function OllamaRuntimeSettings({
               <div className="flex items-center justify-between rounded-lg border border-border px-3 py-2.5">
                 <div>
                   <p className="text-xs font-medium">Ollama Cloud</p>
-                  <p className="text-xs text-muted-foreground">Прямой доступ к `ollama.com/api`</p>
+                  <p className="text-xs text-muted-foreground">Модели с ollama.com</p>
                 </div>
                 <Switch
                   checked={ollamaCloudEnabled}
@@ -117,7 +117,7 @@ export function OllamaRuntimeSettings({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase">Local Base URL</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase">Адрес локального Ollama</label>
             <Input
               value={ollamaBaseUrl}
               onChange={(e) => setOllamaBaseUrl(e.target.value)}
@@ -127,7 +127,7 @@ export function OllamaRuntimeSettings({
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground uppercase">Cloud API URL</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase">Адрес Ollama Cloud</label>
             <Input
               value={ollamaCloudBaseUrl}
               onChange={(e) => setOllamaCloudBaseUrl(e.target.value)}
@@ -139,7 +139,7 @@ export function OllamaRuntimeSettings({
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={onSaveOllama} disabled={saving}>
-              <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение..." : "Сохранить runtime"}
+              <Save className="h-3.5 w-3.5" /> {saving ? "Сохранение…" : "Сохранить Ollama"}
             </Button>
             <Button
               size="sm"
@@ -155,27 +155,27 @@ export function OllamaRuntimeSettings({
 
           <div className="rounded-lg border border-dashed border-border px-4 py-3">
             <div className="flex flex-wrap gap-2">
-              <Badge variant="secondary">{ollamaLocalModels.length ? `${ollamaLocalModels.length} local` : "local: 0"}</Badge>
-              <Badge variant="secondary">{ollamaCloudModels.length ? `${ollamaCloudModels.length} cloud` : "cloud: 0"}</Badge>
+              <Badge variant="secondary">Локальные: {ollamaLocalModels.length}</Badge>
+              <Badge variant="secondary">Облачные: {ollamaCloudModels.length}</Badge>
               <Badge variant="outline">{ollamaRuntimeSummary}</Badge>
               <Badge variant="outline">{ollamaCatalogModels.length} всего в каталоге</Badge>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              `Auto` держит локальный runtime основным. `Cloud only` идёт напрямую в `ollama.com/api`. Для облака нужен `OLLAMA_API_KEY`, а cloud-модели в списке помечаются суффиксом `(cloud)`.
+              Авто сначала использует локальный Ollama. Для облака нужен ключ OLLAMA_API_KEY.
             </p>
           </div>
         </div>
 
         <div className="rounded-xl border border-border p-4 space-y-4">
           <div>
-            <p className="text-xs font-medium">Reasoning Controls</p>
-            <p className="text-xs text-muted-foreground">Отдельные настройки для thinking-моделей в Ollama и reasoning в OpenAI</p>
+            <p className="text-xs font-medium">Глубина рассуждения</p>
+            <p className="text-xs text-muted-foreground">Отдельно для Ollama и OpenAI</p>
           </div>
 
           <div className="space-y-2">
             <div>
-              <p className="text-xs font-medium">Ollama Thinking</p>
-              <p className="text-xs text-muted-foreground">Для `glm-4.7-flash` и других thinking-моделей отправляет `think=false/true/low/medium/high`</p>
+              <p className="text-xs font-medium">Рассуждение Ollama</p>
+              <p className="text-xs text-muted-foreground">Для моделей с поддержкой параметра think</p>
             </div>
 
             <Select value={ollamaThinkMode} onValueChange={setOllamaThinkMode}>
@@ -190,42 +190,42 @@ export function OllamaRuntimeSettings({
             <div className="rounded-lg border border-dashed border-border px-4 py-3">
               <p className="text-xs font-medium">
                 {ollamaThinkMode === AUTO_OLLAMA_THINKING_VALUE
-                  ? "Модель сама решает, включать ли reasoning."
+                  ? "Модель сама выбирает режим."
                   : ollamaThinkMode === "off"
-                    ? "Reasoning будет принудительно отключен."
+                    ? "Рассуждение будет отключено."
                     : `В Ollama будет отправлен think=${ollamaThinkMode}.`}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Для cloud и local runtime используется один и тот же параметр `think`, если модель его поддерживает.
+                Один режим применяется к локальным и облачным моделям.
               </p>
             </div>
           </div>
 
           <div className="space-y-2">
             <div>
-              <p className="text-xs font-medium">OpenAI Reasoning</p>
-              <p className="text-xs text-muted-foreground">Управляет глубиной reasoning для Responses API, если OpenAI участвует в маршрутах</p>
+              <p className="text-xs font-medium">Рассуждение OpenAI</p>
+              <p className="text-xs text-muted-foreground">Глубина рассуждения для Responses API</p>
             </div>
 
             <Select value={reasoningEffort} onValueChange={setReasoningEffort}>
               <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value={AUTO_REASONING_VALUE}>Auto</SelectItem>
-                <SelectItem value="none">None</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High</SelectItem>
+                <SelectItem value={AUTO_REASONING_VALUE}>Авто</SelectItem>
+                <SelectItem value="none">Выкл</SelectItem>
+                <SelectItem value="low">Низкая</SelectItem>
+                <SelectItem value="medium">Средняя</SelectItem>
+                <SelectItem value="high">Высокая</SelectItem>
               </SelectContent>
             </Select>
 
             <div className="rounded-lg border border-dashed border-border px-4 py-3">
               <p className="text-xs font-medium">
                 {openAiRoutingActive
-                  ? "OpenAI сейчас участвует в активной схеме."
-                  : "OpenAI сейчас не выбран, но параметр можно подготовить заранее."}
+                  ? "OpenAI используется для одной из задач."
+                  : "Настройку можно сохранить заранее."}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                `Auto` оставляет выбор движку. `Low/Medium/High` полезны, когда нужно жестче контролировать стоимость и глубину ответа.
+                Авто оставляет выбор модели. Более высокая глубина может увеличить время и стоимость ответа.
               </p>
             </div>
           </div>

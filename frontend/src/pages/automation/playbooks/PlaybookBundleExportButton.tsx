@@ -61,8 +61,8 @@ export function PlaybookBundleExportButton({
         className="h-8 gap-1"
         disabled={exporting}
         aria-label={tr(
-          `Экспортировать опубликованную ревизию ${revisionNumber}`,
-          `Export published revision ${revisionNumber}`,
+          `Экспортировать неизменяемую ревизию ${revisionNumber}`,
+          `Export immutable revision ${revisionNumber}`,
         )}
         onClick={() => void exportBundle()}
       >

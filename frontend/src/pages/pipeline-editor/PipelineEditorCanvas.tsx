@@ -93,7 +93,7 @@ export function PipelineEditorCanvas({
           <div className="text-center select-none space-y-3">
             <Zap className="h-12 w-12 text-primary/20 mx-auto" />
             <p className="text-sm text-muted-foreground/70 font-medium">
-              {localize(lang, "Соберите OPS pipeline", "Build an OPS pipeline")}
+              {localize(lang, "Добавьте первый шаг", "Add the first step")}
             </p>
             <p className="text-xs text-muted-foreground/50 max-w-xs mx-auto">
               {localize(lang, "Добавьте шаги из палитры и соедините их в порядок выполнения.", "Add steps from the palette and connect them into an execution flow.")}

@@ -15,7 +15,7 @@ export function PageShell({
   const widthClass =
     width === "5xl" ? "max-w-5xl" : width === "6xl" ? "max-w-6xl" : width === "full" ? "max-w-none" : "max-w-7xl";
 
-  return <div className={cn("mx-auto space-y-5 px-4 py-5 md:px-6 xl:px-8", widthClass, className)}>{children}</div>;
+  return <div data-ui-slot="page-shell" className={cn("mx-auto space-y-5 px-4 py-5 md:px-6 xl:px-8", widthClass, className)}>{children}</div>;
 }
 
 export function PageGrid({
@@ -29,6 +29,7 @@ export function PageGrid({
 }) {
   return (
     <div
+      data-ui-slot="page-grid"
       className={cn(
         "grid gap-6",
         sidebar ? "xl:grid-cols-[minmax(0,1fr)_320px]" : "xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]",
@@ -55,7 +56,7 @@ export function PageHero({
   className?: string;
 }) {
   return (
-    <section className={cn("relative overflow-hidden rounded-sm border border-border bg-card px-5 py-5 shadow-elev-1 sm:px-6", className)}>
+    <section data-ui-slot="page-hero" className={cn("relative overflow-hidden rounded-sm border border-border bg-card px-5 py-5 shadow-elev-1 sm:px-6", className)}>
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-40"
@@ -98,6 +99,7 @@ export function SoftHeader({
 }) {
   return (
     <header
+      data-ui-slot="soft-header"
       className={cn(
         "relative overflow-hidden rounded-sm border border-border bg-card/80",
         compact ? "px-4 py-3.5 sm:px-5" : "px-5 py-5 sm:px-6",
@@ -144,6 +146,7 @@ export function StatStrip({
 }) {
   return (
     <div
+      data-ui-slot="stat-strip"
       className={cn(
         "grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border sm:grid-cols-4",
         className,
@@ -176,7 +179,7 @@ export function StatStripItem({
   }[tone];
 
   return (
-    <div className={cn("bg-card px-4 py-3 sm:px-5", className)}>
+    <div data-ui-slot="stat-strip-item" className={cn("bg-card px-4 py-3 sm:px-5", className)}>
       <div className="text-2xs font-medium uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
       <div className={cn("mt-1 font-display text-xl font-bold tabular-nums tracking-tight leading-none", valueTone)}>{value}</div>
       {hint ? <div className="mt-1 text-xs leading-4 text-muted-foreground">{hint}</div> : null}
@@ -191,7 +194,7 @@ export function MetricGrid({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", className)}>{children}</div>;
+  return <div data-ui-slot="metric-grid" className={cn("grid gap-4 sm:grid-cols-2 xl:grid-cols-4", className)}>{children}</div>;
 }
 
 export function MetricCard({
@@ -218,7 +221,7 @@ export function MetricCard({
   }[tone];
 
   return (
-    <div className={cn("group relative overflow-hidden rounded-sm border transition-all duration-200 hover:shadow-elev-1", toneStyles.card, className)}>
+    <div data-ui-slot="metric-card" className={cn("group relative overflow-hidden rounded-sm border transition-all duration-200 hover:shadow-elev-1", toneStyles.card, className)}>
       <div className={cn("absolute left-0 top-0 h-full w-0.5", toneStyles.bar)} />
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-3">
@@ -256,7 +259,7 @@ export function SectionCard({
   bodyClassName?: string;
 }) {
   return (
-    <section className={cn("overflow-hidden rounded-sm border border-border bg-card shadow-elev-1", className)}>
+    <section data-ui-slot="section-card" className={cn("overflow-hidden rounded-sm border border-border bg-card shadow-elev-1", className)}>
       <div className="flex flex-col gap-3 border-b border-border bg-surface-2/40 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           {icon ? (
@@ -283,7 +286,7 @@ export function FilterBar({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cn("workspace-subtle rounded-lg px-4 py-3", className)}>{children}</div>;
+  return <div data-ui-slot="filter-bar" className={cn("workspace-subtle rounded-lg px-4 py-3", className)}>{children}</div>;
 }
 
 export function FilterGroup({
@@ -298,7 +301,7 @@ export function FilterGroup({
   className?: string;
 }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-2", className)}>
+    <div data-ui-slot="filter-group" className={cn("flex min-w-0 flex-col gap-2", className)}>
       {label ? <div className="text-xs font-medium text-muted-foreground">{label}</div> : null}
       {description ? <div className="text-xs leading-5 text-muted-foreground">{description}</div> : null}
       {children}
@@ -322,7 +325,7 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
+    <div data-ui-slot="empty-state" className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
       {icon ? (
         <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
           {icon}
@@ -358,7 +361,7 @@ export function StatusBadge({
   }[tone];
 
   return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.1em]", styles.badge, className)}>
+    <span data-ui-slot="status-badge" className={cn("inline-flex items-center gap-1.5 rounded-sm border px-2 py-0.5 text-2xs font-medium uppercase tracking-[0.1em]", styles.badge, className)}>
       {dot ? (
         <span className="relative flex h-1.5 w-1.5">
           {styles.pulse && <span className={cn("absolute inline-flex h-full w-full animate-ping rounded-none opacity-60", styles.dot)} />}
@@ -394,7 +397,7 @@ export function QueryStateBlock({
 
   if (loading) {
     return (
-      <div className={cn("flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground", className)}>
+      <div data-ui-slot="query-loading" className={cn("flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground", className)}>
         <Loader2 className="h-4 w-4 animate-spin" />
         {resolvedLoadingText}
       </div>
@@ -404,7 +407,7 @@ export function QueryStateBlock({
   if (error) {
     const message = errorText ?? (error instanceof Error ? error.message : t("ui.error_default"));
     return (
-      <div role="alert" className={cn("rounded-lg border border-destructive/30 bg-destructive/8 px-5 py-4", className)}>
+      <div data-ui-slot="query-error" role="alert" className={cn("rounded-lg border border-destructive/30 bg-destructive/8 px-5 py-4", className)}>
         <div className="flex items-start gap-3">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div className="min-w-0">

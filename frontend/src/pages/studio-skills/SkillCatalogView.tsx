@@ -62,8 +62,8 @@ export function SkillCatalogView({
         title={tr("Каталог скиллов", "Skill Catalog")}
         titleIcon={<BookOpen className="h-7 w-7 text-primary" />}
         description={tr(
-          "Скилл здесь это рабочий плейбук. Выберите сервис, проверьте ограничения и политику выполнения, а затем правьте рабочие файлы прямо из Studio.",
-          "A skill here is an operating playbook. Pick the service, review guardrails and runtime policy, then edit the workspace directly from Studio.",
+          "Скилл хранит инструкции и ограничения для агента. Выберите сервис, проверьте правила и отредактируйте файлы.",
+          "A skill stores instructions and guardrails for an agent. Choose a service, review the rules, and edit its files.",
         )}
         stats={
           <>
@@ -75,7 +75,7 @@ export function SkillCatalogView({
         actions={
           <>
             {canOpenMcp ? (
-              <HeroActionButton onClick={onOpenMcp} icon={<Server className="h-4 w-4 text-primary/80" />} label={tr("MCP Реестр", "MCP Registry")} />
+              <HeroActionButton onClick={onOpenMcp} icon={<Server className="h-4 w-4 text-primary/80" />} label={tr("MCP-серверы", "MCP servers")} />
             ) : null}
             <Button variant="outline" size="sm" onClick={onValidate} className="h-10 gap-2 rounded-full px-4 font-medium shadow-sm border-border/50 hover:bg-background/80">
               {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}

@@ -22,8 +22,8 @@ export function KubernetesNetworkPanel({ lang, networkRefs }: { lang: string; ne
   const ingresses = networkRefs.filter((item) => item.kind === "ingress");
   return (
     <SectionCard
-      title={localize(lang, "Services / Ingress", "Services / Ingress")}
-      description={localize(lang, "Native Rancher network inventory, read-only.", "Native Rancher network inventory, read-only.")}
+      title={localize(lang, "Сервисы и Ingress", "Services / Ingress")}
+      description={localize(lang, "Сервисы и Ingress из Rancher. Только просмотр.", "Services and Ingress from Rancher. Read-only.")}
       icon={<Network className="h-4 w-4" />}
     >
       {networkRefs.length ? (
@@ -31,11 +31,11 @@ export function KubernetesNetworkPanel({ lang, networkRefs }: { lang: string; ne
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md bg-secondary/30 px-3 py-2">
               <div className="font-semibold text-foreground">{services.length}</div>
-              <div className="text-muted-foreground">services</div>
+              <div className="text-muted-foreground">{localize(lang, "сервисы", "services")}</div>
             </div>
             <div className="rounded-md bg-secondary/30 px-3 py-2">
               <div className="font-semibold text-foreground">{ingresses.length}</div>
-              <div className="text-muted-foreground">ingress</div>
+              <div className="text-muted-foreground">Ingress</div>
             </div>
           </div>
           <div className="space-y-2">
@@ -52,8 +52,8 @@ export function KubernetesNetworkPanel({ lang, networkRefs }: { lang: string; ne
                     <div className="mt-1 truncate text-xs text-muted-foreground">{item.namespace}</div>
                     <div className="mt-2 text-xs text-muted-foreground">
                       {item.kind === "ingress"
-                        ? summarizeList(item.hosts, localize(lang, "hosts не заданы", "hosts not set"))
-                        : summarizeList(item.ports, localize(lang, "ports не заданы", "ports not set"))}
+                        ? summarizeList(item.hosts, localize(lang, "хосты не заданы", "hosts not set"))
+                        : summarizeList(item.ports, localize(lang, "порты не заданы", "ports not set"))}
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground sm:text-right">{formatSync(lang, item.last_sync_at)}</div>
@@ -65,8 +65,8 @@ export function KubernetesNetworkPanel({ lang, networkRefs }: { lang: string; ne
       ) : (
         <EmptyState
           icon={<Network className="h-5 w-5" />}
-          title={localize(lang, "Services/Ingress не синхронизированы", "Services/Ingress are not synced")}
-          description={localize(lang, "Появятся после Rancher service/ingress sync.", "They will appear after Rancher service/ingress sync.")}
+          title={localize(lang, "Нет данных о сервисах и Ingress", "No Services or Ingress data")}
+          description={localize(lang, "Запустите синхронизацию Rancher.", "Run a Rancher sync.")}
         />
       )}
     </SectionCard>

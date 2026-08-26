@@ -8,13 +8,17 @@ import {
   deletePlaybookBinding,
   deletePlaybookShare,
   getPlaybookDraft,
+  getPlaybookDraftFile,
+  getPlaybookDraftFiles,
   listPlaybookBindings,
   listPlaybookRevisions,
   listPlaybookShares,
   publishPlaybookRevision,
   rollbackPlaybookRevision,
+  searchPlaybookShareCandidates,
   updatePlaybookBinding,
   updatePlaybookDraft,
+  updatePlaybookDraftFile,
 } from "./playbook-workspace";
 
 vi.mock("@/lib/api", () => ({ apiFetch: vi.fn(async () => ({ success: true })) }));
@@ -103,5 +107,61 @@ describe("playbook workspace API", () => {
       method: "DELETE",
       body: "{}",
     });
+  });
+
+  it("loads and updates bundle files with both optimistic-lock values", async () => {
+    const path = "roles/web/tasks/main.yml";
+    await getPlaybookDraftFiles(7);
+    await getPlaybookDraftFile(7, path);
+    await getPlaybookDraftFile(7, path, "base");
+    await updatePlaybookDraftFile(7, {
+      path,
+      content: "- name: Configure web\n",
+      expected_draft_version: 4,
+      expected_bundle_hash: "bundle-v4",
+    });
+
+    expect(apiFetch).toHaveBeenNthCalledWith(1, "/servers/api/playbooks/7/draft/files/");
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      2,
+      "/servers/api/playbooks/7/draft/file/?path=roles%2Fweb%2Ftasks%2Fmain.yml",
+    );
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      3,
+      "/servers/api/playbooks/7/draft/file/?path=roles%2Fweb%2Ftasks%2Fmain.yml&view=base",
+    );
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      4,
+      "/servers/api/playbooks/7/draft/file/?path=roles%2Fweb%2Ftasks%2Fmain.yml",
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          path,
+          content: "- name: Configure web\n",
+          expected_draft_version: 4,
+          expected_bundle_hash: "bundle-v4",
+        }),
+      },
+    );
+  });
+
+  it("normalizes user and group share candidates without exposing another directory endpoint", async () => {
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      success: true,
+      candidates: {
+        users: [{ id: 3, username: "alice", email: "alice@example.com" }],
+        groups: [{ id: 8, name: "Platform" }],
+      },
+    });
+
+    const response = await searchPlaybookShareCandidates(7, " alice ", 5);
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/servers/api/playbooks/7/shares/candidates/?q=alice&limit=5",
+    );
+    expect(response.items).toEqual([
+      { id: 3, type: "user", label: "alice", secondary: "alice@example.com" },
+      { id: 8, type: "group", label: "Platform" },
+    ]);
   });
 });

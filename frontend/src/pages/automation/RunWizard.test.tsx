@@ -83,7 +83,7 @@ async function chooseTarget() {
 describe("RunWizard minimal preflight", () => {
   beforeEach(() => vi.mocked(validatePlaybookRevision).mockReset());
 
-  it("shows only targets, required values, and run mode", async () => {
+  it("shows revision, targets, safe run mode, and optional advanced settings", async () => {
     renderWizard();
 
     const steps = within(screen.getByLabelText("Run steps"));
@@ -92,8 +92,8 @@ describe("RunWizard minimal preflight", () => {
     expect(await screen.findByText("Run mode")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Dry run/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Apply changes/i })).toBeInTheDocument();
-    expect(screen.queryByText("Advanced")).not.toBeInTheDocument();
-    expect(screen.queryByLabelText("Revision")).not.toBeInTheDocument();
+    expect(screen.getByText("Advanced settings")).toBeInTheDocument();
+    expect(screen.getByLabelText("Revision")).toBeInTheDocument();
     expect(screen.queryByLabelText("Saved profile")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("extra_vars JSON")).not.toBeInTheDocument();
   });
@@ -160,7 +160,7 @@ describe("RunWizard minimal preflight", () => {
 
     expect(await screen.findByText("Settings need attention")).toBeInTheDocument();
     expect(screen.getByText("community.general is unavailable")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Start dry run" })).toBeDisabled();
   });
 
   it("does not validate when the Ansible runtime is unavailable", async () => {

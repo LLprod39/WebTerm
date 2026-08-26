@@ -268,9 +268,9 @@ export default function SettingsPermissionsPage() {
         <section className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card px-4 py-3">
             <div>
-              <h2 className="text-base font-semibold text-foreground">{lang === "ru" ? "Матрица итогового доступа" : "Effective Access Matrix"}</h2>
+              <h2 className="text-base font-semibold text-foreground">{lang === "ru" ? "Итоговый доступ" : "Effective Access Matrix"}</h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {lang === "ru" ? "Клик по ячейке создаёт или обновляет explicit rule." : "Click a cell to create or update an explicit rule."}
+                {lang === "ru" ? "Нажмите ячейку, чтобы изменить правило." : "Click a cell to create or update an explicit rule."}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -279,7 +279,7 @@ export default function SettingsPermissionsPage() {
                 <Input
                   value={matrixSearch}
                   onChange={(event) => setMatrixSearch(event.target.value)}
-                  placeholder={lang === "ru" ? "Поиск субъекта" : "Search subject"}
+                  placeholder={lang === "ru" ? "Пользователь или группа" : "Search subject"}
                   className="h-10 pl-9"
                 />
               </div>
@@ -300,7 +300,7 @@ export default function SettingsPermissionsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky left-0 z-10 min-w-64 bg-secondary/40">{lang === "ru" ? "Субъект" : "Subject"}</TableHead>
+                <TableHead className="sticky left-0 z-10 min-w-64 bg-secondary/40">{lang === "ru" ? "Пользователь или группа" : "Subject"}</TableHead>
                 {features.map((feature) => (
                   <TableHead key={feature.value} className="min-w-36">{feature.label}</TableHead>
                 ))}
@@ -327,7 +327,7 @@ export default function SettingsPermissionsPage() {
                           className="text-left"
                           aria-label={`${row.name} ${getAccessFeatureLabel(lang, cell.feature)}`}
                         >
-                          <PermissionPill allowed={cell.allowed} explicit={cell.explicit} source={cell.source} />
+                          <PermissionPill lang={lang} allowed={cell.allowed} explicit={cell.explicit} source={cell.source} />
                         </button>
                       </TableCell>
                     ))}
@@ -338,7 +338,7 @@ export default function SettingsPermissionsPage() {
                   <TableCell colSpan={features.length + 1}>
                     <EmptyState
                       icon={<Shield className="h-5 w-5" />}
-                      title={lang === "ru" ? "Субъекты не найдены" : "No subjects found"}
+                      title={lang === "ru" ? "Ничего не найдено" : "No subjects found"}
                       description={lang === "ru" ? "Измените фильтры матрицы." : "Adjust the matrix filters."}
                     />
                   </TableCell>
@@ -352,7 +352,7 @@ export default function SettingsPermissionsPage() {
           <div>
             <h2 className="text-base font-semibold text-foreground">{lang === "ru" ? "Явные исключения" : "Explicit Exceptions"}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {lang === "ru" ? "Один список для пользовательских и групповых правил." : "One list for user and group rules."}
+              {lang === "ru" ? "Правила пользователей и групп." : "User and group rules."}
             </p>
           </div>
           <ExplicitRuleRows

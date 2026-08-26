@@ -11,9 +11,9 @@ const linkLabels: Record<string, { ru: string; en: string }> = {
   rancher: { ru: "Rancher", en: "Rancher" },
   rancher_fleet: { ru: "Fleet", en: "Fleet" },
   devtron_app: { ru: "Devtron", en: "Devtron" },
-  logs: { ru: "Logs", en: "Logs" },
-  history: { ru: "History", en: "History" },
-  values: { ru: "Values", en: "Values" },
+  logs: { ru: "Логи", en: "Logs" },
+  history: { ru: "История", en: "History" },
+  values: { ru: "Параметры", en: "Values" },
 };
 
 function deepLinkEntries(links: Record<string, unknown> | undefined, limit = 3) {

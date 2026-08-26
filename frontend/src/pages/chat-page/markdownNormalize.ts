@@ -6,23 +6,38 @@
  */
 
 export function normalizeOperatorMarkdown(raw: string): string {
-  let text = String(raw || "").replace(/\r\n/g, "\n");
+  const text = String(raw || "").replace(/\r\n/g, "\n");
   if (!text.trim()) return text;
+
+  return mapMarkdownProse(text, normalizeProse).trimEnd();
+}
+
+function normalizeProse(raw: string) {
+  let text = raw;
 
   text = convertWhitespaceTables(text);
   text = fixFlattenedGfmTables(text);
   text = cleanGfmTableBlocks(text);
   text = ensureTableSeparator(text);
   text = text.replace(/^(#{1,6})([^\s#])/gm, "$1 $2");
+  // Some providers concatenate independently streamed Russian sentences
+  // without preserving the boundary whitespace ("готово.Доступно"). Keep
+  // URLs and decimal/version dots intact by repairing Cyrillic starts only.
+  text = text.replace(/([.!?…])(?=[А-ЯЁ])/g, "$1 ");
   text = text.replace(/([.!?…])\s+([-*•])\s+/g, "$1\n$2 ");
   // Collapse 3+ blank lines
   text = text.replace(/\n{3,}/g, "\n\n");
-  return text.trimEnd();
+  return text;
 }
 
 /** Drop markdown table blocks from text (when we already render structured tables). */
 export function stripMarkdownTables(raw: string): string {
-  const lines = String(raw || "").replace(/\r\n/g, "\n").split("\n");
+  const text = String(raw || "").replace(/\r\n/g, "\n");
+  return mapMarkdownProse(text, stripMarkdownTablesFromProse).trim();
+}
+
+function stripMarkdownTablesFromProse(raw: string): string {
+  const lines = raw.split("\n");
   const out: string[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -51,7 +66,76 @@ export function stripMarkdownTables(raw: string): string {
     out.push(line);
     i += 1;
   }
-  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return out.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+type MarkdownSegment = { protected: boolean; value: string };
+
+/**
+ * Run repair rules only over prose. Commands, logs and examples inside fenced
+ * or inline code must remain byte-for-byte stable while the answer streams.
+ */
+function mapMarkdownProse(raw: string, transform: (value: string) => string) {
+  const segments: MarkdownSegment[] = [];
+  const lines = raw.match(/[^\n]*(?:\n|$)/g) || [];
+  let prose = "";
+  let code = "";
+  let fence: { char: "`" | "~"; length: number } | null = null;
+
+  const flushProse = () => {
+    if (!prose) return;
+    segments.push({ protected: false, value: prose });
+    prose = "";
+  };
+  const flushCode = () => {
+    if (!code) return;
+    segments.push({ protected: true, value: code });
+    code = "";
+  };
+
+  for (const line of lines) {
+    if (!line) continue;
+    const withoutNewline = line.endsWith("\n") ? line.slice(0, -1) : line;
+    if (!fence) {
+      const opening = withoutNewline.match(/^\s*(`{3,}|~{3,})/);
+      if (!opening) {
+        prose += line;
+        continue;
+      }
+      flushProse();
+      const marker = opening[1];
+      fence = { char: marker[0] as "`" | "~", length: marker.length };
+      code += line;
+      continue;
+    }
+
+    code += line;
+    const escaped = fence.char === "`" ? "`" : "~";
+    const closing = new RegExp(`^\\s*${escaped}{${fence.length},}\\s*$`);
+    if (closing.test(withoutNewline)) {
+      fence = null;
+      flushCode();
+    }
+  }
+  flushProse();
+  flushCode();
+
+  return segments
+    .map((segment) => (segment.protected ? segment.value : mapInlineCode(segment.value, transform)))
+    .join("");
+}
+
+function mapInlineCode(raw: string, transform: (value: string) => string) {
+  const protectedSpans: string[] = [];
+  const masked = raw.replace(/(`+)([^\n]*?)\1/g, (match) => {
+    const marker = `\uE100${protectedSpans.length}\uE101`;
+    protectedSpans.push(match);
+    return marker;
+  });
+  const transformed = transform(masked);
+  return transformed.replace(/\uE100(\d+)\uE101/g, (_match, index: string) => {
+    return protectedSpans[Number(index)] ?? "";
+  });
 }
 
 const isSepCell = (c: string) => /^:?-{2,}:?$/.test(c.replace(/\s/g, ""));

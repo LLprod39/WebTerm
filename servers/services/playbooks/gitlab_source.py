@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 import httpx
@@ -10,11 +13,45 @@ from django.conf import settings
 
 from servers.services.playbooks.bundle_archive import BundleLimits, BundleValidationError
 
+_COMMIT_SHA_RE = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", re.IGNORECASE)
+_MAX_COMMIT_RESPONSE_BYTES = 128 * 1024
+
 
 @dataclass(frozen=True)
 class GitLabProjectArchive:
     content: bytes
     source: dict[str, str]
+
+
+def refresh_gitlab_project_archive(
+    source_metadata: Any,
+    *,
+    private_token: str = "",
+    limits: BundleLimits | None = None,
+    client: httpx.Client | None = None,
+) -> GitLabProjectArchive:
+    """Fetch a new snapshot from previously persisted, credential-free provenance."""
+
+    if not isinstance(source_metadata, dict) or source_metadata.get("type") != "gitlab":
+        raise BundleValidationError("GitLab source metadata is invalid", code="invalid_gitlab_source")
+    allowed = {"type", "host", "project", "ref", "path", "commit_sha"}
+    if set(source_metadata) - allowed:
+        raise BundleValidationError("GitLab source metadata contains unsupported fields", code="invalid_gitlab_source")
+    host = str(source_metadata.get("host") or "").strip()
+    project = str(source_metadata.get("project") or "").strip()
+    if not host or not project:
+        raise BundleValidationError("GitLab source metadata is incomplete", code="invalid_gitlab_source")
+    persisted_sha = str(source_metadata.get("commit_sha") or "").strip()
+    if persisted_sha and not _COMMIT_SHA_RE.fullmatch(persisted_sha):
+        raise BundleValidationError("GitLab source commit is invalid", code="invalid_gitlab_source")
+    return fetch_gitlab_project_archive(
+        project_url=f"https://{host}/{project}",
+        ref=str(source_metadata.get("ref") or ""),
+        project_path=str(source_metadata.get("path") or ""),
+        private_token=private_token,
+        limits=limits,
+        client=client,
+    )
 
 
 def fetch_gitlab_project_archive(
@@ -28,7 +65,7 @@ def fetch_gitlab_project_archive(
 ) -> GitLabProjectArchive:
     limits = limits or BundleLimits.from_settings()
     source = _normalize_source(project_url=project_url, ref=ref, project_path=project_path)
-    api_url = urlunsplit(
+    archive_url = urlunsplit(
         (
             "https",
             source["host"],
@@ -37,11 +74,6 @@ def fetch_gitlab_project_archive(
             "",
         )
     )
-    params = {}
-    if source.get("ref"):
-        params["sha"] = source["ref"]
-    if source.get("path"):
-        params["path"] = source["path"]
     token = str(private_token or "").strip()
     if len(token) > 4096 or any(ord(char) < 32 for char in token):
         raise BundleValidationError("GitLab access token is invalid", code="invalid_gitlab_token")
@@ -54,9 +86,19 @@ def fetch_gitlab_project_archive(
     request_client = client or httpx.Client(timeout=timeout, follow_redirects=False)
     try:
         try:
+            commit_sha = _resolve_gitlab_commit(
+                source,
+                headers=headers,
+                client=request_client,
+                timeout=timeout,
+            )
+            source = {**source, "commit_sha": commit_sha}
+            params = {"sha": commit_sha}
+            if source.get("path"):
+                params["path"] = source["path"]
             with request_client.stream(
                 "GET",
-                api_url,
+                archive_url,
                 params=params,
                 headers=headers,
                 follow_redirects=False,
@@ -94,6 +136,70 @@ def fetch_gitlab_project_archive(
     if not content:
         raise BundleValidationError("GitLab returned an empty archive", code="empty_archive")
     return GitLabProjectArchive(content=bytes(content), source=source)
+
+
+def _resolve_gitlab_commit(
+    source: dict[str, str],
+    *,
+    headers: dict[str, str],
+    client: httpx.Client,
+    timeout: float,
+) -> str:
+    """Resolve a mutable ref through one exact allowlisted API request."""
+
+    commit_url = urlunsplit(
+        (
+            "https",
+            source["host"],
+            (
+                f"/api/v4/projects/{quote(source['project'], safe='')}"
+                f"/repository/commits/{quote(source.get('ref') or 'HEAD', safe='')}"
+            ),
+            "",
+            "",
+        )
+    )
+    commit_headers = {**headers, "Accept": "application/json"}
+    with client.stream(
+        "GET",
+        commit_url,
+        headers=commit_headers,
+        follow_redirects=False,
+        timeout=timeout,
+    ) as response:
+        _raise_for_gitlab_status(response.status_code)
+        declared_size = _content_length(response.headers.get("content-length"))
+        if declared_size is not None and declared_size > _MAX_COMMIT_RESPONSE_BYTES:
+            raise BundleValidationError(
+                "GitLab commit response is too large",
+                code="gitlab_commit_unavailable",
+                status_code=502,
+            )
+        body = bytearray()
+        for chunk in response.iter_bytes():
+            body.extend(chunk)
+            if len(body) > _MAX_COMMIT_RESPONSE_BYTES:
+                raise BundleValidationError(
+                    "GitLab commit response is too large",
+                    code="gitlab_commit_unavailable",
+                    status_code=502,
+                )
+    try:
+        payload = json.loads(bytes(body))
+    except (TypeError, ValueError, UnicodeDecodeError) as exc:
+        raise BundleValidationError(
+            "GitLab returned invalid commit metadata",
+            code="gitlab_commit_unavailable",
+            status_code=502,
+        ) from exc
+    commit_sha = str(payload.get("id") or "").strip().lower() if isinstance(payload, dict) else ""
+    if not _COMMIT_SHA_RE.fullmatch(commit_sha):
+        raise BundleValidationError(
+            "GitLab returned invalid commit metadata",
+            code="gitlab_commit_unavailable",
+            status_code=502,
+        )
+    return commit_sha
 
 
 def _normalize_source(*, project_url: str, ref: str, project_path: str) -> dict[str, str]:

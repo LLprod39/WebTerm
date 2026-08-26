@@ -28,7 +28,7 @@ const SUDO_DIRECT_OPTIONS = [
     value: "approved",
     labelRu: "Разрешить",
     labelEn: "Approved",
-    hintRu: "Sudo разрешён на этот запуск; backend выполнит его как sudo -n.",
+    hintRu: "Sudo разрешён на этот запуск; система выполнит его как sudo -n.",
     hintEn: "Sudo is approved for this run; backend enforces sudo -n.",
   },
 ] as const;
@@ -53,7 +53,7 @@ export function SshCommandConfig({
   return (
     <NodeFormSection
       title={localize(lang, "Исполнение", "Execution")}
-      description={localize(lang, "Команда будет выполнена напрямую по SSH без LLM-планирования.", "The command runs directly over SSH without LLM planning.")}
+      description={localize(lang, "Команда выполнится напрямую по SSH, без планирования моделью.", "The command runs directly over SSH without LLM planning.")}
     >
       <div className="space-y-1.5">
         <Label className="text-xs">{localize(lang, "Целевой сервер", "Target server")}</Label>
@@ -79,7 +79,7 @@ export function SshCommandConfig({
         />
       </div>
       <div className="space-y-1.5">
-        <Label className="text-xs">Controlled sudo</Label>
+        <Label className="text-xs">{localize(lang, "Контролируемый sudo", "Controlled sudo")}</Label>
         <Select value={sudoPolicy} onValueChange={(value) => onSet("sudo_policy", value)}>
           <SelectTrigger className="h-8 text-xs">
             <SelectValue />
@@ -105,7 +105,7 @@ export function SshCommandConfig({
       </label>
       <AdvancedDisclosure title={localize(lang, "Проверки до/после", "Pre/post checks")}>
         <div className="space-y-1.5">
-          <Label className="text-xs">{localize(lang, "Preflight команды", "Preflight commands")}</Label>
+          <Label className="text-xs">{localize(lang, "Проверки перед запуском", "Preflight commands")}</Label>
           <Textarea
             value={formatCommandListText(data.preflight_commands)}
             onChange={(event) => onSet("preflight_commands", parseCommandListText(event.target.value))}
@@ -116,13 +116,13 @@ export function SshCommandConfig({
           <FieldHint>
             {localize(
               lang,
-              "Одна read-only команда на строку. Если любая вернёт non-zero, основной SSH command не запустится.",
+              "Одна команда только для чтения на строку. Если любая завершится с ошибкой, основная команда не запустится.",
               "One read-only command per line. If any command returns non-zero, the main SSH command will not run.",
             )}
           </FieldHint>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">{localize(lang, "Verification команды", "Verification commands")}</Label>
+          <Label className="text-xs">{localize(lang, "Проверки после запуска", "Verification commands")}</Label>
           <Textarea
             value={formatCommandListText(data.verification_commands)}
             onChange={(event) => onSet("verification_commands", parseCommandListText(event.target.value))}
@@ -133,7 +133,7 @@ export function SshCommandConfig({
           <FieldHint>
             {localize(
               lang,
-              "Команды выполняются после основной команды и попадают в секции output как verification evidence.",
+              "Эти команды выполняются после основной, а результаты сохраняются в отчёте как подтверждение.",
               "Commands run after the main command and are included in output sections as verification evidence.",
             )}
           </FieldHint>
@@ -176,11 +176,11 @@ export function LlmQueryConfig({
         description={localize(lang, "Запрос к модели без автономных инструментов.", "Model prompt without autonomous tools.")}
       >
         <div className="space-y-1.5">
-          <Label className="text-xs">Prompt</Label>
+          <Label className="text-xs">{localize(lang, "Запрос", "Prompt")}</Label>
           <Textarea
             value={(data.prompt as string) || ""}
             onChange={(event) => onSet("prompt", event.target.value)}
-            placeholder="Analyze the data from previous steps and provide recommendations..."
+            placeholder={localize(lang, "Изучи результаты предыдущих шагов и предложи решение...", "Analyze the data from previous steps and provide recommendations...")}
             className="text-xs resize-none"
             rows={5}
           />
@@ -191,11 +191,11 @@ export function LlmQueryConfig({
       </NodeFormSection>
       <NodeFormSection title={localize(lang, "Исполнение", "Execution")}>
         <div className="space-y-1.5">
-          <Label className="text-xs">System Prompt</Label>
+          <Label className="text-xs">{localize(lang, "Системная инструкция", "System Prompt")}</Label>
           <Textarea
             value={(data.system_prompt as string) || ""}
             onChange={(event) => onSet("system_prompt", event.target.value)}
-            placeholder="You are a senior DevOps engineer..."
+            placeholder={localize(lang, "Ты опытный DevOps-инженер...", "You are a senior DevOps engineer...")}
             className="text-xs resize-none"
             rows={2}
           />

@@ -20,9 +20,6 @@ function composerController(overrides: Partial<ChatPageController> = {}): ChatPa
     setPaletteOpen: vi.fn(),
     pinnedServers: [],
     pinnedUsers: [],
-    pinnedPlaybook: null,
-    setPinnedPlaybook: vi.fn(),
-    playbookOptions: [],
     unpinServer: vi.fn(),
     unpinUser: vi.fn(),
     pinServer: vi.fn(),
@@ -31,33 +28,26 @@ function composerController(overrides: Partial<ChatPageController> = {}): ChatPa
     isBusy: false,
     handleStop: vi.fn(),
     submitMessage: vi.fn(),
-    providerOptions: [],
-    providerOverride: "",
-    setProviderOverride: vi.fn(),
     ...overrides,
   } as unknown as ChatPageController;
 }
 
 describe("chat page chrome", () => {
-  it("makes server context and the external file/project flow explicit", () => {
-    const setDraft = vi.fn();
-    const setCaret = vi.fn();
-    const setPaletteOpen = vi.fn();
-
+  it("keeps the composer minimal and points exact server selection to @", () => {
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
-          <ChatComposerForm c={composerController({ setDraft, setCaret, setPaletteOpen })} />
+          <ChatComposerForm c={composerController()} />
         </MemoryRouter>
       </QueryClientProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать сервер для контекста" }));
-    expect(setDraft).toHaveBeenCalledWith("Проверь @");
-    expect(setCaret).toHaveBeenCalledWith(9);
-    expect(setPaletteOpen).toHaveBeenCalledWith(true);
+    expect(screen.getByPlaceholderText("Что нужно сделать? Для точного сервера введите @")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Файл / проект" })).toHaveAttribute("href", "/automation");
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByText("Без playbook")).not.toBeInTheDocument();
     expect(screen.queryByText("Модель")).not.toBeInTheDocument();
+    expect(screen.getByText(/@ — точный сервер/)).toBeInTheDocument();
   });
 
   it("renders chat history as a usable mobile panel and closes it after navigation", () => {
@@ -103,22 +93,24 @@ describe("chat page chrome", () => {
     expect(onNavigate).toHaveBeenCalledOnce();
   });
 
-  it("shows the selected playbook as explicit chat context", () => {
+  it("shows only an exact server selected through @", () => {
+    const unpinServer = vi.fn();
     render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
           <ChatComposerForm
             c={composerController({
-              pinnedPlaybook: { id: 17, name: "Base Linux server configuration and hardening", kind: "ansible" },
-              playbookOptions: [{ id: 17, name: "Base Linux server configuration and hardening", kind: "ansible" }],
+              pinnedServers: [{ id: 17, name: "prod-api-01", host: "10.0.0.17" }],
+              unpinServer,
             })}
           />
         </MemoryRouter>
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("combobox", { name: "Выбрать playbook для контекста" })).toBeInTheDocument();
-    expect(screen.getAllByText(/Base Linux server configuration and hardening/).length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Убрать playbook из контекста" })).toBeInTheDocument();
+    expect(screen.getByText("prod-api-01")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Открепить" }));
+    expect(unpinServer).toHaveBeenCalledWith(17);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 });

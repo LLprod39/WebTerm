@@ -112,6 +112,7 @@ export function AgentWizardStepContent(props: AgentWizardStepContentProps) {
             lang={lang}
             t={t}
             mode={mode}
+            setMode={setMode}
             name={name}
             setName={setName}
             commands={commands}

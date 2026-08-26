@@ -66,38 +66,38 @@ export function ResourceTablePanel({
 }) {
   return (
     <SectionCard
-      title={selectedResource ? selectedResource.kind : localize(lang, "Resources", "Resources")}
+      title={selectedResource ? selectedResource.kind : localize(lang, "Ресурсы", "Resources")}
       description={
         selectedResource
           ? `${selectedResource.query.api_version} / ${selectedResource.query.resource}`
-          : localize(lang, "Выберите ресурс из catalog.", "Select a resource from the catalog.")
+          : localize(lang, "Выберите тип ресурса в каталоге.", "Select a resource from the catalog.")
       }
       icon={<Database className="h-4 w-4" />}
       actions={
         <div className="flex flex-wrap items-center gap-2">
-          {response ? <StatusBadge label={`${response.item_count ?? rows.length} items`} tone="info" /> : null}
-          {response?.truncated ? <StatusBadge label="truncated" tone="warning" /> : null}
-          {response?.ownership_summary ? <StatusBadge label={`${response.ownership_summary.guarded_items} guarded`} tone="warning" /> : null}
+          {response ? <StatusBadge label={`${response.item_count ?? rows.length} ${localize(lang, "объектов", "items")}`} tone="info" /> : null}
+          {response?.truncated ? <StatusBadge label={localize(lang, "список обрезан", "truncated")} tone="warning" /> : null}
+          {response?.ownership_summary ? <StatusBadge label={`${response.ownership_summary.guarded_items} ${localize(lang, "защищено", "guarded")}`} tone="warning" /> : null}
         </div>
       }
       bodyClassName="space-y-4"
     >
       <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <FieldLabel label={localize(lang, "Namespace", "Namespace")}>
+        <FieldLabel label={localize(lang, "Пространство имён", "Namespace")}>
           <Input
             value={selectedResource?.namespaced ? namespace : ""}
             disabled={!selectedResource?.namespaced}
             onChange={(event) => onNamespaceChange(event.target.value)}
-            placeholder={selectedResource?.namespaced ? DEFAULT_NAMESPACE : localize(lang, "cluster-scoped", "cluster-scoped")}
-            aria-label="Resource namespace"
+            placeholder={selectedResource?.namespaced ? DEFAULT_NAMESPACE : localize(lang, "весь кластер", "cluster-scoped")}
+            aria-label={localize(lang, "Пространство имён ресурса", "Resource namespace")}
           />
         </FieldLabel>
-        <FieldLabel label={localize(lang, "Name filter", "Name filter")}>
+        <FieldLabel label={localize(lang, "Фильтр по имени", "Name filter")}>
           <Input
             value={nameFilter}
             onChange={(event) => onNameFilterChange(event.target.value)}
             placeholder={localize(lang, "payments-api, ingress, kube-system...", "payments-api, ingress, kube-system...")}
-            aria-label="Resource name filter"
+            aria-label={localize(lang, "Фильтр ресурсов по имени", "Resource name filter")}
           />
         </FieldLabel>
       </div>
@@ -106,11 +106,11 @@ export function ResourceTablePanel({
 
       {loading ? (
         <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-8 text-sm text-muted-foreground">
-          {localize(lang, "Загружаю resources", "Loading resources")}
+          {localize(lang, "Загружаю ресурсы", "Loading resources")}
         </div>
       ) : error ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-4 text-sm text-destructive">
-          <div>{error instanceof Error ? error.message : localize(lang, "Resource list failed", "Resource list failed")}</div>
+          <div>{error instanceof Error ? error.message : localize(lang, "Не удалось загрузить ресурсы", "Resource list failed")}</div>
           <Button className="mt-3" size="sm" variant="outline" onClick={onRetry}>
             {localize(lang, "Повторить", "Retry")}
           </Button>
@@ -119,11 +119,11 @@ export function ResourceTablePanel({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{localize(lang, "Name", "Name")}</TableHead>
-              <TableHead>{localize(lang, "Namespace", "Namespace")}</TableHead>
-              <TableHead>{localize(lang, "Status", "Status")}</TableHead>
-              <TableHead>{localize(lang, "Owner", "Owner")}</TableHead>
-              <TableHead>{localize(lang, "Age/Freshness", "Age/Freshness")}</TableHead>
+              <TableHead>{localize(lang, "Имя", "Name")}</TableHead>
+              <TableHead>{localize(lang, "Пространство", "Namespace")}</TableHead>
+              <TableHead>{localize(lang, "Состояние", "Status")}</TableHead>
+              <TableHead>{localize(lang, "Владелец", "Owner")}</TableHead>
+              <TableHead>{localize(lang, "Возраст / актуальность", "Age/Freshness")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -149,7 +149,7 @@ export function ResourceTablePanel({
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[160px] truncate text-muted-foreground">
-                    {target.namespace || localize(lang, "cluster", "cluster")}
+                    {target.namespace || localize(lang, "кластер", "cluster")}
                   </TableCell>
                   <TableCell>
                     <StatusBadge label={statusLabel(lang, status)} tone={statusTone(status)} />
@@ -157,11 +157,11 @@ export function ResourceTablePanel({
                   <TableCell>
                     {ownership ? (
                       <div className="flex flex-col gap-1">
-                        <StatusBadge label={ownerLabel(ownership.owner)} tone={ownerTone(ownership.owner)} />
+                        <StatusBadge label={ownerLabel(ownership.owner, lang)} tone={ownerTone(ownership.owner)} />
                         <span className="max-w-[160px] truncate text-xs text-muted-foreground">{ownership.change_path}</span>
                       </div>
                     ) : (
-                      <StatusBadge label={localize(lang, "unknown", "unknown")} tone="neutral" />
+                      <StatusBadge label={localize(lang, "неизвестно", "unknown")} tone="neutral" />
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">{resourceFreshness(lang, item)}</TableCell>
@@ -176,7 +176,7 @@ export function ResourceTablePanel({
           title={localize(lang, "Ресурсы не найдены", "No resources found")}
           description={localize(
             lang,
-            "Проверьте namespace, name filter или права active session.",
+            "Проверьте пространство имён, фильтр и права активной сессии.",
             "Check the namespace, name filter, or active session permissions.",
           )}
         />

@@ -1,6 +1,5 @@
 import { Database, Eye, Save } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,7 +34,6 @@ export function AuditLoggingTab({
 }: AuditLoggingTabProps) {
   const { t, lang } = useI18n();
   const loggingItems = LOGGING_ITEM_KEYS.map((item) => ({ ...item, label: t(item.labelKey), desc: t(item.descKey) }));
-  const activeItems = loggingItems.filter((item) => loggingConfig[item.key]);
   const presetLabels: Record<AuditLoggingPresetKey, { title: string; description: string }> = {
     pilot: {
       title: lang === "ru" ? "Пилот" : "Pilot",
@@ -144,30 +142,10 @@ export function AuditLoggingTab({
         </div>
         <div className="mt-4 rounded-lg border border-border bg-muted/20 px-4 py-3">
           <p className="text-xs text-muted-foreground">
-            Логи хранятся на сервере в таблице <code className="text-foreground">core_ui_useractivitylog</code>.
-            При превышении срока хранения старые записи автоматически удаляются.
+            Старые записи удаляются автоматически по истечении выбранного срока.
           </p>
         </div>
       </SectionCard>
-
-      <div className="rounded-xl border border-border/60 bg-secondary/10 px-5 py-4 shadow-sm">
-        <div className="mb-3 flex items-center gap-2">
-          <div className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10">
-            <Eye className="h-3.5 w-3.5 text-primary" />
-          </div>
-          <span className="text-xs font-semibold text-foreground">{t("audit.filter_tab")}</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {activeItems.map((item) => (
-            <Badge key={item.key} variant="secondary" className="gap-1 text-xs">
-              <item.icon className="h-2.5 w-2.5" /> {item.label}
-            </Badge>
-          ))}
-          {activeItems.length === 0 && (
-            <p className="text-xs text-muted-foreground">{t("audit.log_settings")}</p>
-          )}
-        </div>
-      </div>
     </>
   );
 }

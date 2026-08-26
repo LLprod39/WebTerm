@@ -27,7 +27,7 @@ function ruCount(value: number, one: string, few: string, many: string) {
 }
 
 function releaseGateStatusLabel(readiness: KubernetesReadinessResponse, releaseCheckCount: number, blockerCount: number) {
-  if (readiness.ready_for_sidebar) return "Готово к sidebar";
+  if (readiness.ready_for_sidebar) return "Можно публиковать";
   if (!releaseCheckCount) return "Нет данных";
   return ruCount(blockerCount, "блокер", "блокера", "блокеров");
 }
@@ -41,8 +41,8 @@ function ProductionReleaseGate({
   const blockers = releaseChecks.filter((check) => check.status !== "ready");
   return (
     <SectionCard
-      title="Production release gate"
-      description="Что именно мешает включить Kubernetes в sidebar для пользователей."
+      title="Допуск к рабочему запуску"
+      description="Проверки перед открытием Kubernetes пользователям."
       icon={<ShieldCheck className="h-4 w-4" />}
       actions={
         <StatusBadge
@@ -65,27 +65,27 @@ function ProductionReleaseGate({
             ))
           ) : (
             <div className="rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-4 text-sm text-amber-100">
-              Release gate checks ещё не пришли из backend readiness.
+              Проверки допуска пока не получены.
             </div>
           )}
         </div>
         <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-4">
-          <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Production enablement</div>
+          <div className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">Как включить в рабочей среде</div>
           <div className="mt-3 space-y-3 text-xs leading-5 text-muted-foreground">
             <div>
-              <div className="font-semibold text-foreground">1. Preflight artifact</div>
+              <div className="font-semibold text-foreground">1. Предварительная проверка</div>
               <code className="mt-1 block overflow-auto rounded-md bg-secondary/30 px-3 py-2 text-foreground">
                 python manage.py verify_kubernetes_ops_preflight --output artifacts/kubernetes_ops_preflight_evidence.json
               </code>
             </div>
             <div>
-              <div className="font-semibold text-foreground">2. Production release evidence</div>
+              <div className="font-semibold text-foreground">2. Подтверждение готовности</div>
               <code className="mt-1 block overflow-auto rounded-md bg-secondary/30 px-3 py-2 text-foreground">
                 python manage.py verify_kubernetes_ops_release --username &lt;staff-user&gt; --output artifacts/kubernetes_ops_release_evidence.json
               </code>
             </div>
             <div>
-              <div className="font-semibold text-foreground">3. Production env only after evidence</div>
+              <div className="font-semibold text-foreground">3. Включение после успешной проверки</div>
               <code className="mt-1 block overflow-auto rounded-md bg-secondary/30 px-3 py-2 text-foreground">
                 KUBERNETES_OPS_RELEASE_ENVIRONMENT=production{"\n"}
                 KUBERNETES_OPS_PRODUCTION_APPROVAL_REF=&lt;approval-id&gt;{"\n"}
@@ -93,13 +93,13 @@ function ProductionReleaseGate({
               </code>
             </div>
             <div>
-              <div className="font-semibold text-foreground">Pilot (closed 15–20) — без full production evidence</div>
+              <div className="font-semibold text-foreground">Закрытый пилот (15–20 пользователей)</div>
               <code className="mt-1 block overflow-auto rounded-md bg-secondary/30 px-3 py-2 text-foreground">
                 KUBERNETES_OPS_PILOT_SIDEBAR=true{"\n"}
                 KUBERNETES_OPS_READY_FOR_SIDEBAR=true
               </code>
               <p className="mt-2 text-[11px] text-muted-foreground">
-                Waives only production-scope release evidence. Runtime inventory, providers, and safety checks still required.
+                Упрощается только подтверждение рабочего запуска. Инвентарь, провайдеры и проверки безопасности остаются обязательными.
               </p>
             </div>
           </div>
@@ -143,9 +143,9 @@ export default function SettingsKubernetesPage() {
             <Boxes className="h-4 w-4" />
           </div>
           <div>
-            <h1 className="text-base font-semibold tracking-tight text-foreground">Kubernetes Ops</h1>
+            <h1 className="text-base font-semibold tracking-tight text-foreground">Kubernetes</h1>
             <p className="text-xs text-muted-foreground">
-              Rancher, Devtron, read-only sync worker и release gates для модуля Kubernetes.
+              Провайдеры, синхронизация и допуск к запуску.
             </p>
           </div>
         </div>
@@ -167,7 +167,7 @@ export default function SettingsKubernetesPage() {
       <QueryStateBlock
         loading={authLoading || overviewQuery.isLoading}
         error={overviewQuery.error || (!overviewQuery.isLoading && data && !data.success ? new Error("Kubernetes overview failed") : undefined)}
-        errorText="Не удалось загрузить Kubernetes настройки"
+        errorText="Не удалось загрузить настройки Kubernetes"
         onRetry={refresh}
       >
         {summary && readiness && data ? (
@@ -183,19 +183,19 @@ export default function SettingsKubernetesPage() {
               <MetricCard
                 label="Инвентарь"
                 value={summary.clusters}
-                description={`${summary.apps} apps, ${summary.fleet_rollouts} Fleet`}
+                description={`${summary.apps} приложений, ${summary.fleet_rollouts} развёртываний Fleet`}
                 tone={summary.stale ? "warning" : "info"}
                 icon={<Boxes className="h-4 w-4" />}
               />
               <MetricCard
-                label="Provider issues"
+                label="Ошибки провайдеров"
                 value={summary.provider_issues}
-                description={`${summary.stale} stale rows`}
+                description={`${summary.stale} устаревших записей`}
                 tone={summary.provider_issues || summary.stale ? "warning" : "success"}
                 icon={<RefreshCcw className="h-4 w-4" />}
               />
               <MetricCard
-                label="Required gates"
+                label="Блокировки"
                 value={requiredProblems.length}
                 description={requiredProblems.length ? "Нужно закрыть" : "Все готовы"}
                 tone={requiredProblems.length ? "warning" : "success"}
@@ -208,8 +208,8 @@ export default function SettingsKubernetesPage() {
             <KubernetesProviderAdminPanel providers={data.providers} isAdmin={isAdmin} lang="ru" />
 
             <SectionCard
-              title="Sync worker"
-              description="Read-only background worker должен регулярно обновлять provider inventory."
+              title="Синхронизация"
+              description="Фоновая служба обновляет инвентарь без права записи."
               icon={<RefreshCcw className="h-4 w-4" />}
               actions={
                 <StatusBadge
@@ -222,8 +222,8 @@ export default function SettingsKubernetesPage() {
             </SectionCard>
 
             <SectionCard
-              title="Readiness gate"
-              description="Проверки перед публичным включением Kubernetes Ops в sidebar."
+              title="Обязательные проверки"
+              description="Условия для открытия Kubernetes пользователям."
               icon={<ShieldCheck className="h-4 w-4" />}
               actions={
                 <StatusBadge

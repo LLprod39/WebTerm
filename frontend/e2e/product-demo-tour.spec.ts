@@ -101,7 +101,7 @@ test("product demo tour — servers stack", async ({ page }) => {
 
   // ── 2. Servers inventory ──────────────────────────────────────
   await page.goto("/servers");
-  await expect(page.getByRole("heading", { name: /Инфраструктура|Infrastructure|Серверы|Servers/i })).toBeVisible({
+  await expect(page.getByRole("heading", { name: /Серверы|Servers/i })).toBeVisible({
     timeout: 15_000,
   });
   await dwell(page, 2400);

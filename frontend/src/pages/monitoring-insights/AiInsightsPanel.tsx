@@ -101,7 +101,7 @@ export function AiAnalysisContent({
       <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
         <Sparkles className="h-5 w-5 text-muted-foreground/50" />
         <p className="text-xs text-muted-foreground">
-          {localize(lang, "AI-анализ выключен (AI_INSIGHTS_ENABLED).", "AI analysis is disabled (AI_INSIGHTS_ENABLED).")}
+          {localize(lang, "ИИ-анализ отключён в системных настройках.", "AI analysis is disabled in system settings.")}
         </p>
       </div>
     );
@@ -117,11 +117,11 @@ export function AiAnalysisContent({
         )}
         <p className="text-xs text-muted-foreground">
           {isBusy
-            ? localize(lang, "ИИ анализирует флот…", "The AI is analyzing the fleet…")
+            ? localize(lang, "ИИ анализирует серверы…", "AI is analyzing the servers…")
             : localize(
                 lang,
-                "ИИ ещё не анализировал флот — нажмите «AI-анализ» сверху.",
-                "The AI has not analyzed the fleet yet — click “AI analysis” above.",
+                "Анализ ещё не запускался. Нажмите «ИИ-анализ» сверху.",
+                "Analysis has not run yet. Click “AI analysis” above.",
               )}
         </p>
       </div>
@@ -147,7 +147,7 @@ export function AiAnalysisContent({
         >
           <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
             <span className="text-2xs uppercase tracking-[0.12em] text-muted-foreground/70">
-              {localize(lang, "Сводка по флоту", "Fleet digest")}
+              {localize(lang, "Сводка по серверам", "Server summary")}
             </span>
             <StatusBadge label={verdictLabel(lang, ai.fleet.verdict)} tone={verdictTone[ai.fleet.verdict]} dot={false} />
             <span className="text-2xs text-muted-foreground/60">{relativeTime(ai.fleet.created_at)}</span>

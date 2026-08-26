@@ -112,19 +112,19 @@ export default function StudioPage() {
     () =>
       [
         canSkills
-          ? { label: localize(lang, "Каталог runbook", "Runbook catalog"), desc: localize(lang, "Личные и общие операционные playbook", "Private and shared operations playbooks"), icon: BookOpen, path: "/studio/skills" }
+          ? { label: localize(lang, "Сценарии", "Runbooks"), desc: localize(lang, "Готовые действия для повторяемых задач", "Reusable actions for recurring tasks"), icon: BookOpen, path: "/studio/skills" }
           : null,
         canMcp
-          ? { label: localize(lang, "Реестр MCP", "MCP registry"), desc: localize(lang, "Инструменты и интеграции для автоматизации", "Tools and integrations for automation"), icon: Server, path: "/studio/mcp" }
+          ? { label: localize(lang, "Интеграции MCP", "MCP integrations"), desc: localize(lang, "Инструменты для автоматизации", "Tools for automation"), icon: Server, path: "/studio/mcp" }
           : null,
         canAgents
-          ? { label: localize(lang, "Профили выполнения", "Execution profiles"), desc: localize(lang, "Модель, инструменты и scope для pipeline-нод", "Model, tools, and scope for pipeline nodes"), icon: Bot, path: "/studio/agents" }
+          ? { label: localize(lang, "Профили агентов", "Agent profiles"), desc: localize(lang, "Модели и инструменты для шагов пайплайна", "Models and tools for pipeline steps"), icon: Bot, path: "/studio/agents" }
           : null,
         canRuns
-          ? { label: localize(lang, "История запусков", "Execution history"), desc: localize(lang, "Запуски в вашей зоне доступа", "Runs available for your access scope"), icon: Clock, path: "/studio/runs" }
+          ? { label: localize(lang, "История запусков", "Run history"), desc: localize(lang, "Доступные вам запуски", "Runs available to you"), icon: Clock, path: "/studio/runs" }
           : null,
         canNotifications
-          ? { label: localize(lang, "Оповещения", "Notifications"), desc: localize(lang, "Каналы доставки для админ-событий", "Delivery settings for admin events"), icon: Zap, path: "/studio/notifications" }
+          ? { label: localize(lang, "Оповещения", "Notifications"), desc: localize(lang, "Каналы для предупреждений и отчётов", "Channels for alerts and reports"), icon: Zap, path: "/studio/notifications" }
           : null,
       ].filter(Boolean) as Array<{ label: string; desc: string; icon: typeof BookOpen; path: string }>,
     [canAgents, canMcp, canNotifications, canRuns, canSkills, lang],
@@ -134,7 +134,7 @@ export default function StudioPage() {
     () =>
       [
         canPipelines ? { icon: Workflow, label: localize(lang, "Пайплайны", "Pipelines"), value: pipelines.length } : null,
-        canSkills ? { icon: BookOpen, label: localize(lang, "Runbook", "Runbooks"), value: Array.isArray(skills) ? skills.length : 0 } : null,
+        canSkills ? { icon: BookOpen, label: localize(lang, "Сценарии", "Runbooks"), value: Array.isArray(skills) ? skills.length : 0 } : null,
         canMcp ? { icon: Server, label: localize(lang, "MCP", "MCP servers"), value: Array.isArray(mcpList) ? mcpList.length : 0 } : null,
         canAgents ? { icon: Bot, label: localize(lang, "Профили", "Profiles"), value: Array.isArray(agents) ? agents.length : 0 } : null,
         canRuns ? { icon: CheckCircle2, label: localize(lang, "Завершено", "Completed"), value: runs.filter((run) => run.status === "completed").length, sub: localize(lang, "запусков", "runs") } : null,
@@ -203,7 +203,7 @@ export default function StudioPage() {
         }
         toast({
           variant: "destructive",
-          description: localize(lang, "У пайплайна нет активных триггеров. Сначала добавьте ручной, webhook, schedule или monitoring-триггер.", "This pipeline has no active triggers. Add a manual, webhook, schedule, or monitoring trigger first."),
+          description: localize(lang, "Добавьте ручной запуск, webhook, расписание или запуск по событию мониторинга.", "Add a manual trigger, webhook, schedule, or monitoring event trigger."),
         });
         return;
       }
@@ -251,7 +251,7 @@ export default function StudioPage() {
                 {canPipelines ? localize(lang, "Пайплайны", "Pipelines") : "Studio"}
               </h1>
               <p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">
-                {localize(lang, "Runbook, триггеры, проверки, запуски и инструменты MCP в одном рабочем контуре.", "Runbooks, triggers, verification, runs, and MCP tools in one workspace.")}
+                {localize(lang, "Создавайте пайплайны, запускайте готовые сценарии и подключайте инструменты MCP.", "Build pipelines, run reusable automations, and connect MCP tools.")}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -321,13 +321,13 @@ export default function StudioPage() {
                     <EmptyState
                       icon={<Workflow className="h-5 w-5" />}
                       title={search ? localize(lang, "Ничего не найдено", "No matches") : localize(lang, "Пайплайнов пока нет", "No pipelines yet")}
-                      description={search ? localize(lang, "Попробуйте более общий запрос.", "Try a broader query.") : localize(lang, "Создайте первый runbook для повторяемой OPS-задачи.", "Create the first runbook for a repeatable OPS task.")}
+                      description={search ? localize(lang, "Попробуйте более общий запрос.", "Try a broader query.") : localize(lang, "Создайте первый пайплайн для повторяемой задачи.", "Create your first pipeline for a recurring task.")}
                       actions={!search ? (
                         <Button size="sm" className="h-10 gap-1.5" onClick={() => setShowCreate(true)}>
                           <Plus className="h-3.5 w-3.5" /> {localize(lang, "Новый пайплайн", "New pipeline")}
                         </Button>
                       ) : undefined}
-                      hint={!search ? localize(lang, "Добавьте manual trigger для запуска по запросу или schedule/webhook trigger для автоматизации.", "Add a manual trigger to run on demand, or a schedule/webhook trigger to automate.") : undefined}
+                      hint={!search ? localize(lang, "Добавьте ручной запуск, расписание или webhook.", "Add a manual trigger, schedule, or webhook.") : undefined}
                     />
                   ) : (
                     <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -356,14 +356,13 @@ export default function StudioPage() {
             <section className="workspace-panel p-5">
               <div className="space-y-4">
                 <div>
-                  <p className="enterprise-kicker mb-1">Studio</p>
                   <h2 className="text-xl font-semibold text-foreground">{localize(lang, "Доступные разделы", "Available sections")}</h2>
                 </div>
                 {sectionLinks.length === 0 ? (
                   <EmptyState
                     icon={<Workflow className="h-5 w-5" />}
-                    title={localize(lang, "Разделы Studio недоступны", "No Studio sections available")}
-                    description={localize(lang, "Выдайте доступ в Settings, чтобы открыть runbook, MCP, agents, runs или notifications.", "Grant a Studio section in Settings to open runbooks, MCP, agents, runs, or notifications.")}
+                    title={localize(lang, "Нет доступных разделов", "No sections available")}
+                    description={localize(lang, "Попросите администратора выдать доступ к разделам Студии.", "Ask an administrator for access to Studio sections.")}
                   />
                 ) : (
                   <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">

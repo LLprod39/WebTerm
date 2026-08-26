@@ -24,6 +24,7 @@ from app.agent_kernel.runtime.outcomes import (
     EXIT_TIMEOUT,
 )
 from app.agent_kernel.tools.registry import ToolRegistry
+from app.egress_redaction import redact_payload, sanitize_observation_text
 from app.execution_policy import safe_payload_preview
 from servers.agents.agent_engine_runner_finalize import finalize_failed_run, finalize_successful_run
 from servers.agents.agent_runtime import (
@@ -86,6 +87,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             runtime_control=reset_runtime_control_state(),
             pending_question="",
             final_report="",
+            execution_outcome={},
             started_at=timezone.now(),
         )
     engine.run_record = run
@@ -294,7 +296,14 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     pending_question=action_args.get("question", ""),
                 )
 
+            tool_started_at = time.monotonic()
             observation = await engine._execute_tool(action_name, action_args)
+            measured_duration_ms = max(0, int((time.monotonic() - tool_started_at) * 1000))
+            tool_result_facts = dict(getattr(engine, "_last_tool_result_facts", {}) or {})
+            redacted_observation = sanitize_observation_text(observation).text
+            redacted_args, _redaction_report, _redaction_hashes = redact_payload(action_args)
+            safe_args = redacted_args if isinstance(redacted_args, dict) else {}
+            safe_error = sanitize_observation_text(str(tool_result_facts.get("error") or "")).text[:500]
             logger.info(
                 "agent_run {} iteration {} tool result: tool={} chars={}",
                 run.pk,
@@ -313,14 +322,22 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             tool_calls_log.append(
                 {
                     "tool": action_name,
-                    "args": action_args,
-                    "result": observation[:2000],
-                    "duration_ms": 0,
+                    "args": safe_args,
+                    "server": str(action_args.get("server") or action_args.get("server_name") or "")[:160],
+                    "task": str(action_args.get("task") or action_args.get("task_id") or "")[:200],
+                    "iteration": iteration,
+                    "result": redacted_observation[:2000],
+                    "result_preview": redacted_observation[:2000],
+                    "duration_ms": int(tool_result_facts.get("duration_ms") or measured_duration_ms),
+                    "success": tool_result_facts.get("success"),
+                    "status": str(tool_result_facts.get("status") or "unknown"),
+                    "exit_code": tool_result_facts.get("exit_code"),
+                    "error": safe_error,
                     "timestamp": timezone.now().isoformat(),
                 }
             )
 
-            iter_entry["observation"] = observation[:3000]
+            iter_entry["observation"] = redacted_observation[:3000]
             iterations_log.append(iter_entry)
 
             # GAP 4: on_iteration_complete hook

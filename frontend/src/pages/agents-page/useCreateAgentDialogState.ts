@@ -53,6 +53,17 @@ type UseCreateAgentDialogStateArgs = {
   onSaved: (saved: CreateAgentSavedPayload) => Promise<void> | void;
 };
 
+export function toggleAgentServerSelection(current: number[], serverId: number): number[] {
+  return current.includes(serverId)
+    ? current.filter((item) => item !== serverId)
+    : [...current, serverId];
+}
+
+export function toggleAllAgentServers(current: number[], allServerIds: number[]): number[] {
+  const allSelected = allServerIds.length > 0 && allServerIds.every((id) => current.includes(id));
+  return allSelected ? [] : [...allServerIds];
+}
+
 export function useCreateAgentDialogState({
   open,
   initialAgent = null,
@@ -353,14 +364,13 @@ export function useCreateAgentDialogState({
     setStep(AGENT_WIZARD_STEPS[Math.min(currentStepIndex + 1, AGENT_WIZARD_STEPS.length - 1)].key);
   };
   const goBack = () => setStep(AGENT_WIZARD_STEPS[Math.max(currentStepIndex - 1, 0)].key);
-  const toggleServer = (id: number) => setSelectedServers((prev) => {
-    if (prev.includes(id)) return prev.filter((item) => item !== id);
-    // A normal diagnostic agent is intentionally limited to one host. Only
-    // the explicitly selected multi-agent mode may widen the server scope.
-    return mode === "multi" ? [...prev, id] : [id];
-  });
+  const toggleServer = (id: number) => setSelectedServers((current) => toggleAgentServerSelection(current, id));
   const changeTargetScope = (scope: AgentTargetScope) => {
     setTargetScope(scope);
+    if (scope === "servers") {
+      setToolsConfig(buildDefaultToolsConfig());
+      return;
+    }
     if (scope === "external") {
       setSelectedServers([]);
       setMode("full");
@@ -370,9 +380,7 @@ export function useCreateAgentDialogState({
     }
   };
   const hasAllServersSelected = allServerIds.length > 0 && allServerIds.every((id) => selectedServers.includes(id));
-  const selectAll = () => setSelectedServers(
-    hasAllServersSelected ? [] : mode === "multi" ? allServerIds : allServerIds.slice(0, 1),
-  );
+  const selectAll = () => setSelectedServers((current) => toggleAllAgentServers(current, allServerIds));
   const setScheduleMode = (modeValue: AgentScheduleMode) => {
     const nextInterval = modeValue === "interval" ? (schedule || scheduleConfig.interval_minutes || 60) : 0;
     setSchedule(nextInterval);

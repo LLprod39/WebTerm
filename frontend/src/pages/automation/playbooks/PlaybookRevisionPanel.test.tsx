@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PlaybookCapabilities, PlaybookDraft, PlaybookRevision } from "@/api/playbooks";
@@ -56,43 +57,42 @@ function controller(overrides: Record<string, unknown> = {}): PlaybookWorkspaceV
   } as unknown as PlaybookWorkspaceVersioningController;
 }
 
+function panel(workspace: PlaybookWorkspaceVersioningController) {
+  return <PlaybookRevisionPanel lang="en" playbookId={7} workspace={workspace} compatibilityReady={false} onValidate={vi.fn()} />;
+}
+
+function renderPanel(workspace: PlaybookWorkspaceVersioningController) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(panel(workspace), { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> });
+}
+
 describe("PlaybookRevisionPanel", () => {
   it("creates and publishes revisions only through explicit actions", async () => {
     const createRevision = vi.fn().mockResolvedValue(revision);
     const publishRevision = vi.fn().mockResolvedValue(undefined);
-    render(
-      <PlaybookRevisionPanel
-        lang="en"
-        playbookId={7}
-        workspace={controller({ createRevision, publishRevision })}
-      />,
-    );
+    renderPanel(controller({ createRevision, publishRevision }));
 
-    fireEvent.change(screen.getByLabelText("New revision message"), {
+    fireEvent.change(screen.getByLabelText("New version note"), {
       target: { value: "Release candidate" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Create revision" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create version" }));
     await waitFor(() => expect(createRevision).toHaveBeenCalledWith("Release candidate"));
 
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
-    expect(publishRevision).toHaveBeenCalledWith(12);
+    expect(publishRevision).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Publish", exact: true }));
+    await waitFor(() => expect(publishRevision).toHaveBeenCalledWith(12));
   });
 
   it("offers both conflict resolutions without applying either automatically", () => {
     const acceptServerDraft = vi.fn();
     const keepLocalDraft = vi.fn().mockResolvedValue(undefined);
-    render(
-      <PlaybookRevisionPanel
-        lang="en"
-        playbookId={7}
-        workspace={controller({
+    renderPanel(controller({
           autosaveStatus: "conflict",
           conflict: { serverDraft: { version: 7 } as PlaybookDraft, message: "conflict" },
           acceptServerDraft,
           keepLocalDraft,
-        })}
-      />,
-    );
+        }));
 
     expect(acceptServerDraft).not.toHaveBeenCalled();
     expect(keepLocalDraft).not.toHaveBeenCalled();
@@ -111,34 +111,22 @@ describe("PlaybookRevisionPanel", () => {
       can_delete: false,
       is_owner: false,
     };
-    render(<PlaybookRevisionPanel lang="en" playbookId={7} workspace={controller({ capabilities })} />);
+    renderPanel(controller({ capabilities }));
 
-    expect(screen.queryByRole("button", { name: "Create revision" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create version" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Open revision 2" })).toBeInTheDocument();
   });
 
-  it("offers bundle export only for the published revision when capability allows it", () => {
-    const { rerender } = render(
-      <PlaybookRevisionPanel
-        lang="en"
-        playbookId={7}
-        workspace={controller({ publishedRevisionId: revision.id })}
-      />,
-    );
+  it("offers sanitized export for an immutable revision when capability allows it", () => {
+    const { rerender } = renderPanel(controller({ publishedRevisionId: null }));
 
-    expect(screen.getByRole("button", { name: "Export published revision 2" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Export immutable revision 2" })).toBeInTheDocument();
 
-    rerender(
-      <PlaybookRevisionPanel
-        lang="en"
-        playbookId={7}
-        workspace={controller({
-          publishedRevisionId: revision.id,
+    rerender(panel(controller({
+          publishedRevisionId: null,
           capabilities: { ...ownerCapabilities, can_export: false },
-        })}
-      />,
-    );
-    expect(screen.queryByRole("button", { name: "Export published revision 2" })).not.toBeInTheDocument();
+        })));
+    expect(screen.queryByRole("button", { name: "Export immutable revision 2" })).not.toBeInTheDocument();
   });
 });

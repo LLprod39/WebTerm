@@ -11,6 +11,8 @@ from django.views.decorators.http import require_http_methods
 from core_ui.decorators import require_feature
 from servers.models import PlaybookRevision
 from servers.services.playbooks.access import capabilities_for
+from servers.services.playbooks.bundle_archive import BundleValidationError
+from servers.services.playbooks.revision_safety import validate_revision_safety
 from servers.services.playbooks.revisions import (
     DraftConflict,
     create_revision_from_draft,
@@ -60,6 +62,13 @@ def playbook_revisions(request, playbook_id: int):
             stage="revision_create",
             details={"current_version": exc.current_version, "current_hash": exc.current_hash},
         )
+    except BundleValidationError as exc:
+        return workspace_error(
+            code=exc.code,
+            message="Playbook draft failed safety validation",
+            status=exc.status_code,
+            stage="revision_create",
+        )
     except (TypeError, ValueError) as exc:
         return workspace_error(code="playbook_revision_invalid", message=str(exc), stage="revision_create")
     except PermissionDenied as exc:
@@ -80,7 +89,16 @@ def playbook_revision_detail(request, playbook_id: int, revision_id: int):
         capabilities = capabilities_for(playbook, request.user)
         if not capabilities.can_edit and revision.id != playbook.published_revision_id:
             raise PermissionDenied("Only the published revision is visible")
+        if not capabilities.is_owner:
+            validate_revision_safety(revision)
         return JsonResponse({"success": True, "revision": serialize_revision(revision, include_content=True)})
+    except BundleValidationError as exc:
+        return workspace_error(
+            code=exc.code,
+            message="Published playbook content failed safety validation",
+            status=422,
+            stage="revision_content",
+        )
     except PermissionDenied as exc:
         return workspace_error(code="playbook_forbidden", message=str(exc), status=403, stage="authorization")
 
@@ -99,6 +117,14 @@ def playbook_revision_publish(request, playbook_id: int, revision_id: int):
                 "published_revision_id": playbook.published_revision_id,
                 "revision": serialize_revision(revision),
             }
+        )
+    except BundleValidationError as exc:
+        return workspace_error(
+            code=exc.code,
+            message=str(exc),
+            status=exc.status_code,
+            stage="publish",
+            details=exc.details,
         )
     except (PermissionDenied, ValueError) as exc:
         status = 403 if isinstance(exc, PermissionDenied) else 400

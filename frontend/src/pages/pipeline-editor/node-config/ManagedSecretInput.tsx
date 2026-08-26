@@ -82,7 +82,7 @@ export function ManagedSecretInput({
         {configured
           ? localize(
               lang,
-              "Значение не читается из backend. Введите новое только для ротации.",
+              "Сохранённое значение нельзя прочитать. Введите новое только для замены.",
               "The backend never returns this value. Enter a new one only to rotate it.",
             )
           : localize(

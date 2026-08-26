@@ -143,9 +143,22 @@ def test_playbook_crud_and_templates(auth_client, user):
     - name: Echo
       shell: echo ok
 """
+    preview = auth_client.post(
+        "/servers/api/playbooks/import/",
+        data=json.dumps({"content": yaml_pb, "filename": "imp.yml", "save": False}),
+        content_type="application/json",
+    )
+    assert preview.status_code == 200
     r = auth_client.post(
         "/servers/api/playbooks/import/",
-        data=json.dumps({"content": yaml_pb, "filename": "imp.yml", "save": True}),
+        data=json.dumps(
+            {
+                "content": yaml_pb,
+                "filename": "imp.yml",
+                "save": True,
+                "expected_content_hash": preview.json()["content_hash"],
+            }
+        ),
         content_type="application/json",
     )
     assert r.status_code == 200
@@ -230,6 +243,52 @@ def test_playbook_create_still_rejects_empty_executable_content(auth_client):
 
     assert response.status_code == 400
     assert "YAML" in response.json()["error"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("source_yaml", "expected_code"),
+    [
+        (
+            "- hosts: all\n  tasks:\n    - debug:\n        msg: glpat-0123456789abcdefghij\n",
+            "secret_material_detected",
+        ),
+        (
+            "- hosts: all\n  tasks:\n    - ansible.builtin.copy:\n        src: /etc/passwd\n        dest: /tmp/x\n",
+            "controller_policy_violation",
+        ),
+        ("- hosts: all\n  tasks: [\n", "malformed_yaml"),
+    ],
+)
+def test_guided_generation_revalidates_generated_yaml_before_preview_or_persistence(
+    auth_client,
+    monkeypatch,
+    source_yaml,
+    expected_code,
+):
+    token = "glpat-0123456789abcdefghij"
+    generated = {
+        "name": "Unsafe generated playbook",
+        "description": "generated",
+        "category": Playbook.CATEGORY_CUSTOM,
+        "tasks": [],
+        "source_yaml": source_yaml,
+        "tags": ["guided"],
+        "fidelity": {},
+    }
+    monkeypatch.setattr("servers.views.server_playbooks.generate_from_recipe", lambda *_args, **_kwargs: generated)
+    before = Playbook.objects.count()
+
+    response = auth_client.post(
+        "/servers/api/playbooks/guided/generate/",
+        data=json.dumps({"slug": "run-commands", "params": {}, "save": True}),
+        content_type="application/json",
+    )
+
+    assert response.status_code >= 400, response.content
+    assert response.json()["code"] == expected_code
+    assert token not in response.content.decode()
+    assert Playbook.objects.count() == before
 
 
 @pytest.mark.django_db(transaction=True)

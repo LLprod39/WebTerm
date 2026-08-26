@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { localize, useI18n } from "@/lib/i18n";
 import type { AiAssistantSettings } from "../ai-types";
 import { NovaContextSettings } from "../nova/NovaContextSettings";
 
@@ -80,46 +81,48 @@ export function AiPanelSettingsDialog({
   onSaveDefaults?: () => void;
   onResetToDefaults?: () => void;
 }) {
+  const { lang } = useI18n();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-2xl grid-rows-[auto,minmax(0,1fr),auto] overflow-hidden rounded-xl border-border/60 sm:max-h-[85vh]">
         <DialogHeader className="pb-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Settings2 className="h-4 w-4 text-muted-foreground" />
-            Настройки AI
+            {localize(lang, "Настройки ИИ", "AI settings")}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Параметры применяются сразу к текущему чату.
+            {localize(lang, "Изменения применяются сразу.", "Changes apply immediately.")}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="min-h-0 space-y-5 overflow-y-auto py-2">
           <SettingsSection
-            title="Режим"
-            description="Как AI ведёт диалог и исполняет команды."
+            title={localize(lang, "Режим", "Mode")}
+            description={localize(lang, "Диалог и выполнение команд.", "Conversation and command execution.")}
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[13px] text-foreground">Чат</span>
+                <span className="text-[13px] text-foreground">{localize(lang, "Диалог", "Conversation")}</span>
                 {chatModeControl}
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[13px] text-foreground">Стиль</span>
+                <span className="text-[13px] text-foreground">{localize(lang, "Выполнение", "Execution")}</span>
                 {executionModeControl}
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-[13px] text-foreground">Авто-отчёт</span>
+                <span className="text-[13px] text-foreground">{localize(lang, "Автоотчёт", "Automatic report")}</span>
                 <Select
                   value={settings.autoReport}
                   onValueChange={(value) => onSettingsPatch({ autoReport: value === "on" || value === "off" ? value : "auto" })}
                 >
-                  <SelectTrigger className="h-8 w-36 rounded-md bg-background text-xs" aria-label="Авто-отчёт">
+                  <SelectTrigger className="h-8 w-36 rounded-md bg-background text-xs" aria-label={localize(lang, "Автоотчёт", "Automatic report")}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto</SelectItem>
-                    <SelectItem value="on">Всегда On</SelectItem>
-                    <SelectItem value="off">Всегда Off</SelectItem>
+                    <SelectItem value="auto">{localize(lang, "Авто", "Auto")}</SelectItem>
+                    <SelectItem value="on">{localize(lang, "Всегда", "Always")}</SelectItem>
+                    <SelectItem value="off">{localize(lang, "Никогда", "Never")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -127,21 +130,21 @@ export function AiPanelSettingsDialog({
           </SettingsSection>
 
           <SettingsSection
-            title="Память"
-            description="Контекст между запросами и управление историей."
+            title={localize(lang, "Память", "Memory")}
+            description={localize(lang, "Контекст предыдущих запросов.", "Context from previous requests.")}
           >
             <div className="space-y-2">
               <ToggleRow
-                title="Сохранять контекст"
-                description="AI учитывает предыдущие запросы в рамках сессии."
+                title={localize(lang, "Учитывать контекст", "Use context")}
+                description={localize(lang, "ИИ учитывает предыдущие запросы этой сессии.", "AI uses earlier requests from this session.")}
                 checked={settings.memoryEnabled}
                 onCheckedChange={(checked) => onSettingsPatch({ memoryEnabled: checked })}
               />
 
               <div className="flex items-center justify-between gap-3 py-1.5">
                 <div>
-                  <div className="text-[13px] font-medium text-foreground">TTL памяти</div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Количество запросов (1-20)</p>
+                  <div className="text-[13px] font-medium text-foreground">{localize(lang, "Глубина памяти", "Memory depth")}</div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{localize(lang, "Последние запросы: 1–20", "Recent requests: 1–20")}</p>
                 </div>
                 <input
                   type="number"
@@ -155,10 +158,10 @@ export function AiPanelSettingsDialog({
               </div>
 
               <div className="flex items-center justify-between gap-3 pt-1">
-                <span className="text-[13px] text-foreground">Очистить память</span>
+                <span className="text-[13px] text-foreground">{localize(lang, "Очистить память", "Clear memory")}</span>
                 <Button type="button" variant="outline" size="xs" onClick={onClearMemory} className="h-8 gap-1.5 px-3 text-xs">
                   <Trash2 className="h-3 w-3" />
-                  Очистить
+                  {localize(lang, "Очистить", "Clear")}
                 </Button>
               </div>
             </div>
@@ -167,19 +170,19 @@ export function AiPanelSettingsDialog({
           <NovaContextSettings settings={settings} onChange={onSettingsPatch} />
 
           <SettingsSection
-            title="Отображение"
-            description="Какие элементы показывать в чате."
+            title={localize(lang, "Отображение", "Display")}
+            description={localize(lang, "Какие команды показывать.", "Which commands to show.")}
           >
             <div className="space-y-1">
               <ToggleRow
-                title="Предлагаемые команды"
-                description="Показывать команды в статусе pending."
+                title={localize(lang, "Предлагаемые команды", "Suggested commands")}
+                description={localize(lang, "Показывать команды до подтверждения.", "Show commands before approval.")}
                 checked={settings.showSuggestedCommands}
                 onCheckedChange={(checked) => onSettingsPatch({ showSuggestedCommands: checked })}
               />
               <ToggleRow
-                title="Выполненные команды"
-                description="Показывать done/skipped/cancelled команды."
+                title={localize(lang, "Завершённые команды", "Completed commands")}
+                description={localize(lang, "Показывать выполненные и отменённые команды.", "Show completed and cancelled commands.")}
                 checked={settings.showExecutedCommands}
                 onCheckedChange={(checked) => onSettingsPatch({ showExecutedCommands: checked })}
               />
@@ -190,11 +193,11 @@ export function AiPanelSettingsDialog({
         <DialogFooter className="gap-2 pt-0">
           <Button type="button" variant="ghost" size="sm" onClick={onResetToDefaults} className="gap-1.5 text-xs text-muted-foreground">
             <RotateCcw className="h-3 w-3" />
-            Сбросить
+            {localize(lang, "Сбросить", "Reset")}
           </Button>
           <Button type="button" size="sm" onClick={onSaveDefaults} className="gap-1.5 text-xs">
             <Check className="h-3 w-3" />
-            Сохранить глобально
+            {localize(lang, "Сохранить по умолчанию", "Save as default")}
           </Button>
         </DialogFooter>
       </DialogContent>

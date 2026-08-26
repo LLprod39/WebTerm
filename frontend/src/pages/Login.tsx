@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authLogin, type AuthLoginResponse } from "@/lib/api";
-import { useI18n } from "@/lib/i18n";
+import { localize, useI18n } from "@/lib/i18n";
 import { normalizeInternalRedirectPath } from "@/lib/safeRedirect";
 import { cn } from "@/lib/utils";
 
@@ -59,9 +59,9 @@ export default function Login() {
   };
 
   return (
-    <div className="app-shell-bg min-h-dvh text-foreground">
+    <div data-ui-slot="login-page" data-page-kind="auth" className="app-shell-bg min-h-dvh text-foreground">
       <div className="grid min-h-dvh lg:grid-cols-[42fr_58fr]">
-        <section className="relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between">
+        <section data-ui-slot="login-intro" className="relative hidden overflow-hidden border-r border-border lg:flex lg:flex-col lg:justify-between">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
@@ -99,7 +99,7 @@ export default function Login() {
             </div>
             <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-3.5 py-2.5 shadow-elev-1">
               <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-              <span className="leading-5">Доменный вход через LDAP / Active Directory</span>
+              <span className="leading-5">{localize(lang, "Вход через LDAP / Active Directory", "LDAP / Active Directory sign-in")}</span>
             </div>
             <div className="flex items-center gap-3 rounded-sm border border-border bg-card px-3.5 py-2.5 shadow-elev-1">
               <LockKeyhole className="h-4 w-4 shrink-0 text-primary" />
@@ -108,7 +108,7 @@ export default function Login() {
           </div>
         </section>
 
-        <main className="relative flex min-h-dvh items-center justify-center px-5 py-8">
+        <main data-ui-slot="login-form" className="relative flex min-h-dvh items-center justify-center px-5 py-8">
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 opacity-70 lg:opacity-50"
@@ -127,7 +127,7 @@ export default function Login() {
                 <p className="text-2xs font-medium uppercase tracking-[0.14em] text-primary">{t("login.eyebrow")}</p>
                 <h1 className="type-h1 mt-2 text-foreground">{t("login.title")}</h1>
                 <p className="mt-1.5 text-sm leading-5 text-muted-foreground">
-                  Войдите доменной учётной записью AD
+                  {localize(lang, "Используйте корпоративную учётную запись", "Use your corporate account")}
                 </p>
               </div>
 
@@ -151,7 +151,7 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-sm border border-border-strong bg-card shadow-elev-2">
+            <div data-ui-slot="login-card" className="overflow-hidden rounded-sm border border-border-strong bg-card shadow-elev-2">
               <div className="border-b border-border bg-surface-0 px-5 py-3 text-xs text-muted-foreground">
                 LDAP / Active Directory
               </div>

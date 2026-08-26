@@ -18,7 +18,7 @@ export function PageHeader({
   className?: string;
 }) {
   return (
-    <header className={cn("flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between", className)}>
+    <header data-ui-slot="system-page-header" className={cn("flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between", className)}>
       <div className="min-w-0 space-y-2">
         {eyebrow ? <div className="text-2xs font-medium uppercase tracking-[0.14em] text-primary">{eyebrow}</div> : null}
         <div className="space-y-2">

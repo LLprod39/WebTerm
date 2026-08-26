@@ -94,7 +94,7 @@ export function SkillSettingsTab({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Slug</Label>
+                <Label className="text-xs text-muted-foreground">{tr("Идентификатор", "Identifier")}</Label>
                 <Input value={selectedSkill.slug} disabled className="font-mono text-xs" />
               </div>
               <div className="space-y-1.5">
@@ -152,7 +152,7 @@ export function SkillSettingsTab({
                 />
               </div>
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-xs text-muted-foreground">UI hint</Label>
+                <Label className="text-xs text-muted-foreground">{tr("Подсказка в интерфейсе", "Interface hint")}</Label>
                 <Input
                   value={skillSettingsDraft.ui_hint}
                   onChange={(event) => setSkillSettingsDraft((prev) => ({ ...prev, ui_hint: event.target.value }))}
@@ -171,7 +171,7 @@ export function SkillSettingsTab({
               <div>
                 <h3 className="text-base font-semibold text-foreground">{tr("Политика и инструменты", "Policy and tools")}</h3>
                 <p className="text-[12px] text-muted-foreground">
-                  {tr("Ограничения, рекомендуемые инструменты и runtime policy для безопасного запуска.", "Guardrails, recommended tools, and runtime policy for safe execution.")}
+                  {tr("Ограничения, инструменты и правила безопасного запуска.", "Guardrails, tools, and safe execution rules.")}
                 </p>
               </div>
             </div>
@@ -200,7 +200,7 @@ export function SkillSettingsTab({
                 />
               </div>
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-xs text-muted-foreground">Runtime policy JSON</Label>
+                <Label className="text-xs text-muted-foreground">{tr("Правила выполнения (JSON)", "Execution rules (JSON)")}</Label>
                 <Textarea
                   rows={9}
                   value={skillSettingsDraft.runtime_policy_text}

@@ -174,16 +174,16 @@ describe("SettingsKubernetesPage", () => {
   it("renders Kubernetes admin setup, worker state, and readiness gates in settings", async () => {
     renderPage();
 
-    expect(await screen.findByRole("heading", { name: "Kubernetes Ops" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Production release gate" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Kubernetes" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Допуск к рабочему запуску" })).toBeInTheDocument();
     expect(screen.getAllByText("1 блокер").length).toBeGreaterThan(0);
-    expect(screen.queryByText("Release gate checks ещё не пришли из backend readiness.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Проверки допуска пока не получены.")).not.toBeInTheDocument();
     expect(screen.getAllByText("Production OIDC/Keycloak runtime gate is not enforced until production.").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Release scope is local; production approval is required.").length).toBeGreaterThan(0);
     expect(screen.getAllByText(/KUBERNETES_OPS_READY_FOR_SIDEBAR=true/).length).toBeGreaterThan(0);
     expect(await screen.findByRole("heading", { name: "Настройка провайдеров" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { level: 2, name: "Sync worker" })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Readiness gate" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "Синхронизация" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Обязательные проверки" })).toBeInTheDocument();
     expect(screen.getByText("rancher-main")).toBeInTheDocument();
   });
 
@@ -191,7 +191,7 @@ describe("SettingsKubernetesPage", () => {
     renderPage();
 
     await screen.findByRole("heading", { name: "Настройка провайдеров" });
-    fireEvent.change(screen.getByLabelText("Provider base URL"), {
+    fireEvent.change(screen.getByLabelText("Базовый URL подключения"), {
       target: { value: "https://rancher.example.test" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Добавить" }));

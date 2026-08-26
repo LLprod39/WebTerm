@@ -20,7 +20,7 @@ function AlertsList({ alerts }: { alerts: AdminInsightsResponse["alerts"] }) {
       <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
         <AlertTriangle className="h-5 w-5 text-muted-foreground/50" />
         <p className="text-xs text-muted-foreground">
-          {localize(lang, "Все алерты решены — флот в порядке.", "All alerts resolved — the fleet is fine.")}
+          {localize(lang, "Активных предупреждений нет. Серверы в порядке.", "No active alerts. Servers are healthy.")}
         </p>
       </div>
     );
@@ -142,12 +142,12 @@ export function InsightsRail({
         />
         <SegmentButton
           active={tab === "certs"}
-          label={localize(lang, "Серты", "Certs")}
+          label={localize(lang, "Сертификаты", "Certificates")}
           count={data.summary.certificates_expiring_30d}
           tone="warning"
           onClick={() => setTab("certs")}
         />
-        <SegmentButton active={tab === "ai"} label="AI" onClick={() => setTab("ai")} />
+        <SegmentButton active={tab === "ai"} label={localize(lang, "ИИ", "AI")} onClick={() => setTab("ai")} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2.5">

@@ -19,6 +19,7 @@ import {
   type LinuxUiServiceItem,
   type LinuxUiServicesSummary,
 } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const EMPTY_SERVICES: LinuxUiServiceItem[] = [];
@@ -40,16 +41,16 @@ function serviceHealthClass(health: LinuxUiServiceHealth) {
   }
 }
 
-function serviceActionMeta(action: LinuxUiServiceAction) {
+function serviceActionMeta(action: LinuxUiServiceAction, lang: string) {
   switch (action) {
     case "start":
-      return { label: "Start", confirmLabel: "Start Service", destructive: false, icon: <Play className="h-3.5 w-3.5" /> };
+      return { label: localize(lang, "Запустить", "Start"), confirmLabel: localize(lang, "Запустить сервис", "Start service"), destructive: false, icon: <Play className="h-3.5 w-3.5" /> };
     case "stop":
-      return { label: "Stop", confirmLabel: "Stop Service", destructive: true, icon: <Square className="h-3.5 w-3.5" /> };
+      return { label: localize(lang, "Остановить", "Stop"), confirmLabel: localize(lang, "Остановить сервис", "Stop service"), destructive: true, icon: <Square className="h-3.5 w-3.5" /> };
     case "restart":
-      return { label: "Restart", confirmLabel: "Restart Service", destructive: false, icon: <RefreshCw className="h-3.5 w-3.5" /> };
+      return { label: localize(lang, "Перезапустить", "Restart"), confirmLabel: localize(lang, "Перезапустить сервис", "Restart service"), destructive: false, icon: <RefreshCw className="h-3.5 w-3.5" /> };
     case "reload":
-      return { label: "Reload", confirmLabel: "Reload Service", destructive: false, icon: <RotateCcw className="h-3.5 w-3.5" /> };
+      return { label: localize(lang, "Перечитать", "Reload"), confirmLabel: localize(lang, "Перечитать конфигурацию", "Reload service"), destructive: false, icon: <RotateCcw className="h-3.5 w-3.5" /> };
     default:
       return { label: action, confirmLabel: action, destructive: false, icon: null };
   }
@@ -69,6 +70,7 @@ function ServiceListRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const { lang } = useI18n();
   return (
     <button
       type="button"
@@ -83,7 +85,7 @@ function ServiceListRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="truncate font-mono text-xs text-foreground">{service.unit}</div>
-          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description || "No description"}</div>
+          <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{service.description || localize(lang, "Нет описания", "No description")}</div>
         </div>
         <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", serviceHealthClass(service.health))}>
           {service.health}
@@ -112,6 +114,7 @@ export function ServicesWindow({
   logsEnabled: boolean;
   onOpenLogs: () => void;
 }) {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -194,22 +197,22 @@ export function ServicesWindow({
     const unit = confirmState.service.unit;
     const base =
       confirmState.action === "stop"
-        ? `Stop ${unit}? This can interrupt traffic or background workers immediately.`
-        : `${serviceActionMeta(confirmState.action).label} ${unit}?`;
+        ? localize(lang, `Остановить ${unit}? Это может сразу прервать трафик или фоновые задачи.`, `Stop ${unit}? This may immediately interrupt traffic or background workers.`)
+        : `${serviceActionMeta(confirmState.action, lang).label} ${unit}?`;
     if (isConnectionCriticalService(unit) && ["stop", "restart"].includes(confirmState.action)) {
-      return `${base} This service looks connection-critical and may break the current SSH session.`;
+      return localize(lang, `${base} Текущая SSH-сессия может оборваться.`, `${base} The current SSH session may disconnect.`);
     }
     return base;
-  }, [confirmState]);
+  }, [confirmState, lang]);
 
   if (!servicesEnabled) {
     return (
       <div className="flex h-full min-h-0 items-center justify-center p-6">
         <div className="max-w-lg rounded-3xl border border-border/70 bg-background/92 p-6 text-center">
           <AlertTriangle className="mx-auto h-5 w-5 text-amber-300" />
-          <div className="mt-3 text-sm font-medium text-foreground">systemctl is not available</div>
+          <div className="mt-3 text-sm font-medium text-foreground">{localize(lang, "systemctl недоступен", "systemctl is unavailable")}</div>
           <div className="mt-1 text-xs leading-5 text-muted-foreground">
-            This host does not expose a systemd control surface, so the Services app cannot manage units here.
+            {localize(lang, "На этом хосте нельзя управлять unit systemd.", "Systemd units cannot be managed on this host.")}
           </div>
         </div>
       </div>
@@ -221,29 +224,27 @@ export function ServicesWindow({
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-sm font-medium text-foreground">systemd control center</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Search services, inspect their current state, and run safe actions with explicit confirmation.
-            </div>
+            <div className="text-sm font-medium text-foreground">{localize(lang, "Сервисы systemd", "Systemd services")}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{localize(lang, "Состояние и управление сервисами.", "Service state and actions.")}</div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter by unit, description, state..."
+              placeholder={localize(lang, "Найти сервис...", "Filter services...")}
               className="h-9 min-w-[16rem] bg-background/95 text-sm"
             />
             <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={refreshServices}>
               <RefreshCw className={cn("h-3.5 w-3.5", (servicesQuery.isFetching || logsQuery.isFetching) && "animate-spin")} />
-              Refresh
+              {localize(lang, "Обновить", "Refresh")}
             </Button>
           </div>
         </div>
         <div className="mt-4 grid gap-2 md:grid-cols-4">
-          <SummaryCard label="Total" value={summary.total} hint="Loaded units in current slice" />
-          <SummaryCard label="Active" value={summary.active} hint="Healthy active services" />
-          <SummaryCard label="Failed" value={summary.failed} hint="Needs attention" alert={summary.failed > 0} />
-          <SummaryCard label="Inactive" value={summary.inactive} hint="Stopped or dormant units" />
+          <SummaryCard label={localize(lang, "Всего", "Total")} value={summary.total} hint={localize(lang, "Загруженные unit", "Loaded units")} />
+          <SummaryCard label={localize(lang, "Активны", "Active")} value={summary.active} hint={localize(lang, "Работают сейчас", "Running now")} />
+          <SummaryCard label={localize(lang, "С ошибкой", "Failed")} value={summary.failed} hint={localize(lang, "Требуют внимания", "Needs attention")} alert={summary.failed > 0} />
+          <SummaryCard label={localize(lang, "Неактивны", "Inactive")} value={summary.inactive} hint={localize(lang, "Остановлены", "Stopped units")} />
         </div>
       </div>
 
@@ -252,10 +253,10 @@ export function ServicesWindow({
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
               <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Services
+                {localize(lang, "Сервисы", "Services")}
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
-                {filteredServices.length} of {services.length} visible
+                {localize(lang, `Показано ${filteredServices.length} из ${services.length}`, `${filteredServices.length} of ${services.length} visible`)}
               </div>
             </div>
             <ScrollArea className="h-full max-h-full">
@@ -268,13 +269,13 @@ export function ServicesWindow({
 
                 {servicesQuery.isLoading ? (
                   <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading services...
+                    {localize(lang, "Загружаем сервисы...", "Loading services...")}
                   </div>
                 ) : null}
 
                 {!servicesQuery.isLoading && filteredServices.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No services match the current filter.
+                    {localize(lang, "Ничего не найдено.", "No services match the current filter.")}
                   </div>
                 ) : null}
 
@@ -305,17 +306,17 @@ export function ServicesWindow({
                           {selectedService.active}/{selectedService.sub}
                         </span>
                       </div>
-                      <div className="mt-2 text-sm text-muted-foreground">{selectedService.description || "No description available for this unit."}</div>
+                      <div className="mt-2 text-sm text-muted-foreground">{selectedService.description || localize(lang, "Нет описания.", "No description available.")}</div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                        <SummaryCard label="Load" value={selectedService.load} hint="Unit load state" />
-                        <SummaryCard label="Active" value={selectedService.active} hint="systemctl active state" alert={selectedService.health === "failed"} />
-                        <SummaryCard label="Sub" value={selectedService.sub} hint="systemctl sub-state" />
+                        <SummaryCard label={localize(lang, "Загрузка", "Load")} value={selectedService.load} hint={localize(lang, "Состояние загрузки unit", "Unit load state")} />
+                        <SummaryCard label={localize(lang, "Активность", "Active")} value={selectedService.active} hint={localize(lang, "Состояние systemctl", "systemctl active state")} alert={selectedService.health === "failed"} />
+                        <SummaryCard label={localize(lang, "Подсостояние", "Sub-state")} value={selectedService.sub} hint={localize(lang, "Детальное состояние", "systemctl sub-state")} />
                       </div>
                     </div>
 
                     <div className="flex flex-wrap gap-2 xl:max-w-[16rem] xl:justify-end">
                       {(["start", "restart", "reload", "stop"] as LinuxUiServiceAction[]).map((action) => {
-                        const meta = serviceActionMeta(action);
+                        const meta = serviceActionMeta(action, lang);
                         return (
                           <Button
                             key={action}
@@ -339,18 +340,18 @@ export function ServicesWindow({
                   <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-card/88">
                     <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
                       <div>
-                        <div className="text-sm font-medium text-foreground">Recent output</div>
+                        <div className="text-sm font-medium text-foreground">{localize(lang, "Последний вывод", "Recent output")}</div>
                         <div className="mt-1 text-xs text-muted-foreground">
                           {logsEnabled ? logsQuery.data?.service_logs.source || "journalctl" : "systemctl status fallback"}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="rounded-full border border-border/70 bg-background/94 px-2 py-0.5 text-xs uppercase tracking-wide text-muted-foreground">
-                          {logsQuery.data?.service_logs.lines || 80} lines
+                          {localize(lang, `${logsQuery.data?.service_logs.lines || 80} строк`, `${logsQuery.data?.service_logs.lines || 80} lines`)}
                         </span>
                         {logsEnabled ? (
                           <Button type="button" size="sm" variant="ghost" className="h-8 text-xs" onClick={onOpenLogs}>
-                            Logs App
+                            {localize(lang, "Все логи", "All logs")}
                           </Button>
                         ) : null}
                       </div>
@@ -360,26 +361,22 @@ export function ServicesWindow({
                         {logsQuery.error instanceof Error
                           ? logsQuery.error.message
                           : logsQuery.isLoading
-                            ? "Loading recent service output..."
-                            : logsQuery.data?.service_logs.content || "No recent service output."}
+                            ? localize(lang, "Загружаем вывод сервиса...", "Loading service output...")
+                            : logsQuery.data?.service_logs.content || localize(lang, "Вывода пока нет.", "No recent service output.")}
                       </pre>
                     </ScrollArea>
                   </div>
 
                   <div className="flex min-h-0 flex-col gap-4">
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4">
-                      <div className="text-sm font-medium text-foreground">Action state</div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Service actions run through typed Linux UI endpoints instead of raw shell.
-                      </div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Последнее действие", "Last action")}</div>
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/94 p-3">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Last action</div>
                         <div className="mt-2 text-sm text-foreground">
-                          {lastAction ? `${lastAction.action} ${lastAction.service}` : "No service action has been executed yet."}
+                          {lastAction ? `${lastAction.action} ${lastAction.service}` : localize(lang, "Действий ещё не было.", "No service action has been run yet.")}
                         </div>
                         {lastAction ? (
                           <div className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", lastAction.success ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive")}>
-                            {lastAction.success ? "success" : "failed"}
+                            {lastAction.success ? localize(lang, "успешно", "success") : localize(lang, "ошибка", "failed")}
                           </div>
                         ) : null}
                       </div>
@@ -398,17 +395,17 @@ export function ServicesWindow({
                     </div>
 
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4 text-xs leading-5 text-muted-foreground">
-                      <div className="text-sm font-medium text-foreground">Operational notes</div>
-                      <div className="mt-2">Actions may fail if the current account cannot manage system services.</div>
-                      <div className="mt-2">Restarting SSH or networking can break the current terminal and workspace session.</div>
-                      <div className="mt-2">Use the terminal fallback when you need custom flags or sudo escalation.</div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Важно", "Important")}</div>
+                      <div className="mt-2">{localize(lang, "Нужны права на управление системными сервисами.", "The account needs permission to manage system services.")}</div>
+                      <div className="mt-2">{localize(lang, "Перезапуск SSH или сети может оборвать текущую сессию.", "Restarting SSH or networking may disconnect this session.")}</div>
+                      <div className="mt-2">{localize(lang, "Для дополнительных флагов и sudo используйте терминал.", "Use the terminal for custom flags or sudo.")}</div>
                     </div>
                   </div>
                 </div>
               </>
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                Select a service from the list to inspect state and recent output.
+                {localize(lang, "Выберите сервис.", "Select a service.")}
               </div>
             )}
           </section>
@@ -420,10 +417,10 @@ export function ServicesWindow({
         onOpenChange={(open) => {
           if (!open) setConfirmState(null);
         }}
-        title={confirmState ? `${serviceActionMeta(confirmState.action).label} ${confirmState.service.unit}` : "Confirm service action"}
+        title={confirmState ? `${serviceActionMeta(confirmState.action, lang).label} ${confirmState.service.unit}` : localize(lang, "Подтвердите действие", "Confirm service action")}
         description={confirmDescription}
-        confirmLabel={confirmState ? serviceActionMeta(confirmState.action).confirmLabel : "Confirm"}
-        destructive={Boolean(confirmState && (serviceActionMeta(confirmState.action).destructive || isConnectionCriticalService(confirmState.service.unit)))}
+        confirmLabel={confirmState ? serviceActionMeta(confirmState.action, lang).confirmLabel : localize(lang, "Подтвердить", "Confirm")}
+        destructive={Boolean(confirmState && (serviceActionMeta(confirmState.action, lang).destructive || isConnectionCriticalService(confirmState.service.unit)))}
         onConfirm={async () => {
           if (!confirmState) return;
           const current = confirmState;

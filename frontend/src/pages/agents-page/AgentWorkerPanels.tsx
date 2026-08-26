@@ -24,11 +24,11 @@ export function ExecutionWorkerPanel({
 
   return (
     <SectionCard
-      title={localize(lang, "Execution worker", "Execution worker")}
+      title={localize(lang, "Сервис выполнения", "Execution service")}
       description={localize(
         lang,
-        "Состояние очереди full/multi-агентов",
-        "Full/multi agent queue runtime",
+        "Состояние очереди автономных агентов",
+        "Autonomous agent queue status",
       )}
       icon={<Cpu className="h-4 w-4" />}
       bodyClassName="space-y-4"
@@ -37,7 +37,7 @@ export function ExecutionWorkerPanel({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={readiness.status} tone={tone} />
-            {worker?.is_stale ? <StatusBadge label="stale" tone="warning" /> : null}
+            {worker?.is_stale ? <StatusBadge label={localize(lang, "Нет обновлений", "Stale")} tone="warning" /> : null}
             <span className="text-sm font-semibold text-foreground">{readiness.title}</span>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{readiness.description}</p>
@@ -59,12 +59,12 @@ export function ExecutionWorkerPanel({
           ) : null}
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-2 text-xs text-muted-foreground sm:grid-cols-3 lg:min-w-[420px]">
-          <WorkerFact label="worker" value={worker?.worker_key || "default"} />
-          <WorkerFact label="host" value={worker?.hostname || "—"} />
-          <WorkerFact label="pid" value={worker?.pid ? String(worker.pid) : "—"} />
-          <WorkerFact label="heartbeat" value={formatWorkerTime(worker?.heartbeat_at, lang)} />
-          <WorkerFact label="lease" value={formatWorkerTime(worker?.lease_expires_at, lang)} />
-          <WorkerFact label="cycle" value={formatWorkerTime(worker?.last_cycle_finished_at, lang)} />
+          <WorkerFact label={localize(lang, "Обработчик", "Worker")} value={worker?.worker_key || "default"} />
+          <WorkerFact label={localize(lang, "Узел", "Host")} value={worker?.hostname || "—"} />
+          <WorkerFact label="PID" value={worker?.pid ? String(worker.pid) : "—"} />
+          <WorkerFact label={localize(lang, "Последний сигнал", "Heartbeat")} value={formatWorkerTime(worker?.heartbeat_at, lang)} />
+          <WorkerFact label={localize(lang, "Резерв до", "Lease until")} value={formatWorkerTime(worker?.lease_expires_at, lang)} />
+          <WorkerFact label={localize(lang, "Последний цикл", "Last cycle")} value={formatWorkerTime(worker?.last_cycle_finished_at, lang)} />
         </div>
       </div>
       {worker?.last_error ? (
@@ -122,7 +122,7 @@ export function WorkerRuntimePanel({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={status} tone={tone} />
-            {worker?.is_stale ? <StatusBadge label="stale" tone="warning" /> : null}
+            {worker?.is_stale ? <StatusBadge label={localize(lang, "Нет обновлений", "Stale")} tone="warning" /> : null}
             <span className="text-sm font-semibold text-foreground">{statusTitle}</span>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">{statusDescription}</p>
@@ -144,12 +144,12 @@ export function WorkerRuntimePanel({
           ) : null}
         </div>
         <div className="grid min-w-0 grid-cols-2 gap-x-5 gap-y-2 text-xs text-muted-foreground sm:grid-cols-3 lg:min-w-[420px]">
-          <WorkerFact label="worker" value={worker?.worker_key || "default"} />
-          <WorkerFact label="host" value={worker?.hostname || "—"} />
-          <WorkerFact label="pid" value={worker?.pid ? String(worker.pid) : "—"} />
-          <WorkerFact label="heartbeat" value={formatWorkerTime(worker?.heartbeat_at, lang)} />
-          <WorkerFact label="lease" value={formatWorkerTime(worker?.lease_expires_at, lang)} />
-          <WorkerFact label="cycle" value={formatWorkerTime(worker?.last_cycle_finished_at, lang)} />
+          <WorkerFact label={localize(lang, "Обработчик", "Worker")} value={worker?.worker_key || "default"} />
+          <WorkerFact label={localize(lang, "Узел", "Host")} value={worker?.hostname || "—"} />
+          <WorkerFact label="PID" value={worker?.pid ? String(worker.pid) : "—"} />
+          <WorkerFact label={localize(lang, "Последний сигнал", "Heartbeat")} value={formatWorkerTime(worker?.heartbeat_at, lang)} />
+          <WorkerFact label={localize(lang, "Резерв до", "Lease until")} value={formatWorkerTime(worker?.lease_expires_at, lang)} />
+          <WorkerFact label={localize(lang, "Последний цикл", "Last cycle")} value={formatWorkerTime(worker?.last_cycle_finished_at, lang)} />
         </div>
       </div>
       {worker?.last_error ? (
@@ -173,7 +173,7 @@ export function WorkerRuntimePanel({
 export function WorkerFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="font-mono uppercase tracking-wide text-muted-foreground/70">{label}</p>
+      <p className="text-xs font-medium text-muted-foreground/70">{label}</p>
       <p className="mt-0.5 truncate text-foreground">{value}</p>
     </div>
   );

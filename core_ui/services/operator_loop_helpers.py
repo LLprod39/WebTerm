@@ -390,9 +390,7 @@ def _alerts_summary(items: list[dict[str, Any]]) -> tuple[str, str]:
         if severity:
             counts[severity] = counts.get(severity, 0) + 1
     severity_bits = [
-        f"{counts[key]} {key}"
-        for key in ("critical", "high", "warning", "medium", "info", "low")
-        if counts.get(key)
+        f"{counts[key]} {key}" for key in ("critical", "high", "warning", "medium", "info", "low") if counts.get(key)
     ]
     top = max(items, key=lambda item: severity_rank.get(str(item.get("severity") or "").lower(), 0), default={})
     top_server = str(top.get("server_name") or "").strip()
@@ -469,9 +467,7 @@ def _fallback_answer_from_metadata(metadata: dict[str, Any] | None) -> str:
                     and metrics_status not in {"unreachable", "offline", "unknown"}
                     and "unreachable" in alert_titles
                 ):
-                    facts.append(
-                        "Есть расхождение: снимок метрик доступен, но алерты сообщают недоступность сервера."
-                    )
+                    facts.append("Есть расхождение: снимок метрик доступен, но алерты сообщают недоступность сервера.")
                     next_steps.append("Сверь время и источник обеих проверок, прежде чем менять систему.")
             elif kind == "servers":
                 status_counts = table.get("status_counts") if isinstance(table.get("status_counts"), dict) else {}
@@ -484,8 +480,13 @@ def _fallback_answer_from_metadata(metadata: dict[str, Any] | None) -> str:
                 count = len(items)
                 noun = _ru_plural(count, "агент", "агента", "агентов")
                 facts.append(f"Доступно {count} {noun}; активных запусков — {active}.")
+            elif kind == "playbooks":
+                count = len(items)
+                facts.append(f"Доступно {count} playbook/runbook; полный каталог приведён в таблице.")
             elif kind == "forecasts":
-                risky = sum(1 for item in items if str(item.get("severity") or "").lower() in {"critical", "high", "warning"})
+                risky = sum(
+                    1 for item in items if str(item.get("severity") or "").lower() in {"critical", "high", "warning"}
+                )
                 count = len(items)
                 noun = _ru_plural(count, "прогноз", "прогноза", "прогнозов")
                 if count:

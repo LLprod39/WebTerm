@@ -128,12 +128,12 @@ export function AgentListSection({
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
             <NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />
           </div>
-          <h3 className="font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Здесь появятся ваши цифровые сотрудники", "Your digital employees will appear here")}</h3>
+          <h3 className="font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Агентов пока нет", "No agents yet")}</h3>
           <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {localize(
               lang,
-              "Опишите реальную IT-задачу, подключите нужные системы и знания, задайте права, запуск и формат результата. Технический runtime можно оставить по умолчанию.",
-              "Describe a real IT task, connect the required systems and knowledge, then set permissions, trigger, and result format. You can leave the technical runtime at its default.",
+              "Создайте агента, задайте задачу, доступы и ожидаемый результат.",
+              "Create an agent, then define its task, access, and expected result.",
             )}
           </p>
         </div>
@@ -145,10 +145,10 @@ export function AgentListSection({
           >
             <ActionIcons.add className="mb-2 h-4 w-4 text-primary" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Поручить свою задачу", "Assign your task")}
+              {localize(lang, "Создать агента", "Create an agent")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Цель, инструкции и результат", "Goal, instructions, and result")}
+              {localize(lang, "Задача, инструкции и результат", "Task, instructions, and result")}
             </div>
           </button>
           <button
@@ -158,7 +158,7 @@ export function AgentListSection({
           >
             <ShieldCheck className="mb-2 h-4 w-4 text-info" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Задать границы", "Set boundaries")}
+              {localize(lang, "Настроить доступы", "Configure access")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
               {localize(lang, "Системы, права и подтверждения", "Systems, permissions, approvals")}
@@ -171,10 +171,10 @@ export function AgentListSection({
           >
             <Workflow className="mb-2 h-4 w-4 text-ai" strokeWidth={1.5} />
             <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Дать инструменты", "Provide tools")}
+              {localize(lang, "Добавить материалы", "Add materials")}
             </div>
             <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Skills, материалы и интеграции", "Skills, materials, integrations")}
+              {localize(lang, "Навыки, инструкции и интеграции", "Skills, instructions, and integrations")}
             </div>
           </button>
         </div>
@@ -184,10 +184,10 @@ export function AgentListSection({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <details className="group rounded-sm border border-border bg-surface-0 text-sm">
-          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 text-xs font-semibold text-muted-foreground">
-            {localize(lang, "Advanced: фильтр runtime", "Advanced: runtime filter")}
+          <summary className="flex h-9 cursor-pointer list-none items-center gap-2 px-3 text-xs font-semibold text-muted-foreground">
+            {localize(lang, "Режим выполнения", "Execution mode")}
             <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" />
           </summary>
           <div className="flex items-center gap-0.5 border-t border-border p-0.5">
@@ -209,13 +209,13 @@ export function AgentListSection({
           ))}
           </div>
         </details>
-        <div className="relative w-full max-w-64 sm:w-64">
-          <ActionIcons.search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
+        <div className="relative w-full sm:w-80 lg:w-96">
+          <ActionIcons.search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" strokeWidth={1.5} />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={localize(lang, "Поиск по имени, цели, серверу…", "Search name, goal, server…")}
-            className="h-9 pl-8 text-sm"
+            className="h-9 bg-card pl-9 text-sm"
           />
         </div>
       </div>
@@ -240,7 +240,7 @@ export function AgentListSection({
         />
       ) : (
         <div className="overflow-hidden rounded-sm border border-border bg-card shadow-elev-1">
-          <div className="hidden border-b border-border bg-surface-0 px-4 py-2.5 type-label text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:items-center lg:gap-3">
+          <div className="hidden border-b border-border bg-surface-0 px-5 py-2.5 type-label text-muted-foreground lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(8rem,0.7fr)_minmax(10rem,0.9fr)_minmax(9rem,0.8fr)_10.5rem] lg:items-center lg:gap-3">
             <span>{localize(lang, "Агент", "Agent")}</span>
             <span>{localize(lang, "Серверы", "Servers")}</span>
             <span>{localize(lang, "Последний запуск", "Last run")}</span>
@@ -284,12 +284,12 @@ export function AgentListSection({
                 <div
                   key={ag.id}
                   className={cn(
-                    "group px-3 py-3 transition-colors sm:px-4",
+                    "group px-3 py-3 transition-colors sm:px-5",
                     createdAgentId === ag.id ? "bg-primary/8" : "hover:bg-surface-1",
                     isPaused && "opacity-70",
                   )}
                 >
-                  <div className="flex items-start gap-2.5 sm:items-center lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(7rem,0.7fr)_minmax(9rem,0.9fr)_minmax(8rem,0.8fr)_auto] lg:items-center lg:gap-3">
+                  <div className="flex items-start gap-2.5 sm:items-center lg:grid lg:grid-cols-[minmax(0,1.6fr)_minmax(8rem,0.7fr)_minmax(10rem,0.9fr)_minmax(9rem,0.8fr)_10.5rem] lg:items-center lg:gap-3">
                     <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
                       <span className="relative mt-1.5 flex h-2 w-2 shrink-0 sm:mt-0" aria-hidden>
                         {dot.pulse ? (
@@ -333,7 +333,7 @@ export function AgentListSection({
                       {scheduleMeta}
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-1 self-center">
+                    <div className="flex shrink-0 items-center justify-self-end gap-1 self-center">
                       {ag.active_run_id ? (
                         <Button asChild size="sm" className="h-8 gap-1.5 shadow-elev-1">
                           <Link to={`/agents/run/${ag.active_run_id}`}>

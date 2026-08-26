@@ -27,6 +27,7 @@ from .views import (
     server_ops,
     server_pages,
     server_playbook_compatibility_views,
+    server_playbook_run_report_views,
     server_playbooks,
     server_shares,
     snapshot_views,
@@ -263,9 +264,24 @@ urlpatterns = [
     path("api/agents/runs/<int:run_id>/", server_agent_runs.agent_run_detail, name="agent_run_detail"),
     path("api/agents/runs/<int:run_id>/report/", server_agent_runs.agent_run_report, name="agent_run_report"),
     path(
+        "api/agents/runs/<int:run_id>/report/v2/",
+        server_agent_runs.agent_run_report_v2,
+        name="agent_run_report_v2",
+    ),
+    path(
+        "api/agents/runs/<int:run_id>/report/document/",
+        server_agent_runs.agent_run_report_document,
+        name="agent_run_report_document",
+    ),
+    path(
         "api/agents/runs/<int:run_id>/report/deliver/",
         server_agent_runs.agent_run_report_deliver,
         name="agent_run_report_deliver",
+    ),
+    path(
+        "api/agents/runs/<int:run_id>/artifacts/",
+        server_agent_runs.agent_run_artifacts,
+        name="agent_run_artifacts",
     ),
     path(
         "api/agents/runs/<int:run_id>/artifacts/download-all/",
@@ -279,6 +295,21 @@ urlpatterns = [
     ),
     path("api/agents/runs/<int:run_id>/log/", server_agent_runs.agent_run_log, name="agent_run_log"),
     path("api/agents/runs/<int:run_id>/events/", server_agent_runs.agent_run_events, name="agent_run_events"),
+    path(
+        "api/agents/runs/<int:run_id>/events/v2/",
+        server_agent_runs.agent_run_events_v2,
+        name="agent_run_events_v2",
+    ),
+    path(
+        "api/agents/runs/<int:run_id>/activity/",
+        server_agent_runs.agent_run_activity,
+        name="agent_run_activity",
+    ),
+    path(
+        "api/agents/runs/<int:run_id>/cleanup-stale/",
+        server_agent_runs.agent_run_cleanup_stale,
+        name="agent_run_cleanup_stale",
+    ),
     path(
         "api/agents/runs/<int:run_id>/audit-export/",
         server_agent_runs.agent_run_audit_export,
@@ -340,6 +371,16 @@ urlpatterns = [
         playbook_bundle_views.playbook_gitlab_commit,
         name="playbook_gitlab_commit",
     ),
+    path(
+        "api/playbooks/<int:playbook_id>/gitlab/refresh/preview/",
+        playbook_bundle_views.playbook_gitlab_refresh_preview,
+        name="playbook_gitlab_refresh_preview",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/gitlab/refresh/commit/",
+        playbook_bundle_views.playbook_gitlab_refresh_commit,
+        name="playbook_gitlab_refresh_commit",
+    ),
     path("api/playbooks/ansible/status/", server_playbooks.playbook_ansible_status, name="playbook_ansible_status"),
     path("api/playbooks/guided/", server_playbooks.playbook_guided_recipes, name="playbook_guided_recipes"),
     path("api/playbooks/guided/generate/", server_playbooks.playbook_guided_generate, name="playbook_guided_generate"),
@@ -355,7 +396,37 @@ urlpatterns = [
         name="playbook_inventory_preview",
     ),
     path("api/playbooks/runs/", server_playbooks.playbook_run_list, name="playbook_run_list"),
+    path(
+        "api/playbooks/runs/history/",
+        server_playbook_run_report_views.playbook_run_report_list,
+        name="playbook_run_report_list",
+    ),
     path("api/playbooks/runs/<int:run_id>/", server_playbooks.playbook_run_detail, name="playbook_run_detail"),
+    path(
+        "api/playbooks/runs/<int:run_id>/report/",
+        server_playbook_run_report_views.playbook_run_report,
+        name="playbook_run_report",
+    ),
+    path(
+        "api/playbooks/runs/<int:run_id>/hosts/<int:server_id>/",
+        server_playbook_run_report_views.playbook_run_report_host,
+        name="playbook_run_report_host",
+    ),
+    path(
+        "api/playbooks/runs/<int:run_id>/log/",
+        server_playbook_run_report_views.playbook_run_report_log,
+        name="playbook_run_report_log",
+    ),
+    path(
+        "api/playbooks/runs/<int:run_id>/retry-context/",
+        server_playbook_run_report_views.playbook_run_retry_context,
+        name="playbook_run_retry_context",
+    ),
+    path(
+        "api/playbooks/runs/<int:run_id>/export/",
+        server_playbook_run_report_views.playbook_run_report_export,
+        name="playbook_run_report_export",
+    ),
     path("api/playbooks/runs/<int:run_id>/cancel/", server_playbooks.playbook_run_cancel, name="playbook_run_cancel"),
     path(
         "api/playbooks/runs/<int:run_id>/rerun-failed/",
@@ -404,6 +475,16 @@ urlpatterns = [
         name="playbook_draft",
     ),
     path(
+        "api/playbooks/<int:playbook_id>/draft/files/",
+        playbook_draft_views.playbook_draft_files,
+        name="playbook_draft_files",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/draft/file/",
+        playbook_draft_views.playbook_draft_file,
+        name="playbook_draft_file",
+    ),
+    path(
         "api/playbooks/<int:playbook_id>/revisions/",
         playbook_revision_views.playbook_revisions,
         name="playbook_revisions",
@@ -447,6 +528,11 @@ urlpatterns = [
         "api/playbooks/<int:playbook_id>/shares/",
         playbook_share_views.playbook_shares,
         name="playbook_shares",
+    ),
+    path(
+        "api/playbooks/<int:playbook_id>/shares/candidates/",
+        playbook_share_views.playbook_share_candidates,
+        name="playbook_share_candidates",
     ),
     path(
         "api/playbooks/<int:playbook_id>/shares/<int:share_id>/",

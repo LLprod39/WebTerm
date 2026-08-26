@@ -16,6 +16,7 @@ from web_ui.services.settings_readiness_config import (
 )
 from web_ui.services.settings_readiness_runtime import (
     access_policy_check,
+    ansible_runtime_check,
     runtime_limits_check,
     server_secret_storage_check,
     workers_check,
@@ -36,6 +37,7 @@ def build_settings_readiness_report() -> dict[str, Any]:
         access_policy_check(),
         runtime_limits_check(),
         workers_check(),
+        ansible_runtime_check(),
         plugin_marketplace_check(),
     ]
     summary = {

@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Bot,
   CheckCircle2,
   FileText,
   Plus,
@@ -9,7 +10,7 @@ import {
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
-import { PageShell, SoftHeader, StatStrip, StatStripItem } from "@/components/ui/page-shell";
+import { PageShell, StatStrip, StatStripItem } from "@/components/ui/page-shell";
 import { SkeletonList } from "@/components/ui/list-state";
 import { localize } from "@/lib/i18n";
 import { CreateAgentDialog } from "./agents-page/CreateAgentDialog";
@@ -96,31 +97,47 @@ export default function AgentsPage() {
   ) : null;
 
   return (
-    <PageShell width="7xl" className="space-y-4">
-      <SoftHeader
-        compact
-        title={t("agent.title")}
-        count={allAgents.length > 0 ? allAgents.length : undefined}
-        subtitle=""
-        actions={
-          <>
-            <Button size="icon" variant="ghost" onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })} aria-label={t("udash.refresh")}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button className="gap-1.5 shadow-elev-1" onClick={openCreate}>
-              <Plus className="h-4 w-4" />
-              {t("agent.new")}
-            </Button>
-          </>
-        }
-      />
+    <PageShell width="7xl" className="space-y-5">
+      <header className="flex flex-col gap-5 border-b border-border/70 pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-start gap-3.5">
+          <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+            <Bot className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
+              {t("agent.title")}
+              {allAgents.length > 0 ? (
+                <span className="ml-2 font-mono text-base font-normal text-muted-foreground">{allAgents.length}</span>
+              ) : null}
+            </h1>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+              {localize(lang, "Задачи, проверки и запуски по расписанию.", "Tasks, checks, and scheduled runs.")}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-9 w-9"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["agents"] })}
+            aria-label={t("udash.refresh")}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button size="sm" className="h-9 gap-1.5" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            {t("agent.new")}
+          </Button>
+        </div>
+      </header>
 
       {allAgents.length > 0 ? (
         <StatStrip>
           <StatStripItem
             label={localize(lang, "Всего", "Total")}
             value={allAgents.length}
-            hint={localize(lang, "профили", "profiles")}
+            hint={localize(lang, "агенты", "agents")}
           />
           <StatStripItem
             label={localize(lang, "Выполняется", "Running")}
@@ -139,10 +156,10 @@ export default function AgentsPage() {
             }
           />
           <StatStripItem
-            label={localize(lang, "Сбой / стоп", "Failed / stop")}
+            label={localize(lang, "С ошибкой", "Failed")}
             value={failedAgents}
             tone={failedAgents > 0 ? "danger" : "default"}
-            hint={localize(lang, "последний запуск", "last run")}
+            hint={localize(lang, "по последнему запуску", "by latest run")}
           />
         </StatStrip>
       ) : null}
@@ -199,8 +216,8 @@ export default function AgentsPage() {
             <div className="text-sm font-medium text-foreground">{result.server_name}</div>
             <div className="text-xs text-muted-foreground">
               {result.status === "completed"
-                ? localize(lang, "Работа завершена · результат готов", "Work completed · result ready")
-                : localize(lang, "Запуск завершился с проблемой · откройте результат", "Run ended with an issue · open the result")}
+                ? localize(lang, "Успешно", "Completed")
+                : localize(lang, "Завершено с ошибкой", "Failed")}
               {" · "}{formatDuration(result.duration_ms)}
             </div>
           </div>

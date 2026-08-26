@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api";
 
 export * from "./playbook-workspace";
 export * from "./playbook-bundles";
+export * from "./playbook-run-report";
 
 export type PlaybookKind = "runbook" | "ansible";
 export type PlaybookCategory = "deploy" | "patch" | "diagnose" | "security" | "maintenance" | "custom";
@@ -71,6 +72,15 @@ export interface PlaybookCompatibilityProposal {
   report: PlaybookCompatibilityReport;
 }
 
+export interface PlaybookCompatibilityBase {
+  path: string;
+  content_hash: string;
+  draft_version: number;
+  version?: number;
+  bundle_hash: string;
+  base_revision_id: number | null;
+}
+
 export type PlaybookInventoryBindings = Record<string, { server_ids: number[]; group_ids: number[] }>;
 
 export interface PlaybookSummary {
@@ -96,6 +106,8 @@ export interface PlaybookSummary {
   published_revision_id?: number | null;
   published_revision_number?: number | null;
   published_content_hash?: string;
+  draft_version?: number | null;
+  has_unpublished_draft?: boolean;
   source?: {
     type?: "gitlab" | string;
     host?: string;
@@ -252,15 +264,75 @@ export async function duplicatePlaybook(id: number) {
   });
 }
 
-export async function importPlaybook(payload: { content: string; filename?: string; save?: boolean }) {
+export interface RawPlaybookImportFile {
+  path: string;
+  size_bytes: number;
+  sha256: string;
+  is_text: boolean;
+  editable: boolean;
+  is_entrypoint: boolean;
+}
+
+export interface RawPlaybookImportPreview {
+  success: true;
+  preview: true;
+  parsed: Record<string, unknown> & { name?: string; description?: string; tags?: string[] };
+  content_hash: string;
+  tree: { entrypoint: string; files: RawPlaybookImportFile[] };
+  entrypoint: string;
+  dependencies: { roles: string[]; collections: string[]; assets: string[] };
+  compatibility: PlaybookCompatibilityReport;
+  secret_findings: Array<Record<string, unknown>>;
+  safe_to_commit: boolean;
+}
+
+export interface RawPlaybookImportCommit {
+  success: true;
+  playbook: PlaybookDetail;
+  parsed: Record<string, unknown>;
+  content_hash: string;
+  entrypoint: string;
+}
+
+export async function importPlaybook(payload: {
+  content: string;
+  filename?: string;
+  save?: boolean;
+  expected_content_hash?: string;
+}) {
   return apiFetch<{
     success: boolean;
     playbook?: PlaybookDetail;
     parsed?: Record<string, unknown>;
+    content_hash?: string;
+    entrypoint?: string;
     error?: string;
   }>("/servers/api/playbooks/import/", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function previewRawPlaybook(content: string, filename: string) {
+  return apiFetch<RawPlaybookImportPreview>("/servers/api/playbooks/import/", {
+    method: "POST",
+    body: JSON.stringify({ content, filename, save: false }),
+  });
+}
+
+export async function commitRawPlaybook(
+  content: string,
+  filename: string,
+  expectedContentHash: string,
+) {
+  return apiFetch<RawPlaybookImportCommit>("/servers/api/playbooks/import/", {
+    method: "POST",
+    body: JSON.stringify({
+      content,
+      filename,
+      save: true,
+      expected_content_hash: expectedContentHash,
+    }),
   });
 }
 
@@ -382,20 +454,21 @@ export async function runPlaybook(
 export async function analyzePlaybookCompatibility(
   id: number,
   payload: {
+    path?: string;
     source_yaml?: string;
     server_ids?: number[];
     group_ids?: number[];
     inventory_bindings?: PlaybookInventoryBindings;
   } = {},
 ) {
-  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; error?: string }>(
+  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; base?: PlaybookCompatibilityBase; error?: string }>(
     `/servers/api/playbooks/${id}/compatibility/analyze/`,
     { method: "POST", body: JSON.stringify(payload) },
   );
 }
 
 export async function analyzePlaybookSource(sourceYaml: string) {
-  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; error?: string }>(
+  return apiFetch<{ success: boolean; report: PlaybookCompatibilityReport; base?: PlaybookCompatibilityBase; error?: string }>(
     "/servers/api/playbooks/compatibility/analyze/",
     { method: "POST", body: JSON.stringify({ source_yaml: sourceYaml }) },
   );
@@ -403,12 +476,13 @@ export async function analyzePlaybookSource(sourceYaml: string) {
 
 export async function adaptPlaybookCompatibility(
   id: number,
-  payload: { instruction?: string; inventory_bindings?: PlaybookInventoryBindings } = {},
+  payload: { path?: string; instruction?: string; inventory_bindings?: PlaybookInventoryBindings } = {},
 ) {
   return apiFetch<{
     success: boolean;
     error?: string;
     proposal: PlaybookCompatibilityProposal;
+    base?: PlaybookCompatibilityBase;
   }>(`/servers/api/playbooks/${id}/compatibility/adapt/`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -417,7 +491,7 @@ export async function adaptPlaybookCompatibility(
 }
 
 export async function adaptPlaybookSource(sourceYaml: string, payload: { instruction?: string } = {}) {
-  return apiFetch<{ success: boolean; error?: string; proposal: PlaybookCompatibilityProposal }>(
+  return apiFetch<{ success: boolean; error?: string; proposal: PlaybookCompatibilityProposal; base?: PlaybookCompatibilityBase }>(
     "/servers/api/playbooks/compatibility/adapt/",
     {
       method: "POST",
@@ -430,16 +504,23 @@ export async function adaptPlaybookSource(sourceYaml: string, payload: { instruc
 export async function applyPlaybookCompatibility(
   id: number,
   payload: {
+    path: string;
     adapted_yaml: string;
     changes?: string[];
     inventory_bindings?: PlaybookInventoryBindings;
+    expected_content_hash: string;
+    expected_bundle_hash: string;
+    expected_draft_version?: number;
+    base_revision_id?: number | null;
   },
 ) {
   return apiFetch<{
     success: boolean;
     error?: string;
-    revision: PlaybookCompatibilityRevision;
-    playbook: PlaybookDetail;
+    revision?: PlaybookCompatibilityRevision;
+    playbook?: PlaybookDetail;
+    draft?: import("./playbook-workspace").PlaybookDraft;
+    report?: PlaybookCompatibilityReport;
   }>(`/servers/api/playbooks/${id}/compatibility/apply/`, {
     method: "POST",
     body: JSON.stringify(payload),

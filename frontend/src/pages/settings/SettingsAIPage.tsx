@@ -66,11 +66,11 @@ export default function SettingsAIPage() {
     <div className="space-y-5 pb-10">
       <SettingsPageHeader
         icon={Bot}
-        title="AI и модели"
-        description="Провайдеры, API-ключи и модели для чата, агентов и оркестратора. Настраивается в UI после деплоя."
+        title="ИИ и модели"
+        description="Провайдеры, ключи и модели для чата, агентов и сценариев."
         actions={
           <>
-            <Badge variant="secondary">{aiSettings.configuredProviderCount} активных API</Badge>
+            <Badge variant="secondary">{aiSettings.configuredProviderCount} подключено</Badge>
             {aiSettings.aiDraftDirty ? <Badge>Есть черновик</Badge> : <Badge variant="outline">Все сохранено</Badge>}
           </>
         }

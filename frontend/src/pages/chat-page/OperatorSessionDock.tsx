@@ -46,7 +46,7 @@ export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCom
   const statusDot = useMemo(() => {
     if (session.mode === "live") {
       if (status === "connected") return "bg-emerald-400";
-      if (status === "connecting") return "bg-amber-400 animate-pulse";
+      if (status === "connecting") return "bg-amber-400 animate-pulse motion-reduce:animate-none";
       if (status === "error") return "bg-rose-400";
       return "bg-zinc-500";
     }
@@ -83,7 +83,7 @@ export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCom
       className={cn(
         "flex h-full w-[min(100%,26rem)] shrink-0 flex-col overflow-hidden",
         "border-l border-white/[0.06] bg-[#0a0b0e]",
-        "animate-in slide-in-from-right-3 fade-in-0 duration-300",
+        "animate-in slide-in-from-right-3 fade-in-0 duration-300 motion-reduce:animate-none",
       )}
       aria-label={localize(lang, "Терминал", "Terminal")}
     >

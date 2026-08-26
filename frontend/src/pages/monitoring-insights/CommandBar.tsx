@@ -91,7 +91,6 @@ export function CommandBar({
         <div className="flex items-center gap-3">
           <MiniRing score={summary.fleet_health_score} />
           <div className="min-w-0">
-            <div className="enterprise-kicker">{localize(lang, "Командный центр", "Command center")}</div>
             <h1 className="font-display text-lg font-bold leading-tight text-foreground">
               {localize(lang, "Метрики и прогнозы", "Metrics & Forecasts")}
             </h1>
@@ -113,7 +112,7 @@ export function CommandBar({
           </p>
           <p className="mt-0.5 text-2xs text-muted-foreground/50">
             {localize(lang, "Обновлено", "Updated")} {relativeTime(generatedAt)}
-            {cached ? localize(lang, " · кэш", " · cached") : ""}
+            {cached ? localize(lang, " · сохранённые данные", " · saved data") : ""}
           </p>
         </div>
 
@@ -129,12 +128,12 @@ export function CommandBar({
             tone={summary.predictions_critical > 0 ? "danger" : summary.predictions_warning > 0 ? "warning" : "success"}
           />
           <StatChip
-            label={localize(lang, "серт ≤30д", "certs ≤30d")}
+            label={localize(lang, "сертификаты ≤30 дней", "certificates ≤30 days")}
             value={String(summary.certificates_expiring_30d)}
             tone={summary.certificates_expiring_30d > 0 ? "warning" : "success"}
           />
           <StatChip
-            label={localize(lang, "худший", "worst")}
+            label={localize(lang, "мин. здоровье", "lowest health")}
             value={String(summary.fleet_health_worst)}
             tone={summary.fleet_health_worst < 60 ? "danger" : summary.fleet_health_worst < 80 ? "warning" : "success"}
           />
@@ -149,7 +148,7 @@ export function CommandBar({
             <Button variant="default" size="sm" onClick={onRunAi} disabled={aiBusy} className="h-8">
               {aiBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
               <span className="ml-1.5 hidden xl:inline">
-                {aiBusy ? localize(lang, "Анализ…", "Analyzing…") : localize(lang, "AI-анализ", "AI analysis")}
+                {aiBusy ? localize(lang, "Анализ…", "Analyzing…") : localize(lang, "ИИ-анализ", "AI analysis")}
               </span>
             </Button>
           ) : null}

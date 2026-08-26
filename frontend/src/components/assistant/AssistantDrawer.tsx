@@ -135,7 +135,7 @@ export function AssistantDrawer() {
         return sendAssistantChatMessage(existing, message);
       }
       const created = await createAssistantChat(
-        localize(lang, "Ассистент (панель)", "Assistant (drawer)"),
+        localize(lang, "Ассистент", "Assistant"),
       );
       setChatId(created.id);
       return sendAssistantChatMessage(created.id, message);
@@ -188,9 +188,6 @@ export function AssistantDrawer() {
                 <Sparkles className="h-4 w-4 text-primary" />
                 {localize(lang, "Ассистент", "Assistant")}
               </SheetTitle>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                {contextSystemLine(pageContext, lang)}
-              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1">
               <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" asChild>
@@ -328,9 +325,6 @@ export function AssistantDrawer() {
               )}
             </Button>
           </div>
-          <p className="mt-1.5 text-[10px] text-muted-foreground">
-            {localize(lang, "Enter — отправить · Shift+Enter — новая строка", "Enter to send · Shift+Enter for newline")}
-          </p>
         </div>
       </SheetContent>
     </Sheet>

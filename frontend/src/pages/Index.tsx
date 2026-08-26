@@ -31,8 +31,8 @@ const Index = () => {
         <p className="mt-2 text-sm text-muted-foreground">
           {localize(
             lang,
-            "Попросите администратора назначить пилотный профиль доступа.",
-            "Ask an administrator to assign a pilot access profile.",
+            "Попросите администратора назначить профиль доступа.",
+            "Ask an administrator to assign an access profile.",
           )}
         </p>
       </section>

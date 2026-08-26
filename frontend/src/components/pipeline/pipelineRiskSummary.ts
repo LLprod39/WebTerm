@@ -26,9 +26,15 @@ export interface PipelineRiskSummary {
   items: PipelineRiskItem[];
 }
 
-function nodeLabel(node: PipelineNode): string {
+type RiskSummaryLang = "en" | "ru";
+
+function riskText(lang: RiskSummaryLang, ru: string, en: string) {
+  return lang === "ru" ? ru : en;
+}
+
+function nodeLabel(node: PipelineNode, lang: RiskSummaryLang): string {
   const data = node.data || {};
-  return String(data.label || data.tool_name || node.id || node.type || "Node");
+  return String(data.label || data.tool_name || node.id || node.type || riskText(lang, "Шаг", "Node"));
 }
 
 function isApprovalNode(node: PipelineNode): boolean {
@@ -41,51 +47,51 @@ function isVerificationNode(node: PipelineNode): boolean {
   return node.type === "ops/http_check" || VERIFICATION_RE.test(blob);
 }
 
-function classifyRiskNode(node: PipelineNode): Omit<PipelineRiskItem, "hasApproval"> | null {
+function classifyRiskNode(node: PipelineNode, lang: RiskSummaryLang): Omit<PipelineRiskItem, "hasApproval"> | null {
   const data = node.data || {};
   if (node.type === "ops/process_action") {
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: String(data.action || "").toLowerCase() === "kill_force" ? "dangerous" : "mutating",
-      reason: "Process actions change runtime state and need explicit operator approval.",
+      reason: riskText(lang, "Действие меняет состояние процесса и требует подтверждения оператора.", "Process actions change runtime state and need explicit operator approval."),
     };
   }
   if (node.type === "ops/service_action" || node.type === "ops/docker_action" || node.type === "ops/alert_update") {
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: "mutating",
-      reason: "OPS action mutates service/container/alert state.",
+      reason: riskText(lang, "Действие меняет состояние службы, контейнера или оповещения.", "OPS action mutates service/container/alert state."),
     };
   }
   if (node.type === "ops/file_action" && String(data.action || "read").toLowerCase() === "write") {
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: "mutating",
-      reason: "File write changes server configuration or text files and needs operator approval.",
+      reason: riskText(lang, "Запись меняет файлы или настройки сервера и требует подтверждения оператора.", "File write changes server configuration or text files and needs operator approval."),
     };
   }
   if (node.type === "ops/package_action" && String(data.action || "list_updates").toLowerCase() !== "list_updates") {
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: "mutating",
-      reason: "Package install/update/remove changes OS state and needs operator approval.",
+      reason: riskText(lang, "Установка, обновление или удаление пакета меняет систему и требует подтверждения оператора.", "Package install/update/remove changes OS state and needs operator approval."),
     };
   }
   if (node.type === "ops/disk_cleanup" && String(data.action || "inspect").toLowerCase() !== "inspect") {
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: "mutating",
-      reason: "Disk cleanup removes or vacuums host data and needs operator approval.",
+      reason: riskText(lang, "Очистка диска удаляет данные сервера и требует подтверждения оператора.", "Disk cleanup removes or vacuums host data and needs operator approval."),
     };
   }
   if (node.type === "agent/mcp_call") {
@@ -102,14 +108,14 @@ function classifyRiskNode(node: PipelineNode): Omit<PipelineRiskItem, "hasApprov
     const dangerous = permissionMode === "BREAK_GLASS" || ["dangerous", "critical", "break_glass"].includes(riskLevel);
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: dangerous ? "dangerous" : "mutating",
       reason: looksMutating
-        ? `MCP tool "${toolName || "unnamed"}" looks mutating.`
+        ? riskText(lang, `Инструмент MCP «${toolName || "без названия"}» может изменить состояние.`, `MCP tool "${toolName || "unnamed"}" looks mutating.`)
         : operationKind
-          ? `MCP operation "${operationKind}" is marked as state-changing.`
-        : `MCP permission mode "${permissionMode || "unknown"}" allows action execution.`,
+          ? riskText(lang, `Операция MCP «${operationKind}» отмечена как изменяющая состояние.`, `MCP operation "${operationKind}" is marked as state-changing.`)
+          : riskText(lang, `Режим доступа MCP «${permissionMode || "неизвестно"}» разрешает выполнять действия.`, `MCP permission mode "${permissionMode || "unknown"}" allows action execution.`),
     };
   }
   if (node.type === "agent/ssh_cmd") {
@@ -117,18 +123,18 @@ function classifyRiskNode(node: PipelineNode): Omit<PipelineRiskItem, "hasApprov
     if (!SSH_MUTATING_COMMAND_RE.test(command)) {
       return {
         nodeId: node.id,
-        label: nodeLabel(node),
+        label: nodeLabel(node, lang),
         type: node.type,
         risk: "review",
-        reason: "Raw SSH command should be reviewed before running against operations targets.",
+        reason: riskText(lang, "Проверьте SSH-команду перед запуском на сервере.", "Raw SSH command should be reviewed before running against operations targets."),
       };
     }
     return {
       nodeId: node.id,
-      label: nodeLabel(node),
+      label: nodeLabel(node, lang),
       type: node.type,
       risk: "mutating",
-      reason: "SSH command appears to mutate system state.",
+      reason: riskText(lang, "SSH-команда может изменить состояние системы.", "SSH command appears to mutate system state."),
     };
   }
   return null;
@@ -161,7 +167,7 @@ function hasApprovedApprovalAncestor(nodeId: string, nodesById: Map<string, Pipe
   return false;
 }
 
-export function buildPipelineRiskSummary(nodes: PipelineNode[], edges: PipelineEdge[]): PipelineRiskSummary {
+export function buildPipelineRiskSummary(nodes: PipelineNode[], edges: PipelineEdge[], lang: RiskSummaryLang = "en"): PipelineRiskSummary {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
   const incoming = new Map<string, PipelineEdge[]>();
   for (const edge of edges) {
@@ -173,7 +179,7 @@ export function buildPipelineRiskSummary(nodes: PipelineNode[], edges: PipelineE
 
   const items = nodes
     .map((node) => {
-      const risk = classifyRiskNode(node);
+      const risk = classifyRiskNode(node, lang);
       if (!risk) {
         return null;
       }

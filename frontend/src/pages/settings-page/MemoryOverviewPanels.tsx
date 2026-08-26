@@ -15,13 +15,13 @@ type MemoryOverviewPanelsProps = {
 
 function MemoryStatsGrid({ stats }: { stats: ServerMemoryOverviewResponse["stats"] }) {
   const items = [
-    { label: "Canonical", value: stats.canonical },
-    { label: "Patterns", value: stats.patterns },
-    { label: "Automation", value: stats.automation_candidates },
-    { label: "Skill Drafts", value: stats.skill_drafts },
-    { label: "Revalidation", value: stats.revalidation_open },
-    { label: "Episodes", value: stats.episodes },
-    { label: "Archive", value: stats.archive },
+    { label: "Проверенные", value: stats.canonical },
+    { label: "Закономерности", value: stats.patterns },
+    { label: "Автоматизация", value: stats.automation_candidates },
+    { label: "Навыки", value: stats.skill_drafts },
+    { label: "На проверке", value: stats.revalidation_open },
+    { label: "Сессии", value: stats.episodes },
+    { label: "Архив", value: stats.archive },
   ];
 
   return (
@@ -75,26 +75,26 @@ export function MemoryOverviewPanels({
       <MemoryStatsGrid stats={memoryOverview.stats} />
 
       <SectionCard
-        title="Worker status"
+        title="Фоновые службы"
         icon={Activity}
-        description="Состояние фоновых workers, которые крутят dreams, execution plane, scheduler и watcher scans."
+        description="Анализ, расписание и выполнение"
       >
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
           <WorkerStateCard
-            label="Memory dreams"
+            label="Объединение памяти"
             state={memoryOverview.worker_states?.memory_dreams || memoryOverview.daemon_state}
           />
-          <WorkerStateCard label="Agent execution" state={memoryOverview.worker_states?.agent_execution} />
-          <WorkerStateCard label="Agent scheduler" state={memoryOverview.worker_states?.scheduled_agents} />
-          <WorkerStateCard label="Watchers" state={memoryOverview.worker_states?.watchers} />
+          <WorkerStateCard label="Выполнение агентов" state={memoryOverview.worker_states?.agent_execution} />
+          <WorkerStateCard label="Расписание агентов" state={memoryOverview.worker_states?.scheduled_agents} />
+          <WorkerStateCard label="Наблюдение" state={memoryOverview.worker_states?.watchers} />
         </div>
       </SectionCard>
 
       {memoryOverview.canonical.length > 0 ? (
         <SectionCard
-          title="Canonical snapshots"
+          title="Проверенные записи"
           icon={Database}
-          description="Активная память сервера, которая реально уходит в prompt."
+          description="Факты, доступные моделям"
         >
           <div className="space-y-2">
             {memoryOverview.canonical.map((item) => (
@@ -106,9 +106,9 @@ export function MemoryOverviewPanels({
 
       {learnedCandidates.length > 0 ? (
         <SectionCard
-          title="Learned candidates"
+          title="Найденные закономерности"
           icon={Bot}
-          description="То, что dreams и pattern learning предлагают поднять в operational knowledge."
+          description="Предложения для базы знаний"
         >
           <div className="space-y-3">
             {learnedCandidates.map((item) => (
@@ -128,9 +128,9 @@ export function MemoryOverviewPanels({
 
       {memoryOverview.revalidation.length > 0 ? (
         <SectionCard
-          title="Revalidation queue"
+          title="Нужно проверить"
           icon={RefreshCw}
-          description="Факты, которые снам нужно перепроверить или уточнить."
+          description="Факты, требующие подтверждения"
         >
           <div className="space-y-2">
             {memoryOverview.revalidation.map((item) => (
@@ -147,14 +147,14 @@ export function MemoryOverviewPanels({
       ) : null}
 
       {memoryOverview.episodes.length > 0 ? (
-        <SectionCard title="Recent episodes" icon={Clock} description="Последние схлопнутые эпизоды из raw event inbox.">
+        <SectionCard title="Недавняя активность" icon={Clock} description="Последние сессии и операции">
           <div className="space-y-2">
             {memoryOverview.episodes.slice(0, 6).map((item) => (
               <div key={item.id} className="rounded-lg border border-border bg-secondary/10 px-3 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-foreground">{item.title}</p>
                   <Badge variant="secondary">{item.episode_kind}</Badge>
-                  <Badge variant="outline">{item.event_count} events</Badge>
+                  <Badge variant="outline">{item.event_count} событий</Badge>
                 </div>
                 <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-muted-foreground">{item.summary}</p>
               </div>
@@ -165,9 +165,9 @@ export function MemoryOverviewPanels({
 
       {memoryOverview.archive.length > 0 ? (
         <SectionCard
-          title="Archive"
+          title="Архив"
           icon={FolderOpen}
-          description="Старые и superseded memory artefacts, исключенные из prompt."
+          description="Старые и отключённые записи"
         >
           <div className="space-y-2">
             {memoryOverview.archive.slice(0, 6).map((item) => (

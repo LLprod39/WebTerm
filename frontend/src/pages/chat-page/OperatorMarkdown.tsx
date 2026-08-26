@@ -1,34 +1,124 @@
-import type { Components } from "react-markdown";
+import type { Components, Options } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Server } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { Children, Fragment, memo, useMemo, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
 import { normalizeOperatorMarkdown, stripMarkdownTables } from "./markdownNormalize";
 
+const STREAM_CURSOR_MARKER = "\uE000";
+
+type MarkdownAstNode = {
+  type: string;
+  value?: string;
+  children?: MarkdownAstNode[];
+};
+
+const cursorParentTypes = new Set(["paragraph", "heading"]);
+
+function findLastCursorParent(node: MarkdownAstNode): MarkdownAstNode | null {
+  if (cursorParentTypes.has(node.type) && node.children) return node;
+  const lastChild = node.children?.at(-1);
+  return lastChild ? findLastCursorParent(lastChild) : null;
+}
+
+/** Injects an inert marker after parsing so streaming never changes markdown syntax. */
+function remarkStreamingCursor() {
+  return (tree: MarkdownAstNode) => {
+    const parent = findLastCursorParent(tree);
+    if (parent?.children) {
+      parent.children.push({ type: "text", value: STREAM_CURSOR_MARKER });
+      return;
+    }
+    tree.children ??= [];
+    tree.children.push({
+      type: "paragraph",
+      children: [{ type: "text", value: STREAM_CURSOR_MARKER }],
+    });
+  };
+}
+
+const staticRemarkPlugins: NonNullable<Options["remarkPlugins"]> = [remarkGfm];
+const streamingRemarkPlugins: NonNullable<Options["remarkPlugins"]> = [
+  remarkGfm,
+  remarkStreamingCursor,
+];
+
+function StreamingCursor() {
+  return (
+    <span
+      aria-hidden="true"
+      data-operator-stream-cursor
+      className="relative inline-block h-[1em] w-0 align-[-0.12em] motion-safe:animate-pulse after:absolute after:inset-y-[0.08em] after:left-[2px] after:w-px after:rounded-full after:bg-primary/80 after:content-['']"
+    />
+  );
+}
+
+function withStreamingCursor(children: ReactNode): ReactNode {
+  return Children.map(children, (child, childIndex) => {
+    if (typeof child !== "string" || !child.includes(STREAM_CURSOR_MARKER)) return child;
+    const parts = child.split(STREAM_CURSOR_MARKER);
+    return parts.map((part, partIndex) => (
+      <Fragment key={`${childIndex}-${partIndex}`}>
+        {part}
+        {partIndex < parts.length - 1 ? <StreamingCursor /> : null}
+      </Fragment>
+    ));
+  });
+}
+
 /** Readable, low-chrome markdown for operator chat. */
 const components: Components = {
   h1: ({ children }) => (
-    <h1 className="mb-1.5 mt-0 text-[15px] font-semibold tracking-tight leading-snug text-foreground">{children}</h1>
+    <h1 className="mb-1.5 mt-0 text-[15px] font-semibold tracking-tight leading-snug text-foreground">
+      {withStreamingCursor(children)}
+    </h1>
   ),
   h2: ({ children }) => (
-    <h2 className="mb-1 mt-2.5 text-[13.5px] font-semibold tracking-tight leading-snug text-foreground first:mt-0">{children}</h2>
+    <h2 className="mb-1 mt-2.5 text-[13.5px] font-semibold tracking-tight leading-snug text-foreground first:mt-0">
+      {withStreamingCursor(children)}
+    </h2>
   ),
   h3: ({ children }) => (
-    <h3 className="mb-0.5 mt-2 text-[13px] font-semibold text-foreground first:mt-0">{children}</h3>
+    <h3 className="mb-0.5 mt-2 text-[13px] font-semibold text-foreground first:mt-0">
+      {withStreamingCursor(children)}
+    </h3>
+  ),
+  h4: ({ children }) => (
+    <h4 className="mb-0.5 mt-2 text-[13px] font-semibold text-foreground first:mt-0">
+      {withStreamingCursor(children)}
+    </h4>
+  ),
+  h5: ({ children }) => (
+    <h5 className="mb-0.5 mt-2 text-[12.5px] font-semibold text-foreground first:mt-0">
+      {withStreamingCursor(children)}
+    </h5>
+  ),
+  h6: ({ children }) => (
+    <h6 className="mb-0.5 mt-2 text-[12px] font-semibold text-muted-foreground first:mt-0">
+      {withStreamingCursor(children)}
+    </h6>
   ),
   p: ({ children }) => (
-    <p className="my-1.5 text-[13.5px] leading-6 text-foreground/90 first:mt-0 last:mb-0">{children}</p>
+    <p className="my-2 text-[14px] leading-6 text-foreground/90 first:mt-0 last:mb-0">
+      {withStreamingCursor(children)}
+    </p>
   ),
-  ul: ({ children }) => <ul className="my-1.5 space-y-1 pl-4 list-disc marker:text-primary/55">{children}</ul>,
+  ul: ({ children }) => (
+    <ul className="my-2 list-disc space-y-1.5 pl-5 marker:text-primary/55">{children}</ul>
+  ),
   ol: ({ children }) => (
-    <ol className="my-1.5 list-decimal space-y-1 pl-4 marker:font-mono marker:text-[10px] marker:text-muted-foreground">
+    <ol className="my-2 list-decimal space-y-1.5 pl-5 marker:font-mono marker:text-[11px] marker:text-muted-foreground">
       {children}
     </ol>
   ),
-  li: ({ children }) => <li className="text-[13.5px] leading-6 text-foreground/90 pl-0.5">{children}</li>,
+  li: ({ children }) => (
+    <li className="pl-0.5 text-[14px] leading-6 text-foreground/90">
+      {withStreamingCursor(children)}
+    </li>
+  ),
   strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
   em: ({ children }) => <em className="italic text-foreground/85">{children}</em>,
   a: ({ href, children }) => (
@@ -63,14 +153,17 @@ const components: Components = {
   },
   pre: ({ children }) => <>{children}</>,
   table: ({ children }) => (
-    <div className="my-1.5 overflow-hidden rounded-sm border border-border/60">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[360px] border-collapse text-left text-[11.5px] leading-4">{children}</table>
-      </div>
+    <div
+      data-operator-table
+      className="my-2 w-full min-w-0 overflow-hidden rounded-md border border-border/60"
+    >
+      <table className="w-full min-w-0 table-fixed border-collapse text-left text-[13px] leading-[1.5]">
+        {children}
+      </table>
     </div>
   ),
   thead: ({ children }) => (
-    <thead className="bg-muted/25 text-[10px] text-muted-foreground">{children}</thead>
+    <thead className="bg-muted/25 text-[11px] text-muted-foreground">{children}</thead>
   ),
   tbody: ({ children }) => <tbody>{children}</tbody>,
   tr: ({ children }) => (
@@ -79,11 +172,13 @@ const components: Components = {
     </tr>
   ),
   th: ({ children }) => (
-    <th className="whitespace-nowrap px-2 py-1 font-medium first:pl-2.5 last:pr-2.5">{children}</th>
+    <th className="min-w-0 whitespace-normal break-words px-2.5 py-1.5 align-top font-medium [overflow-wrap:anywhere] first:w-[40%] first:pl-3 last:pr-3 sm:first:w-[26%]">
+      {withStreamingCursor(children)}
+    </th>
   ),
   td: ({ children }) => (
-    <td className="whitespace-nowrap px-2 py-0.5 align-middle first:pl-2.5 last:pr-2.5">
-      <TableCell>{children}</TableCell>
+    <td className="min-w-0 whitespace-normal break-words px-2.5 py-1.5 align-top [overflow-wrap:anywhere] first:w-[40%] first:pl-3 last:pr-3 sm:first:w-[26%]">
+      <TableCell>{withStreamingCursor(children)}</TableCell>
     </td>
   ),
 };
@@ -109,13 +204,17 @@ function TableCell({ children }: { children: ReactNode }) {
   }
   if (/^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(text) && text.length > 3) {
     return (
-      <span className="inline-flex items-center gap-1 font-medium text-foreground">
-        <Server className="h-2.5 w-2.5 shrink-0 opacity-70" />
-        {text}
+      <span className="inline-flex max-w-full min-w-0 items-start gap-1 font-medium text-foreground">
+        <Server className="mt-0.5 h-2.5 w-2.5 shrink-0 opacity-70" />
+        <span className="min-w-0 break-words [overflow-wrap:anywhere]">{text}</span>
       </span>
     );
   }
-  return <span className="text-foreground/90">{children}</span>;
+  return (
+    <span className="block min-w-0 whitespace-normal break-words text-foreground/90 [overflow-wrap:anywhere]">
+      {children}
+    </span>
+  );
 }
 
 function flattenText(node: ReactNode): string {
@@ -156,36 +255,41 @@ function CodeBlock({ className, children }: { className?: string; children: Reac
   );
 }
 
-export function OperatorMarkdown({
-  content,
-  className,
-  streaming = false,
-  stripTables = false,
-}: {
+type OperatorMarkdownProps = {
   content: string;
   className?: string;
   streaming?: boolean;
   /** When true, remove markdown tables (structured DataTableCard already shown). */
   stripTables?: boolean;
-}) {
-  let normalized = normalizeOperatorMarkdown(content);
-  if (stripTables) {
-    normalized = stripMarkdownTables(normalized);
-  }
+};
+
+export const OperatorMarkdown = memo(function OperatorMarkdown({
+  content,
+  className,
+  streaming = false,
+  stripTables = false,
+}: OperatorMarkdownProps) {
+  const normalized = useMemo(() => {
+    const markdown = normalizeOperatorMarkdown(content);
+    return stripTables ? stripMarkdownTables(markdown) : markdown;
+  }, [content, stripTables]);
+
   if (!normalized.trim()) {
-    return streaming ? (
-      <span className="inline-block h-3.5 w-0.5 animate-pulse bg-primary/80" />
+    return streaming && !stripTables ? (
+      <div className={cn("operator-md min-h-6 max-w-[min(920px,100%)]", className)}>
+        <StreamingCursor />
+      </div>
     ) : null;
   }
 
   return (
     <div className={cn("operator-md max-w-[min(920px,100%)]", className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown
+        remarkPlugins={streaming ? streamingRemarkPlugins : staticRemarkPlugins}
+        components={components}
+      >
         {normalized}
       </ReactMarkdown>
-      {streaming ? (
-        <span className="ml-0.5 inline-block h-3.5 w-0.5 animate-pulse bg-primary/80 align-middle" />
-      ) : null}
     </div>
   );
-}
+});

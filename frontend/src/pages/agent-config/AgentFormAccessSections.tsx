@@ -46,7 +46,7 @@ export function AgentCoreSettingsSection({
           <Input
             value={form.name || ""}
             onChange={(event) => onFieldChange("name", event.target.value)}
-          placeholder={localize(lang, "OPS-разбор", "Ops triage profile")}
+          placeholder={localize(lang, "Разбор инцидентов", "Ops triage profile")}
             disabled={readOnly}
           />
         </div>
@@ -112,7 +112,7 @@ export function AgentCoreSettingsSection({
       </div>
 
       <div className="space-y-2 rounded-xl border border-border/70 bg-background/30 px-4 py-3">
-        <Label>{localize(lang, "Controlled sudo", "Controlled sudo")}</Label>
+        <Label>{localize(lang, "Контролируемый sudo", "Controlled sudo")}</Label>
         <Select
           value={(form.sudo_policy as string) || "disabled"}
           onValueChange={(value) => onFieldChange("sudo_policy", value)}
@@ -141,7 +141,7 @@ export function AgentCoreSettingsSection({
           rows={4}
           placeholder={localize(
             lang,
-            "Ты аккуратный OPS-агент. Проверяй контекст перед рискованными действиями.",
+            "Ты аккуратный оператор. Проверяй контекст перед рискованными действиями.",
             "You are a careful operations agent. Verify before any risky action.",
           )}
           disabled={readOnly}
@@ -236,8 +236,8 @@ export function AgentMcpServersSection({
                 <Badge variant="outline" className="text-xs font-mono">
                   {mcp.transport}
                 </Badge>
-                {mcp.last_test_ok === true ? <Badge variant="secondary">OK</Badge> : null}
-                {mcp.last_test_ok === false ? <Badge variant="destructive">ERR</Badge> : null}
+                {mcp.last_test_ok === true ? <Badge variant="secondary">{localize(lang, "Готово", "OK")}</Badge> : null}
+                {mcp.last_test_ok === false ? <Badge variant="destructive">{localize(lang, "Ошибка", "Error")}</Badge> : null}
               </div>
               <div className="text-xs text-muted-foreground">
                 {mcp.description || localize(lang, "Описание не заполнено", "No description")}
@@ -272,7 +272,7 @@ export function AgentSkillsSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <Label>{localize(lang, "Skills", "Skills")}</Label>
+        <Label>{localize(lang, "Навыки", "Skills")}</Label>
         <Button
           type="button"
           variant="outline"
@@ -340,7 +340,7 @@ export function AgentServerScopeSection({
       <p className="text-xs text-muted-foreground">
         {localize(
           lang,
-          "Оставьте пустым, чтобы профиль работал со всеми доступными серверами. Выберите серверы, чтобы жёстко ограничить scope.",
+          "Оставьте пустым, чтобы профиль работал со всеми доступными серверами. Выберите серверы, чтобы ограничить доступ.",
           "Leave empty to allow all accessible servers. Select specific servers to hard-scope this profile.",
         )}
       </p>

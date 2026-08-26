@@ -47,8 +47,14 @@ def ensure_playbook_workspace(
     origin_revision = locked.origin_revision or locked.content_revisions.order_by("revision_number").first()
     if published_revision is None:
         published_revision = locked.content_revisions.order_by("-revision_number").first()
+    actor_id = getattr(actor, "id", None)
+    owner_is_remediating = actor_id == locked.user_id
     if origin_revision is None:
         content_format, source_yaml, tasks = _legacy_content(locked)
+        if not owner_is_remediating:
+            from servers.services.playbooks.revision_safety import validate_legacy_playbook_safety
+
+            validate_legacy_playbook_safety(locked)
         origin_revision = PlaybookRevision.objects.create(
             playbook=locked,
             revision_number=1,
@@ -101,6 +107,10 @@ def ensure_playbook_workspace(
                 source_revision_id=origin_revision.id,
                 result_revision_id=published_revision.id,
             )
+    if not owner_is_remediating:
+        from servers.services.playbooks.revision_safety import validate_revision_safety
+
+        validate_revision_safety(published_revision)
     update_fields: list[str] = []
     if locked.origin_revision_id is None:
         locked.origin_revision = origin_revision
@@ -352,6 +362,10 @@ def create_revision_from_draft(
     if expected_version is not None and int(expected_version) != draft.version:
         raise DraftConflict(draft.version, draft.content_hash, draft.updated_at.isoformat())
 
+    from servers.services.playbooks.revision_safety import validate_draft_safety
+
+    validate_draft_safety(draft)
+
     next_number = (locked.content_revisions.aggregate(value=Max("revision_number"))["value"] or 0) + 1
     revision = PlaybookRevision.objects.create(
         playbook=locked,
@@ -382,9 +396,12 @@ def create_revision_from_draft(
 
 @transaction.atomic
 def publish_revision(playbook: Playbook, revision: PlaybookRevision, *, actor) -> Playbook:
+    from servers.services.playbooks.revision_safety import validate_revision_safety
+
     locked = Playbook.objects.select_for_update().get(pk=playbook.pk)
     if revision.playbook_id != locked.id:
         raise ValueError("Revision does not belong to this playbook")
+    validate_revision_safety(revision)
     if revision.origin_type == PlaybookRevision.ORIGIN_ADAPTATION:
         actor_id = getattr(actor, "id", None)
         ready_validations = revision.validations.filter(status=PlaybookValidation.STATUS_READY)

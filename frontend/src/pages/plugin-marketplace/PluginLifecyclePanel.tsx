@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 
 function tone(status: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (status === "enabled" || status === "verified" || status === "signed" || status === "builtin") return "success";
@@ -14,15 +15,57 @@ function tone(status: string): "neutral" | "success" | "warning" | "danger" | "i
   return "neutral";
 }
 
-function CountGrid({ counts }: { counts: Record<string, number> }) {
+function surfaceLabel(lang: string, kind: string) {
+  const labels: Record<string, [string, string]> = {
+    pages: ["страницы", "pages"],
+    dashboard_widgets: ["виджеты обзора", "dashboard widgets"],
+    connectors: ["подключения", "connectors"],
+    studio_nodes: ["шаги Студии", "Studio nodes"],
+    agent_tools: ["инструменты агентов", "agent tools"],
+    terminal_actions: ["действия терминала", "terminal actions"],
+    hooks: ["обработчики", "hooks"],
+  };
+  const label = labels[kind];
+  return label ? localize(lang, label[0], label[1]) : kind.replaceAll("_", " ");
+}
+
+function providerLabel(lang: string, provider: string) {
+  const labels: Record<string, [string, string]> = {
+    disabled: ["отключена", "disabled"],
+    local_subprocess: ["локальный процесс", "local process"],
+    docker_runner: ["изолированный контейнер", "isolated container"],
+    external_worker: ["внешний исполнитель", "external worker"],
+  };
+  const label = labels[provider];
+  return label ? localize(lang, label[0], label[1]) : provider.replaceAll("_", " ");
+}
+
+function lifecycleStatusLabel(lang: string, status: string) {
+  const labels: Record<string, [string, string]> = {
+    enabled: ["включён", "enabled"],
+    verified: ["проверен", "verified"],
+    signed: ["подписан", "signed"],
+    builtin: ["встроенный", "built in"],
+    blocked: ["заблокирован", "blocked"],
+    quarantined: ["в карантине", "quarantined"],
+    invalid: ["некорректен", "invalid"],
+    rejected: ["отклонён", "rejected"],
+    pending: ["ожидает", "pending"],
+    unsigned: ["без подписи", "unsigned"],
+  };
+  const label = labels[status];
+  return label ? localize(lang, label[0], label[1]) : status.replaceAll("_", " ");
+}
+
+function CountGrid({ counts, lang }: { counts: Record<string, number>; lang: string }) {
   const entries = Object.entries(counts).filter(([, count]) => count > 0);
   if (!entries.length) {
-    return <p className="text-xs text-muted-foreground">No runtime surfaces are declared.</p>;
+    return <p className="text-xs text-muted-foreground">{localize(lang, "Точки интерфейса не заявлены.", "No interface surfaces declared.")}</p>;
   }
   return (
     <div className="flex flex-wrap gap-2">
       {entries.map(([kind, count]) => (
-        <Badge key={kind} variant="outline">{kind}: {count}</Badge>
+        <Badge key={kind} variant="outline">{surfaceLabel(lang, kind)}: {count}</Badge>
       ))}
     </div>
   );
@@ -31,6 +74,7 @@ function CountGrid({ counts }: { counts: Record<string, number> }) {
 export function PluginLifecyclePanel({ installationId }: { installationId: number | null }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { lang } = useI18n();
   const impactQuery = useQuery({
     queryKey: ["plugins", "impact", installationId],
     queryFn: () => fetchPluginLifecycleImpact(installationId as number),
@@ -48,7 +92,7 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
     mutationFn: () => softUninstallPlugin(installationId as number),
     onSuccess: () => {
       invalidate();
-      toast({ description: "Plugin soft-uninstalled." });
+      toast({ description: localize(lang, "Плагин отключён и помечен удалённым.", "Plugin soft-uninstalled.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -56,7 +100,7 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
     mutationFn: () => rollbackPlugin(installationId as number),
     onSuccess: () => {
       invalidate();
-      toast({ description: "Plugin rolled back to the previous package." });
+      toast({ description: localize(lang, "Плагин возвращён к предыдущему пакету.", "Plugin rolled back to the previous package.") });
     },
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
@@ -72,11 +116,15 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
   const privilegedLocalExecution = backendExecutionProvider === "local_subprocess";
 
   return (
-    <SectionCard title="Lifecycle impact" description="Enable blockers, disappearing surfaces, missing permissions, and reversible operations." icon={<History className="h-4 w-4" />}>
+    <SectionCard
+      title={localize(lang, "Изменения при отключении", "Lifecycle impact")}
+      description={localize(lang, "Показывает блокировки, исчезающие разделы и обратимые действия.", "Enable blockers, disappearing surfaces, missing permissions, and reversible operations.")}
+      icon={<History className="h-4 w-4" />}
+    >
       <QueryStateBlock loading={impactQuery.isLoading} error={impactQuery.error}>
         {!installationId || !impact ? (
           <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-            Select an installation to inspect lifecycle impact.
+            {localize(lang, "Выберите установленный плагин.", "Select an installation to inspect lifecycle impact.")}
           </p>
         ) : (
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -85,11 +133,11 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-foreground">{impact.plugin_id}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">Package {impact.package.version}</div>
+                    <div className="mt-0.5 text-xs text-muted-foreground">{localize(lang, "Пакет", "Package")} {impact.package.version}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <StatusBadge label={impact.status} tone={tone(impact.status)} />
-                    <StatusBadge label={impact.package.ready_to_enable ? "ready" : "blocked"} tone={impact.package.ready_to_enable ? "success" : "warning"} />
+                    <StatusBadge label={lifecycleStatusLabel(lang, impact.status)} tone={tone(impact.status)} />
+                    <StatusBadge label={impact.package.ready_to_enable ? localize(lang, "готов", "ready") : localize(lang, "заблокирован", "blocked")} tone={impact.package.ready_to_enable ? "success" : "warning"} />
                   </div>
                 </div>
                 {impact.package.enable_blockers.length ? (
@@ -105,54 +153,54 @@ export function PluginLifecyclePanel({ installationId }: { installationId: numbe
               </div>
 
               <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Surfaces removed on disable/uninstall</div>
-                <CountGrid counts={impact.surfaces.counts} />
+                <div className="mb-2 text-xs font-semibold text-muted-foreground">{localize(lang, "Что исчезнет после отключения", "Surfaces removed on disable/uninstall")}</div>
+                <CountGrid counts={impact.surfaces.counts} lang={lang} />
               </div>
             </div>
 
             <div className="space-y-3">
               <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Permission review</div>
+                <div className="mb-2 text-xs font-semibold text-muted-foreground">{localize(lang, "Разрешения", "Permission review")}</div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">declared: {impact.permissions.declared.length}</Badge>
-                  <Badge variant="outline">granted: {impact.permissions.granted.length}</Badge>
-                  <Badge variant="outline">missing: {impact.permissions.missing.length}</Badge>
+                  <Badge variant="outline">{localize(lang, "заявлено", "declared")}: {impact.permissions.declared.length}</Badge>
+                  <Badge variant="outline">{localize(lang, "выдано", "granted")}: {impact.permissions.granted.length}</Badge>
+                  <Badge variant="outline">{localize(lang, "не хватает", "missing")}: {impact.permissions.missing.length}</Badge>
                 </div>
               </div>
               <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Secrets</div>
+                <div className="mb-2 text-xs font-semibold text-muted-foreground">{localize(lang, "Секреты", "Secrets")}</div>
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">declared: {impact.secrets.declared.length}</Badge>
-                  <Badge variant="outline">bound: {impact.secrets.bound.length}</Badge>
+                  <Badge variant="outline">{localize(lang, "заявлено", "declared")}: {impact.secrets.declared.length}</Badge>
+                  <Badge variant="outline">{localize(lang, "подключено", "bound")}: {impact.secrets.bound.length}</Badge>
                   <Badge variant={impact.secrets.missing_required.length ? "destructive" : "outline"}>
-                    missing required: {impact.secrets.missing_required.length}
+                    {localize(lang, "нет обязательных", "missing required")}: {impact.secrets.missing_required.length}
                   </Badge>
                 </div>
               </div>
               <div className="rounded-lg border border-border/70 bg-card px-4 py-4">
-                <div className="mb-2 text-xs font-semibold text-muted-foreground">Plugin code execution</div>
+                <div className="mb-2 text-xs font-semibold text-muted-foreground">{localize(lang, "Запуск кода плагина", "Plugin code execution")}</div>
                 <div className="flex flex-wrap gap-2">
                   <StatusBadge
                     label={privilegedLocalExecution
-                      ? "privileged local process — full application access"
+                      ? localize(lang, "локальный процесс с полным доступом", "privileged local process — full application access")
                       : sandboxPolicy?.required
-                        ? (sandboxPolicy.allowed ? "isolated runner ready" : "code execution blocked")
-                        : "no executable code"}
+                        ? (sandboxPolicy.allowed ? localize(lang, "изолированный запуск готов", "isolated runner ready") : localize(lang, "запуск кода заблокирован", "code execution blocked"))
+                        : localize(lang, "исполняемого кода нет", "no executable code")}
                     tone={privilegedLocalExecution ? "danger" : sandboxPolicy?.required ? (sandboxPolicy.allowed ? "success" : "danger") : "neutral"}
                   />
-                  <Badge variant="outline">provider: {backendExecutionProvider}</Badge>
-                  <Badge variant="outline">requirements: {sandboxPolicy?.requirements?.length ?? 0}</Badge>
-                  <Badge variant={sandboxPolicy?.blockers?.length ? "destructive" : "outline"}>blockers: {sandboxPolicy?.blockers?.length ?? 0}</Badge>
+                  <Badge variant="outline">{localize(lang, "среда", "provider")}: {providerLabel(lang, backendExecutionProvider)}</Badge>
+                  <Badge variant="outline">{localize(lang, "требования", "requirements")}: {sandboxPolicy?.requirements?.length ?? 0}</Badge>
+                  <Badge variant={sandboxPolicy?.blockers?.length ? "destructive" : "outline"}>{localize(lang, "блокировки", "blockers")}: {sandboxPolicy?.blockers?.length ?? 0}</Badge>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => softUninstall.mutate()} disabled={softUninstall.isPending}>
                   <Trash2 className="h-4 w-4" />
-                  Soft uninstall
+                  {localize(lang, "Отключить и удалить", "Soft uninstall")}
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => rollback.mutate()} disabled={rollback.isPending || !impact.uninstall.reversible}>
                   <RotateCcw className="h-4 w-4" />
-                  Rollback
+                  {localize(lang, "Вернуть версию", "Rollback")}
                 </Button>
               </div>
             </div>

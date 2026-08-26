@@ -65,9 +65,9 @@ describe("PlaybooksCatalogPanel loading states", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("alert")).toHaveTextContent("Failed to load playbooks");
+    expect(screen.getByRole("alert")).toHaveTextContent("Failed to load projects");
     expect(screen.getByRole("alert")).toHaveTextContent("503");
-    expect(screen.queryByText("Your playbook library is empty")).not.toBeInTheDocument();
+    expect(screen.queryByText("No projects yet")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(onRetryPlaybooks).toHaveBeenCalledTimes(1);
@@ -87,7 +87,7 @@ describe("PlaybooksCatalogPanel loading states", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Execution worker is offline");
+    expect(screen.getByRole("status")).toHaveTextContent("Execution service is unavailable");
     expect(screen.getByRole("status")).toHaveTextContent("Projects and YAML validation remain available");
   });
 
@@ -126,9 +126,10 @@ describe("PlaybooksCatalogPanel loading states", () => {
     expect(screen.queryByText(/Project archive/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/template/i)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Create Ansible" })[0]);
-    expect(onOpenNew).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Import" })[0]);
     expect(onOpenImport).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getAllByRole("button", { name: "Create from scratch" })[0]);
+    expect(onOpenNew).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("link", { name: "Check readiness" })).toHaveAttribute("href", "/settings/readiness");
   });
 });

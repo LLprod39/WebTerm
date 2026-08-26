@@ -145,7 +145,7 @@ export function actionTone(action: AssistantAction) {
 export function ActionIcon({ action }: { action: AssistantAction }) {
   if (action.status === "completed") return <CheckCircle2 className="h-4 w-4 text-success" />;
   if (action.status === "failed" || action.status === "cancelled") return <XCircle className="h-4 w-4 text-destructive" />;
-  if (action.status === "running") return <Loader2 className="h-4 w-4 animate-spin text-primary" />;
+  if (action.status === "running") return <Loader2 className="h-4 w-4 animate-spin text-primary motion-reduce:animate-none" />;
   if (action.requires_confirmation) return <ShieldCheck className="h-4 w-4 text-warning" />;
   return <Clock3 className="h-4 w-4 text-muted-foreground" />;
 }

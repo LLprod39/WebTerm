@@ -104,12 +104,12 @@ export default function AgentConfigPage() {
       <StudioNav />
       <div className="flex-1 overflow-auto flex flex-col">
       <StudioHero
-        kicker={localize(lang, "Studio / Профили выполнения", "Studio / Execution Profiles")}
+        kicker={localize(lang, "Студия / Профили выполнения", "Studio / Execution Profiles")}
         title={localize(lang, "Профили выполнения", "Execution Profiles")}
         titleIcon={<Bot className="h-7 w-7 text-primary" />}
         description={localize(
           lang,
-          "Переиспользуемые конфигурации инструментов, scope и доступа для pipeline-нод.",
+          "Готовые наборы инструментов, области серверов и доступа для узлов сценария.",
           "Reusable tool, scope, and access configs for pipeline nodes.",
         )}
         stats={
@@ -140,7 +140,7 @@ export default function AgentConfigPage() {
             {localize(lang, "Профилей выполнения пока нет.", "No execution profiles yet.")}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {localize(lang, "Создайте профиль с моделью, инструментами и scope для pipeline-нод.", "Create a profile with model, tools, and scope for pipeline nodes.")}
+            {localize(lang, "Сохраните модель, инструменты и доступ к серверам в одном профиле.", "Create a profile with model, tools, and scope for pipeline nodes.")}
           </p>
           <Button className="mt-4 gap-2" size="sm" onClick={() => setEditAgent({})}>
             <Plus className="h-4 w-4" />
@@ -154,7 +154,7 @@ export default function AgentConfigPage() {
               <TableHead>{localize(lang, "Профиль", "Profile")}</TableHead>
               {canManageAiRouting ? <TableHead>{localize(lang, "Модель", "Model")}</TableHead> : null}
               <TableHead>{localize(lang, "Инструменты", "Tools")}</TableHead>
-              <TableHead>Scope</TableHead>
+              <TableHead>{localize(lang, "Серверы", "Scope")}</TableHead>
               <TableHead>{localize(lang, "Владелец / доступ", "Owner / access")}</TableHead>
               <TableHead>{localize(lang, "Обновлён", "Updated")}</TableHead>
               <TableHead className="w-[112px] text-right">{localize(lang, "Действия", "Actions")}</TableHead>
@@ -279,7 +279,7 @@ export default function AgentConfigPage() {
             <SheetDescription>
               {localize(
                 lang,
-                "Настройте инструменты, scope, MCP-серверы, skills и доступ для переиспользуемого профиля.",
+                "Настройте инструменты, доступ к серверам, MCP-серверы, навыки и общий доступ.",
                 "Configure tools, scope, MCP servers, skills, and access for this reusable profile.",
               )}
             </SheetDescription>

@@ -22,6 +22,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getMarsRunWsUrl, marsApi, type MarsRunEvent } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
+import { statusLabel } from "./mars/MarsPageUtils";
 
 function runTone(status?: string): "neutral" | "success" | "warning" | "danger" | "info" {
   if (status === "completed") return "success";
@@ -158,9 +159,9 @@ export default function MarsRunPage() {
   }, [cliLines, logSearch]);
   const logText = filteredCliLines.length
     ? filteredCliLines.join("\n")
-    : localize(lang, "CLI stdout/stderr появится здесь.", "CLI stdout/stderr appears here.");
+    : localize(lang, "Вывод команд появится здесь.", "Command output will appear here.");
   const checklist = [
-    { label: localize(lang, "Рабочая папка", "Workspace policy"), done: events.some((event) => event.event_type === "mars_run_started") },
+    { label: localize(lang, "Подготовка", "Setup"), done: events.some((event) => event.event_type === "mars_run_started") },
     { label: localize(lang, "Создание", "Build"), done: events.some((event) => event.event_type === "codex_finished") || Boolean(run?.codex_summary) },
     { label: localize(lang, "Проверка", "Verification"), done: events.some((event) => event.event_type.startsWith("tests_")) || Boolean(run?.test_output) },
     { label: localize(lang, "Качество", "Quality"), done: events.some((event) => event.event_type === "gemini_finished") || Boolean(run?.gemini_review) },
@@ -188,7 +189,7 @@ export default function MarsRunPage() {
                 {localize(lang, "Назад", "Back")}
               </Link>
             </Button>
-            <StatusBadge label={run?.status || "loading"} tone={runTone(run?.status)} />
+            <StatusBadge label={runQuery.isLoading ? localize(lang, "Загрузка", "Loading") : statusLabel(run?.status, lang)} tone={runTone(run?.status)} />
             <Button variant="outline" onClick={() => stopRun.mutate()} disabled={!canStop || stopRun.isPending}>
               {stopRun.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-4 w-4" />}
               {localize(lang, "Остановить", "Stop")}
@@ -201,14 +202,13 @@ export default function MarsRunPage() {
         <div className="space-y-5">
           <SectionCard
             title={localize(lang, "Обзор", "Overview")}
-            description={localize(lang, "Итог, изменения, проверки и следующий шаг видны до подробных логов.", "Summary, changes, checks, and next step appear before detailed logs.")}
             icon={<BrainCircuit className="h-4 w-4" />}
           >
             <div className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Статус", "Status")}</div>
-                  <div className="mt-2 text-sm font-semibold text-foreground">{run?.status?.replaceAll("_", " ") || "loading"}</div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{runQuery.isLoading ? localize(lang, "Загрузка", "Loading") : statusLabel(run?.status, lang)}</div>
                 </div>
                 <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Изменения", "Changes")}</div>
@@ -216,13 +216,7 @@ export default function MarsRunPage() {
                 </div>
                 <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
                   <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Проверки", "Checks")}</div>
-                  <div className="mt-2 text-sm font-semibold text-foreground">{run?.test_output ? localize(lang, "Есть вывод", "Output ready") : localize(lang, "Ожидаются", "Pending")}</div>
-                </div>
-                <div className="rounded-lg border border-border/80 bg-secondary/20 px-3 py-3">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{localize(lang, "Следующее действие", "Next action")}</div>
-                  <div className="mt-2 text-sm font-semibold text-foreground">
-                    {run?.status === "completed" ? localize(lang, "Открыть отчет", "Open report") : canStop ? localize(lang, "Следить за ходом", "Watch progress") : localize(lang, "Проверить результат", "Review result")}
-                  </div>
+                  <div className="mt-2 text-sm font-semibold text-foreground">{run?.test_output ? localize(lang, "Завершены", "Completed") : localize(lang, "Ожидаются", "Pending")}</div>
                 </div>
               </div>
 
@@ -249,7 +243,6 @@ export default function MarsRunPage() {
             <TabsContent value="progress">
               <SectionCard
                 title={localize(lang, "Ход работы", "Progress")}
-                description={localize(lang, "Основные события запуска без внутренних деталей.", "Main run events without internal details.")}
                 icon={<BrainCircuit className="h-4 w-4" />}
               >
                 <div className="space-y-2">
@@ -315,7 +308,7 @@ export default function MarsRunPage() {
                       ))
                     ) : (
                       <div className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-                        {localize(lang, "Git status чистый.", "Git status is clean.")}
+                        {localize(lang, "Нет изменённых файлов.", "No changed files.")}
                       </div>
                     )}
                   </div>

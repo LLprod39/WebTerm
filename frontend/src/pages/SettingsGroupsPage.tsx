@@ -229,9 +229,6 @@ export default function SettingsGroupsPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="truncate font-semibold text-foreground">{group.name}</div>
-                          <div className="mt-0.5 text-sm text-muted-foreground">
-                            {lang === "ru" ? "ID группы" : "Group ID"} {group.id}
-                          </div>
                         </div>
                       </div>
                     </TableCell>

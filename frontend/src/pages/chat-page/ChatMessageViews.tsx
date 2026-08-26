@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { memo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { motion, useReducedMotion } from "framer-motion";
 import { Bot, Check, CheckCircle2, Circle, Copy, Loader2, MapPin, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
@@ -29,6 +30,8 @@ import { MetricsSnapshotCard, type MetricsSnapshot } from "./MetricsSnapshotCard
 import { OperatorMarkdown } from "./OperatorMarkdown";
 import { cleanStepTitle } from "./PlanTasksPanel";
 import { WebSourcesCard, type WebSource } from "./WebSourcesCard";
+import { CHAT_MOTION } from "./chatMotion";
+import { visibleOperatorUserText } from "./operatorUserText";
 
 type MetricSeriesChart = {
   title?: string;
@@ -196,7 +199,7 @@ export function ActionCard({
         : canConfirm
           ? "bg-warning/70"
           : action.status === "running"
-            ? "bg-info animate-pulse"
+            ? "bg-info animate-pulse motion-reduce:animate-none"
             : "bg-muted-foreground/40";
 
   return (
@@ -317,7 +320,7 @@ export function ActionCard({
                   onClick={() => onConfirm(action.id, typedRequired ? typedConfirm.trim() : undefined)}
                 >
                   {isWorking ? (
-                    <Loader2 className="inline h-3 w-3 animate-spin" />
+                    <Loader2 className="inline h-3 w-3 animate-spin motion-reduce:animate-none" />
                   ) : (
                     localize(lang, "подтвердить", "confirm")
                   )}
@@ -381,7 +384,7 @@ export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<
               ) : failed ? (
                 <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
               ) : step.status === "running" ? (
-                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-primary" />
+                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
               ) : (
                 <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
               )}
@@ -423,18 +426,7 @@ function CopyMessageButton({ content, lang }: { content: string; lang: "ru" | "e
   );
 }
 
-export function MessageBubble({
-  message,
-  actionWorkingId,
-  onConfirmAction,
-  onCancelAction,
-  onUndoAction,
-  onSaveRunbook,
-  onRetry,
-  serverPanelActions,
-  agentPanelActions,
-  forecastPanelActions,
-}: {
+type MessageBubbleProps = {
   message: AssistantChatMessage;
   actionWorkingId: number | null;
   onConfirmAction: (actionId: number, typedConfirm?: string) => void;
@@ -446,8 +438,37 @@ export function MessageBubble({
   serverPanelActions?: ServerPanelActions;
   agentPanelActions?: AgentPanelActions;
   forecastPanelActions?: ForecastPanelActions;
-}) {
+  /**
+   * Live-turn adornments share this shell with the eventual REST message.
+   * Keeping them as slots (instead of swapping the whole bubble) preserves
+   * Markdown/code/card DOM while the durable message is attached.
+   */
+  turnActivity?: ReactNode;
+  turnTrailing?: ReactNode;
+  streaming?: boolean;
+  streamStripTables?: boolean;
+  animateSupportingContent?: boolean;
+};
+
+function MessageBubbleComponent({
+  message,
+  actionWorkingId,
+  onConfirmAction,
+  onCancelAction,
+  onUndoAction,
+  onSaveRunbook,
+  onRetry,
+  serverPanelActions,
+  agentPanelActions,
+  forecastPanelActions,
+  turnActivity,
+  turnTrailing,
+  streaming = false,
+  streamStripTables = false,
+  animateSupportingContent = false,
+}: MessageBubbleProps) {
   const { lang } = useI18n();
+  const reduceMotion = useReducedMotion();
   const isUser = message.role === "user";
   const actions = message.metadata.actions || [];
   const Icon = isUser ? User : Bot;
@@ -461,12 +482,7 @@ export function MessageBubble({
 
   if (isUser) {
     // Strip hidden operator context (pins / human terminal trail) from display
-    const displayContent = String(message.content || "")
-      .replace(/\n\n\[Human terminal on[^\]]*\][\s\S]*$/i, "")
-      .replace(/\n\nКонтекст серверов:[\s\S]*$/i, "")
-      .replace(/\n\nКонтекст playbook:[\s\S]*$/i, "")
-      .replace(/\nКонтекст пользователей:[\s\S]*$/i, "")
-      .trim();
+    const displayContent = visibleOperatorUserText(message.content);
     return (
       <div className="group flex justify-end gap-3">
         <div className="min-w-0 max-w-[min(560px,85%)]">
@@ -484,9 +500,21 @@ export function MessageBubble({
   const hasStructuredTable = tables.some(
     (t) => (t.rows?.length || 0) > 0 || t.kind === "forecasts" || Boolean(t.interactive),
   );
+  const hasSupportingContent = Boolean(
+    webSources.length ||
+      metrics ||
+      plan ||
+      (chart?.series && chart.series.length >= 2) ||
+      tables.length ||
+      actions.length,
+  );
 
   return (
-    <div className="group grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5">
+    <motion.div
+      layout={!reduceMotion}
+      transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.layout}
+      className="group grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5"
+    >
       <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-sm border border-primary/20 bg-primary/10 text-primary shadow-[0_0_0_1px_hsl(var(--primary)/0.06)]">
         <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
       </div>
@@ -495,9 +523,11 @@ export function MessageBubble({
           <span className="font-semibold tracking-tight text-foreground">
             {localize(lang, "Оператор", "Operator")}
           </span>
-          <span className="tabular-nums text-muted-foreground/65 opacity-0 transition-opacity group-hover:opacity-100">
-            {formatDateTime(message.created_at, lang)}
-          </span>
+          {message.created_at ? (
+            <span className="tabular-nums text-muted-foreground/65 opacity-0 transition-opacity group-hover:opacity-100">
+              {formatDateTime(message.created_at, lang)}
+            </span>
+          ) : null}
           {actions.length ? (
             <span className="rounded-sm border border-border/50 bg-muted/20 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
               {actions.length} {localize(lang, "действ.", "actions")}
@@ -518,11 +548,27 @@ export function MessageBubble({
             ) : null}
           </span>
         </div>
+        {turnActivity}
         {message.content ? (
-          <div className="max-w-[min(640px,100%)]">
-            <OperatorMarkdown content={message.content} stripTables={hasStructuredTable || Boolean(metrics)} />
+          <div className="max-w-[min(640px,100%)]" data-message-markdown>
+            <OperatorMarkdown
+              content={message.content}
+              streaming={streaming}
+              stripTables={streamStripTables || hasStructuredTable || Boolean(metrics)}
+            />
           </div>
         ) : null}
+        {turnTrailing}
+        {hasSupportingContent ? (
+          <motion.div
+            layout={!reduceMotion}
+            initial={
+              animateSupportingContent && !reduceMotion ? { opacity: 0, y: 4 } : false
+            }
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+            className="space-y-2"
+          >
         <WebSourcesCard sources={webSources} />
         {metrics ? <MetricsSnapshotCard data={metrics} /> : null}
         {plan ? (
@@ -604,7 +650,12 @@ export function MessageBubble({
             {localize(lang, "Сохранить runbook", "Save runbook")}
           </Button>
         ) : null}
+          </motion.div>
+        ) : null}
       </div>
-    </div>
+    </motion.div>
   );
 }
+
+export const MessageBubble = memo(MessageBubbleComponent);
+MessageBubble.displayName = "MessageBubble";

@@ -68,10 +68,10 @@ export function ResourceInspector({
 
   return (
     <SectionCard
-      title={localize(lang, "Inspector", "Inspector")}
+      title={localize(lang, "Инспектор", "Inspector")}
       description={
         selectedTarget
-          ? `${selectedResource?.kind || "Resource"} / ${selectedTarget.namespace || "cluster"} / ${selectedTarget.name}`
+          ? `${selectedResource?.kind || localize(lang, "Ресурс", "Resource")} / ${selectedTarget.namespace || localize(lang, "кластер", "cluster")} / ${selectedTarget.name}`
           : localize(lang, "Выберите строку в таблице.", "Select a row in the table.")
       }
       icon={<FileCode2 className="h-4 w-4" />}
@@ -83,7 +83,7 @@ export function ResourceInspector({
           title={localize(lang, "Объект не выбран", "No object selected")}
           description={localize(
             lang,
-            "Выберите resource row, чтобы открыть summary, YAML, events, logs или watch preview.",
+            "Выберите ресурс, чтобы открыть сводку, YAML, события, логи или последние изменения.",
             "Select a resource row to open summary, YAML, events, logs, or watch preview.",
           )}
         />
@@ -92,10 +92,10 @@ export function ResourceInspector({
           <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <StatusBadge label={selectedResource.kind} tone="info" />
-              <StatusBadge label={selectedTarget.namespace || localize(lang, "cluster", "cluster")} tone="neutral" />
+              <StatusBadge label={selectedTarget.namespace || localize(lang, "кластер", "cluster")} tone="neutral" />
               {selectedRow?.webterm_ownership ? (
                 <StatusBadge
-                  label={ownerLabel(selectedRow.webterm_ownership.owner)}
+                  label={ownerLabel(selectedRow.webterm_ownership.owner, lang)}
                   tone={ownerTone(selectedRow.webterm_ownership.owner)}
                 />
               ) : null}
@@ -110,19 +110,19 @@ export function ResourceInspector({
           <Tabs value={tab} onValueChange={(value) => onTabChange(value as InspectorTab)}>
             <TabsList className="grid h-auto w-full grid-cols-3 gap-1 p-1 text-xs xl:grid-cols-5">
               <TabsTrigger value="summary" className="text-xs">
-                Summary
+                {localize(lang, "Сводка", "Summary")}
               </TabsTrigger>
               <TabsTrigger value="yaml" className="text-xs">
                 YAML
               </TabsTrigger>
               <TabsTrigger value="events" className="text-xs">
-                Events
+                {localize(lang, "События", "Events")}
               </TabsTrigger>
               <TabsTrigger value="logs" className="text-xs" disabled={!canLogs}>
-                Logs
+                {localize(lang, "Логи", "Logs")}
               </TabsTrigger>
               <TabsTrigger value="watch" className="text-xs" disabled={!canWatch}>
-                Watch
+                {localize(lang, "Изменения", "Watch")}
               </TabsTrigger>
             </TabsList>
 
@@ -167,7 +167,7 @@ function ResourceSummaryView({
   error: unknown;
   selectedRow: KubernetesAdminResourceItem | null;
 }) {
-  if (loading) return <PanelLoading text={localize(lang, "Загружаю detail", "Loading detail")} />;
+  if (loading) return <PanelLoading text={localize(lang, "Загружаю сведения", "Loading detail")} />;
   if (error) return <PanelError lang={lang} error={error} />;
 
   const facts = detail?.resource || selectedRow || {};
@@ -176,7 +176,7 @@ function ResourceSummaryView({
     <div className="space-y-3">
       {ownership ? <OwnershipPanel lang={lang} ownership={ownership} /> : null}
       <div className="grid gap-2 sm:grid-cols-2">
-        {resourceFactRows(facts).map(([label, value]) => (
+        {resourceFactRows(lang, facts).map(([label, value]) => (
           <div key={label} className="rounded-lg border border-border/70 bg-background/45 px-3 py-3">
             <div className="text-xs font-medium text-muted-foreground">{label}</div>
             <div className="mt-1 break-all text-sm font-semibold text-foreground">{value}</div>
@@ -186,7 +186,7 @@ function ResourceSummaryView({
       {detail?.policy ? (
         <div className="rounded-lg border border-border/70 bg-background/45 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={detail.policy.mutates_state ? "mutates" : "read-only"} tone={detail.policy.mutates_state ? "danger" : "success"} />
+            <StatusBadge label={detail.policy.mutates_state ? localize(lang, "может изменить", "mutates") : localize(lang, "только чтение", "read-only")} tone={detail.policy.mutates_state ? "danger" : "success"} />
             {detail.policy.blocked_actions.slice(0, 8).map((action) => (
               <StatusBadge key={action} label={action} tone="neutral" dot={false} />
             ))}
@@ -215,7 +215,7 @@ function YamlView({
       <EmptyState
         icon={<FileCode2 className="h-5 w-5" />}
         title="YAML"
-        description={localize(lang, "Откройте вкладку, чтобы загрузить redacted YAML.", "Open the tab to load redacted YAML.")}
+        description={localize(lang, "Откройте вкладку, чтобы загрузить YAML со скрытыми секретами.", "Open the tab to load redacted YAML.")}
       />
     );
   }
@@ -223,8 +223,8 @@ function YamlView({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge label={yaml.mode} tone="success" />
-        {yaml.redacted ? <StatusBadge label="redacted" tone="warning" /> : null}
-        <StatusBadge label={yaml.policy.mutates_state ? "mutates" : "read-only"} tone={yaml.policy.mutates_state ? "danger" : "success"} />
+        {yaml.redacted ? <StatusBadge label={localize(lang, "секреты скрыты", "redacted")} tone="warning" /> : null}
+        <StatusBadge label={yaml.policy.mutates_state ? localize(lang, "может изменить", "mutates") : localize(lang, "только чтение", "read-only")} tone={yaml.policy.mutates_state ? "danger" : "success"} />
       </div>
       <pre className="max-h-[34rem] overflow-auto rounded-lg border border-border/70 bg-secondary/25 p-4 text-xs leading-5 text-foreground">
         {JSON.stringify(yaml.resource, null, 2)}
@@ -244,7 +244,7 @@ function EventsView({
   loading: boolean;
   error: unknown;
 }) {
-  if (loading) return <PanelLoading text={localize(lang, "Загружаю events", "Loading events")} />;
+  if (loading) return <PanelLoading text={localize(lang, "Загружаю события", "Loading events")} />;
   if (error) return <PanelError lang={lang} error={error} />;
   const events = detail?.events?.events || [];
   return events.length ? (
@@ -252,7 +252,7 @@ function EventsView({
       {events.map((event, index) => (
         <div key={`${event.name}-${event.resource_version}-${index}`} className="rounded-lg border border-border/70 bg-background/45 px-3 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge label={event.type || "event"} tone={event.type === "Warning" ? "warning" : "info"} />
+            <StatusBadge label={event.type || localize(lang, "событие", "event")} tone={event.type === "Warning" ? "warning" : "info"} />
             <span className="text-sm font-semibold text-foreground">{event.reason || event.name}</span>
             {event.count > 1 ? <StatusBadge label={`x${event.count}`} tone="neutral" /> : null}
           </div>
@@ -264,8 +264,8 @@ function EventsView({
   ) : (
     <EmptyState
       icon={<AlertTriangle className="h-5 w-5" />}
-      title={localize(lang, "Events не найдены", "No events found")}
-      description={localize(lang, "Для выбранного объекта backend вернул пустой bounded events snapshot.", "The backend returned an empty bounded events snapshot for the selected object.")}
+      title={localize(lang, "Событий не найдено", "No events found")}
+      description={localize(lang, "У выбранного объекта пока нет событий.", "The selected object has no events yet.")}
     />
   );
 }
@@ -281,15 +281,15 @@ function LogsView({
   loading: boolean;
   error: unknown;
 }) {
-  if (loading) return <PanelLoading text={localize(lang, "Загружаю logs snapshot", "Loading logs snapshot")} />;
+  if (loading) return <PanelLoading text={localize(lang, "Загружаю логи", "Loading logs")} />;
   if (error) return <PanelError lang={lang} error={error} />;
   return logs ? (
     <AdminLogsSnapshotPanel lang={lang} logs={logs} />
   ) : (
     <EmptyState
       icon={<ScrollText className="h-5 w-5" />}
-      title="Logs snapshot"
-      description={localize(lang, "Logs доступны только для Pod и загружаются bounded snapshot.", "Logs are available for Pods only and load as a bounded snapshot.")}
+      title={localize(lang, "Снимок логов", "Logs snapshot")}
+      description={localize(lang, "Логи доступны только для подов.", "Logs are available for pods only.")}
     />
   );
 }
@@ -305,15 +305,15 @@ function WatchView({
   loading: boolean;
   error: unknown;
 }) {
-  if (loading) return <PanelLoading text={localize(lang, "Загружаю watch preview", "Loading watch preview")} />;
+  if (loading) return <PanelLoading text={localize(lang, "Загружаю последние изменения", "Loading watch preview")} />;
   if (error) return <PanelError lang={lang} error={error} />;
   return watch ? (
     <WatchPreviewPanel lang={lang} watch={watch} />
   ) : (
     <EmptyState
       icon={<Activity className="h-5 w-5" />}
-      title="Watch preview"
-      description={localize(lang, "Это bounded preview, не unrestricted stream.", "This is a bounded preview, not an unrestricted stream.")}
+      title={localize(lang, "Последние изменения", "Watch preview")}
+      description={localize(lang, "Показаны последние доступные события.", "Shows the latest available events.")}
     />
   );
 }
@@ -329,7 +329,7 @@ function PanelLoading({ text }: { text: string }) {
 function PanelError({ lang, error }: { lang: string; error: unknown }) {
   return (
     <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-4 text-sm text-destructive">
-      {error instanceof Error ? error.message : localize(lang, "Request failed", "Request failed")}
+      {error instanceof Error ? error.message : localize(lang, "Запрос не выполнен", "Request failed")}
     </div>
   );
 }

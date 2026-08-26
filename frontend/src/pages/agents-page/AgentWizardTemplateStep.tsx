@@ -57,14 +57,14 @@ export function AgentWizardTemplateStep({
       <details className="group rounded-sm border border-border bg-surface-0/35">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-foreground">
           <span>
-            {localize(lang, "Advanced: архитектура выполнения", "Advanced: execution architecture")}
+            {localize(lang, "Как выполняется агент", "How the agent runs")}
             <span className="ml-2 font-normal text-muted-foreground">· {mode === "full" ? localize(lang, "универсальный", "general") : mode === "mini" ? localize(lang, "командный", "command") : localize(lang, "оркестратор", "orchestrator")}</span>
           </span>
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
         </summary>
         <div className="space-y-3 border-t border-border px-4 py-4">
           <p className="text-xs leading-5 text-muted-foreground">
-            {localize(lang, "Меняйте этот режим только если понимаете различия runtime. Для большинства задач подходит универсальный режим.", "Change this only when you understand the runtime trade-offs. The general mode fits most tasks.")}
+            {localize(lang, "Для большинства задач подходит универсальный режим.", "The general mode fits most tasks.")}
           </p>
         <div className="grid gap-3 md:grid-cols-3">
           {[
@@ -81,7 +81,7 @@ export function AgentWizardTemplateStep({
               icon: Terminal,
               label: localize(lang, "Командный", "Command agent"),
               text: localize(lang, "Выполняет заданный список команд и делает краткий разбор результата.", "Runs a fixed list of commands and briefly analyses the result."),
-              when: localize(lang, "Быстрый старт · без worker", "Quick start · no worker"),
+              when: localize(lang, "Быстрый старт · без фонового обработчика", "Quick start · no background worker"),
               accent: "text-primary border-primary/30 bg-primary/10",
             },
             {
@@ -182,7 +182,7 @@ export function AgentWizardTemplateStep({
                 </div>
                 <p className="line-clamp-2 text-xs leading-5 text-foreground">
                   {tpl.mode === "full" || tpl.mode === "multi"
-                    ? (tpl.goal || localize(lang, "Автономная OPS-задача", "Autonomous OPS task"))
+                    ? (tpl.goal || localize(lang, "Автономная задача", "Autonomous task"))
                     : localize(lang, `${tpl.command_count} команд`, `${tpl.command_count} commands`)}
                 </p>
               </button>

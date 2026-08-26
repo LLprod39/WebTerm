@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, backendPath } from "@/lib/api";
 import type { BackgroundWorkerStateRecord } from "@/api/server-memory";
 import type { ProviderBinding } from "@/api/aiProviders";
 import type {
@@ -17,6 +17,14 @@ import type {
   AgentScheduleOverviewSummary,
   AgentTemplate,
   DashboardRunItem,
+  AgentRunActivityFilters,
+  AgentRunActivityV2Response,
+  AgentRunArtifactsV2Response,
+  AgentRunCleanupStaleResponse,
+  AgentRunReportDeliveryAttemptResponse,
+  AgentRunReportEventFilters,
+  AgentRunReportEventsV2Response,
+  AgentRunReportV2Response,
 } from "@/api/agent-types";
 
 export type * from "@/api/agent-types";
@@ -159,8 +167,56 @@ export async function fetchAgentRunReport(runId: number) {
   return apiFetch<AgentRunReportResponse>(`/servers/api/agents/runs/${runId}/report/`);
 }
 
+export async function fetchAgentRunReportV2(runId: number) {
+  const response = await fetch(backendPath(`/servers/api/agents/runs/${runId}/report/v2/`), { credentials: "include" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return response.json() as Promise<AgentRunReportV2Response>;
+}
+
+function appendListParam(params: URLSearchParams, name: string, values?: string[]) {
+  const normalized = values?.map((value) => value.trim()).filter(Boolean);
+  if (normalized?.length) params.set(name, normalized.join(","));
+}
+
+export async function fetchAgentRunReportEventsV2(runId: number, filters: AgentRunReportEventFilters = {}) {
+  const params = new URLSearchParams();
+  params.set("limit", String(filters.limit ?? 50));
+  params.set("direction", filters.direction ?? "older");
+  if (filters.cursor !== undefined && filters.cursor !== null) params.set("cursor", String(filters.cursor));
+  appendListParam(params, "severity", filters.severity);
+  appendListParam(params, "phase", filters.phase);
+  appendListParam(params, "category", filters.category);
+  if (filters.important !== undefined) params.set("important", String(filters.important));
+  if (filters.q?.trim()) params.set("q", filters.q.trim());
+  return apiFetch<AgentRunReportEventsV2Response>(
+    `/servers/api/agents/runs/${runId}/events/?${params.toString()}`,
+  );
+}
+
+export async function fetchAgentRunActivityV2(runId: number, filters: AgentRunActivityFilters = {}) {
+  const params = new URLSearchParams();
+  params.set("limit", String(filters.limit ?? 50));
+  params.set("direction", filters.direction ?? "older");
+  if (filters.cursor !== undefined && filters.cursor !== null) params.set("cursor", String(filters.cursor));
+  appendListParam(params, "kind", filters.kind);
+  appendListParam(params, "status", filters.status);
+  return apiFetch<AgentRunActivityV2Response>(
+    `/servers/api/agents/runs/${runId}/activity/?${params.toString()}`,
+  );
+}
+
+export async function fetchAgentRunArtifactsV2(runId: number) {
+  return apiFetch<AgentRunArtifactsV2Response>(`/servers/api/agents/runs/${runId}/artifacts/`);
+}
+
 export async function retryAgentRunReportDelivery(runId: number) {
-  return apiFetch<AgentRunReportResponse>(`/servers/api/agents/runs/${runId}/report/deliver/`, {
+  return apiFetch<AgentRunReportDeliveryAttemptResponse>(`/servers/api/agents/runs/${runId}/report/deliver/`, {
+    method: "POST",
+  });
+}
+
+export async function cleanupStaleAgentRun(runId: number) {
+  return apiFetch<AgentRunCleanupStaleResponse>(`/servers/api/agents/runs/${runId}/cleanup-stale/`, {
     method: "POST",
   });
 }

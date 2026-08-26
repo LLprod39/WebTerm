@@ -1,4 +1,5 @@
 import {
+  AlertCircle,
   ArrowDown,
   Bot,
   Check,
@@ -8,7 +9,10 @@ import {
   Plus,
   X,
 } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { useMemo, useRef } from "react";
 
+import type { AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { localize } from "@/lib/i18n";
@@ -19,9 +23,14 @@ import {
   hasMarkdownTable,
   InventoryPanelSkeleton,
 } from "./InventoryPanelSkeleton";
-import { OperatorMarkdown } from "./OperatorMarkdown";
 import { OperatorThinkingPanel } from "./OperatorThinkingPanel";
 import { QUICK_PROMPT_CARDS } from "./chatHelpers";
+import { visibleOperatorUserText } from "./operatorUserText";
+import { isNewOptimisticUserTurn } from "./optimisticUserTurn";
+import { CHAT_EASE, CHAT_MOTION } from "./chatMotion";
+import type { AgentPanelActions } from "./InteractiveAgentsPanel";
+import type { ForecastPanelActions } from "./InteractiveForecastsPanel";
+import type { ServerPanelActions } from "./InteractiveServersPanel";
 import type { ChatPageController } from "./useChatPageController";
 
 type ChatMessagesPaneProps = {
@@ -30,6 +39,7 @@ type ChatMessagesPaneProps = {
 };
 
 export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
+  const reduceMotion = useReducedMotion();
   const {
     lang,
     selectedTitle,
@@ -54,18 +64,221 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     handleSaveRunbook,
     handleRetry,
     pinnedServers,
-    pinnedPlaybook,
     pinServer,
     unpinServer,
     openSessionDock,
     pendingUserText,
+    pendingUserEpoch,
+    pendingUserBaselineIds,
     showLiveStream,
+    operatorTurn,
+    liveTurnKey,
+    liveAssistantMessageId,
+    settledLiveMessage,
     streamInventoryKind,
     endRef,
     atBottom,
     setAtBottom,
     scrollToEnd,
   } = c;
+
+  const headerStatus = activeChat?.active_turn?.status === "awaiting_async" ||
+    (isBusy && operatorWs.statusMessage?.includes("Жду"))
+    ? {
+        key: "waiting",
+        text: localize(
+          lang,
+          "Жду агента/задачу — напишу, когда отработает",
+          "Waiting on agent/task — will report when done",
+        ),
+        className: "text-info",
+      }
+    : isBusy
+      ? {
+          key: "working",
+          text: localize(lang, "Работает в фоне…", "Working in background…"),
+          className: "text-muted-foreground",
+        }
+      : {
+          key: "ready",
+          text: pinnedServers.length
+            ? localize(
+                lang,
+                `Выбран через @: ${pinnedServers.map((server) => server.name).join(", ")}`,
+                `Selected via @: ${pinnedServers.map((server) => server.name).join(", ")}`,
+              )
+            : localize(
+                lang,
+                "Плейбуки, запуски, логи и агенты доступны по запросу",
+                "Playbooks, runs, logs, and agents are available on request",
+              ),
+          className: "text-muted-foreground/70",
+        };
+
+  const reconciledMessageKeysRef = useRef(new Map<number, string>());
+  const optimisticUserSequenceRef = useRef(0);
+  const optimisticUserWasPresentRef = useRef(false);
+  const optimisticUserEpochRef = useRef(pendingUserEpoch);
+  const optimisticUserKeyRef = useRef("pending-user-message-0");
+  const optimisticBaselineIdsRef = useRef(new Set<number>());
+  if (isNewOptimisticUserTurn({
+    pendingText: pendingUserText,
+    wasPresent: optimisticUserWasPresentRef.current,
+    previousEpoch: optimisticUserEpochRef.current,
+    nextEpoch: pendingUserEpoch,
+  })) {
+    optimisticUserSequenceRef.current += 1;
+    optimisticUserKeyRef.current = `pending-user-message-${optimisticUserSequenceRef.current}`;
+    // Baseline is captured at dispatch and scoped to the originating chat, so
+    // navigation cannot make an older identical prompt look like this send.
+    optimisticBaselineIdsRef.current = new Set(pendingUserBaselineIds);
+  }
+  optimisticUserWasPresentRef.current = Boolean(pendingUserText);
+  optimisticUserEpochRef.current = pendingUserEpoch;
+  const optimisticUserKey = optimisticUserKeyRef.current;
+  const pendingPersistedUser = pendingUserText
+    ? [...displayMessages]
+        .reverse()
+        .find(
+          (message) =>
+            message.role === "user" &&
+            !optimisticBaselineIdsRef.current.has(message.id) &&
+            visibleOperatorUserText(message.content) === pendingUserText.trim(),
+        )
+    : undefined;
+  const visibleMessages = pendingPersistedUser
+    ? displayMessages.filter((message) => message.id !== pendingPersistedUser.id)
+    : displayMessages;
+  const liveText = operatorTurn?.text || operatorWs.streamText;
+  if (pendingPersistedUser) {
+    // The durable user row inherits the optimistic wrapper key so the bubble
+    // never exits/re-enters while REST catches up with the send.
+    for (const [messageId, key] of reconciledMessageKeysRef.current) {
+      if (messageId !== pendingPersistedUser.id && key === optimisticUserKey) {
+        reconciledMessageKeysRef.current.delete(messageId);
+      }
+    }
+    reconciledMessageKeysRef.current.set(pendingPersistedUser.id, optimisticUserKey);
+  }
+  if (liveAssistantMessageId && liveTurnKey) {
+    reconciledMessageKeysRef.current.set(liveAssistantMessageId, liveTurnKey);
+  }
+  const messageMotionKey = (message: AssistantChatMessage) =>
+    reconciledMessageKeysRef.current.get(message.id) ?? `message-${message.id}`;
+
+  const messageHandlersRef = useRef({
+    handleConfirm,
+    handleCancel,
+    handleUndo,
+    handleSaveRunbook,
+    handleRetry,
+    pinServer,
+    unpinServer,
+    dispatchMessage,
+    openSessionDock,
+  });
+  messageHandlersRef.current = {
+    handleConfirm,
+    handleCancel,
+    handleUndo,
+    handleSaveRunbook,
+    handleRetry,
+    pinServer,
+    unpinServer,
+    dispatchMessage,
+    openSessionDock,
+  };
+
+  const stableMessageHandlers = useMemo(
+    () => ({
+      onConfirm: (actionId: number, typedConfirm?: string) =>
+        messageHandlersRef.current.handleConfirm(actionId, typedConfirm),
+      onCancel: (actionId: number) => messageHandlersRef.current.handleCancel(actionId),
+      onUndo: (actionId: number) => messageHandlersRef.current.handleUndo(actionId),
+      onSaveRunbook: (message: AssistantChatMessage) =>
+        messageHandlersRef.current.handleSaveRunbook(message),
+      onRetry: () => messageHandlersRef.current.handleRetry(),
+      onAsk: (prompt: string) => messageHandlersRef.current.dispatchMessage(prompt),
+    }),
+    [],
+  );
+  const pinnedServerIds = useMemo(() => pinnedServers.map((server) => server.id), [pinnedServers]);
+  const serverPanelActions = useMemo<ServerPanelActions>(
+    () => ({
+      pinnedIds: pinnedServerIds,
+      onPin: (server) => messageHandlersRef.current.pinServer(server),
+      onUnpin: (id) => messageHandlersRef.current.unpinServer(id),
+      onAsk: stableMessageHandlers.onAsk,
+      onOpenSession: (server) =>
+        messageHandlersRef.current.openSessionDock({
+          serverId: server.id,
+          serverName: server.name,
+          host: server.host,
+          mode: "live",
+        }),
+    }),
+    [pinnedServerIds, stableMessageHandlers.onAsk],
+  );
+  const agentPanelActions = useMemo<AgentPanelActions>(
+    () => ({ onAsk: stableMessageHandlers.onAsk }),
+    [stableMessageHandlers.onAsk],
+  );
+  const forecastPanelActions = useMemo<ForecastPanelActions>(
+    () => ({ onAsk: stableMessageHandlers.onAsk }),
+    [stableMessageHandlers.onAsk],
+  );
+  const isReconcilingLiveTurn = Boolean(operatorTurn?.reconciling && settledLiveMessage);
+  const liveTurnError = operatorTurn?.error ?? operatorWs.errorMessage;
+  const liveTerminalStatus = String(
+    operatorTurn?.terminalStatus ?? operatorWs.terminalStatus ?? "",
+  ).toLowerCase();
+  const terminalNotice =
+    liveTerminalStatus === "cancelled" || liveTerminalStatus === "stopped"
+      ? {
+          text: localize(lang, "Генерация остановлена", "Generation stopped"),
+          destructive: false,
+        }
+      : liveTerminalStatus === "limit"
+        ? {
+            text: localize(lang, "Достигнут лимит выполнения", "Execution limit reached"),
+            destructive: true,
+          }
+        : liveTerminalStatus === "failed" || liveTerminalStatus === "error"
+          ? {
+              text: localize(lang, "Ответ не удалось завершить", "Response could not be completed"),
+              destructive: true,
+            }
+          : (liveTerminalStatus === "completed" || liveTerminalStatus === "done") && !liveText.trim()
+            ? {
+                text: localize(lang, "Ответ завершён", "Response completed"),
+                destructive: false,
+              }
+            : null;
+  const hasDurablePlan = Boolean(settledLiveMessage?.metadata.plan);
+  const hasDurableInventory = Boolean(
+    settledLiveMessage?.metadata.table ||
+      (Array.isArray(settledLiveMessage?.metadata.tables) &&
+        settledLiveMessage.metadata.tables.length > 0),
+  );
+  const liveShellMessage = useMemo<AssistantChatMessage>(() => {
+    if (settledLiveMessage) {
+      return {
+        ...settledLiveMessage,
+        content: liveText || settledLiveMessage.content,
+      };
+    }
+    return {
+      id: liveAssistantMessageId ?? -1,
+      role: "assistant",
+      content: liveText,
+      metadata: {},
+      created_at: "",
+    };
+  }, [
+    liveAssistantMessageId,
+    liveText,
+    settledLiveMessage,
+  ]);
 
   return (
     <>
@@ -84,28 +297,20 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
           <h2 className="truncate text-[14px] font-medium tracking-tight text-foreground">
             {selectedTitle}
           </h2>
-          {activeChat?.active_turn?.status === "awaiting_async" ||
-          (isBusy && operatorWs.statusMessage?.includes("Жду")) ? (
-            <p className="text-[11px] text-info">
-              {localize(
-                lang,
-                "Жду агента/задачу — напишу, когда отработает",
-                "Waiting on agent/task — will report when done",
-              )}
-            </p>
-          ) : isBusy ? (
-            <p className="text-[11px] text-muted-foreground">
-              {localize(lang, "Работает в фоне…", "Working in background…")}
-            </p>
-          ) : (
-            <p className="text-[11px] text-muted-foreground/70">
-              {pinnedPlaybook
-                ? localize(lang, `Playbook в контексте: ${pinnedPlaybook.name} · #${pinnedPlaybook.id}`, `Playbook in context: ${pinnedPlaybook.name} · #${pinnedPlaybook.id}`)
-                : pinnedServers.length
-                ? localize(lang, `${pinnedServers.length} сервер(а) в контексте`, `${pinnedServers.length} server(s) in context`)
-                : localize(lang, "Контекст: весь доступный флот", "Context: all accessible servers")}
-            </p>
-          )}
+          <div className="relative min-h-[1rem] overflow-hidden text-[11px]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.p
+                key={headerStatus.key}
+                initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
+                transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
+                className={headerStatus.className}
+              >
+                {headerStatus.text}
+              </motion.p>
+            </AnimatePresence>
+          </div>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -166,10 +371,13 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
               </p>
               <div className="mt-6 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                 {QUICK_PROMPT_CARDS.map((card) => (
-                  <button
+                  <motion.button
                     key={card.id}
                     type="button"
                     onClick={() => dispatchMessage(lang === "ru" ? card.promptRu : card.promptEn)}
+                    whileHover={reduceMotion ? undefined : { y: -1 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
                     className="rounded-2xl border border-border/70 bg-transparent px-3.5 py-3 text-left transition-colors hover:bg-muted/40"
                   >
                     <div className="text-[13px] font-medium text-foreground">
@@ -178,7 +386,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                     <div className="mt-0.5 text-[11px] text-muted-foreground/75">
                       {lang === "ru" ? card.hintRu : card.hintEn}
                     </div>
-                  </button>
+                  </motion.button>
                 ))}
               </div>
               <div className="mt-5 flex w-full flex-wrap items-center justify-center gap-2 border-t border-border/50 pt-4">
@@ -211,13 +419,13 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
 
             {activeChatQuery.isLoading ? (
               <div className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" />
                 {localize(lang, "Загрузка чата", "Loading chat")}
               </div>
             ) : null}
 
             {!activeChatQuery.isLoading &&
-            !displayMessages.length &&
+            !visibleMessages.length &&
             !pendingUserText &&
             !showLiveStream &&
             !isBusy ? (
@@ -226,44 +434,46 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
               </div>
             ) : null}
 
-            {displayMessages.map((message, index) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                actionWorkingId={actionWorkingId}
-                onConfirmAction={handleConfirm}
-                onCancelAction={handleCancel}
-                onUndoAction={handleUndo}
-                onSaveRunbook={handleSaveRunbook}
-                onRetry={
-                  !isBusy && message.role === "assistant" && index === displayMessages.length - 1
-                    ? handleRetry
-                    : undefined
-                }
-                serverPanelActions={{
-                  pinnedIds: pinnedServers.map((s) => s.id),
-                  onPin: pinServer,
-                  onUnpin: unpinServer,
-                  onAsk: (prompt) => dispatchMessage(prompt),
-                  onOpenSession: (server) =>
-                    openSessionDock({
-                      serverId: server.id,
-                      serverName: server.name,
-                      host: server.host,
-                      mode: "live",
-                    }),
-                }}
-                agentPanelActions={{
-                  onAsk: (prompt) => dispatchMessage(prompt),
-                }}
-                forecastPanelActions={{
-                  onAsk: (prompt) => dispatchMessage(prompt),
-                }}
-              />
-            ))}
+            <AnimatePresence key={activeChat?.id ?? "new-chat"} initial={false} mode="popLayout">
+              {[
+                ...visibleMessages.map((message, index) => (
+                <motion.div
+                  key={messageMotionKey(message)}
+                  layout="position"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -2 }}
+                  transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.enter}
+                >
+                  <MessageBubble
+                    message={message}
+                    actionWorkingId={actionWorkingId}
+                    onConfirmAction={stableMessageHandlers.onConfirm}
+                    onCancelAction={stableMessageHandlers.onCancel}
+                    onUndoAction={stableMessageHandlers.onUndo}
+                    onSaveRunbook={stableMessageHandlers.onSaveRunbook}
+                    onRetry={
+                      !isBusy && message.role === "assistant" && index === visibleMessages.length - 1
+                        ? stableMessageHandlers.onRetry
+                        : undefined
+                    }
+                    serverPanelActions={serverPanelActions}
+                    agentPanelActions={agentPanelActions}
+                    forecastPanelActions={forecastPanelActions}
+                  />
+                </motion.div>
+                )),
 
-            {pendingUserText ? (
-              <div className="group flex justify-end gap-3">
+                pendingUserText ? (
+              <motion.div
+                key={optimisticUserKey}
+                layout="position"
+                initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0 }}
+                transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.enter}
+                className="group flex justify-end gap-3"
+              >
                 <div className="min-w-0 max-w-[min(560px,85%)]">
                   <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm opacity-90">
                     <div className="whitespace-pre-wrap break-words">{pendingUserText}</div>
@@ -272,116 +482,213 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                     {localize(lang, "отправляется…", "sending…")}
                   </div>
                 </div>
-              </div>
-            ) : null}
+              </motion.div>
+                ) : null,
 
-            {showLiveStream || isBusy ? (
-              <div className="min-w-0 space-y-2.5">
-                {(operatorWs.phase !== "idle" || isBusy) &&
-                (operatorWs.hasReasoningStream || operatorWs.toolSteps.length > 0 || !operatorWs.streamText) ? (
-                  <OperatorThinkingPanel
-                    phase={
-                      operatorWs.phase === "idle" && isBusy
-                        ? "thinking"
-                        : operatorWs.phase === "idle"
-                          ? "streaming"
-                          : operatorWs.phase
+                showLiveStream || isBusy ? (
+                <motion.div
+                  key={liveTurnKey ?? `operator-turn-${activeChat?.active_turn?.turn_id ?? activeChat?.id ?? "pending"}`}
+                  layout="position"
+                  initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -2 }}
+                  transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.enter}
+                  className="min-w-0"
+                  data-operator-turn={operatorTurn?.reconciling ? "reconciling" : "live"}
+                >
+                  <MessageBubble
+                    message={liveShellMessage}
+                    actionWorkingId={actionWorkingId}
+                    onConfirmAction={stableMessageHandlers.onConfirm}
+                    onCancelAction={stableMessageHandlers.onCancel}
+                    onUndoAction={stableMessageHandlers.onUndo}
+                    onSaveRunbook={stableMessageHandlers.onSaveRunbook}
+                    onRetry={isReconcilingLiveTurn ? stableMessageHandlers.onRetry : undefined}
+                    serverPanelActions={serverPanelActions}
+                    agentPanelActions={agentPanelActions}
+                    forecastPanelActions={forecastPanelActions}
+                    streaming={!isReconcilingLiveTurn && (operatorWs.busy || isBusy)}
+                    animateSupportingContent
+                    streamStripTables={
+                      !isReconcilingLiveTurn &&
+                      (Boolean(streamInventoryKind) || hasMarkdownTable(liveText))
                     }
-                    startedAt={operatorWs.thinkingStartedAt ?? Date.now()}
-                    iteration={operatorWs.thinkingIteration}
-                    reasoningText={operatorWs.reasoningText}
-                    hasReasoningStream={operatorWs.hasReasoningStream}
-                    statusMessage={operatorWs.statusMessage}
-                    toolSteps={operatorWs.toolSteps}
-                    compact={Boolean(operatorWs.streamText)}
+                    turnActivity={
+                      isReconcilingLiveTurn ? undefined : (
+                        liveTurnError ? (
+                          <motion.div
+                            layout={!reduceMotion}
+                            role="alert"
+                            initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+                            className="flex max-w-[min(42rem,100%)] items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/[0.06] px-3 py-2.5 text-[12px]"
+                          >
+                            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive" />
+                            <div className="min-w-0">
+                              <div className="font-medium text-foreground">
+                                {localize(lang, "Ответ не завершён", "Response did not finish")}
+                              </div>
+                              <div className="mt-0.5 break-words text-muted-foreground">
+                                {liveTurnError}
+                              </div>
+                            </div>
+                          </motion.div>
+                        ) : liveTerminalStatus ? (
+                          terminalNotice ? (
+                            <motion.div
+                              layout={!reduceMotion}
+                              role={terminalNotice.destructive ? "alert" : "status"}
+                              initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+                              className={cn(
+                                "flex max-w-[min(42rem,100%)] items-center gap-2 rounded-lg border px-3 py-2 text-[12px]",
+                                terminalNotice.destructive
+                                  ? "border-destructive/30 bg-destructive/[0.06] text-destructive"
+                                  : "border-border/60 bg-muted/20 text-muted-foreground",
+                              )}
+                            >
+                              {terminalNotice.destructive ? (
+                                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                              ) : (
+                                <Check className="h-3.5 w-3.5 shrink-0" />
+                              )}
+                              <span className="font-medium">{terminalNotice.text}</span>
+                            </motion.div>
+                          ) : undefined
+                        ) : (
+                        <>
+                          <OperatorThinkingPanel
+                            phase={
+                              (operatorTurn?.phase ?? operatorWs.phase) === "idle" && isBusy
+                                ? "thinking"
+                                : (operatorTurn?.phase ?? operatorWs.phase) === "idle"
+                                  ? "streaming"
+                                  : (operatorTurn?.phase ?? operatorWs.phase)
+                            }
+                            startedAt={operatorTurn?.startedAt ?? operatorWs.thinkingStartedAt}
+                            iteration={operatorTurn?.iteration ?? operatorWs.thinkingIteration}
+                            reasoningText={operatorWs.reasoningText}
+                            hasReasoningStream={operatorWs.hasReasoningStream}
+                            statusMessage={operatorTurn?.statusMessage ?? operatorWs.statusMessage}
+                            toolSteps={operatorTurn?.toolSteps ?? operatorWs.toolSteps}
+                            compact={Boolean(liveText)}
+                          />
+
+                          <AnimatePresence initial={false} mode="popLayout">
+                            {operatorWs.asyncTask ? (
+                              <motion.div
+                                key="async-task"
+                                layout
+                                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduceMotion ? undefined : { opacity: 0 }}
+                                transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+                                className={cn(
+                                  "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-[13px]",
+                                  operatorWs.asyncTask.status === "failed"
+                                    ? "border-destructive/30 bg-destructive/[0.06]"
+                                    : operatorWs.asyncTask.status === "done"
+                                      ? "border-success/30 bg-success/[0.06]"
+                                      : "border-primary/30 bg-primary/[0.05]",
+                                )}
+                              >
+                                {operatorWs.asyncTask.status === "running" ? (
+                                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
+                                ) : operatorWs.asyncTask.status === "done" ? (
+                                  <Check className="h-4 w-4 shrink-0 text-success" />
+                                ) : (
+                                  <X className="h-4 w-4 shrink-0 text-destructive" />
+                                )}
+                                <div className="min-w-0">
+                                  <div className="font-medium text-foreground">
+                                    {operatorWs.asyncTask.status === "running"
+                                      ? localize(lang, "Фоновая задача выполняется", "Background task running")
+                                      : operatorWs.asyncTask.status === "done"
+                                        ? localize(lang, "Фоновая задача завершена", "Background task finished")
+                                        : localize(lang, "Фоновая задача упала", "Background task failed")}
+                                  </div>
+                                  <div className="truncate font-mono text-[11px] text-muted-foreground">
+                                    {operatorWs.asyncTask.kind}
+                                    {operatorWs.asyncTask.runId ? ` · #${operatorWs.asyncTask.runId}` : ""}
+                                    {operatorWs.asyncTask.status === "running"
+                                      ? localize(lang, " · работает отдельный агент…", " · a separate agent is working…")
+                                      : ""}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            ) : null}
+
+                            {operatorWs.livePlan && !hasDurablePlan ? (
+                              <motion.div
+                                key="live-plan"
+                                layout
+                                initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduceMotion ? undefined : { opacity: 0 }}
+                                transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+                                className={cn(tasksPanelOpen && "lg:hidden")}
+                              >
+                                <PlanChecklist plan={operatorWs.livePlan} />
+                              </motion.div>
+                            ) : null}
+                          </AnimatePresence>
+                        </>
+                        )
+                      )
+                    }
+                    turnTrailing={
+                      !isReconcilingLiveTurn && streamInventoryKind && !hasDurableInventory ? (
+                        <motion.div
+                          key={`inventory-${streamInventoryKind}`}
+                          layout
+                          initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={reduceMotion ? undefined : { opacity: 0 }}
+                          transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
+                        >
+                          <InventoryPanelSkeleton
+                            kind={streamInventoryKind}
+                            rows={streamInventoryKind === "alerts" ? 4 : 5}
+                          />
+                        </motion.div>
+                      ) : undefined
+                    }
                   />
-                ) : null}
-
-                {/* Distinct card for a long-running spawned task (agent / pipeline run). */}
-                {operatorWs.asyncTask ? (
-                  <div
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-2xl border px-3 py-2.5 text-[13px]",
-                      operatorWs.asyncTask.status === "failed"
-                        ? "border-destructive/30 bg-destructive/[0.06]"
-                        : operatorWs.asyncTask.status === "done"
-                          ? "border-success/30 bg-success/[0.06]"
-                          : "border-primary/30 bg-primary/[0.05]",
-                    )}
-                  >
-                    {operatorWs.asyncTask.status === "running" ? (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-                    ) : operatorWs.asyncTask.status === "done" ? (
-                      <Check className="h-4 w-4 shrink-0 text-success" />
-                    ) : (
-                      <X className="h-4 w-4 shrink-0 text-destructive" />
-                    )}
-                    <div className="min-w-0">
-                      <div className="font-medium text-foreground">
-                        {operatorWs.asyncTask.status === "running"
-                          ? localize(lang, "Фоновая задача выполняется", "Background task running")
-                          : operatorWs.asyncTask.status === "done"
-                            ? localize(lang, "Фоновая задача завершена", "Background task finished")
-                            : localize(lang, "Фоновая задача упала", "Background task failed")}
-                      </div>
-                      <div className="truncate font-mono text-[11px] text-muted-foreground">
-                        {operatorWs.asyncTask.kind}
-                        {operatorWs.asyncTask.runId ? ` · #${operatorWs.asyncTask.runId}` : ""}
-                        {operatorWs.asyncTask.status === "running"
-                          ? localize(lang, " · работает отдельный агент…", " · a separate agent is working…")
-                          : ""}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* On lg+ the plan lives in the right-side PlanTasksPanel. */}
-                {operatorWs.livePlan ? (
-                  <div className={cn(tasksPanelOpen && "lg:hidden")}>
-                    <PlanChecklist plan={operatorWs.livePlan} />
-                  </div>
-                ) : null}
-
-                {/* Text first, cards below — same order as the settled MessageBubble,
-                    so the answer doesn't jump from under the cards to the top on turn end. */}
-                {operatorWs.streamText ? (
-                  <div className="max-w-[min(42rem,100%)]">
-                    <OperatorMarkdown
-                      content={operatorWs.streamText}
-                      streaming={operatorWs.busy || isBusy}
-                      stripTables={Boolean(streamInventoryKind) || hasMarkdownTable(operatorWs.streamText)}
-                    />
-                  </div>
-                ) : null}
-
-                {streamInventoryKind ? (
-                  <InventoryPanelSkeleton
-                    kind={streamInventoryKind}
-                    rows={streamInventoryKind === "alerts" ? 4 : 5}
-                  />
-                ) : null}
-              </div>
-            ) : null}
+                </motion.div>
+                ) : null,
+              ]}
+            </AnimatePresence>
             <div ref={endRef} className="h-2 shrink-0" aria-hidden />
           </div>
         )}
       </div>
 
-      {!atBottom && !showEmptyStarter ? (
-        <div className="pointer-events-none relative z-[2]">
-          <button
-            type="button"
-            onClick={() => {
-              setAtBottom(true);
-              scrollToEnd(true);
-            }}
-            className="pointer-events-auto absolute -top-12 left-1/2 flex h-8 w-8 -translate-x-1/2 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-colors hover:text-foreground"
-            aria-label={localize(lang, "Вниз", "Scroll to bottom")}
-          >
-            <ArrowDown className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {!atBottom && !showEmptyStarter ? (
+          <div className="pointer-events-none relative z-[2]">
+            <motion.button
+              type="button"
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: 4 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+              transition={{ duration: reduceMotion ? 0 : 0.18, ease: CHAT_EASE }}
+              onClick={() => {
+                setAtBottom(true);
+                scrollToEnd(true);
+              }}
+              className="pointer-events-auto absolute -top-12 left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-border/80 bg-background/95 px-3 text-[11px] font-medium text-muted-foreground shadow-md backdrop-blur-sm transition-colors hover:text-foreground"
+              aria-label={localize(lang, "К новому сообщению", "Jump to new message")}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+              {localize(lang, "К новому сообщению", "New message")}
+              <ArrowDown className="h-3.5 w-3.5" />
+            </motion.button>
+          </div>
+        ) : null}
+      </AnimatePresence>
     </>
   );
 }

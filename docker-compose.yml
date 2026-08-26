@@ -24,11 +24,11 @@ x-backend-worker: &backend-worker
     http_proxy: ${http_proxy:-}
     https_proxy: ${https_proxy:-}
     ftp_proxy: ${ftp_proxy:-}
-    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend}
+    no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend,ai-cli-runner-manager}
     HTTP_PROXY: ${HTTP_PROXY:-}
     HTTPS_PROXY: ${HTTPS_PROXY:-}
     FTP_PROXY: ${FTP_PROXY:-}
-    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend}
+    NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend,ai-cli-runner-manager}
     POSTGRES_HOST: postgres
     POSTGRES_PORT: "5432"
     POSTGRES_DB: ${POSTGRES_DB:-weu_platform}
@@ -81,6 +81,12 @@ x-backend-worker: &backend-worker
     OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    AI_CLI_SUBSCRIPTIONS_ENABLED: ${AI_CLI_SUBSCRIPTIONS_ENABLED:-true}
+    AI_CLI_RUNNER_MANAGER_URL: http://ai-cli-runner-manager:9000
+    AI_CLI_RUNNER_MANAGER_TOKEN: "${AI_CLI_RUNNER_MANAGER_TOKEN:?AI_CLI_RUNNER_MANAGER_TOKEN is required}"
+    AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS: ${AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS:-30}
+    AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS: ${AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS:-300}
+    AI_CLI_AUTH_IN_PROCESS: "false"
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     GEMINI_API_KEY: ${GEMINI_API_KEY:-}
     GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
@@ -183,11 +189,11 @@ services:
       http_proxy: ${http_proxy:-}
       https_proxy: ${https_proxy:-}
       ftp_proxy: ${ftp_proxy:-}
-      no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend}
+      no_proxy: ${no_proxy:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend,ai-cli-runner-manager}
       HTTP_PROXY: ${HTTP_PROXY:-}
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       FTP_PROXY: ${FTP_PROXY:-}
-      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend}
+      NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend,ai-cli-runner-manager}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
       POSTGRES_DB: ${POSTGRES_DB:-weu_platform}
@@ -209,6 +215,12 @@ services:
       DJANGO_DEBUG: ${DJANGO_DEBUG:-false}
       DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-web_ui.settings.production}
       KUBERNETES_OPS_ENABLED: ${KUBERNETES_OPS_ENABLED:-false}
+      AI_CLI_SUBSCRIPTIONS_ENABLED: ${AI_CLI_SUBSCRIPTIONS_ENABLED:-true}
+      AI_CLI_RUNNER_MANAGER_URL: http://ai-cli-runner-manager:9000
+      AI_CLI_RUNNER_MANAGER_TOKEN: "${AI_CLI_RUNNER_MANAGER_TOKEN:?AI_CLI_RUNNER_MANAGER_TOKEN is required}"
+      AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS: ${AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS:-30}
+      AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS: ${AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS:-300}
+      AI_CLI_AUTH_IN_PROCESS: "false"
       MARS_AGENT_RUNTIME: ${MARS_AGENT_RUNTIME:-docker}
       MARS_AGENT_DOCKER_IMAGE: ${MARS_AGENT_DOCKER_IMAGE:-webterm-mars-agent:latest}
       MARS_AGENT_DOCKER_NETWORK: ${MARS_AGENT_DOCKER_NETWORK:-bridge}
@@ -399,6 +411,122 @@ services:
         "exec python manage.py run_monitor --full-quick --quick-interval ${MONITOR_QUICK_INTERVAL:-60} --deep-interval ${MONITOR_DEEP_INTERVAL:-600} --concurrency ${MONITOR_CONCURRENCY:-5} $${MONITOR_SERVER_ID:+--server-id $${MONITOR_SERVER_ID}}",
       ]
 
+  # Local/pilot AI subscription plane. It is part of the default stack so a
+  # Docker restart cannot leave the UI enabled while the runner is absent.
+  ai-cli-docker-proxy:
+    image: ${WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE:-webterm-ai-cli-docker-proxy:local}
+    build:
+      context: .
+      dockerfile: docker/playbook-socket-proxy.Dockerfile
+    container_name: mini-prod-ai-cli-docker-proxy
+    user: "10002:10002"
+    group_add:
+      - "${DOCKER_SOCKET_GID:-0}"
+    environment:
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      DOCKER_PROXY_POLICY: ai-cli
+      AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
+      AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
+      AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
+      AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
+      AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    networks:
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10002,gid=10002,mode=1770
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+
+  ai-cli-egress-proxy:
+    image: ${WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE:-webterm-ai-cli-egress-proxy:local}
+    build:
+      context: .
+      dockerfile: docker/ai-cli-egress-proxy.Dockerfile
+    container_name: mini-prod-ai-cli-egress-proxy
+    user: "10003:10003"
+    networks:
+      - default
+      - ai-cli-egress
+    expose:
+      - "3128"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=10003,gid=10003,mode=1770
+      - /var/cache/squid:rw,noexec,nosuid,nodev,size=64m,uid=10003,gid=10003,mode=0700
+      - /var/log/squid:rw,noexec,nosuid,nodev,size=16m,uid=10003,gid=10003,mode=0700
+      - /run/squid:rw,noexec,nosuid,nodev,size=4m,uid=10003,gid=10003,mode=0700
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+
+  ai-cli-runner-manager:
+    image: ${WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE:-webterm-ai-cli-runner-manager:local}
+    build:
+      context: .
+      dockerfile: docker/ai-cli-runner-manager.Dockerfile
+    container_name: mini-prod-ai-cli-runner-manager
+    environment:
+      DOCKER_HOST: tcp://ai-cli-docker-proxy:2375
+      AI_CLI_RUNNER_MANAGER_TOKEN: "${AI_CLI_RUNNER_MANAGER_TOKEN:?AI_CLI_RUNNER_MANAGER_TOKEN is required}"
+      AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
+      AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
+      AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
+      AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
+      AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
+      AI_CLI_DOCKER_CPUS: ${AI_CLI_DOCKER_CPUS:-1.0}
+      AI_CLI_DOCKER_MEMORY: ${AI_CLI_DOCKER_MEMORY:-1g}
+      AI_CLI_DOCKER_PIDS_LIMIT: ${AI_CLI_DOCKER_PIDS_LIMIT:-128}
+      AI_CLI_REQUEST_TIMEOUT_SECONDS: ${AI_CLI_REQUEST_TIMEOUT_SECONDS:-900}
+      AI_CLI_OUTPUT_LIMIT_BYTES: ${AI_CLI_OUTPUT_LIMIT_BYTES:-2097152}
+    ports:
+      - "127.0.0.1:${AI_CLI_RUNNER_MANAGER_PORT:-19090}:9000"
+    networks:
+      - default
+      - docker-control
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=1770
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 128
+    mem_limit: 256m
+    cpus: 0.5
+    depends_on:
+      ai-cli-docker-proxy:
+        condition: service_healthy
+      ai-cli-egress-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
+  ai-provider-auth:
+    <<: *backend-worker
+    container_name: mini-prod-ai-provider-auth
+    command:
+      [
+        "sh",
+        "-lc",
+        "exec python manage.py run_ai_provider_auth_worker --interval ${AI_CLI_AUTH_WORKER_INTERVAL_SECONDS:-2} --concurrency ${AI_CLI_AUTH_WORKER_CONCURRENCY:-4} --worker-key \"$${HOSTNAME:-compose}\"",
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ai-cli-runner-manager:
+        condition: service_healthy
+
   telegram-bot:
     <<: *backend-worker
     container_name: mini-prod-telegram-bot
@@ -571,3 +699,10 @@ volumes:
   playbook_runtime:
     name: ${PLAYBOOK_RUNTIME_VOLUME_NAME:-mini_prod_playbook_runtime}
   playbook_validator_socket:
+
+networks:
+  docker-control:
+    internal: true
+  ai-cli-egress:
+    name: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
+    internal: true

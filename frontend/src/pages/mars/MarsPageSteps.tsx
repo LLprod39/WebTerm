@@ -24,7 +24,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { MarsInterviewQuestion, MarsRun } from "@/lib/api";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
-import { isMultiQuestion, splitAnswer, statusTone, TASK_STARTERS } from "./MarsPageUtils";
+import { isMultiQuestion, splitAnswer, statusLabel, statusTone, TASK_STARTERS } from "./MarsPageUtils";
 
 type BriefStepProps = {
   lang: string;
@@ -46,7 +46,7 @@ export function MarsBriefStep({
   return (
     <SectionCard
       title={localize(lang, "Задача", "Task")}
-      description={localize(lang, "Опишите результат, а MARS задаст уточняющие вопросы перед планом.", "Describe the result; MARS asks clarifying questions before the plan.")}
+      description={localize(lang, "Опишите результат и важные ограничения.", "Describe the result and key constraints.")}
       icon={<Target className="h-4 w-4" />}
       bodyClassName="space-y-4 px-5 py-5"
       actions={
@@ -81,9 +81,6 @@ export function MarsBriefStep({
               </span>
               <span className="min-w-0">
                 <span className="line-clamp-2 text-xs leading-5 text-foreground">{localize(lang, starter.ru, starter.en)}</span>
-                <span className="mt-1 inline-block text-xs text-muted-foreground underline-offset-2 group-hover:text-primary group-hover:underline">
-                  {localize(lang, "Пример запроса", "Example request")}
-                </span>
               </span>
             </button>
           ))}
@@ -219,13 +216,13 @@ export function MarsInterviewStep({
             </div>
 
             <div className="grid gap-2">
-              <Label>{localize(lang, "Детали для MARS", "Details for MARS")}</Label>
+              <Label>{localize(lang, "Дополнительные детали", "Additional details")}</Label>
               <Textarea
                 value={answers[activeQuestion.id] || ""}
                 onChange={(event) => onAnswerChange(activeQuestion.id, event.target.value)}
                 rows={4}
                 className="min-h-24 resize-none bg-background text-sm leading-6"
-                placeholder={activeQuestion.placeholder || localize(lang, "Добавьте детали, чтобы MARS не гадал.", "Add details so MARS does not guess.")}
+                placeholder={activeQuestion.placeholder || localize(lang, "Добавьте важные детали.", "Add any important details.")}
               />
             </div>
 
@@ -314,7 +311,7 @@ export function MarsPlanStep({ lang, goalText, planDraft, canApprovePlan, pendin
   return (
     <SectionCard
       title={localize(lang, "План", "Plan")}
-      description={localize(lang, "Проверьте, как MARS понял задачу. Здесь можно поправить план перед выполнением.", "Review how MARS understood the task. You can edit the plan before execution.")}
+      description={localize(lang, "Проверьте и при необходимости исправьте план.", "Review and edit the plan if needed.")}
       icon={<ShieldCheck className="h-4 w-4" />}
       actions={
         <Button size="sm" onClick={onApprovePlan} disabled={!canApprovePlan} className="h-9">
@@ -381,19 +378,13 @@ export function MarsRunStep({
       icon={<Play className="h-4 w-4" />}
       actions={
         <StatusBadge
-          label={latestRun?.status ? latestRun.status.replaceAll("_", " ") : sessionStatus === "approved" ? localize(lang, "готово к запуску", "ready to run") : localize(lang, "ожидает план", "waiting for plan")}
+          label={latestRun?.status ? statusLabel(latestRun.status, lang) : sessionStatus === "approved" ? localize(lang, "Готов к запуску", "Ready to run") : localize(lang, "Нужен план", "Plan required")}
           tone={latestRun ? statusTone(latestRun.status) : sessionStatus === "approved" ? "success" : "neutral"}
         />
       }
     >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div className="space-y-4">
-          <div className="grid gap-2 rounded-lg border border-border/80 bg-secondary/20 px-3 py-3 text-sm text-muted-foreground sm:grid-cols-3">
-            <div>{localize(lang, "Изменяет код", "Changes code")}</div>
-            <div>{localize(lang, "Создает файлы", "Creates files")}</div>
-            <div>{localize(lang, "Запускает проверки", "Runs checks")}</div>
-          </div>
-
           <div className="grid gap-2">
             <Label>{localize(lang, "Профиль проверки", "Verification profile")}</Label>
             <Select value={verificationProfile || "none"} onValueChange={onVerificationProfileChange}>

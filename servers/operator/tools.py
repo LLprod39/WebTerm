@@ -41,7 +41,7 @@ from servers.operator.tools_monitoring import (
     list_certificates,
     server_forecasts,
 )
-from servers.operator.tools_playbooks import resolve_playbook
+from servers.operator.tools_playbooks import list_playbooks, playbook_runs, resolve_playbook
 
 __all__ = [
     "extract_server_hint",
@@ -50,6 +50,7 @@ __all__ = [
     "get_alert_detail",
     "list_alerts",
     "list_certificates",
+    "list_playbooks",
     "list_servers",
     "metric_series",
     "normalize_host_hint",
@@ -57,6 +58,7 @@ __all__ = [
     "prepare_list_servers_arguments",
     "promote_chat_memory",
     "propose_plan",
+    "playbook_runs",
     "register_operator_tools",
     "resolve_server",
     "resolve_playbook",
@@ -113,6 +115,46 @@ def register_operator_tools() -> None:
                 },
             },
             handler=resolve_playbook,
+        ),
+        AssistantActionSpec(
+            action_type="operator.list_playbooks",
+            label="List playbooks",
+            description=(
+                "List accessible Ansible playbooks and runbooks with last-run status. "
+                "Use when the user asks what playbooks are available; no manual UI selection is required."
+            ),
+            required_feature="automation",
+            risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "q": {"type": "string", "description": "Optional name/description filter"},
+                    "limit": {"type": "integer", "description": "Maximum rows, default 20, max 50"},
+                },
+            },
+            handler=list_playbooks,
+        ),
+        AssistantActionSpec(
+            action_type="operator.playbook_runs",
+            label="Read playbook runs and logs",
+            description=(
+                "List playbook runs or inspect one run's status, report, host results, and bounded live-log tail. "
+                "Use run_id for details/logs; use playbook_id or playbook_name to filter history."
+            ),
+            required_feature="automation",
+            risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "integer", "description": "Exact run id for report and log tail"},
+                    "playbook_id": {"type": "integer", "description": "Filter history by playbook id"},
+                    "playbook_name": {"type": "string", "description": "Filter history by playbook name"},
+                    "status": {"type": "string", "description": "Optional run status"},
+                    "limit": {"type": "integer", "description": "Maximum rows, default 20, max 50"},
+                    "log_tail_chars": {"type": "integer", "description": "Detail log tail size, max 20000"},
+                },
+            },
+            handler=playbook_runs,
         ),
         AssistantActionSpec(
             action_type="operator.list_servers",

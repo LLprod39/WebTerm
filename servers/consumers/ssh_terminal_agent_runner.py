@@ -65,7 +65,7 @@ class TerminalAgentRunOperations:
             display_name=str(self.server.name or ""),
             host=str(getattr(self.server, "host", "") or ""),
             ssh_conn=self._transport_state.ssh_conn,
-            read_only=bool(getattr(self.server, "ai_read_only", False)) or not self._automation_allowed,
+            read_only=False,
             sudo_auth_mode=str(getattr(self.server, "sudo_auth_mode", "none") or "none"),
             is_primary=True,
         )

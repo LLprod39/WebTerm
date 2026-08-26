@@ -90,12 +90,12 @@ export default function AdminDashboard() {
   return (
     <PageShell width={isFullWidth ? "full" : "7xl"}>
       <PageHero
-        kicker={localize(lang, "Состояние платформы", "Platform Status")}
-        title={localize(lang, "Панель администратора", "Admin Dashboard")}
+        kicker={localize(lang, "Администрирование", "Administration")}
+        title={localize(lang, "Состояние системы", "System status")}
         description={localize(
           lang,
-          "Мониторинг инфраструктуры, активности пользователей и запусков агентов в реальном времени.",
-          "Live monitoring for infrastructure, user activity, and agent runs.",
+          "Инфраструктура, активность пользователей и запуски агентов.",
+          "Infrastructure, user activity, and agent runs.",
         )}
         actions={
           <div className="flex items-center gap-2">
@@ -109,12 +109,12 @@ export default function AdminDashboard() {
               {isFullWidth ? (
                 <>
                   <Minimize2 className="h-3.5 w-3.5" />
-                  <span>{localize(lang, "Обычный экран", "Normal width")}</span>
+                  <span>{localize(lang, "Сузить", "Narrow")}</span>
                 </>
               ) : (
                 <>
                   <Maximize2 className="h-3.5 w-3.5" />
-                  <span>{localize(lang, "На весь экран", "Full width")}</span>
+                  <span>{localize(lang, "Расширить", "Expand")}</span>
                 </>
               )}
             </Button>
@@ -130,8 +130,8 @@ export default function AdminDashboard() {
               >
                 <Radio className={cn("h-3.5 w-3.5", liveConnected && "animate-pulse")} />
                 {liveConnected
-                  ? localize(lang, "Live метрики", "Live metrics")
-                  : localize(lang, "Live…", "Live…")}
+                  ? localize(lang, "Метрики онлайн", "Live metrics")
+                  : localize(lang, "Подключение…", "Connecting…")}
               </span>
             </div>
           </div>

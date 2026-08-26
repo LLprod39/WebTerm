@@ -62,8 +62,8 @@ export function ServerRulesTab({
   } = controller;
 
   return (
-    <section className="bg-card border border-border rounded-lg p-5 space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">{t("srv.rules_tab")}</h2>
           <p className="text-xs text-muted-foreground mt-1">{t("srv.rules_intro")}</p>
@@ -81,22 +81,22 @@ export function ServerRulesTab({
           if (value === "group") setRulesScopeTab("group");
           else selectGlobalRules();
         }}
-        className="space-y-4"
+        className="space-y-0"
       >
-        <TabsList className="w-full justify-start">
-          <TabsTrigger value="global" className="gap-2">
+        <TabsList className="h-11 w-full justify-start gap-5 rounded-none border-b border-border bg-transparent px-4 py-0">
+          <TabsTrigger value="global" className="h-11 gap-2 rounded-none border-b-2 border-transparent bg-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
             <Settings className="h-4 w-4" /> {t("srv.rules_scope_global")}
           </TabsTrigger>
-          <TabsTrigger value="group" className="gap-2">
+          <TabsTrigger value="group" className="h-11 gap-2 rounded-none border-b-2 border-transparent bg-transparent px-1 shadow-none data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-primary data-[state=active]:shadow-none">
             <Layers className="h-4 w-4" /> {t("srv.rules_scope_group")}
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="global" className="mt-0">
+        <TabsContent value="global" className="mt-0 p-4">
           {rulesLoading ? (
             <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">{t("loading")}</div>
           ) : (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-4 rounded-lg border border-border p-4">
                 <div>
                   <div className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">{t("srv.scope_global")}</div>
@@ -178,7 +178,7 @@ export function ServerRulesTab({
           )}
         </TabsContent>
 
-        <TabsContent value="group" className="mt-0">
+        <TabsContent value="group" className="mt-0 p-4">
           {!manageableGroups.length ? (
             <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
               {t("srv.rules_group_empty")}
@@ -186,7 +186,7 @@ export function ServerRulesTab({
           ) : rulesLoading ? (
             <div className="rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">{t("loading")}</div>
           ) : (
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="space-y-4 rounded-lg border border-border p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>

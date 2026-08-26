@@ -39,6 +39,7 @@ import {
   startAiProviderAuth,
   verifyAiProviderConnection,
   type AiProviderConnection,
+  type AiReasoningEffort,
   type AiPurpose,
   type AiSubscriptionTarget,
   type ProviderBinding,
@@ -117,12 +118,15 @@ export default function SettingsAIConnectionsPage() {
   const [scope, setScope] = useState<"personal" | "workspace">("personal");
   const [authFlowId, setAuthFlowId] = useState("");
   const [draftPreferences, setDraftPreferences] = useState<Partial<Record<AiPurpose, string>>>({});
+  const [draftModels, setDraftModels] = useState<Partial<Record<AiPurpose, string>>>({});
+  const [draftReasoning, setDraftReasoning] = useState<Partial<Record<AiPurpose, AiReasoningEffort>>>({});
   const [poolName, setPoolName] = useState("");
   const [poolTarget, setPoolTarget] = useState<AiSubscriptionTarget>("codex_subscription");
   const [poolMembers, setPoolMembers] = useState<number[]>([]);
   const [grantConnectionId, setGrantConnectionId] = useState("");
   const [grantUserId, setGrantUserId] = useState("");
   const [grantUnattended, setGrantUnattended] = useState(false);
+  const [showRevoked, setShowRevoked] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationTarget | null>(null);
   const handledFlowState = useRef("");
 
@@ -168,6 +172,10 @@ export default function SettingsAIConnectionsPage() {
   }, [activeFlow, refresh, text, toast]);
 
   const connections = useMemo(() => connectionsQuery.data?.connections ?? [], [connectionsQuery.data?.connections]);
+  const revokedConnections = connections.filter((item) => item.status === "revoked");
+  const visibleConnections = showRevoked
+    ? connections
+    : connections.filter((item) => item.status !== "revoked");
   const pools = useMemo(() => poolsQuery.data?.pools ?? [], [poolsQuery.data?.pools]);
   const preferences = useMemo(() => preferencesQuery.data?.preferences ?? [], [preferencesQuery.data?.preferences]);
   const platformTargets = useMemo(
@@ -179,6 +187,14 @@ export default function SettingsAIConnectionsPage() {
     agents: text("Агенты и расписания", "Agents and schedules"),
     terminal: text("AI в терминале", "Terminal AI"),
     internal: text("Внутренние AI-задачи", "Internal AI tasks"),
+  };
+  const reasoningLabels: Record<AiReasoningEffort, string> = {
+    low: text("low · быстро", "low · fast"),
+    medium: text("medium · баланс", "medium · balanced"),
+    high: text("high · глубоко", "high · deep"),
+    xhigh: text("xhigh · очень глубоко", "xhigh · extra deep"),
+    max: text("max · максимум", "max · maximum"),
+    ultra: text("ultra · максимум + делегирование", "ultra · maximum + delegation"),
   };
   const bindingOptions = useMemo(() => [
     ...connections.filter((item) => item.access.interactive).map((item) => ({
@@ -206,12 +222,19 @@ export default function SettingsAIConnectionsPage() {
   });
 
   const savePreference = (purpose: AiPurpose) => mutation.mutate(async () => {
-    const selected = draftPreferences[purpose] || bindingKey(preferences.find((item) => item.purpose === purpose)?.binding);
+    const savedPreference = preferences.find((item) => item.purpose === purpose);
+    const selected = draftPreferences[purpose] || bindingKey(savedPreference?.binding);
     const option = bindingOptions.find((item) => item.key === selected);
     if (!option) throw new Error(text("Выберите доступное подключение", "Select an available connection"));
+    const models = catalogQuery.data?.models_by_target?.[option.binding.target_id] ?? [];
+    const modelId = models.length ? (draftModels[purpose] || savedPreference?.binding.model_id || models[0].id) : undefined;
+    const model = models.find((item) => item.id === modelId);
+    const reasoningEffort = model
+      ? (draftReasoning[purpose] || savedPreference?.binding.reasoning_effort || model.default_reasoning_effort)
+      : undefined;
     await saveAiProviderPreference({
       purpose,
-      binding: option.binding,
+      binding: { ...option.binding, model_id: modelId, reasoning_effort: reasoningEffort },
       project_scoped: true,
       require_unattended: purpose === "agents" || purpose === "internal",
     });
@@ -333,8 +356,17 @@ export default function SettingsAIConnectionsPage() {
           ) : null}
 
           <section className="rounded-sm border border-border bg-card" aria-labelledby="connections-title">
-            <div className="border-b border-border px-4 py-3"><h2 id="connections-title" className="font-semibold">{text("Подключения", "Connections")}</h2></div>
-            {connections.length ? connections.map((connection) => (
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <h2 id="connections-title" className="font-semibold">{text("Подключения", "Connections")}</h2>
+              {revokedConnections.length ? (
+                <Button variant="ghost" size="sm" onClick={() => setShowRevoked((current) => !current)}>
+                  {showRevoked
+                    ? text("Скрыть отозванные", "Hide revoked")
+                    : text(`Показать отозванные (${revokedConnections.length})`, `Show revoked (${revokedConnections.length})`)}
+                </Button>
+              ) : null}
+            </div>
+            {visibleConnections.length ? visibleConnections.map((connection) => (
               <ConnectionRow
                 key={connection.id}
                 connection={connection}
@@ -347,21 +379,46 @@ export default function SettingsAIConnectionsPage() {
                 })}
                 onRevoke={(item) => setConfirmation({ kind: "connection", id: item.id, label: item.name })}
               />
-            )) : <p className="px-4 py-8 text-center text-sm text-muted-foreground">{text("Подключений пока нет.", "No connections yet.")}</p>}
+            )) : <p className="px-4 py-8 text-center text-sm text-muted-foreground">{text("Активных подключений пока нет.", "No active connections yet.")}</p>}
           </section>
 
           <section className="rounded-sm border border-border bg-card p-4" aria-labelledby="purpose-title">
-            <div className="mb-4 flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" aria-hidden /><h2 id="purpose-title" className="font-semibold">{text("Провайдеры по назначению", "Providers by purpose")}</h2></div>
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className="mb-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" aria-hidden /><h2 id="purpose-title" className="font-semibold">{text("Модель и режим по назначению", "Model and reasoning by purpose")}</h2></div><p className="mt-1 text-sm text-muted-foreground">{text("Выберите подключение, модель Codex и глубину размышления отдельно для каждого сценария.", "Choose a connection, Codex model, and reasoning depth separately for each scenario.")}</p></div>
+            <div className="grid gap-3">
               {(Object.keys(purposeLabels) as AiPurpose[]).map((purpose) => {
-                const saved = bindingKey(preferences.find((item) => item.purpose === purpose)?.binding);
+                const savedPreference = preferences.find((item) => item.purpose === purpose);
+                const saved = bindingKey(savedPreference?.binding);
+                const selectedKey = draftPreferences[purpose] ?? saved;
+                const selectedBinding = bindingOptions.find((item) => item.key === selectedKey)?.binding;
+                const models = catalogQuery.data?.models_by_target?.[selectedBinding?.target_id ?? ""] ?? [];
+                const selectedModelId = draftModels[purpose] || savedPreference?.binding.model_id || models[0]?.id || "";
+                const selectedModel = models.find((item) => item.id === selectedModelId);
+                const selectedReasoning = draftReasoning[purpose]
+                  || savedPreference?.binding.reasoning_effort
+                  || selectedModel?.default_reasoning_effort
+                  || "";
                 return <div key={purpose} className="rounded-sm border border-border/70 p-3">
                   <Label id={`purpose-${purpose}`}>{purposeLabels[purpose]}</Label>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_160px_auto]">
                     <Select value={draftPreferences[purpose] ?? saved} onValueChange={(value) => setDraftPreferences((current) => ({ ...current, [purpose]: value }))}>
                       <SelectTrigger aria-labelledby={`purpose-${purpose}`} className="min-w-0 flex-1"><SelectValue placeholder={text("Наследовать настройку workspace", "Inherit workspace setting")} /></SelectTrigger>
                       <SelectContent>{bindingOptions.map((option) => <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>)}</SelectContent>
                     </Select>
+                    {models.length ? <Select
+                      value={selectedModelId}
+                      onValueChange={(value) => {
+                        const nextModel = models.find((item) => item.id === value);
+                        setDraftModels((current) => ({ ...current, [purpose]: value }));
+                        if (nextModel) setDraftReasoning((current) => ({ ...current, [purpose]: nextModel.default_reasoning_effort }));
+                      }}
+                    >
+                      <SelectTrigger aria-label={`${purposeLabels[purpose]} · ${text("модель", "model")}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>{models.map((model) => <SelectItem key={model.id} value={model.id}>{model.label}{model.deprecated ? ` · ${text("устаревает", "deprecated")}` : ""}</SelectItem>)}</SelectContent>
+                    </Select> : <div className="hidden sm:block" />}
+                    {selectedModel ? <Select value={selectedReasoning} onValueChange={(value) => setDraftReasoning((current) => ({ ...current, [purpose]: value as AiReasoningEffort }))}>
+                      <SelectTrigger aria-label={`${purposeLabels[purpose]} · ${text("размышление", "reasoning")}`}><SelectValue /></SelectTrigger>
+                      <SelectContent>{selectedModel.reasoning_efforts.map((effort) => <SelectItem key={effort} value={effort}>{reasoningLabels[effort]}</SelectItem>)}</SelectContent>
+                    </Select> : <div className="hidden sm:block" />}
                     <Button variant="outline" disabled={mutation.isPending} onClick={() => savePreference(purpose)}>{text("Сохранить", "Save")}</Button>
                   </div>
                 </div>;

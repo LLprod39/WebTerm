@@ -28,6 +28,7 @@ from servers.models_inventory import (
     ServerConnection,
     ServerShare,
     TerminalAiChatMessage,
+    TerminalAiProviderState,
 )
 from servers.models_knowledge import GlobalServerRules, ServerGroupKnowledge, ServerKnowledge
 from servers.models_memory import (
@@ -122,4 +123,5 @@ __all__ = [
     "PlaybookRunDispatch",
     "PlaybookValidation",
     "TerminalAiChatMessage",
+    "TerminalAiProviderState",
 ]

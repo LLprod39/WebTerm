@@ -109,7 +109,7 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
                     filter === item ? "bg-card text-foreground" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {item === "all" ? "Severity" : severityLabel[item]}
+                  {item === "all" ? "Важность" : severityLabel[item]}
                 </button>
               ))}
             </div>
@@ -125,14 +125,14 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
                 setQuery(event.target.value);
                 setVisibleCount(EVENT_PAGE_SIZE);
               }}
-              placeholder="Поиск по событиям, задачам, фазам и payload"
+              placeholder="Поиск по событиям, задачам, фазам и данным"
               className="pl-9"
             />
           </div>
           <div className="grid min-w-[360px] grid-cols-3 gap-2 max-sm:min-w-0">
             <EventMiniStat label="Важные" value={summary.important} />
             <EventMiniStat label="Проблемы" value={summary.problems} />
-            <EventMiniStat label="Debug" value={summary.debug} />
+            <EventMiniStat label="Отладка" value={summary.debug} />
           </div>
         </div>
 
@@ -261,9 +261,9 @@ function EventTimelineItem({
             <div className="mb-1.5 flex flex-wrap items-center gap-2">
               <StatusBadge label={severityLabel[event.severity]} tone={severityTone[event.severity]} />
               <span className="rounded-md border border-border/70 bg-card/60 px-2 py-0.5 font-mono text-xs text-muted-foreground">
-                {eventCategoryLabel[event.category] || event.category || "event"}
+                {eventCategoryLabel[event.category] || event.category || "событие"}
               </span>
-              {event.task_id !== null ? <span className="font-mono text-xs text-muted-foreground">task #{event.task_id}</span> : null}
+              {event.task_id !== null ? <span className="font-mono text-xs text-muted-foreground">задача #{event.task_id}</span> : null}
               {event.important ? <span className="text-xs font-medium text-foreground">важное</span> : null}
             </div>
             <p className="break-words text-sm font-medium leading-6 text-foreground">{event.title || event.message}</p>
@@ -276,14 +276,14 @@ function EventTimelineItem({
           <details className="group mt-2" open={debugOpen}>
             <summary className="inline-flex cursor-pointer list-none items-center gap-2 font-mono text-xs text-muted-foreground hover:text-foreground">
               <span>{event.event_type}</span>
-              {hasPayload ? <span className="text-muted-foreground/70">payload</span> : null}
+              {hasPayload ? <span className="text-muted-foreground/70">данные</span> : null}
             </summary>
             {hasPayload ? (
               <pre className="mt-2 max-h-56 max-w-full overflow-auto rounded-lg border border-border/70 bg-card/60 p-3 font-mono text-xs leading-5 text-muted-foreground">
                 {JSON.stringify(event.payload, null, 2)}
               </pre>
             ) : (
-              <p className="mt-2 text-xs text-muted-foreground">Технический payload пуст.</p>
+              <p className="mt-2 text-xs text-muted-foreground">Технических данных нет.</p>
             )}
           </details>
         ) : null}

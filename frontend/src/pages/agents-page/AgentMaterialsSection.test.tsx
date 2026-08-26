@@ -28,9 +28,10 @@ describe("AgentMaterialsSection", () => {
       />,
     );
 
-    expect(screen.getByText("Материалы для контекста ИИ")).toBeInTheDocument();
+    expect(screen.getByText("Материалы для агента")).toBeInTheDocument();
     expect(screen.getByText(/Сохраняются первые 12 КБ текста/)).toBeInTheDocument();
-    expect(screen.getAllByText(/ограниченном Docker-контейнере/)).toHaveLength(2);
+    expect(screen.getByText(/отдельном ограниченном контейнере/)).toBeInTheDocument();
+    expect(screen.getByText(/ограниченном Docker-контейнере/)).toBeInTheDocument();
     expect(screen.getByText(/обычным интернет-доступом/)).toBeInTheDocument();
     expect(screen.getByText(/не получает файлы, секреты, Docker socket или сеть хоста/)).toBeInTheDocument();
     expect(screen.getByText("Уведомить о результате в Telegram")).toBeInTheDocument();

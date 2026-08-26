@@ -50,6 +50,7 @@ import {
   Network,
   NotebookPen,
   Package,
+  Palette,
   Pause,
   Play,
   Plus,
@@ -100,6 +101,7 @@ export const NavIcons = {
 
 /** Settings IA — each item has its own glyph. */
 export const SettingsIcons = {
+  appearance: Palette,
   readiness: ClipboardList,
   ai: Sparkles,
   limits: Scale,
@@ -115,6 +117,12 @@ export const SettingsIcons = {
   plugins: Blocks,
   shell: Settings2,
   menu: ListTree,
+} as const satisfies Record<string, LucideIcon>;
+
+/** Theme and appearance controls. */
+export const AppearanceIcons = {
+  picker: Palette,
+  selected: CheckCircle2,
 } as const satisfies Record<string, LucideIcon>;
 
 /** Studio top navigation. */

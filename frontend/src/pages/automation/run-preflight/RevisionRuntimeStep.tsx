@@ -65,7 +65,7 @@ export function RevisionRuntimeStep({
           ) : (
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
-              <p>{tr("Для общего playbook доступна только опубликованная версия.", "Shared playbooks can run only their published revision.")}</p>
+              <p>{tr("Для общего проекта доступна только опубликованная версия.", "Shared projects can run only their published revision.")}</p>
             </div>
           )}
 
@@ -76,7 +76,7 @@ export function RevisionRuntimeStep({
                 <span className="truncate font-mono text-muted-foreground" title={selectedRevision.content_hash}>{selectedRevision.content_hash}</span>
                 <span className={runtimeReady ? "inline-flex items-center gap-1 text-success" : "inline-flex items-center gap-1 text-warning"}>
                   {runtimeReady ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                  {runtimeReady ? tr("Runtime готов", "Runtime ready") : tr("Запуск недоступен", "Execution unavailable")}
+                  {runtimeReady ? tr("Готово к запуску", "Ready to run") : tr("Запуск недоступен", "Execution unavailable")}
                 </span>
               </div>
             </div>

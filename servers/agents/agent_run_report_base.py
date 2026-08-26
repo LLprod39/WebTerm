@@ -32,6 +32,7 @@ TERMINAL_STATUSES = {
 }
 DELIVERY_EVENT_TYPES = {
     "agent_report_delivered",
+    "agent_report_delivery_accepted",
     "agent_report_delivery_sent",
     "agent_report_delivery_skipped",
     "agent_report_delivery_failed",

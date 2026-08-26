@@ -17,18 +17,19 @@ import {
   type LinuxUiDockerActionResult,
   type LinuxUiDockerContainer,
 } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const EMPTY_DOCKER_CONTAINERS: LinuxUiDockerContainer[] = [];
 
-function dockerActionMeta(action: LinuxUiDockerAction) {
+function dockerActionMeta(action: LinuxUiDockerAction, lang: string) {
   switch (action) {
     case "start":
-      return { label: "Start", confirmLabel: "Start Container", destructive: false };
+      return { label: localize(lang, "Запустить", "Start"), confirmLabel: localize(lang, "Запустить контейнер", "Start container"), destructive: false };
     case "stop":
-      return { label: "Stop", confirmLabel: "Stop Container", destructive: true };
+      return { label: localize(lang, "Остановить", "Stop"), confirmLabel: localize(lang, "Остановить контейнер", "Stop container"), destructive: true };
     case "restart":
-      return { label: "Restart", confirmLabel: "Restart Container", destructive: false };
+      return { label: localize(lang, "Перезапустить", "Restart"), confirmLabel: localize(lang, "Перезапустить контейнер", "Restart container"), destructive: false };
     default:
       return { label: action, confirmLabel: action, destructive: false };
   }
@@ -80,6 +81,7 @@ export function DockerWindow({
   active: boolean;
   dockerEnabled: boolean;
 }) {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -140,28 +142,30 @@ export function DockerWindow({
 
   const confirmDescription = useMemo(() => {
     if (!confirmState) return "";
-    const base = `${dockerActionMeta(confirmState.action).label} container ${confirmState.container.name}?`;
+    const base = localize(
+      lang,
+      `${dockerActionMeta(confirmState.action, lang).label} контейнер ${confirmState.container.name}?`,
+      `${dockerActionMeta(confirmState.action, lang).label} container ${confirmState.container.name}?`,
+    );
     if (confirmState.action === "stop") {
-      return `${base} This will stop the selected container and any service behind it may become unavailable.`;
+      return localize(lang, `${base} Связанные сервисы могут стать недоступны.`, `${base} Services behind it may become unavailable.`);
     }
-    return `${base} The workspace will refresh container state after the action completes.`;
-  }, [confirmState]);
+    return localize(lang, `${base} Состояние обновится после выполнения.`, `${base} Container state will refresh after the action.`);
+  }, [confirmState, lang]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-sm font-medium text-foreground">docker center</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Inspect containers, read recent logs, and run start/stop/restart actions without leaving the workspace shell.
-            </div>
+            <div className="text-sm font-medium text-foreground">Docker</div>
+            <div className="mt-1 text-xs text-muted-foreground">{localize(lang, "Контейнеры, логи и основные действия.", "Containers, logs, and common actions.")}</div>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Filter containers..."
+              placeholder={localize(lang, "Найти контейнер...", "Filter containers...")}
               className="h-9 min-w-[16rem] bg-background/95 text-sm"
             />
             <Input
@@ -174,13 +178,13 @@ export function DockerWindow({
             />
             <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => void dockerQuery.refetch()} disabled={!dockerEnabled}>
               <RefreshCw className={cn("h-3.5 w-3.5", dockerQuery.isFetching && "animate-spin")} />
-              Refresh
+              {localize(lang, "Обновить", "Refresh")}
             </Button>
           </div>
         </div>
         {!dockerEnabled ? (
           <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Docker is not available on this host.
+            {localize(lang, "Docker недоступен на этом хосте.", "Docker is not available on this host.")}
           </div>
         ) : null}
         {dockerPayload?.error ? (
@@ -189,11 +193,11 @@ export function DockerWindow({
           </div>
         ) : null}
         <div className="mt-4 grid gap-2 md:grid-cols-5">
-          <SummaryCard label="Total" value={dockerPayload?.summary.total || 0} hint="Known containers" />
-          <SummaryCard label="Running" value={dockerPayload?.summary.running || 0} hint="Healthy runtime containers" />
-          <SummaryCard label="Exited" value={dockerPayload?.summary.exited || 0} hint="Stopped containers" alert={(dockerPayload?.summary.exited || 0) > 0} />
-          <SummaryCard label="Restarting" value={dockerPayload?.summary.restarting || 0} hint="Needs attention" alert={(dockerPayload?.summary.restarting || 0) > 0} />
-          <SummaryCard label="Paused" value={dockerPayload?.summary.paused || 0} hint="Paused containers" />
+          <SummaryCard label={localize(lang, "Всего", "Total")} value={dockerPayload?.summary.total || 0} hint={localize(lang, "Все контейнеры", "Known containers")} />
+          <SummaryCard label={localize(lang, "Запущены", "Running")} value={dockerPayload?.summary.running || 0} hint={localize(lang, "Работают сейчас", "Running now")} />
+          <SummaryCard label={localize(lang, "Остановлены", "Exited")} value={dockerPayload?.summary.exited || 0} hint={localize(lang, "Не запущены", "Stopped containers")} alert={(dockerPayload?.summary.exited || 0) > 0} />
+          <SummaryCard label={localize(lang, "Перезапускаются", "Restarting")} value={dockerPayload?.summary.restarting || 0} hint={localize(lang, "Требуют внимания", "Needs attention")} alert={(dockerPayload?.summary.restarting || 0) > 0} />
+          <SummaryCard label={localize(lang, "На паузе", "Paused")} value={dockerPayload?.summary.paused || 0} hint={localize(lang, "Приостановлены", "Paused containers")} />
         </div>
       </div>
 
@@ -201,8 +205,8 @@ export function DockerWindow({
         <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
-              <div className="text-sm font-medium text-foreground">Containers</div>
-              <div className="mt-1 text-xs text-muted-foreground">{filteredContainers.length} visible</div>
+              <div className="text-sm font-medium text-foreground">{localize(lang, "Контейнеры", "Containers")}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{localize(lang, `Показано: ${filteredContainers.length}`, `${filteredContainers.length} visible`)}</div>
             </div>
             <ScrollArea className="h-full max-h-full">
               <div className="space-y-2 p-3">
@@ -213,12 +217,12 @@ export function DockerWindow({
                 ) : null}
                 {dockerQuery.isLoading ? (
                   <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading docker data...
+                    {localize(lang, "Загружаем данные Docker...", "Loading Docker data...")}
                   </div>
                 ) : null}
                 {!dockerQuery.isLoading && filteredContainers.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No containers match the current filter.
+                    {localize(lang, "Ничего не найдено.", "No containers match the current filter.")}
                   </div>
                 ) : null}
                 {filteredContainers.map((item) => (
@@ -252,9 +256,9 @@ export function DockerWindow({
                       <div className="mt-1 text-xs text-muted-foreground">{selectedContainer.status}</div>
                       <div className="mt-3 grid gap-2 sm:grid-cols-4">
                         <SummaryCard label="CPU" value={selectedContainer.cpu_percent || "n/a"} hint="docker stats CPU%" />
-                        <SummaryCard label="Memory" value={selectedContainer.memory_percent || "n/a"} hint={selectedContainer.memory_usage || "No live stats"} />
-                        <SummaryCard label="Network" value={selectedContainer.network_io || "n/a"} hint="Net IO" />
-                        <SummaryCard label="Block" value={selectedContainer.block_io || "n/a"} hint="Block IO" />
+                        <SummaryCard label={localize(lang, "Память", "Memory")} value={selectedContainer.memory_percent || "n/a"} hint={selectedContainer.memory_usage || localize(lang, "Нет текущих данных", "No live stats")} />
+                        <SummaryCard label={localize(lang, "Сеть", "Network")} value={selectedContainer.network_io || "n/a"} hint="Net IO" />
+                        <SummaryCard label={localize(lang, "Диск", "Block")} value={selectedContainer.block_io || "n/a"} hint="Block IO" />
                       </div>
                       {selectedContainer.ports ? (
                         <div className="mt-3 rounded-2xl border border-border/70 bg-background/92 px-3 py-2 font-mono text-xs text-muted-foreground">
@@ -273,7 +277,7 @@ export function DockerWindow({
                           disabled={dockerActionMutation.isPending}
                           onClick={() => setConfirmState({ container: selectedContainer, action })}
                         >
-                          {dockerActionMeta(action).label}
+                          {dockerActionMeta(action, lang).label}
                         </Button>
                       ))}
                     </div>
@@ -283,9 +287,9 @@ export function DockerWindow({
                 <div className="grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                   <div className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
                     <div className="border-b border-border/60 px-4 py-3">
-                      <div className="text-sm font-medium text-foreground">Recent logs</div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Последние логи", "Recent logs")}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {lines} lines from <span className="font-mono">{selectedContainer.name}</span>
+                        {localize(lang, `${lines} строк из`, `${lines} lines from`)} <span className="font-mono">{selectedContainer.name}</span>
                       </div>
                     </div>
                     <ScrollArea className="h-full">
@@ -293,26 +297,22 @@ export function DockerWindow({
                         {dockerLogsQuery.error instanceof Error
                           ? dockerLogsQuery.error.message
                           : dockerLogsQuery.isLoading
-                          ? "Loading docker logs..."
-                          : dockerLogsQuery.data?.docker_logs.content || "No log lines available."}
+                          ? localize(lang, "Загружаем логи...", "Loading Docker logs...")
+                          : dockerLogsQuery.data?.docker_logs.content || localize(lang, "Логов пока нет.", "No log lines available.")}
                       </pre>
                     </ScrollArea>
                   </div>
 
                   <div className="flex min-h-0 flex-col gap-4">
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4">
-                      <div className="text-sm font-medium text-foreground">Action state</div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        Start, stop, and restart use typed Docker actions and refresh the container list afterwards.
-                      </div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Последнее действие", "Last action")}</div>
                       <div className="mt-4 rounded-2xl border border-border/70 bg-background/94 p-3">
-                        <div className="text-xs uppercase tracking-wide text-muted-foreground">Last action</div>
                         <div className="mt-2 text-sm text-foreground">
-                          {lastAction ? `${lastAction.action} ${lastAction.container}` : "No docker action has been executed yet."}
+                          {lastAction ? `${lastAction.action} ${lastAction.container}` : localize(lang, "Действий ещё не было.", "No Docker action has been run yet.")}
                         </div>
                         {lastAction ? (
                           <div className={cn("mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", lastAction.success ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-destructive/30 bg-destructive/10 text-destructive")}>
-                            {lastAction.success ? "success" : "failed"}
+                            {lastAction.success ? localize(lang, "успешно", "success") : localize(lang, "ошибка", "failed")}
                           </div>
                         ) : null}
                       </div>
@@ -331,16 +331,16 @@ export function DockerWindow({
                     </div>
 
                     <div className="rounded-3xl border border-border/70 bg-card/88 p-4 text-xs leading-5 text-muted-foreground">
-                      <div className="text-sm font-medium text-foreground">Operational notes</div>
-                      <div className="mt-2">Restart is the safest first response when a container is unhealthy but its image and config are still trusted.</div>
-                      <div className="mt-2">Stop is intentionally treated as destructive because it can take application traffic offline immediately.</div>
+                      <div className="text-sm font-medium text-foreground">{localize(lang, "Важно", "Important")}</div>
+                      <div className="mt-2">{localize(lang, "Сначала попробуйте перезапуск, если образ и конфигурация доверенные.", "Try restart first when the image and configuration are trusted.")}</div>
+                      <div className="mt-2">{localize(lang, "Остановка сразу прервёт работу сервисов контейнера.", "Stopping immediately interrupts services in the container.")}</div>
                     </div>
                   </div>
                 </div>
               </>
             ) : (
               <div className="flex h-full items-center justify-center px-6 text-sm text-muted-foreground">
-                Select a container from the list to inspect logs and action state.
+                {localize(lang, "Выберите контейнер.", "Select a container.")}
               </div>
             )}
           </section>
@@ -352,10 +352,10 @@ export function DockerWindow({
         onOpenChange={(open) => {
           if (!open) setConfirmState(null);
         }}
-        title={confirmState ? `${dockerActionMeta(confirmState.action).label} ${confirmState.container.name}` : "Confirm docker action"}
+        title={confirmState ? `${dockerActionMeta(confirmState.action, lang).label} ${confirmState.container.name}` : localize(lang, "Подтвердите действие", "Confirm Docker action")}
         description={confirmDescription}
-        confirmLabel={confirmState ? dockerActionMeta(confirmState.action).confirmLabel : "Confirm"}
-        destructive={Boolean(confirmState && dockerActionMeta(confirmState.action).destructive)}
+        confirmLabel={confirmState ? dockerActionMeta(confirmState.action, lang).confirmLabel : localize(lang, "Подтвердить", "Confirm")}
+        destructive={Boolean(confirmState && dockerActionMeta(confirmState.action, lang).destructive)}
         onConfirm={async () => {
           if (!confirmState) return;
           const current = confirmState;

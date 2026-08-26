@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { QueryStateBlock, SectionCard, StatusBadge } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 function connectorId(connector: Record<string, unknown>) {
@@ -15,6 +16,7 @@ function connectorId(connector: Record<string, unknown>) {
 
 export function PluginConnectorsPanel() {
   const { toast } = useToast();
+  const { lang } = useI18n();
   const [selectedKey, setSelectedKey] = useState("");
   const surfacesQuery = useQuery({ queryKey: ["plugins", "surfaces", "connectors"], queryFn: fetchPluginSurfaces });
   const connectors = useMemo(
@@ -35,12 +37,12 @@ export function PluginConnectorsPanel() {
   });
   const pingMutation = useMutation({
     mutationFn: () => pingPluginConnector(pluginId, selectedConnectorId),
-    onSuccess: () => toast({ description: "Connector ping completed." }),
+    onSuccess: () => toast({ description: localize(lang, "Проверка подключения завершена.", "Connection check completed.") }),
     onError: (error: Error) => toast({ variant: "destructive", description: error.message }),
   });
 
   return (
-    <SectionCard title="Connectors" description="Enabled plugin connectors with health checks." icon={<Cable className="h-4 w-4" />}>
+    <SectionCard title={localize(lang, "Подключения", "Connections")} description={localize(lang, "Подключения включённых плагинов и их состояние.", "Connections exposed by enabled plugins and their health.")} icon={<Cable className="h-4 w-4" />}>
       <QueryStateBlock loading={surfacesQuery.isLoading} error={surfacesQuery.error}>
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_420px]">
           <div className="space-y-3">
@@ -66,7 +68,7 @@ export function PluginConnectorsPanel() {
               );
             }) : (
               <p className="rounded-lg border border-border/70 bg-secondary/15 px-4 py-4 text-sm text-muted-foreground">
-                No enabled plugin connectors.
+                {localize(lang, "Подключений нет.", "No plugin connections are enabled.")}
               </p>
             )}
           </div>
@@ -80,7 +82,7 @@ export function PluginConnectorsPanel() {
                     <div className="mt-0.5 text-xs text-muted-foreground">{pluginId}</div>
                   </div>
                   <StatusBadge
-                    label={healthQuery.data?.health.status || "unknown"}
+                    label={healthQuery.data?.health.status || localize(lang, "нет данных", "unknown")}
                     tone={healthQuery.data?.health.status === "healthy" ? "success" : "warning"}
                   />
                 </div>
@@ -88,18 +90,18 @@ export function PluginConnectorsPanel() {
                   {(healthQuery.data?.health.checks ?? []).map((check, index) => (
                     <div key={index} className="flex items-center justify-between rounded-lg border border-border/60 bg-secondary/15 px-3 py-2 text-xs">
                       <span className="font-medium text-foreground">{String(check.name || "check")}</span>
-                      <StatusBadge label={check.ok ? "ok" : "blocked"} tone={check.ok ? "success" : "warning"} dot={false} />
+                      <StatusBadge label={check.ok ? localize(lang, "готово", "ok") : localize(lang, "недоступно", "blocked")} tone={check.ok ? "success" : "warning"} dot={false} />
                     </div>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" variant="outline" onClick={() => healthQuery.refetch()}>
                     <RefreshCw className="h-4 w-4" />
-                    Refresh
+                    {localize(lang, "Обновить", "Refresh")}
                   </Button>
                   <Button size="sm" onClick={() => pingMutation.mutate()} disabled={pingMutation.isPending}>
                     <RadioTower className="h-4 w-4" />
-                    Ping
+                    {localize(lang, "Проверить", "Check")}
                   </Button>
                 </div>
               </div>

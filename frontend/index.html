@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -7,32 +7,58 @@
     <meta name="application-name" content="WebTerm" />
     <meta name="description" content="Server management console with terminal access and AI assistance." />
     <meta name="author" content="WebTerm contributors" />
-    <meta name="theme-color" content="#09090b" />
+    <meta name="theme-color" content="#101013" />
     <!-- Help static demo deploys avoid stale index.html / chunk mismatches -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta name="demo-build" content="2026-07-09-servers-modal-v4" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="alternate icon" href="/favicon.ico" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Manrope:wght@400;500;600;700;800&amp;display=swap"
-    />
     <script>
       (function () {
         try {
           // Last style applied for this browser session/user (FOUC guard).
           // Per-user map is applied after auth loads in the app.
           var style = localStorage.getItem("webterm.ui-style.active");
-          var allowed = { catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1, flow: 1, "flow-dark": 1, ashita: 1 };
+          var allowed = { "enterprise-light": 1, "enterprise-dark": 1, catalog: 1, classic: 1, pulse: 1, signal: 1, folio: 1, "folio-dark": 1, flow: 1, "flow-dark": 1, ashita: 1 };
           if (style === "nocturne" || style === "haze") style = "flow-dark";
           if (!allowed[style]) {
             style = localStorage.getItem("webterm.ui-style");
           }
           if (!allowed[style]) style = "flow-dark";
-          document.documentElement.setAttribute("data-ui-style", style);
+          var appPath = window.location.pathname;
+          var basePath = "%BASE_URL%";
+          if (!basePath || basePath.charAt(0) === "%") basePath = "/";
+          var normalizedBase = basePath.replace(/\/+$/, "");
+          if (
+            normalizedBase &&
+            normalizedBase !== "/" &&
+            (appPath === normalizedBase || appPath.indexOf(normalizedBase + "/") === 0)
+          ) {
+            appPath = appPath.slice(normalizedBase.length) || "/";
+          }
+          var isEnterpriseStyle = style === "enterprise-light" || style === "enterprise-dark";
+          var effectiveStyle = isEnterpriseStyle && /^\/chat(?:\/|$)/.test(appPath)
+            ? "flow-dark"
+            : style;
+          document.documentElement.setAttribute("data-ui-preference", style);
+          document.documentElement.setAttribute("data-ui-style", effectiveStyle);
+          document.documentElement.style.colorScheme = effectiveStyle === "enterprise-light" || effectiveStyle === "folio" || effectiveStyle === "flow"
+            ? "light"
+            : "dark";
+          var themeColor = effectiveStyle === "enterprise-light"
+            ? "#f3f6f8"
+            : effectiveStyle === "enterprise-dark"
+              ? "#0b1118"
+              : "#101013";
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", themeColor);
+          if (effectiveStyle !== "enterprise-light" && effectiveStyle !== "enterprise-dark") {
+            var fontLink = document.createElement("link");
+            fontLink.id = "webterm-supported-theme-fonts";
+            fontLink.rel = "stylesheet";
+            fontLink.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700;800&display=swap";
+            document.head.appendChild(fontLink);
+          }
         } catch (e) {
           document.documentElement.setAttribute("data-ui-style", "flow-dark");
         }

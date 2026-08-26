@@ -20,7 +20,12 @@ _TOOL_OUTPUT_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "name": {"type": "string"},
-                    "arguments": {"type": "object"},
+                    # Codex structured outputs require every object schema to
+                    # declare ``additionalProperties: false``. Tool arguments
+                    # are intentionally open-ended and vary per WebTerm tool,
+                    # so carry them as JSON text here and validate the decoded
+                    # object against the server-side allowlist below.
+                    "arguments": {"type": "string"},
                 },
                 "required": ["name", "arguments"],
                 "additionalProperties": False,
@@ -77,7 +82,7 @@ def tool_response_events(raw: str, request: RunnerRequestV1) -> list[ProviderEve
         if not isinstance(call, dict):
             return [_tool_protocol_error()]
         name = str(call.get("name") or "")
-        arguments = call.get("arguments")
+        arguments = _decode_tool_arguments(call.get("arguments"))
         if name not in allowed or not isinstance(arguments, dict):
             return [_tool_protocol_error()]
         events.append(
@@ -102,6 +107,19 @@ def _tool_protocol_error() -> ProviderEventV1:
             "retryable": False,
         },
     )
+
+
+def _decode_tool_arguments(value: Any) -> dict[str, Any] | None:
+    """Accept the strict-schema JSON transport and legacy object responses."""
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        decoded = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return decoded if isinstance(decoded, dict) else None
 
 
 def _message_content_text(value: Any) -> str:
@@ -143,8 +161,9 @@ def _with_tool_protocol(prompt: str, request: RunnerRequestV1) -> str:
         )
     instruction = (
         "Use only the WebTerm tools listed below. You cannot execute them yourself. "
+        "Encode each tool call's arguments as a JSON object string. "
         "Return exactly one JSON object with schema "
-        '{"text":"short user-facing text","tool_calls":[{"name":"exact_name","arguments":{}}]}. '
+        '{"text":"short user-facing text","tool_calls":[{"name":"exact_name","arguments":"{}"}]}. '
         "Use an empty tool_calls array for a final text answer. No Markdown around JSON.\n"
         f"WebTerm tools: {json.dumps(catalog, ensure_ascii=False, separators=(',', ':'))}"
     )

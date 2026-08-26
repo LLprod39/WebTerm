@@ -2,8 +2,6 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  CircleHelp,
-  Clock3,
   FileText,
   FolderKanban,
   ListChecks,
@@ -24,6 +22,7 @@ import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import {
   ORCHESTRATOR_PHASES,
+  statusLabel,
   statusTone,
   stepIndexLabel,
   type MarsPhaseId,
@@ -151,9 +150,6 @@ export function MarsProjectRail({
         <div className="flex flex-col gap-3 border-b border-border/70 bg-secondary/25 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-sm font-semibold text-foreground">{localize(lang, "История проектов", "Project history")}</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {localize(lang, "Все проекты MARS, созданные через пошаговый мастер.", "All MARS projects created through the step-by-step wizard.")}
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {projects.length > 6 ? (
@@ -212,7 +208,7 @@ export function MarsProjectRail({
                     </button>
                     <div className="hidden text-right text-xs text-muted-foreground sm:block">{projectUpdatedAt(project)}</div>
                     <div className="flex justify-end">
-                      <StatusBadge label={status.replaceAll("_", " ")} tone={statusTone(status)} />
+                      <StatusBadge label={statusLabel(status, lang)} tone={statusTone(status)} />
                     </div>
                     <button
                       type="button"
@@ -304,9 +300,6 @@ export function MarsOrchestratorRail({ lang, latestRun, totalProgress }: Orchest
       <section className="rounded-lg border border-border/80 bg-card/95 p-4 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)]">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-foreground">{localize(lang, "План выполнения", "Run plan")}</h2>
-          <span className="rounded-md border border-border/70 bg-secondary/60 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {localize(lang, "Авто", "Auto")}
-          </span>
         </div>
         <div className="mt-4 space-y-2">
           {ORCHESTRATOR_PHASES.map((phase, index) => {
@@ -338,30 +331,6 @@ export function MarsOrchestratorRail({ lang, latestRun, totalProgress }: Orchest
               </div>
             );
           })}
-        </div>
-      </section>
-
-      <section className="rounded-lg border border-border/80 bg-card/95 p-4 shadow-[0_14px_42px_hsl(var(--background)_/_0.2)]">
-        <div className="flex items-start gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-secondary/60 text-muted-foreground">
-            <CircleHelp className="h-4 w-4" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-foreground">{localize(lang, "Нужна помощь?", "Need help?")}</h2>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {localize(lang, "Откройте документацию или напишите в поддержку.", "Open documentation or contact support.")}
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <CircleHelp className="h-3.5 w-3.5" />
-            {localize(lang, "Поддержка", "Support")}
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs">
-            <Clock3 className="h-3.5 w-3.5" />
-            {localize(lang, "Документация", "Docs")}
-          </Button>
         </div>
       </section>
     </>

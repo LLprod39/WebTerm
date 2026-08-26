@@ -13,7 +13,7 @@ import { localize } from "@/lib/i18n";
 import { notify } from "@/lib/notify";
 import { notifyWithUndo } from "@/lib/notify-undo";
 
-import { asPayload, enforcePilotServerAccess, initialForm } from "./serverForm";
+import { asPayload, initialForm } from "./serverForm";
 import type { ServerForm, SSHHostKeyEnrollmentTarget } from "./types";
 import { validateServerForm } from "./serverValidation";
 
@@ -21,7 +21,6 @@ type Translate = (key: string) => string;
 type TranslateWithVars = (key: string, vars?: Record<string, string | number>) => string;
 
 interface UseServerCrudControllerParams {
-  canConfigureElevatedAccess: boolean;
   onServerDeleted?: (serverId: number) => void;
   reload: () => Promise<void>;
   t: Translate;
@@ -29,7 +28,6 @@ interface UseServerCrudControllerParams {
 }
 
 export function useServerCrudController({
-  canConfigureElevatedAccess,
   onServerDeleted,
   reload,
   t,
@@ -69,10 +67,7 @@ export function useServerCrudController({
     return true;
   }, []);
 
-  const effectiveForm = useMemo(
-    () => canConfigureElevatedAccess ? form : enforcePilotServerAccess(form),
-    [canConfigureElevatedAccess, form],
-  );
+  const effectiveForm = form;
 
   const formValidation = useMemo(
     () => validateServerForm(effectiveForm, t, editingServer?.has_saved_sudo_password ?? false),
@@ -127,9 +122,9 @@ export function useServerCrudController({
     setSaving(true);
     try {
       let savedId = editingServer?.id ?? null;
-      if (editingServer) await updateServer(editingServer.id, asPayload(form, canConfigureElevatedAccess));
+      if (editingServer) await updateServer(editingServer.id, asPayload(form));
       else {
-        const created = await createServer(asPayload(form, canConfigureElevatedAccess));
+        const created = await createServer(asPayload(form));
         savedId = created.server_id;
       }
       notify.success({
@@ -147,7 +142,7 @@ export function useServerCrudController({
     } finally {
       setSaving(false);
     }
-  }, [canConfigureElevatedAccess, editingServer, effectiveForm, form, reload, t]);
+  }, [editingServer, effectiveForm, form, reload, t]);
 
   const handlePrivateKeyFile = useCallback(async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -294,7 +289,6 @@ export function useServerCrudController({
   }, [editingServer?.name, form.name, saveServer, t, testConnectionById]);
 
   return {
-    canConfigureElevatedAccess,
     clearServerDeleteTarget,
     closeHostKeyEnrollment,
     confirmDeleteServer,

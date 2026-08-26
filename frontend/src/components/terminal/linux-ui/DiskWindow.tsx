@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { fetchLinuxUiDisk, type FrontendServer, type LinuxUiDiskMount, type LinuxUiDiskPathStat } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 const EMPTY_MOUNTS: LinuxUiDiskMount[] = [];
@@ -27,6 +28,7 @@ function DiskMountRow({
   selected: boolean;
   onClick: () => void;
 }) {
+  const { lang } = useI18n();
   const fill = Math.max(0, Math.min(100, mount.percent || 0));
 
   return (
@@ -59,7 +61,7 @@ function DiskMountRow({
         />
       </div>
       <div className="mt-2 text-xs text-muted-foreground">
-        {mount.used_gb != null && mount.size_gb != null ? `${mount.used_gb} / ${mount.size_gb} GB` : "Usage unavailable"}
+        {mount.used_gb != null && mount.size_gb != null ? `${mount.used_gb} / ${mount.size_gb} GB` : localize(lang, "Нет данных", "Usage unavailable")}
       </div>
     </button>
   );
@@ -111,6 +113,7 @@ export function DiskWindow({
   diskEnabled: boolean;
   onOpenInEditor?: (path: string) => void;
 }) {
+  const { lang } = useI18n();
   const [selectedMountPath, setSelectedMountPath] = useState<string | null>(null);
   const [mountSearch, setMountSearch] = useState("");
   const [pathSearch, setPathSearch] = useState("");
@@ -194,7 +197,7 @@ export function DiskWindow({
       return visibleTopDirectories.map((item) => ({
         path: item.path,
         sizeMb: item.size_mb,
-        label: "Directory footprint",
+        label: localize(lang, "Размер каталога", "Directory size"),
         kind: "directory" as const,
       }));
     }
@@ -202,17 +205,17 @@ export function DiskWindow({
       return visibleLargeLogs.map((item) => ({
         path: item.path,
         sizeMb: item.size_mb,
-        label: "Log footprint",
+        label: localize(lang, "Размер лога", "Log size"),
         kind: "log" as const,
       }));
     }
     return visibleCleanupCandidates.map((item) => ({
       path: item,
       sizeMb: null,
-      label: "Cleanup candidate",
+      label: localize(lang, "Можно очистить", "Cleanup candidate"),
       kind: "cleanup" as const,
     }));
-  }, [detailTab, visibleCleanupCandidates, visibleLargeLogs, visibleTopDirectories]);
+  }, [detailTab, lang, visibleCleanupCandidates, visibleLargeLogs, visibleTopDirectories]);
 
   useEffect(() => {
     if (!detailItems.length) {
@@ -233,48 +236,46 @@ export function DiskWindow({
       <div className="border-b border-border/60 px-4 py-3">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="text-sm font-medium text-foreground">disk center</div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Inspect mounts, spot heavy directories, and surface cleanup candidates before the host runs out of space.
-            </div>
+            <div className="text-sm font-medium text-foreground">{localize(lang, "Диск", "Disk")}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{localize(lang, "Использование, крупные файлы и очистка.", "Usage, large files, and cleanup candidates.")}</div>
           </div>
           <Button type="button" size="sm" variant="outline" className="h-9 gap-1.5 text-xs" onClick={() => void diskQuery.refetch()}>
             <RefreshCw className={cn("h-3.5 w-3.5", diskQuery.isFetching && "animate-spin")} />
-            Refresh
+            {localize(lang, "Обновить", "Refresh")}
           </Button>
         </div>
         {!diskEnabled ? (
           <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-            Disk tooling is limited on this host. The workspace will show whatever `df`, `du`, and `find` can provide.
+            {localize(lang, "Данные ограничены возможностями df, du и find.", "Data is limited to what df, du, and find can provide.")}
           </div>
         ) : null}
         <div className="mt-4 grid gap-2 md:grid-cols-4">
-          <SummaryCard label="Mounts" value={diskPayload?.summary.mounts || 0} hint="Visible filesystems" />
-          <SummaryCard label="Critical" value={diskPayload?.summary.critical_mounts || 0} hint=">= 90% full" alert={(diskPayload?.summary.critical_mounts || 0) > 0} />
-          <SummaryCard label="Top Dir" value={diskPayload?.summary.top_directory_mb != null ? `${diskPayload.summary.top_directory_mb} MB` : "N/A"} hint="Largest common root discovered" />
-          <SummaryCard label="Cleanup" value={diskPayload?.summary.cleanup_candidates || 0} hint="Old /tmp candidates" alert={(diskPayload?.summary.cleanup_candidates || 0) > 0} />
+          <SummaryCard label={localize(lang, "Разделы", "Mounts")} value={diskPayload?.summary.mounts || 0} hint={localize(lang, "Файловые системы", "Visible filesystems")} />
+          <SummaryCard label={localize(lang, "Критично", "Critical")} value={diskPayload?.summary.critical_mounts || 0} hint={localize(lang, "Заполнено на 90% и больше", ">= 90% full")} alert={(diskPayload?.summary.critical_mounts || 0) > 0} />
+          <SummaryCard label={localize(lang, "Крупнейший каталог", "Largest directory")} value={diskPayload?.summary.top_directory_mb != null ? `${diskPayload.summary.top_directory_mb} MB` : "N/A"} hint={localize(lang, "Среди проверенных путей", "Among scanned paths")} />
+          <SummaryCard label={localize(lang, "К очистке", "Cleanup")} value={diskPayload?.summary.cleanup_candidates || 0} hint={localize(lang, "Старые объекты в /tmp", "Old /tmp candidates")} alert={(diskPayload?.summary.cleanup_candidates || 0) > 0} />
         </div>
         <div className="mt-4 flex flex-col gap-2 xl:flex-row xl:items-center">
           <Input
             value={mountSearch}
             onChange={(event) => setMountSearch(event.target.value)}
-            placeholder="Filter mounts..."
+            placeholder={localize(lang, "Найти раздел...", "Filter mounts...")}
             className="h-9 min-w-[14rem] bg-background/95 text-sm"
           />
           <Input
             value={pathSearch}
             onChange={(event) => setPathSearch(event.target.value)}
-            placeholder="Filter directories, logs, cleanup..."
+            placeholder={localize(lang, "Найти путь...", "Filter directories, logs, cleanup...")}
             className="h-9 min-w-[18rem] bg-background/95 text-sm"
           />
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" size="sm" variant={showCriticalOnly ? "default" : "outline"} className="h-9 text-xs" onClick={() => setShowCriticalOnly((current) => !current)}>
-              Critical only
+              {localize(lang, "Заполнено от 80%", "80% full or more")}
             </Button>
             {([
-              { value: "usage", label: "Usage" },
-              { value: "size", label: "Size" },
-              { value: "name", label: "Name" },
+              { value: "usage", label: localize(lang, "Заполнение", "Usage") },
+              { value: "size", label: localize(lang, "Размер", "Size") },
+              { value: "name", label: localize(lang, "Имя", "Name") },
             ] as const).map((item) => (
               <Button
                 key={item.value}
@@ -295,8 +296,8 @@ export function DiskWindow({
         <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[18rem_minmax(0,1fr)]">
           <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
             <div className="border-b border-border/60 px-4 py-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Mounts</div>
-              <div className="mt-1 text-xs text-muted-foreground">{filteredMounts.length} of {mounts.length} filesystems visible</div>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{localize(lang, "Разделы", "Mounts")}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{localize(lang, `Показано ${filteredMounts.length} из ${mounts.length}`, `${filteredMounts.length} of ${mounts.length} visible`)}</div>
             </div>
             <ScrollArea className="h-full max-h-full">
               <div className="space-y-2 p-3">
@@ -307,12 +308,12 @@ export function DiskWindow({
                 ) : null}
                 {diskQuery.isLoading ? (
                   <div className="rounded-2xl border border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    Loading disk data...
+                    {localize(lang, "Загружаем данные диска...", "Loading disk data...")}
                   </div>
                 ) : null}
                 {!diskQuery.isLoading && filteredMounts.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No mounts match the current filter.
+                    {localize(lang, "Ничего не найдено.", "No mounts match the current filter.")}
                   </div>
                 ) : null}
                 {filteredMounts.map((mount) => (
@@ -335,18 +336,18 @@ export function DiskWindow({
                     <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-mono text-sm text-foreground">{selectedMount.mount}</h3>
                     <span className={cn("rounded-full border px-2 py-0.5 text-xs uppercase tracking-wide", diskUsageClass(selectedMount.percent))}>
-                      {selectedMount.percent != null ? `${selectedMount.percent.toFixed(1)}% full` : "usage unknown"}
+                      {selectedMount.percent != null ? localize(lang, `Заполнено ${selectedMount.percent.toFixed(1)}%`, `${selectedMount.percent.toFixed(1)}% full`) : localize(lang, "Нет данных", "Usage unknown")}
                     </span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => void navigator.clipboard.writeText(selectedMount.mount)}>
                         <Copy className="mr-1.5 h-3.5 w-3.5" />
-                        Copy mount
+                        {localize(lang, "Копировать путь", "Copy mount")}
                       </Button>
                       {onOpenInEditor && visibleLargeLogs[0] ? (
                         <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={() => onOpenInEditor(visibleLargeLogs[0].path)}>
                           <FileCode2 className="mr-1.5 h-3.5 w-3.5" />
-                          Open top log
+                          {localize(lang, "Открыть крупнейший лог", "Open largest log")}
                         </Button>
                       ) : null}
                     </div>
@@ -362,22 +363,22 @@ export function DiskWindow({
                     />
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-3">
-                    <SummaryCard label="Size" value={selectedMount.size_gb != null ? `${selectedMount.size_gb} GB` : "N/A"} hint="Total filesystem size" />
-                    <SummaryCard label="Used" value={selectedMount.used_gb != null ? `${selectedMount.used_gb} GB` : "N/A"} hint="Allocated space" alert={(selectedMount.percent || 0) >= 80} />
-                    <SummaryCard label="Free" value={selectedMount.available_gb != null ? `${selectedMount.available_gb} GB` : "N/A"} hint="Available capacity" />
+                    <SummaryCard label={localize(lang, "Всего", "Size")} value={selectedMount.size_gb != null ? `${selectedMount.size_gb} GB` : "N/A"} hint={localize(lang, "Размер файловой системы", "Filesystem size")} />
+                    <SummaryCard label={localize(lang, "Занято", "Used")} value={selectedMount.used_gb != null ? `${selectedMount.used_gb} GB` : "N/A"} hint={localize(lang, "Используемое место", "Allocated space")} alert={(selectedMount.percent || 0) >= 80} />
+                    <SummaryCard label={localize(lang, "Свободно", "Free")} value={selectedMount.available_gb != null ? `${selectedMount.available_gb} GB` : "N/A"} hint={localize(lang, "Доступное место", "Available capacity")} />
                   </div>
                 </>
               ) : (
-                <div className="text-sm text-muted-foreground">Select a mount to inspect filesystem pressure.</div>
+                <div className="text-sm text-muted-foreground">{localize(lang, "Выберите раздел.", "Select a mount.")}</div>
               )}
             </div>
 
             <div className="rounded-3xl border border-border/70 bg-background/88 px-4 py-3">
               <div className="flex flex-wrap items-center gap-2">
                 {([
-                  { value: "directories", label: `Directories (${visibleTopDirectories.length})` },
-                  { value: "logs", label: `Logs (${visibleLargeLogs.length})` },
-                  { value: "cleanup", label: `Cleanup (${visibleCleanupCandidates.length})` },
+                  { value: "directories", label: localize(lang, `Каталоги (${visibleTopDirectories.length})`, `Directories (${visibleTopDirectories.length})`) },
+                  { value: "logs", label: localize(lang, `Логи (${visibleLargeLogs.length})`, `Logs (${visibleLargeLogs.length})`) },
+                  { value: "cleanup", label: localize(lang, `Очистка (${visibleCleanupCandidates.length})`, `Cleanup (${visibleCleanupCandidates.length})`) },
                 ] as const).map((item) => (
                   <Button
                     key={item.value}
@@ -397,14 +398,14 @@ export function DiskWindow({
               <section className="min-h-0 overflow-hidden rounded-3xl border border-border/70 bg-background/88">
                 <div className="border-b border-border/60 px-4 py-3">
                   <div className="text-sm font-medium text-foreground">
-                    {detailTab === "directories" ? "Largest directories" : detailTab === "logs" ? "Largest logs" : "Cleanup candidates"}
+                    {detailTab === "directories" ? localize(lang, "Крупнейшие каталоги", "Largest directories") : detailTab === "logs" ? localize(lang, "Крупнейшие логи", "Largest logs") : localize(lang, "Можно очистить", "Cleanup candidates")}
                   </div>
                   <div className="mt-1 text-xs text-muted-foreground">
                     {detailTab === "directories"
-                      ? "Common writable roots only. This keeps the scan responsive."
+                      ? localize(lang, "Проверены основные каталоги с правом записи.", "Common writable roots are scanned.")
                       : detailTab === "logs"
-                        ? "Heavy log files are often the fastest cleanup win."
-                        : "Old top-level `/tmp` entries are surfaced here first."}
+                        ? localize(lang, "Крупные логи часто освобождают больше всего места.", "Large logs often free the most space.")
+                        : localize(lang, "Сначала показаны старые объекты верхнего уровня в `/tmp`.", "Old top-level `/tmp` entries are shown first.")}
                   </div>
                 </div>
                 <ScrollArea className="h-full">
@@ -436,7 +437,7 @@ export function DiskWindow({
                       )
                     )) : (
                       <div className="rounded-2xl border border-dashed border-border/70 bg-background/92 px-3 py-6 text-center text-sm text-muted-foreground">
-                        No items match the current storage filter.
+                        {localize(lang, "Ничего не найдено.", "No items match the current filter.")}
                       </div>
                     )}
                   </div>
@@ -452,31 +453,31 @@ export function DiskWindow({
                     </div>
                     <div className="grid gap-2">
                       <SummaryCard
-                        label="Type"
-                        value={selectedArtifact.kind}
-                        hint={selectedMount ? selectedMount.mount : "Selected storage object"}
+                        label={localize(lang, "Тип", "Type")}
+                        value={selectedArtifact.kind === "directory" ? localize(lang, "Каталог", "Directory") : selectedArtifact.kind === "log" ? localize(lang, "Лог", "Log") : localize(lang, "Очистка", "Cleanup")}
+                        hint={selectedMount ? selectedMount.mount : localize(lang, "Выбранный объект", "Selected storage object")}
                       />
                       <SummaryCard
-                        label="Size"
+                        label={localize(lang, "Размер", "Size")}
                         value={selectedArtifact.sizeMb != null ? `${selectedArtifact.sizeMb} MB` : "N/A"}
-                        hint={selectedArtifact.kind === "cleanup" ? "Temporary candidate size unavailable" : "Reported footprint"}
+                        hint={selectedArtifact.kind === "cleanup" ? localize(lang, "Размер не определён", "Size unavailable") : localize(lang, "Занимаемое место", "Reported size")}
                       />
                     </div>
                     <div className="grid gap-2">
                       <Button type="button" size="sm" variant="outline" className="h-9 justify-start text-xs" onClick={() => void navigator.clipboard.writeText(selectedArtifact.path)}>
                         <Copy className="mr-2 h-3.5 w-3.5" />
-                        Copy path
+                        {localize(lang, "Копировать путь", "Copy path")}
                       </Button>
                       {selectedArtifact.kind === "log" && onOpenInEditor ? (
                         <Button type="button" size="sm" variant="outline" className="h-9 justify-start text-xs" onClick={() => onOpenInEditor(selectedArtifact.path)}>
                           <FileCode2 className="mr-2 h-3.5 w-3.5" />
-                          Open in editor
+                          {localize(lang, "Открыть в редакторе", "Open in editor")}
                         </Button>
                       ) : null}
                     </div>
                   </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground">Select a directory, log, or cleanup candidate to inspect it.</div>
+                  <div className="text-sm text-muted-foreground">{localize(lang, "Выберите объект.", "Select an item.")}</div>
                 )}
               </section>
             </div>

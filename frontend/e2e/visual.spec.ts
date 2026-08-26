@@ -68,7 +68,7 @@ test.describe("Visual regression", () => {
   test("servers page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true });
     await page.goto("/servers");
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("servers-page.png", { animations: "disabled", fullPage: true });
   });
@@ -95,7 +95,7 @@ test.describe("Visual regression", () => {
     await page.getByRole("button", { name: "New agent" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading", { name: "Agent type" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "What work should this agent own?" })).toBeVisible();
     await dialog.getByRole("button", { name: /Custom/i }).click();
     await dialog.getByPlaceholder("Log analysis").fill("Disk Audit");
     await dialog.locator("textarea").nth(0).fill("hostname\nuptime");
@@ -181,7 +181,7 @@ test.describe("Visual regression", () => {
   test("notifications settings dirty state snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true });
     await page.goto("/studio/notifications");
-    await expect(page.getByRole("heading", { name: "Notification Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
     await page.locator('input[type="password"]').first().fill("visual-token");
     await expect(page.getByText("You have unsaved changes")).toBeVisible();
     await stabilizeVisuals(page);
@@ -240,7 +240,7 @@ test.describe("Visual regression", () => {
   test("settings audit page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, isStaff: true });
     await page.goto("/settings/audit");
-    await expect(page.getByRole("heading", { name: "Аудит и журнал" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Журнал аудита" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("settings-audit-page.png", { animations: "disabled", fullPage: true });
   });
@@ -248,7 +248,7 @@ test.describe("Visual regression", () => {
   test("settings kubernetes page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, isStaff: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "healthy" });
     await page.goto("/settings/kubernetes");
-    await expect(page.getByRole("heading", { name: "Kubernetes Ops" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Kubernetes" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Настройка провайдеров" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("settings-kubernetes-page.png", { animations: "disabled", fullPage: true });
@@ -257,7 +257,7 @@ test.describe("Visual regression", () => {
   test("kubernetes empty state snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "empty" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Обзор кластеров" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "Кластеры" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-empty-state.png", { animations: "disabled", fullPage: true });
@@ -266,7 +266,7 @@ test.describe("Visual regression", () => {
   test("kubernetes healthy inventory snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "healthy" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Обзор кластеров" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "prod-kz-1" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-healthy-inventory.png", { animations: "disabled", fullPage: true });
@@ -275,7 +275,7 @@ test.describe("Visual regression", () => {
   test("kubernetes degraded inventory snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, lang: "ru", features: { kubernetes: true }, kubernetesState: "degraded" });
     await page.goto("/kubernetes");
-    await expect(page.getByRole("heading", { name: "Кластерный пульт" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Обзор кластеров" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "prod-eu-1" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("kubernetes-degraded-inventory.png", { animations: "disabled", fullPage: true });
@@ -284,7 +284,7 @@ test.describe("Visual regression", () => {
   test("mars beta page snapshot", async ({ page }) => {
     await installPlatformMocks(page, { authenticated: true, features: { mars: true } });
     await page.goto("/mars");
-    await expect(page.getByRole("heading", { name: "MARS beta - AI development" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build with MARS" })).toBeVisible();
     await expect(page.getByText("Project history")).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("mars-beta-page.png", { animations: "disabled", fullPage: true });
@@ -294,7 +294,7 @@ test.describe("Visual regression", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await installPlatformMocks(page, { authenticated: true });
     await page.goto("/servers");
-    await expect(page.getByRole("heading", { name: "Infrastructure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Servers" })).toBeVisible();
     await stabilizeVisuals(page);
     await expect(page).toHaveScreenshot("servers-page-mobile.png", { animations: "disabled", fullPage: true });
   });
@@ -306,7 +306,7 @@ test.describe("Visual regression", () => {
     await page.getByRole("button", { name: "New agent" }).click();
 
     const dialog = page.getByRole("dialog");
-    await expect(dialog.getByRole("heading", { name: "Agent type" })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: "What work should this agent own?" })).toBeVisible();
     await dialog.getByRole("button", { name: /Custom/i }).click();
     await dialog.getByPlaceholder("Log analysis").fill("Disk Audit");
     await dialog.locator("textarea").nth(0).fill("hostname\nuptime");

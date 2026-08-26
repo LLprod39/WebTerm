@@ -62,10 +62,10 @@ export function KubernetesMetricsStrip({
       title={localize(lang, "Метрики", "Metrics")}
       description={
         live
-          ? localize(lang, "Live snapshot metrics.k8s.io (Admin session)", "Live metrics.k8s.io snapshot (Admin session)")
+          ? localize(lang, "Текущие метрики metrics.k8s.io", "Current metrics.k8s.io data")
           : localize(
               lang,
-              "Превью-спарклайны. Live CPU/mem — с Admin session на кластере.",
+              "Предпросмотр графиков. Текущие CPU и память доступны с сессией администратора.",
               "Preview sparklines. Live CPU/mem needs an Admin session on the cluster.",
             )
       }
@@ -86,7 +86,7 @@ export function KubernetesMetricsStrip({
         <div className="rounded-sm border border-border bg-surface-0 p-3">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <div className="text-2xs uppercase tracking-[0.14em] text-muted-foreground">Memory</div>
+              <div className="text-2xs uppercase tracking-[0.14em] text-muted-foreground">{localize(lang, "Память", "Memory")}</div>
               <div className="mt-1 font-display text-lg font-semibold tabular-nums">
                 {live ? formatBytes(summary!.total_memory_bytes) : "—"}
               </div>
@@ -97,8 +97,8 @@ export function KubernetesMetricsStrip({
       </div>
       {live ? (
         <div className="mt-2 font-mono text-2xs text-muted-foreground">
-          nodes={summary!.item_count}
-          {summary!.truncated ? " · truncated" : ""}
+          {localize(lang, "нод", "nodes")}={summary!.item_count}
+          {summary!.truncated ? localize(lang, " · список обрезан", " · truncated") : ""}
         </div>
       ) : null}
     </SectionCard>

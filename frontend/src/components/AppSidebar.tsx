@@ -69,9 +69,9 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border/80 bg-sidebar">
+    <Sidebar data-ui-slot="app-sidebar" collapsible="icon" className="border-r border-sidebar-border/80 bg-sidebar">
       {/* Logo — compact, no heavy chrome */}
-      <div className="flex h-12 items-center gap-2.5 border-b border-sidebar-border/70 px-2.5">
+      <div data-ui-slot="sidebar-brand" className="flex h-12 items-center gap-2.5 border-b border-sidebar-border/70 px-2.5">
         <button
           type="button"
           onClick={toggleSidebar}
@@ -98,7 +98,7 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation — same language as Settings sidebar: icon tile + label row */}
-      <SidebarContent className="px-2 py-3">
+      <SidebarContent data-ui-slot="sidebar-navigation" className="px-2 py-3">
         {navSections.map((section) => (
           <SidebarGroup key={section.id} data-testid={`nav-section-${section.id}`} className={collapsed ? "mb-2" : "mb-3.5"}>
             {!collapsed ? (
@@ -112,6 +112,7 @@ export function AppSidebar() {
                   <SidebarMenuItem key={item.titleKey}>
                     <SidebarMenuButton asChild size="sm" className="h-auto p-0 hover:bg-transparent data-[active=true]:bg-transparent">
                       <NavLink
+                        data-ui-slot="sidebar-link"
                         to={item.path}
                         end={item.path === "/dashboard"}
                         onMouseEnter={() => prefetchRouteForPath(item.path)}
@@ -154,7 +155,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer — quiet controls */}
-      <SidebarFooter className="space-y-2 border-t border-sidebar-border/70 px-2.5 py-2.5">
+      <SidebarFooter data-ui-slot="sidebar-footer" className="space-y-2 border-t border-sidebar-border/70 px-2.5 py-2.5">
         {!collapsed ? (
           <div className="flex items-center gap-0.5 rounded-md bg-sidebar-accent/25 p-0.5 text-[10px] font-medium uppercase tracking-wider">
             <button

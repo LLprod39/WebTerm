@@ -4,6 +4,7 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 from app.background_workers import STUDIO_WORKER_SPECS
 from app.runtime_limit_config import runtime_limits_payload
@@ -15,8 +16,75 @@ from core_ui.managed_secrets import (
     SERVER_SUDO_NAMESPACE,
 )
 from core_ui.models import ManagedSecret
-from servers.models import Server
+from servers.models import BackgroundWorkerState, Server
+from servers.playbooks.dispatch import PLAYBOOK_EXECUTION_WORKER_KIND
+from servers.services.ansible_engine import detect_ansible
+from servers.services.ansible_validator_client import validator_runtime_available, validator_socket_path
 from web_ui.services.settings_readiness_common import readiness_check
+
+
+def ansible_runtime_check() -> dict[str, Any]:
+    """Report validation and execution readiness without changing either runtime."""
+
+    socket_path = validator_socket_path()
+    if socket_path:
+        try:
+            validation_available = validator_runtime_available()
+        except Exception:
+            validation_available = False
+        runtime = {
+            "method": "isolated-worker" if validation_available else "none",
+            "version": "image-managed",
+            "image": str(getattr(settings, "WEBTERM_ANSIBLE_IMAGE", "webterm-ansible:latest")),
+        }
+    else:
+        detected = detect_ansible()
+        validation_available = bool(detected.get("available"))
+        runtime = {
+            "method": str(detected.get("method") or "none"),
+            "version": str(detected.get("version") or ""),
+            "binary": str(detected.get("binary") or ""),
+        }
+
+    worker_ready = BackgroundWorkerState.objects.filter(
+        worker_kind=PLAYBOOK_EXECUTION_WORKER_KIND,
+        status=BackgroundWorkerState.STATUS_RUNNING,
+        lease_expires_at__gt=timezone.now(),
+    ).exists()
+    details = {
+        **runtime,
+        "validation_available": validation_available,
+        "execution_worker_ready": worker_ready,
+    }
+    if validation_available and worker_ready:
+        return readiness_check(
+            "ansible_runtime",
+            "Ansible",
+            "ready",
+            "Проверка YAML и сервис запуска Ansible готовы.",
+            action_path="/automation",
+            action_label="Открыть Ansible",
+            details=details,
+        )
+    if validation_available:
+        return readiness_check(
+            "ansible_runtime",
+            "Ansible",
+            "warning",
+            "Проверка YAML доступна, но сервис запуска не передаёт свежий heartbeat.",
+            action_path="/automation",
+            action_label="Открыть Ansible",
+            details=details,
+        )
+    return readiness_check(
+        "ansible_runtime",
+        "Ansible",
+        "warning",
+        "Валидатор Ansible недоступен; проекты можно редактировать, но проверка и запуск заблокированы.",
+        action_path="/automation",
+        action_label="Открыть Ansible",
+        details=details,
+    )
 
 
 def server_secret_storage_check() -> dict[str, Any]:

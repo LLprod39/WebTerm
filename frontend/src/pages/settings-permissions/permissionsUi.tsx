@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, StatusBadge } from "@/components/ui/page-shell";
-import { ACCESS_UI_TEXT, getAccessFeatureLabel } from "@/lib/accessUiText";
+import { ACCESS_UI_TEXT, getAccessFeatureLabel, getAccessSourceLabel } from "@/lib/accessUiText";
 import { cn } from "@/lib/utils";
 
 
@@ -49,10 +49,12 @@ export function keyedPermissionMap<T extends { feature: string }>(items: T[], id
 }
 
 export function PermissionPill({
+  lang,
   allowed,
   explicit,
   source,
 }: {
+  lang: "en" | "ru";
   allowed: boolean | null;
   explicit: boolean;
   source: string;
@@ -66,9 +68,13 @@ export function PermissionPill({
   return (
     <span className={cn("inline-flex min-w-24 flex-col rounded-md border px-2 py-1 text-left text-xs leading-4", tone)}>
       <span className="font-semibold">
-        {allowed === true ? "Allow" : allowed === false ? "Deny" : "Inherit"}
+        {allowed === true
+          ? lang === "ru" ? "Разрешено" : "Allow"
+          : allowed === false
+            ? lang === "ru" ? "Запрещено" : "Deny"
+            : lang === "ru" ? "Наследуется" : "Inherit"}
       </span>
-      <span className="truncate opacity-80">{explicit ? "explicit" : source}</span>
+      <span className="truncate opacity-80">{explicit ? (lang === "ru" ? "исключение" : "explicit") : getAccessSourceLabel(lang, source)}</span>
     </span>
   );
 }
@@ -127,7 +133,7 @@ function SubjectPicker({
         <Input
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
-          placeholder={lang === "ru" ? "Поиск субъекта" : "Search subject"}
+          placeholder={lang === "ru" ? "Пользователь или группа" : "Search subject"}
           className="h-10 pl-9"
         />
       </div>
@@ -155,7 +161,7 @@ function SubjectPicker({
           })
         ) : (
           <div className="px-3 py-8 text-center text-sm text-muted-foreground">
-            {lang === "ru" ? "Субъекты не найдены." : "No subjects found."}
+            {lang === "ru" ? "Ничего не найдено." : "No subjects found."}
           </div>
         )}
       </div>
@@ -201,14 +207,14 @@ export function ExceptionSheet({
           </SheetTitle>
           <SheetDescription>
             {lang === "ru"
-              ? "Создайте или обновите точечное исключение. Матрица сразу показывает, что оно перекрывает."
+              ? "Задайте точечное исключение. Итоговый доступ обновится сразу."
               : "Create or update an explicit exception. The matrix shows what it overrides."}
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-6 overflow-auto px-5 py-5">
           <section>
-            <div className="mb-2 text-sm font-medium text-foreground">{lang === "ru" ? "Субъект" : "Subject"}</div>
+            <div className="mb-2 text-sm font-medium text-foreground">{lang === "ru" ? "Кому" : "Subject"}</div>
             <div className="grid grid-cols-2 gap-2">
               <FilterButton
                 active={draft.kind === "user"}
@@ -338,7 +344,7 @@ export function ExplicitRuleRows({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>{lang === "ru" ? "Субъект" : "Subject"}</TableHead>
+          <TableHead>{lang === "ru" ? "Кому" : "Subject"}</TableHead>
           <TableHead>{lang === "ru" ? "Модуль" : "Feature"}</TableHead>
           <TableHead>{lang === "ru" ? "Правило" : "Rule"}</TableHead>
           <TableHead className="w-28 text-right">{lang === "ru" ? "Действия" : "Actions"}</TableHead>

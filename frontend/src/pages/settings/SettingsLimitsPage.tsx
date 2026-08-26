@@ -40,30 +40,30 @@ type LimitField = {
 };
 
 const RUN_LIMITS: LimitField[] = [
-  { key: "agent_active_runs_per_user_limit", label: "Агенты: запуски / пользователь", description: "Сколько agent runs может идти одновременно у одного пользователя", max: 100 },
-  { key: "agent_active_runs_global_limit", label: "Агенты: запуски на платформу", description: "Общий потолок активных agent runs", max: 500 },
-  { key: "agent_run_stale_seconds", label: "Агенты: stale (сек)", description: "Через сколько секунд run считается зависшим", max: 604800 },
-  { key: "pipeline_active_runs_per_user_limit", label: "Pipeline: запуски / пользователь", description: "Одновременные pipeline runs на пользователя", max: 100 },
-  { key: "pipeline_active_runs_global_limit", label: "Pipeline: запуски на платформу", description: "Общий потолок pipeline runs", max: 500 },
-  { key: "pipeline_run_stale_seconds", label: "Pipeline: stale (сек)", description: "Через сколько pipeline run считается зависшим", max: 604800 },
+  { key: "agent_active_runs_per_user_limit", label: "Агенты на пользователя", description: "Одновременные запуски одного пользователя", max: 100 },
+  { key: "agent_active_runs_global_limit", label: "Агенты на платформу", description: "Общее число одновременных запусков", max: 500 },
+  { key: "agent_run_stale_seconds", label: "Зависание агента, сек.", description: "Когда запуск считать зависшим", max: 604800 },
+  { key: "pipeline_active_runs_per_user_limit", label: "Сценарии на пользователя", description: "Одновременные сценарии одного пользователя", max: 100 },
+  { key: "pipeline_active_runs_global_limit", label: "Сценарии на платформу", description: "Общее число одновременных сценариев", max: 500 },
+  { key: "pipeline_run_stale_seconds", label: "Зависание сценария, сек.", description: "Когда выполнение считать зависшим", max: 604800 },
 ];
 
 const SESSION_LIMITS: LimitField[] = [
-  { key: "ssh_terminal_sessions_per_user_limit", label: "SSH: сессии / пользователь", description: "Активные terminal-сессии на одного пользователя", max: 100 },
-  { key: "ssh_terminal_sessions_global_limit", label: "SSH: сессии на платформу", description: "Общий потолок terminal-сессий", max: 1000 },
-  { key: "ssh_terminal_session_stale_seconds", label: "SSH: stale (сек)", description: "Когда сессия считается зависшей", max: 86400 },
-  { key: "llm_daily_token_limit_per_user", label: "LLM: токены / день / пользователь", description: "0 — без дневного бюджета", max: 50000000 },
+  { key: "ssh_terminal_sessions_per_user_limit", label: "SSH-сессии на пользователя", description: "Одновременные терминалы одного пользователя", max: 100 },
+  { key: "ssh_terminal_sessions_global_limit", label: "SSH-сессии на платформу", description: "Общее число открытых терминалов", max: 1000 },
+  { key: "ssh_terminal_session_stale_seconds", label: "Зависание SSH-сессии, сек.", description: "Когда сессию считать зависшей", max: 86400 },
+  { key: "llm_daily_token_limit_per_user", label: "Токены в день на пользователя", description: "0 — без дневного ограничения", max: 50000000 },
 ];
 
 const MCP_LIMITS: LimitField[] = [
-  { key: "mcp_stdio_initialize_timeout_seconds", label: "stdio: запуск (сек)", description: "Таймаут initialize stdio MCP", min: 1, max: 600 },
-  { key: "mcp_stdio_request_timeout_seconds", label: "stdio: запрос (сек)", description: "Таймаут обычного stdio request", min: 1, max: 600 },
-  { key: "mcp_stdio_tool_call_timeout_seconds", label: "stdio: tool call (сек)", description: "Таймаут вызова tool по stdio", min: 1, max: 3600 },
-  { key: "mcp_process_terminate_timeout_seconds", label: "stdio: остановка (сек)", description: "Graceful stop процесса MCP", min: 1, max: 60 },
-  { key: "mcp_http_connect_timeout_seconds", label: "HTTP: connect (сек)", description: "Таймаут подключения HTTP MCP", min: 1, max: 300 },
-  { key: "mcp_http_request_timeout_seconds", label: "HTTP: request (сек)", description: "Таймаут HTTP request / list", min: 1, max: 600 },
-  { key: "mcp_http_tool_call_timeout_seconds", label: "HTTP: tool call (сек)", description: "Таймаут HTTP tool call", min: 1, max: 3600 },
-  { key: "mcp_http_retry_attempts", label: "HTTP: повторы", description: "Сколько раз повторять HTTP MCP", max: 10 },
+  { key: "mcp_stdio_initialize_timeout_seconds", label: "stdio: запуск, сек.", description: "Ожидание запуска MCP-сервера", min: 1, max: 600 },
+  { key: "mcp_stdio_request_timeout_seconds", label: "stdio: запрос, сек.", description: "Ожидание обычного запроса", min: 1, max: 600 },
+  { key: "mcp_stdio_tool_call_timeout_seconds", label: "stdio: инструмент, сек.", description: "Ожидание вызова инструмента", min: 1, max: 3600 },
+  { key: "mcp_process_terminate_timeout_seconds", label: "stdio: остановка, сек.", description: "Ожидание корректной остановки", min: 1, max: 60 },
+  { key: "mcp_http_connect_timeout_seconds", label: "HTTP: подключение, сек.", description: "Ожидание подключения к MCP", min: 1, max: 300 },
+  { key: "mcp_http_request_timeout_seconds", label: "HTTP: запрос, сек.", description: "Ожидание запроса или списка", min: 1, max: 600 },
+  { key: "mcp_http_tool_call_timeout_seconds", label: "HTTP: инструмент, сек.", description: "Ожидание вызова инструмента", min: 1, max: 3600 },
+  { key: "mcp_http_retry_attempts", label: "HTTP: повторы", description: "Число повторных запросов", max: 10 },
 ];
 
 const ALL_FIELDS = [...RUN_LIMITS, ...SESSION_LIMITS, ...MCP_LIMITS];
@@ -169,7 +169,7 @@ export default function SettingsLimitsPage() {
       <SettingsPageHeader
         icon={Gauge}
         title="Лимиты и бюджеты"
-        description="Защита платформы от перегрузки: агенты, pipeline, SSH и MCP. Меняется здесь — без env."
+        description="Ограничения для агентов, сценариев, SSH и MCP."
         actions={
           <>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={resetDraft} disabled={saving}>
@@ -191,7 +191,7 @@ export default function SettingsLimitsPage() {
         onRetry={() => queryClient.invalidateQueries({ queryKey: ["settings", "config"] })}
       >
         <div className="space-y-4">
-          <SectionCard title="Запуски" icon={Bot} description="Агенты и Studio pipeline">
+          <SectionCard title="Запуски" icon={Bot} description="Агенты и сценарии">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {RUN_LIMITS.map((field) => (
                 <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />
@@ -199,7 +199,7 @@ export default function SettingsLimitsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Сессии и LLM" icon={Clock} description="Терминал SSH и дневной бюджет токенов">
+          <SectionCard title="Сессии и модели" icon={Clock} description="SSH-терминалы и дневной бюджет токенов">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {SESSION_LIMITS.map((field) => (
                 <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />
@@ -207,7 +207,7 @@ export default function SettingsLimitsPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="MCP" icon={Cable} description="Таймауты и повторы внешних tool servers">
+          <SectionCard title="MCP" icon={Cable} description="Ожидание и повторы серверов инструментов">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {MCP_LIMITS.map((field) => (
                 <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />

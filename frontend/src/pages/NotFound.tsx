@@ -14,8 +14,12 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md text-center">
+    <div
+      data-ui-slot="not-found-page"
+      data-page-kind="utility"
+      className="flex min-h-screen flex-col items-center justify-center bg-background px-6"
+    >
+      <div data-ui-slot="not-found-content" className="w-full max-w-md text-center">
         <div className="accent-gradient mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-elev-1">
           <Search className="h-7 w-7" />
         </div>

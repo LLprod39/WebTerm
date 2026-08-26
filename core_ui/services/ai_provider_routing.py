@@ -36,6 +36,7 @@ def binding_from_preference(preference: AIProviderPreference | None) -> Provider
         connection_id=preference.connection_id,
         pool_id=preference.pool_id,
         model_id=preference.model_id or None,
+        reasoning_effort=preference.reasoning_effort or None,
     )
 
 

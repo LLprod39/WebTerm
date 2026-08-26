@@ -1,7 +1,6 @@
 import type { TerminalConnectionStatus } from "@/components/terminal/XTerminal";
 import type { AiMessage } from "@/components/terminal/ai-types";
-import type { AuthUser, FrontendServer } from "@/lib/api";
-import { hasFeatureAccess } from "@/lib/featureAccess";
+import type { FrontendServer } from "@/lib/api";
 
 export interface Tab {
   id: string;
@@ -40,15 +39,6 @@ export function mapStatus(status: TerminalConnectionStatus): Tab["status"] {
 
 export function findServer(servers: FrontendServer[], id: number) {
   return servers.find((server) => server.id === id);
-}
-
-export function isTerminalReadOnlyMode(server: FrontendServer, user: AuthUser | null | undefined) {
-  if (server.ai_read_only === true) return true;
-  // Keep the disclosure fail-closed while the session is loading or when the
-  // auth endpoint is temporarily unavailable. Release write access follows
-  // the centrally managed automation capability, not a named access profile.
-  if (!user) return true;
-  return !hasFeatureAccess(user, "automation");
 }
 
 function getNextSessionNumber(tabs: Tab[], serverId: number) {

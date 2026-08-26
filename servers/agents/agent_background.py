@@ -77,7 +77,14 @@ def _mark_background_failure(run_id: int, exc: Exception, *, phase: str) -> None
     run.status = AgentRun.STATUS_FAILED
     run.ai_analysis = message
     run.completed_at = timezone.now()
-    run.save(update_fields=["status", "ai_analysis", "completed_at"])
+    run.execution_outcome = {
+        "outcome": "failed",
+        "status": AgentRun.STATUS_FAILED,
+        "reason": message,
+        "exit_reason": "background_failure",
+        "report_generation": {"status": "failed", "generated_at": None, "error": message},
+    }
+    run.save(update_fields=["status", "ai_analysis", "completed_at", "execution_outcome"])
     refresh_agent_run_report_payload(run)
 
 

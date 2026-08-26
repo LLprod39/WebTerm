@@ -263,8 +263,8 @@ describe("KubernetesPage", () => {
   it("renders an operator overview without admin provider controls", async () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "Кластерный пульт" })).toBeInTheDocument();
-    expect(await screen.findByText("Sidebar выкл.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Обзор кластеров" })).toBeInTheDocument();
+    expect(await screen.findByText("Требуется настройка")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Кластеры" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Требует внимания" })).toBeInTheDocument();
     expect(screen.queryByText("Админ-диагностика")).not.toBeInTheDocument();
@@ -332,7 +332,7 @@ describe("KubernetesPage", () => {
     renderPage();
 
     expect(await screen.findByText("broken-worker")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Запросить restart broken-worker" }));
+    fireEvent.click(screen.getByRole("button", { name: "Запросить перезапуск broken-worker" }));
 
     await waitFor(() => {
       expect(createKubernetesActionRequest).toHaveBeenCalledWith({
@@ -342,7 +342,7 @@ describe("KubernetesPage", () => {
       });
     });
     expect(await screen.findByText("Заявка на действие")).toBeInTheDocument();
-    expect(screen.getByText("execution off")).toBeInTheDocument();
+    expect(screen.getByText("выполнение выключено")).toBeInTheDocument();
     expect(await screen.findByText("Заявка создана")).toBeInTheDocument();
     expect(fetchKubernetesActionReport).toHaveBeenCalledWith("request-1");
     expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
@@ -359,12 +359,12 @@ describe("KubernetesPage", () => {
     renderPage();
 
     expect(await screen.findByText("broken-worker")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Запросить restart broken-worker" }));
-    expect(await screen.findByText("Внешний lifecycle")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Запросить перезапуск broken-worker" }));
+    expect(await screen.findByText("Внешнее выполнение")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Approval reference"), { target: { value: "CHG-K8S-123" } });
-    fireEvent.change(screen.getByLabelText("Approval summary"), { target: { value: "Approved after CAB review." } });
-    fireEvent.click(screen.getByRole("button", { name: "Записать external approval" }));
+    fireEvent.change(screen.getByLabelText("Ссылка на согласование"), { target: { value: "CHG-K8S-123" } });
+    fireEvent.change(screen.getByLabelText("Сводка согласования"), { target: { value: "Approved after CAB review." } });
+    fireEvent.click(screen.getByRole("button", { name: "Записать внешнее согласование" }));
 
     await waitFor(() => {
       expect(approveExternalKubernetesAction).toHaveBeenCalledWith("request-1", {
@@ -372,13 +372,13 @@ describe("KubernetesPage", () => {
         summary: "Approved after CAB review.",
       });
     });
-    expect(await screen.findByText("approved_external")).toBeInTheDocument();
+    expect(await screen.findByText("согласовано вне WebTerm")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("External evidence reference"), {
+    fireEvent.change(screen.getByLabelText("Ссылка на внешнее подтверждение"), {
       target: { value: "https://rancher.example.test/dashboard/c/local/apps/deployments/broken-worker" },
     });
-    fireEvent.change(screen.getByLabelText("Verification summary"), { target: { value: "Pods are ready." } });
-    fireEvent.click(screen.getByRole("button", { name: "Записать external verification" }));
+    fireEvent.change(screen.getByLabelText("Сводка проверки"), { target: { value: "Pods are ready." } });
+    fireEvent.click(screen.getByRole("button", { name: "Записать внешнюю проверку" }));
 
     await waitFor(() => {
       expect(verifyExternalKubernetesAction).toHaveBeenCalledWith("request-1", {
@@ -387,7 +387,7 @@ describe("KubernetesPage", () => {
         external_ref: "https://rancher.example.test/dashboard/c/local/apps/deployments/broken-worker",
       });
     });
-    expect(await screen.findByText("verified_external")).toBeInTheDocument();
+    expect(await screen.findByText("проверено вне WebTerm")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /execute/i })).not.toBeInTheDocument();
   });
 });

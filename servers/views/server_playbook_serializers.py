@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from servers.models import Playbook, PlaybookRun
+from app.egress_redaction import redact_egress_payload
+from servers.models_playbooks import Playbook, PlaybookRun
 from servers.services.playbook_compatibility_analysis import (
     COMPATIBILITY_ANALYZER_VERSION,
     analyze_playbook_compatibility,
@@ -20,22 +21,67 @@ def _playbooks_for_user(user):
     return playbooks_visible_to(user)
 
 
-def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None) -> dict[str, Any]:
-    viewer = viewer or pb.user
-    capabilities = capabilities_for(pb, viewer)
-    revision = pb.active_compatibility_revision
-    published = pb.published_revision
-    published_metadata = published.metadata if published and isinstance(published.metadata, dict) else {}
-    source = published_metadata.get("source") if isinstance(published_metadata.get("source"), dict) else {}
+def _playbook_compatibility(pb: Playbook) -> dict[str, Any]:
     compatibility = pb.compatibility if isinstance(pb.compatibility, dict) else {}
     if compatibility.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION and (pb.source_yaml or "").strip():
-        compatibility = analyze_playbook_compatibility(pb.source_yaml)
+        return analyze_playbook_compatibility(pb.source_yaml)
+    return compatibility
+
+
+def _active_compatibility_payload(revision, *, is_owner: bool) -> dict[str, Any] | None:
+    if revision is None:
+        return None
     revision_report = revision.report if revision and isinstance(revision.report, dict) else {}
-    if revision and revision_report.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION:
+    if revision_report.get("analyzer_version") != COMPATIBILITY_ANALYZER_VERSION:
         revision_report = analyze_playbook_compatibility(
             revision.adapted_yaml,
             bindings=revision.inventory_bindings if isinstance(revision.inventory_bindings, dict) else {},
         )
+    return {
+        "id": revision.id,
+        "status": revision.status,
+        "report": revision_report,
+        "semantic_guard": revision.semantic_guard if isinstance(revision.semantic_guard, dict) else {},
+        "change_summary": revision.change_summary if isinstance(revision.change_summary, list) else [],
+        "inventory_bindings": (
+            revision.inventory_bindings if is_owner and isinstance(revision.inventory_bindings, dict) else {}
+        ),
+        "created_at": revision.created_at.isoformat(),
+    }
+
+
+def _published_source_metadata(published) -> dict[str, str]:
+    metadata = published.metadata if published and isinstance(published.metadata, dict) else {}
+    source = metadata.get("source") if isinstance(metadata.get("source"), dict) else {}
+    allowed = {"type", "host", "project", "ref", "path", "commit_sha"}
+    return {key: str(value) for key, value in source.items() if key in allowed and isinstance(value, str)}
+
+
+def _has_unpublished_draft(draft, published) -> bool:
+    return bool(
+        draft
+        and (
+            published is None
+            or draft.content_hash != published.content_hash
+            or (draft.bundle_hash or "") != (published.bundle_hash or "")
+        )
+    )
+
+
+def _serialized_playbook_content(pb: Playbook, published, revision, *, is_owner: bool) -> dict[str, Any]:
+    tasks = published.tasks if published and isinstance(published.tasks, list) else pb.tasks
+    return {
+        "tasks": tasks if isinstance(tasks, list) else [],
+        "source_yaml": published.source_yaml if published else pb.source_yaml or "",
+        "adapted_source_yaml": revision.adapted_yaml if revision and is_owner else "",
+    }
+
+
+def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None) -> dict[str, Any]:
+    capabilities = capabilities_for(pb, viewer or pb.user)
+    revision = pb.active_compatibility_revision
+    published = pb.published_revision
+    draft = getattr(pb, "draft", None)
     data: dict[str, Any] = {
         "id": pb.id,
         "name": pb.name,
@@ -45,23 +91,10 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None
         "visibility": pb.visibility,
         "tags": pb.tags if isinstance(pb.tags, list) else [],
         "fidelity": pb.fidelity if isinstance(pb.fidelity, dict) else {},
-        "compatibility": compatibility,
-        "active_compatibility_revision": (
-            {
-                "id": revision.id,
-                "status": revision.status,
-                "report": revision_report,
-                "semantic_guard": revision.semantic_guard if isinstance(revision.semantic_guard, dict) else {},
-                "change_summary": revision.change_summary if isinstance(revision.change_summary, list) else [],
-                "inventory_bindings": (
-                    revision.inventory_bindings
-                    if capabilities.is_owner and isinstance(revision.inventory_bindings, dict)
-                    else {}
-                ),
-                "created_at": revision.created_at.isoformat(),
-            }
-            if revision
-            else None
+        "compatibility": _playbook_compatibility(pb),
+        "active_compatibility_revision": _active_compatibility_payload(
+            revision,
+            is_owner=capabilities.is_owner,
         ),
         "task_count": (len(published.tasks) if published and isinstance(published.tasks, list) else pb.task_count),
         "is_template_clone": pb.is_template_clone,
@@ -75,23 +108,20 @@ def _serialize_playbook(pb: Playbook, *, include_tasks: bool = True, viewer=None
         "published_revision_id": pb.published_revision_id,
         "published_revision_number": published.revision_number if published else None,
         "published_content_hash": published.content_hash if published else "",
-        "source": {
-            key: str(value)
-            for key, value in source.items()
-            if key in {"type", "host", "project", "ref", "path"} and isinstance(value, str)
-        },
+        "draft_version": draft.version if draft else None,
+        "has_unpublished_draft": _has_unpublished_draft(draft, published),
+        "source": _published_source_metadata(published),
         "capabilities": capabilities.to_dict(),
     }
     if include_tasks:
-        data["tasks"] = (
-            published.tasks
-            if published and isinstance(published.tasks, list)
-            else pb.tasks
-            if isinstance(pb.tasks, list)
-            else []
+        data.update(
+            _serialized_playbook_content(
+                pb,
+                published,
+                revision,
+                is_owner=capabilities.is_owner,
+            )
         )
-        data["source_yaml"] = published.source_yaml if published else pb.source_yaml or ""
-        data["adapted_source_yaml"] = revision.adapted_yaml if revision and capabilities.is_owner else ""
     return data
 
 
@@ -126,7 +156,25 @@ def _serialize_run(run: PlaybookRun, *, include_hosts: bool = True) -> dict[str,
             visible_snapshot.pop("source_yaml_original", None)
         data["playbook_snapshot"] = visible_snapshot
         data["live_log"] = (run.live_log or "")[-120_000:]
-    return data
+    # Older rows may predate storage-time redaction.  Keep the legacy response
+    # contract, but apply the same egress policy to the complete payload before
+    # any caller can serialize or incrementally reconstruct a secret.
+    redacted, _report, _hashes = redact_egress_payload(data)
+    if not isinstance(redacted, dict):
+        return {}
+    # Names are identifiers, not secret values.  Preserve the documented
+    # manifest contract while never returning the corresponding values.
+    manifest = run.variable_manifest if isinstance(run.variable_manifest, dict) else {}
+    redacted["variable_manifest"] = {
+        "names": [str(item) for item in manifest.get("names", [])[:100]]
+        if isinstance(manifest.get("names"), list)
+        else [],
+        "managed_secret_names": [str(item) for item in manifest.get("managed_secret_names", [])[:100]]
+        if isinstance(manifest.get("managed_secret_names"), list)
+        else [],
+        "values_redacted": True,
+    }
+    return redacted
 
 
 def _normalize_incoming_tasks(raw: Any) -> list[dict[str, Any]]:

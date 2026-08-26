@@ -437,7 +437,7 @@ test("uses advanced server actions for sharing, knowledge, context, security and
 
   await advancedDialog.getByRole("button", { name: "Security" }).click();
   await page.locator('input[type="password"]').first().fill("master-pass");
-  await page.getByRole("button", { name: "Set Session MP" }).click();
+  await page.getByRole("button", { name: "Save password" }).click();
   await expect.poll(() => harness.getCalls("/servers/api/master-password/set/", "POST").length).toBe(1);
   await page.getByRole("button", { name: "Reveal Server Password" }).click();
   await expect(page.locator('input[value="revealed-password"]')).toBeVisible();

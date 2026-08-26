@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from core_ui.models.projects import ProjectMembership
 from servers.models import Playbook, Server
 from tests.playbook_workspace_support import playbook_client as _client
 
@@ -95,6 +96,12 @@ def test_shared_runner_never_receives_owner_original_source_in_run_snapshot(work
             content_type="application/json",
         ).status_code
         == 200
+    )
+    playbook.refresh_from_db()
+    ProjectMembership.objects.create(
+        project=playbook.project,
+        user=teammate,
+        role=ProjectMembership.ROLE_OPERATOR,
     )
     assert (
         owner_client.post(

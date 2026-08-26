@@ -369,7 +369,7 @@ def _write_inventory(
                 try:
                     passphrase = get_server_auth_secret(server, master_password=master_password, fallback_plain="")
                     if passphrase:
-                        if secret_collector is not None and len(passphrase) >= 3:
+                        if secret_collector is not None:
                             secret_collector.append(passphrase)
                         # ssh-key with passphrase needs ssh-agent; store for advanced users in host vars comment
                         parts.append(f"ansible_ssh_passphrase={_ini_escape(passphrase)}")
@@ -381,7 +381,7 @@ def _write_inventory(
             except Exception:
                 password = ""
             if password:
-                if secret_collector is not None and len(password) >= 3:
+                if secret_collector is not None:
                     secret_collector.append(password)
                 parts.append(f"ansible_ssh_pass={_ini_escape(password)}")
                 ssh_options.extend(["-o PreferredAuthentications=password", "-o PubkeyAuthentication=no"])
@@ -392,7 +392,7 @@ def _write_inventory(
         except Exception:
             sudo_pw = ""
         if sudo_pw:
-            if secret_collector is not None and len(sudo_pw) >= 3:
+            if secret_collector is not None:
                 secret_collector.append(sudo_pw)
             parts.append(f"ansible_become_password={_ini_escape(sudo_pw)}")
         ssh_args = " ".join(ssh_options)

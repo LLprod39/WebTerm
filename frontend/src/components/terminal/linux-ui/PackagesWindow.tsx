@@ -11,6 +11,7 @@ import {
   type FrontendServer,
   type LinuxUiPackageItem,
 } from "@/lib/api";
+import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 function PackageRow({ item }: { item: LinuxUiPackageItem }) {
@@ -31,6 +32,7 @@ export function PackagesWindow({
   active: boolean;
   packageManager: string;
 }) {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search.trim().toLowerCase());
@@ -66,9 +68,9 @@ export function PackagesWindow({
       setActionOutput((p) => p + [res.output?.stdout, res.output?.stderr, res.error].filter(Boolean).join("\n") + `\nExit: ${res.output?.exit_code ?? "?"}`);
       void queryClient.invalidateQueries({ queryKey: ["linux-ui", server.id, "packages"] });
     } catch (err) {
-      setActionOutput((p) => p + (err instanceof Error ? err.message : "Failed"));
+      setActionOutput((p) => p + (err instanceof Error ? err.message : localize(lang, "Ошибка", "Failed")));
     } finally { setIsRunning(false); }
-  }, [server.id, queryClient]);
+  }, [lang, server.id, queryClient]);
 
   const installCmd = installPkg.trim() ? (
     packageManager === "apt" ? `apt-get install -y ${installPkg.trim()}` :
@@ -84,19 +86,19 @@ export function PackagesWindow({
     packageManager === "pacman" ? "pacman -Syu --noconfirm" :
     packageManager === "apk" ? "apk update && apk upgrade" : "";
 
-  if (!packageManager) return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No package manager detected.</div>;
+  if (!packageManager) return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{localize(lang, "Менеджер пакетов не найден.", "No package manager detected.")}</div>;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex items-center gap-0.5 border-b border-border/60 bg-muted/30 px-2">
         {(["installed", "updates", "actions"] as const).map((t) => (
           <button key={t} type="button" onClick={() => setTab(t)} className={cn("px-3 py-2 text-xs", tab === t ? "text-foreground border-b-2 border-primary" : "text-muted-foreground hover:text-foreground")}>
-            {t === "installed" ? `Packages (${installedPackages.length})` : t === "updates" ? "Updates" : "Install / Update"}
+            {t === "installed" ? localize(lang, `Пакеты (${installedPackages.length})`, `Packages (${installedPackages.length})`) : t === "updates" ? localize(lang, "Обновления", "Updates") : localize(lang, "Установка", "Install / update")}
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2 py-1">
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Filter..." className="h-7 w-40 text-xs" />
-          <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => void packagesQuery.refetch()}>
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={localize(lang, "Найти...", "Filter...")} className="h-7 w-40 text-xs" />
+          <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0" aria-label={localize(lang, "Обновить список пакетов", "Refresh packages")} onClick={() => void packagesQuery.refetch()}>
             <RefreshCw className={cn("h-3 w-3", packagesQuery.isFetching && "animate-spin")} />
           </Button>
         </div>
@@ -105,29 +107,29 @@ export function PackagesWindow({
         <div className="p-3">
           {tab === "installed" && (
             <div className="space-y-1">
-              {packagesQuery.isLoading ? <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>
-                : installedPackages.length === 0 ? <div className="py-8 text-center text-sm text-muted-foreground">No matches.</div>
+              {packagesQuery.isLoading ? <div className="py-8 text-center text-sm text-muted-foreground">{localize(lang, "Загружаем...", "Loading...")}</div>
+                : installedPackages.length === 0 ? <div className="py-8 text-center text-sm text-muted-foreground">{localize(lang, "Ничего не найдено.", "No matches.")}</div>
                 : installedPackages.map((item) => <PackageRow key={`${item.name}-${item.version}`} item={item} />)}
             </div>
           )}
           {tab === "updates" && (
-            <pre className="whitespace-pre-wrap font-mono text-xs leading-5 text-foreground">{updateLines.length > 0 ? updateLines.join("\n") : "No updates available."}</pre>
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-5 text-foreground">{updateLines.length > 0 ? updateLines.join("\n") : localize(lang, "Обновлений нет.", "No updates available.")}</pre>
           )}
           {tab === "actions" && (
             <div className="space-y-3">
               <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                <div className="text-xs font-medium text-foreground mb-2">Install Package</div>
+                <div className="text-xs font-medium text-foreground mb-2">{localize(lang, "Установить пакет", "Install package")}</div>
                 <div className="flex items-center gap-2">
-                  <Input value={installPkg} onChange={(e) => setInstallPkg(e.target.value)} placeholder="e.g. nginx htop" className="h-8 flex-1 text-xs font-mono"
+                  <Input value={installPkg} onChange={(e) => setInstallPkg(e.target.value)} placeholder={localize(lang, "например: nginx htop", "e.g. nginx htop")} className="h-8 flex-1 text-xs font-mono"
                     onKeyDown={(e) => { if (e.key === "Enter" && installCmd) void runPkgCmd(installCmd); }} />
-                  <Button type="button" size="sm" className="h-8 text-xs" disabled={!installCmd || isRunning} onClick={() => void runPkgCmd(installCmd)}>Install</Button>
+                  <Button type="button" size="sm" className="h-8 text-xs" disabled={!installCmd || isRunning} onClick={() => void runPkgCmd(installCmd)}>{localize(lang, "Установить", "Install")}</Button>
                 </div>
               </div>
               <div className="rounded-xl border border-border/70 bg-background/90 p-3">
-                <div className="text-xs font-medium text-foreground mb-2">System Update</div>
+                <div className="text-xs font-medium text-foreground mb-2">{localize(lang, "Обновить систему", "System update")}</div>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 rounded bg-muted px-2 py-1.5 text-xs text-muted-foreground font-mono">{updateCmd}</code>
-                  <Button type="button" size="sm" variant="outline" className="h-8 text-xs" disabled={isRunning} onClick={() => void runPkgCmd(updateCmd)}>Update</Button>
+                  <Button type="button" size="sm" variant="outline" className="h-8 text-xs" disabled={isRunning} onClick={() => void runPkgCmd(updateCmd)}>{localize(lang, "Обновить", "Update")}</Button>
                 </div>
               </div>
               {actionOutput && (

@@ -133,8 +133,8 @@ export default function SettingsAuditPage() {
           <Activity className="h-4 w-4 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">Аудит и журнал</h1>
-          <p className="text-sm leading-6 text-muted-foreground">Логирование и история действий пользователей</p>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Журнал аудита</h1>
+          <p className="text-sm leading-6 text-muted-foreground">Настройки и история действий</p>
         </div>
       </div>
 
