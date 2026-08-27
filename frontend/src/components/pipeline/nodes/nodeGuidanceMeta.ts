@@ -84,8 +84,8 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
       en: "LLM query nodes are pure reasoning steps for analysis, summarization, or decision support.",
     },
     checklist: {
-      ru: ["Напишите prompt", "Выберите provider и model", "Подставьте переменные пайплайна при необходимости"],
-      en: ["Write the prompt", "Choose provider and model", "Use pipeline variables where needed"],
+      ru: ["Напишите prompt", "Используйте Auto: провайдер и модель задаются настройками рабочей области", "Подставьте переменные пайплайна при необходимости"],
+      en: ["Write the prompt", "Use Auto: provider and model come from workspace settings", "Use pipeline variables where needed"],
     },
   },
   "agent/mcp_call": {
@@ -331,4 +331,3 @@ export const NODE_TYPE_GUIDANCE_META: Record<string, NodeGuidanceMeta> = {
     },
   },
 };
-

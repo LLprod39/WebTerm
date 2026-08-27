@@ -30,7 +30,11 @@ class TerminalAgentSupportOperations:
         """Resolve and pin the terminal AI provider for this user/server session."""
         from django.contrib.auth import get_user_model
 
-        from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
+        from core_ui.ai_model_policy import (
+            operational_provider_binding,
+            stored_operational_provider_binding,
+            user_can_manage_ai_routing,
+        )
         from core_ui.services.ai_execution_context import abuild_execution_context
         from servers.models import TerminalAiProviderState
 
@@ -47,10 +51,11 @@ class TerminalAgentSupportOperations:
         )()
         self._terminal_provider_invocation_seq = int(getattr(self, "_terminal_provider_invocation_seq", 0) or 0) + 1
         explicit_binding = (self._ai_state.settings or {}).get("provider_binding") or None
-        explicit_binding, stored_binding = await sync_to_async(
+        explicit_binding, stored_binding, can_manage_routing = await sync_to_async(
             lambda: (
                 operational_provider_binding(user, explicit_binding),
                 stored_operational_provider_binding(user, state.provider_binding),
+                user_can_manage_ai_routing(user),
             ),
             thread_sensitive=True,
         )()
@@ -63,6 +68,7 @@ class TerminalAgentSupportOperations:
             explicit_binding=explicit_binding,
             stored_binding=stored_binding,
             requested_provider="auto",
+            allow_user_preference=can_manage_routing,
             # Terminal planning, Nova, reporting, and memory calls use
             # different system prompts. Reusing one Codex thread across those
             # purposes makes later calls inherit the wrong instructions.

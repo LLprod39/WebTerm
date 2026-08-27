@@ -162,6 +162,13 @@ export function getNodeTypeGuidance(type: string, lang: PipelineEditorLang) {
   };
 }
 
+export function getLlmQueryModelLabel(data: Record<string, unknown>, lang: PipelineEditorLang) {
+  return (
+    (typeof data.model === "string" ? data.model : "") ||
+    localize(lang, "Авто · модель рабочей области", "Auto · workspace model")
+  );
+}
+
 export function getNodePaletteText(type: string, lang: PipelineEditorLang) {
   const meta = NODE_TYPE_META[type];
   if (!meta) return { label: type, description: type };

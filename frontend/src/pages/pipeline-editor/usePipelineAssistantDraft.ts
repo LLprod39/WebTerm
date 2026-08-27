@@ -6,12 +6,13 @@ import type { PipelineEdge, PipelineNode, PipelineRun } from "@/lib/api";
 import { studioPipelines } from "@/lib/api";
 import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
 import { localize } from "./presentation";
-import { normaliseAssistantPatch } from "./pipelineGraphUtils";
+import { applyWorkspaceAiRoutingPolicy, normaliseAssistantPatch } from "./pipelineGraphUtils";
 
 type AssistantIntent = "create" | "edit" | "validate" | "fix_run";
 type AssistantHistoryItem = { role: "user" | "assistant"; content: string };
 
 export function usePipelineAssistantDraft({
+  canManageAiRouting,
   clearGraphOverlay,
   fitView,
   graphRunLive,
@@ -31,6 +32,7 @@ export function usePipelineAssistantDraft({
   setSelectedNode,
   toast,
 }: {
+  canManageAiRouting: boolean;
   clearGraphOverlay: () => void;
   fitView: (options: { padding: number; duration: number }) => void;
   graphRunLive: PipelineRun | null;
@@ -70,13 +72,17 @@ export function usePipelineAssistantDraft({
       intent: AssistantIntent;
       message: string;
       history: AssistantHistoryItem[];
-    }) =>
-      studioPipelines.assistant({
+    }) => {
+      const routedNodes = applyWorkspaceAiRoutingPolicy(nodes, canManageAiRouting);
+      const routedSelectedNode = selectedNode
+        ? applyWorkspaceAiRoutingPolicy([selectedNode], canManageAiRouting)[0]
+        : null;
+      return studioPipelines.assistant({
         pipeline_id: pipelineId,
         pipeline_name: pipelineName || pipelineFallbackName || "Untitled",
-        nodes,
+        nodes: routedNodes,
         edges,
-        selected_node: selectedNode,
+        selected_node: routedSelectedNode,
         user_message: message,
         intent,
         draft_mode: true,
@@ -91,7 +97,8 @@ export function usePipelineAssistantDraft({
               node_states: graphRunLive.node_states,
             }
           : {},
-      }),
+      });
+    },
     onSuccess: (response, variables) => {
       setAssistantProposal(response);
       setAssistantHistory((current) => [
@@ -147,7 +154,8 @@ export function usePipelineAssistantDraft({
         response: assistantProposal,
         normalizeNodeData: (data) => normaliseAssistantPatch(data, { mcpList: [] }),
       });
-      setNodes(result.nodes as unknown as Node[]);
+      const routedNodes = applyWorkspaceAiRoutingPolicy(result.nodes, canManageAiRouting);
+      setNodes(routedNodes as unknown as Node[]);
       setEdges(result.edges as unknown as Edge[]);
       setHasLocalChanges(true);
       clearGraphOverlay();
@@ -159,10 +167,10 @@ export function usePipelineAssistantDraft({
         assistantProposal.graph_patch.update_nodes?.[0]?.node_id ||
         null;
       const nextSelectedId = firstNewId || firstUpdatedId;
-      setSelectedNode(nextSelectedId ? result.nodes.find((node) => node.id === nextSelectedId) || null : null);
+      setSelectedNode(nextSelectedId ? routedNodes.find((node) => node.id === nextSelectedId) || null : null);
       setAssistantProposal(null);
 
-      const maxNumericNodeId = result.nodes.reduce((max, node) => {
+      const maxNumericNodeId = routedNodes.reduce((max, node) => {
         const num = parseInt(node.id.replace(/\D/g, "") || "0");
         return Math.max(max, num);
       }, 0);
@@ -171,7 +179,7 @@ export function usePipelineAssistantDraft({
       if (saveAfterApply) {
         saveAppliedGraph({
           name: pipelineName || pipelineFallbackName || "Untitled",
-          nodes: result.nodes,
+          nodes: routedNodes,
           edges: result.edges,
         });
         return;
@@ -180,6 +188,7 @@ export function usePipelineAssistantDraft({
     },
     [
       assistantProposal,
+      canManageAiRouting,
       clearGraphOverlay,
       edges,
       fitView,

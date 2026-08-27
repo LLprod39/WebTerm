@@ -46,9 +46,10 @@ def resolve_execution_context(
     explicit_binding: ProviderBinding | None = None,
     stored_binding: ProviderBinding | None = None,
     platform_default: ProviderBinding | None = None,
+    allow_user_preference: bool = True,
 ) -> LLMExecutionContext:
-    """Resolve the provider binding using the product precedence contract."""
-    user_default = _user_preference(context)
+    """Resolve a binding, optionally skipping personal defaults on centrally routed surfaces."""
+    user_default = _user_preference(context) if allow_user_preference else None
     workspace_default = _workspace_preference(context)
     route = resolve_provider_route(
         explicit=explicit_binding or context.binding,

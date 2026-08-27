@@ -85,7 +85,7 @@ export function AgentCoreSettingsSection({
           ) : (
             <div className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
               <div className="font-mono text-xs text-foreground">
-                {form.model || localize(lang, "Модель из настроек", "Workspace default model")}
+                {localize(lang, "Модель рабочей области", "Workspace default model")}
               </div>
               <p className="mt-1 text-xs leading-relaxed">
                 {localize(

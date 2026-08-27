@@ -189,6 +189,45 @@ describe("PipelineEditorPage save hydration", () => {
     expect(screen.queryByRole("combobox", { name: /AI-провайдер задачи|Task AI provider/i })).not.toBeInTheDocument();
   });
 
+  it("scrubs stale AI routing overrides before save without opening node settings", async () => {
+    vi.mocked(api.studioPipelines.get).mockResolvedValue({
+      ...freshPipeline,
+      provider_binding: { target_id: "grok_subscription", connection_id: 7 },
+      nodes: [
+        ...freshPipeline.nodes,
+        {
+          id: "legacy_llm",
+          type: "agent/llm_query",
+          position: { x: 720, y: 0 },
+          data: {
+            label: "Legacy LLM",
+            prompt: "Summarize",
+            provider: "gemini",
+            model: "gemini-2.5-pro",
+            provider_binding: { target_id: "grok_subscription", connection_id: 7 },
+          },
+        },
+      ],
+    } as never);
+
+    renderPage(buildQueryClient());
+
+    const saveButton = await screen.findByRole("button", { name: /^(Save|Сохранить)$/ });
+    await waitFor(() => expect(saveButton).not.toBeDisabled());
+    fireEvent.click(saveButton);
+
+    await waitFor(() => expect(api.studioPipelines.update).toHaveBeenCalledTimes(1));
+    const [, payload] = vi.mocked(api.studioPipelines.update).mock.calls[0];
+    const llmNode = payload.nodes.find((node) => node.id === "legacy_llm");
+
+    expect(payload.provider_binding).toEqual({});
+    expect(llmNode?.data).toMatchObject({
+      provider: "auto",
+      model: "",
+      provider_binding: {},
+    });
+  });
+
   it("prefers the authoritative server graph when the editor has no local changes", () => {
     const payload = buildPipelineSavePayload({
       pipelineId: 45,
@@ -338,6 +377,31 @@ describe("PipelineEditorPage save hydration", () => {
       expect.objectContaining({ nodeId: "logs", field: "source" }),
       expect.objectContaining({ nodeId: "logs", field: "lines" }),
     ]);
+  });
+
+  it("accepts workspace routing for LLM requests in the node manifest schema", () => {
+    const manifests = [
+      {
+        type: "agent/llm_query",
+        input_schema: {
+          type: "object",
+          properties: {
+            provider: { type: "string", enum: ["auto", "gemini", "openai"] },
+          },
+        },
+      },
+    ] as unknown as api.StudioCapabilityNode[];
+
+    const errors = getPipelineClientValidationErrors([
+      {
+        id: "llm_summary",
+        type: "agent/llm_query",
+        position: { x: 0, y: 0 },
+        data: { provider: "auto", prompt: "Summarize" },
+      },
+    ] as unknown as api.PipelineNode[], manifests);
+
+    expect(errors).toEqual([]);
   });
 
   it("checks MCP arguments against embedded tool schema", () => {

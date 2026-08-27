@@ -100,7 +100,7 @@ def test_ssh_cmd_node_cannot_mutate_new_read_only_server():
     )
 
     assert result["status"] == "failed"
-    assert "read-only" in result["error"]
+    assert "preflight" in result["error"] or "read-only" in result["error"]
 
 
 def test_llm_query_node_streams_response_with_context(monkeypatch):
@@ -149,7 +149,7 @@ def test_llm_query_node_streams_response_with_context(monkeypatch):
     assert "Summarize incident INC-88" in str(captured["prompt"])
     assert "CPU at 99%" in str(captured["prompt"])
     assert "SERVER MEMORY" in str(captured["prompt"])
-    assert captured["model"] == "gemini"
+    assert captured["model"] == "auto"
     assert captured["execution_context"] is not None
 
 

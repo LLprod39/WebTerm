@@ -134,6 +134,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     const normalisedGraph = normalisePipelineGraph(
       (pipeline.nodes || []) as PipelineNode[],
       (pipeline.edges || []) as PipelineEdge[],
+      canManageAiRouting,
     );
     setNodes(normalisedGraph.nodes as never[]);
     setEdges(normalisedGraph.edges as never[]);
@@ -169,6 +170,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     showClientValidationError,
   });
   const { runMutation, saveMutation, validateRunMutation } = usePipelineEditorMutations({
+    canManageAiRouting,
     lang,
     navigate,
     pipelineId,
@@ -199,6 +201,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setAssistantOpen,
     setAssistantProposal,
   } = usePipelineAssistantDraft({
+    canManageAiRouting,
     clearGraphOverlay,
     edges: pipelineEdges,
     fitView,

@@ -22,6 +22,7 @@ from opentelemetry.trace import SpanKind
 
 from app.agent_kernel import skill_provider_registry
 from app.observability import extract_trace_context, record_agent_dispatch, record_agent_run, start_span
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from servers.agents.agent_dispatch import (
     AgentDispatchLeaseLost,
     complete_agent_dispatch,
@@ -123,6 +124,7 @@ async def _run_agent_background(
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
     from core_ui.services.ai_execution_context import abuild_execution_context
 
+    can_manage_routing = await sync_to_async(user_can_manage_ai_routing, thread_sensitive=True)(user)
     execution_context = await abuild_execution_context(
         actor_user_id=user.pk,
         project_id=run.project_id or agent.project_id,
@@ -132,6 +134,7 @@ async def _run_agent_background(
         mode=run.provider_execution_mode,
         stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
+        allow_user_preference=can_manage_routing,
         provider_session_id=run.provider_session_id,
     )
     servers, denied_server_ids = await sync_to_async(
@@ -216,6 +219,7 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
     user = await sync_to_async(lambda: User.objects.get(pk=user_id), thread_sensitive=True)()
     from core_ui.services.ai_execution_context import abuild_execution_context
 
+    can_manage_routing = await sync_to_async(user_can_manage_ai_routing, thread_sensitive=True)(user)
     execution_context = await abuild_execution_context(
         actor_user_id=user.pk,
         project_id=run.project_id or agent.project_id,
@@ -225,6 +229,7 @@ async def _run_plan_execution_background(run_id: int, agent_id: int, server_ids:
         mode=run.provider_execution_mode,
         stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
+        allow_user_preference=can_manage_routing,
         provider_session_id=run.provider_session_id,
     )
     servers, denied_server_ids = await sync_to_async(

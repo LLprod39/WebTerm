@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core_ui.decorators import require_feature
-from studio.model_policy import sanitize_pipeline_nodes_for_user
+from studio.model_policy import sanitize_pipeline_graph_selection_for_user, sanitize_pipeline_nodes_for_user
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession
 from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_assistant_interview import (
@@ -48,6 +48,11 @@ def api_pipeline_drafts(request):
         return error
 
     source_pipeline = meta["pipeline"]
+    snapshot_nodes, snapshot_selected_node = sanitize_pipeline_graph_selection_for_user(
+        request.user,
+        meta["nodes"],
+        meta["selected_node"],
+    )
     session = PipelineDraftSession.objects.create(
         owner=request.user,
         source_pipeline=source_pipeline,
@@ -58,9 +63,9 @@ def api_pipeline_drafts(request):
         current_graph_snapshot={
             "pipeline_id": source_pipeline.id if source_pipeline else None,
             "pipeline_name": meta["pipeline_name"],
-            "nodes": meta["nodes"],
+            "nodes": snapshot_nodes,
             "edges": meta["edges"],
-            "selected_node": meta["selected_node"],
+            "selected_node": snapshot_selected_node,
         },
         selected_node_id=meta["selected_node_id"],
     )
@@ -146,12 +151,17 @@ def api_pipeline_draft_revise(request, draft_id: int):
         previous_questions=previous_questions,
     )
     draft.intent = meta["intent"]
+    snapshot_nodes, snapshot_selected_node = sanitize_pipeline_graph_selection_for_user(
+        request.user,
+        meta["nodes"],
+        meta["selected_node"],
+    )
     draft.current_graph_snapshot = {
         "pipeline_id": draft.source_pipeline_id,
         "pipeline_name": meta["pipeline_name"],
-        "nodes": meta["nodes"],
+        "nodes": snapshot_nodes,
         "edges": meta["edges"],
-        "selected_node": meta["selected_node"],
+        "selected_node": snapshot_selected_node,
     }
     draft.selected_node_id = meta["selected_node_id"]
     draft.save(

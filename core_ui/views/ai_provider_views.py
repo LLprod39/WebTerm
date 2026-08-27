@@ -31,6 +31,7 @@ from core_ui.schemas.openapi_metadata import openapi_responses
 from core_ui.services.ai_provider_access import can_use_binding, can_use_connection
 from core_ui.services.ai_provider_auth import (
     cancel_pending_auth_flows,
+    clear_connection_provider_pins,
     fence_connection_invocations,
     queue_connection_verification,
     revoke_connection_credentials,
@@ -391,6 +392,24 @@ def api_ai_provider_connection_detail(request, connection_id: int):
             {"success": True, "connection": _serialize_connection(connection, request.user, include_grants=True)}
         )
     if request.method == "DELETE":
+        workspace_preference_count = connection.preferences.filter(user__isnull=True).count()
+        blocking_pool_count = 0
+        for membership in connection.pool_memberships.filter(enabled=True, pool__enabled=True).select_related("pool"):
+            if not membership.pool.preferences.filter(user__isnull=True).exists():
+                continue
+            has_replacement = membership.pool.members.exclude(connection=connection).filter(
+                enabled=True,
+                connection__enabled=True,
+                connection__status=AIProviderConnection.STATUS_CONNECTED,
+            ).exists()
+            if not has_replacement:
+                blocking_pool_count += 1
+        if workspace_preference_count or blocking_pool_count:
+            return _error(
+                "Connection is still required by a workspace AI routing default. Reassign that default first.",
+                409,
+                code="provider_connection_in_use",
+            )
         # Fail closed before contacting the manager: no new route may select
         # this connection, and active leases are fenced from durable writes.
         connection.enabled = False
@@ -398,6 +417,7 @@ def api_ai_provider_connection_detail(request, connection_id: int):
         connection.save(update_fields=["enabled", "status", "updated_at"])
         cancel_pending_auth_flows(connection)
         fence_connection_invocations(connection)
+        clear_connection_provider_pins(connection)
         try:
             if not revoke_connection_credentials(connection):
                 raise RuntimeError("credential cleanup was not acknowledged")

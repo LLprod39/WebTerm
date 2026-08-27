@@ -107,7 +107,12 @@ def _activation_validation(
         errors.extend(context_errors)
         issues.extend(validation_issues(context_errors))
 
-    integration = pipeline_integration_diagnostics(pipeline, entry_node_id=node_id)
+    integration = pipeline_integration_diagnostics(
+        pipeline,
+        entry_node_id=node_id,
+        actor=pipeline.owner,
+        unattended=trigger_type != PipelineTrigger.TYPE_MANUAL,
+    )
     errors.extend(integration["errors"])
     issues.extend(integration["issues"])
     return errors, issues
@@ -303,7 +308,12 @@ def api_trigger_receive(request, token: str = ""):
     if context_errors:
         return _validation_err(context_errors, prefix="Pipeline is not runnable")
 
-    integration = pipeline_integration_diagnostics(trigger.pipeline, entry_node_id=trigger.node_id)
+    integration = pipeline_integration_diagnostics(
+        trigger.pipeline,
+        entry_node_id=trigger.node_id,
+        actor=trigger.pipeline.owner,
+        unattended=True,
+    )
     if integration["errors"]:
         return _validation_err(
             integration["errors"],

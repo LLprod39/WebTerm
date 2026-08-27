@@ -108,8 +108,8 @@ async def execute_agent_react(
     mcp_server_ids = config.get("mcp_server_ids", [])
     node_skill_slugs = normalise_skill_slugs(config.get("skill_slugs"))
     goal = config.get("goal", "")
-    owner = await _s2a_fn(lambda: run.pipeline.owner)()
-    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(owner)
+    owner, actor = await _s2a_fn(lambda: (run.pipeline.owner, run.triggered_by or run.pipeline.owner))()
+    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(actor)
     if not can_manage_ai_routing:
         config = {**config, "provider": "auto", "model": "", "provider_binding": {}}
     trigger_type = _pipeline_trigger_type(run)
@@ -282,8 +282,8 @@ async def execute_agent_multi(
     mcp_server_ids = config.get("mcp_server_ids", [])
     node_skill_slugs = normalise_skill_slugs(config.get("skill_slugs"))
     goal = config.get("goal", "")
-    owner = await _s2a_fn(lambda: run.pipeline.owner)()
-    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(owner)
+    owner, actor = await _s2a_fn(lambda: (run.pipeline.owner, run.triggered_by or run.pipeline.owner))()
+    can_manage_ai_routing = await _s2a_fn(user_can_manage_ai_routing)(actor)
     if not can_manage_ai_routing:
         config = {**config, "provider": "auto", "model": "", "provider_binding": {}}
     trigger_type = _pipeline_trigger_type(run)

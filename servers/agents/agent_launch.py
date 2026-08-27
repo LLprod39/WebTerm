@@ -4,7 +4,11 @@ from django.db import transaction
 
 from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_agent_run_limit_error
-from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
+from core_ui.ai_model_policy import (
+    operational_provider_binding,
+    stored_operational_provider_binding,
+    user_can_manage_ai_routing,
+)
 from core_ui.services.ai_execution_context import build_execution_context
 from servers.agents.agent_background import launch_agent_run_background
 from servers.agents.agent_targeting import agent_server_requirement_reasons
@@ -106,6 +110,7 @@ def launch_queued_agent_run(
             explicit_binding=operational_provider_binding(user, explicit_provider_binding),
             stored_binding=stored_operational_provider_binding(user, agent.provider_binding),
             requested_provider="auto",
+            allow_user_preference=user_can_manage_ai_routing(user),
         )
         run_result = AgentRun.objects.create(
             agent=agent,

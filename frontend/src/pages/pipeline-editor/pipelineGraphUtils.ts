@@ -20,7 +20,31 @@ export const AGENT_PROVIDER_OPTIONS = [
   { value: "ollama", label: "Ollama" },
 ] as const;
 
-export const DIRECT_LLM_PROVIDERS = AGENT_PROVIDER_OPTIONS.filter((item) => item.value !== "auto");
+const WORKSPACE_ROUTED_NODE_TYPES = new Set([
+  "agent/llm_query",
+  "agent/react",
+  "agent/multi",
+]);
+
+export function applyWorkspaceAiRoutingPolicy(
+  nodes: PipelineNode[],
+  canManageAiRouting: boolean,
+): PipelineNode[] {
+  if (canManageAiRouting) return nodes;
+
+  return nodes.map((node) => {
+    if (!WORKSPACE_ROUTED_NODE_TYPES.has(node.type)) return node;
+    return {
+      ...node,
+      data: {
+        ...(node.data || {}),
+        provider: "auto",
+        model: "",
+        provider_binding: {},
+      },
+    };
+  });
+}
 
 export const MCP_MUTATING_TOOL_RE = /(^|[_\-.])(add|apply|assign|create|delete|disable|enable|grant|patch|remove|restart|revoke|set|start|stop|update|write)([_\-.]|$)/i;
 
@@ -262,7 +286,7 @@ export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNo
     case "agent/multi":
       return { max_iterations: 6, sudo_policy: "inherit", on_failure: "abort" };
     case "agent/llm_query":
-      return { provider: "gemini", on_failure: "abort" };
+      return { provider: "auto", on_failure: "abort" };
     case "agent/ssh_cmd":
       return { dry_run: true, preflight_commands: [], verification_commands: [], permission_mode: "SAFE", sudo_policy: "disabled", on_failure: "abort" };
     case "agent/mcp_call":
@@ -441,12 +465,18 @@ export function normaliseAssistantPatch(
   return next;
 }
 
-export function normalisePipelineGraph(nodes: PipelineNode[], edges: PipelineEdge[]) {
+export function normalisePipelineGraph(
+  nodes: PipelineNode[],
+  edges: PipelineEdge[],
+  canManageAiRouting = true,
+) {
+  const normalisedNodes = nodes.map((node) => ({
+    ...node,
+    data: normaliseAssistantPatch((node.data || {}) as Record<string, unknown>, { mcpList: [] }),
+  }));
+
   return {
-    nodes: nodes.map((node) => ({
-      ...node,
-      data: normaliseAssistantPatch((node.data || {}) as Record<string, unknown>, { mcpList: [] }),
-    })),
+    nodes: applyWorkspaceAiRoutingPolicy(normalisedNodes, canManageAiRouting),
     edges,
   };
 }

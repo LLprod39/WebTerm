@@ -17,6 +17,7 @@ import {
   AgentVisibilitySection,
 } from "./AgentFormAccessSections";
 import { MODEL_OPTIONS, sudoOption, toolLabel, visibleAllowedTools } from "./agentConfigOptions";
+import { buildAgentProfileSavePayload } from "./agentProfilePayload";
 
 
 type ProfileSection = "main" | "tools" | "scope" | "access";
@@ -391,7 +392,7 @@ export function AgentForm({
               {dirty ? localize(lang, "Сбросить", "Discard") : localize(lang, "Закрыть", "Close")}
             </Button>
             <Button
-              onClick={() => onSave(form)}
+              onClick={() => onSave(buildAgentProfileSavePayload(form, canManageAiRouting))}
               disabled={!canSave}
               className="gap-2"
             >

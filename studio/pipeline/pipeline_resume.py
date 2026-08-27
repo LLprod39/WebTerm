@@ -9,6 +9,9 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from app.ai_runtime import ProviderRuntimeError
+from core_ui.ai_model_policy import stored_operational_provider_binding, user_can_manage_ai_routing
+from core_ui.services.ai_execution_context import build_execution_context
 from studio.models import PipelineRun
 from studio.node_manifest import get_node_manifest
 
@@ -37,6 +40,16 @@ class ResumeCheckpoint:
     routing_state: dict[str, Any]
     retry_node_ids: list[str]
     confirmation_nodes: list[dict[str, str]]
+
+
+def _provider_binding_identity(binding: dict[str, Any] | None) -> tuple[Any, ...]:
+    value = binding or {}
+    return (
+        value.get("target_id"),
+        value.get("connection_id"),
+        value.get("pool_id"),
+        value.get("selected_connection_id"),
+    )
 
 
 def _node_lookup(run: PipelineRun) -> dict[str, dict[str, Any]]:
@@ -159,6 +172,31 @@ def request_pipeline_run_resume(
     if checkpoint.confirmation_nodes and not confirm_non_idempotent:
         raise PipelineResumeConfirmationRequired(checkpoint.confirmation_nodes)
 
+    can_manage_routing = user_can_manage_ai_routing(actor)
+    try:
+        execution_context = build_execution_context(
+            actor_user_id=actor.pk,
+            project_id=run.project_id,
+            purpose="ops",
+            source_kind="pipeline_run",
+            source_id=run.pk,
+            mode=run.provider_execution_mode,
+            stored_binding=stored_operational_provider_binding(actor, run.provider_binding_snapshot),
+            requested_provider="auto",
+            allow_user_preference=can_manage_routing,
+        )
+    except (ProviderRuntimeError, TypeError, ValueError) as exc:
+        raise PipelineResumeError(
+            f"Pipeline provider route is unavailable: {exc}",
+            code="pipeline_resume_provider_unavailable",
+            details=getattr(exc, "details", {}),
+        ) from exc
+
+    previous_actor_id = run.triggered_by_id
+    previous_binding_identity = _provider_binding_identity(run.provider_binding_snapshot)
+    next_binding = execution_context.binding.to_dict()
+    next_binding_identity = _provider_binding_identity(next_binding)
+
     previous_status = run.status
     trigger_data = dict(run.trigger_data) if isinstance(run.trigger_data, dict) else {}
     resume_history = list(trigger_data.get("resume_history") or [])
@@ -177,7 +215,21 @@ def request_pipeline_run_resume(
     run.error = ""
     run.runtime_control = {}
     run.trigger_data = trigger_data
-    run.save(update_fields=["status", "finished_at", "error", "runtime_control", "trigger_data"])
+    run.triggered_by = actor
+    run.provider_binding_snapshot = next_binding
+    update_fields = [
+        "status",
+        "finished_at",
+        "error",
+        "runtime_control",
+        "trigger_data",
+        "triggered_by",
+        "provider_binding_snapshot",
+    ]
+    if previous_actor_id != actor.pk or previous_binding_identity != next_binding_identity:
+        run.provider_session_id = ""
+        update_fields.append("provider_session_id")
+    run.save(update_fields=update_fields)
 
     from studio.dispatch import requeue_pipeline_run_dispatch
 

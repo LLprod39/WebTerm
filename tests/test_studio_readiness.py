@@ -145,7 +145,7 @@ def test_readiness_endpoint_reports_missing_pipeline_id():
 
 def test_readiness_endpoint_can_scope_to_entry_node_branch(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    user = User.objects.create_user(username="readiness-api-entry-scope", password="x")
+    user = User.objects.create_superuser(username="readiness-api-entry-scope", password="x")
     _grant_feature(user, "studio_pipelines")
     pipeline = Pipeline.objects.create(
         owner=user,
@@ -338,7 +338,7 @@ def test_readiness_reports_missing_integration_requirements(monkeypatch):
     monkeypatch.setattr("studio.pipeline.pipeline_notifications.load_notification_config", lambda: {})
     for key in ("OPENAI_API_KEY", "CODEX_API_KEY", "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "PIPELINE_NOTIFY_EMAIL"):
         monkeypatch.delenv(key, raising=False)
-    user = User.objects.create_user(username="readiness-integrations-missing", password="x")
+    user = User.objects.create_superuser(username="readiness-integrations-missing", password="x")
     _grant_feature(user, "studio_pipelines")
     pipeline = Pipeline.objects.create(
         owner=user,

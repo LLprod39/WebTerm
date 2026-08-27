@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { NODE_PALETTE, NODE_TYPES } from "@/components/pipeline/nodes";
 import {
+  getLlmQueryModelLabel,
   getNodeBranchLabel,
   getNodePaletteText,
   getNodeTypeGuidance,
@@ -49,5 +50,14 @@ describe("pipeline node catalog", () => {
     expect(getNodeBranchLabel("rejected", "ru")).toBe("Нет");
     expect(getNodeBranchLabel("timeout", "ru")).toBe("Timeout");
     expect(getNodeBranchLabel("error", "ru")).toBe("Ошибка");
+  });
+
+  it("describes workspace routing without advertising a hardcoded Gemini model", () => {
+    const guidance = getNodeTypeGuidance("agent/llm_query", "en");
+
+    expect(guidance.checklist.join(" ")).toContain("workspace settings");
+    expect(guidance.checklist.join(" ")).not.toMatch(/choose provider/i);
+    expect(getLlmQueryModelLabel({}, "en")).toBe("Auto · workspace model");
+    expect(getLlmQueryModelLabel({ model: "gpt-5.4" }, "en")).toBe("gpt-5.4");
   });
 });

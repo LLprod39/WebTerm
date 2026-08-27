@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from studio.model_helpers import collect_monitoring_filters
+from studio.model_policy import sanitize_pipeline_nodes_for_user
 
 
 def sync_pipeline_triggers_from_nodes(pipeline) -> None:
@@ -68,7 +69,7 @@ def sync_pipeline_triggers_from_nodes(pipeline) -> None:
 def instantiate_template_for_user(template, user):
     from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline
 
-    nodes = list(template.nodes)
+    nodes = sanitize_pipeline_nodes_for_user(user, list(template.nodes))
     edges = list(template.edges)
 
     if template.slug == "server-update-approval":

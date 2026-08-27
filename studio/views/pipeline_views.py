@@ -194,7 +194,12 @@ def api_pipeline_run(request, pipeline_id: int):
         else []
     )
     integration = (
-        pipeline_integration_diagnostics(pipeline, entry_node_id=selected_trigger.node_id)
+        pipeline_integration_diagnostics(
+            pipeline,
+            entry_node_id=selected_trigger.node_id,
+            actor=request.user,
+            unattended=False,
+        )
         if selected_trigger is not None and not validation_errors
         else {"requirements": [], "issues": [], "errors": [], "warnings": []}
     )
@@ -293,7 +298,7 @@ def api_pipeline_clone(request, pipeline_id: int):
         description=pipeline.description,
         icon=pipeline.icon,
         tags=pipeline.tags,
-        nodes=pipeline.nodes,
+        nodes=sanitize_pipeline_nodes_for_user(request.user, pipeline.nodes),
         edges=pipeline.edges,
         graph_version=CURRENT_PIPELINE_GRAPH_VERSION,
         owner=request.user,

@@ -10,6 +10,7 @@ from datetime import timedelta
 from urllib.parse import urlparse
 
 from asgiref.sync import async_to_sync, sync_to_async
+from django.apps import apps
 from django.db import close_old_connections, transaction
 from django.db.models import F, Q
 from django.utils import timezone
@@ -341,6 +342,120 @@ def fence_connection_invocations(connection: AIProviderConnection) -> int:
             ]
         )
     return len(invocations)
+
+
+def _clear_connection_binding_refs(value: object, connection_id: int) -> bool:
+    """Clear matching provider_binding objects inside mutable JSON documents."""
+
+    changed = False
+    if isinstance(value, list):
+        for item in value:
+            changed = _clear_connection_binding_refs(item, connection_id) or changed
+        return changed
+    if not isinstance(value, dict):
+        return False
+    for key, item in list(value.items()):
+        if key == "provider_binding" and isinstance(item, dict):
+            pinned_id = item.get("connection_id") or item.get("selected_connection_id")
+            if str(pinned_id or "") == str(connection_id):
+                value[key] = {}
+                changed = True
+                continue
+        changed = _clear_connection_binding_refs(item, connection_id) or changed
+    return changed
+
+
+@transaction.atomic
+def clear_connection_provider_pins(connection: AIProviderConnection) -> int:
+    """Remove mutable pins while preserving completed-run provider provenance."""
+
+    pin_fields = (
+        ("core_ui", "ChatSession", "provider_binding", None),
+        (
+            "core_ui",
+            "ChatTurnState",
+            "provider_binding_snapshot",
+            {"status__in": ["running", "awaiting_confirm", "awaiting_async", "resuming"]},
+        ),
+        ("servers", "TerminalAiProviderState", "provider_binding", None),
+        ("servers", "ServerAgent", "provider_binding", None),
+        (
+            "servers",
+            "AgentRun",
+            "provider_binding_snapshot",
+            {"status__in": ["pending", "running", "paused", "waiting", "plan_review"]},
+        ),
+        ("studio", "AgentConfig", "provider_binding", None),
+        ("studio", "Pipeline", "provider_binding", None),
+        (
+            "studio",
+            "PipelineRun",
+            "provider_binding_snapshot",
+            {"status__in": ["pending", "running", "hibernating"]},
+        ),
+    )
+    cleared = 0
+    for app_label, model_name, field_name, extra_filters in pin_fields:
+        model = apps.get_model(app_label, model_name)
+        queryset = model.objects.filter(
+            Q(**{f"{field_name}__connection_id": connection.pk})
+            | Q(**{f"{field_name}__selected_connection_id": connection.pk})
+        )
+        if extra_filters:
+            queryset = queryset.filter(**extra_filters)
+        updates = {field_name: {}}
+        if any(field.name == "provider_session_id" for field in model._meta.fields):
+            updates["provider_session_id"] = ""
+        cleared += queryset.update(**updates)
+
+    pipeline_model = apps.get_model("studio", "Pipeline")
+    for pipeline in pipeline_model.objects.only("pk", "nodes").iterator():
+        nodes = pipeline.nodes if isinstance(pipeline.nodes, list) else []
+        if _clear_connection_binding_refs(nodes, connection.pk):
+            pipeline_model.objects.filter(pk=pipeline.pk).update(nodes=nodes)
+            cleared += 1
+
+    template_model = apps.get_model("studio", "PipelineTemplate")
+    for template in template_model.objects.only("pk", "nodes").iterator():
+        nodes = template.nodes if isinstance(template.nodes, list) else []
+        if _clear_connection_binding_refs(nodes, connection.pk):
+            template_model.objects.filter(pk=template.pk).update(nodes=nodes)
+            cleared += 1
+
+    active_draft_statuses = ["drafting", "needs_input", "ready", "invalid", "blocked"]
+    draft_model = apps.get_model("studio", "PipelineDraftSession")
+    for draft in draft_model.objects.filter(status__in=active_draft_statuses).only("pk", "current_graph_snapshot"):
+        snapshot = draft.current_graph_snapshot if isinstance(draft.current_graph_snapshot, dict) else {}
+        if _clear_connection_binding_refs(snapshot, connection.pk):
+            draft_model.objects.filter(pk=draft.pk).update(current_graph_snapshot=snapshot)
+            cleared += 1
+
+    revision_model = apps.get_model("studio", "PipelineDraftRevision")
+    draft_json_fields = ("node_patch", "graph_patch", "preview_nodes", "response_payload")
+    revisions = revision_model.objects.filter(session__status__in=active_draft_statuses).only("pk", *draft_json_fields)
+    for revision in revisions:
+        updates = {}
+        for field_name in draft_json_fields:
+            value = getattr(revision, field_name)
+            if _clear_connection_binding_refs(value, connection.pk):
+                updates[field_name] = value
+        if updates:
+            revision_model.objects.filter(pk=revision.pk).update(**updates)
+            cleared += 1
+
+    preference_model = apps.get_model("core_ui", "AIProviderPreference")
+    deleted, _ = preference_model.objects.filter(connection=connection, user__isnull=False).delete()
+    cleared += deleted
+    for membership in connection.pool_memberships.select_related("pool"):
+        viable_member_exists = membership.pool.members.filter(
+            enabled=True,
+            connection__enabled=True,
+            connection__status=AIProviderConnection.STATUS_CONNECTED,
+        ).exists()
+        if not viable_member_exists:
+            deleted, _ = membership.pool.preferences.filter(user__isnull=False).delete()
+            cleared += deleted
+    return cleared
 
 
 def retry_pending_credential_cleanup(*, limit: int = 10) -> int:

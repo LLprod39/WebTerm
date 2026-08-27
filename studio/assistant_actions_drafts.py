@@ -8,6 +8,7 @@ from django.utils import timezone
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from studio.assistant_actions_common import _draft_for_user, _int_payload, _request_like
+from studio.model_policy import sanitize_pipeline_graph_selection_for_user, sanitize_pipeline_nodes_for_user
 from studio.models import CURRENT_PIPELINE_GRAPH_VERSION, Pipeline, PipelineDraftSession
 from studio.pipeline.pipeline_validation import validate_pipeline_definition
 from studio.services.pipeline_assistant_interview import (
@@ -51,6 +52,11 @@ def create_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
         raise AssistantActionError(message, status=getattr(error, "status_code", 400))
 
     source_pipeline = meta["pipeline"]
+    snapshot_nodes, snapshot_selected_node = sanitize_pipeline_graph_selection_for_user(
+        ctx.user,
+        meta["nodes"],
+        meta["selected_node"],
+    )
     session = PipelineDraftSession.objects.create(
         owner=ctx.user,
         source_pipeline=source_pipeline,
@@ -61,9 +67,9 @@ def create_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
         current_graph_snapshot={
             "pipeline_id": source_pipeline.id if source_pipeline else None,
             "pipeline_name": meta["pipeline_name"],
-            "nodes": meta["nodes"],
+            "nodes": snapshot_nodes,
             "edges": meta["edges"],
-            "selected_node": meta["selected_node"],
+            "selected_node": snapshot_selected_node,
         },
         selected_node_id=meta["selected_node_id"],
     )
@@ -106,7 +112,7 @@ def apply_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
     title = str(ctx.input_payload.get("name") or draft.title or "AI Chat Pipeline").strip()
     description = str(ctx.input_payload.get("description") or draft.user_goal or latest.assistant_reply or "").strip()
     tags = ctx.input_payload.get("tags") if isinstance(ctx.input_payload.get("tags"), list) else ["ai-chat"]
-    nodes = latest.preview_nodes or []
+    nodes = sanitize_pipeline_nodes_for_user(ctx.user, latest.preview_nodes or [])
     edges = latest.preview_edges or []
     owner = draft.source_pipeline.owner if draft.source_pipeline_id and draft.source_pipeline else draft.owner
     errors = validate_pipeline_definition(
@@ -227,12 +233,17 @@ def revise_pipeline_draft(ctx: AssistantActionContext) -> dict[str, Any]:
         previous_questions=previous_questions,
     )
     draft.intent = meta["intent"]
+    snapshot_nodes, snapshot_selected_node = sanitize_pipeline_graph_selection_for_user(
+        ctx.user,
+        meta["nodes"],
+        meta["selected_node"],
+    )
     draft.current_graph_snapshot = {
         "pipeline_id": draft.source_pipeline_id,
         "pipeline_name": meta["pipeline_name"],
-        "nodes": meta["nodes"],
+        "nodes": snapshot_nodes,
         "edges": meta["edges"],
-        "selected_node": meta["selected_node"],
+        "selected_node": snapshot_selected_node,
     }
     draft.selected_node_id = meta["selected_node_id"]
     draft.save(

@@ -7,12 +7,13 @@ import type { PipelineDetail, PipelineEdge, PipelineNode, PipelineRun, ProviderB
 import { studioPipelines } from "@/lib/api";
 
 import { localize } from "./presentation";
-import { normalisePipelineGraph } from "./pipelineGraphUtils";
+import { applyWorkspaceAiRoutingPolicy, normalisePipelineGraph } from "./pipelineGraphUtils";
 
 type ToastFn = (options: { variant?: "default" | "destructive"; description?: string }) => void;
 
 export function usePipelineEditorMutations({
   lang,
+  canManageAiRouting,
   navigate,
   pipelineId,
   providerBinding,
@@ -30,6 +31,7 @@ export function usePipelineEditorMutations({
   toast,
 }: {
   lang: "en" | "ru";
+  canManageAiRouting: boolean;
   navigate: NavigateFunction;
   pipelineId: number | null;
   providerBinding: ProviderBinding | null;
@@ -49,10 +51,18 @@ export function usePipelineEditorMutations({
   const queryClient = useQueryClient();
 
   const saveMutation = useMutation({
-    mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string; provider_binding?: ProviderBinding | Record<string, never> }) =>
-      pipelineId
-        ? studioPipelines.update(pipelineId, { ...data, provider_binding: data.provider_binding ?? providerBinding ?? {} })
-        : studioPipelines.create({ ...data, provider_binding: data.provider_binding ?? providerBinding ?? {}, icon: "W" }),
+    mutationFn: (data: { nodes: PipelineNode[]; edges: PipelineEdge[]; name: string; provider_binding?: ProviderBinding | Record<string, never> }) => {
+      const payload = {
+        ...data,
+        nodes: applyWorkspaceAiRoutingPolicy(data.nodes, canManageAiRouting),
+        provider_binding: canManageAiRouting
+          ? data.provider_binding ?? providerBinding ?? {}
+          : {},
+      };
+      return pipelineId
+        ? studioPipelines.update(pipelineId, payload)
+        : studioPipelines.create({ ...payload, icon: "W" });
+    },
     onSuccess: (pipeline: PipelineDetail) => {
       queryClient.setQueryData(["studio", "pipeline", pipeline.id], pipeline);
       queryClient.invalidateQueries({ queryKey: ["studio", "pipelines"] });
@@ -61,6 +71,7 @@ export function usePipelineEditorMutations({
       const normalisedGraph = normalisePipelineGraph(
         (pipeline.nodes || []) as PipelineNode[],
         (pipeline.edges || []) as PipelineEdge[],
+        canManageAiRouting,
       );
       setNodes(normalisedGraph.nodes as unknown as Node[]);
       setEdges(normalisedGraph.edges as unknown as Edge[]);

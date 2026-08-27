@@ -14,6 +14,7 @@ def test_non_admin_pipeline_nodes_inherit_workspace_model_without_mutating_input
 
     assert sanitized[0]["data"]["provider"] == "auto"
     assert sanitized[0]["data"]["model"] == ""
+    assert sanitized[0]["data"]["provider_binding"] == {}
     assert sanitized[1] == nodes[1]
     assert nodes[0]["data"] == {"provider": "grok", "model": "grok-3"}
 
@@ -24,7 +25,7 @@ def test_staff_without_platform_settings_cannot_keep_explicit_model():
 
     sanitized = sanitize_pipeline_nodes_for_user(user, nodes)
 
-    assert sanitized[0]["data"] == {"provider": "auto", "model": ""}
+    assert sanitized[0]["data"] == {"provider": "auto", "model": "", "provider_binding": {}}
 
 
 def test_platform_settings_admin_can_keep_explicit_model(monkeypatch):

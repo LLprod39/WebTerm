@@ -1,3 +1,4 @@
+from studio.model_policy import sanitize_pipeline_draft_response_for_user
 from studio.models import (
     CURRENT_PIPELINE_GRAPH_VERSION,
     PipelineDraftRevision,
@@ -58,6 +59,11 @@ def revision_from_response(
     preview_nodes: list[dict],
     preview_edges: list[dict],
 ) -> PipelineDraftRevision:
+    response, preview_nodes = sanitize_pipeline_draft_response_for_user(
+        session.owner,
+        response,
+        preview_nodes,
+    )
     revision = PipelineDraftRevision.objects.create(
         session=session,
         user_message=user_message,

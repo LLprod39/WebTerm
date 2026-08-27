@@ -158,7 +158,10 @@ NODE_MANIFESTS: dict[str, NodeManifest] = {
         tags=("ai", "analysis"),
         input_schema=_schema(
             {
-                "provider": _str(enum=("gemini", "openai"), default="gemini"),
+                "provider": _str(
+                    enum=("auto", "gemini", "openai", "grok", "claude", "ollama"),
+                    default="auto",
+                ),
                 "model": _str(description="Optional model override."),
                 "system_prompt": _str(description="System instructions for the LLM."),
                 "prompt": _str(description="Prompt template; can reference context variables."),

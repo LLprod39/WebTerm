@@ -13,6 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.views.decorators.http import require_http_methods
 
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.api_failure import internal_error_response
 from core_ui.decorators import require_feature
 from servers.agents.agent_cleanup_service import cleanup_stale_agent_run_for_user
@@ -653,6 +654,7 @@ def agent_run_task_ai_refine(request, run_id, task_id):
         source_id=run.pk,
         mode=run.provider_execution_mode,
         stored_binding=run.provider_binding_snapshot,
+        allow_user_preference=user_can_manage_ai_routing(request.user),
         provider_session_id=run.provider_session_id,
         idempotency_key=f"agent-run:{run.pk}:task-refine:{task_id}",
     )

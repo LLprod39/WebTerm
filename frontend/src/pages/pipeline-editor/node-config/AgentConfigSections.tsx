@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatCommandListText, parseCommandListText } from "@/components/pipeline/commandList";
 
 import { AdvancedDisclosure, FailureSelect, FieldHint, NodeFormSection } from "../PanelPrimitives";
-import { DIRECT_LLM_PROVIDERS } from "../pipelineGraphUtils";
+import { AGENT_PROVIDER_OPTIONS } from "../pipelineGraphUtils";
 import { localize } from "../presentation";
 import type { Lang, NodeData, ServerOption, SetNodeData } from "./types";
 
@@ -204,12 +204,12 @@ export function LlmQueryConfig({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label className="text-xs">{localize(lang, "Провайдер", "Provider")}</Label>
-              <Select value={(data.provider as string) || "gemini"} onValueChange={onProviderChange}>
+              <Select value={provider || "auto"} onValueChange={onProviderChange}>
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DIRECT_LLM_PROVIDERS.map((item) => (
+                  {AGENT_PROVIDER_OPTIONS.map((item) => (
                     <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>
                   ))}
                 </SelectContent>

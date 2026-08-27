@@ -219,7 +219,11 @@ async def run_agent_loop(
                 if ctx.emit is not None:
                     await ctx.emit({"type": "agent_error", "iteration": iterations, "message": str(exc)[:400]})
                 stopped = True
-                stop_reason = "llm_error"
+                stop_reason = (
+                    "provider_unavailable"
+                    if getattr(exc, "code", "") == "provider_route_unavailable"
+                    else "llm_error"
+                )
                 break
 
             # Emit thinking (optional, collapsible in UI).

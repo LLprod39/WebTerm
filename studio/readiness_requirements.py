@@ -5,7 +5,10 @@ from typing import Any
 
 from django.conf import settings
 
+from app.ai_runtime import ExecutionMode, ProviderRuntimeError, is_subscription_target, legacy_runtime_provider_id
 from app.core.model_utils import resolve_provider_and_model
+from core_ui.ai_model_policy import stored_operational_provider_binding, user_can_manage_ai_routing
+from core_ui.services.ai_execution_context import build_execution_context
 from studio.models import AgentConfig, MCPServerPool, Pipeline
 from studio.pipeline.pipeline_notifications import _load_notif_cfg
 
@@ -168,9 +171,89 @@ def _email_requirement(requirements: dict[str, dict[str, Any]], node_id: str, da
         )
 
 
-def _llm_requirement(requirements: dict[str, dict[str, Any]], node_id: str, data: dict[str, Any]) -> None:
-    provider, _model = resolve_provider_and_model(data.get("provider"), data.get("model"), default_provider="gemini")
-    ready = _llm_provider_ready(provider)
+def _resolved_auto_llm_route(
+    pipeline: Pipeline,
+    *,
+    node_id: str,
+    data: dict[str, Any],
+    actor: Any | None,
+    unattended: bool,
+) -> tuple[str, bool, str]:
+    routing_actor = actor or pipeline.owner
+    can_manage_routing = user_can_manage_ai_routing(routing_actor)
+    explicit_binding = None
+    if can_manage_routing:
+        from studio.services.ai_execution_context import explicit_binding_from_node
+
+        explicit_binding = explicit_binding_from_node(
+            data,
+            purpose=str(data.get("purpose") or "opssummary").strip() or "opssummary",
+        )
+    try:
+        context = build_execution_context(
+            actor_user_id=routing_actor.pk,
+            project_id=pipeline.project_id,
+            purpose=str(data.get("purpose") or "opssummary").strip() or "opssummary",
+            source_kind="pipeline",
+            source_id=f"{pipeline.pk}:{node_id}",
+            mode=ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE,
+            explicit_binding=explicit_binding,
+            stored_binding=stored_operational_provider_binding(routing_actor, pipeline.provider_binding),
+            requested_provider="auto",
+            allow_user_preference=can_manage_routing,
+        )
+    except (ProviderRuntimeError, TypeError, ValueError) as exc:
+        details = getattr(exc, "details", {})
+        target_id = str(details.get("target_id") or "auto")
+        return target_id, False, f"Studio LLM route {target_id} is unavailable: {exc}."
+
+    binding = context.binding
+    if binding is None:
+        return "auto", False, "Studio LLM route is not configured."
+    target_id = binding.target_id
+    if is_subscription_target(target_id):
+        return target_id, True, f"Studio LLM route {target_id} is configured."
+    provider = legacy_runtime_provider_id(target_id)
+    ready = bool(provider and _llm_provider_ready(provider))
+    return (
+        provider or target_id,
+        ready,
+        f"LLM provider {provider or target_id} is configured."
+        if ready
+        else f"Configure credentials/runtime for LLM provider {provider or target_id}.",
+    )
+
+
+def _llm_requirement(
+    requirements: dict[str, dict[str, Any]],
+    node_id: str,
+    data: dict[str, Any],
+    *,
+    pipeline: Pipeline,
+    actor: Any | None,
+    unattended: bool,
+) -> None:
+    routing_actor = actor or pipeline.owner
+    provider, _model = resolve_provider_and_model(data.get("provider"), data.get("model"), default_provider="auto")
+    if (
+        provider == "auto"
+        or not user_can_manage_ai_routing(routing_actor)
+        or data.get("provider_binding") not in (None, {}, "")
+    ):
+        provider, ready, message = _resolved_auto_llm_route(
+            pipeline,
+            node_id=node_id,
+            data=data,
+            actor=routing_actor,
+            unattended=unattended,
+        )
+    else:
+        ready = _llm_provider_ready(provider)
+        message = (
+            f"LLM provider {provider} is configured."
+            if ready
+            else f"Configure credentials/runtime for LLM provider {provider}."
+        )
     _upsert_requirement(
         requirements,
         f"llm:{provider}",
@@ -179,9 +262,7 @@ def _llm_requirement(requirements: dict[str, dict[str, Any]], node_id: str, data
         node_id=node_id,
         status="ready" if ready else "missing",
         severity="ready" if ready else "error",
-        message=f"LLM provider {provider} is configured."
-        if ready
-        else f"Configure credentials/runtime for LLM provider {provider}.",
+        message=message,
     )
 
 
@@ -217,20 +298,17 @@ def _mcp_requirement(requirements: dict[str, dict[str, Any]], node_id: str, mcp:
 
 
 def _pipeline_has_unattended_triggers(pipeline: Pipeline) -> bool:
-    nodes = pipeline.nodes or []
-    for node in nodes:
-        if not isinstance(node, dict):
-            continue
-        ntype = str(node.get("type") or "")
-        if ntype in {"trigger/schedule", "trigger/webhook", "trigger/monitoring"}:
-            return True
-    try:
+    if pipeline.pk:
         return pipeline.triggers.filter(
             trigger_type__in=["schedule", "webhook", "monitoring"],
             is_active=True,
         ).exists()
-    except Exception:
-        return False
+    nodes = pipeline.nodes or []
+    return any(
+        isinstance(node, dict)
+        and str(node.get("type") or "") in {"trigger/schedule", "trigger/webhook", "trigger/monitoring"}
+        for node in nodes
+    )
 
 
 def _agent_unattended_ask_user_requirement(
@@ -263,9 +341,15 @@ def _agent_unattended_ask_user_requirement(
     )
 
 
-def integration_requirements(pipeline: Pipeline, *, node_ids: set[str] | None = None) -> list[dict[str, Any]]:
+def integration_requirements(
+    pipeline: Pipeline,
+    *,
+    node_ids: set[str] | None = None,
+    actor: Any | None = None,
+    unattended: bool | None = None,
+) -> list[dict[str, Any]]:
     requirements: dict[str, dict[str, Any]] = {}
-    unattended_graph = _pipeline_has_unattended_triggers(pipeline)
+    unattended_graph = _pipeline_has_unattended_triggers(pipeline) if unattended is None else unattended
     for node in pipeline.nodes or []:
         if not isinstance(node, dict):
             continue
@@ -279,14 +363,26 @@ def integration_requirements(pipeline: Pipeline, *, node_ids: set[str] | None = 
         elif node_type == "output/email":
             _email_requirement(requirements, node_id, data)
         elif node_type in {"agent/llm_query", "agent/react", "agent/multi"}:
-            _llm_requirement(requirements, node_id, data)
+            llm_data = data
+            agent_config = None
             agent_config_id = data.get("agent_config_id")
             if agent_config_id not in (None, ""):
                 agent_config = AgentConfig.objects.filter(owner=pipeline.owner, id=agent_config_id).first()
-                if agent_config:
-                    _llm_requirement(requirements, node_id, {"model": agent_config.model})
-                    for mcp in agent_config.mcp_servers.all():
-                        _mcp_requirement(requirements, node_id, mcp)
+                if agent_config and agent_config.provider_binding:
+                    llm_data = dict(data)
+                    if llm_data.get("provider_binding") in (None, {}, ""):
+                        llm_data["provider_binding"] = dict(agent_config.provider_binding)
+            _llm_requirement(
+                requirements,
+                node_id,
+                llm_data,
+                pipeline=pipeline,
+                actor=actor,
+                unattended=unattended_graph,
+            )
+            if agent_config:
+                for mcp in agent_config.mcp_servers.all():
+                    _mcp_requirement(requirements, node_id, mcp)
         if node_type == "agent/mcp_call":
             mcp_server = None
             with_id = data.get("mcp_server_id")

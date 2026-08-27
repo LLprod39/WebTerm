@@ -82,7 +82,7 @@ def test_create_pipeline_run_rejects_missing_runtime_context_before_db_write():
 @pytest.mark.django_db
 def test_create_pipeline_run_rejects_missing_integrations_before_db_write(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    owner = User.objects.create_user(username="run-create-missing-integration", password="x")
+    owner = User.objects.create_superuser(username="run-create-missing-integration", password="x")
     pipeline = _pipeline(
         owner,
         nodes=[
@@ -106,7 +106,7 @@ def test_create_pipeline_run_rejects_missing_integrations_before_db_write(monkey
 @pytest.mark.django_db
 def test_create_pipeline_run_checks_integrations_only_for_selected_branch(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    owner = User.objects.create_user(username="run-create-branch-integration", password="x")
+    owner = User.objects.create_superuser(username="run-create-branch-integration", password="x")
     pipeline = _pipeline(
         owner,
         nodes=[

@@ -9,7 +9,11 @@ from django.utils import timezone
 from app.ai_runtime import ExecutionMode
 from app.runtime_limits import get_pipeline_run_limit_error
 from app.server_alert_provider import ServerAlertSnapshot, get_alert_snapshot, get_open_alert_snapshot
-from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
+from core_ui.ai_model_policy import (
+    operational_provider_binding,
+    stored_operational_provider_binding,
+    user_can_manage_ai_routing,
+)
 from core_ui.services.ai_execution_context import build_execution_context
 
 from .models import PipelineRun, PipelineTrigger
@@ -47,6 +51,8 @@ def validate_pipeline_run_creation(
     pipeline,
     context: dict[str, Any] | None,
     entry_node_id: str,
+    actor=None,
+    unattended: bool | None = None,
 ) -> list[str]:
     entry = str(entry_node_id or "").strip()
     if not entry:
@@ -73,7 +79,12 @@ def validate_pipeline_run_creation(
         edges=pipeline.edges,
         entry_node_id=entry,
     )
-    integration = pipeline_integration_diagnostics(pipeline, entry_node_id=entry)
+    integration = pipeline_integration_diagnostics(
+        pipeline,
+        entry_node_id=entry,
+        actor=actor,
+        unattended=unattended,
+    )
     return [*context_errors, *integration["errors"]]
 
 
@@ -88,19 +99,21 @@ def create_pipeline_run(
     explicit_provider_binding: dict[str, Any] | None = None,
 ) -> PipelineRun:
     entry = str(entry_node_id or "").strip()
+    actor = triggered_by or pipeline.owner
+    unattended = triggered_by is None or (trigger is not None and trigger.trigger_type != PipelineTrigger.TYPE_MANUAL)
+    execution_mode = ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE
     preflight_errors = validate_pipeline_run_creation(
         pipeline=pipeline,
         context=context,
         entry_node_id=entry,
+        actor=actor,
+        unattended=unattended,
     )
     if preflight_errors:
         raise ValueError(f"Pipeline is not runnable: {'; '.join(preflight_errors)}")
 
     from studio.dispatch import enqueue_pipeline_run_dispatch
 
-    actor = triggered_by or pipeline.owner
-    unattended = triggered_by is None or (trigger is not None and trigger.trigger_type != PipelineTrigger.TYPE_MANUAL)
-    execution_mode = ExecutionMode.UNATTENDED if unattended else ExecutionMode.INTERACTIVE
     execution_context = build_execution_context(
         actor_user_id=actor.pk,
         project_id=pipeline.project_id,
@@ -111,6 +124,7 @@ def create_pipeline_run(
         explicit_binding=operational_provider_binding(actor, explicit_provider_binding),
         stored_binding=stored_operational_provider_binding(actor, pipeline.provider_binding),
         requested_provider="auto",
+        allow_user_preference=user_can_manage_ai_routing(actor),
     )
 
     with transaction.atomic():

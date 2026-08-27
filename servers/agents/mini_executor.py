@@ -16,6 +16,7 @@ from loguru import logger
 from app.sudo_policy import evaluate_sudo_command, prepare_sudo_command
 from app.tools.safety import is_dangerous_command
 from core_ui.activity import log_user_activity
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.audit import audit_context
 from servers.agents.agent_analysis import get_ai_analysis
 from servers.agents.agent_run_report import build_agent_run_report_payload
@@ -399,6 +400,7 @@ async def _run_agent_body(
 async def _mini_execution_context(agent: ServerAgent, user, run: AgentRun):
     from core_ui.services.ai_execution_context import abuild_execution_context
 
+    can_manage_routing = await sync_to_async(user_can_manage_ai_routing, thread_sensitive=True)(user)
     context = await abuild_execution_context(
         actor_user_id=user.pk,
         project_id=run.project_id or agent.project_id,
@@ -408,6 +410,7 @@ async def _mini_execution_context(agent: ServerAgent, user, run: AgentRun):
         mode=run.provider_execution_mode,
         stored_binding=run.provider_binding_snapshot,
         requested_provider="auto",
+        allow_user_preference=can_manage_routing,
         provider_session_id=run.provider_session_id,
         idempotency_key=f"agent:{run.pk}:mini-analysis",
         tool_policy={"surface": "mini_agent", "webtrerm_tools_only": True},

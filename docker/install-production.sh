@@ -779,7 +779,9 @@ load_superuser_password() {
 }
 
 service_container_id() {
-  compose ps -q "$1" | head -n 1
+  # Consume the complete output so multi-replica services do not trip
+  # `set -o pipefail` when a first-line-only reader closes the pipe early.
+  compose ps -q "$1" | sed -n '1p'
 }
 
 wait_for_service() {

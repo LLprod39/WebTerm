@@ -2,7 +2,7 @@ import { type NodeProps } from "@xyflow/react";
 import { BrainCircuit, Zap } from "lucide-react";
 import { NodeBase } from "./NodeBase";
 import { useI18n } from "@/lib/i18n";
-import { getNodeBranchLabel, getNodeTypeInfo } from "./nodeMeta";
+import { getLlmQueryModelLabel, getNodeBranchLabel, getNodeTypeInfo } from "./nodeMeta";
 import { getNodeRuntimeProps } from "./runtimeProps";
 
 export function LLMQueryNode({ data, selected }: NodeProps) {
@@ -10,7 +10,7 @@ export function LLMQueryNode({ data, selected }: NodeProps) {
   const d = data as Record<string, unknown>;
   const label = (typeof d?.label === "string" ? d.label : "") || getNodeTypeInfo("agent/llm_query", lang).label;
   const prompt = typeof d?.prompt === "string" ? d.prompt : "";
-  const model = (typeof d?.model === "string" ? d.model : "") || "gemini-2.0-flash-exp";
+  const model = getLlmQueryModelLabel(d, lang);
 
   return (
     <NodeBase

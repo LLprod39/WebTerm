@@ -11,7 +11,9 @@ from threading import RLock
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 
+from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.services.ai_execution_context import abuild_execution_context
 from servers.models_agents import AgentRun
 
@@ -37,6 +39,17 @@ def execution_mode_value(context: Any | None) -> str:
     return str(getattr(mode, "value", None) or "interactive")
 
 
+async def resolve_engine_actor(engine: Any):
+    """Return the routing/audit actor without changing the engine's resource owner."""
+
+    parent_context = getattr(engine, "execution_context", None)
+    actor_user_id = getattr(parent_context, "actor_user_id", None) or getattr(engine.user, "pk", None)
+    actor = engine.user
+    if actor_user_id and getattr(actor, "pk", None) != actor_user_id:
+        actor = await sync_to_async(get_user_model().objects.get, thread_sensitive=True)(pk=actor_user_id)
+    return actor
+
+
 async def build_agent_execution_context(engine: Any, purpose: str, *, surface: str):
     engine._provider_invocation_seq += 1
     state: dict[str, Any] = {}
@@ -52,11 +65,16 @@ async def build_agent_execution_context(engine: Any, purpose: str, *, surface: s
             .get(),
             thread_sensitive=True,
         )()
-    base_binding = state.get("provider_binding_snapshot") or execution_binding_snapshot(engine.execution_context)
+    parent_context = getattr(engine, "execution_context", None)
+    actor = await resolve_engine_actor(engine)
+    actor_user_id = getattr(actor, "pk", None)
+    project_id = getattr(parent_context, "project_id", None) or getattr(engine.agent, "project_id", None)
+    can_manage_routing = await sync_to_async(user_can_manage_ai_routing, thread_sensitive=True)(actor)
+    base_binding = state.get("provider_binding_snapshot") or execution_binding_snapshot(parent_context)
     run_id = getattr(run_record, "pk", None)
     return await abuild_execution_context(
-        actor_user_id=getattr(engine.user, "pk", None),
-        project_id=getattr(engine.agent, "project_id", None),
+        actor_user_id=actor_user_id,
+        project_id=project_id,
         purpose=purpose,
         source_kind="agent_run",
         source_id=run_id or f"ephemeral-{id(engine)}",
@@ -64,6 +82,7 @@ async def build_agent_execution_context(engine: Any, purpose: str, *, surface: s
         stored_binding=base_binding,
         requested_provider=engine.model_preference,
         requested_specific_model=engine.specific_model,
+        allow_user_preference=can_manage_routing,
         provider_session_id=state.get("provider_session_id") or "",
         idempotency_key=f"agent:{run_id}:llm:{engine._provider_invocation_seq}" if run_id else "",
         tool_policy={"surface": surface, "webtrerm_tools_only": True},

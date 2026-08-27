@@ -273,6 +273,7 @@ def build_partial_stop_summary(
         "total_timeout": "истёк общий тайм-аут",
         "llm_timeout": "LLM не ответил вовремя",
         "llm_error": "ошибка LLM",
+        "provider_unavailable": "выбранное LLM-подключение недоступно",
         "user_stop": "остановлено вами",
         "fatal_tool_error": "критическая ошибка инструмента",
         "cancelled": "выполнение отменено",
@@ -338,15 +339,18 @@ def build_partial_stop_summary(
     if todo_lines:
         parts.extend(["", "### Чеклист", *todo_lines[:12]])
 
-    parts.extend(
-        [
-            "",
-            "### Что делать дальше",
-            "- Переключитесь на Nova и продолжите с уточнённой целью, если лимит шагов/тайм-аут.",
+    if stop_reason in {"llm_error", "provider_unavailable"}:
+        next_steps = [
+            "- Проверьте доступность выбранного подключения в «Настройки -> AI Connections» и повторите запуск Nova.",
+            "- Если подключение было отозвано, назначьте рабочее workspace-подключение для Terminal.",
+        ]
+    else:
+        next_steps = [
+            "- Продолжите задачу в Nova с уточнённой целью, если достигнут лимит шагов или тайм-аут.",
             "- Проверьте вывод последних tool calls выше.",
             "- При необходимости включите sudo policy Ask/Approved для systemctl/apt.",
         ]
-    )
+    parts.extend(["", "### Что делать дальше", *next_steps])
     return "\n".join(parts).strip()
 
 

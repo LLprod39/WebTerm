@@ -56,7 +56,7 @@ def test_shipped_budget_defaults_meet_complex_task_bar():
     assert clamp_full_iterations(500) == 100
 
 
-def test_create_paths_default_to_full_budget_constants():
+def test_create_paths_use_runtime_budget_policy_without_legacy_hardcodes():
     """Create API + assistant action must not hardcode 20/600 when payload omits budgets."""
     import inspect
 
@@ -65,8 +65,9 @@ def test_create_paths_default_to_full_budget_constants():
 
     create_src = inspect.getsource(server_agents.agent_create)
     assistant_src = inspect.getsource(assistant_actions.create_agent)
-    assert "FULL_DEFAULT_MAX_ITERATIONS" in create_src
-    assert "FULL_DEFAULT_SESSION_TIMEOUT_SEC" in create_src
+    assert "resolve_agent_runtime_budget" in create_src
+    assert "PILOT_MAX_ITERATIONS" in create_src
+    assert "PILOT_MAX_SESSION_TIMEOUT_SECONDS" in create_src
     assert 'max_iterations", 20)' not in create_src
     assert 'session_timeout_seconds", 600)' not in create_src
     assert "FULL_DEFAULT_MAX_ITERATIONS" in assistant_src
@@ -276,6 +277,20 @@ def test_nova_history_compaction_and_partial_summary():
     assert "лимит шагов" in summary
     assert "nginx" in summary.lower() or "доказательств" in summary.lower() or "ok line" in summary
     assert "Что делать дальше" in summary
+
+
+def test_nova_provider_unavailable_summary_has_actionable_routing_guidance():
+    summary = build_partial_stop_summary(
+        user_message="the purpose of the server",
+        history=[],
+        stop_reason="provider_unavailable",
+        iterations=1,
+        tool_calls=0,
+    )
+
+    assert "LLM-подключение недоступно" in summary
+    assert "AI Connections" in summary
+    assert "Переключитесь на Nova" not in summary
 
 
 @pytest.mark.asyncio

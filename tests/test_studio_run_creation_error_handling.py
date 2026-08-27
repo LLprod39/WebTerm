@@ -183,7 +183,7 @@ def test_manual_run_validate_only_returns_actionable_issues():
 @pytest.mark.django_db
 def test_manual_run_validate_only_blocks_missing_integrations(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    user = User.objects.create_user(username="manual-validate-integration", password="x")
+    user = User.objects.create_superuser(username="manual-validate-integration", password="x")
     _grant_feature(user, "studio", "studio_pipelines", "studio_runs")
     pipeline = Pipeline.objects.create(
         name="Validate missing LLM",

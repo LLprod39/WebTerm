@@ -7,7 +7,11 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
-from core_ui.ai_model_policy import operational_provider_binding, stored_operational_provider_binding
+from core_ui.ai_model_policy import (
+    operational_provider_binding,
+    stored_operational_provider_binding,
+    user_can_manage_ai_routing,
+)
 from core_ui.services.ai_execution_context import (
     abuild_execution_context,
     active_project_for_execution,
@@ -17,6 +21,7 @@ from core_ui.services.ai_execution_context import (
 
 def prepare_operator_turn_context(*, session: Any, user: Any, provider_binding: dict[str, Any] | None):
     project = active_project_for_execution(user)
+    can_manage_routing = user_can_manage_ai_routing(user)
     explicit_binding = operational_provider_binding(user, provider_binding)
     stored_binding = stored_operational_provider_binding(user, session.provider_binding)
     context = build_execution_context(
@@ -28,6 +33,7 @@ def prepare_operator_turn_context(*, session: Any, user: Any, provider_binding: 
         explicit_binding=explicit_binding,
         stored_binding=stored_binding,
         requested_provider="auto",
+        allow_user_preference=can_manage_routing,
         provider_session_id=session.provider_session_id,
     )
     binding = context.binding.to_dict()
@@ -59,6 +65,10 @@ async def build_operator_iteration_context(*, session: Any, turn: Any, user: Any
         stored_operational_provider_binding,
         thread_sensitive=True,
     )(user, state["provider_binding"] or turn.provider_binding_snapshot)
+    can_manage_routing = await sync_to_async(
+        user_can_manage_ai_routing,
+        thread_sensitive=True,
+    )(user)
     return await abuild_execution_context(
         actor_user_id=user.pk,
         project_id=project_id,
@@ -67,6 +77,7 @@ async def build_operator_iteration_context(*, session: Any, turn: Any, user: Any
         source_id=session.pk,
         stored_binding=stored_binding,
         requested_provider="auto",
+        allow_user_preference=can_manage_routing,
         # An empty durable session id is authoritative: falling back to the turn
         # snapshot would resurrect a session belonging to an earlier connection.
         provider_session_id=state["provider_session_id"],

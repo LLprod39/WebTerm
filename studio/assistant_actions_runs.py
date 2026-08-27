@@ -24,7 +24,12 @@ from studio.views.pipeline_helpers import (
 
 
 def _pipeline_run_check(
-    pipeline: Pipeline, *, context: dict[str, Any], entry_node_id: str, validate_only: bool
+    pipeline: Pipeline,
+    *,
+    actor,
+    context: dict[str, Any],
+    entry_node_id: str,
+    validate_only: bool,
 ) -> dict[str, Any]:
     validation_errors = validate_pipeline_definition(
         nodes=pipeline.nodes,
@@ -53,7 +58,12 @@ def _pipeline_run_check(
         else []
     )
     integration = (
-        pipeline_integration_diagnostics(pipeline, entry_node_id=selected_trigger.node_id)
+        pipeline_integration_diagnostics(
+            pipeline,
+            entry_node_id=selected_trigger.node_id,
+            actor=actor,
+            unattended=False,
+        )
         if selected_trigger is not None and not validation_errors
         else {"requirements": [], "issues": [], "errors": [], "warnings": []}
     )
@@ -90,7 +100,13 @@ def validate_pipeline_run(ctx: AssistantActionContext) -> dict[str, Any]:
     if error:
         raise AssistantActionError(error)
     entry_node_id = str(ctx.input_payload.get("entry_node_id") or "").strip()
-    check = _pipeline_run_check(pipeline, context=raw_context, entry_node_id=entry_node_id, validate_only=True)
+    check = _pipeline_run_check(
+        pipeline,
+        actor=ctx.user,
+        context=raw_context,
+        entry_node_id=entry_node_id,
+        validate_only=True,
+    )
     dry_run = {
         "ok": check["validation"]["ok"] and check["risk"].get("level") != "dangerous",
         "executed": False,
@@ -125,7 +141,13 @@ def run_pipeline(ctx: AssistantActionContext) -> dict[str, Any]:
     if error:
         raise AssistantActionError(error)
     entry_node_id = str(ctx.input_payload.get("entry_node_id") or "").strip()
-    check = _pipeline_run_check(pipeline, context=raw_context, entry_node_id=entry_node_id, validate_only=False)
+    check = _pipeline_run_check(
+        pipeline,
+        actor=ctx.user,
+        context=raw_context,
+        entry_node_id=entry_node_id,
+        validate_only=False,
+    )
     if check["all_errors"]:
         raise AssistantActionError(
             "Pipeline is not runnable: " + "; ".join(check["all_errors"]), details={"validation": check["validation"]}

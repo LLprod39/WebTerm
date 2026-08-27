@@ -5,7 +5,7 @@ import json
 import pytest
 from django.contrib.auth.models import Group, User
 
-from core_ui.models import UserActivityLog, UserAppPermission
+from core_ui.models import ChatSession, UserActivityLog, UserAppPermission
 from core_ui.models.ai_providers import (
     AIConnectionAuthFlow,
     AIProviderConnection,
@@ -16,6 +16,14 @@ from core_ui.models.ai_providers import (
 )
 from core_ui.models.projects import Project, ProjectMembership
 from core_ui.services.ai_provider_auth import retry_pending_credential_cleanup
+from servers.models import Server, TerminalAiProviderState
+from studio.models import (
+    Pipeline,
+    PipelineDraftRevision,
+    PipelineDraftSession,
+    PipelineRun,
+    PipelineTemplate,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -477,6 +485,186 @@ def test_revoke_fails_closed_and_retains_reference_for_offline_cleanup(client, m
     connection.refresh_from_db()
     assert connection.status == AIProviderConnection.STATUS_REVOKED
     assert connection.credential_ref == ""
+
+
+def test_revoke_removes_personal_routing_default(client, monkeypatch) -> None:
+    user = User.objects.create_user("default-provider-owner", password="pw")
+    project = _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=user,
+        created_by=user,
+        name="Selected Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_selected",
+    )
+    AIProviderPreference.objects.create(
+        user=user,
+        project=project,
+        purpose=AIProviderPreference.PURPOSE_TERMINAL,
+        target_id=connection.target_id,
+        connection=connection,
+    )
+    client.force_login(user)
+    monkeypatch.setattr(
+        "core_ui.views.ai_provider_views.revoke_connection_credentials",
+        lambda _connection: True,
+    )
+
+    response = client.delete(f"/api/ai/providers/connections/{connection.pk}/")
+
+    assert response.status_code == 200
+    assert response.json()["revoked"] is True
+    connection.refresh_from_db()
+    assert connection.enabled is False
+    assert connection.status == AIProviderConnection.STATUS_REVOKED
+    assert connection.credential_ref == ""
+    assert not AIProviderPreference.objects.filter(connection=connection).exists()
+
+
+def test_revoke_rejects_connection_required_by_workspace_default(client, monkeypatch) -> None:
+    admin = User.objects.create_superuser("workspace-default-provider-admin", password="pw")
+    project = _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Workspace default Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="workspace_connection_selected",
+    )
+    AIProviderPreference.objects.create(
+        project=project,
+        purpose=AIProviderPreference.PURPOSE_TERMINAL,
+        target_id=connection.target_id,
+        connection=connection,
+    )
+    client.force_login(admin)
+    monkeypatch.setattr(
+        "core_ui.views.ai_provider_views.revoke_connection_credentials",
+        lambda _connection: pytest.fail("credential cleanup must not start while a workspace default needs it"),
+    )
+
+    response = client.delete(f"/api/ai/providers/connections/{connection.pk}/")
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "provider_connection_in_use"
+    connection.refresh_from_db()
+    assert connection.enabled is True
+    assert connection.status == AIProviderConnection.STATUS_CONNECTED
+
+
+def test_revoke_clears_terminal_and_chat_provider_pins(client, monkeypatch) -> None:
+    user = User.objects.create_user("pinned-provider-owner", password="pw")
+    project = _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=user,
+        created_by=user,
+        name="Pinned Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_pinned",
+    )
+    binding = {
+        "target_id": connection.target_id,
+        "connection_id": connection.pk,
+        "model_id": "gpt-5.6-luna",
+    }
+    chat = ChatSession.objects.create(
+        user=user,
+        provider_binding=binding,
+        provider_session_id="chat-provider-session",
+    )
+    server = Server.objects.create(
+        user=user,
+        project=project,
+        name="provider-pin-server",
+        host="192.0.2.10",
+        username="root",
+    )
+    terminal = TerminalAiProviderState.objects.create(
+        user=user,
+        server=server,
+        provider_binding=binding,
+        provider_session_id="terminal-provider-session",
+    )
+    pipeline = Pipeline.objects.create(
+        owner=user,
+        project=project,
+        name="Pinned provider pipeline",
+        nodes=[
+            {
+                "id": "llm",
+                "type": "agent/llm_query",
+                "data": {"provider": "auto", "provider_binding": binding, "prompt": "Check"},
+            }
+        ],
+        provider_binding=binding,
+    )
+    pending_run = PipelineRun.objects.create(
+        pipeline=pipeline,
+        project=project,
+        status=PipelineRun.STATUS_PENDING,
+        provider_binding_snapshot=binding,
+    )
+    completed_run = PipelineRun.objects.create(
+        pipeline=pipeline,
+        project=project,
+        status=PipelineRun.STATUS_COMPLETED,
+        provider_binding_snapshot=binding,
+    )
+    draft = PipelineDraftSession.objects.create(
+        owner=user,
+        status=PipelineDraftSession.STATUS_READY,
+        current_graph_snapshot={"nodes": pipeline.nodes, "selected_node": pipeline.nodes[0]},
+    )
+    revision = PipelineDraftRevision.objects.create(
+        session=draft,
+        node_patch={"provider_binding": binding},
+        graph_patch={"nodes": pipeline.nodes},
+        preview_nodes=pipeline.nodes,
+        response_payload={"graph_patch": {"nodes": pipeline.nodes}},
+    )
+    template = PipelineTemplate.objects.create(
+        slug="pinned-provider-template",
+        name="Pinned provider template",
+        nodes=pipeline.nodes,
+    )
+    client.force_login(user)
+    monkeypatch.setattr(
+        "core_ui.views.ai_provider_views.revoke_connection_credentials",
+        lambda _connection: True,
+    )
+
+    response = client.delete(f"/api/ai/providers/connections/{connection.pk}/")
+
+    assert response.status_code == 200
+    assert response.json()["revoked"] is True
+    chat.refresh_from_db()
+    terminal.refresh_from_db()
+    pipeline.refresh_from_db()
+    pending_run.refresh_from_db()
+    completed_run.refresh_from_db()
+    draft.refresh_from_db()
+    revision.refresh_from_db()
+    template.refresh_from_db()
+    assert chat.provider_binding == {}
+    assert chat.provider_session_id == ""
+    assert terminal.provider_binding == {}
+    assert terminal.provider_session_id == ""
+    assert pipeline.provider_binding == {}
+    assert pipeline.nodes[0]["data"]["provider_binding"] == {}
+    assert pending_run.provider_binding_snapshot == {}
+    assert completed_run.provider_binding_snapshot == binding
+    assert draft.current_graph_snapshot["nodes"][0]["data"]["provider_binding"] == {}
+    assert revision.node_patch["provider_binding"] == {}
+    assert revision.graph_patch["nodes"][0]["data"]["provider_binding"] == {}
+    assert revision.preview_nodes[0]["data"]["provider_binding"] == {}
+    assert revision.response_payload["graph_patch"]["nodes"][0]["data"]["provider_binding"] == {}
+    assert template.nodes[0]["data"]["provider_binding"] == {}
 
 
 def test_string_false_does_not_enable_connection(client) -> None:

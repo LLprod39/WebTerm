@@ -198,6 +198,15 @@ def test_production_installer_starts_the_execution_planes() -> None:
     assert "healthy_agent_execution_replicas" in smoke
 
 
+def test_production_installer_reads_multi_replica_service_id_without_sigpipe() -> None:
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
+    helper = installer.split("service_container_id()", 1)[1].split("wait_for_service()", 1)[0]
+
+    assert "compose ps -q" in helper
+    assert "sed -n '1p'" in helper
+    assert "head -n 1" not in helper
+
+
 def test_production_installer_pulls_the_pinned_agent_command_runner() -> None:
     installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
 

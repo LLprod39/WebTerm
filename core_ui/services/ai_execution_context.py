@@ -57,6 +57,7 @@ def build_execution_context(
     stored_binding: ProviderBinding | dict[str, Any] | None = None,
     requested_provider: str = "auto",
     requested_specific_model: str | None = None,
+    allow_user_preference: bool = True,
     provider_session_id: str = "",
     idempotency_key: str = "",
     tool_policy: dict[str, Any] | None = None,
@@ -89,6 +90,7 @@ def build_execution_context(
             requested_provider=requested_provider,
             requested_specific_model=requested_specific_model,
         ),
+        allow_user_preference=allow_user_preference,
     )
 
 

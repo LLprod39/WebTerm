@@ -33,6 +33,7 @@ from servers.agents.agent_runtime import (
     is_runtime_stop_requested,
     register_engine,
     reset_runtime_control_state,
+    resolve_engine_actor,
     unregister_engine,
 )
 from servers.agents.agent_sessions import AgentSessionManager
@@ -47,11 +48,14 @@ def sync_to_async(func, thread_sensitive=False):
 async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> AgentRun:
     engine._loop = asyncio.get_running_loop()
     primary_server = engine.servers[0] if engine.servers else None
+    run_user = await resolve_engine_actor(engine)
+    run_project_id = getattr(getattr(engine, "execution_context", None), "project_id", None)
     if run_record is None:
         run = await sync_to_async(AgentRun.objects.create)(
             agent=engine.agent if engine.agent.pk else None,
             server=primary_server,
-            user=engine.user,
+            user=run_user,
+            **({"project_id": run_project_id} if run_project_id else {}),
             status=AgentRun.STATUS_RUNNING,
             runtime_control=reset_runtime_control_state(),
             provider_binding_snapshot=execution_binding_snapshot(engine.execution_context),
@@ -74,7 +78,8 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             run,
             agent=engine.agent if engine.agent.pk else None,
             server=primary_server,
-            user=engine.user,
+            user=run_user,
+            **({"project_id": run_project_id} if run_project_id else {}),
             status=AgentRun.STATUS_RUNNING,
             ai_analysis="",
             commands_output=[],

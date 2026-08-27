@@ -138,9 +138,7 @@ export function NodeConfigPanel({
     ? ""
     : authReady && !canSelectModels
       ? "auto"
-      : type === "agent/llm_query"
-        ? ((d.provider as string) || "gemini")
-        : ((d.provider as string) || "auto");
+      : ((d.provider as string) || "auto");
   const currentModel = authReady && !canSelectModels ? "" : ((d.model as string) || "");
   const modelProvider = provider && provider !== "auto" ? provider : "";
   const modelList = useMemo(() => getModelsForProvider(modelsData, modelProvider), [modelProvider, modelsData]);
