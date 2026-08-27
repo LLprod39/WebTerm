@@ -65,8 +65,22 @@ fi
   cd "$(dirname "$DUMP_PATH")"
   sha256sum --check "$(basename "$DUMP_PATH").sha256"
 )
+# Consume the complete age stream first so every encrypted chunk is authenticated.
+age --decrypt --identity "$AGE_IDENTITY_FILE" "$DUMP_PATH" >/dev/null
+
+# pg_restore only needs the custom-format catalog and may close stdin before age
+# reaches EOF. Accept that decryptor SIGPIPE only after the full pass above and
+# only when pg_restore itself validated the catalog successfully.
+set +e
 age --decrypt --identity "$AGE_IDENTITY_FILE" "$DUMP_PATH" \
   | compose exec -T "$SERVICE" pg_restore --list >/dev/null
+validation_status=("${PIPESTATUS[@]}")
+set -e
+if [[ "${validation_status[1]}" -ne 0 ]] \
+  || [[ "${validation_status[0]}" -ne 0 && "${validation_status[0]}" -ne 141 ]]; then
+  echo "Encrypted PostgreSQL archive validation failed" >&2
+  exit 1
+fi
 if [[ "$DRY_RUN" == "1" ]]; then
   echo "Archive is valid; dry run did not change the database"
   exit 0

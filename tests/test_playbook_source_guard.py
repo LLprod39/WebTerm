@@ -79,11 +79,11 @@ def test_source_guard_rejects_secrets_controller_escape_and_malformed_yaml(sourc
 
 def test_source_guard_controller_finding_never_echoes_token_plugin_name():
     token = "glpat-0123456789abcdefghij"
-    source = f'''- hosts: all
+    source = f"""- hosts: all
   tasks:
     - debug:
         msg: "{{{{ lookup('{token}', 'value') }}}}"
-'''
+"""
 
     with pytest.raises(PlaybookSourceSafetyError) as caught:
         validate_ansible_source(source)

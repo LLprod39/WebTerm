@@ -10,6 +10,7 @@ from typing import Any
 import aiohttp
 from loguru import logger
 
+from app.core.llm_http_errors import provider_http_error
 from app.core.llm_runtime import (
     RETRY_BACKOFF,
     _is_retryable_error,
@@ -161,14 +162,19 @@ async def stream_openai_compatible_response(
                     )
                     return
 
-                error_text = redacted_log_text(await response.text())
-                is_retryable = response.status == 429 or (500 <= response.status < 600)
+                provider_error = provider_http_error(
+                    provider=provider,
+                    display_name=display_name,
+                    status=response.status,
+                    body=await response.text(),
+                )
+                is_retryable = provider_error.retryable
                 logger.error(
-                    "{}: HTTP error {}, retryable={}, body={}",
+                    "{}: HTTP error {}, code={}, retryable={}",
                     display_name,
                     response.status,
+                    provider_error.code,
                     is_retryable,
-                    redacted_log_text(error_text, limit=500),
                 )
                 if is_retryable and attempt < max_attempts - 1:
                     yield "[Повтор попытки...]"
@@ -186,11 +192,18 @@ async def stream_openai_compatible_response(
                     purpose=purpose,
                     metadata=log_metadata,
                 )
-                yield f"Error from {display_name} API: {response.status} - {error_text}"
+                yield f"Error from {display_name} API: {provider_error.message}"
                 return
         except Exception as exc:
             err_retryable = _is_retryable_error(exc) and attempt < max_attempts - 1
-            logger.error(f"{display_name}: exception attempt={attempt + 1}: {type(exc).__name__}: {exc}", exc_info=True)
+            logger.error(
+                "{}: exception attempt={}/{} type={} retryable={}",
+                display_name,
+                attempt + 1,
+                max_attempts,
+                type(exc).__name__,
+                err_retryable,
+            )
             if err_retryable:
                 yield "[Повтор попытки...]"
                 await asyncio.sleep(RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)])
@@ -210,7 +223,7 @@ async def stream_openai_compatible_response(
             if _is_timeout_error(exc):
                 yield f"Error: Timeout ({display_name} stream)."
             else:
-                yield f"Error calling {display_name}: {str(exc)}"
+                yield f"Error calling {display_name}: Provider transport is temporarily unavailable. Try again later."
             return
 
 

@@ -44,9 +44,7 @@ def build_assistant_runtime_context(user) -> dict:
     context: dict = {"agents": [], "servers": []}
     if feature_allowed_for_user(user, "agents"):
         agents = list(
-            ServerAgent.objects.filter(user=user)
-            .prefetch_related("servers")
-            .order_by("-updated_at", "-id")[:30]
+            ServerAgent.objects.filter(user=user).prefetch_related("servers").order_by("-updated_at", "-id")[:30]
         )
         active_runs = {}
         for run in AgentRun.objects.filter(agent__in=agents, status__in=ACTIVE_AGENT_RUN_STATUSES).order_by(

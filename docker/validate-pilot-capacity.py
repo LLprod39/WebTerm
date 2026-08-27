@@ -6,6 +6,10 @@ from __future__ import annotations
 import argparse
 
 
+MAX_GLOBAL_CONCURRENCY = 10
+MAX_PER_USER_CONCURRENCY = 2
+
+
 def _positive_int(value: str) -> int:
     try:
         parsed = int(value)
@@ -24,15 +28,29 @@ def main() -> int:
     parser.add_argument("--worker-concurrency", required=True, type=_positive_int)
     args = parser.parse_args()
 
-    if args.global_concurrency != 10:
-        parser.error("pilot global concurrency must be exactly 10")
-    if args.per_user_concurrency != 2:
-        parser.error("pilot per-user concurrency must be exactly 2")
+    if args.global_concurrency > MAX_GLOBAL_CONCURRENCY:
+        parser.error(
+            f"pilot global concurrency must not exceed {MAX_GLOBAL_CONCURRENCY}"
+        )
+    if args.per_user_concurrency > MAX_PER_USER_CONCURRENCY:
+        parser.error(
+            f"pilot per-user concurrency must not exceed {MAX_PER_USER_CONCURRENCY}"
+        )
+    if args.per_user_concurrency > args.global_concurrency:
+        parser.error("pilot per-user concurrency must not exceed global concurrency")
     slots = args.replicas * args.worker_concurrency
     if slots < args.global_concurrency:
-        parser.error("replicas multiplied by worker concurrency must provide at least 10 local slots")
+        parser.error(
+            "replicas multiplied by worker concurrency must provide at least "
+            f"{args.global_concurrency} local slots"
+        )
 
-    print(f"Pilot capacity valid: database cap=10, per-user cap=2, local worker slots={slots}")
+    print(
+        "Pilot capacity valid: "
+        f"database cap={args.global_concurrency}, "
+        f"per-user cap={args.per_user_concurrency}, "
+        f"local worker slots={slots}"
+    )
     return 0
 
 

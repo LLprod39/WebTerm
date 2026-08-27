@@ -52,9 +52,7 @@ TEXT_EXTENSIONS = frozenset(
 )
 BINARY_EXTENSIONS = frozenset({".bin", ".gif", ".ico", ".jpeg", ".jpg", ".png", ".ttf", ".webp", ".woff", ".woff2"})
 ALLOWED_EXTENSIONS = TEXT_EXTENSIONS | BINARY_EXTENSIONS
-ALLOWED_TOP_LEVEL_DIRS = frozenset(
-    {"files", "group_vars", "inventory", "playbooks", "roles", "templates", "vars"}
-)
+ALLOWED_TOP_LEVEL_DIRS = frozenset({"files", "group_vars", "inventory", "playbooks", "roles", "templates", "vars"})
 ALLOWED_ROLE_DIRS = frozenset({"defaults", "files", "handlers", "meta", "tasks", "templates", "vars"})
 YAML_EXTENSIONS = frozenset({".yml", ".yaml"})
 KNOWN_REPOSITORY_METADATA_DIRS = frozenset({".github", ".gitlab", "docs"})
@@ -534,9 +532,10 @@ def _preflight_zip_directory(data: bytes, limits: BundleLimits) -> None:
         zip64_offset = int.from_bytes(data[locator_offset + 8 : locator_offset + 16], "little")
         if zip64_offset + 56 > locator_offset or data[zip64_offset : zip64_offset + 4] != b"PK\x06\x06":
             raise BundleValidationError("ZIP64 directory metadata is malformed", code="malformed_archive")
-        if int.from_bytes(data[zip64_offset + 16 : zip64_offset + 20], "little") != 0 or int.from_bytes(
-            data[zip64_offset + 20 : zip64_offset + 24], "little"
-        ) != 0:
+        if (
+            int.from_bytes(data[zip64_offset + 16 : zip64_offset + 20], "little") != 0
+            or int.from_bytes(data[zip64_offset + 20 : zip64_offset + 24], "little") != 0
+        ):
             raise BundleValidationError("Multi-disk ZIP archives are not supported", code="malformed_archive")
         entries_on_disk = int.from_bytes(data[zip64_offset + 24 : zip64_offset + 32], "little")
         entry_count = int.from_bytes(data[zip64_offset + 32 : zip64_offset + 40], "little")
@@ -713,9 +712,7 @@ def _validate_file_layout(path: str) -> None:
     if parts[0] == "playbooks" and suffix not in YAML_EXTENSIONS:
         raise BundleValidationError("Playbooks must be YAML", code="disallowed_extension")
     if parts[0] == "inventory" and suffix not in YAML_EXTENSIONS | {".ini", ".json"}:
-        raise BundleValidationError(
-            "Inventory reference files must be YAML, INI, or JSON", code="disallowed_extension"
-        )
+        raise BundleValidationError("Inventory reference files must be YAML, INI, or JSON", code="disallowed_extension")
     if parts[0] == "templates" and suffix not in TEXT_EXTENSIONS:
         raise BundleValidationError("Templates must be UTF-8 text", code="disallowed_extension")
 

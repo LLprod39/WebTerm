@@ -391,9 +391,7 @@ def test_preview_redacts_camel_case_secret_pat_and_dependency_credentials():
 """.encode()
     requirements = f"roles:\n  - src: {dependency_url}\n".encode()
 
-    preview = preview_project_bundle(
-        _zip({"playbook.yml": source, "requirements.yml": requirements})
-    )
+    preview = preview_project_bundle(_zip({"playbook.yml": source, "requirements.yml": requirements}))
 
     serialized = json.dumps(preview)
     assert preview["safe_to_commit"] is False
@@ -437,11 +435,11 @@ def test_credential_token_in_bundle_path_is_blocked_and_never_echoed(staff_user,
 
 def test_controller_lookup_token_is_never_echoed_in_bundle_preview():
     token = "glpat-0123456789abcdefghij"
-    source = f'''- hosts: all
+    source = f"""- hosts: all
   tasks:
     - debug:
         msg: "{{{{ lookup('{token}', 'value') }}}}"
-'''.encode()
+""".encode()
     preview = preview_project_bundle(_zip({"playbook.yml": source}))
 
     assert preview["safe_to_commit"] is False
@@ -610,9 +608,7 @@ def test_preview_reports_yaml_complexity_as_non_committable_without_echoing_cont
     )
 
     assert preview["safe_to_commit"] is False
-    assert preview["complexity_warnings"] == [
-        {"code": "yaml_complexity_limit", "message": "YAML alias limit exceeded"}
-    ]
+    assert preview["complexity_warnings"] == [{"code": "yaml_complexity_limit", "message": "YAML alias limit exceeded"}]
     assert source.decode() not in json.dumps(preview)
 
 
@@ -994,8 +990,7 @@ def test_safe_export_removes_inventory_references_and_never_serializes_binding_m
         checksum_rows = {
             path: digest
             for digest, path in (
-                line.split("  ", 1)
-                for line in archive.read("checksums.sha256").decode("utf-8").splitlines()
+                line.split("  ", 1) for line in archive.read("checksums.sha256").decode("utf-8").splitlines()
             )
         }
         assert set(checksum_rows) == set(archive.namelist()) - {"checksums.sha256"}

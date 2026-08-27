@@ -17,9 +17,7 @@ def cleanup_stale_agent_run_for_user(user, run_id: int) -> dict:
     stale_seconds = _agent_run_stale_seconds_setting()
     current_time = timezone.now()
     run = (
-        AgentRun.objects.filter(Q(user=user) | Q(agent__user=user), id=run_id)
-        .select_related("agent", "server")
-        .first()
+        AgentRun.objects.filter(Q(user=user) | Q(agent__user=user), id=run_id).select_related("agent", "server").first()
     )
     if run is None:
         return {"ok": False, "status": 404, "code": "run_not_found", "error": "Run not found"}
@@ -50,7 +48,9 @@ def cleanup_stale_agent_run_for_user(user, run_id: int) -> dict:
             "stale_seconds": stale_seconds,
         }
 
-    message = f"Agent run exceeded stale runtime threshold ({stale_seconds}s) and was marked failed by operator cleanup."
+    message = (
+        f"Agent run exceeded stale runtime threshold ({stale_seconds}s) and was marked failed by operator cleanup."
+    )
     record_run_event(
         run.id,
         "agent_stale_cleanup",
@@ -74,9 +74,7 @@ def cleanup_stale_agent_run_for_user(user, run_id: int) -> dict:
         "exit_reason": "stale_cleanup",
         "report_generation": {"status": "failed", "generated_at": None, "error": message},
     }
-    run.save(
-        update_fields=["status", "ai_analysis", "completed_at", "duration_ms", "execution_outcome"]
-    )
+    run.save(update_fields=["status", "ai_analysis", "completed_at", "duration_ms", "execution_outcome"])
     refresh_agent_run_report_payload(run)
     return {
         "ok": True,

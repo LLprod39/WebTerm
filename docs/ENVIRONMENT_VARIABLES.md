@@ -2,7 +2,7 @@
 
 Generated from `.env.production.example` by `scripts/env_contract.py`. Do not edit this table by hand.
 
-Total variables: **362**.
+Total variables: **374**.
 
 ## Required
 
@@ -11,6 +11,7 @@ Total variables: **362**.
 | `PUBLIC_BIND_HOST` | Public URLs and ports | `0.0.0.0` |
 | `PUBLIC_HTTP_PORT` | Public URLs and ports | `80` |
 | `PUBLIC_HTTPS_PORT` | Public URLs and ports | `443` |
+| `FRONTEND_BIND_HOST` | Public URLs and ports | `127.0.0.1` |
 | `FRONTEND_PORT` | Public URLs and ports | `8080` |
 | `DJANGO_BIND_HOST` | Public URLs and ports | `127.0.0.1` |
 | `DJANGO_HOST_PORT` | Public URLs and ports | `9000` |
@@ -190,45 +191,55 @@ Total variables: **362**.
 | `LOKI_RETENTION_PERIOD` | images are digest-pinned and require the full Linux observability smoke before GO. | `336h` |
 | `TEMPO_RETENTION` | images are digest-pinned and require the full Linux observability smoke before GO. | `336h` |
 | `ALERTMANAGER_WEBHOOK_URL_FILE` | stays out of Compose environment/log output and is read by Alertmanager only. | `/etc/webterm/alertmanager.webhook-url` |
-| `GRAFANA_ADMIN_USER` | stays out of Compose environment/log output and is read by Alertmanager only. | `webterm-admin` |
-| `GRAFANA_ADMIN_PASSWORD` | stays out of Compose environment/log output and is read by Alertmanager only. | `operator supplied` |
-| `GRAFANA_BIND_HOST` | stays out of Compose environment/log output and is read by Alertmanager only. | `127.0.0.1` |
-| `GRAFANA_PORT` | stays out of Compose environment/log output and is read by Alertmanager only. | `3000` |
-| `GRAFANA_ROOT_URL` | stays out of Compose environment/log output and is read by Alertmanager only. | `https://grafana.webterm.example.com` |
-| `GRAFANA_COOKIE_SECURE` | stays out of Compose environment/log output and is read by Alertmanager only. | `true` |
-| `AGENT_COMMAND_RUNNER_IMAGE` | stays out of Compose environment/log output and is read by Alertmanager only. | `empty` |
-| `AGENT_COMMAND_DOCKER_NETWORK` | stays out of Compose environment/log output and is read by Alertmanager only. | `bridge` |
-| `AGENT_COMMAND_DOCKER_CPUS` | stays out of Compose environment/log output and is read by Alertmanager only. | `0.5` |
-| `AGENT_COMMAND_DOCKER_MEMORY` | stays out of Compose environment/log output and is read by Alertmanager only. | `256m` |
-| `AGENT_COMMAND_DOCKER_PIDS_LIMIT` | stays out of Compose environment/log output and is read by Alertmanager only. | `64` |
-| `AGENT_COMMAND_TIMEOUT_SECONDS` | stays out of Compose environment/log output and is read by Alertmanager only. | `120` |
-| `AGENT_COMMAND_OUTPUT_MAX_CHARS` | stays out of Compose environment/log output and is read by Alertmanager only. | `100000` |
-| `AI_CLI_SUBSCRIPTIONS_ENABLED` | tokens here; device login writes only to isolated named Docker volumes. | `false` |
-| `AI_CLI_RUNNER_MANAGER_TOKEN` | tokens here; device login writes only to isolated named Docker volumes. | `operator supplied` |
-| `AI_CLI_CODEX_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
-| `AI_CLI_GROK_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
-| `AI_CLI_RUNNER_MANAGER_URL` | tokens here; device login writes only to isolated named Docker volumes. | `http://ai-cli-runner-manager:9000` |
-| `AI_CLI_DOCKER_NETWORK` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-egress` |
-| `AI_CLI_CREDENTIAL_VOLUME_PREFIX` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-cred-` |
-| `AI_CLI_EGRESS_PROXY_URL` | tokens here; device login writes only to isolated named Docker volumes. | `http://ai-cli-egress-proxy:3128` |
-| `AI_CLI_DOCKER_CPUS` | tokens here; device login writes only to isolated named Docker volumes. | `1.0` |
-| `AI_CLI_DOCKER_MEMORY` | tokens here; device login writes only to isolated named Docker volumes. | `1g` |
-| `AI_CLI_DOCKER_PIDS_LIMIT` | tokens here; device login writes only to isolated named Docker volumes. | `128` |
-| `AI_CLI_REQUEST_TIMEOUT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `900` |
-| `AI_CLI_OUTPUT_LIMIT_BYTES` | tokens here; device login writes only to isolated named Docker volumes. | `2097152` |
-| `AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `30` |
-| `AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `300` |
-| `AI_CLI_AUTH_WORKER_INTERVAL_SECONDS` | tokens here; device login writes only to isolated named Docker volumes. | `2` |
-| `AI_CLI_AUTH_WORKER_CONCURRENCY` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `4` |
-| `WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
-| `WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
-| `WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
-| `GROK_BUILD_URL` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
-| `GROK_BUILD_SHA256` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
-| `PILOT_RESTRICTED_MODE` | out of this list; only disposable/snapshot-capable test targets belong here. | `true` |
-| `PILOT_SSH_ALLOWED_HOSTS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |
-| `PILOT_SSH_ALLOWED_CIDRS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |
-| `PILOT_SSH_ALLOWED_PORTS` | out of this list; only disposable/snapshot-capable test targets belong here. | `22` |
+| `GRAFANA_ADMIN_USER` | Grafana access | `webterm-admin` |
+| `GRAFANA_ADMIN_PASSWORD` | Grafana access | `operator supplied` |
+| `GRAFANA_BIND_HOST` | Grafana access | `127.0.0.1` |
+| `GRAFANA_PORT` | Grafana access | `3000` |
+| `GRAFANA_ROOT_URL` | Grafana access | `https://grafana.webterm.example.com` |
+| `GRAFANA_COOKIE_SECURE` | Grafana access | `true` |
+| `AGENT_COMMAND_RUNNER_IMAGE` | Agent command runner | `empty` |
+| `AGENT_COMMAND_DOCKER_NETWORK` | Agent command runner | `bridge` |
+| `AGENT_COMMAND_DOCKER_CPUS` | Agent command runner | `0.5` |
+| `AGENT_COMMAND_DOCKER_MEMORY` | Agent command runner | `256m` |
+| `AGENT_COMMAND_DOCKER_PIDS_LIMIT` | Agent command runner | `64` |
+| `AGENT_COMMAND_TIMEOUT_SECONDS` | Agent command runner | `120` |
+| `AGENT_COMMAND_OUTPUT_MAX_CHARS` | Agent command runner | `100000` |
+| `AGENT_MATERIAL_RUNNER_ENABLED` | Agent material runner | `false` |
+| `AGENT_MATERIAL_RUNNER_IMAGE` | Agent material runner | `empty` |
+| `AGENT_MATERIAL_RUNNER_DOCKER_COMMAND` | Agent material runner | `docker` |
+| `AGENT_MATERIAL_RUNNER_DOCKER_NETWORK` | Agent material runner | `bridge` |
+| `AGENT_MATERIAL_RUNNER_CPUS` | Agent material runner | `0.25` |
+| `AGENT_MATERIAL_RUNNER_MEMORY` | Agent material runner | `128m` |
+| `AGENT_MATERIAL_RUNNER_PIDS_LIMIT` | Agent material runner | `32` |
+| `AGENT_MATERIAL_RUNNER_INPUT_MAX_BYTES` | Agent material runner | `64000` |
+| `AGENT_MATERIAL_RUNNER_OUTPUT_MAX_CHARS` | Agent material runner | `50000` |
+| `AI_CLI_SUBSCRIPTIONS_ENABLED` | Subscription CLI providers | `false` |
+| `AI_CLI_RUNNER_MANAGER_TOKEN` | Subscription CLI providers | `operator supplied` |
+| `AI_CLI_CODEX_RUNNER_IMAGE` | Subscription CLI providers | `empty` |
+| `AI_CLI_GROK_RUNNER_IMAGE` | Subscription CLI providers | `empty` |
+| `AI_CLI_RUNNER_MANAGER_URL` | Subscription CLI providers | `http://ai-cli-runner-manager:9000` |
+| `AI_CLI_DOCKER_NETWORK` | Subscription CLI providers | `webterm-ai-cli-egress` |
+| `AI_CLI_CREDENTIAL_VOLUME_PREFIX` | Subscription CLI providers | `webterm-ai-cli-cred-` |
+| `AI_CLI_EGRESS_PROXY_URL` | Subscription CLI providers | `http://ai-cli-egress-proxy:3128` |
+| `AI_CLI_UPSTREAM_PROXY_URL` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `empty` |
+| `AI_CLI_DOCKER_CPUS` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `1.0` |
+| `AI_CLI_DOCKER_MEMORY` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `1g` |
+| `AI_CLI_DOCKER_PIDS_LIMIT` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `128` |
+| `AI_CLI_REQUEST_TIMEOUT_SECONDS` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `900` |
+| `AI_CLI_OUTPUT_LIMIT_BYTES` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `2097152` |
+| `AI_CLI_INTERACTIVE_CAPACITY_WAIT_SECONDS` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `30` |
+| `AI_CLI_UNATTENDED_CAPACITY_WAIT_SECONDS` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `300` |
+| `AI_CLI_AUTH_WORKER_INTERVAL_SECONDS` | Optional parent proxy used by the isolated egress proxy on restricted hosts. | `2` |
+| `AI_CLI_AUTH_WORKER_CONCURRENCY` | AI CLI authentication worker and image pins | `4` |
+| `WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE` | AI CLI authentication worker and image pins | `empty` |
+| `WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE` | AI CLI authentication worker and image pins | `empty` |
+| `WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE` | AI CLI authentication worker and image pins | `empty` |
+| `GROK_BUILD_URL` | Grok build inputs | `empty` |
+| `GROK_BUILD_SHA256` | Grok build inputs | `empty` |
+| `PILOT_RESTRICTED_MODE` | Set true only when intentionally recreating the old closed-pilot boundary. | `false` |
+| `PILOT_SSH_ALLOWED_HOSTS` | These legacy allowlists are consulted only when the restricted switch is on. | `empty` |
+| `PILOT_SSH_ALLOWED_CIDRS` | These legacy allowlists are consulted only when the restricted switch is on. | `empty` |
+| `PILOT_SSH_ALLOWED_PORTS` | These legacy allowlists are consulted only when the restricted switch is on. | `22` |
 | `BACKUP_AGE_RECIPIENT_FILE` | repository and production env. | `/etc/webterm/backup.age.recipient` |
 | `BACKUP_DIR` | repository and production env. | `./backups/postgres` |
 | `BACKUP_STATUS_DIR` | repository and production env. | `./backups/status` |
@@ -248,11 +259,12 @@ Total variables: **362**.
 | `SERVER_BULK_WORKER_LEASE_SECONDS` | repository and production env. | `90` |
 | `CELERY_LOG_LEVEL` | repository and production env. | `info` |
 | `CELERY_WORKER_CONCURRENCY` | repository and production env. | `2` |
-| `KUBERNETES_OPS_SYNC_INTERVAL_SECONDS` | repository and production env. | `300` |
-| `KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS` | repository and production env. | `1800` |
-| `KUBERNETES_OPS_STALE_AFTER_SECONDS` | repository and production env. | `900` |
-| `KUBERNETES_OPS_AUDIT_RETENTION_DAYS` | repository and production env. | `365` |
-| `KUBERNETES_OPS_READY_FOR_SIDEBAR` | repository and production env. | `false` |
+| `KUBERNETES_OPS_ENABLED` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `false` |
+| `KUBERNETES_OPS_SYNC_INTERVAL_SECONDS` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `300` |
+| `KUBERNETES_OPS_SYNC_MAX_BACKOFF_SECONDS` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `1800` |
+| `KUBERNETES_OPS_STALE_AFTER_SECONDS` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `900` |
+| `KUBERNETES_OPS_AUDIT_RETENTION_DAYS` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `365` |
+| `KUBERNETES_OPS_READY_FOR_SIDEBAR` | the `kubernetes-ops` Compose profile only when that surface is intentionally deployed. | `false` |
 | `KUBERNETES_OPS_PILOT_SIDEBAR` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `false` |
 | `KUBERNETES_OPS_RELEASE_ENVIRONMENT` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `local` |
 | `KUBERNETES_OPS_PRODUCTION_APPROVAL_REF` | Closed pilot: waive production-only release_scope evidence (still need READY_FOR_SIDEBAR=true + runtime checks) | `empty` |

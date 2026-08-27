@@ -36,7 +36,7 @@ def _grant_feature(user: User, *features: str) -> None:
 
 
 @pytest.mark.django_db
-def test_pilot_agent_create_rejects_unsafe_server_tools_and_schedule():
+def test_pilot_agent_accepts_writable_server_but_rejects_unsafe_tools_and_schedule():
     user = User.objects.create_user(username="pilot-agent-policy", password="x")
     _grant_feature(user, "agents")
     safe = _create_server(user, name="safe-pilot", ai_read_only=True)
@@ -83,12 +83,10 @@ def test_pilot_agent_create_rejects_unsafe_server_tools_and_schedule():
         content_type="application/json",
     )
 
-    assert unsafe_server.status_code == 403
+    assert unsafe_server.status_code == 200
     assert unsafe_tool.status_code == 403
     assert scheduled.status_code == 403
-    assert all(
-        response.json()["code"] == "pilot_policy_violation" for response in (unsafe_server, unsafe_tool, scheduled)
-    )
+    assert all(response.json()["code"] == "pilot_policy_violation" for response in (unsafe_tool, scheduled))
 
 
 @pytest.mark.django_db
@@ -189,11 +187,19 @@ def test_agent_endpoints_crud_run_and_control_flow(monkeypatch):
     assert listed_agent["skill_slugs"] == []
     assert listed_agent["input_artifacts"] == []
     assert listed_agent["report_delivery"]["telegram"]["enabled"] is False
-    from servers.agents.agent_budgets import FULL_DEFAULT_MAX_ITERATIONS, FULL_DEFAULT_SESSION_TIMEOUT_SEC
+    from servers.agents.agent_budgets import resolve_agent_runtime_budget
 
-    assert listed_agent["session_timeout_seconds"] == FULL_DEFAULT_SESSION_TIMEOUT_SEC
-    assert listed_agent["max_iterations"] == FULL_DEFAULT_MAX_ITERATIONS
-    assert listed_agent["max_connections"] == 5
+    recommended_budget = resolve_agent_runtime_budget(
+        mode="mini",
+        goal="",
+        system_prompt="",
+        commands=["uname -a"],
+        skill_slugs=[],
+        input_artifacts=[],
+    )
+    assert listed_agent["session_timeout_seconds"] == recommended_budget.session_timeout_seconds
+    assert listed_agent["max_iterations"] == recommended_budget.max_iterations
+    assert listed_agent["max_connections"] == recommended_budget.max_connections
     # Mini agents use the same execution-plane worker as full/multi.
     assert listed_agent["execution_readiness"]["required"] is True
 

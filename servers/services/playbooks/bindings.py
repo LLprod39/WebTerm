@@ -225,11 +225,7 @@ def save_binding_profile(
     existing_options = profile.options if isinstance(profile.options, dict) else {}
     normalized_options = _normalize_options(
         options,
-        default_dry_run=(
-            bool(existing_options.get("dry_run", True))
-            if profile.pk is not None
-            else True
-        ),
+        default_dry_run=(bool(existing_options.get("dry_run", True)) if profile.pk is not None else True),
     )
 
     if normalized_references:

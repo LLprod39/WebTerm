@@ -20,7 +20,7 @@ class KubernetesAdminClusterTerminalStreamConsumer(KubernetesAdminConsumerAuthMi
     _terminal_input_queue: asyncio.Queue | None = None
 
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()
@@ -70,7 +70,7 @@ class KubernetesAdminNodeDebugStreamConsumer(KubernetesAdminConsumerAuthMixin, A
     _node_debug_input_queue: asyncio.Queue | None = None
 
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()

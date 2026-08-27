@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group, User
 
 from core_ui.models import UserActivityLog, UserAppPermission
 from core_ui.models.ai_providers import (
@@ -11,6 +11,7 @@ from core_ui.models.ai_providers import (
     AIProviderConnection,
     AIProviderConnectionGrant,
     AIProviderPool,
+    AIProviderPoolMember,
     AIProviderPreference,
 )
 from core_ui.models.projects import Project, ProjectMembership
@@ -167,6 +168,73 @@ def test_staff_without_admin_capability_cannot_enumerate_or_manage_workspace_cre
     assert client.get(f"/api/ai/providers/auth-flows/{flow.public_id}/").status_code == 200
 
 
+def test_admin_can_grant_workspace_connection_to_group(client) -> None:
+    admin = User.objects.create_user("group-grant-admin", password="pw", is_staff=True)
+    _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    group = Group.objects.create(name="pilot")
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Pilot Codex",
+        status=AIProviderConnection.STATUS_CONNECTED,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps(
+            {
+                "connection_id": connection.pk,
+                "group_id": group.pk,
+                "allow_interactive": True,
+                "allow_unattended": True,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 201
+    assert response.json()["grant"]["group"] == {"id": group.pk, "name": "pilot"}
+    grant = AIProviderConnectionGrant.objects.get(connection=connection, group=group)
+    assert grant.allow_interactive is True
+    assert grant.allow_unattended is True
+
+
+def test_admin_cannot_grant_revoked_workspace_connection(client) -> None:
+    admin = User.objects.create_user("stale-grant-admin", password="pw", is_staff=True)
+    _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    group = Group.objects.create(name="pilot")
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Revoked Pilot Codex",
+        status=AIProviderConnection.STATUS_REVOKED,
+        enabled=False,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps(
+            {
+                "connection_id": connection.pk,
+                "group_id": group.pk,
+                "allow_interactive": True,
+                "allow_unattended": True,
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "provider_route_unavailable"
+    assert not AIProviderConnectionGrant.objects.filter(connection=connection, group=group).exists()
+
+
 def test_preference_is_default_deny_until_workspace_grant_exists(client) -> None:
     user = User.objects.create_user("operator", password="pw")
     project = _project(user)
@@ -206,6 +274,76 @@ def test_preference_is_default_deny_until_workspace_grant_exists(client) -> None
     )
     assert allowed.status_code == 200
     assert allowed.json()["preference"]["binding"]["connection_id"] == connection.pk
+
+
+def test_workspace_default_rejects_revoked_or_disabled_connection(client) -> None:
+    admin = User.objects.create_user("stale-default-admin", password="pw", is_staff=True)
+    _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Revoked Codex",
+        status=AIProviderConnection.STATUS_REVOKED,
+        enabled=False,
+    )
+    client.force_login(admin)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "workspace_default": True,
+                "binding": {"target_id": "codex_subscription", "connection_id": connection.pk},
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "provider_route_unavailable"
+    assert not AIProviderPreference.objects.filter(project__owner=admin, purpose="assistant").exists()
+
+
+def test_workspace_default_rejects_pool_without_connected_member(client) -> None:
+    admin = User.objects.create_user("stale-pool-admin", password="pw", is_staff=True)
+    _project(admin)
+    UserAppPermission.objects.create(user=admin, feature="ai_connections_admin", allowed=True)
+    connection = AIProviderConnection.objects.create(
+        target_id="codex_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Revoked Pool Member",
+        status=AIProviderConnection.STATUS_REVOKED,
+        enabled=False,
+    )
+    pool = AIProviderPool.objects.create(
+        name="Stale Pilot Pool",
+        target_id="codex_subscription",
+        created_by=admin,
+    )
+    AIProviderPoolMember.objects.create(pool=pool, connection=connection)
+    client.force_login(admin)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "workspace_default": True,
+                "binding": {"target_id": "codex_subscription", "pool_id": pool.pk},
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "provider_route_unavailable"
+    assert not AIProviderPreference.objects.filter(project__owner=admin, purpose="assistant").exists()
 
 
 def test_preference_saves_supported_codex_model_and_reasoning(client) -> None:

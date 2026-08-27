@@ -160,9 +160,7 @@ def distill_with_llm(
         finish_generation_log(
             generation_log,
             status=(
-                ServerMemoryGenerationLog.STATUS_SUCCEEDED
-                if cleaned
-                else ServerMemoryGenerationLog.STATUS_FALLBACK
+                ServerMemoryGenerationLog.STATUS_SUCCEEDED if cleaned else ServerMemoryGenerationLog.STATUS_FALLBACK
             ),
             output=raw,
             execution_context=execution_context,
@@ -319,9 +317,7 @@ def llm_enhance_patterns(
         finish_generation_log(
             generation_log,
             status=(
-                ServerMemoryGenerationLog.STATUS_SUCCEEDED
-                if cleaned
-                else ServerMemoryGenerationLog.STATUS_FALLBACK
+                ServerMemoryGenerationLog.STATUS_SUCCEEDED if cleaned else ServerMemoryGenerationLog.STATUS_FALLBACK
             ),
             output=raw,
             execution_context=execution_context,

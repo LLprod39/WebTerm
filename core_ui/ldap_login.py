@@ -7,22 +7,25 @@ from typing import Any
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.db import transaction
 from loguru import logger
 
 PILOT_GROUP_NAME = "pilot"
-PILOT_GROUP_FEATURES = (
-    "dashboard",
-    "servers",
-    "agents",
-    "studio",
-    "studio_pipelines",
-    "studio_runs",
-    "studio_agents",
-    "studio_skills",
-    "studio_mcp",
-    "studio_notifications",
-    "knowledge_base",
-    "orchestrator",
+PILOT_GROUP_FEATURES = frozenset(
+    {
+        "dashboard",
+        "servers",
+        "agents",
+        "chat",
+        "automation",
+        "studio",
+        "studio_pipelines",
+        "studio_runs",
+        "studio_agents",
+        "studio_skills",
+        "studio_mcp",
+        "studio_notifications",
+    }
 )
 
 _AD_DATA_MESSAGES = {
@@ -89,20 +92,25 @@ def _normalize_username(raw: str) -> str:
 
 
 def ensure_pilot_group_permissions(group: Group | None = None) -> Group:
-    """Create/update the pilot Django group and its app permissions."""
-    from core_ui.models.access import GroupAppPermission
+    """Reconcile the managed pilot group to its exact feature policy."""
+    from core_ui.models.access import FEATURE_CHOICES, GroupAppPermission
 
-    group, _ = Group.objects.get_or_create(name=PILOT_GROUP_NAME)
-    existing = {
-        row.feature: row for row in GroupAppPermission.objects.filter(group=group).only("id", "feature", "allowed")
-    }
-    for feature in PILOT_GROUP_FEATURES:
-        row = existing.get(feature)
-        if row is None:
-            GroupAppPermission.objects.create(group=group, feature=feature, allowed=True)
-        elif not row.allowed:
-            row.allowed = True
-            row.save(update_fields=["allowed"])
+    with transaction.atomic():
+        if group is None:
+            group, _ = Group.objects.get_or_create(name=PILOT_GROUP_NAME)
+        GroupAppPermission.objects.bulk_create(
+            [
+                GroupAppPermission(
+                    group=group,
+                    feature=feature,
+                    allowed=feature in PILOT_GROUP_FEATURES,
+                )
+                for feature, _label in FEATURE_CHOICES
+            ],
+            update_conflicts=True,
+            update_fields=["allowed"],
+            unique_fields=["group", "feature"],
+        )
     return group
 
 

@@ -83,10 +83,7 @@ def expectation_is_stale(
     return bool(
         current["path"] != selected_path
         or current["content_hash"] != expectation.content_hash
-        or (
-            expectation.draft_version is not None
-            and current["draft_version"] != expectation.draft_version
-        )
+        or (expectation.draft_version is not None and current["draft_version"] != expectation.draft_version)
         or (expectation.revision_id is not None and current["base_revision_id"] != expectation.revision_id)
         or current["bundle_hash"] != expectation.bundle_hash
     )
@@ -222,9 +219,7 @@ def _evaluate_fragment(*, source: str, adapted_yaml: str, path: str) -> tuple[di
     try:
         validate_yaml_fragment_safety(adapted_yaml, path=path)
     except PlaybookAdaptationError as exc:
-        raise CompatibilityApplyEvaluationError(
-            str(exc), code="playbook_fragment_invalid", status=422
-        ) from exc
+        raise CompatibilityApplyEvaluationError(str(exc), code="playbook_fragment_invalid", status=422) from exc
     guard = compare_yaml_fragment_semantics(source, adapted_yaml, path=path)
     report = {
         "status": "ready" if guard["passed"] else "blocked",

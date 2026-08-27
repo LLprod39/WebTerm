@@ -261,9 +261,7 @@ def test_search_api_is_scoped_budgeted_and_never_persists_raw_query(client):
     assert client.get(url).status_code == 405
     response = client.post(
         url,
-        data=json.dumps(
-            {"query": raw_query, "top_k": 2, "char_budget": 25, "asset_kinds": ["runbook"]}
-        ),
+        data=json.dumps({"query": raw_query, "top_k": 2, "char_budget": 25, "asset_kinds": ["runbook"]}),
         content_type="application/json",
     )
 
@@ -294,10 +292,7 @@ def test_search_api_flag_off_and_foreign_agent_scope_are_denied(client, settings
     assert client.post(url, data=json.dumps({"query": "needle"}), content_type="application/json").status_code == 404
 
     settings.SERVER_MEMORY_ASSET_RETRIEVAL_ENABLED = True
-    assert (
-        client.post(url, data="{bad-json", content_type="application/json").status_code
-        == 400
-    )
+    assert client.post(url, data="{bad-json", content_type="application/json").status_code == 400
     assert (
         client.post(
             url,

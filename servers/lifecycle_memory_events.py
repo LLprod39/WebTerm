@@ -87,9 +87,7 @@ def _schedule(*, model, source_id: int, server_id: int, event_family: str, trans
 def _validated_project_server_ids(*, project_id: int | None, candidate_ids: set[int]) -> list[int]:
     if not project_id or not candidate_ids:
         return []
-    return list(
-        Server.objects.filter(project_id=project_id, id__in=sorted(candidate_ids)).values_list("id", flat=True)
-    )
+    return list(Server.objects.filter(project_id=project_id, id__in=sorted(candidate_ids)).values_list("id", flat=True))
 
 
 def _bounded_integer_ids(values: Any) -> set[int]:
@@ -108,9 +106,9 @@ def _bounded_integer_ids(values: Any) -> set[int]:
 def remember_alert_state(sender, instance: ServerAlert, **kwargs) -> None:
     if not devops_memory_events_enabled() or not instance.pk:
         return
-    instance._devops_previous_is_resolved = sender.objects.filter(pk=instance.pk).values_list(
-        "is_resolved", flat=True
-    ).first()
+    instance._devops_previous_is_resolved = (
+        sender.objects.filter(pk=instance.pk).values_list("is_resolved", flat=True).first()
+    )
 
 
 @receiver(post_save, sender=ServerAlert, dispatch_uid="devops_memory_alert_lifecycle")
@@ -187,11 +185,7 @@ def enqueue_playbook_run_lifecycle(sender, instance: PlaybookRun, **kwargs) -> N
 
 @receiver(post_save, sender=AgentRun, dispatch_uid="devops_memory_agent_run_lifecycle")
 def enqueue_agent_run_lifecycle(sender, instance: AgentRun, **kwargs) -> None:
-    if (
-        not devops_memory_events_enabled()
-        or instance.status not in AGENT_TERMINAL_STATUSES
-        or not instance.server_id
-    ):
+    if not devops_memory_events_enabled() or instance.status not in AGENT_TERMINAL_STATUSES or not instance.server_id:
         return
     server_ids = _validated_project_server_ids(
         project_id=instance.project_id,

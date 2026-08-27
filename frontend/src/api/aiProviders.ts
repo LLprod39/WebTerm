@@ -160,12 +160,16 @@ export const saveAiProviderPreference = (payload: {
   body: JSON.stringify(payload),
 });
 
+type AiProviderGrantPrincipal =
+  | { user_id: number; group_id?: never; project_id?: never; project_role?: never }
+  | { group_id: number; user_id?: never; project_id?: never; project_role?: never }
+  | { project_id: number; project_role?: string; user_id?: never; group_id?: never };
+
 export const createAiProviderGrant = (payload: {
   connection_id: number;
-  user_id: number;
   allow_interactive: boolean;
   allow_unattended: boolean;
-}) => apiFetch<{ success: boolean; grant: AiProviderGrant }>("/api/ai/providers/grants/", {
+} & AiProviderGrantPrincipal) => apiFetch<{ success: boolean; grant: AiProviderGrant }>("/api/ai/providers/grants/", {
   method: "POST",
   body: JSON.stringify(payload),
 });

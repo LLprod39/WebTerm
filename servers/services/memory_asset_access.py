@@ -160,13 +160,13 @@ def accessible_memory_assets_queryset(*, user, server_ids: list[int], project=No
             return ServerMemoryAsset.objects.none()
 
     now = timezone.now()
-    active_grant_q = Q(grants__revoked_at__isnull=True) & (
-        Q(grants__expires_at__isnull=True) | Q(grants__expires_at__gt=now)
-    ) & Q(grants__permission__in=READABLE_GRANT_PERMISSIONS)
-    visibility_q = Q(visibility=ServerMemoryAsset.VISIBILITY_INHERIT_SERVER)
-    visibility_q |= Q(visibility=ServerMemoryAsset.VISIBILITY_PRIVATE) & (
-        Q(server__user=user) | Q(created_by=user)
+    active_grant_q = (
+        Q(grants__revoked_at__isnull=True)
+        & (Q(grants__expires_at__isnull=True) | Q(grants__expires_at__gt=now))
+        & Q(grants__permission__in=READABLE_GRANT_PERMISSIONS)
     )
+    visibility_q = Q(visibility=ServerMemoryAsset.VISIBILITY_INHERIT_SERVER)
+    visibility_q |= Q(visibility=ServerMemoryAsset.VISIBILITY_PRIVATE) & (Q(server__user=user) | Q(created_by=user))
     visibility_q |= Q(visibility=ServerMemoryAsset.VISIBILITY_PROJECT) & (
         Q(project__owner=user) | Q(project__memberships__user=user)
     )

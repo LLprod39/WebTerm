@@ -149,14 +149,18 @@ def _outcome_for_run(run: AgentRun, document: str, coverage: dict[str, Any]) -> 
     saved_details = saved.get("outcome_details") if isinstance(saved.get("outcome_details"), dict) else {}
     saved_report = saved.get("report") if isinstance(saved.get("report"), dict) else {}
     document_outcome, document_reason = _legacy_outcome_from_document(document)
-    outcome = str(
-        stored.get("outcome")
-        or saved.get("outcome")
-        or saved_details.get("outcome")
-        or saved_report.get("outcome")
-        or document_outcome
-        or ""
-    ).strip().lower()
+    outcome = (
+        str(
+            stored.get("outcome")
+            or saved.get("outcome")
+            or saved_details.get("outcome")
+            or saved_report.get("outcome")
+            or document_outcome
+            or ""
+        )
+        .strip()
+        .lower()
+    )
     reason = _text(
         stored.get("reason")
         or saved.get("outcome_reason")
@@ -198,9 +202,7 @@ def _outcome_for_run(run: AgentRun, document: str, coverage: dict[str, Any]) -> 
         details = {key: saved_details[key] for key in detail_keys if key in saved_details}
     technical_outcome = outcome
     technical_reason = reason
-    explicit_partial = bool(
-        re.search(r"(?:статус[^\n]{0,40}частич|partial\s+success)", document, flags=re.IGNORECASE)
-    )
+    explicit_partial = bool(re.search(r"(?:статус[^\n]{0,40}частич|partial\s+success)", document, flags=re.IGNORECASE))
     partial_coverage = bool(
         coverage.get("total")
         and coverage.get("checked") is not None
@@ -481,9 +483,7 @@ def _validated_model_indicators(
                 "value_kind": value_kind,
                 "unit": _text(raw.get("unit"), limit=40),
                 "numerator": raw.get("numerator") if isinstance(raw.get("numerator"), (int, float)) else None,
-                "denominator": raw.get("denominator")
-                if isinstance(raw.get("denominator"), (int, float))
-                else None,
+                "denominator": raw.get("denominator") if isinstance(raw.get("denominator"), (int, float)) else None,
                 "tone": tone,
                 "priority": priority,
                 "evidence_refs": refs,
@@ -628,7 +628,9 @@ def _atomic_findings_and_actions(
         if cta_type not in {"open_evidence", "open_url", "rerun", "configure_delivery", "none"}:
             cta_type = "open_evidence" if canonical_cta_ref else "none"
         supplied_href = _text(cta_raw.get("href"), limit=500)
-        safe_supplied_href = supplied_href if supplied_href.startswith("/") and not supplied_href.startswith("//") else ""
+        safe_supplied_href = (
+            supplied_href if supplied_href.startswith("/") and not supplied_href.startswith("//") else ""
+        )
         cta_href = (canonical_cta_ref or {}).get("href") or safe_supplied_href
         safety = str(raw.get("safety") or "review_required").strip().lower()
         if safety not in {"read_only", "review_required", "destructive", "unknown"}:
@@ -788,9 +790,7 @@ def _phase_summary(
         (run.agent.goal or run.agent.ai_prompt) if run.agent_id and run.agent else "Выполнить назначенную проверку.",
         limit=1_200,
     )
-    problem_events = [
-        event for event in events if _severity_rank(event.get("severity")) >= _severity_rank("warning")
-    ]
+    problem_events = [event for event in events if _severity_rank(event.get("severity")) >= _severity_rank("warning")]
     important_events = [event for event in events if event.get("important")]
     failed_activities = [item for item in activities if item.get("status") == "failed"]
 
@@ -831,7 +831,9 @@ def _phase_summary(
     is_active = bool(lifecycle.get("is_active"))
     action_status = "active" if is_active else "problem" if failed_activities else "completed"
     observation_status = "active" if is_active else "problem" if problem_events else "completed"
-    conclusion_status = "pending" if is_active else "problem" if outcome.get("status") in {"failed", "partial"} else "completed"
+    conclusion_status = (
+        "pending" if is_active else "problem" if outcome.get("status") in {"failed", "partial"} else "completed"
+    )
     observation_summary = (
         _text(observation_items[0].get("summary") or observation_items[0].get("title"), limit=700)
         if observation_items
@@ -985,8 +987,14 @@ def build_agent_run_activity_items(run: AgentRun) -> list[dict[str, Any]]:
                 "summary": _text(iteration.get("observation") or iteration.get("thought"), limit=700),
                 "tool": _text(iteration.get("action"), limit=120),
                 "task": _text(iteration.get("task") or iteration.get("task_id"), limit=200),
-                "server": _text((iteration.get("args") or {}).get("server") if isinstance(iteration.get("args"), dict) else "", limit=160),
-                "command": _text((iteration.get("args") or {}).get("command") if isinstance(iteration.get("args"), dict) else "", limit=1_500),
+                "server": _text(
+                    (iteration.get("args") or {}).get("server") if isinstance(iteration.get("args"), dict) else "",
+                    limit=160,
+                ),
+                "command": _text(
+                    (iteration.get("args") or {}).get("command") if isinstance(iteration.get("args"), dict) else "",
+                    limit=1_500,
+                ),
                 "exit_code": None,
                 "duration_ms": int(iteration.get("duration_ms") or 0),
                 "started_at": iteration.get("timestamp"),
@@ -1003,7 +1011,9 @@ def build_agent_run_activity_items(run: AgentRun) -> list[dict[str, Any]]:
             exit_code = int(raw_exit_code) if raw_exit_code is not None else None
         except (TypeError, ValueError):
             exit_code = None
-        known_success = explicit_success if explicit_success is not None else (exit_code == 0 if exit_code is not None else None)
+        known_success = (
+            explicit_success if explicit_success is not None else (exit_code == 0 if exit_code is not None else None)
+        )
         status, success = _activity_status(tool_call.get("status"), known_success=known_success)
         args = tool_call.get("args") if isinstance(tool_call.get("args"), dict) else {}
         items.append(
@@ -1153,13 +1163,19 @@ def _report_generation(run: AgentRun, document: dict[str, Any], outcome: dict[st
         error = _text((outcome.get("details") or {}).get("technical_reason") or "LLM call failed", limit=700)
     elif stored.get("status") in {"generating", "ready", "ready_with_fallback", "failed"}:
         status = str(stored["status"])
-        label = _text(stored.get("label"), limit=200) or {
-            "generating": "Отчёт формируется",
-            "ready": "Отчёт готов",
-            "ready_with_fallback": "Отчёт готов по сохранённым данным",
-            "failed": "Отчёт не сформирован",
-        }[status]
-        severity = str(stored.get("severity") or ("success" if status == "ready" else "warning" if status != "failed" else "critical"))
+        label = (
+            _text(stored.get("label"), limit=200)
+            or {
+                "generating": "Отчёт формируется",
+                "ready": "Отчёт готов",
+                "ready_with_fallback": "Отчёт готов по сохранённым данным",
+                "failed": "Отчёт не сформирован",
+            }[status]
+        )
+        severity = str(
+            stored.get("severity")
+            or ("success" if status == "ready" else "warning" if status != "failed" else "critical")
+        )
         error = _text(stored.get("error"), limit=700)
     elif document["available"]:
         status, label, severity, error = "ready", "Отчёт готов", "success", ""
@@ -1176,12 +1192,18 @@ def _report_generation(run: AgentRun, document: dict[str, Any], outcome: dict[st
         "error": error,
         "generated_at": (
             _text(stored.get("generated_at"), limit=80)
-            or (run.completed_at.isoformat() if status in {"ready", "ready_with_fallback"} and run.completed_at else None)
+            or (
+                run.completed_at.isoformat()
+                if status in {"ready", "ready_with_fallback"} and run.completed_at
+                else None
+            )
         ),
     }
 
 
-def _evidence_state(run: AgentRun, outcome: dict[str, Any], coverage: dict[str, Any], activities: list[dict[str, Any]]) -> dict[str, Any]:
+def _evidence_state(
+    run: AgentRun, outcome: dict[str, Any], coverage: dict[str, Any], activities: list[dict[str, Any]]
+) -> dict[str, Any]:
     checked, total = coverage.get("checked"), coverage.get("total")
     if run.status not in TERMINAL_STATUSES:
         status, label = "pending", "Сбор доказательств продолжается"
@@ -1318,9 +1340,7 @@ def build_agent_run_report_v2(run: AgentRun) -> dict[str, Any]:
             "tone": "info",
             "priority": 25,
             "evidence_refs": [
-                _activity_ref(run.id, item)
-                for item in activities
-                if item.get("kind") in {"command", "step", "tool"}
+                _activity_ref(run.id, item) for item in activities if item.get("kind") in {"command", "step", "tool"}
             ][:3],
         },
         {
@@ -1471,14 +1491,18 @@ def build_agent_run_events_v2(
     except (TypeError, ValueError):
         cursor_sequence = None
     if normalized_direction == "older":
-        candidates = [item for item in filtered if cursor_sequence is None or int(item.get("sequence_no") or 0) < cursor_sequence]
+        candidates = [
+            item for item in filtered if cursor_sequence is None or int(item.get("sequence_no") or 0) < cursor_sequence
+        ]
         selected_desc = list(reversed(candidates))[: page_limit + 1]
         has_more = len(selected_desc) > page_limit
         selected = list(reversed(selected_desc[:page_limit]))
         next_cursor = str(selected[0]["sequence_no"]) if selected and has_more else None
         prev_cursor = str(selected[-1]["sequence_no"]) if selected else None
     else:
-        candidates = [item for item in filtered if cursor_sequence is None or int(item.get("sequence_no") or 0) > cursor_sequence]
+        candidates = [
+            item for item in filtered if cursor_sequence is None or int(item.get("sequence_no") or 0) > cursor_sequence
+        ]
         selected = candidates[: page_limit + 1]
         has_more = len(selected) > page_limit
         selected = selected[:page_limit]

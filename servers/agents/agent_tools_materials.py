@@ -227,27 +227,61 @@ async def tool_run_script_material(
     if local_run:
         source_name = str(item.get("source_name") or item.get("name") or "").lower()
         first_line = content.lstrip().splitlines()[0] if content.lstrip() else ""
-        if not (source_name.endswith((".sh", ".bash")) or first_line.startswith(("#!/bin/sh", "#!/bin/bash", "#!/usr/bin/env bash"))):
-            return ToolResult(False, "Blocked: isolated material runner supports only identifiable shell/bash scripts.", data={"code": "unsupported_material_language", "runtime": "blocked"})
+        if not (
+            source_name.endswith((".sh", ".bash"))
+            or first_line.startswith(("#!/bin/sh", "#!/bin/bash", "#!/usr/bin/env bash"))
+        ):
+            return ToolResult(
+                False,
+                "Blocked: isolated material runner supports only identifiable shell/bash scripts.",
+                data={"code": "unsupported_material_language", "runtime": "blocked"},
+            )
         try:
             from app.agent_kernel.sandbox.material_runner import MaterialRunnerError, execute_isolated_material
 
             callback = getattr(session, "event_callback", None)
             if callback is not None:
-                await callback("agent_material_execution_started", {"material_id": item.get("id"), "runtime": "isolated_container", "dry_run": dry})
+                await callback(
+                    "agent_material_execution_started",
+                    {"material_id": item.get("id"), "runtime": "isolated_container", "dry_run": dry},
+                )
             local_content = f"set -n\n{content}" if dry else content
-            result = await execute_isolated_material(content=local_content, args=args_str.split(), timeout_seconds=timeout_sec, language="bash")
+            result = await execute_isolated_material(
+                content=local_content, args=args_str.split(), timeout_seconds=timeout_sec, language="bash"
+            )
         except MaterialRunnerError as exc:
             if callback is not None:
-                await callback("agent_material_execution_blocked", {"material_id": item.get("id"), "runtime": "isolated_container", "reason": str(exc)})
-            return ToolResult(False, f"Blocked: {exc} WebTerm did not execute the material on the backend host.", data={"code": "isolated_material_runner_unavailable", "runtime": "blocked"})
+                await callback(
+                    "agent_material_execution_blocked",
+                    {"material_id": item.get("id"), "runtime": "isolated_container", "reason": str(exc)},
+                )
+            return ToolResult(
+                False,
+                f"Blocked: {exc} WebTerm did not execute the material on the backend host.",
+                data={"code": "isolated_material_runner_unavailable", "runtime": "blocked"},
+            )
         if callback is not None:
-            await callback("agent_material_execution_finished", {"material_id": item.get("id"), "runtime": "isolated_container", "exit_status": result.exit_status, "duration_ms": result.duration_ms})
+            await callback(
+                "agent_material_execution_finished",
+                {
+                    "material_id": item.get("id"),
+                    "runtime": "isolated_container",
+                    "exit_status": result.exit_status,
+                    "duration_ms": result.duration_ms,
+                },
+            )
         combined = result.stdout + (f"\nSTDERR:\n{result.stderr}" if result.stderr else "")
         return ToolResult(
             result.exit_status == 0,
             f"run_script_material mode={'dry_run' if dry else 'execute'} id={item.get('id')} name={item.get('name')!r} runtime=isolated_container script_exit={result.exit_status}\n\n{combined[:8000]}",
-            data={"material_id": item.get("id"), "script_exit": result.exit_status, "exit_code": result.exit_status, "dry_run": dry, "duration_ms": result.duration_ms, "runtime": "isolated_container"},
+            data={
+                "material_id": item.get("id"),
+                "script_exit": result.exit_status,
+                "exit_code": result.exit_status,
+                "dry_run": dry,
+                "duration_ms": result.duration_ms,
+                "runtime": "isolated_container",
+            },
         )
 
     if dry:

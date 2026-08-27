@@ -62,7 +62,9 @@ async def _finalize_failed_run(
     run.completed_at = timezone.now()
     run.duration_ms = int((time.monotonic() - t0) * 1000)
     lowered_message = message.lower()
-    exit_reason = "timeout" if "timeout" in lowered_message else "connection_error" if "ssh" in lowered_message else "exception"
+    exit_reason = (
+        "timeout" if "timeout" in lowered_message else "connection_error" if "ssh" in lowered_message else "exception"
+    )
     run.execution_outcome = {
         "outcome": "failed",
         "status": AgentRun.STATUS_FAILED,

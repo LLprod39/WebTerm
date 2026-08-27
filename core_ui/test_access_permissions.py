@@ -61,6 +61,15 @@ class AccessPermissionsTests(TestCase):
         dashboard_response = self.client.get(reverse("api_admin_dashboard"))
         self.assertEqual(dashboard_response.status_code, 403)
 
+    def test_dashboard_layout_api_requires_dashboard_feature(self):
+        user = self.create_user("dashboard-denied")
+        UserAppPermission.objects.create(user=user, feature="dashboard", allowed=False)
+        self.client.force_login(user)
+
+        denied = self.client.get(reverse("api_dashboard_layout", args=["user"]))
+
+        self.assertEqual(denied.status_code, 403)
+
     def test_pilot_user_profile_grants_user_workspace_only(self):
         user = self.create_user("pilot")
         _apply_access_profile(user, "pilot_user")

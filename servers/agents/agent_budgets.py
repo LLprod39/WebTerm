@@ -55,7 +55,9 @@ class AgentRuntimeBudget:
     max_connections: int
 
 
-def resolve_agent_runtime_budget(*, mode: str, goal: str = "", system_prompt: str = "", commands=None, skill_slugs=None, input_artifacts=None) -> AgentRuntimeBudget:
+def resolve_agent_runtime_budget(
+    *, mode: str, goal: str = "", system_prompt: str = "", commands=None, skill_slugs=None, input_artifacts=None
+) -> AgentRuntimeBudget:
     """Choose a bounded runtime budget from task complexity, without asking end users."""
     complexity = len((goal or "").strip()) + len((system_prompt or "").strip())
     complexity += 180 * len(commands or []) + 220 * len(skill_slugs or []) + 240 * len(input_artifacts or [])

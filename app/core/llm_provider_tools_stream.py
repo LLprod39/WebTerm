@@ -53,7 +53,7 @@ async def stream_provider_chat_tools(
       {"type":"text_delta","text":str}
       {"type":"tool_call","id":str,"name":str,"arguments":dict}
       {"type":"done","usage":dict,"stop_reason":str}
-      {"type":"error","message":str}
+      {"type":"error","code":str,"message":str}
     """
     model, specific_model = apply_execution_context_binding(
         execution_context=execution_context,
@@ -154,6 +154,7 @@ async def stream_provider_chat_tools(
             usage_logger=_log_llm_usage,
             prompt_for_usage=prompt_for_usage,
             provider=provider,
+            display_name="OpenAI" if provider == "openai" else "Grok",
             trust_env=provider in {"openai", "grok"},
         ):
             yield event

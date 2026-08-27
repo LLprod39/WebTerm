@@ -1,5 +1,4 @@
 import json
-import os
 import subprocess
 import sys
 import time
@@ -23,13 +22,31 @@ def main():
     script.write_text(content, encoding="utf-8")
     script.chmod(0o500)
     started = time.monotonic()
-    env = {"PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin", "HOME": "/work", "TMPDIR": "/work", "LANG": "C.UTF-8"}
+    env = {
+        "PATH": "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "HOME": "/work",
+        "TMPDIR": "/work",
+        "LANG": "C.UTF-8",
+    }
     try:
-        result = subprocess.run(["/bin/bash", "--noprofile", "--norc", str(script), *args], cwd="/work", env=env, capture_output=True, timeout=timeout, check=False)
+        result = subprocess.run(
+            ["/bin/bash", "--noprofile", "--norc", str(script), *args],
+            cwd="/work",
+            env=env,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
         stdout, stderr, code = result.stdout, result.stderr, result.returncode
     except subprocess.TimeoutExpired as exc:
         stdout, stderr, code = exc.stdout or b"", (exc.stderr or b"") + b"\nmaterial timeout", 124
-    response = {"schema": "webterm.material-result.v1", "stdout": stdout.decode("utf-8", "replace")[:output_limit], "stderr": stderr.decode("utf-8", "replace")[:output_limit], "exit_status": code, "duration_ms": int((time.monotonic() - started) * 1000)}
+    response = {
+        "schema": "webterm.material-result.v1",
+        "stdout": stdout.decode("utf-8", "replace")[:output_limit],
+        "stderr": stderr.decode("utf-8", "replace")[:output_limit],
+        "exit_status": code,
+        "duration_ms": int((time.monotonic() - started) * 1000),
+    }
     sys.stdout.write(json.dumps(response, ensure_ascii=False))
 
 
@@ -37,4 +54,4 @@ try:
     main()
 except Exception as exc:
     sys.stderr.write(f"material runner error: {exc}\n")
-    raise SystemExit(2)
+    raise SystemExit(2) from exc

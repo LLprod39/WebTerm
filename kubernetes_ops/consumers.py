@@ -41,7 +41,7 @@ from kubernetes_ops.services.admin_watch import get_admin_resource_watch_preview
 
 class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, AsyncJsonWebsocketConsumer):
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()
@@ -189,7 +189,7 @@ class KubernetesAdminLogStreamConsumer(KubernetesAdminFollowLifecycleMixin, Asyn
 
 class KubernetesAdminWatchStreamConsumer(KubernetesAdminFollowLifecycleMixin, AsyncJsonWebsocketConsumer):
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()
@@ -349,7 +349,7 @@ class KubernetesAdminExecStreamConsumer(KubernetesAdminConsumerAuthMixin, AsyncJ
     _exec_input_queue: asyncio.Queue | None = None
 
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()
@@ -404,7 +404,7 @@ class KubernetesAdminPortForwardStreamConsumer(KubernetesAdminConsumerAuthMixin,
     _port_forward_input_queue: asyncio.Queue | None = None
 
     async def connect(self):
-        if not self._authenticated():
+        if not await self._authenticated():
             await self.close(code=4001)
             return
         await self.accept()

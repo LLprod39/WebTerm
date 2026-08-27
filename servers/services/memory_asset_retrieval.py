@@ -197,9 +197,7 @@ def _retrieve_scoped(
             )
         authorized_servers = authorized_servers.filter(user=user)
     accessible_ids = list(authorized_servers.order_by("pk").values_list("pk", flat=True).distinct())
-    accessible_project_ids = list(
-        authorized_servers.order_by().values_list("project_id", flat=True).distinct()[:2]
-    )
+    accessible_project_ids = list(authorized_servers.order_by().values_list("project_id", flat=True).distinct()[:2])
     audit_project = agent.project if agent is not None else None
     if audit_project is None and len(accessible_project_ids) == 1:
         audit_project = authorized_servers.first().project
@@ -292,9 +290,9 @@ def _retrieve_scoped(
         legacy_rows = legacy_rows.filter(layer=ServerMemorySnapshot.LAYER_CANONICAL)
     if legacy_memory_keys is not None:
         legacy_rows = legacy_rows.filter(memory_key__in=legacy_memory_keys)
-    for snapshot in legacy_rows.only(
-        "id", "server_id", "memory_key", "title", "content", "content_hash"
-    ).order_by("id"):
+    for snapshot in legacy_rows.only("id", "server_id", "memory_key", "title", "content", "content_hash").order_by(
+        "id"
+    ):
         score = _lexical_score(query, snapshot.title, snapshot.content)
         if score > 0:
             scored.append(
@@ -312,9 +310,7 @@ def _retrieve_scoped(
             )
 
     if include_legacy_knowledge:
-        server_groups = dict(
-            authorized_servers.filter(group_id__isnull=False).values_list("id", "group_id").distinct()
-        )
+        server_groups = dict(authorized_servers.filter(group_id__isnull=False).values_list("id", "group_id").distinct())
         for row in legacy_knowledge_rows(
             query=query,
             server_ids=accessible_ids,

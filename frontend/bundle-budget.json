@@ -1,10 +1,10 @@
 {
-  "baselineCommit": "b8924eeb1bcfd0647e80615eaa8c7684828e517a",
-  "baselineTotalJavaScriptBytes": 4687999,
-  "baselineLargestJavaScriptBytes": 979344,
-  "baselineTotalCssBytes": 219798,
+  "baselineCommit": "11b9119150cb5964e0641ea9bf395d4c55edcdc7",
+  "baselineTotalJavaScriptBytes": 4738112,
+  "baselineLargestJavaScriptBytes": 410310,
+  "baselineTotalCssBytes": 301410,
   "minimumHeadroomPercent": 5,
-  "maxTotalJavaScriptBytes": 4922000,
-  "maxLargestJavaScriptBytes": 1029000,
-  "maxTotalCssBytes": 231000
+  "maxTotalJavaScriptBytes": 5025000,
+  "maxLargestJavaScriptBytes": 435000,
+  "maxTotalCssBytes": 320000
 }

@@ -89,10 +89,7 @@ def _runtime_secret_context(
 
 
 def _redacted_run_fields(fields: dict[str, Any], *, secret_values: tuple[str, ...]) -> dict[str, Any]:
-    return {
-        name: _redact_runtime_value(value, secret_values=secret_values)
-        for name, value in fields.items()
-    }
+    return {name: _redact_runtime_value(value, secret_values=secret_values) for name, value in fields.items()}
 
 
 def _estimated_total_kind(total: int) -> str:

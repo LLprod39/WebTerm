@@ -262,7 +262,7 @@ describe("Servers page rules and translations", () => {
     expect(await screen.findByRole("button", { name: "NOPASSWD" })).toBeInTheDocument();
     expect(screen.queryByRole("switch", { name: "AI: read-only" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stored sudo password" }));
-    expect(screen.getByLabelText("Sudo password")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Sudo password/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Update" }));
     await waitFor(() => {

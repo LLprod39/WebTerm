@@ -104,9 +104,7 @@ def test_chat_reads_owned_playbook_run_report_and_bounded_log_tail():
     )
 
     listed = playbook_runs(AssistantActionContext(user=user, input_payload={}))
-    detail = playbook_runs(
-        AssistantActionContext(user=user, input_payload={"run_id": run.id, "log_tail_chars": 18})
-    )
+    detail = playbook_runs(AssistantActionContext(user=user, input_payload={"run_id": run.id, "log_tail_chars": 18}))
 
     assert listed["count"] == 1
     assert listed["runs"][0]["id"] == run.id

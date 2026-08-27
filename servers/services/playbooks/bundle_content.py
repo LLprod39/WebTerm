@@ -578,9 +578,7 @@ def _scan_text_for_tokens(path: str, text: str) -> list[dict[str, str]]:
     for match in _ASSIGNMENT_RE.finditer(text):
         if _is_inventory_identity_key(match.group("key")):
             findings.append({"path": path, "kind": "inventory_identity", "key": match.group("key")[:80]})
-        elif _is_sensitive_key(match.group("key")) and _contains_secret_value(
-            match.group("value").strip().rstrip(",")
-        ):
+        elif _is_sensitive_key(match.group("key")) and _contains_secret_value(match.group("value").strip().rstrip(",")):
             findings.append({"path": path, "kind": "sensitive_assignment"})
             break
     for match in _INLINE_ASSIGNMENT_RE.finditer(text):
@@ -609,8 +607,11 @@ def _redact_structure(value: Any, seen: set[int] | None = None) -> tuple[Any, in
             if _is_sensitive_key(str(key)) and _contains_secret_value(nested):
                 output[key] = "__REDACTED__"
                 redactions += 1
-            elif _is_inventory_identity_key(str(key)) and _contains_secret_value(nested) or str(key).casefold() in {"hosts", "host_selectors", "missing_bindings"} and _contains_literal_host(
-                nested
+            elif (
+                _is_inventory_identity_key(str(key))
+                and _contains_secret_value(nested)
+                or str(key).casefold() in {"hosts", "host_selectors", "missing_bindings"}
+                and _contains_literal_host(nested)
             ):
                 output[key] = "__REDACTED_TARGET__"
                 redactions += 1

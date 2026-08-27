@@ -236,9 +236,7 @@ async def execute_operator_dispatch(dispatch_id: int, *, worker_name: str, lease
                 "type": "turn_complete",
                 "status": str(turn.status if turn is not None else "done"),
                 "turn_id": turn.pk if turn is not None else None,
-                "assistant_message_id": (
-                    turn.assistant_message_id if turn is not None else None
-                ),
+                "assistant_message_id": (turn.assistant_message_id if turn is not None else None),
                 "dispatch_id": row.pk,
                 "durable_completion": True,
             }

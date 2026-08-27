@@ -442,7 +442,7 @@ export function useCreateAgentDialogState({
     { icon: Server, label: localize(lang, "Системы", "Systems"), value: selectedServers.length ? localize(lang, `${selectedServers.length} выбрано`, `${selectedServers.length} selected`) : localize(lang, "Без серверов · внешние системы", "No servers · external systems") },
     { icon: Shield, label: localize(lang, "Автономность", "Autonomy"), value: localize(lang, sudoAgentOption(sudoPolicy).labelRu, sudoAgentOption(sudoPolicy).labelEn) },
     { icon: CalendarDays, label: localize(lang, "Запуск", "Trigger"), value: formatScheduleConfigLabel(scheduleConfig, schedule, lang) },
-    { icon: BellRing, label: localize(lang, "Результат", "Result"), value: telegramEnabled ? localize(lang, "Отчёт + Telegram", "Report + Telegram") : localize(lang, "Отчёт в WebTrerm", "Report in WebTrerm") },
+    { icon: BellRing, label: localize(lang, "Результат", "Result"), value: telegramEnabled ? localize(lang, "Отчёт + Telegram", "Report + Telegram") : localize(lang, "Отчёт в WebTerm", "Report in WebTerm") },
   ];
   const enabledToolCount = Object.values(toolsConfig).filter(Boolean).length;
   const visibleSkills = skillsExpanded ? availableSkills : availableSkills.slice(0, 4);

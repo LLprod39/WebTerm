@@ -177,6 +177,7 @@ def test_compose_production_studio_workers_are_declared():
     assert services["telegram-bot"]["profiles"] == ["telegram-bot"]
     assert services["telegram-bot"]["environment"]["TELEGRAM_BOT_POLL_TOKEN"].startswith("${TELEGRAM_BOT_TOKEN:")
     assert services["scheduled-pipelines"]["environment"]["TELEGRAM_BOT_POLL_TOKEN"] == ""
+    assert "${FRONTEND_BIND_HOST:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080" in services["nginx"]["ports"]
 
 
 def test_compose_dev_monitor_supports_optional_local_inventory_scope():
@@ -192,6 +193,7 @@ def test_compose_dev_monitor_supports_optional_local_inventory_scope():
 def test_compose_production_kubernetes_ops_sync_worker_is_opt_in():
     compose = _load_yaml("docker-compose.production.yml")
     services = compose["services"]
+    installer = (ROOT / "docker/install-production.sh").read_text(encoding="utf-8")
 
     assert "kubernetes-ops-sync" in services
     assert services["kubernetes-ops-sync"]["container_name"] == "mini-prod-kubernetes-ops-sync"
@@ -200,10 +202,22 @@ def test_compose_production_kubernetes_ops_sync_worker_is_opt_in():
     assert "python manage.py run_kubernetes_ops_sync_worker --daemon" in command
     assert "--interval ${KUBERNETES_OPS_SYNC_INTERVAL_SECONDS:-300}" in command
     assert "--worker-key production" in command
+    default_services = installer.split("local services=(", 1)[1].split(")", 1)[0]
+    background_waits = installer.split('echo "==> Waiting for background workers"', 1)[1].split(
+        'if [[ "$WITH_TELEGRAM_BOT"', 1
+    )[0]
+    assert "kubernetes-ops-sync" not in default_services
+    assert "wait_for_service kubernetes-ops-sync" not in background_waits
+    assert "--profile kubernetes-ops up -d kubernetes-ops-sync" in installer
 
     assert compose["x-backend-worker-environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
     assert services["backend"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
     dev_compose = _load_yaml("docker-compose.yml")
     assert dev_compose["services"]["kubernetes-ops-sync"]["profiles"] == ["kubernetes-ops"]
-    assert dev_compose["x-backend-worker"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
-    assert dev_compose["services"]["backend"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
+    assert (
+        dev_compose["x-backend-worker"]["environment"]["KUBERNETES_OPS_ENABLED"] == "${KUBERNETES_OPS_ENABLED:-false}"
+    )
+    assert (
+        dev_compose["services"]["backend"]["environment"]["KUBERNETES_OPS_ENABLED"]
+        == "${KUBERNETES_OPS_ENABLED:-false}"
+    )

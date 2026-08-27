@@ -231,10 +231,18 @@ def test_expired_and_revoked_grants_do_not_retrieve_restricted_assets():
     server = _server(owner, project, name="expiry-node")
     _share(server, owner, viewer, share_context=True)
     expired = _asset(
-        server, owner, title="Expired", content="expiryneedle expired", visibility=ServerMemoryAsset.VISIBILITY_RESTRICTED
+        server,
+        owner,
+        title="Expired",
+        content="expiryneedle expired",
+        visibility=ServerMemoryAsset.VISIBILITY_RESTRICTED,
     )
     revoked = _asset(
-        server, owner, title="Revoked", content="expiryneedle revoked", visibility=ServerMemoryAsset.VISIBILITY_RESTRICTED
+        server,
+        owner,
+        title="Revoked",
+        content="expiryneedle revoked",
+        visibility=ServerMemoryAsset.VISIBILITY_RESTRICTED,
     )
     ServerMemoryAssetGrant.objects.create(
         asset=expired,

@@ -60,7 +60,12 @@ def launch_queued_agent_run(
             if not server_ids:
                 reasons = agent_server_requirement_reasons(agent)
                 if reasons:
-                    return {"ok": False, "status": 400, "error": "Selected commands or capabilities require a server", "payload": {"code": "server_scope_required", "reasons": reasons}}
+                    return {
+                        "ok": False,
+                        "status": 400,
+                        "error": "Selected commands or capabilities require a server",
+                        "payload": {"code": "server_scope_required", "reasons": reasons},
+                    }
                 servers = []
                 denied = []
             else:

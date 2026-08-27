@@ -60,7 +60,8 @@ def draft_file_tree(draft: PlaybookDraft) -> dict[str, Any]:
         )
     return {
         "entrypoint": entrypoint,
-        "bundle_hash": draft.bundle_hash or (inspected.content_hash if inspected else calculate_bundle_content_hash(files)),
+        "bundle_hash": draft.bundle_hash
+        or (inspected.content_hash if inspected else calculate_bundle_content_hash(files)),
         "draft_version": draft.version,
         "files": rows,
     }
@@ -97,7 +98,9 @@ def get_draft_text_file(draft: PlaybookDraft, *, path: str = "") -> DraftFileSna
     if selected not in files:
         raise BundleValidationError("Draft file was not found", code="draft_file_not_found", status_code=404)
     if PurePosixPath(selected).suffix.casefold() not in TEXT_EXTENSIONS:
-        raise BundleValidationError("Draft file is binary and cannot be opened", code="draft_file_binary", status_code=415)
+        raise BundleValidationError(
+            "Draft file is binary and cannot be opened", code="draft_file_binary", status_code=415
+        )
     try:
         content = files[selected].decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -123,7 +126,9 @@ def get_base_text_file(draft: PlaybookDraft, *, path: str = "") -> DraftFileSnap
     if selected not in files:
         raise BundleValidationError("Base file was not found", code="draft_base_file_not_found", status_code=404)
     if PurePosixPath(selected).suffix.casefold() not in TEXT_EXTENSIONS:
-        raise BundleValidationError("Base file is binary and cannot be opened", code="draft_file_binary", status_code=415)
+        raise BundleValidationError(
+            "Base file is binary and cannot be opened", code="draft_file_binary", status_code=415
+        )
     try:
         content = files[selected].decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -147,7 +152,9 @@ def get_revision_text_file(revision: PlaybookRevision, *, path: str = "") -> Dra
     if selected not in files:
         raise BundleValidationError("Published file was not found", code="published_file_not_found", status_code=404)
     if PurePosixPath(selected).suffix.casefold() not in TEXT_EXTENSIONS:
-        raise BundleValidationError("Published file is binary and cannot be opened", code="draft_file_binary", status_code=415)
+        raise BundleValidationError(
+            "Published file is binary and cannot be opened", code="draft_file_binary", status_code=415
+        )
     try:
         content = files[selected].decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -192,7 +199,7 @@ def update_draft_text_file(
         with transaction.atomic():
             ensure_playbook_workspace(playbook, actor=actor)
             draft = (
-                PlaybookDraft.objects.select_for_update()
+                PlaybookDraft.objects.select_for_update(of=("self",))
                 .select_related("asset_bundle", "base_revision", "playbook")
                 .get(playbook=playbook)
             )
@@ -341,7 +348,9 @@ def _load_draft_files(draft: PlaybookDraft) -> tuple[InspectedBundle | None, dic
     stored_limit = max(limits.max_archive_bytes, limits.max_total_bytes + limits.max_files * 1024)
     archive = get_playbook_bundle_storage().read(asset.storage_key, max_bytes=stored_limit)
     inspected = inspect_project_bundle(archive, limits=limits)
-    if inspected.content_hash != asset.content_hash or (draft.bundle_hash and inspected.content_hash != draft.bundle_hash):
+    if inspected.content_hash != asset.content_hash or (
+        draft.bundle_hash and inspected.content_hash != draft.bundle_hash
+    ):
         raise BundleStorageError("Stored playbook bundle failed its integrity check")
     files = {item.path: item.content for item in inspected.files}
     if entrypoint not in files:

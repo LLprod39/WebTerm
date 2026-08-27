@@ -137,6 +137,27 @@ def test_operator_loop_read_tools_then_answer(operator_user):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_operator_loop_preserves_typed_provider_error(operator_user):
+    session = ChatSession.objects.create(user=operator_user, title="typed error")
+    llm = ScriptedToolsLLM(
+        [[{"type": "error", "code": "provider_quota_exceeded", "message": "Provider quota is exhausted."}]]
+    )
+    events: list[dict] = []
+
+    async def on_event(event):
+        events.append(event)
+
+    result = asyncio.run(handle_operator_message(session, operator_user, "test", on_event=on_event, provider=llm))
+
+    assert result.status == ChatTurnState.STATUS_FAILED
+    assert {
+        "type": "error",
+        "code": "provider_quota_exceeded",
+        "message": "Provider quota is exhausted.",
+    } in events
+
+
+@pytest.mark.django_db(transaction=True)
 def test_operator_loop_parks_mutate_and_resumes(operator_user):
     session = ChatSession.objects.create(user=operator_user, title="t")
     llm = ScriptedToolsLLM(

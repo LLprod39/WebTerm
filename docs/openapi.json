@@ -9334,2857 +9334,6 @@
         "x-django-view-name": "api_openapi"
       }
     },
-    "/api/plugins/catalog/": {
-      "get": {
-        "operationId": "plugin_marketplace_catalog_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Catalog",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:catalog"
-      }
-    },
-    "/api/plugins/connectors/{plugin_id}/{connector_id}/health/": {
-      "get": {
-        "operationId": "plugin_marketplace_connector_health_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plugin_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "connector_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Connector Health",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:connector_health"
-      }
-    },
-    "/api/plugins/connectors/{plugin_id}/{connector_id}/ping/": {
-      "post": {
-        "operationId": "plugin_marketplace_connector_ping_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plugin_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "connector_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Connector Ping",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:connector_ping"
-      }
-    },
-    "/api/plugins/demo/action/": {
-      "post": {
-        "operationId": "plugin_marketplace_demo_action_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Demo Action",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:demo_action"
-      }
-    },
-    "/api/plugins/hooks/emit/": {
-      "post": {
-        "operationId": "plugin_marketplace_emit_hook_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Emit Hook",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:emit_hook"
-      }
-    },
-    "/api/plugins/installed/": {
-      "get": {
-        "operationId": "plugin_marketplace_installed_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Installed",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:installed"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/disable/": {
-      "post": {
-        "operationId": "plugin_marketplace_disable_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Disable",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:disable"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/enable/": {
-      "post": {
-        "operationId": "plugin_marketplace_enable_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Enable",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:enable"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/impact/": {
-      "get": {
-        "operationId": "plugin_marketplace_impact_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Impact",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:impact"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/permissions/": {
-      "get": {
-        "operationId": "plugin_marketplace_permissions_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Permissions",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:permissions"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/permissions/grant/": {
-      "post": {
-        "operationId": "plugin_marketplace_grant_permission_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Grant Permission",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:grant_permission"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/permissions/revoke/": {
-      "post": {
-        "operationId": "plugin_marketplace_revoke_permission_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Revoke Permission",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:revoke_permission"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/rollback/": {
-      "post": {
-        "operationId": "plugin_marketplace_rollback_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Rollback",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:rollback"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/scope/": {
-      "get": {
-        "operationId": "plugin_marketplace_scope_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Scope",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:scope"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/scope/update/": {
-      "post": {
-        "operationId": "plugin_marketplace_update_scope_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Update Scope",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:update_scope"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/secrets/bind/": {
-      "post": {
-        "operationId": "plugin_marketplace_bind_secret_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Bind Secret",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:bind_secret"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/settings/": {
-      "get": {
-        "operationId": "plugin_marketplace_settings_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Settings",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:settings"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/settings/update/": {
-      "post": {
-        "operationId": "plugin_marketplace_update_settings_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Update Settings",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:update_settings"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/soft-uninstall/": {
-      "post": {
-        "operationId": "plugin_marketplace_soft_uninstall_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Soft Uninstall",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:soft_uninstall"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/update-package/": {
-      "post": {
-        "operationId": "plugin_marketplace_update_package_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Update Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:update_package"
-      }
-    },
-    "/api/plugins/installed/{installation_id}/update-preview/": {
-      "post": {
-        "operationId": "plugin_marketplace_update_preview_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "installation_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Update Preview",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:update_preview"
-      }
-    },
-    "/api/plugins/marketplace/catalog/": {
-      "get": {
-        "operationId": "plugin_marketplace_marketplace_catalog_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Catalog",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_catalog"
-      }
-    },
-    "/api/plugins/marketplace/catalog/{item_id}/": {
-      "get": {
-        "operationId": "plugin_marketplace_marketplace_catalog_detail_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Catalog Detail",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_catalog_detail"
-      }
-    },
-    "/api/plugins/marketplace/catalog/{item_id}/install/": {
-      "post": {
-        "operationId": "plugin_marketplace_marketplace_install_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "item_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Install",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_install"
-      }
-    },
-    "/api/plugins/marketplace/compatibility-jobs/": {
-      "get": {
-        "operationId": "plugin_marketplace_compatibility_jobs_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Compatibility Jobs",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:compatibility_jobs"
-      },
-      "post": {
-        "operationId": "plugin_marketplace_compatibility_jobs_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Compatibility Jobs",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:compatibility_jobs"
-      }
-    },
-    "/api/plugins/marketplace/compatibility-matrix/": {
-      "get": {
-        "operationId": "plugin_marketplace_compatibility_matrix_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Compatibility Matrix",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:compatibility_matrix"
-      },
-      "post": {
-        "operationId": "plugin_marketplace_compatibility_matrix_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Compatibility Matrix",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:compatibility_matrix"
-      }
-    },
-    "/api/plugins/marketplace/sources/": {
-      "get": {
-        "operationId": "plugin_marketplace_marketplace_sources_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Sources",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_sources"
-      },
-      "post": {
-        "operationId": "plugin_marketplace_marketplace_sources_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Sources",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_sources"
-      }
-    },
-    "/api/plugins/marketplace/sources/{source_id}/": {
-      "patch": {
-        "operationId": "plugin_marketplace_marketplace_source_detail_patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "source_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": false
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Source Detail",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_source_detail"
-      },
-      "post": {
-        "operationId": "plugin_marketplace_marketplace_source_detail_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "source_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Source Detail",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_source_detail"
-      }
-    },
-    "/api/plugins/marketplace/sources/{source_id}/sync-remote/": {
-      "post": {
-        "operationId": "plugin_marketplace_marketplace_source_sync_remote_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "source_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Source Sync Remote",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_source_sync_remote"
-      }
-    },
-    "/api/plugins/marketplace/sources/{source_id}/sync/": {
-      "post": {
-        "operationId": "plugin_marketplace_marketplace_source_sync_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "source_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Marketplace Source Sync",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:marketplace_source_sync"
-      }
-    },
-    "/api/plugins/packages/install-local-upload/": {
-      "post": {
-        "operationId": "plugin_marketplace_install_local_upload_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Install Local Upload",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:install_local_upload"
-      }
-    },
-    "/api/plugins/packages/install-remote/": {
-      "post": {
-        "operationId": "plugin_marketplace_install_remote_package_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Install Remote Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:install_remote_package"
-      }
-    },
-    "/api/plugins/packages/retention/": {
-      "get": {
-        "operationId": "plugin_marketplace_package_retention_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Package Retention",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:package_retention"
-      }
-    },
-    "/api/plugins/packages/validate-path/": {
-      "post": {
-        "operationId": "plugin_marketplace_validate_package_path_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Validate Package Path",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:validate_package_path"
-      }
-    },
-    "/api/plugins/pages/{plugin_id}/{page_id}/": {
-      "get": {
-        "operationId": "plugin_marketplace_plugin_page_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plugin_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "page_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Plugin Page",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:plugin_page"
-      }
-    },
-    "/api/plugins/quarantine/": {
-      "post": {
-        "operationId": "plugin_marketplace_quarantine_plugin_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Quarantine Plugin",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:quarantine_plugin"
-      }
-    },
-    "/api/plugins/review/packages/": {
-      "get": {
-        "operationId": "plugin_marketplace_review_packages_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Review Packages",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:review_packages"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/attest/": {
-      "post": {
-        "operationId": "plugin_marketplace_attest_package_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Attest Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:attest_package"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/replay-provenance/": {
-      "post": {
-        "operationId": "plugin_marketplace_replay_provenance_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Replay Provenance",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:replay_provenance"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/review/": {
-      "post": {
-        "operationId": "plugin_marketplace_review_package_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Review Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:review_package"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/sbom/": {
-      "get": {
-        "operationId": "plugin_marketplace_package_sbom_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Package Sbom",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:package_sbom"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/security-scan/": {
-      "post": {
-        "operationId": "plugin_marketplace_security_scan_package_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Security Scan Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:security_scan_package"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/sign/": {
-      "post": {
-        "operationId": "plugin_marketplace_sign_package_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Sign Package",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:sign_package"
-      }
-    },
-    "/api/plugins/review/packages/{package_id}/verify-signature/": {
-      "post": {
-        "operationId": "plugin_marketplace_verify_signature_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "package_id",
-            "required": true,
-            "schema": {
-              "minimum": 0,
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Verify Signature",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:verify_signature"
-      }
-    },
-    "/api/plugins/surfaces/": {
-      "get": {
-        "operationId": "plugin_marketplace_surfaces_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Surfaces",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:surfaces"
-      }
-    },
-    "/api/plugins/terminal-actions/{plugin_id}/{action_id}/execute/": {
-      "post": {
-        "operationId": "plugin_marketplace_terminal_action_execute_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plugin_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "action_id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "example": {
-                "name": "example"
-              },
-              "schema": {
-                "$ref": "#/components/schemas/MutationSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiSuccessResponse"
-                }
-              }
-            },
-            "description": "Successful response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiErrorResponse"
-                }
-              }
-            },
-            "description": "Invalid request"
-          },
-          "401": {
-            "$ref": "#/components/responses/AuthenticationRequired"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "500": {
-            "$ref": "#/components/responses/InternalError"
-          }
-        },
-        "summary": "Plugin Marketplace Terminal Action Execute",
-        "tags": [
-          "plugins"
-        ],
-        "x-django-view-name": "plugin_marketplace:terminal_action_execute"
-      }
-    },
     "/api/projects/": {
       "get": {
         "operationId": "api_projects_get",
@@ -16684,6 +13833,58 @@
         "x-django-view-name": "servers:agent_run_detail"
       }
     },
+    "/servers/api/agents/runs/{run_id}/activity/": {
+      "get": {
+        "operationId": "servers_agent_run_activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Activity",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_activity"
+      }
+    },
     "/servers/api/agents/runs/{run_id}/approve-plan/": {
       "post": {
         "operationId": "servers_agent_run_approve_plan_post",
@@ -16747,6 +13948,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_approve_plan"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/artifacts/": {
+      "get": {
+        "operationId": "servers_agent_run_artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Artifacts",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_artifacts"
       }
     },
     "/servers/api/agents/runs/{run_id}/artifacts/download-all/": {
@@ -16914,6 +14167,71 @@
         "x-django-view-name": "servers:agent_run_audit_export"
       }
     },
+    "/servers/api/agents/runs/{run_id}/cleanup-stale/": {
+      "post": {
+        "operationId": "servers_agent_run_cleanup_stale_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Cleanup Stale",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_cleanup_stale"
+      }
+    },
     "/servers/api/agents/runs/{run_id}/events/": {
       "get": {
         "operationId": "servers_agent_run_events_get",
@@ -16964,6 +14282,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_events"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/events/v2/": {
+      "get": {
+        "operationId": "servers_agent_run_events_v2_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Events V2",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_events_v2"
       }
     },
     "/servers/api/agents/runs/{run_id}/log/": {
@@ -17198,6 +14568,110 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_report_deliver"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/report/document/": {
+      "get": {
+        "operationId": "servers_agent_run_report_document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Report Document",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_report_document"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/report/v2/": {
+      "get": {
+        "operationId": "servers_agent_run_report_v2_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Report V2",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_report_v2"
       }
     },
     "/servers/api/agents/runs/{run_id}/tasks/{task_id}/ai-refine/": {
@@ -19320,6 +16794,114 @@
         "x-django-view-name": "servers:playbook_ansible_status"
       }
     },
+    "/servers/api/playbooks/compatibility/adapt/": {
+      "post": {
+        "operationId": "servers_playbook_source_compatibility_adapt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Source Compatibility Adapt",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_source_compatibility_adapt"
+      }
+    },
+    "/servers/api/playbooks/compatibility/analyze/": {
+      "post": {
+        "operationId": "servers_playbook_source_compatibility_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Source Compatibility Analyze",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_source_compatibility_analyze"
+      }
+    },
     "/servers/api/playbooks/create/": {
       "post": {
         "operationId": "servers_playbook_create_post",
@@ -19834,6 +17416,47 @@
         "x-django-view-name": "servers:playbook_run_list"
       }
     },
+    "/servers/api/playbooks/runs/history/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_list_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report List",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_list"
+      }
+    },
     "/servers/api/playbooks/runs/{run_id}/": {
       "get": {
         "operationId": "servers_playbook_run_detail_get",
@@ -19951,6 +17574,223 @@
         "x-django-view-name": "servers:playbook_run_cancel"
       }
     },
+    "/servers/api/playbooks/runs/{run_id}/export/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Export",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_export"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/hosts/{server_id}/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_host_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Host",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_host"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/log/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Log",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_log"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/report/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report"
+      }
+    },
     "/servers/api/playbooks/runs/{run_id}/rerun-failed/": {
       "post": {
         "operationId": "servers_playbook_run_rerun_failed_post",
@@ -20014,6 +17854,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_run_rerun_failed"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/retry-context/": {
+      "get": {
+        "operationId": "servers_playbook_run_retry_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Retry Context",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_retry_context"
       }
     },
     "/servers/api/playbooks/templates/": {
@@ -20848,6 +18740,173 @@
         "x-django-view-name": "servers:playbook_draft"
       }
     },
+    "/servers/api/playbooks/{playbook_id}/draft/file/": {
+      "get": {
+        "operationId": "servers_playbook_draft_file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft File",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_file"
+      },
+      "patch": {
+        "operationId": "servers_playbook_draft_file_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft File",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_file"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/draft/files/": {
+      "get": {
+        "operationId": "servers_playbook_draft_files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft Files",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_files"
+      }
+    },
     "/servers/api/playbooks/{playbook_id}/duplicate/": {
       "post": {
         "operationId": "servers_playbook_duplicate_post",
@@ -20911,6 +18970,136 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_duplicate"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/gitlab/refresh/commit/": {
+      "post": {
+        "operationId": "servers_playbook_gitlab_refresh_commit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Gitlab Refresh Commit",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_gitlab_refresh_commit"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/gitlab/refresh/preview/": {
+      "post": {
+        "operationId": "servers_playbook_gitlab_refresh_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Gitlab Refresh Preview",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_gitlab_refresh_preview"
       }
     },
     "/servers/api/playbooks/{playbook_id}/restore/": {
@@ -21615,6 +19804,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_shares"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/shares/candidates/": {
+      "get": {
+        "operationId": "servers_playbook_share_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Return a bounded directory listing only to principals allowed to share.",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_share_candidates"
       }
     },
     "/servers/api/playbooks/{playbook_id}/shares/{share_id}/": {
@@ -23685,6 +21926,71 @@
           "servers"
         ],
         "x-django-view-name": "servers:server_memory_run_dreams"
+      }
+    },
+    "/servers/api/{server_id}/memory/search/": {
+      "post": {
+        "operationId": "servers_server_memory_search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Server Memory Search",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:server_memory_search"
       }
     },
     "/servers/api/{server_id}/memory/snapshots/": {

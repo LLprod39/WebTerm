@@ -112,8 +112,7 @@ def ingest_event(
     if normalized_override and not event_metadata:
         raise ValueError("DevOps idempotency override requires validated devops_event metadata")
     if event_metadata and (
-        not normalized_override
-        or event_metadata["devops_event"]["idempotency_sha256"] != normalized_override[10:]
+        not normalized_override or event_metadata["devops_event"]["idempotency_sha256"] != normalized_override[10:]
     ):
         raise ValueError("DevOps metadata idempotency digest does not match the override")
     idempotency_key = normalized_override or build_idempotency_key(

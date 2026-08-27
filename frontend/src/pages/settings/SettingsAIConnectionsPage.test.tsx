@@ -6,9 +6,23 @@ import SettingsAIConnectionsPage from "./SettingsAIConnectionsPage";
 import { I18nProvider } from "@/lib/i18n";
 
 const mocks = vi.hoisted(() => ({
+  auth: vi.fn(async () => ({
+    authenticated: true,
+    user: {
+      id: 1,
+      username: "pilot",
+      email: "pilot@example.test",
+      is_staff: false,
+      ai_cli_runtime_enabled: true,
+      features: { ai_connections_personal: true },
+    },
+  })),
+  grant: vi.fn(async () => ({ success: true, grant: { id: 1 } })),
   revoke: vi.fn(async () => ({ success: true, revoked: true })),
   pools: vi.fn(async () => ({ success: true, pools: [] })),
   users: vi.fn(async () => ({ success: true, users: [] })),
+  groups: vi.fn(async () => ({ success: true, groups: [] })),
+  savePreference: vi.fn(async () => ({ success: true, preference: { id: 1 } })),
   verify: vi.fn(async () => ({
     success: true,
     auth_flow: { id: "verify-flow", connection_id: 7, status: "pending", verification_uri: "", user_code: "", error_code: "", expires_at: null },
@@ -44,24 +58,17 @@ vi.mock("@/lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/api")>();
   return {
     ...actual,
-    fetchAuthSession: vi.fn(async () => ({
-      authenticated: true,
-      user: {
-        id: 1,
-        username: "pilot",
-        email: "pilot@example.test",
-        is_staff: false,
-        ai_cli_runtime_enabled: true,
-        features: { ai_connections_personal: true },
-      },
-    })),
+    fetchAuthSession: mocks.auth,
     fetchAiProviderConnections: mocks.connections,
     fetchAiProviderPools: mocks.pools,
     fetchAiProviderPreferences: mocks.preferences,
     fetchAiProviderCatalog: mocks.catalog,
     fetchAccessUsers: mocks.users,
+    fetchAccessGroups: mocks.groups,
     fetchAiProviderAuthFlow: mocks.authFlow,
     revokeAiProviderConnection: mocks.revoke,
+    createAiProviderGrant: mocks.grant,
+    saveAiProviderPreference: mocks.savePreference,
     startAiProviderAuth: vi.fn(async () => ({
       success: true,
       auth_flow: { id: "flow-1", connection_id: 7, status: "pending", verification_uri: "", user_code: "", error_code: "", expires_at: null },
@@ -204,5 +211,125 @@ describe("SettingsAIConnectionsPage pilot safety", () => {
 
     expect(await screen.findByRole("combobox", { name: "Ассистент и чаты · модель" })).toHaveTextContent("GPT-5.6 Terra");
     expect(screen.getByRole("combobox", { name: "Ассистент и чаты · размышление" })).toHaveTextContent("high");
+  });
+
+  it("grants a connected workspace Codex connection to a group", async () => {
+    mocks.auth.mockResolvedValueOnce({
+      authenticated: true,
+      user: {
+        id: 1,
+        username: "admin",
+        email: "admin@example.test",
+        is_staff: true,
+        ai_cli_runtime_enabled: true,
+        active_project: { id: "project-1", name: "Pilot", slug: "pilot" },
+        features: { ai_connections_personal: true, ai_connections_admin: true },
+      },
+    });
+    mocks.connections.mockResolvedValueOnce({
+      success: true,
+      connections: [{
+        id: 9,
+        public_id: "conn-9",
+        target_id: "codex_subscription" as const,
+        scope: "workspace" as const,
+        owner_id: null,
+        name: "Team Codex",
+        status: "connected",
+        enabled: true,
+        concurrency_limit: 3,
+        last_error_code: "",
+        last_verified_at: null,
+        access: { interactive: true, unattended: true },
+        manageable: true,
+        grants: [],
+      }],
+    });
+    mocks.groups.mockResolvedValueOnce({
+      success: true,
+      groups: [{ id: 2, name: "pilot", member_count: 9, members: [], explicit_permissions: {} }],
+    });
+    renderPage();
+
+    expect(await screen.findByText("Workspace: пулы и явные гранты")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Workspace-подключение" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Team Codex" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Группа" }));
+    fireEvent.click(await screen.findByRole("option", { name: "pilot" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Расписания" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выдать доступ" }));
+
+    await waitFor(() => expect(mocks.grant).toHaveBeenCalledWith({
+      connection_id: 9,
+      group_id: 2,
+      allow_interactive: true,
+      allow_unattended: true,
+    }));
+  });
+
+  it("saves an administrator selection as the active workspace default", async () => {
+    mocks.auth.mockResolvedValueOnce({
+      authenticated: true,
+      user: {
+        id: 1,
+        username: "admin",
+        email: "admin@example.test",
+        is_staff: true,
+        ai_cli_runtime_enabled: true,
+        active_project: { id: "project-1", name: "Pilot", slug: "pilot" },
+        features: { ai_connections_personal: true, ai_connections_admin: true },
+      },
+    });
+    mocks.connections.mockResolvedValueOnce({
+      success: true,
+      connections: [{
+        id: 9,
+        public_id: "conn-9",
+        target_id: "codex_subscription" as const,
+        scope: "workspace" as const,
+        owner_id: null,
+        name: "Team Codex",
+        status: "connected",
+        enabled: true,
+        concurrency_limit: 3,
+        last_error_code: "",
+        last_verified_at: null,
+        access: { interactive: true, unattended: true },
+        manageable: true,
+        grants: [],
+      }],
+    });
+    mocks.catalog.mockResolvedValueOnce({
+      success: true,
+      targets: [],
+      purposes: [],
+      models_by_target: {
+        codex_subscription: [{
+          id: "gpt-5.6-terra",
+          label: "GPT-5.6 Terra",
+          default_reasoning_effort: "medium" as const,
+          reasoning_efforts: ["low", "medium", "high"] as const,
+        }],
+      },
+    });
+    renderPage();
+
+    await screen.findByText("По умолчанию для активного workspace: Pilot.");
+    fireEvent.click(screen.getByRole("combobox", { name: "Ассистент и чаты" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Team Codex · Codex CLI" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Сохранить" })[0]);
+
+    await waitFor(() => expect(mocks.savePreference).toHaveBeenCalledWith({
+      purpose: "assistant",
+      binding: {
+        target_id: "codex_subscription",
+        connection_id: 9,
+        model_id: "gpt-5.6-terra",
+        reasoning_effort: "medium",
+      },
+      project_scoped: true,
+      workspace_default: true,
+      require_unattended: false,
+    }));
   });
 });

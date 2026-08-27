@@ -104,15 +104,19 @@ def _editable_draft_base(playbook, *, actor, path: str = ""):
             code="draft_file_read_only",
             status_code=422,
         )
-    return draft, snapshot, {
-        "path": snapshot.path,
-        "content_hash": snapshot.sha256,
-        "draft_version": draft.version,
-        "version": draft.version,
-        "bundle_hash": draft.bundle_hash
-        or calculate_bundle_content_hash({snapshot.path: snapshot.content.encode("utf-8")}),
-        "base_revision_id": draft.base_revision_id,
-    }
+    return (
+        draft,
+        snapshot,
+        {
+            "path": snapshot.path,
+            "content_hash": snapshot.sha256,
+            "draft_version": draft.version,
+            "version": draft.version,
+            "bundle_hash": draft.bundle_hash
+            or calculate_bundle_content_hash({snapshot.path: snapshot.content.encode("utf-8")}),
+            "base_revision_id": draft.base_revision_id,
+        },
+    )
 
 
 def _stale_response(*, current: dict[str, Any]) -> JsonResponse:

@@ -53,15 +53,9 @@ def finish_generation_log(
     output_hash = sha256_text(output) if output else ""
     generation_log.status = status
     generation_log.output_sha256 = output_hash
-    generation_log.output_redacted_ref = (
-        f"sha256:{output_hash[:16]}"
-        if output_hash
-        else ""
-    )
+    generation_log.output_redacted_ref = f"sha256:{output_hash[:16]}" if output_hash else ""
     generation_log.error_code = str(error_code or "")[:80]
-    generation_log.error_redacted_ref = (
-        f"error-type:{str(error_type or 'unknown')[:80]}" if error_code else ""
-    )[:255]
+    generation_log.error_redacted_ref = (f"error-type:{str(error_type or 'unknown')[:80]}" if error_code else "")[:255]
     generation_log.completed_at = timezone.now()
 
     if execution_context is not None:

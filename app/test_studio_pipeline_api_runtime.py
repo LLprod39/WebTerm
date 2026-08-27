@@ -230,7 +230,7 @@ def test_execute_agent_ssh_cmd_awaits_async_connect_kwargs(monkeypatch):
     monkeypatch.setattr(
         "studio.pipeline.pipeline_agent_runtime._log_pipeline_ssh_command", fake_log_pipeline_ssh_command
     )
-    monkeypatch.setattr(Server.objects, "get", lambda *args, **kwargs: server)
+    monkeypatch.setattr("studio.pipeline.pipeline_agent_runtime_ssh.get_owned_server", lambda *args, **kwargs: server)
     monkeypatch.setattr(asyncssh, "connect", fake_connect)
 
     result = asyncio.run(execute_agent_ssh_cmd(node, {"load_user": "smoke-user-01", "run_index": 1}, run))

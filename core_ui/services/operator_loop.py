@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 from asgiref.sync import sync_to_async
 from loguru import logger
 
+from app.ai_runtime import ProviderRuntimeError
 from app.core.llm import get_provider
 from app.core.llm_tools import _looks_like_tool_json_leak
 from core_ui.models import AssistantAction, ChatMessage, ChatTurnState
@@ -140,6 +141,7 @@ async def run_operator_loop(
         tool_calls: list[dict[str, Any]] = []
         usage: dict[str, Any] = {}
         stop_reason = "end_turn"
+        error_code = ""
         error_message = ""
         reasoning_seen = False
 
@@ -206,17 +208,23 @@ async def run_operator_loop(
                     usage = event.get("usage") or {}
                     stop_reason = event.get("stop_reason") or stop_reason
                 elif etype == "error":
+                    error_code = str(event.get("code") or "provider_error")
                     error_message = str(event.get("message") or "LLM error")
         except Exception as exc:  # noqa: BLE001
-            logger.exception("operator loop LLM failed: {}", exc)
-            error_message = str(exc)
+            if isinstance(exc, ProviderRuntimeError):
+                error_code = exc.code
+                error_message = exc.message
+            else:
+                error_code = "provider_transport_unavailable"
+                error_message = "LLM provider is temporarily unavailable. Contact the platform administrator."
+            logger.error("operator loop LLM failed: code={} exception_type={}", error_code, type(exc).__name__)
 
         if error_message:
             fail_text = f"\n\nОшибка LLM: {error_message}"
             if assistant_message and error_message not in (assistant_message.content or ""):
                 await _append_assistant_text(assistant_message.pk, fail_text)
             await _save_turn(turn, status=ChatTurnState.STATUS_FAILED, error=error_message, llm_messages=messages)
-            await _emit(on_event, {"type": "error", "message": error_message})
+            await _emit(on_event, {"type": "error", "code": error_code or "provider_error", "message": error_message})
             await _emit(on_event, {"type": "turn_done", "status": "failed", "turn_id": turn.pk})
             break
 

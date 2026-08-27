@@ -47,9 +47,8 @@ Default stack services:
   postgres, redis, backend, frontend, nginx,
   mcp-runner,
   scheduled-pipelines, scheduled-agents, agent-execution pool, monitor,
-  ops-supervisor (watchers + memory dreams),
-  kubernetes-ops-sync, celery-worker
-  optional profiles: ai-cli, observability, telegram-bot, mars-agent
+  ops-supervisor (watchers + memory dreams), celery-worker
+  optional profiles: ai-cli, kubernetes-ops, observability, telegram-bot, mars-agent
 
 Options:
   --env-file PATH              Path to env file (default: .env.production)
@@ -857,7 +856,6 @@ wait_for_stack() {
   wait_for_service agent-execution 180
   wait_for_service monitor 180
   wait_for_service ops-supervisor 180
-  wait_for_service kubernetes-ops-sync 180
   wait_for_service celery-worker 180
   if [[ "$WITH_TELEGRAM_BOT" -eq 1 ]]; then
     wait_for_service telegram-bot 180
@@ -946,7 +944,6 @@ Background workers (agents / studio / monitoring):
   scheduled-pipelines     # Studio pipeline schedules
   operator-execution      # durable Operator Chat turns
   monitor                 # server monitoring cycles
-  kubernetes-ops-sync       # Kubernetes inventory sync
   celery-worker           # async memory/tasks queue
 
 Useful commands:
@@ -962,6 +959,8 @@ Optional profiles:
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile ai-cli up -d
   # Pilot telemetry; Grafana is bound to loopback and must be reached over TLS/VPN/SSH tunnel
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile observability up -d
+  # Kubernetes inventory sync is opt-in and remains disabled for the closed pilot
+  docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile kubernetes-ops up -d kubernetes-ops-sync
   # Telegram bot (needs TELEGRAM_BOT_TOKEN in env)
   docker compose --project-name $PROJECT_NAME --env-file $ENV_FILE -f $COMPOSE_FILE --profile telegram-bot up -d telegram-bot
   # MARS (disabled until MARS_AGENT_DOCKER_IMAGE is an exact release digest)
@@ -1067,7 +1066,6 @@ main() {
     agent-execution
     monitor
     ops-supervisor
-    kubernetes-ops-sync
     celery-worker
     frontend
     nginx
@@ -1086,6 +1084,11 @@ main() {
     echo "==> Starting explicitly provisioned Telegram bot"
     compose up -d telegram-bot
   fi
+
+  # Optional profile startup can recreate a tagged backend dependency. Refresh
+  # nginx so its startup-time Docker DNS lookup cannot retain the old address.
+  echo "==> Refreshing reverse-proxy upstream resolution"
+  compose restart nginx
 
   if [[ "$SKIP_HEALTHCHECKS" -eq 0 ]]; then
     wait_for_stack

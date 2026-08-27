@@ -62,7 +62,7 @@ def test_ai_cli_images_install_only_hashed_locks_and_security_audits_them() -> N
     assert "--require-hashes --requirement /app/provider-requirements.lock" in provider_dockerfile
     assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in backend_dockerfile
     assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in manager_dockerfile
-    assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in provider_dockerfile
+    assert "/opt/venv/bin/python -m pip uninstall --yes pip setuptools wheel" in provider_dockerfile
     for lock in ("ai_cli_runner_manager/requirements.lock", "ai_cli_runner_manager/provider-requirements.lock"):
         text = (ROOT / lock).read_text(encoding="utf-8")
         assert "--hash=sha256:" in text
@@ -90,6 +90,7 @@ def test_optional_pilot_profiles_are_explicit_and_fail_closed() -> None:
     assert "validate-pilot-capacity.py" in installer
     assert "--with-ai-cli requires PILOT_RESTRICTED_MODE=true" in installer
     assert "explicit disposable PILOT_SSH_ALLOWED_HOSTS/CIDRS/PORTS" in installer
+    assert "compose restart nginx" in installer
     for key in (
         "PILOT_RESTRICTED_MODE",
         "PILOT_SSH_ALLOWED_HOSTS",

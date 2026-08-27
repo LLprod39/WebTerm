@@ -121,8 +121,7 @@ class ServerMemoryPromotion(models.Model):
             ),
             models.CheckConstraint(
                 condition=(
-                    ~models.Q(status="approved")
-                    | models.Q(approved_by__isnull=False, decided_at__isnull=False)
+                    ~models.Q(status="approved") | models.Q(approved_by__isnull=False, decided_at__isnull=False)
                 ),
                 name="mem_prom_approved_actor",
             ),

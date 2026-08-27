@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from app.agent_kernel import skill_provider_registry
 
-
 SERVER_DEPENDENT_TOOLS = {
     "open_connection",
     "close_connection",

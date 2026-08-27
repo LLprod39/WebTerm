@@ -395,9 +395,7 @@ def _check_action(
             "add_host can expand execution beyond the frozen WebTerm target set",
             path,
         )
-    if module in _CONTROLLER_FILE_MODULE_FIELDS and not (
-        module in {"copy", "unarchive"} and _remote_source(arguments)
-    ):
+    if module in _CONTROLLER_FILE_MODULE_FIELDS and not (module in {"copy", "unarchive"} and _remote_source(arguments)):
         _check_module_paths(module, arguments, path, findings)
     if module in {"include_role", "import_role"}:
         _check_role_values(arguments, path, findings)

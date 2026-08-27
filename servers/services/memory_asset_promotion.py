@@ -86,12 +86,18 @@ def promote_memory_asset(*, asset, actor, destination_kind: str, playbook=None) 
         or snapshot.archived_at is not None
         or snapshot.asset_id != asset.id
     ):
-        raise MemoryPromotionError("Promotion requires the active canonical current snapshot", code="source_not_canonical")
+        raise MemoryPromotionError(
+            "Promotion requires the active canonical current snapshot", code="source_not_canonical"
+        )
     if destination_kind not in {choice[0] for choice in ServerMemoryPromotion.DESTINATION_CHOICES}:
         raise MemoryPromotionError("Unsupported promotion destination", code="destination_invalid")
 
     _require_destination_permission(destination_kind=destination_kind, actor=actor, asset=asset, playbook=playbook)
-    target_id = getattr(playbook, "pk", None) if destination_kind == ServerMemoryPromotion.DESTINATION_PLAYBOOK_REVISION else None
+    target_id = (
+        getattr(playbook, "pk", None)
+        if destination_kind == ServerMemoryPromotion.DESTINATION_PLAYBOOK_REVISION
+        else None
+    )
     idempotency_key = _idempotency_key(
         asset_id=asset.id,
         snapshot_id=snapshot.id,
@@ -207,11 +213,7 @@ def promote_memory_asset(*, asset, actor, destination_kind: str, playbook=None) 
         ready = validation.status == PlaybookValidation.STATUS_READY
         _mark_promotion(
             promotion,
-            status=(
-                ServerMemoryPromotion.STATUS_VALIDATED
-                if ready
-                else ServerMemoryPromotion.STATUS_REJECTED
-            ),
+            status=(ServerMemoryPromotion.STATUS_VALIDATED if ready else ServerMemoryPromotion.STATUS_REJECTED),
             result=_result_with_provenance(
                 promotion=promotion,
                 asset=asset,
@@ -271,7 +273,9 @@ def _require_destination_permission(*, destination_kind: str, actor, asset, play
             raise MemoryPromotionError("Automation permission is required", code="automation_forbidden")
         capabilities = capabilities_for(playbook, actor)
         if not (capabilities.can_edit and capabilities.can_validate):
-            raise MemoryPromotionError("Playbook edit and validation permissions are required", code="playbook_forbidden")
+            raise MemoryPromotionError(
+                "Playbook edit and validation permissions are required", code="playbook_forbidden"
+            )
         return
     if destination_kind == ServerMemoryPromotion.DESTINATION_STUDIO_SKILL:
         if not user_can_feature(actor, "studio_skills"):
@@ -300,7 +304,9 @@ def _validated_playbook_payload(content: str) -> dict[str, Any]:
         name = str(raw_name).strip()
         reference = str(raw_ref).strip()
         if not name or len(name) > 128 or len(reference) > 300 or not reference.startswith("managed://"):
-            raise MemoryPromotionError("Only bounded ManagedSecret references are accepted", code="secret_references_invalid")
+            raise MemoryPromotionError(
+                "Only bounded ManagedSecret references are accepted", code="secret_references_invalid"
+            )
         normalized_references[name] = reference
 
     content_format = str(payload.get("content_format") or "")
@@ -396,13 +402,7 @@ def _bounded_result(result: dict[str, Any]) -> dict[str, Any]:
 
 def _compact_validation_result(validation) -> dict[str, Any]:
     issues = validation.issues if isinstance(validation.issues, list) else []
-    issue_codes = sorted(
-        {
-            str(item.get("code") or "unknown")[:80]
-            for item in issues
-            if isinstance(item, dict)
-        }
-    )[:50]
+    issue_codes = sorted({str(item.get("code") or "unknown")[:80] for item in issues if isinstance(item, dict)})[:50]
     return {
         "id": validation.id,
         "status": str(validation.status)[:20],

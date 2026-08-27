@@ -54,7 +54,9 @@ def legacy_knowledge_rows(
     if not authorized_group_ids:
         return rows
     first_server_for_group = {
-        group_id: min(server_id for server_id, current_group_id in server_groups.items() if current_group_id == group_id)
+        group_id: min(
+            server_id for server_id, current_group_id in server_groups.items() if current_group_id == group_id
+        )
         for group_id in authorized_group_ids
     }
     group_qs = ServerGroupKnowledge.objects.filter(

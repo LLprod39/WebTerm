@@ -271,7 +271,9 @@ def api_pipeline_run(request, pipeline_id: int):
                 "entry_node_id": selected_trigger.node_id,
             },
             entry_node_id=selected_trigger.node_id,
-            explicit_provider_binding=(payload.get("provider_binding") if user_can_select_models(request.user) else None),
+            explicit_provider_binding=(
+                payload.get("provider_binding") if user_can_select_models(request.user) else None
+            ),
         )
     except ValueError as exc:
         return _validation_err(pipeline_run_creation_error_details(exc), prefix="Pipeline is not runnable")

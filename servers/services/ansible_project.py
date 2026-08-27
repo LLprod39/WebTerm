@@ -13,9 +13,7 @@ class AnsibleProjectError(ValueError):
     """A project path or payload violates the runtime materialization contract."""
 
 
-_RUNTIME_RESERVED = frozenset(
-    {"ansible.cfg", "extra_vars.json", "inventory.ini", "known_hosts"}
-)
+_RUNTIME_RESERVED = frozenset({"ansible.cfg", "extra_vars.json", "inventory.ini", "known_hosts"})
 _RUNTIME_KEY_RE = re.compile(r"key_[0-9]+", re.IGNORECASE)
 
 
@@ -30,9 +28,7 @@ def is_runtime_reserved_path(raw_path: str) -> bool:
     normalized = normalized.rstrip("/")
     if not normalized or "/" in normalized:
         return False
-    return normalized.casefold() in _RUNTIME_RESERVED or bool(
-        _RUNTIME_KEY_RE.fullmatch(normalized)
-    )
+    return normalized.casefold() in _RUNTIME_RESERVED or bool(_RUNTIME_KEY_RE.fullmatch(normalized))
 
 
 def _safe_relative_path(raw_path: str) -> PurePosixPath:

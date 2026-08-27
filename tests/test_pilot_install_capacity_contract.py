@@ -35,11 +35,20 @@ def test_pilot_capacity_accepts_ten_database_capped_slots() -> None:
     assert "database cap=10" in result.stdout
 
 
+def test_pilot_capacity_accepts_compact_host_profile() -> None:
+    result = _validate(global_limit=3, per_user=1, replicas=3, worker_slots=1)
+
+    assert result.returncode == 0, result.stderr
+    assert "database cap=3" in result.stdout
+    assert "per-user cap=1" in result.stdout
+    assert "local worker slots=3" in result.stdout
+
+
 def test_pilot_capacity_rejects_global_limit_above_ten() -> None:
     result = _validate(global_limit=11)
 
     assert result.returncode != 0
-    assert "global concurrency must be exactly 10" in result.stderr
+    assert "global concurrency must not exceed 10" in result.stderr
 
 
 def test_pilot_capacity_rejects_an_undersized_worker_pool() -> None:
@@ -47,3 +56,17 @@ def test_pilot_capacity_rejects_an_undersized_worker_pool() -> None:
 
     assert result.returncode != 0
     assert "provide at least 10 local slots" in result.stderr
+
+
+def test_pilot_capacity_rejects_per_user_limit_above_two() -> None:
+    result = _validate(global_limit=3, per_user=3, replicas=3, worker_slots=1)
+
+    assert result.returncode != 0
+    assert "per-user concurrency must not exceed 2" in result.stderr
+
+
+def test_pilot_capacity_rejects_per_user_limit_above_global_limit() -> None:
+    result = _validate(global_limit=1, per_user=2, replicas=1, worker_slots=1)
+
+    assert result.returncode != 0
+    assert "per-user concurrency must not exceed global concurrency" in result.stderr

@@ -81,8 +81,8 @@ export function useServerCrudController({
   }, []);
 
   const openEdit = useCallback(async (server: FrontendServer) => {
-    setEditingServer(server);
     const details = await fetchServerDetails(server.id);
+    setEditingServer(details);
     setForm({
       name: details.name,
       server_type: details.server_type,

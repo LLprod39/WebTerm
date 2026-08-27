@@ -190,9 +190,7 @@ def test_unsafe_legacy_draft_is_owner_remediation_only_and_cannot_be_revisioned(
     responses = [
         teammate_client.get(f"/servers/api/playbooks/{playbook.id}/draft/"),
         teammate_client.get(f"/servers/api/playbooks/{playbook.id}/draft/files/?view=current"),
-        teammate_client.get(
-            f"/servers/api/playbooks/{playbook.id}/draft/file/?view=current&path=playbook.yml"
-        ),
+        teammate_client.get(f"/servers/api/playbooks/{playbook.id}/draft/file/?view=current&path=playbook.yml"),
         teammate_client.post(
             f"/servers/api/playbooks/{playbook.id}/revisions/",
             data=json.dumps({"expected_version": draft.version}),

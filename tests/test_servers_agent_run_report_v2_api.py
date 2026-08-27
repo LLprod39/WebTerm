@@ -147,12 +147,8 @@ def test_legacy_adapter_is_read_only_and_understands_numbered_sections():
     payload = response.json()
     assert payload["outcome"]["status"] == "inconclusive"
     assert payload["outcome"]["reason_source"] == "legacy_inference"
-    assert [item["title"] for item in payload["findings"]] == [
-        "Все четыре read-only команды завершились с кодом 0."
-    ]
-    assert [item["title"] for item in payload["actions"]] == [
-        "Проверить результат при следующем плановом запуске."
-    ]
+    assert [item["title"] for item in payload["findings"]] == ["Все четыре read-only команды завершились с кодом 0."]
+    assert [item["title"] for item in payload["actions"]] == ["Проверить результат при следующем плановом запуске."]
     assert payload["counts"]["operations_succeeded"] == 4
     run.refresh_from_db()
     assert run.execution_outcome == {}
@@ -181,9 +177,7 @@ def test_events_cursor_reads_beyond_legacy_500_cap_without_overlap():
     assert newest["events"] == newest["items"]
     assert newest["event_high_watermark"]["sequence_no"] == 503
     assert newest["event_high_watermark"]["total"] == 503
-    critical = client.get(
-        f"/servers/api/agents/runs/{run.id}/events/v2/?cursor=504&severity=critical&limit=10"
-    ).json()
+    critical = client.get(f"/servers/api/agents/runs/{run.id}/events/v2/?cursor=504&severity=critical&limit=10").json()
     assert critical["total"] == 1
     assert critical["items"][0]["sequence_no"] == 503
 

@@ -61,10 +61,9 @@ def playbooks_visible_to(user) -> QuerySet[Playbook]:
         & Q(grants__can_view=True)
         & _active_grants_q(prefix="grants__")
     )
-    workspace_grant_q = (
-        Q(project__memberships__user=user, grants__workspace_shared=True, grants__can_view=True)
-        & _active_grants_q(prefix="grants__")
-    )
+    workspace_grant_q = Q(
+        project__memberships__user=user, grants__workspace_shared=True, grants__can_view=True
+    ) & _active_grants_q(prefix="grants__")
     workspace_policy = PlaybookGrant.objects.filter(playbook_id=OuterRef("pk"), workspace_shared=True)
     return (
         Playbook.objects.annotate(_has_workspace_policy=Exists(workspace_policy))

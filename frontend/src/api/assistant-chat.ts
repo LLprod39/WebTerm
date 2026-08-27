@@ -114,7 +114,7 @@ export type OperatorWsEvent =
     }
   | { type: "thinking_delta"; text: string; iteration?: number }
   | { type: "turn_started" | "turn_done" | "turn_complete"; status?: string; actions?: AssistantAction[] }
-  | { type: "error"; message: string }
+  | { type: "error"; code?: string; message: string }
   | { type: "pong" }
   | { type: string; [key: string]: unknown };
 

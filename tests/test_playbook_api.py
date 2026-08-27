@@ -61,7 +61,7 @@ def test_playbook_surface_requires_automation_but_staff_is_allowed():
 
 
 @pytest.mark.django_db
-def test_restricted_pilot_playbooks_require_exact_pilot_operator_profile(monkeypatch):
+def test_playbooks_use_automation_capability_without_named_profile(monkeypatch):
     monkeypatch.setenv("PILOT_RESTRICTED_MODE", "true")
     custom = User.objects.create_user(username="pb_custom_automation", password="testpass123")
     UserAppPermission.objects.create(user=custom, feature="automation", allowed=True)
@@ -69,14 +69,10 @@ def test_restricted_pilot_playbooks_require_exact_pilot_operator_profile(monkeyp
     operator = User.objects.create_user(username="pb_pilot_operator", password="testpass123")
     _apply_access_profile(operator, "pilot_operator")
 
-    for denied_user in (custom, staff):
-        denied_client = Client()
-        denied_client.force_login(denied_user)
-        assert denied_client.get("/servers/api/playbooks/").status_code == 403
-
-    operator_client = Client()
-    operator_client.force_login(operator)
-    assert operator_client.get("/servers/api/playbooks/").status_code == 200
+    for allowed_user in (custom, staff, operator):
+        allowed_client = Client()
+        allowed_client.force_login(allowed_user)
+        assert allowed_client.get("/servers/api/playbooks/").status_code == 200
 
 
 @pytest.mark.django_db

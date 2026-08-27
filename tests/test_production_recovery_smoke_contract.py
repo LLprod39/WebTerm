@@ -44,7 +44,10 @@ def test_postgres_scripts_target_the_real_production_service_and_require_confirm
     assert "POSTGRES_SERVICE:-postgres" in backup
     assert "pg_dump --format=custom" in backup
     assert "pg_restore --list" in backup
+    assert "tee --output-error=warn-nopipe" in backup
     assert "POSTGRES_SERVICE:-postgres" in restore
+    assert "validation_status=(\"${PIPESTATUS[@]}\")" in restore
+    assert '"${validation_status[0]}" -ne 141' in restore
     assert "RESTORE_CONFIRM=RESTORE_WEBTERM" in restore
     assert "dropdb --force --if-exists" in restore
     assert "createdb" in restore

@@ -88,7 +88,7 @@ function FieldLabel({
   return (
     <Label htmlFor={htmlFor} className="text-[13px] font-medium leading-[18px] text-muted-foreground">
       {children}
-      {required ? <span className="ml-1 text-warning">*</span> : null}
+      {required ? <span aria-hidden="true" className="ml-1 text-warning">*</span> : null}
     </Label>
   );
 }

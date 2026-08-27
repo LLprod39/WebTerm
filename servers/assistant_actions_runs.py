@@ -127,11 +127,7 @@ def _resolve_agent_run_id(ctx: AssistantActionContext) -> int:
 
 
 def _agent_for_user(user, agent_id: int) -> ServerAgent:
-    agent = (
-        ServerAgent.objects.filter(id=agent_id, user=user)
-        .prefetch_related("servers")
-        .first()
-    )
+    agent = ServerAgent.objects.filter(id=agent_id, user=user).prefetch_related("servers").first()
     if agent is None:
         raise AssistantActionError("Agent not found", status=404)
     return agent
@@ -141,9 +137,7 @@ def _run_for_user(user, run_id: int) -> AgentRun:
     run = AgentRun.objects.filter(id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
-    run = (
-        AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
-    )
+    run = AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
     if run is None:
         raise AssistantActionError("Agent run not found", status=404)
     return run

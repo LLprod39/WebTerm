@@ -258,7 +258,9 @@ def _source_contract(*, server: Server, source: Any, event_family: str) -> dict[
         _require_family(event_family, {"pipeline"})
         _require_project(source.project_id, server.project_id)
         if server.id not in pipeline_snapshot_server_ids(source.nodes_snapshot):
-            raise DevOpsMemoryEventError("Pipeline run has no validated reference to this server", code="source_server_mismatch")
+            raise DevOpsMemoryEventError(
+                "Pipeline run has no validated reference to this server", code="source_server_mismatch"
+            )
         object_type = "studio.pipeline_run"
         source_kind = "pipeline"
         actor_user_id = source.triggered_by_id
@@ -413,7 +415,7 @@ def _integer_ids(values: Any) -> set[int]:
 
 
 def pipeline_snapshot_server_ids(nodes_snapshot: Any) -> set[int]:
-    """Extract only explicitly configured WebTrerm server IDs from a run snapshot."""
+    """Extract only explicitly configured WebTerm server IDs from a run snapshot."""
     if not isinstance(nodes_snapshot, list):
         return set()
     result: set[int] = set()
@@ -448,6 +450,4 @@ def _iso(value: datetime | None) -> str:
 
 
 def _canonical_json(value: Any) -> bytes:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode(
-        "utf-8"
-    )
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")

@@ -557,10 +557,7 @@ def export_revision_bundle(
         if sanitized is not None:
             export_files[path] = sanitized
 
-    payload_checksums = {
-        path: hashlib.sha256(content).hexdigest()
-        for path, content in sorted(export_files.items())
-    }
+    payload_checksums = {path: hashlib.sha256(content).hexdigest() for path, content in sorted(export_files.items())}
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "kind": MANIFEST_KIND,
@@ -584,8 +581,7 @@ def export_revision_bundle(
         "utf-8"
     )
     export_files[CHECKSUMS_NAME] = "".join(
-        f"{hashlib.sha256(content).hexdigest()}  {path}\n"
-        for path, content in sorted(export_files.items())
+        f"{hashlib.sha256(content).hexdigest()}  {path}\n" for path, content in sorted(export_files.items())
     ).encode("utf-8")
     output = build_canonical_zip(export_files)
 
@@ -606,14 +602,16 @@ def export_revision_bundle(
 def _preview_payload(inspected: InspectedBundle, *, selected_entrypoint: str) -> dict[str, Any]:
     from servers.services.playbooks.draft_files import is_editable_draft_yaml_path
 
-    files = sanitize_preview_value([
-        {
-            **item.manifest_item(),
-            "editable": is_editable_draft_yaml_path(item.path),
-            "is_entrypoint": item.path == selected_entrypoint,
-        }
-        for item in inspected.files
-    ])
+    files = sanitize_preview_value(
+        [
+            {
+                **item.manifest_item(),
+                "editable": is_editable_draft_yaml_path(item.path),
+                "is_entrypoint": item.path == selected_entrypoint,
+            }
+            for item in inspected.files
+        ]
+    )
     controller_findings = _bundle_controller_findings(inspected, entrypoint=selected_entrypoint)
     blocking_findings = blocking_secret_findings(inspected.secret_findings)
     compatibility: dict[str, Any] | None = None

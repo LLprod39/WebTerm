@@ -6,12 +6,14 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
 from core_ui.api_errors import internal_error_response
+from core_ui.decorators import require_feature
 from core_ui.models import DashboardLayout
 
 logger = logging.getLogger(__name__)
 
 
 @login_required
+@require_feature("dashboard")
 @require_http_methods(["GET", "POST"])
 def api_dashboard_layout(request, dashboard_type):
     """

@@ -109,7 +109,7 @@ def test_group_server_and_context_crud_endpoints():
     assert bootstrap.status_code == 200
     assert bootstrap.json()["success"] is True
     bootstrap_server = next(item for item in bootstrap.json()["servers"] if item["id"] == server_id)
-    assert bootstrap_server["ai_read_only"] is True
+    assert bootstrap_server["ai_read_only"] is False
 
     details = client.get(f"/servers/api/{server_id}/get/")
     assert details.status_code == 200

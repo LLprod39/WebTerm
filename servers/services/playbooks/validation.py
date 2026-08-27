@@ -389,9 +389,7 @@ def validate_revision(
                             else "ansible_runtime_unavailable"
                         ),
                         "severity": "error",
-                        "message": str(
-                            syntax_check.get("message") or "Ansible syntax validation did not complete"
-                        ),
+                        "message": str(syntax_check.get("message") or "Ansible syntax validation did not complete"),
                         "remediation": (
                             "Fix the reported Ansible/Jinja syntax in the draft, publish a new revision, "
                             "and run validation again."

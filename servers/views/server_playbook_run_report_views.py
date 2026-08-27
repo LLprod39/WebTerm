@@ -194,9 +194,7 @@ def playbook_run_report_list(request):
         queryset = queryset.filter(playbook_id=int(playbook_id))
     query = str(request.GET.get("q") or "").strip()[:200]
     if query:
-        queryset = queryset.filter(
-            Q(playbook__name__icontains=query) | Q(playbook_snapshot__name__icontains=query)
-        )
+        queryset = queryset.filter(Q(playbook__name__icontains=query) | Q(playbook_snapshot__name__icontains=query))
     assert limit is not None
     rows = list(queryset[: limit + 1])
     has_more = len(rows) > limit
@@ -244,8 +242,7 @@ def playbook_run_report_export(request, run_id: int):
             json.dumps(public_host_detail(run, host), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         )
     checksum_lines = [
-        f"{hashlib.sha256(content.encode('utf-8')).hexdigest()}  {name}"
-        for name, content in sorted(files.items())
+        f"{hashlib.sha256(content.encode('utf-8')).hexdigest()}  {name}" for name, content in sorted(files.items())
     ]
     files["checksums.sha256"] = "\n".join(checksum_lines) + "\n"
     manifest = {

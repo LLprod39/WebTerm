@@ -161,9 +161,10 @@ def test_playbook_promotion_is_idempotent_validated_unpublished_and_provenanced(
     assert promotion.playbook_id == playbook.id
     assert promotion.playbook_revision.playbook_id == playbook.id
     assert promotion.validation_result["source"]["snapshot_id"] == asset.current_snapshot_id
-    assert promotion.validation_result["source"]["snapshot_content_hash"] == hashlib.sha256(
-        asset.current_snapshot.content.encode("utf-8")
-    ).hexdigest()
+    assert (
+        promotion.validation_result["source"]["snapshot_content_hash"]
+        == hashlib.sha256(asset.current_snapshot.content.encode("utf-8")).hexdigest()
+    )
     assert promotion.validation_result["destination"]["revision_id"] == promotion.playbook_revision_id
     assert promotion.validation_result["destination"]["published"] is False
     assert promotion.validation_result["binding_required"] is True
@@ -332,9 +333,10 @@ def test_snapshot_content_hash_mismatch_is_rejected_with_computed_provenance():
     promotion = ServerMemoryPromotion.objects.get()
     assert promotion.status == ServerMemoryPromotion.STATUS_REJECTED
     assert promotion.validation_result["code"] == "source_integrity_mismatch"
-    assert promotion.validation_result["source"]["snapshot_content_hash"] == hashlib.sha256(
-        asset.current_snapshot.content.encode("utf-8")
-    ).hexdigest()
+    assert (
+        promotion.validation_result["source"]["snapshot_content_hash"]
+        == hashlib.sha256(asset.current_snapshot.content.encode("utf-8")).hexdigest()
+    )
     assert playbook.content_revisions.count() == baseline_revision_count
 
 

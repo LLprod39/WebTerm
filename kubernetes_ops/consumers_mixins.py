@@ -14,14 +14,12 @@ from kubernetes_ops.services.admin_streams import (
 
 
 class KubernetesAdminConsumerAuthMixin:
-    def _authenticated(self) -> bool:
+    async def _authenticated(self) -> bool:
         user = self.scope.get("user")
-        return bool(
-            user
-            and not isinstance(user, AnonymousUser)
-            and user.is_authenticated
-            and kubernetes_permission_policy(user)["can_read"]
-        )
+        if not user or isinstance(user, AnonymousUser) or not user.is_authenticated:
+            return False
+        policy = await database_sync_to_async(kubernetes_permission_policy)(user)
+        return bool(policy["can_read"])
 
     def _query_params(self) -> dict[str, str]:
         raw = self.scope.get("query_string", b"").decode("utf-8", errors="ignore")

@@ -10,6 +10,8 @@ from typing import Any
 
 from loguru import logger
 
+from app.ai_runtime import ProviderRuntimeError
+from app.core.llm_http_errors import provider_http_error
 from app.core.llm_tool_helpers import UsageLogger, _messages_to_openai, tools_to_openai
 
 
@@ -26,6 +28,7 @@ async def stream_openai_tools(
     usage_logger: UsageLogger | None = None,
     prompt_for_usage: str = "",
     provider: str = "openai",
+    display_name: str | None = None,
     trust_env: bool = False,
 ) -> AsyncGenerator[dict[str, Any], None]:
     import aiohttp
@@ -52,6 +55,7 @@ async def stream_openai_tools(
     tool_acc: dict[int, dict[str, Any]] = {}
     usage: dict[str, Any] = {}
     finish_reason = "stop"
+    provider_label = display_name or {"openai": "OpenAI", "grok": "Grok", "xai": "xAI"}.get(provider.lower(), provider)
 
     try:
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
@@ -61,7 +65,12 @@ async def stream_openai_tools(
         ):
             if resp.status >= 400:
                 body = await resp.text()
-                raise RuntimeError(f"{provider} tools HTTP {resp.status}: {body[:400]}")
+                raise provider_http_error(
+                    provider=provider,
+                    display_name=provider_label,
+                    status=resp.status,
+                    body=body,
+                )
             async for raw_line in resp.content:
                 line = raw_line.decode("utf-8", errors="replace").strip()
                 if not line.startswith("data:"):
@@ -100,7 +109,19 @@ async def stream_openai_tools(
                     if fn.get("arguments"):
                         acc["json"] += fn["arguments"]
     except Exception as exc:  # noqa: BLE001
-        logger.error("{} tool stream failed: {}", provider, exc)
+        if isinstance(exc, ProviderRuntimeError):
+            error_code = exc.code
+            error_message = exc.message
+            logger.error(
+                "{} tool stream failed: code={} status={}",
+                provider,
+                exc.code,
+                exc.details.get("http_status", "unknown"),
+            )
+        else:
+            error_code = "provider_transport_unavailable"
+            error_message = f"{provider_label} is temporarily unavailable. Try again later."
+            logger.error("{} tool stream failed: exception_type={}", provider, type(exc).__name__)
         if usage_logger:
             usage_logger(
                 provider,
@@ -111,7 +132,7 @@ async def stream_openai_tools(
                 "error",
                 purpose=purpose,
             )
-        yield {"type": "error", "message": str(exc)}
+        yield {"type": "error", "code": error_code, "message": error_message}
         return
 
     for acc in tool_acc.values():

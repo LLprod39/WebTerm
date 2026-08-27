@@ -38,7 +38,4 @@ def filter_tools_for_policy(user, tools: list[dict[str, Any]]) -> list[dict[str,
 def pilot_policy_note(user) -> str:
     if not is_pilot_restricted_operator(user):
         return ""
-    return (
-        "Operator policy: only read tools are available; "
-        "mutating tools require the automation capability."
-    )
+    return "Operator policy: only read tools are available; mutating tools require the automation capability."

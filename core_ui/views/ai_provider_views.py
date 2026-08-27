@@ -42,13 +42,50 @@ logger = logging.getLogger(__name__)
 # The runner image is pinned, so this catalog matches the Codex SDK shipped in
 # that image. Unsupported model/effort pairs are rejected before a run starts.
 CODEX_SUBSCRIPTION_MODELS = [
-    {"id": "gpt-5.6-sol", "label": "GPT-5.6 Sol", "default_reasoning_effort": "low", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"]},
-    {"id": "gpt-5.6-terra", "label": "GPT-5.6 Terra", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"]},
-    {"id": "gpt-5.6-luna", "label": "GPT-5.6 Luna", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh", "max"]},
-    {"id": "gpt-5.5", "label": "GPT-5.5", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
-    {"id": "gpt-5.4", "label": "GPT-5.4", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"], "deprecated": True},
-    {"id": "gpt-5.4-mini", "label": "GPT-5.4 Mini", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"], "deprecated": True},
-    {"id": "gpt-5.3-codex-spark", "label": "GPT-5.3 Codex Spark", "default_reasoning_effort": "high", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+    {
+        "id": "gpt-5.6-sol",
+        "label": "GPT-5.6 Sol",
+        "default_reasoning_effort": "low",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+    },
+    {
+        "id": "gpt-5.6-terra",
+        "label": "GPT-5.6 Terra",
+        "default_reasoning_effort": "medium",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh", "max", "ultra"],
+    },
+    {
+        "id": "gpt-5.6-luna",
+        "label": "GPT-5.6 Luna",
+        "default_reasoning_effort": "medium",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+    },
+    {
+        "id": "gpt-5.5",
+        "label": "GPT-5.5",
+        "default_reasoning_effort": "medium",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh"],
+    },
+    {
+        "id": "gpt-5.4",
+        "label": "GPT-5.4",
+        "default_reasoning_effort": "medium",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh"],
+        "deprecated": True,
+    },
+    {
+        "id": "gpt-5.4-mini",
+        "label": "GPT-5.4 Mini",
+        "default_reasoning_effort": "medium",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh"],
+        "deprecated": True,
+    },
+    {
+        "id": "gpt-5.3-codex-spark",
+        "label": "GPT-5.3 Codex Spark",
+        "default_reasoning_effort": "high",
+        "reasoning_efforts": ["low", "medium", "high", "xhigh"],
+    },
 ]
 
 
@@ -101,7 +138,9 @@ def _provider_surface_guard(request, *, admin: bool = False) -> JsonResponse | N
     if os.getenv("AI_CLI_SUBSCRIPTIONS_ENABLED", "").strip().lower() not in {"1", "true", "yes"}:
         return _error("Subscription CLI providers are disabled", 404, code="feature_disabled")
     if not user_can_manage_ai_routing(request.user):
-        return _error("AI connection access is reserved for platform settings administrators", 403, code="permission_denied")
+        return _error(
+            "AI connection access is reserved for platform settings administrators", 403, code="permission_denied"
+        )
     feature = "ai_connections_admin" if admin else "ai_connections_personal"
     if not user_can_feature(request.user, feature, request=request):
         return _error("AI connection access is not granted", 403, code="permission_denied")
@@ -754,6 +793,12 @@ def api_ai_provider_grants(request):
     ).first()
     if connection is None:
         return _validation_error({"connection_id": "Workspace connection does not exist"})
+    if not connection.enabled or connection.status != AIProviderConnection.STATUS_CONNECTED:
+        return _error(
+            "Grants require an enabled, connected workspace connection",
+            409,
+            code="provider_route_unavailable",
+        )
     if principal_name == "user_id":
         user = User.objects.filter(pk=principal_id).first()
         if user is None:
@@ -783,6 +828,14 @@ def api_ai_provider_grants(request):
             project_role=role,
             defaults=defaults,
         )
+    _audit_provider_mutation(
+        request,
+        action="ai_provider.grant.set",
+        entity_type="ai_provider_connection_grant",
+        entity_id=grant.pk,
+        target_id=connection.target_id,
+        scope=connection.scope,
+    )
     return JsonResponse({"success": True, "grant": _serialize_grant(grant)}, status=201)
 
 
@@ -849,10 +902,28 @@ def _save_preference(
             return _error("Connection does not exist or targets another provider")
         if workspace_default and connection.scope != AIProviderConnection.SCOPE_WORKSPACE:
             return _error("Workspace defaults cannot use a personal connection")
+        if workspace_default and (
+            not connection.enabled or connection.status != AIProviderConnection.STATUS_CONNECTED
+        ):
+            return _error(
+                "Workspace defaults require an enabled, connected provider connection",
+                409,
+                code="provider_route_unavailable",
+            )
     if binding.pool_id is not None:
         pool = AIProviderPool.objects.filter(pk=binding.pool_id, enabled=True).first()
         if pool is None or pool.target_id != binding.target_id:
             return _error("Pool does not exist or targets another provider")
+        if workspace_default and not pool.members.filter(
+            enabled=True,
+            connection__enabled=True,
+            connection__status=AIProviderConnection.STATUS_CONNECTED,
+        ).exists():
+            return _error(
+                "Workspace defaults require a pool with an enabled, connected member",
+                409,
+                code="provider_route_unavailable",
+            )
     if not workspace_default:
         try:
             require_unattended = _strict_bool(data.get("require_unattended"), field="require_unattended", default=False)
@@ -874,6 +945,15 @@ def _save_preference(
         "reasoning_effort": binding.reasoning_effort or "",
     }
     preference, _ = AIProviderPreference.objects.update_or_create(defaults=defaults, **filters)
+    if workspace_default:
+        _audit_provider_mutation(
+            request,
+            action="ai_provider.workspace_default.set",
+            entity_type="ai_provider_preference",
+            entity_id=preference.pk,
+            target_id=preference.target_id,
+            scope="workspace",
+        )
     return JsonResponse({"success": True, "preference": _serialize_preference(preference)})
 
 

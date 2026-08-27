@@ -454,12 +454,43 @@ def _persist_fenced_event(
                 invocation.error_code = str(event.payload.get("code") or "provider_error")[:80]
             update_fields.extend(["status", "provider_session_id", "error_code"])
         invocation.save(update_fields=list(dict.fromkeys(update_fields)))
+        _update_connection_terminal_state(invocation, event)
         if invocation.status == AIProviderInvocation.STATUS_SUCCEEDED:
             _pin_source_provider_state(invocation)
         return ProviderEventV1(
             ProviderEventType(safe_event["type"]),
             dict(safe_event.get("payload") or {}),
         )
+
+
+def _update_connection_terminal_state(invocation: AIProviderInvocation, event: ProviderEventV1) -> None:
+    if invocation.connection_id is None:
+        return
+    if event.type not in {
+        ProviderEventType.COMPLETED,
+        ProviderEventType.AUTH_REQUIRED,
+        ProviderEventType.LIMIT,
+    }:
+        return
+
+    connection = AIProviderConnection.objects.select_for_update().get(pk=invocation.connection_id)
+    update_fields = ["status", "last_error_code", "updated_at"]
+    if event.type is ProviderEventType.COMPLETED:
+        connection.status = AIProviderConnection.STATUS_CONNECTED
+        connection.last_error_code = ""
+        limits = dict(connection.limits or {})
+        if limits.pop("quota_exhausted", None) is not None:
+            connection.limits = limits
+            update_fields.append("limits")
+    elif event.type is ProviderEventType.AUTH_REQUIRED:
+        connection.status = AIProviderConnection.STATUS_AUTH_REQUIRED
+        connection.last_error_code = "provider_auth_required"
+    else:
+        connection.status = AIProviderConnection.STATUS_LIMITED
+        connection.last_error_code = "provider_quota_exceeded"
+        connection.limits = {**(connection.limits or {}), "quota_exhausted": True}
+        update_fields.append("limits")
+    connection.save(update_fields=update_fields)
 
 
 def _pin_source_provider_state(invocation: AIProviderInvocation) -> None:

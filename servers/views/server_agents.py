@@ -223,14 +223,18 @@ def agent_create(request):
     sudo_policy = normalize_sudo_policy(data.get("sudo_policy"))
     stop_conditions = data.get("stop_conditions", [])
     try:
-        default_timeout = recommended_budget.session_timeout_seconds if automation_allowed else PILOT_MAX_SESSION_TIMEOUT_SECONDS
+        default_timeout = (
+            recommended_budget.session_timeout_seconds if automation_allowed else PILOT_MAX_SESSION_TIMEOUT_SECONDS
+        )
         raw_timeout = data.get("session_timeout_seconds", default_timeout)
         session_timeout = int(raw_timeout if raw_timeout not in (None, "") else default_timeout)
     except (TypeError, ValueError):
         session_timeout = default_timeout
     session_timeout = max(30, min(session_timeout, 3600))
     try:
-        max_connections = min(int(data.get("max_connections", recommended_budget.max_connections if automation_allowed else 1)), 10)
+        max_connections = min(
+            int(data.get("max_connections", recommended_budget.max_connections if automation_allowed else 1)), 10
+        )
     except (TypeError, ValueError):
         return JsonResponse({"success": False, "error": "max_connections must be an integer"}, status=400)
     skill_slugs = skill_provider_registry.sanitize_accessible_skill_slugs(
@@ -292,7 +296,12 @@ def agent_create(request):
     )
     if not execution_servers and server_reasons:
         return JsonResponse(
-            {"success": False, "error": "Selected commands or capabilities require a server", "code": "server_scope_required", "reasons": server_reasons},
+            {
+                "success": False,
+                "error": "Selected commands or capabilities require a server",
+                "code": "server_scope_required",
+                "reasons": server_reasons,
+            },
             status=400,
         )
 
@@ -470,7 +479,12 @@ def agent_update(request, agent_id):
     )
     if not effective_servers and server_reasons:
         return JsonResponse(
-            {"success": False, "error": "Selected commands or capabilities require a server", "code": "server_scope_required", "reasons": server_reasons},
+            {
+                "success": False,
+                "error": "Selected commands or capabilities require a server",
+                "code": "server_scope_required",
+                "reasons": server_reasons,
+            },
             status=400,
         )
     violations = pilot_agent_policy_violations(
@@ -517,11 +531,7 @@ def agent_delete(request, agent_id):
 @require_http_methods(["POST"])
 def agent_run(request, agent_id):
     """Run agent on its configured servers (or a specific one)."""
-    agent = (
-        ServerAgent.objects.filter(id=agent_id, user=request.user)
-        .prefetch_related("servers")
-        .first()
-    )
+    agent = ServerAgent.objects.filter(id=agent_id, user=request.user).prefetch_related("servers").first()
     if not agent:
         return JsonResponse({"success": False, "error": "Agent not found"}, status=404)
 

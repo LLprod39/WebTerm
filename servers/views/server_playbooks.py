@@ -554,7 +554,9 @@ def _redacted_source_findings(details: dict) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for item in details.get("findings") or []:
         if isinstance(item, dict):
-            findings.append({"path": str(item.get("path") or "playbook.yml"), "kind": str(item.get("kind") or "secret")})
+            findings.append(
+                {"path": str(item.get("path") or "playbook.yml"), "kind": str(item.get("kind") or "secret")}
+            )
     for item in details.get("issues") or []:
         if isinstance(item, dict):
             findings.append(

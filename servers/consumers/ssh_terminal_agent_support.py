@@ -63,7 +63,10 @@ class TerminalAgentSupportOperations:
             explicit_binding=explicit_binding,
             stored_binding=stored_binding,
             requested_provider="auto",
-            provider_session_id=state.provider_session_id,
+            # Terminal planning, Nova, reporting, and memory calls use
+            # different system prompts. Reusing one Codex thread across those
+            # purposes makes later calls inherit the wrong instructions.
+            provider_session_id="",
             idempotency_key=(
                 f"terminal:{state.pk}:run:{self._ai_state.session.run_id}:call:{self._terminal_provider_invocation_seq}"
             ),

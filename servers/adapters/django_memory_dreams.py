@@ -126,7 +126,9 @@ def dream_server_memory(store: Any, server_id: int, *, deactivate_noise: bool = 
             if review_created:
                 created_versions += 1
 
-        raw_content = llm_content if llm_content and candidate.memory_key not in review_required_keys else candidate.content
+        raw_content = (
+            llm_content if llm_content and candidate.memory_key not in review_required_keys else candidate.content
+        )
         canonical_metadata = dict(candidate.metadata or {})
         if llm_content and candidate.memory_key not in review_required_keys:
             canonical_metadata.update(

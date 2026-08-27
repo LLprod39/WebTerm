@@ -6,7 +6,6 @@ from django.contrib.auth.models import User
 from core_ui.ai_model_policy import operational_provider_binding, user_can_manage_ai_routing
 from core_ui.models import UserAppPermission
 
-
 pytestmark = pytest.mark.django_db
 
 

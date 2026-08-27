@@ -566,12 +566,16 @@ def test_usage_event_persists_only_allowlisted_numeric_counters() -> None:
 
 def test_auth_and_quota_events_are_failed_states_with_typed_error_codes() -> None:
     user = User.objects.create_user("provider-error-lifecycle")
-    connection = _connection(owner=user, name="Error Lifecycle", concurrency_limit=2)
     cases = [
-        (ProviderEventType.AUTH_REQUIRED, "provider_auth_required"),
-        (ProviderEventType.LIMIT, "provider_quota_exceeded"),
+        (
+            ProviderEventType.AUTH_REQUIRED,
+            "provider_auth_required",
+            AIProviderConnection.STATUS_AUTH_REQUIRED,
+        ),
+        (ProviderEventType.LIMIT, "provider_quota_exceeded", AIProviderConnection.STATUS_LIMITED),
     ]
-    for index, (event_type, error_code) in enumerate(cases):
+    for index, (event_type, error_code, connection_status) in enumerate(cases):
+        connection = _connection(owner=user, name=f"Error Lifecycle {index}", concurrency_limit=2)
         invocation, lease = create_invocation_with_lease(
             _context(
                 user,
@@ -589,8 +593,12 @@ def test_auth_and_quota_events_are_failed_states_with_typed_error_codes() -> Non
             owner_id=f"error-worker-{index}",
         )
         invocation.refresh_from_db()
+        connection.refresh_from_db()
         assert invocation.status == AIProviderInvocation.STATUS_FAILED
         assert invocation.error_code == error_code
+        assert connection.status == connection_status
+        assert connection.last_error_code == error_code
+        assert bool(connection.limits.get("quota_exhausted")) is (event_type is ProviderEventType.LIMIT)
         release_provider_lease(str(lease.lease_token), owner_id=f"error-worker-{index}")
 
 

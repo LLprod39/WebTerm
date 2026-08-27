@@ -162,8 +162,7 @@ class ServerMemoryAssetGrant(models.Model):
         constraints = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(user__isnull=False, group__isnull=True)
-                    | models.Q(user__isnull=True, group__isnull=False)
+                    models.Q(user__isnull=False, group__isnull=True) | models.Q(user__isnull=True, group__isnull=False)
                 ),
                 name="servers_mem_asset_grant_one_subject",
             ),

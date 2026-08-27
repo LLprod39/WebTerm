@@ -158,8 +158,7 @@ def _task_fragment_manifest(task: dict[str, Any]) -> dict[str, Any]:
         normalized_key = key.rsplit(".", 1)[-1] if key.startswith(("ansible.builtin.", "ansible.legacy.")) else key
         if normalized_key in {"block", "rescue", "always"} and isinstance(value, list):
             output[normalized_key] = [
-                _task_fragment_manifest(item) if isinstance(item, dict) else _canonical_fragment(item)
-                for item in value
+                _task_fragment_manifest(item) if isinstance(item, dict) else _canonical_fragment(item) for item in value
             ]
         else:
             output[normalized_key] = _canonical_fragment(value)

@@ -137,7 +137,9 @@ def playbook_draft_file(request, playbook_id: int):
         playbook = get_playbook_for_action(request.user, playbook_id, "view")
         capabilities = capabilities_for(playbook, request.user)
         if request.method == "GET":
-            view = str(request.GET.get("view") or ("current" if capabilities.can_edit else "published")).strip().casefold()
+            view = (
+                str(request.GET.get("view") or ("current" if capabilities.can_edit else "published")).strip().casefold()
+            )
             if view not in {"current", "base", "published"}:
                 return workspace_error(
                     code="draft_file_view_invalid",
@@ -155,8 +157,8 @@ def playbook_draft_file(request, playbook_id: int):
                 )
             else:
                 _revision, draft = ensure_playbook_workspace(playbook, actor=request.user)
-                draft = type(draft).objects.select_related("asset_bundle", "base_revision__asset_bundle").get(
-                    pk=draft.pk
+                draft = (
+                    type(draft).objects.select_related("asset_bundle", "base_revision__asset_bundle").get(pk=draft.pk)
                 )
                 if not capabilities.is_owner:
                     if view == "base":

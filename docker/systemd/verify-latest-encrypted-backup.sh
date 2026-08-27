@@ -20,5 +20,5 @@ if [[ -z "$latest_volumes" || ! -f "$latest_volumes" ]]; then
   exit 1
 fi
 
-RESTORE_DRY_RUN=1 "$ROOT_DIR/scripts/restore_postgres.sh" "$latest"
-RESTORE_DRY_RUN=1 "$ROOT_DIR/scripts/restore_important_volumes.sh" "$latest_volumes"
+RESTORE_DRY_RUN=1 bash "$ROOT_DIR/scripts/restore_postgres.sh" "$latest"
+RESTORE_DRY_RUN=1 bash "$ROOT_DIR/scripts/restore_important_volumes.sh" "$latest_volumes"

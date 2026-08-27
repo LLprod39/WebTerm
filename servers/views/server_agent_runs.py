@@ -45,9 +45,7 @@ def _owned_agent_run(user, run_id: int) -> AgentRun | None:
     run = AgentRun.objects.filter(id=run_id, user=user).select_related("agent", "server").first()
     if run:
         return run
-    return (
-        AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
-    )
+    return AgentRun.objects.filter(id=run_id, agent__user=user).select_related("agent", "server").first()
 
 
 def _run_agent_name(run: AgentRun) -> str:
@@ -292,7 +290,12 @@ def agent_run_cleanup_stale(request, run_id):
     result = cleanup_stale_agent_run_for_user(request.user, run_id)
     if not result.get("ok"):
         return JsonResponse(
-            {"success": False, "code": result.get("code"), "error": result.get("error"), **{key: value for key, value in result.items() if key not in {"ok", "status", "code", "error"}}},
+            {
+                "success": False,
+                "code": result.get("code"),
+                "error": result.get("error"),
+                **{key: value for key, value in result.items() if key not in {"ok", "status", "code", "error"}},
+            },
             status=int(result.get("status") or 409),
         )
     cleaned_run = result["run"]

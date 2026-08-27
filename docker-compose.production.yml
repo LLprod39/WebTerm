@@ -595,6 +595,8 @@ services:
       dockerfile: docker/ai-cli-egress-proxy.Dockerfile
     container_name: mini-prod-ai-cli-egress-proxy
     user: "10003:10003"
+    environment:
+      AI_CLI_UPSTREAM_PROXY_URL: ${AI_CLI_UPSTREAM_PROXY_URL:-}
     networks:
       - default
       - ai-cli-egress
@@ -1142,7 +1144,7 @@ services:
     container_name: mini-prod-nginx
     ports:
       - "${PUBLIC_BIND_HOST:-0.0.0.0}:${PUBLIC_HTTP_PORT:-80}:8080"
-      - "${PUBLIC_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-8080}:8080"
+      - "${FRONTEND_BIND_HOST:-127.0.0.1}:${FRONTEND_PORT:-8080}:8080"
       - "${PUBLIC_BIND_HOST:-0.0.0.0}:${PUBLIC_HTTPS_PORT:-443}:8443"
     volumes:
       - ./docker/nginx/production.conf:/etc/nginx/conf.d/default.conf:ro

@@ -27,6 +27,7 @@ import {
   createAiProviderGrant,
   createAiProviderPool,
   deleteAiProviderGrant,
+  fetchAccessGroups,
   fetchAccessUsers,
   fetchAiProviderAuthFlow,
   fetchAiProviderCatalog,
@@ -73,6 +74,9 @@ type ConfirmationTarget =
   | { kind: "connection"; id: number; label: string }
   | { kind: "grant"; id: number; label: string };
 
+type GrantPrincipalKind = "user" | "group";
+type PreferenceScope = "personal" | "workspace";
+
 export default function SettingsAIConnectionsPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -112,6 +116,12 @@ export default function SettingsAIConnectionsPage() {
     enabled: runtimeEnabled && canAdmin,
     retry: false,
   });
+  const groupsQuery = useQuery({
+    queryKey: ["access", "groups"],
+    queryFn: fetchAccessGroups,
+    enabled: runtimeEnabled && canAdmin,
+    retry: false,
+  });
 
   const [name, setName] = useState("");
   const [target, setTarget] = useState<AiSubscriptionTarget>("codex_subscription");
@@ -124,8 +134,10 @@ export default function SettingsAIConnectionsPage() {
   const [poolTarget, setPoolTarget] = useState<AiSubscriptionTarget>("codex_subscription");
   const [poolMembers, setPoolMembers] = useState<number[]>([]);
   const [grantConnectionId, setGrantConnectionId] = useState("");
-  const [grantUserId, setGrantUserId] = useState("");
+  const [grantPrincipalKind, setGrantPrincipalKind] = useState<GrantPrincipalKind>("group");
+  const [grantPrincipalId, setGrantPrincipalId] = useState("");
   const [grantUnattended, setGrantUnattended] = useState(false);
+  const [preferenceScope, setPreferenceScope] = useState<PreferenceScope>("workspace");
   const [showRevoked, setShowRevoked] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationTarget | null>(null);
   const handledFlowState = useRef("");
@@ -178,6 +190,10 @@ export default function SettingsAIConnectionsPage() {
     : connections.filter((item) => item.status !== "revoked");
   const pools = useMemo(() => poolsQuery.data?.pools ?? [], [poolsQuery.data?.pools]);
   const preferences = useMemo(() => preferencesQuery.data?.preferences ?? [], [preferencesQuery.data?.preferences]);
+  const workspaceDefaults = useMemo(
+    () => preferencesQuery.data?.workspace_defaults ?? [],
+    [preferencesQuery.data?.workspace_defaults],
+  );
   const platformTargets = useMemo(
     () => (catalogQuery.data?.targets ?? []).filter((item) => item.kind === "platform"),
     [catalogQuery.data?.targets],
@@ -196,13 +212,32 @@ export default function SettingsAIConnectionsPage() {
     max: text("max · максимум", "max · maximum"),
     ultra: text("ultra · максимум + делегирование", "ultra · maximum + delegation"),
   };
-  const bindingOptions = useMemo(() => [
-    ...connections.filter((item) => item.access.interactive).map((item) => ({
+  const personalBindingOptions = useMemo(() => [
+    ...connections.filter((item) => item.enabled && item.status === "connected" && item.access.interactive).map((item) => ({
       key: `connection:${item.id}`,
       label: `${item.name} · ${targetLabel(item.target_id)}`,
       binding: { target_id: item.target_id, connection_id: item.id } as ProviderBinding,
     })),
-    ...pools.map((item) => ({
+    ...pools.filter((item) => item.enabled).map((item) => ({
+      key: `pool:${item.id}`,
+      label: `${item.name} · ${text("пул", "pool")}`,
+      binding: { target_id: item.target_id, pool_id: item.id } as ProviderBinding,
+    })),
+    ...platformTargets.map((item) => ({
+      key: `target:${item.id}`,
+      label: `${item.label} · ${text("платформа", "platform")}`,
+      binding: { target_id: item.id } as ProviderBinding,
+    })),
+  ], [connections, platformTargets, pools, text]);
+  const workspaceBindingOptions = useMemo(() => [
+    ...connections
+      .filter((item) => item.scope === "workspace" && item.enabled && item.status === "connected")
+      .map((item) => ({
+        key: `connection:${item.id}`,
+        label: `${item.name} · ${targetLabel(item.target_id)}`,
+        binding: { target_id: item.target_id, connection_id: item.id } as ProviderBinding,
+      })),
+    ...pools.filter((item) => item.enabled).map((item) => ({
       key: `pool:${item.id}`,
       label: `${item.name} · ${text("пул", "pool")}`,
       binding: { target_id: item.target_id, pool_id: item.id } as ProviderBinding,
@@ -222,7 +257,10 @@ export default function SettingsAIConnectionsPage() {
   });
 
   const savePreference = (purpose: AiPurpose) => mutation.mutate(async () => {
-    const savedPreference = preferences.find((item) => item.purpose === purpose);
+    const workspaceDefault = canAdmin && preferenceScope === "workspace";
+    const scopedPreferences = workspaceDefault ? workspaceDefaults : preferences;
+    const bindingOptions = workspaceDefault ? workspaceBindingOptions : personalBindingOptions;
+    const savedPreference = scopedPreferences.find((item) => item.purpose === purpose);
     const selected = draftPreferences[purpose] || bindingKey(savedPreference?.binding);
     const option = bindingOptions.find((item) => item.key === selected);
     if (!option) throw new Error(text("Выберите доступное подключение", "Select an available connection"));
@@ -236,6 +274,7 @@ export default function SettingsAIConnectionsPage() {
       purpose,
       binding: { ...option.binding, model_id: modelId, reasoning_effort: reasoningEffort },
       project_scoped: true,
+      workspace_default: workspaceDefault,
       require_unattended: purpose === "agents" || purpose === "internal",
     });
     toast({ title: text("Значение сохранено", "Preference saved"), description: purposeLabels[purpose] });
@@ -251,8 +290,15 @@ export default function SettingsAIConnectionsPage() {
   };
 
   const workspaceConnections = connections.filter((item) => item.scope === "workspace");
-  const loading = connectionsQuery.isLoading || (canAdmin && poolsQuery.isLoading) || preferencesQuery.isLoading || catalogQuery.isLoading;
-  const loadError = connectionsQuery.error || (canAdmin ? poolsQuery.error : null) || preferencesQuery.error || catalogQuery.error;
+  const activeWorkspaceConnections = workspaceConnections.filter((item) => item.enabled && item.status === "connected");
+  const loading = connectionsQuery.isLoading
+    || (canAdmin && (poolsQuery.isLoading || usersQuery.isLoading || groupsQuery.isLoading))
+    || preferencesQuery.isLoading
+    || catalogQuery.isLoading;
+  const loadError = connectionsQuery.error
+    || (canAdmin ? poolsQuery.error || usersQuery.error || groupsQuery.error : null)
+    || preferencesQuery.error
+    || catalogQuery.error;
 
   if (!authQuery.isLoading && !runtimeEnabled) {
     return (
@@ -275,8 +321,8 @@ export default function SettingsAIConnectionsPage() {
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                 {text(
-                  "Для безопасного входа в Codex CLI или Grok CLI платформе нужен отдельный изолированный процесс с закреплённой версией. Сейчас он выключен, поэтому создание подключений и вход временно недоступны. Остальные функции WebTrerm продолжают работать.",
-                  "Secure Codex CLI or Grok CLI sign-in requires an isolated runtime with a pinned version. It is currently disabled, so creating connections and signing in are temporarily unavailable. Other WebTrerm features continue to work.",
+                  "Для безопасного входа в Codex CLI или Grok CLI платформе нужен отдельный изолированный процесс с закреплённой версией. Сейчас он выключен, поэтому создание подключений и вход временно недоступны. Остальные функции WebTerm продолжают работать.",
+                  "Secure Codex CLI or Grok CLI sign-in requires an isolated runtime with a pinned version. It is currently disabled, so creating connections and signing in are temporarily unavailable. Other WebTerm features continue to work.",
                 )}
               </p>
             </div>
@@ -305,7 +351,7 @@ export default function SettingsAIConnectionsPage() {
         errorText={text("Не удалось загрузить AI-подключения.", "Could not load AI connections.")}
         onRetry={() => void Promise.all([
           connectionsQuery.refetch(),
-          ...(canAdmin ? [poolsQuery.refetch()] : []),
+          ...(canAdmin ? [poolsQuery.refetch(), usersQuery.refetch(), groupsQuery.refetch()] : []),
           preferencesQuery.refetch(),
           catalogQuery.refetch(),
         ])}
@@ -383,10 +429,29 @@ export default function SettingsAIConnectionsPage() {
           </section>
 
           <section className="rounded-sm border border-border bg-card p-4" aria-labelledby="purpose-title">
-            <div className="mb-4"><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" aria-hidden /><h2 id="purpose-title" className="font-semibold">{text("Модель и режим по назначению", "Model and reasoning by purpose")}</h2></div><p className="mt-1 text-sm text-muted-foreground">{text("Выберите подключение, модель Codex и глубину размышления отдельно для каждого сценария.", "Choose a connection, Codex model, and reasoning depth separately for each scenario.")}</p></div>
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div><div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" aria-hidden /><h2 id="purpose-title" className="font-semibold">{text("Модель и режим по назначению", "Model and reasoning by purpose")}</h2></div><p className="mt-1 text-sm text-muted-foreground">{canAdmin && preferenceScope === "workspace" ? text(`По умолчанию для активного workspace: ${authQuery.data?.user?.active_project?.name || "—"}.`, `Default for active workspace: ${authQuery.data?.user?.active_project?.name || "—"}.`) : text("Личные настройки текущего пользователя.", "Personal settings for the current user.")}</p></div>
+              {canAdmin ? <div className="inline-grid grid-cols-2 rounded-md border border-border p-1" role="group" aria-label={text("Область назначения", "Preference scope")}>
+                {(["workspace", "personal"] as PreferenceScope[]).map((value) => <Button
+                  key={value}
+                  type="button"
+                  size="sm"
+                  variant={preferenceScope === value ? "secondary" : "ghost"}
+                  onClick={() => {
+                    setPreferenceScope(value);
+                    setDraftPreferences({});
+                    setDraftModels({});
+                    setDraftReasoning({});
+                  }}
+                >{value === "workspace" ? text("Workspace", "Workspace") : text("Лично", "Personal")}</Button>)}
+              </div> : null}
+            </div>
             <div className="grid gap-3">
               {(Object.keys(purposeLabels) as AiPurpose[]).map((purpose) => {
-                const savedPreference = preferences.find((item) => item.purpose === purpose);
+                const workspaceDefault = canAdmin && preferenceScope === "workspace";
+                const scopedPreferences = workspaceDefault ? workspaceDefaults : preferences;
+                const bindingOptions = workspaceDefault ? workspaceBindingOptions : personalBindingOptions;
+                const savedPreference = scopedPreferences.find((item) => item.purpose === purpose);
                 const saved = bindingKey(savedPreference?.binding);
                 const selectedKey = draftPreferences[purpose] ?? saved;
                 const selectedBinding = bindingOptions.find((item) => item.key === selectedKey)?.binding;
@@ -436,11 +501,12 @@ export default function SettingsAIConnectionsPage() {
               </div>
               <div className="flex flex-wrap gap-3">{workspaceConnections.filter((item) => item.target_id === poolTarget).map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><Checkbox checked={poolMembers.includes(item.id)} onCheckedChange={(checked) => setPoolMembers((current) => checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))} />{item.name}</label>)}</div>
               {pools.length ? <div className="flex flex-wrap gap-2">{pools.map((pool) => <Badge key={pool.id} variant="outline">{pool.name}: {pool.members.length}</Badge>)}</div> : null}
-              <div className="grid gap-3 border-t border-border pt-4 md:grid-cols-[1fr_1fr_auto_auto]">
-                <Select value={grantConnectionId} onValueChange={setGrantConnectionId}><SelectTrigger aria-label={text("Workspace-подключение", "Workspace connection")}><SelectValue placeholder={text("Workspace-подключение", "Workspace connection")} /></SelectTrigger><SelectContent>{workspaceConnections.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent></Select>
-                <Select value={grantUserId} onValueChange={setGrantUserId}><SelectTrigger aria-label={text("Пользователь", "User")}><SelectValue placeholder={text("Пользователь", "User")} /></SelectTrigger><SelectContent>{(usersQuery.data?.users ?? []).map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.username}</SelectItem>)}</SelectContent></Select>
+              <div className="grid gap-3 border-t border-border pt-4 md:grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)_auto_auto]">
+                <Select value={grantConnectionId} onValueChange={setGrantConnectionId}><SelectTrigger aria-label={text("Workspace-подключение", "Workspace connection")}><SelectValue placeholder={text("Workspace-подключение", "Workspace connection")} /></SelectTrigger><SelectContent>{activeWorkspaceConnections.map((item) => <SelectItem key={item.id} value={String(item.id)}>{item.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={grantPrincipalKind} onValueChange={(value) => { setGrantPrincipalKind(value as GrantPrincipalKind); setGrantPrincipalId(""); }}><SelectTrigger aria-label={text("Тип получателя", "Principal type")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="group">{text("Группа", "Group")}</SelectItem><SelectItem value="user">{text("Пользователь", "User")}</SelectItem></SelectContent></Select>
+                <Select value={grantPrincipalId} onValueChange={setGrantPrincipalId}><SelectTrigger aria-label={grantPrincipalKind === "group" ? text("Группа", "Group") : text("Пользователь", "User")}><SelectValue placeholder={grantPrincipalKind === "group" ? text("Выберите группу", "Select group") : text("Выберите пользователя", "Select user")} /></SelectTrigger><SelectContent>{grantPrincipalKind === "group" ? (groupsQuery.data?.groups ?? []).map((group) => <SelectItem key={group.id} value={String(group.id)}>{group.name}</SelectItem>) : (usersQuery.data?.users ?? []).map((user) => <SelectItem key={user.id} value={String(user.id)}>{user.username}</SelectItem>)}</SelectContent></Select>
                 <label className="flex items-center gap-2 text-sm"><Checkbox checked={grantUnattended} onCheckedChange={(checked) => setGrantUnattended(Boolean(checked))} />{text("Расписания", "Schedules")}</label>
-                <Button disabled={!grantConnectionId || !grantUserId || mutation.isPending} onClick={() => mutation.mutate(() => createAiProviderGrant({ connection_id: Number(grantConnectionId), user_id: Number(grantUserId), allow_interactive: true, allow_unattended: grantUnattended }))}>{text("Выдать доступ", "Grant access")}</Button>
+                <Button disabled={!grantConnectionId || !grantPrincipalId || mutation.isPending} onClick={() => mutation.mutate(() => createAiProviderGrant({ connection_id: Number(grantConnectionId), ...(grantPrincipalKind === "group" ? { group_id: Number(grantPrincipalId) } : { user_id: Number(grantPrincipalId) }), allow_interactive: true, allow_unattended: grantUnattended }))}>{text("Выдать доступ", "Grant access")}</Button>
               </div>
               {workspaceConnections.flatMap((item) => item.grants ?? []).length ? <div className="space-y-2">{workspaceConnections.flatMap((item) => item.grants ?? []).map((grant) => {
                 const label = grant.user?.username || grant.group?.name || grant.project?.name || `#${grant.id}`;

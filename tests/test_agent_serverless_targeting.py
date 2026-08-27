@@ -3,13 +3,16 @@ from servers.agents.agent_targeting import server_requirement_reasons
 
 
 def test_external_agent_needs_no_server_for_safe_tools():
-    assert server_requirement_reasons(
-        mode="full",
-        commands=[],
-        tools_config={"report": True, "read_material": True, "read_skill": True},
-        sudo_policy="disabled",
-        skill_slugs=[],
-    ) == []
+    assert (
+        server_requirement_reasons(
+            mode="full",
+            commands=[],
+            tools_config={"report": True, "read_material": True, "read_skill": True},
+            sudo_policy="disabled",
+            skill_slugs=[],
+        )
+        == []
+    )
 
 
 def test_ssh_capabilities_require_server():

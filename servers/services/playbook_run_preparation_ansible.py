@@ -80,9 +80,7 @@ def resolve_preparation_targets(
         server_ids = sorted(
             {server_id for binding in mappings.values() for server_id in binding.get("server_ids") or []}
         )
-        group_ids = sorted(
-            {group_id for binding in mappings.values() for group_id in binding.get("group_ids") or []}
-        )
+        group_ids = sorted({group_id for binding in mappings.values() for group_id in binding.get("group_ids") or []})
     servers = resolve_target_servers(user, server_ids=server_ids, group_ids=group_ids)
     if not servers:
         report = readiness_report(

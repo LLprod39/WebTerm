@@ -120,7 +120,7 @@ VALIDATOR_PID=$!
 set +e
 compose exec -T "$SERVICE" sh -ec \
   'exec pg_dump --format=custom --compress=6 --no-owner --no-privileges --username="$POSTGRES_USER" --dbname="$POSTGRES_DB"' \
-  | tee "$VALIDATION_FIFO" \
+  | tee --output-error=warn-nopipe "$VALIDATION_FIFO" \
   | age --encrypt --recipients-file "$AGE_RECIPIENT_FILE" --output "$DB_TMP_FILE"
 pipeline_status=$?
 wait "$VALIDATOR_PID"
@@ -168,7 +168,7 @@ compose exec -T "$VOLUME_SERVICE" sh -ec '
   exec tar --format=pax --numeric-owner --one-file-system \
     -C /workspace -czf - media config_runtime private/playbook_bundles
 ' \
-  | tee "$VALIDATION_FIFO" \
+  | tee --output-error=warn-nopipe "$VALIDATION_FIFO" \
   | age --encrypt --recipients-file "$AGE_RECIPIENT_FILE" --output "$VOLUME_TMP_FILE"
 pipeline_status=$?
 wait "$VALIDATOR_PID"
