@@ -15,6 +15,9 @@ from servers.services.ssh_pool import ssh_connection_pool
 
 async def _run_command(server: Server, *, secret: str = "", command: str, user_id: int | None = None) -> str:
     result = await _run_command_result(server, secret=secret, command=command, user_id=user_id)
+    exit_code = result.get("exit_code")
+    if exit_code is None or exit_code < 0:
+        raise ConnectionError("Соединение SSH прервано или недоступно. Повторите попытку подключения.")
     stdout = str(result.get("stdout") or "")
     stderr = str(result.get("stderr") or "")
     return stdout if stdout.strip() else stderr
@@ -92,6 +95,7 @@ async def get_linux_ui_capabilities(server: Server, *, secret: str = "", user_id
         package_manager = "dnf"
     elif commands["yum"]:
         package_manager = "yum"
+    is_systemd = _as_bool(parsed.get("is_systemd"))
 
     return {
         "hostname": parsed.get("hostname") or server.host,
@@ -99,7 +103,7 @@ async def get_linux_ui_capabilities(server: Server, *, secret: str = "", user_id
         "os_name": parsed.get("os_name") or "",
         "os_id": parsed.get("os_id") or "",
         "kernel": parsed.get("kernel") or "",
-        "is_systemd": _as_bool(parsed.get("is_systemd")),
+        "is_systemd": is_systemd,
         "package_manager": package_manager,
         "commands": commands,
         "available_apps": {
@@ -110,7 +114,7 @@ async def get_linux_ui_capabilities(server: Server, *, secret: str = "", user_id
             "text_editor": True,
             "quick_run": commands["bash"] or commands["sh"],
             "settings": commands["bash"] or commands["sh"],
-            "services": commands["systemctl"],
+            "services": commands["systemctl"] and is_systemd,
             "logs": commands["journalctl"],
             "processes": True,
             "disk": True,

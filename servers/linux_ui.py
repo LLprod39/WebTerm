@@ -17,8 +17,10 @@ from servers.linux_ui_commands import (
 from servers.linux_ui_parsers import (
     _as_float,
     _as_int,
+    _build_log_source_command,
     _ensure_systemd_output,
     _kb_to_gb,  # noqa: F401 - compatibility export
+    _log_command_payload,
     _normalize_service_limit,
     _parse_key_value_lines,
     _parse_marked_sections,
@@ -250,31 +252,20 @@ async def get_linux_ui_service_logs(
 ) -> dict[str, Any]:
     unit = _validate_service_name(service)
     normalized_lines = _normalize_service_limit(lines, default=80, minimum=20, maximum=200)
-    service_arg = shlex.quote(unit)
     result = await _run_command_result(
         server,
         secret=secret,
-        command=(
-            "if command -v journalctl >/dev/null 2>&1; then "
-            f"journalctl -u {service_arg} -n {normalized_lines} --no-pager -o short-iso 2>/dev/null; "
-            "else "
-            f"systemctl status {service_arg} --no-pager --lines={normalized_lines} 2>&1 || true; "
-            "fi"
-        ),
+        command=_build_log_source_command("service", normalized_lines, unit),
         user_id=user_id,
     )
-    output = str(result.get("stdout") or "") or str(result.get("stderr") or "")
-    _ensure_systemd_output(output)
-
+    output = str(result.get("stdout") or "")
     source = "journalctl" if output.strip() and "Loaded:" not in output[:120] else "systemctl-status"
-    if not output.strip():
-        output = "No recent service output."
 
     return {
         "service": unit,
         "lines": normalized_lines,
         "source": source,
-        "content": output,
+        **_log_command_payload(result),
     }
 
 
@@ -376,18 +367,20 @@ async def run_linux_ui_process_action(
         "action_exit=$?\n"
         "printf '\\n__ACTION_EXIT__=%s\\n' \"$action_exit\"\n"
         "printf '__PROCESS__\\n'\n"
-        f"ps -p {process_id} -o pid=,user=,%cpu=,%mem=,etime=,comm=,args= 2>/dev/null || true\n"
+        f"ps -p {process_id} -o stat=,pid=,user=,%cpu=,%mem=,etime=,comm=,args= 2>/dev/null || true\n"
     )
     result = await _run_command_result(server, secret=secret, command=command, user_id=user_id)
     output = f"{result.get('stdout') or ''}{result.get('stderr') or ''}"
     action_exit = 1
     process_excerpt = ""
+    process_state = ""
     if "__ACTION_EXIT__=" in output:
         before_process, _, process_part = output.partition("__PROCESS__\n")
         exit_match = re.search(r"__ACTION_EXIT__=(\d+)", before_process)
         if exit_match:
             action_exit = int(exit_match.group(1))
         process_excerpt = process_part.strip()
+        process_state = process_excerpt.split(maxsplit=1)[0] if process_excerpt else ""
 
     return {
         "success": action_exit == 0,
@@ -395,6 +388,6 @@ async def run_linux_ui_process_action(
         "action": normalized_action,
         "dangerous": normalized_action == "kill_force",
         "output": output.strip(),
-        "still_running": bool(process_excerpt),
+        "still_running": bool(process_excerpt) and not process_state.startswith(("Z", "X")),
         "process_excerpt": process_excerpt,
     }

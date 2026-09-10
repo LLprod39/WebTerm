@@ -26,6 +26,7 @@ import {
   type StepEdgeData,
 } from "./edges/StepEdge";
 import { CanvasControls } from "./CanvasControls";
+import { handleLabel } from "./catalog";
 import type { ContextTarget } from "./ContextMenu";
 
 const PALETTE_MIME = "application/webterm-pipeline-node";
@@ -118,6 +119,11 @@ export function FlowCanvas({
     [onConnectEndEmpty],
   );
 
+  // Nodes with several outputs already label each port on the card, so the
+  // edge chip would only duplicate it.
+  const labelledPorts = new Set(
+    nodes.filter((node) => node.data.handles.length > 1).map((node) => node.id),
+  );
   const decoratedEdges = edges.map((edge) => ({
     ...edge,
     type: "step" as const,
@@ -127,9 +133,11 @@ export function FlowCanvas({
       onDelete: onDeleteEdge,
     },
     label:
-      edge.sourceHandle && edge.sourceHandle !== "out"
-        ? edge.sourceHandle
-        : edge.label,
+      edge.sourceHandle &&
+      edge.sourceHandle !== "out" &&
+      !labelledPorts.has(edge.source)
+        ? handleLabel(edge.sourceHandle)
+        : undefined,
   }));
 
   return (

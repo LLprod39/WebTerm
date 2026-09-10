@@ -6,6 +6,7 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core_ui.projects import user_can_write_project
@@ -35,7 +36,7 @@ def _broadcast_access_revoked(server_id: int) -> None:
 
 
 @transaction.atomic
-def transfer_server_ownership(*, server_id: int, actor, target_user_id: int) -> dict:
+def transfer_server_ownership(*, server_id: int, actor, target_user_id: int | None = None, target_user: str | None = None) -> dict:
     # of=("self",) is required: Server.group is nullable, so select_related emits a
     # LEFT OUTER JOIN and PostgreSQL refuses a bare FOR UPDATE over it. The transfer
     # only needs the server row locked.
@@ -46,6 +47,22 @@ def transfer_server_ownership(*, server_id: int, actor, target_user_id: int) -> 
         raise ServerOwnershipTransferError("server not found")
     if not (getattr(actor, "is_staff", False) or server.user_id == getattr(actor, "id", None)):
         raise ServerOwnershipTransferError("only the current owner or staff may transfer this server")
+    if target_user is not None:
+        identifier = str(target_user).strip()
+        if not identifier:
+            raise ServerOwnershipTransferError("target username or email is required")
+        candidates = list(
+            get_user_model().objects.select_for_update()
+            .filter(Q(username=identifier) | Q(email__iexact=identifier), is_active=True)
+            .values_list("pk", flat=True)[:2]
+        )
+        if not candidates:
+            raise ServerOwnershipTransferError("active target user not found")
+        if len(candidates) != 1:
+            raise ServerOwnershipTransferError("email matches multiple users; use the exact username")
+        target_user_id = candidates[0]
+    if target_user_id is None:
+        raise ServerOwnershipTransferError("target user is required")
     if server.user_id == int(target_user_id):
         raise ServerOwnershipTransferError("target user already owns this server")
 

@@ -7,7 +7,7 @@ from datetime import timedelta
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
@@ -18,6 +18,7 @@ from core_ui.models import UserActivityLog
 from servers.models import GlobalServerRules, Server, ServerConnection, ServerGroup, ServerGroupMember, ServerShare
 from servers.secret_utils import has_saved_server_sudo_secret
 from servers.ssh_host_keys import has_trusted_host_keys
+from servers.services.server_query import CAPABILITY_CONNECT_TERMINAL, user_has_server_capability
 from servers.views.server_helpers import _accessible_servers_queryset, _serialize_detected_os_fields
 
 
@@ -130,6 +131,14 @@ def frontend_bootstrap(request):
     )
 
     servers_payload = []
+    terminal_connections = dict(
+        ServerConnection.objects.filter(
+            server_id__in=server_ids, status__in=["connected", "disconnected"]
+        )
+        .values("server_id")
+        .annotate(latest=Max("connected_at"))
+        .values_list("server_id", "latest")
+    )
 
     def serialize_group(group: ServerGroup | None) -> dict:
         if not group:
@@ -170,6 +179,10 @@ def frontend_bootstrap(request):
 
         group_name = server.group.name if server.group else "Ungrouped"
         status = _frontend_status_for_server(server, connected_server_ids, now)
+        connection_times = [
+            value for value in (server.last_connected, terminal_connections.get(server.id)) if value
+        ]
+        last_connected = max(connection_times) if connection_times else None
         item = {
             "id": server.id,
             "name": server.name,
@@ -182,11 +195,14 @@ def frontend_bootstrap(request):
             "group_name": group_name,
             "is_shared": is_shared,
             "can_edit": bool(server.user_id == request.user.id),
+            "can_connect_terminal": user_has_server_capability(
+                server, request.user, CAPABILITY_CONNECT_TERMINAL, share
+            ),
             "share_context_enabled": bool(share.share_context) if share else True,
             "shared_by_username": share.shared_by.username if share and share.shared_by else "",
             "terminal_path": f"/servers/{server.id}/terminal/",
             "minimal_terminal_path": f"/servers/{server.id}/terminal/minimal/",
-            "last_connected": server.last_connected.isoformat() if server.last_connected else None,
+            "last_connected": last_connected.isoformat() if last_connected else None,
             "ai_read_only": False,
             "sudo_auth_mode": getattr(server, "sudo_auth_mode", "none") or "none",
             "has_saved_sudo_password": bool(server.user_id == request.user.id and has_saved_server_sudo_secret(server)),

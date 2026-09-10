@@ -372,7 +372,7 @@ def _build_log_source_command(source: str, lines: int, service: str) -> str:
             "if command -v journalctl >/dev/null 2>&1; then "
             f"journalctl -n {lines} --no-pager -o short-iso 2>&1; "
             "else "
-            "printf 'journalctl is unavailable on this host.\\n'; "
+            "printf 'journalctl is unavailable on this host.\\n' >&2; exit 127; "
             "fi"
         )
     if kind == "service":
@@ -381,8 +381,10 @@ def _build_log_source_command(source: str, lines: int, service: str) -> str:
         return (
             "if command -v journalctl >/dev/null 2>&1; then "
             f"journalctl -u {service_arg} -n {lines} --no-pager -o short-iso 2>&1; "
-            "else "
-            f"systemctl status {service_arg} --no-pager --lines={lines} 2>&1 || true; "
+            "elif command -v systemctl >/dev/null 2>&1; then "
+            f"systemctl status {service_arg} --no-pager --lines={lines} 2>&1; "
+            "status=$?; if [ \"$status\" -eq 3 ]; then exit 0; else exit \"$status\"; fi; "
+            "else printf 'Service log tools are unavailable on this host.\\n' >&2; exit 127; "
             "fi"
         )
 
@@ -392,13 +394,41 @@ def _build_log_source_command(source: str, lines: int, service: str) -> str:
     file_checks = " ".join(f"{shlex.quote(candidate)}" for candidate in path_candidates)
     return (
         f"for candidate in {file_checks}; do "
-        'if [ -f "$candidate" ]; then '
+        'if [ -f "$candidate" ] && [ -r "$candidate" ]; then '
         f'tail -n {lines} "$candidate" 2>&1; '
-        "exit 0; "
+        "exit $?; "
         "fi; "
         "done; "
-        "printf 'Selected log file is unavailable on this host.\\n'"
+        f"for candidate in {file_checks}; do "
+        'if [ -f "$candidate" ]; then '
+        "printf 'Selected log file is not readable.\\n' >&2; exit 77; "
+        "fi; done; "
+        "printf 'Selected log file is unavailable on this host.\\n' >&2; exit 44"
     )
+
+
+def _log_command_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Distinguish an empty log, an unavailable source, and failed SSH transport."""
+    exit_code = result.get("exit_code", -1)
+    if exit_code is None or exit_code < 0:
+        raise ConnectionError("Не удалось получить журнал: соединение SSH прервано или недоступно.")
+    stdout = str(result.get("stdout") or "")
+    stderr = str(result.get("stderr") or "")
+    if exit_code == 0:
+        return {"available": True, "content": stdout.strip(), "unavailable_reason": ""}
+
+    diagnostic = f"{stdout}\n{stderr}".lower()
+    if exit_code == 77 or any(value in diagnostic for value in ("permission denied", "operation not permitted", "access denied")):
+        reason = "У пользователя SSH недостаточно прав для чтения этого журнала."
+    elif exit_code == 127:
+        reason = "На сервере нет утилиты для чтения этого журнала."
+    elif exit_code == 44 or "no such container" in diagnostic or "could not be found" in diagnostic:
+        reason = "Выбранный журнал не найден на сервере."
+    elif "system has not been booted with systemd" in diagnostic or "failed to connect to bus" in diagnostic:
+        reason = "Журнал службы недоступен: systemd на сервере не работает."
+    else:
+        reason = "Не удалось прочитать выбранный журнал. Проверьте доступность источника и повторите попытку."
+    return {"available": False, "content": "", "unavailable_reason": reason}
 
 
 def _log_source_available(meta: dict[str, str], source: str, service: str) -> bool:

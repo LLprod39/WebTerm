@@ -163,6 +163,7 @@ docs/
 docs/*
 !docs/PIPELINE_NODES_SPEC.md
 !docs/PROJECT_STRUCTURE.md
+!docs/frontend-next/
 !docs/WebTerm_Kubernetes_Ops_Rancher_Fleet_Devtron_Report.md
 !docs/architecture/
 docs/architecture/*

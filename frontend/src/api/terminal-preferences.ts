@@ -1,12 +1,5 @@
-/**
- * src/api/terminal-preferences.ts — Terminal appearance preference API.
- */
-
-import { apiFetch } from "@/lib/api";
-
-export interface TerminalPrefs {
-  theme_name: string;
-  theme_colors: Record<string, string>;
+import { api } from "./client";
+export interface TerminalPreferences {
   font_size: number;
   font_family: string;
   line_height: number;
@@ -15,26 +8,9 @@ export interface TerminalPrefs {
   scrollback: number;
   intercept_editors: boolean;
 }
-
-export async function fetchTerminalPreferences(): Promise<TerminalPrefs> {
-  return apiFetch<TerminalPrefs>("/api/terminal/preferences/");
-}
-
-export async function updateTerminalPreferences(
-  data: Partial<TerminalPrefs>,
-): Promise<TerminalPrefs> {
-  return apiFetch<TerminalPrefs>("/api/terminal/preferences/", {
-    method: "PATCH",
-    body: JSON.stringify(data),
-  });
-}
-
-export async function fetchCommandSuggestions(
-  serverId: number,
-  prefix: string,
-): Promise<string[]> {
-  const res = await apiFetch<{ suggestions: string[] }>(
-    `/servers/api/${serverId}/command-suggestions/?q=${encodeURIComponent(prefix)}`,
-  );
-  return res.suggestions;
-}
+export const terminalPreferencesApi = {
+  get: (signal?: AbortSignal) =>
+    api.get<TerminalPreferences>("/api/terminal/preferences/", signal),
+  update: (body: Partial<TerminalPreferences>) =>
+    api.patch<TerminalPreferences>("/api/terminal/preferences/", body),
+};

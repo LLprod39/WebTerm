@@ -1,0 +1,7 @@
+FROM alpine:latest
+RUN apk add --no-cache openssh-server openssh-sftp-server bash coreutils procps iproute2 util-linux \
+    && adduser -D -s /bin/bash qa \
+    && ssh-keygen -A \
+    && printf 'PasswordAuthentication yes\nPermitRootLogin no\nAllowUsers qa\nSubsystem sftp internal-sftp\n' > /etc/ssh/sshd_config
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D", "-e"]

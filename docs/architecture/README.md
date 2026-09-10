@@ -53,7 +53,6 @@ python scripts/check_architecture_sizes.py --strict-new
 - Built-in agent tools now declare explicit policy metadata next to their registration; server engines inject that catalog into `ToolRegistry`, which still keeps compatibility inference for undeclared and MCP tools.
 - Settings/env parsing, model-local helpers, pipeline validation schema helpers, and node-manifest schema builders now live outside the large compatibility modules.
 - Frontend legacy-growth pages have been split into focused feature modules for agent configs, agent wizard state/UI, server groups, server CRUD, server list/share/knowledge/rules/security/execute workflow state, Studio skills, and shared AI provider constants.
-- Frontend API calls are moving by domain under `frontend/src/api/`; auth/session, settings/access, server management, Studio pipelines/runs/skills/MCP/triggers/templates, Linux UI, files, memory, monitoring, agents, MARS, and Studio notifications now live outside the compatibility facade in `frontend/src/lib/api.ts`.
 - `app.plugins` is pure Python and guarded from Django/feature-app imports; `plugin_marketplace` may use `core_ui` access/audit but is guarded from direct `servers` and `studio` imports.
 
 ## Current Architecture Plans
@@ -74,4 +73,4 @@ python scripts/check_architecture_sizes.py --strict-new
 - `KUBERNETES_OPS_OPERATIONS.md` is the operator/admin runbook for Kubernetes Ops: production configuration, readiness gates, provider outage DR, sync worker recovery, token rotation, audit retention, terminal/debug policy, rollback, and daily checks.
 - `KUBERNETES_LOW_LEVEL_ADMIN_MODE_PLAN.md` is the focused Freelens++ Admin Mode chapter of the master Kubernetes plan in `docs/WebTerm_Kubernetes_Ops_Rancher_Fleet_Devtron_Report.md`: WebTerm-only live resource explorer, full YAML, log streaming, dry-run/apply, exec, port-forward, and break-glass access behind separate permissions, sessions, TTL, approvals, and audit.
 - `KUBERNETES_FRONTEND_PARALLEL_UI_PLAN.md` is the frontend-only parallel work contract for redesigning Kubernetes into a WebTerm-native Freelens-like UI without changing backend/API behavior from the UI session.
-- `PLATFORM_DEVELOPMENT_RULES.md` is the short working contract for changing the platform safely: ownership, boundaries, permissions, frontend/backend patterns, Studio, terminal, dashboards, integrations, checks, and stop conditions.
+- `PLATFORM_DEVELOPMENT_RULES.md` is the short working contract for changing the platform safely: ownership, boundaries, permissions, backend patterns, Studio, terminal, dashboards, integrations, checks, and stop conditions.

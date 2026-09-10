@@ -570,6 +570,7 @@ services:
       FTP_PROXY: ${FTP_PROXY:-}
       NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1,::1,postgres,redis,mcp-demo,backend,frontend,nginx}
       VITE_DJANGO_URL: http://backend:9000
+      WEBTERM_FRONTEND_ALLOWED_HOSTS: ${WEBTERM_FRONTEND_ALLOWED_HOSTS:-${ALLOWED_HOSTS:-localhost,127.0.0.1}}
       NODE_ENV: production
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"

@@ -267,7 +267,8 @@ def test_run_memory_dreams_command_updates_worker_state():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_manual_knowledge_sync_creates_versioned_snapshots():
+@pytest.mark.parametrize("confidence", [1.0, 0.0])
+def test_manual_knowledge_sync_creates_versioned_snapshots(confidence):
     owner = User.objects.create_user(username="ops-memory-manual-user", password="x")
     server = Server.objects.create(user=owner, name="manual-node", host="10.0.0.41", port=22, username="root")
     note = ServerKnowledge.objects.create(
@@ -276,7 +277,7 @@ def test_manual_knowledge_sync_creates_versioned_snapshots():
         title="Main app upstream",
         content="proxy_pass http://127.0.0.1:8000;",
         source="manual",
-        confidence=1.0,
+        confidence=confidence,
         created_by=owner,
     )
     store = DjangoServerMemoryStore()
@@ -292,3 +293,5 @@ def test_manual_knowledge_sync_creates_versioned_snapshots():
     assert len(snapshots) == 2
     assert snapshots[0].is_active is False
     assert snapshots[1].is_active is True
+    assert snapshots[1].confidence == confidence
+    assert snapshots[1].metadata["source_confidence"] == confidence

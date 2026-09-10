@@ -16,6 +16,7 @@ from servers.linux_ui_commands import (
 from servers.linux_ui_parsers import (
     _as_bool,
     _build_log_source_command,
+    _log_command_payload,
     _log_source_available,
     _normalize_service_limit,
     _parse_docker_container_rows,
@@ -57,24 +58,26 @@ async def get_linux_ui_logs(
             continue
         preset_paths = preset["path"]
         paths = [preset_paths] if isinstance(preset_paths, str) else list(preset_paths)
-        file_checks = " || ".join(f"[ -f {shlex.quote(candidate)} ]" for candidate in paths)
+        file_checks = " || ".join(
+            f"([ -f {shlex.quote(candidate)} ] && [ -r {shlex.quote(candidate)} ])" for candidate in paths
+        )
         meta_script_lines.append(
             f"if {file_checks}; then printf 'preset_{preset_key}=1\\n'; else printf 'preset_{preset_key}=0\\n'; fi"
         )
 
     content_command = _build_log_source_command(normalized_source, normalized_lines, service)
-    raw = await _run_command(
+    result = await _run_command_result(
         server,
         secret=secret,
         command="\n".join(meta_script_lines) + "\nprintf '__CONTENT__\\n'\n" + content_command + "\n",
         user_id=user_id,
     )
 
-    meta_raw, _, content = raw.partition("__CONTENT__\n")
+    meta_raw, separator, content = str(result.get("stdout") or "").partition("__CONTENT__\n")
+    if result.get("exit_code") == 0 and not separator:
+        raise ConnectionError("Не удалось получить журнал: сервер SSH вернул неполный ответ.")
     meta = _parse_key_value_lines(meta_raw)
-    content_text = content.strip()
-    if not content_text:
-        content_text = "No log lines available."
+    payload = _log_command_payload({**result, "stdout": content if separator else meta_raw})
 
     presets = []
     for preset_key, preset in LOG_SOURCES.items():
@@ -83,7 +86,11 @@ async def get_linux_ui_logs(
                 "key": preset_key,
                 "label": preset["label"],
                 "description": preset["description"],
-                "available": _log_source_available(meta, preset_key, service),
+                "available": (
+                    payload["available"]
+                    if preset_key == normalized_source
+                    else _log_source_available(meta, preset_key, service)
+                ),
             }
         )
 
@@ -91,9 +98,8 @@ async def get_linux_ui_logs(
         "source": normalized_source,
         "service": _validate_service_name(service) if normalized_source == "service" and service else "",
         "lines": normalized_lines,
-        "content": content_text,
         "presets": presets,
-        "available": _log_source_available(meta, normalized_source, service),
+        **payload,
     }
 
 
@@ -213,7 +219,7 @@ async def get_linux_ui_docker_logs(
 ) -> dict[str, Any]:
     container_ref = _validate_container_ref(container)
     normalized_lines = _normalize_service_limit(lines, default=80, minimum=20, maximum=200)
-    content = await _run_command(
+    result = await _run_command_result(
         server,
         secret=secret,
         command=f"docker logs --tail {normalized_lines} {shlex.quote(container_ref)} 2>&1\n",
@@ -222,7 +228,7 @@ async def get_linux_ui_docker_logs(
     return {
         "container": container_ref,
         "lines": normalized_lines,
-        "content": content.strip() or "No log lines available.",
+        **_log_command_payload(result),
     }
 
 

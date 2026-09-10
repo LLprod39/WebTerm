@@ -1,0 +1,1 @@
+export { intelligenceRoutes } from "./index";

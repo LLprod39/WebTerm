@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 
 class MutationSchema(BaseModel):
@@ -80,7 +80,16 @@ class AuthLoginMutationSchema(BaseModel):
 class ServerOwnershipTransferSchema(BaseModel):
     model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"target_user_id": 42}]})
 
-    target_user_id: int = Field(gt=0)
+    target_user_id: int | None = Field(default=None, gt=0)
+    target_user: str | None = Field(default=None, min_length=1, max_length=254)
+
+    @model_validator(mode="after")
+    def one_target(self):
+        if (self.target_user_id is None) == (self.target_user is None):
+            raise ValueError("Provide either target_user_id or target_user")
+        if self.target_user is not None and not self.target_user.strip():
+            raise ValueError("Target username or email cannot be blank")
+        return self
 
 
 class ServerGroupBulkActionParameters(BaseModel):

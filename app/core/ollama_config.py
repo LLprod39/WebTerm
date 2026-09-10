@@ -93,13 +93,20 @@ def _sticky_ollama_url() -> str | None:
     env = (os.getenv("OLLAMA_BASE_URL") or "").strip()
     if env:
         return env.rstrip("/")
+    # An explicit cache path is an isolation boundary: do not read host markers
+    # when it is configured, even if that file is absent or unreadable.
+    configured_cache = (os.getenv("OLLAMA_CACHE_PATH") or "").strip()
     # Repo root markers (WSL: /mnt/c/WebTrerm, Windows: C:\WebTrerm)
-    candidates = [
-        Path(os.getcwd()) / ".ollama_wsl_url",
-        Path(__file__).resolve().parents[2] / ".ollama_wsl_url",
-        Path("/mnt/c/WebTrerm/.ollama_wsl_url"),
-        Path("C:/WebTrerm/.ollama_wsl_url"),
-    ]
+    candidates = (
+        [Path(configured_cache).expanduser()]
+        if configured_cache
+        else [
+            Path(os.getcwd()) / ".ollama_wsl_url",
+            Path(__file__).resolve().parents[2] / ".ollama_wsl_url",
+            Path("/mnt/c/WebTrerm/.ollama_wsl_url"),
+            Path("C:/WebTrerm/.ollama_wsl_url"),
+        ]
+    )
     for path in candidates:
         try:
             if path.is_file():
@@ -116,11 +123,18 @@ def remember_ollama_url(base_url: str) -> None:
     url = (base_url or "").strip().rstrip("/")
     if not url or "://" not in url:
         return
-    for path in (
-        Path(__file__).resolve().parents[2] / ".ollama_wsl_url",
-        Path("/mnt/c/WebTrerm/.ollama_wsl_url"),
-        Path("C:/WebTrerm/.ollama_wsl_url"),
-    ):
+    configured_cache = (os.getenv("OLLAMA_CACHE_PATH") or "").strip()
+    # A failed write to an explicit path must not fall back to shared host files.
+    candidates = (
+        (Path(configured_cache).expanduser(),)
+        if configured_cache
+        else (
+            Path(__file__).resolve().parents[2] / ".ollama_wsl_url",
+            Path("/mnt/c/WebTrerm/.ollama_wsl_url"),
+            Path("C:/WebTrerm/.ollama_wsl_url"),
+        )
+    )
+    for path in candidates:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(url + "\n", encoding="utf-8")

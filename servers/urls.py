@@ -124,6 +124,7 @@ urlpatterns = [
     path("api/groups/create/", server_groups.group_create, name="group_create"),
     path("api/groups/<int:group_id>/update/", server_groups.group_update, name="group_update"),
     path("api/groups/<int:group_id>/delete/", server_groups.group_delete, name="group_delete"),
+    path("api/groups/<int:group_id>/members/", server_groups.group_members, name="group_members"),
     path("api/groups/<int:group_id>/add-member/", server_groups.group_add_member, name="group_add_member"),
     path("api/groups/<int:group_id>/remove-member/", server_groups.group_remove_member, name="group_remove_member"),
     path("api/groups/<int:group_id>/subscribe/", server_groups.group_subscribe, name="group_subscribe"),

@@ -1,197 +1,55 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
-import path from "path";
-
-const DOMAIN_AUTH_HEADERS = [
-  "x-forwarded-user",
-  "x-remote-user",
-  "remote-user",
-  "x-auth-request-user",
-  "x-forwarded-preferred-username",
-];
-
-function copyHeader(proxyReq: { setHeader: (name: string, value: string) => void }, req: { headers: Record<string, string | string[] | undefined> }, headerName: string) {
-  const raw = req.headers[headerName];
-  if (!raw) return;
-  const value = Array.isArray(raw) ? raw.join(",") : raw;
-  proxyReq.setHeader(headerName, value);
-}
-
-function copyProxyHeaders(proxyReq: { setHeader: (name: string, value: string) => void }, req: { headers: Record<string, string | string[] | undefined> }) {
-  copyHeader(proxyReq, req, "cookie");
-  for (const headerName of DOMAIN_AUTH_HEADERS) {
-    copyHeader(proxyReq, req, headerName);
-  }
-}
-
-// https://vitejs.dev/config/
+import tailwindcss from "@tailwindcss/vite";
+import { fileURLToPath, URL } from "node:url";
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
-  const djangoTarget = env.VITE_DJANGO_URL || process.env.VITE_DJANGO_URL || "http://127.0.0.1:9000";
-
-  // VITE_BASE=/WebTerm-Demo/ for GitHub Pages static demo; default "/" for normal deploys.
-  const base = env.VITE_BASE || process.env.VITE_BASE || "/";
-
+  const env = loadEnv(mode, fileURLToPath(new URL(".", import.meta.url)), [
+    "WEBTERM_",
+    "VITE_DJANGO_URL",
+  ]);
+  const target =
+    process.env.WEBTERM_BACKEND_URL ||
+    process.env.VITE_DJANGO_URL ||
+    env.WEBTERM_BACKEND_URL ||
+    env.VITE_DJANGO_URL ||
+    "http://127.0.0.1:9000";
+  const allowedHosts = (
+    process.env.WEBTERM_FRONTEND_ALLOWED_HOSTS ||
+    env.WEBTERM_FRONTEND_ALLOWED_HOSTS ||
+    ""
+  )
+    .split(",")
+    .map((host) => host.trim())
+    .filter((host) => host && host !== "*");
   return {
-  base,
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) {
-            return;
-          }
-
-          const moduleId = id.replaceAll("\\", "/");
-
-          // Keep optional editor/runtime code out of the shared application
-          // vendor chunk. These packages are only needed after opening the
-          // corresponding lazy route or editor surface.
-          const editorLanguagePackage = moduleId.match(/\/@codemirror\/(lang-[^/]+)\//)?.[1];
-          if (editorLanguagePackage) {
-            return `editor-${editorLanguagePackage}`;
-          }
-          if (moduleId.includes("/@codemirror/") || moduleId.includes("/@lezer/")) {
-            return "editor-vendor";
-          }
-          if (
-            moduleId.includes("/react/") ||
-            moduleId.includes("/react-dom/") ||
-            moduleId.includes("/react-router") ||
-            moduleId.includes("/scheduler/") ||
-            moduleId.includes("/@tanstack/react-query/") ||
-            moduleId.includes("/@tanstack/query-core/")
-          ) {
-            return "core-vendor";
-          }
-          if (
-            moduleId.includes("/date-fns/") ||
-            moduleId.includes("/react-day-picker/") ||
-            moduleId.includes("/zod/") ||
-            moduleId.includes("/yaml/")
-          ) {
-            return "data-vendor";
-          }
-
-          if (id.includes("@xterm") || id.includes("xterm")) {
-            return "terminal-vendor";
-          }
-          if (id.includes("@xyflow") || id.includes("zustand")) {
-            return "flow-vendor";
-          }
-          if (
-            id.includes("react-markdown") ||
-            id.includes("remark-") ||
-            id.includes("rehype") ||
-            id.includes("micromark") ||
-            id.includes("mdast") ||
-            id.includes("hast") ||
-            id.includes("unist") ||
-            id.includes("vfile") ||
-            id.includes("property-information") ||
-            id.includes("parse-entities") ||
-            id.includes("character-entities") ||
-            id.includes("comma-separated-tokens") ||
-            id.includes("space-separated-tokens") ||
-            id.includes("style-to-object") ||
-            id.includes("style-to-js") ||
-            id.includes("html-url-attributes") ||
-            id.includes("trim-lines") ||
-            id.includes("bail") ||
-            id.includes("devlop") ||
-            id.includes("inline-style-parser") ||
-            id.includes("hastscript")
-          ) {
-            return "content-vendor";
-          }
-          if (
-            moduleId.includes("/framer-motion/") ||
-            moduleId.includes("/motion-dom/") ||
-            moduleId.includes("/motion-utils/")
-          ) {
-            return "motion-vendor";
-          }
-          if (
-            moduleId.includes("/recharts/") ||
-            moduleId.includes("/d3-") ||
-            moduleId.includes("/lodash/") ||
-            moduleId.includes("/decimal-js-light/") ||
-            moduleId.includes("/react-smooth/") ||
-            moduleId.includes("/victory-vendor/")
-          ) {
-            return "charts-vendor";
-          }
-          if (
-            moduleId.includes("/embla-carousel/") ||
-            moduleId.includes("/embla-carousel-react/")
-          ) {
-            return "carousel-vendor";
-          }
-          if (
-            id.includes("@radix-ui") ||
-            id.includes("cmdk") ||
-            id.includes("vaul") ||
-            id.includes("@floating-ui") ||
-            id.includes("react-remove-scroll") ||
-            id.includes("react-style-singleton") ||
-            id.includes("aria-hidden") ||
-            id.includes("use-sidecar") ||
-            id.includes("use-callback-ref")
-          ) {
-            return "ui-vendor";
-          }
-          if (id.includes("lucide-react")) {
-            return "icons-vendor";
-          }
-          return "vendor";
-        },
+    cacheDir: `node_modules/.vite-${new URL(target).port || new URL(target).hostname}`,
+    plugins: [react(), tailwindcss()],
+    resolve: {
+      alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    },
+    server: {
+      strictPort: true,
+      allowedHosts,
+      watch: {
+        ignored: [
+          "**/storybook-static/**",
+          "**/artifacts/**",
+          "**/playwright-report*/**",
+          "**/test-results*/**",
+        ],
+      },
+      proxy: {
+        "/api/": { target, changeOrigin: false },
+        "/servers/api/": { target, changeOrigin: false },
+        "/ws/": { target, ws: true, changeOrigin: false },
       },
     },
-  },
-  server: {
-    host: "0.0.0.0",
-    port: 8080,
-    allowedHosts: true,
-    hmr: {
-      overlay: false,
+    preview: { allowedHosts },
+    build: {
+      target: "es2022",
+      sourcemap: false,
+      manifest: true,
+      chunkSizeWarningLimit: 650,
     },
-    proxy: {
-      "/api": {
-        target: djangoTarget,
-        changeOrigin: false,
-        configure: (proxy) => {
-          proxy.on("proxyReq", (proxyReq, req) => {
-            copyProxyHeaders(proxyReq, req as { headers: Record<string, string | string[] | undefined> });
-          });
-        },
-      },
-      "/servers/api": {
-        target: djangoTarget,
-        changeOrigin: false,
-        configure: (proxy) => {
-          proxy.on("proxyReq", (proxyReq, req) => {
-            copyProxyHeaders(proxyReq, req as { headers: Record<string, string | string[] | undefined> });
-          });
-        },
-      },
-      "/ws": {
-        target: djangoTarget,
-        changeOrigin: false,
-        ws: true,
-        configure: (proxy) => {
-          // http-proxy does not always forward Cookie on WS upgrade — do it explicitly
-          proxy.on("proxyReqWs", (proxyReq, req) => {
-            copyProxyHeaders(proxyReq, req as { headers: Record<string, string | string[] | undefined> });
-          });
-        },
-      },
-    },
-  },
-  plugins: [react()],
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
   };
 });

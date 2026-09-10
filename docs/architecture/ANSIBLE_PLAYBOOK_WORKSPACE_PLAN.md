@@ -149,16 +149,6 @@ Playbooks должны стать самостоятельным продукт�
 9. поделиться опубликованной revision с другим пользователем;
 10. восстановить историю, сравнить изменения и повторить run.
 
-### 3.2 UX-метрики
-
-- Время от импорта до первого понятного compatibility report.
-- Время от импорта до validated revision.
-- Доля ошибок, которые показываются с конкретным stage и location.
-- Доля runs, запущенных из validated revision.
-- Доля runs, для которых сохранены revision hash и runtime fingerprint.
-- Число потерянных draft/conflict overwrite: целевое значение 0.
-- Доля shared playbooks с явно выбранной ролью, а не legacy global sharing.
-
 ### 3.3 Не-цели первой версии
 
 - Не строить собственный Git hosting.
@@ -976,46 +966,6 @@ Draft update:
 
 Старое строковое `error` можно дублировать в transition period.
 
-## 13. Frontend architecture
-
-`frontend/src/api/playbooks.ts` уже близок к лимиту и должен стать compatibility facade.
-
-Предлагаемая структура:
-
-```text
-frontend/src/api/playbooks/
-  index.ts
-  types.ts
-  catalog.ts
-  drafts.ts
-  revisions.ts
-  validation.ts
-  bindings.ts
-  sharing.ts
-  runs.ts
-  bundles.ts
-
-frontend/src/pages/automation/
-  AutomationPage.tsx
-  AutomationRoutes.tsx
-  catalog/
-  editor/
-  runs/
-  templates/
-  sharing/
-```
-
-Rules:
-
-- route components только координируют;
-- query/mutation logic живёт в controller hooks;
-- CodeMirror wrapper расширяется через reusable extensions, а не fork внутри playbook;
-- runtime state находится в URL/query cache, не в одном огромном `view.mode`;
-- forms используют typed API contracts;
-- loading, empty, error, denied, stale и unavailable имеют отдельные состояния;
-- mobile layout покрывается component/E2E tests;
-- `frontend/src/lib/api.ts` остаётся только facade.
-
 ## 14. Migration strategy
 
 ### 14.1 Data backfill
@@ -1306,24 +1256,6 @@ Runs:
 - `online_only` behavior matches the public option;
 - cancel/rerun;
 - worker restart/reclaim after durable dispatch is implemented.
-
-### 16.2 Frontend
-
-- direct route and reload for catalog/editor/revision/run;
-- create/import modes;
-- Ansible source edit changes actual save payload;
-- no editable no-op task cards for YAML;
-- Ctrl+S/autosave/error/conflict;
-- jump from issue to line;
-- diff/original/revision;
-- permission-denied/read-only actions;
-- stale validation;
-- binding/variable forms;
-- sharing role picker;
-- loading/empty/error/unavailable;
-- keyboard and focus order;
-- responsive single-panel editor;
-- no duplicate API requests from hidden tabs.
 
 ### 16.3 E2E golden paths
 

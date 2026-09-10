@@ -26,7 +26,9 @@ def repair_server_memory(store, server_id: int, *, stale_after_days: int = 30, c
             max_age_days=stale_after_days,
         )
         freshness = compute_freshness_score(snapshot.updated_at, snapshot.last_verified_at)
-        target_confidence = decay_confidence(snapshot.confidence or 0.8, freshness)
+        current_confidence = float(snapshot.confidence if snapshot.confidence is not None else 0.8)
+        # A freshness pass may lower certainty, but must not raise a user-set value.
+        target_confidence = min(current_confidence, decay_confidence(current_confidence, freshness))
         dirty_fields: list[str] = []
         if abs(target_confidence - float(snapshot.confidence or 0.0)) >= 0.05:
             snapshot.confidence = target_confidence

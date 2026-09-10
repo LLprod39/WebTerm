@@ -1,5 +1,7 @@
 # WebTerm
 
+The previous frontend has been removed for a full redesign. This checkout currently contains the backend; a new web interface has not been implemented.
+
 WebTerm is a self-hosted admin and automation platform for teams that manage
 servers, terminal work, infrastructure context, AI agents, and internal tools
 from one browser workspace.
@@ -8,7 +10,6 @@ It is not just a web SSH client. The goal is to keep the server inventory,
 terminal, monitoring, run history, automation pipelines, AI assistance, and
 private plugin extensions in one controlled product.
 
-![WebTerm overview](.github/assets/readme-hero.svg)
 
 ## What This Project Does
 
@@ -37,7 +38,6 @@ private plugin extensions in one controlled product.
 ## Stack
 
 - Backend: Python, Django, Django Channels.
-- Frontend: React, Vite, TypeScript, Tailwind.
 - Runtime services: PostgreSQL, Redis, Celery, Docker Compose.
 - Automation integrations: MCP services, LLM providers, Telegram/email
   notifications, optional Keycloak integration.
@@ -49,12 +49,11 @@ private plugin extensions in one controlled product.
 - Release history and current public version: [`CHANGELOG.md`](CHANGELOG.md) and [`VERSION`](VERSION).
 - Third-party notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 - Threat model and findings ledger: [`security/`](security/).
-- CI: `.github/workflows/security.yml` (pip-audit, npm audit, SBOM, checksums, GitHub-signed provenance attestations).
+- CI: `.github/workflows/security.yml` (pip-audit, SBOM, checksums, GitHub-signed provenance attestations).
 
 ## Repository Layout
 
 ```text
-frontend/            React/Vite SPA
 web_ui/              Django project settings, URLs, ASGI/WSGI
 core_ui/             auth, access, settings, admin/common API
 servers/             server inventory, SSH, monitoring, server agents
@@ -96,34 +95,13 @@ python manage.py runserver 0.0.0.0:9000
 From Windows PowerShell, the same locked setup can be launched inside WSL:
 
 ```powershell
-wsl -e bash -lc 'cd /mnt/c/WebTrerm && ./bootstrap-linux.sh --no-docker --skip-frontend'
+wsl -e bash -lc 'cd /mnt/c/WebTrerm && ./bootstrap-linux.sh --no-docker'
 ```
 
 Backend URLs:
 
 - Django admin: `http://127.0.0.1:9000/admin/`
 - Health check: `http://127.0.0.1:9000/api/health/`
-
-### Frontend
-
-Use Node.js `22.23.1` with npm `10.9.8` (`.nvmrc` and `packageManager` are
-versioned):
-
-```powershell
-cd frontend
-npm ci
-npm run dev
-```
-
-Frontend URL:
-
-- `http://127.0.0.1:8080/`
-
-For UI-only work without a backend, create `frontend/.env.local`:
-
-```env
-VITE_ENABLE_DEMO_MODE=true
-```
 
 ## Docker
 
@@ -139,7 +117,7 @@ chmod +x install-server.sh
 ./install-server.sh --host webterm.example.com --https
 ```
 
-This starts postgres, redis, backend, frontend, nginx, MCP services, plus
+This starts postgres, redis, backend, nginx, MCP services, plus
 ops-supervisor, scheduled-agents, scheduled-pipelines, monitor,
 kubernetes-ops-sync, and celery-worker.
 
@@ -196,12 +174,7 @@ uv pip compile requirements-dev.in -o requirements-dev.lock \
   --python-version 3.11 --python-platform linux --generate-hashes
 ```
 
-```bash
-cd frontend
-npm run build
-npm run test
-npm run test:e2e:smoke
-```
+
 
 ## Documentation
 

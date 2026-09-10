@@ -37,6 +37,18 @@ def _linux_ui_error_response(exc: Exception) -> JsonResponse:
         return JsonResponse({"success": False, "error": str(exc)}, status=400)
     if isinstance(exc, PermissionError):
         return JsonResponse({"success": False, "error": "Недостаточно прав для выполнения операции"}, status=403)
+    if isinstance(exc, ConnectionError):
+        return JsonResponse(
+            {
+                "success": False,
+                "code": "ssh_connection_failed",
+                "error": (
+                    "Не удалось получить данные сервера по SSH. Проверьте доступность сервера "
+                    "и параметры подключения, затем повторите попытку."
+                ),
+            },
+            status=502,
+        )
     return internal_error_response(None, exc)
 
 

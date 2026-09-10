@@ -10,7 +10,7 @@ The repository used the internal package version `2.0.0` before WebTerm had a pu
 
 ## Decision
 
-The canonical release identity is `0.1.0` in the root `VERSION`, Python project metadata, frontend package and lockfile, and backend/frontend container labels. The declared v0.1 HTTP surface is the compatibility boundary. Until the release checklist is approved, `0.1.0` remains unreleased.
+The canonical release identity is `0.1.0` in the root `VERSION`, Python project metadata and backend container labels. The declared v0.1 HTTP surface is the compatibility boundary. Until the release checklist is approved, `0.1.0` remains unreleased.
 
 Historical lowercase `webtrerm` identifiers and the local `C:\WebTrerm` checkout path remain compatibility values. They are not the product name and are inventoried in the release brand contract.
 

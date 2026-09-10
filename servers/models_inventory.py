@@ -352,6 +352,11 @@ class CommandSnapshot(models.Model):
     command = models.TextField(help_text="Shell command that triggered the snapshot")
     file_path = models.CharField(max_length=1024, help_text="Absolute path on remote server")
     content = models.TextField(blank=True, help_text="File content before modification")
+    file_existed = models.BooleanField(
+        null=True,
+        default=None,
+        help_text="Whether the file existed before the command; unknown for legacy captures",
+    )
     content_truncated = models.BooleanField(
         default=False,
         help_text="Stored content was truncated at COMMAND_SNAPSHOT_MAX_CONTENT_BYTES and cannot be restored safely",

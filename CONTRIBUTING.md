@@ -9,7 +9,6 @@ Release evidence is produced on Linux. On Windows, run the backend in WSL and ke
 Prerequisites:
 
 - Python 3.11;
-- Node.js 22.23.1 and npm 10.9.8;
 - Docker with Compose for PostgreSQL/Redis integration checks;
 - WSL 2 when developing from Windows.
 
@@ -21,7 +20,7 @@ source .venv-wsl/bin/activate
 python manage.py check --settings=web_ui.settings.test
 ```
 
-The bootstrap installs the hashed `requirements-dev.lock` with `--require-hashes` and the frontend with `npm ci`. Do not reuse `.venv-wsl` from native Windows; the Windows helper deliberately uses `.venv-windows`.
+The bootstrap installs the hashed `requirements-dev.lock` with `--require-hashes`. Do not reuse `.venv-wsl` from native Windows; the Windows helper deliberately uses `.venv-windows`.
 
 ## Make a focused change
 
@@ -48,17 +47,6 @@ python manage.py makemigrations --check --dry-run --settings=web_ui.settings.tes
 python -m pytest tests app core_ui servers studio kubernetes_ops plugin_marketplace mars
 ```
 
-Frontend:
-
-```bash
-cd frontend
-npm ci
-npm run lint
-npm run typecheck
-npm run test:coverage
-npm run build:budget
-npm run test:e2e
-```
 
 PostgreSQL/Redis integration and production checks run in CI. If your change touches those surfaces, run the matching Compose flow from the [release checklist](docs/releases/V0_1_RELEASE_CHECKLIST.md).
 

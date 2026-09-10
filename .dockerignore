@@ -68,4 +68,9 @@ db.sqlite3-wal
 frontend/.vite
 frontend/playwright-report
 frontend/test-results
+frontend/tests/.auth
+frontend/storybook-static
+frontend/artifacts
+frontend/test-results-*
+frontend/playwright-report-*
 .import_linter_cache

@@ -22,24 +22,14 @@ Exact GitHub check-run names (job `name:` fields):
 - `Production Checks`
 - `Documentation Contract`
 
-### Frontend CI
-- `Frontend Lock`
-- `Frontend Typecheck and Lint`
-- `Frontend Unit and Coverage`
-- `Frontend Production Build`
-
 ### Architecture Fitness
 - `Architecture No Regression`
 - `God-file & Import Boundary Checks` (the stable required-check name; it now
   enforces complexity, fan-in/fan-out and import boundaries, while line count
   is warning-only)
 
-### Playwright Smoke
-- `Playwright Smoke` (runs on every PR/push to `test`/`main` — no path filter — so the required context always appears)
-
 ### Security baseline
 - `Python dependency audit`
-- `npm dependency audit`
 - `SBOM, checksums, provenance`
 - `Secrets-never and security unit tests`
 
@@ -151,7 +141,7 @@ Stage 1 acceptance: CI **p95 ≤ 15 minutes** for merge-candidate product workfl
 
 ## AI workflow isolation
 
-Gemini triage/review workflows are **not** required product gates. Their check names must never replace backend/frontend/architecture/Playwright/security evidence.
+Gemini triage/review workflows are **not** required product gates. Their check names must never replace backend/architecture/security evidence.
 
 ## Bootstrap safety
 

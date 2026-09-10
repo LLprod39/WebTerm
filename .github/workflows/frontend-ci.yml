@@ -97,6 +97,10 @@ jobs:
       - run: npm ci
       - name: Build and enforce the frozen bundle budget
         run: npm run build:budget
+      - name: Verify corporate host handling
+        run: node --test scripts/preview-hosts.test.mjs
+      - name: Build the component catalog
+        run: npm run build-storybook
       - name: Upload production bundle evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -104,6 +108,7 @@ jobs:
           name: frontend-build-evidence-${{ github.sha }}
           path: |
             frontend/dist
+            frontend/storybook-static
             frontend/artifacts/bundle-budget.json
           if-no-files-found: warn
           retention-days: 14

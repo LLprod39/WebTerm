@@ -21,7 +21,7 @@ for cmd in systemctl journalctl docker ss ip apt apt-get dnf yum python3 bash sh
     printf 'cmd_%s=0\n' "$cmd"
   fi
 done
-if [ -d /run/systemd/system ] || command -v systemctl >/dev/null 2>&1; then
+if [ -d /run/systemd/system ]; then
   printf 'is_systemd=1\n'
 else
   printf 'is_systemd=0\n'

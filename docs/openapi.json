@@ -543,15 +543,34 @@
           }
         ],
         "properties": {
+          "target_user": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target User"
+          },
           "target_user_id": {
-            "exclusiveMinimum": 0,
-            "title": "Target User Id",
-            "type": "integer"
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Target User Id"
           }
         },
-        "required": [
-          "target_user_id"
-        ],
         "title": "ServerOwnershipTransferSchema",
         "type": "object"
       },
@@ -16684,6 +16703,58 @@
         "x-django-view-name": "servers:agent_run_detail"
       }
     },
+    "/servers/api/agents/runs/{run_id}/activity/": {
+      "get": {
+        "operationId": "servers_agent_run_activity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Activity",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_activity"
+      }
+    },
     "/servers/api/agents/runs/{run_id}/approve-plan/": {
       "post": {
         "operationId": "servers_agent_run_approve_plan_post",
@@ -16747,6 +16818,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_approve_plan"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/artifacts/": {
+      "get": {
+        "operationId": "servers_agent_run_artifacts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Artifacts",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_artifacts"
       }
     },
     "/servers/api/agents/runs/{run_id}/artifacts/download-all/": {
@@ -16914,6 +17037,71 @@
         "x-django-view-name": "servers:agent_run_audit_export"
       }
     },
+    "/servers/api/agents/runs/{run_id}/cleanup-stale/": {
+      "post": {
+        "operationId": "servers_agent_run_cleanup_stale_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Cleanup Stale",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_cleanup_stale"
+      }
+    },
     "/servers/api/agents/runs/{run_id}/events/": {
       "get": {
         "operationId": "servers_agent_run_events_get",
@@ -16964,6 +17152,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_events"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/events/v2/": {
+      "get": {
+        "operationId": "servers_agent_run_events_v2_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Events V2",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_events_v2"
       }
     },
     "/servers/api/agents/runs/{run_id}/log/": {
@@ -17198,6 +17438,110 @@
           "servers"
         ],
         "x-django-view-name": "servers:agent_run_report_deliver"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/report/document/": {
+      "get": {
+        "operationId": "servers_agent_run_report_document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Report Document",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_report_document"
+      }
+    },
+    "/servers/api/agents/runs/{run_id}/report/v2/": {
+      "get": {
+        "operationId": "servers_agent_run_report_v2_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Agent Run Report V2",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:agent_run_report_v2"
       }
     },
     "/servers/api/agents/runs/{run_id}/tasks/{task_id}/ai-refine/": {
@@ -18678,6 +19022,58 @@
         "x-django-view-name": "servers:group_delete"
       }
     },
+    "/servers/api/groups/{group_id}/members/": {
+      "get": {
+        "operationId": "servers_group_members_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "group_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "List actual memberships for the same managers allowed to change them.",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:group_members"
+      }
+    },
     "/servers/api/groups/{group_id}/remove-member/": {
       "post": {
         "operationId": "servers_group_remove_member_post",
@@ -19320,6 +19716,114 @@
         "x-django-view-name": "servers:playbook_ansible_status"
       }
     },
+    "/servers/api/playbooks/compatibility/adapt/": {
+      "post": {
+        "operationId": "servers_playbook_source_compatibility_adapt_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Source Compatibility Adapt",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_source_compatibility_adapt"
+      }
+    },
+    "/servers/api/playbooks/compatibility/analyze/": {
+      "post": {
+        "operationId": "servers_playbook_source_compatibility_analyze_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Source Compatibility Analyze",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_source_compatibility_analyze"
+      }
+    },
     "/servers/api/playbooks/create/": {
       "post": {
         "operationId": "servers_playbook_create_post",
@@ -19834,6 +20338,47 @@
         "x-django-view-name": "servers:playbook_run_list"
       }
     },
+    "/servers/api/playbooks/runs/history/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_list_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report List",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_list"
+      }
+    },
     "/servers/api/playbooks/runs/{run_id}/": {
       "get": {
         "operationId": "servers_playbook_run_detail_get",
@@ -19951,6 +20496,223 @@
         "x-django-view-name": "servers:playbook_run_cancel"
       }
     },
+    "/servers/api/playbooks/runs/{run_id}/export/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Export",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_export"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/hosts/{server_id}/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_host_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Host",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_host"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/log/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_log_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report Log",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report_log"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/report/": {
+      "get": {
+        "operationId": "servers_playbook_run_report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Report",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_report"
+      }
+    },
     "/servers/api/playbooks/runs/{run_id}/rerun-failed/": {
       "post": {
         "operationId": "servers_playbook_run_rerun_failed_post",
@@ -20014,6 +20776,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_run_rerun_failed"
+      }
+    },
+    "/servers/api/playbooks/runs/{run_id}/retry-context/": {
+      "get": {
+        "operationId": "servers_playbook_run_retry_context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Run Retry Context",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_run_retry_context"
       }
     },
     "/servers/api/playbooks/templates/": {
@@ -20848,6 +21662,173 @@
         "x-django-view-name": "servers:playbook_draft"
       }
     },
+    "/servers/api/playbooks/{playbook_id}/draft/file/": {
+      "get": {
+        "operationId": "servers_playbook_draft_file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft File",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_file"
+      },
+      "patch": {
+        "operationId": "servers_playbook_draft_file_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft File",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_file"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/draft/files/": {
+      "get": {
+        "operationId": "servers_playbook_draft_files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Draft Files",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_draft_files"
+      }
+    },
     "/servers/api/playbooks/{playbook_id}/duplicate/": {
       "post": {
         "operationId": "servers_playbook_duplicate_post",
@@ -20911,6 +21892,136 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_duplicate"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/gitlab/refresh/commit/": {
+      "post": {
+        "operationId": "servers_playbook_gitlab_refresh_commit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Gitlab Refresh Commit",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_gitlab_refresh_commit"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/gitlab/refresh/preview/": {
+      "post": {
+        "operationId": "servers_playbook_gitlab_refresh_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Playbook Gitlab Refresh Preview",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_gitlab_refresh_preview"
       }
     },
     "/servers/api/playbooks/{playbook_id}/restore/": {
@@ -21615,6 +22726,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:playbook_shares"
+      }
+    },
+    "/servers/api/playbooks/{playbook_id}/shares/candidates/": {
+      "get": {
+        "operationId": "servers_playbook_share_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playbook_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Return a bounded directory listing only to principals allowed to share.",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:playbook_share_candidates"
       }
     },
     "/servers/api/playbooks/{playbook_id}/shares/{share_id}/": {
@@ -23685,6 +24848,71 @@
           "servers"
         ],
         "x-django-view-name": "servers:server_memory_run_dreams"
+      }
+    },
+    "/servers/api/{server_id}/memory/search/": {
+      "post": {
+        "operationId": "servers_server_memory_search_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Servers Server Memory Search",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:server_memory_search"
       }
     },
     "/servers/api/{server_id}/memory/snapshots/": {

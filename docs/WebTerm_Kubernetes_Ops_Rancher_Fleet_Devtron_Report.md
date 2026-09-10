@@ -484,26 +484,6 @@ class K8sAuditEvent(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 ```
 
-## 6.3. Frontend-модуль
-
-```text
-frontend/src/features/kubernetes/
-├── pages/
-│   ├── KubernetesOverviewPage.tsx
-│   ├── ClusterDetailPage.tsx
-│   ├── FleetHelmOpsPage.tsx
-│   ├── DevtronAppsPage.tsx
-│   ├── K8sTerminalPage.tsx
-│   └── K8sAuditPage.tsx
-├── components/
-│   ├── ClusterHealthCard.tsx
-│   ├── FleetRolloutTable.tsx
-│   ├── HelmAppTable.tsx
-│   ├── ExternalConsoleFrame.tsx
-│   └── OpenInProviderButton.tsx
-└── api.ts
-```
-
 ## 6.4. API endpoints в WebTerm
 
 Примерный набор endpoint-ов:
@@ -1393,53 +1373,6 @@ run_kubernetes_ops_sync_worker / production scheduler
 - sync on every page refresh;
 - write actions в первом backend slice.
 
-## 15.5. Phase 3: native WebTerm frontend workspace
-
-Цель: заменить beta onboarding на рабочий read-only cockpit.
-
-Структура:
-
-```text
-frontend/src/features/kubernetes/
-├── api.ts
-├── types.ts
-├── pages/
-│   ├── KubernetesOverviewPage.tsx
-│   ├── KubernetesClustersPage.tsx
-│   ├── KubernetesClusterDetailPage.tsx
-│   ├── FleetHelmOpsPage.tsx
-│   ├── DevtronAppOpsPage.tsx
-│   └── KubernetesAuditPage.tsx
-└── components/
-    ├── ClusterHealthSummary.tsx
-    ├── ProviderLinkButton.tsx
-    ├── FleetRolloutTable.tsx
-    ├── DevtronAppTable.tsx
-    ├── OwnershipBadge.tsx
-    └── K8sEmptyState.tsx
-```
-
-UX states:
-
-| State | Что видит пользователь |
-|---|---|
-| No provider configured | Настройка недоступна обычному пользователю; admin видит checklist |
-| Provider unreachable | Warning banner + last successful sync timestamp |
-| No clusters | Empty state с action для admin |
-| Healthy | Overview cards, cluster/app/fleet tables, deep links |
-| Degraded | Incident-style summary, events/log links, suggested read-only diagnosis |
-| Permission denied | Clear access message, no hidden broken actions |
-
-Когда Phase 3 закрыт, можно включить production env:
-
-```text
-KUBERNETES_OPS_RELEASE_ENVIRONMENT=production
-KUBERNETES_OPS_PRODUCTION_APPROVAL_REF=<approval-id>
-KUBERNETES_OPS_READY_FOR_SIDEBAR=true
-```
-
-Но только после backend readiness, tests, e2e evidence, external provider/MCP evidence и `release_scope=ready`.
-
 ## 15.6. Phase 4: Studio automation и AI Ops
 
 Цель: связать Kubernetes cockpit с уже существующим Studio automation stack.
@@ -1623,20 +1556,6 @@ Checklist:
 | P1 | Audit events | `K8sAuditEvent` | view/deeplink/action request recorded |
 | P2 | Action request/approval | `actions/request-approval` | no direct execution without policy |
 | P2 | MCP resource binding | Studio integration | Kubernetes cockpit can start draft with context |
-
-## 16.2. Frontend backlog
-
-| Priority | Item | Files/area | Acceptance |
-|---:|---|---|---|
-| P0 | Move current onboarding into empty-state | `frontend/src/features/kubernetes` | no lost beta UX |
-| P0 | Overview page | `KubernetesOverviewPage.tsx` | cluster/app/rollout health visible |
-| P0 | Cluster table/detail | pages + components | status, labels, provider links |
-| P1 | Fleet HelmOps table | `FleetHelmOpsPage.tsx` | target clusters, status, rollout stage |
-| P1 | Devtron AppOps table | `DevtronAppOpsPage.tsx` | app, env, namespace, health, links |
-| P1 | Stale provider state | banners/components | last sync and provider error visible |
-| P1 | Permission-aware actions | buttons/components | unauthorized actions absent/disabled with reason |
-| P2 | Automation entrypoints | Studio links | "Diagnose", "Create runbook", "Open draft" |
-| P2 | Visual/e2e coverage | Playwright | screenshots for empty/healthy/degraded |
 
 ## 16.3. Security/access backlog
 

@@ -8,7 +8,7 @@ import {
   type Connection,
   type Edge,
 } from "@xyflow/react";
-import { Play, ShieldCheck } from "lucide-react";
+import { ChevronDown, Play, ShieldCheck } from "lucide-react";
 import { api } from "@/api/client";
 import {
   automationApi,
@@ -44,10 +44,15 @@ import {
 } from "../graph";
 import { EditorTopBar } from "./EditorTopBar";
 import { FlowCanvas } from "./FlowCanvas";
-import { NodePicker, type PickerPending } from "./NodePicker";
+import {
+  NodePicker,
+  type PickerContext,
+  type PickerPending,
+} from "./NodePicker";
 import { NodeSettings } from "./NodeSettings";
 import { ContextMenu, type ContextTarget } from "./ContextMenu";
 import { useHistory } from "./useHistory";
+import { displayLabel, summarizeNode } from "./catalog";
 import {
   DEFAULT_EDGE_OPTIONS,
   type StepEdgeData,
@@ -55,6 +60,9 @@ import {
 import "./editor.css";
 
 type SettingsMode = "node" | "process" | null;
+
+const isTrigger = (node: CanvasNode) =>
+  node.data.backend.type.startsWith("trigger/");
 
 function decorateNodes(
   nodes: CanvasNode[],
@@ -70,6 +78,9 @@ function decorateNodes(
       handle,
     ]);
   }
+  // The inline "add first step" placeholder only makes sense while the
+  // canvas holds nothing but triggers; afterwards the per-port "+" takes over.
+  const onlyTriggers = nodes.length > 0 && nodes.every(isTrigger);
   return nodes.map((node) => {
     const manifest = manifests.find((m) => m.type === node.data.backend.type);
     return {
@@ -78,6 +89,9 @@ function decorateNodes(
         ...node.data,
         connectedHandles: [...new Set(connected.get(node.id) ?? [])],
         issueCount: nodeIssues(node, manifest).length,
+        approval: manifest?.requires_approval_by_default ?? false,
+        summary: summarizeNode(node.data.backend.type, node.data.backend.data),
+        ghost: onlyTriggers && !connected.has(node.id),
         actions,
       },
     };
@@ -210,6 +224,19 @@ function PipelineEditorInner({
     setNotice("");
   };
 
+  // Opening the run drawer starts the readiness check right away so the
+  // operator only has to confirm, instead of clicking "check" then "run".
+  const autoPreflight = useRef(false);
+  useEffect(() => {
+    if (!runOpen) {
+      autoPreflight.current = false;
+      return;
+    }
+    if (autoPreflight.current || dirty || manual.length !== 1) return;
+    autoPreflight.current = true;
+    preflight.mutate();
+  }, [dirty, manual.length, preflight, runOpen]);
+
   const commit = useCallback(
     (nextNodes: CanvasNode[], nextEdges: Edge[], record = true) => {
       const snapshot = { nodes: nextNodes, edges: nextEdges };
@@ -232,6 +259,48 @@ function PipelineEditorInner({
     setPickerOpen(false);
     setPending(null);
   };
+
+  /** Add a step after the current selection (or free-standing when nothing is selected). */
+  const addAfterSelected = () => {
+    const source = nodes.find((node) => node.id === selected);
+    if (!source) {
+      openPicker({ kind: "free" });
+      return;
+    }
+    const used = new Set(
+      edges
+        .filter((edge) => edge.source === source.id)
+        .map((edge) => edge.sourceHandle || "out"),
+    );
+    openPicker({
+      kind: "output",
+      source: source.id,
+      handle:
+        source.data.handles.find((handle) => !used.has(handle)) ??
+        source.data.handles[0] ??
+        "out",
+    });
+  };
+
+  const pickerContext = useMemo<PickerContext | undefined>(() => {
+    const sourceId =
+      pending?.kind === "output"
+        ? pending.source
+        : pending?.kind === "insert"
+          ? edges.find((edge) => edge.id === pending.edgeId)?.source
+          : pending?.kind === "free"
+            ? selected
+            : null;
+    const source = nodes.find((node) => node.id === sourceId);
+    if (!source) return undefined;
+    return {
+      label: displayLabel(source.data.backend.type, source.data.backend.data),
+      type: source.data.backend.type,
+      handle: pending?.kind === "output" ? pending.handle : undefined,
+    };
+  }, [edges, nodes, pending, selected]);
+
+  const stepCount = nodes.filter((node) => !isTrigger(node)).length;
 
   const deleteNode = useCallback(
     (id: string) => {
@@ -421,19 +490,9 @@ function PipelineEditorInner({
         }
         return;
       }
-      if (event.key === "Tab") {
+      if (event.key === "Tab" && !pickerOpen) {
         event.preventDefault();
-        openPicker(
-          selected
-            ? {
-                kind: "output",
-                source: selected,
-                handle:
-                  nodes.find((node) => node.id === selected)?.data.handles[0] ??
-                  "out",
-              }
-            : { kind: "free" },
-        );
+        addAfterSelected();
         return;
       }
       if (event.key === "Delete" || event.key === "Backspace") {
@@ -496,22 +555,7 @@ function PipelineEditorInner({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [
-    commit,
-    deleteNode,
-    dirty,
-    duplicate,
-    edges,
-    fitView,
-    manifests,
-    name,
-    nodes,
-    payload,
-    redo,
-    save,
-    selected,
-    undo,
-  ]);
+  });
 
   return (
     <div className="auto-editor-page">
@@ -522,25 +566,14 @@ function PipelineEditorInner({
         pipelineId={pipeline.id}
         layoutHint={layoutHint}
         savePending={save.isPending}
+        stepCount={stepCount}
         onName={(value) => {
           setName(value);
           invalidate();
         }}
         onSave={() => save.mutate(payload())}
         onRun={() => setRunOpen(true)}
-        onAddStep={() =>
-          openPicker(
-            selected
-              ? {
-                  kind: "output",
-                  source: selected,
-                  handle:
-                    nodes.find((node) => node.id === selected)?.data
-                      .handles[0] ?? "out",
-                }
-              : { kind: "free" },
-          )
-        }
+        onAddStep={addAfterSelected}
         onProcessSettings={() => {
           setSelected(null);
           setSettingsMode("process");
@@ -650,6 +683,7 @@ function PipelineEditorInner({
           open={pickerOpen}
           manifests={manifests}
           pending={pending}
+          context={pickerContext}
           onClose={closePicker}
           onPick={onPick}
         />
@@ -671,6 +705,7 @@ function PipelineEditorInner({
           }}
           onChange={updateNodeData}
           onDelete={() => selected && deleteNode(selected)}
+          onAddNext={addAfterSelected}
           onClose={() => setSettingsMode(null)}
         />
       </div>
@@ -717,42 +752,47 @@ function PipelineEditorInner({
         onOpenChange={setRunOpen}
         title="Проверка и запуск процесса"
       >
-        <div className="auto-form">
-          <Field label="Ручной триггер" htmlFor="pipeline-entry">
-            <select
-              id="pipeline-entry"
-              value={entry}
-              onChange={(event) => {
-                setEntry(event.target.value);
-                preflight.reset();
-              }}
-            >
-              <option value="">
-                {manual.length === 1
-                  ? "Единственный активный триггер"
-                  : "Выберите триггер"}
-              </option>
-              {manual.map((node) => (
-                <option key={node.id} value={node.id}>
-                  {String(node.data.backend.data.label || node.id)}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <div className="auto-form auto-run-drawer">
+          {manual.length > 1 && (
+            <Field label="Ручной триггер" htmlFor="pipeline-entry">
+              <select
+                id="pipeline-entry"
+                value={entry}
+                onChange={(event) => {
+                  setEntry(event.target.value);
+                  preflight.reset();
+                }}
+              >
+                <option value="">Выберите триггер</option>
+                {manual.map((node) => (
+                  <option key={node.id} value={node.id}>
+                    {displayLabel(node.data.backend.type, node.data.backend.data)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           {manual.length === 0 && (
             <p className="notice notice-warning">
-              Включите ручной триггер в редакторе и сохраните процесс.
+              Включите ручной триггер (переключатель «Триггер включён» в его
+              настройках) и сохраните процесс.
             </p>
           )}
-          <KeyValues
-            label="Контекст запуска"
-            value={context}
-            onChange={(value) => {
-              setContext(value);
-              preflight.reset();
-            }}
-          />
+          {manual.length === 1 && (
+            <p className="auto-run-entry">
+              <Play size={13} aria-hidden />
+              Старт с «
+              {displayLabel(
+                manual[0].data.backend.type,
+                manual[0].data.backend.data,
+              )}
+              »
+            </p>
+          )}
           <Feedback error={preflight.error || run.error} />
+          {preflight.isPending && !preflight.data && (
+            <p className="auto-muted auto-run-checking">Проверяем готовность…</p>
+          )}
           {preflight.data && (
             <>
               <ValidationResult
@@ -772,29 +812,50 @@ function PipelineEditorInner({
               )}
             </>
           )}
-          <Button
-            loading={preflight.isPending}
-            disabled={
-              dirty || manual.length === 0 || (manual.length > 1 && !entry)
-            }
-            onClick={() => preflight.mutate()}
-          >
-            <ShieldCheck size={15} />
-            Проверить готовность
-          </Button>
-          <Button
-            variant="primary"
-            disabled={
-              !preflight.data?.ok ||
-              preflight.data.risk.level === "dangerous" ||
-              dirty
-            }
-            loading={run.isPending}
-            onClick={() => setConfirm(true)}
-          >
-            <Play size={15} />
-            Запустить процесс
-          </Button>
+          <details className="auto-node-advanced">
+            <summary>
+              <ChevronDown size={14} aria-hidden />
+              Контекст запуска
+              {Object.keys(context).length > 0 && (
+                <span>{Object.keys(context).length}</span>
+              )}
+            </summary>
+            <div className="auto-node-advanced-body">
+              <KeyValues
+                label="Переменные контекста"
+                value={context}
+                onChange={(value) => {
+                  setContext(value);
+                  preflight.reset();
+                }}
+              />
+            </div>
+          </details>
+          <div className="auto-run-actions">
+            <Button
+              loading={preflight.isPending}
+              disabled={
+                dirty || manual.length === 0 || (manual.length > 1 && !entry)
+              }
+              onClick={() => preflight.mutate()}
+            >
+              <ShieldCheck size={15} />
+              Проверить готовность
+            </Button>
+            <Button
+              variant="primary"
+              disabled={
+                !preflight.data?.ok ||
+                preflight.data.risk.level === "dangerous" ||
+                dirty
+              }
+              loading={run.isPending}
+              onClick={() => setConfirm(true)}
+            >
+              <Play size={15} />
+              Запустить процесс
+            </Button>
+          </div>
         </div>
       </Drawer>
       <ConfirmDialog

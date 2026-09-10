@@ -10,6 +10,7 @@ import type { PipelineRun } from "@/api/automation";
 import { useTheme } from "@/app/theme";
 import { EmptyState } from "@/components/ui";
 import { runToCanvas } from "./graph";
+import { handleLabel } from "./editor/catalog";
 import { pipelineNodeTypes } from "./editor/nodes/StepNode";
 import { pipelineEdgeTypes } from "./editor/edges/StepEdge";
 import "./editor/editor.css";
@@ -34,9 +35,11 @@ export default function RunCanvas({
       ),
     [run.nodes_snapshot, run.edges_snapshot, run.node_states, selected],
   );
-  const edges = useMemo(
-    () =>
-      (run.edges_snapshot ?? []).map((edge) => ({
+  const edges = useMemo(() => {
+    const labelledPorts = new Set(
+      nodes.filter((node) => node.data.handles.length > 1).map((n) => n.id),
+    );
+    return (run.edges_snapshot ?? []).map((edge) => ({
         ...edge,
         type: "step" as const,
         sourceHandle: edge.sourceHandle || "out",
@@ -48,12 +51,13 @@ export default function RunCanvas({
         },
         data: { readOnly: true },
         label:
-          edge.sourceHandle && edge.sourceHandle !== "out"
-            ? edge.sourceHandle
+          edge.sourceHandle &&
+          edge.sourceHandle !== "out" &&
+          !labelledPorts.has(edge.source)
+            ? handleLabel(edge.sourceHandle)
             : undefined,
-      })),
-    [run.edges_snapshot],
-  );
+      }));
+  }, [nodes, run.edges_snapshot]);
   if (!nodes.length)
     return (
       <EmptyState

@@ -195,16 +195,6 @@ WebTerm должен обойти замороженный baseline RoutineOps �
 
 После исправления запустить полный набор в clean locked environment, а не только `--lf`.
 
-#### F1.2. Frontend tests
-
-- Исправить shared `framer-motion` mock: он должен экспортировать `useReducedMotion`.
-- Разобрать реальные expectation drift в:
-  - `AppSidebar.mars.test.tsx`;
-  - `Servers.test.tsx`;
-  - `SettingsKubernetesPage.test.tsx`.
-- Устранить 6 unhandled errors; test run с unhandled error не может считаться зелёным даже при passed assertions.
-- Добавить shared render harness с router, i18n, motion и feature gates, чтобы page tests не создавали несовместимые mocks.
-
 #### F1.3. Ruff, ESLint и bundle health
 
 - Исправить все 166 Ruff errors. Сначала `F821/F841/F401`, затем import order и safe simplifications.
@@ -347,17 +337,6 @@ Wiring contract для `ready()`:
 
 Падение docs guard не должно пропускать build/tests, как произошло в текущем RoutineOps CI.
 
-#### Frontend CI
-
-Создать `.github/workflows/frontend-ci.yml`:
-
-1. `npm ci`;
-2. `npm run typecheck`;
-3. ESLint с `--max-warnings 0`;
-4. Vitest + coverage;
-5. production Vite build + bundle budget;
-6. upload build/test artifacts.
-
 #### E2E и integration
 
 - Playwright smoke — каждый PR.
@@ -458,30 +437,6 @@ Wiring contract для `ready()`:
 - release checklist.
 
 Ввести единый `VERSION` и синхронизацию Python/frontend/container metadata. Первый честный публичный release — `v0.1.0`, независимо от старого внутреннего `2.0.0`, если migration/versioning ADR подтверждает reset.
-
-#### UX
-
-Целевая навигация:
-
-```text
-Dashboard
-Infrastructure
-  Servers
-  Devices (Stage 2)
-  Kubernetes
-Automation
-  AI Agents
-  Playbooks
-  Studio
-Extensions
-Administration
-```
-
-- Первый запуск — readiness wizard поверх существующих readiness endpoints.
-- Один основной demo flow Stage 1: install -> add server -> connect -> guarded action -> audit evidence.
-- Все pages: loading, empty, error, denied, disabled и degraded states.
-- Keyboard/focus/contrast/mobile проверки.
-- Lighthouse/bundle budgets и interaction latency.
 
 #### Acceptance
 

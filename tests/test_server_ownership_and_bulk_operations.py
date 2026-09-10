@@ -30,9 +30,10 @@ def _project_operator(project, user):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_server_owner_transfer_preserves_server_and_revokes_old_runtime_access(monkeypatch):
+@pytest.mark.parametrize("identifier", ["id", "username", "email"])
+def test_server_owner_transfer_preserves_server_and_revokes_old_runtime_access(monkeypatch, identifier):
     owner = User.objects.create_user(username="owner-transfer", password="x")
-    target = User.objects.create_user(username="target-transfer", password="x")
+    target = User.objects.create_user(username="target-transfer", email="target-transfer@example.test", password="x")
     grant_feature(owner, "servers")
     project = ensure_default_project(owner)
     _project_operator(project, target)
@@ -62,11 +63,13 @@ def test_server_owner_transfer_preserves_server_and_revokes_old_runtime_access(m
     client.force_login(owner)
     response = client.post(
         f"/servers/api/{server.pk}/transfer-owner/",
-        data=json_payload({"target_user_id": target.pk}),
+        data=json_payload({"target_user_id": target.pk} if identifier == "id" else {
+            "target_user": target.username if identifier == "username" else target.email.upper(),
+        }),
         content_type="application/json",
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 200, response.content
     server.refresh_from_db()
     connection.refresh_from_db()
     assert server.user_id == target.id
@@ -84,7 +87,8 @@ def test_server_owner_transfer_preserves_server_and_revokes_old_runtime_access(m
 
 
 @pytest.mark.django_db
-def test_server_owner_transfer_rejects_viewer_and_non_owner():
+@pytest.mark.parametrize("identifier", ["id", "username"])
+def test_server_owner_transfer_rejects_viewer_and_non_owner(identifier):
     owner = User.objects.create_user(username="owner-transfer-denied", password="x")
     viewer = User.objects.create_user(username="viewer-transfer-denied", password="x")
     outsider = User.objects.create_user(username="outsider-transfer-denied", password="x")
@@ -104,7 +108,7 @@ def test_server_owner_transfer_rejects_viewer_and_non_owner():
     owner_client.force_login(owner)
     viewer_response = owner_client.post(
         f"/servers/api/{server.pk}/transfer-owner/",
-        data=json_payload({"target_user_id": viewer.pk}),
+        data=json_payload({"target_user_id": viewer.pk} if identifier == "id" else {"target_user": viewer.username}),
         content_type="application/json",
     )
     assert viewer_response.status_code == 400
@@ -113,12 +117,31 @@ def test_server_owner_transfer_rejects_viewer_and_non_owner():
     outsider_client.force_login(outsider)
     outsider_response = outsider_client.post(
         f"/servers/api/{server.pk}/transfer-owner/",
-        data=json_payload({"target_user_id": viewer.pk}),
+        data=json_payload({"target_user_id": viewer.pk} if identifier == "id" else {"target_user": viewer.username}),
         content_type="application/json",
     )
-    assert outsider_response.status_code == 403
+    assert outsider_response.status_code == 403, outsider_response.content
     server.refresh_from_db()
     assert server.user_id == owner.id
+
+
+@pytest.mark.django_db
+def test_server_owner_transfer_requires_unambiguous_active_identity():
+    owner = User.objects.create_user(username="owner-identity", password="x")
+    grant_feature(owner, "servers")
+    project = ensure_default_project(owner)
+    server = Server.objects.create(user=owner, project=project, name="identity-server", host="10.1.2.5", username="root")
+    for username in ("identity-one", "identity-two"):
+        target = User.objects.create_user(username=username, email="same@example.test", password="x")
+        _project_operator(project, target)
+    User.objects.create_user(username="inactive-target", password="x", is_active=False)
+    client = Client()
+    client.force_login(owner)
+    for identifier in ("same@example.test", "inactive-target", "", "missing-identity"):
+        response = client.post(f"/servers/api/{server.pk}/transfer-owner/", data=json_payload({"target_user": identifier}), content_type="application/json")
+        assert response.status_code == 400
+        server.refresh_from_db()
+        assert server.user_id == owner.pk
 
 
 @pytest.mark.django_db

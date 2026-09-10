@@ -6,8 +6,6 @@ These rules are the shared working contract for changing WebTerm without damagin
 
 Use this file before adding or changing:
 
-- pages and navigation;
-- dashboard widgets;
 - API endpoints;
 - backend services;
 - Studio pipelines/nodes;
@@ -42,7 +40,6 @@ During coding:
 Before finishing:
 
 1. Run focused tests.
-2. Run build/lint when frontend changed.
 3. Run architecture guard for architecture-sensitive changes.
 4. Check for stale docs/path references.
 5. Report what was verified and what was not.
@@ -56,7 +53,6 @@ Before finishing:
 | Generic tools and execution policy | `app.tools`, `app.agent_kernel`, `app.execution_policy` |
 | Servers, terminal, SSH, monitoring, server memory | `servers` |
 | Studio pipelines, nodes, MCP, skills, templates | `studio` |
-| Frontend app shell and pages | `frontend/src` |
 | Deployment/settings | `web_ui`, deploy files, docs |
 
 If work touches two domains, create a contract/provider/hook at the boundary instead of importing one feature app into another.
@@ -93,8 +89,6 @@ Avoid adding new product behavior directly to:
 
 - compatibility barrels;
 - `_views_all.py` shims;
-- large route components;
-- `frontend/src/lib/api.ts`;
 - `SSHTerminalConsumer`;
 - static mega-catalogs;
 - broad "utils" files.
@@ -114,15 +108,12 @@ Bad:
 
 - add server business logic in `studio`;
 - add Studio runtime logic in `servers`;
-- add API calls inside React components;
-- add permission rules only in frontend.
+- omit server-side permission enforcement.
 
 Good:
 
 - service in owning app;
 - thin view/API;
-- typed frontend API module;
-- focused UI component;
 - targeted tests.
 
 ### R-004: Public Contract Before Runtime
@@ -165,7 +156,7 @@ Every risky path needs:
 
 Do not expose secrets in:
 
-- frontend payloads;
+- API payloads;
 - logs;
 - reports;
 - LLM prompts;
@@ -182,9 +173,7 @@ Show only:
 - health status;
 - safe error summary.
 
-### R-007: Frontend Gates Are Not Security
-
-Frontend `FeatureGate` improves UX, but backend must enforce access too.
+### R-007: Enforce Access on the Backend
 
 Every protected backend endpoint needs backend permission checks.
 
@@ -232,47 +221,6 @@ Registries should:
 - expose snapshot/restore for tests if global;
 - be initialized in app startup or explicit bootstrap, not random imports.
 
-## 6. Frontend Rules
-
-### API Calls
-
-New API calls go into domain modules:
-
-```text
-frontend/src/api/
-```
-
-Do not expand `frontend/src/lib/api.ts` except compatibility exports.
-
-### Pages
-
-Route/page components should coordinate, not own all behavior.
-
-Extract when state grows:
-
-- controller hooks;
-- model helpers;
-- focused components;
-- formatters;
-- API modules.
-
-### UI Behavior
-
-Every interactive UI change should handle:
-
-- loading;
-- empty state;
-- error state;
-- permission denied;
-- disabled/unavailable feature;
-- mobile and desktop layout if visible to users.
-
-### Runtime Crashes
-
-A missing optional component, unknown widget, unknown node, or failed catalog load must not blank the app.
-
-Render controlled fallback instead.
-
 ## 7. Studio Rules
 
 Changing Studio nodes requires checking all affected layers:
@@ -280,12 +228,9 @@ Changing Studio nodes requires checking all affected layers:
 - backend node manifest;
 - executor registry;
 - validation;
-- frontend palette/metadata;
-- node config panel;
 - pipeline assistant catalog if relevant;
 - docs/tests.
 
-Do not add a node only to frontend or only to backend.
 
 Unknown node types should fail clearly, not silently skip.
 
@@ -308,24 +253,9 @@ Use focused modules under:
 servers/consumers/ssh_terminal_*.py
 servers/services/terminal_*
 servers/services/terminal_ai/
-frontend/src/components/terminal/
-frontend/src/pages/terminal-page/
 ```
 
 Any AI-generated command execution must pass the same safety/policy path as manual or pipeline execution.
-
-## 9. Dashboard Rules
-
-Dashboard widgets must:
-
-- have stable ids;
-- tolerate missing data;
-- tolerate removed/disabled widgets in saved layout;
-- not do hidden mutations;
-- keep render components small;
-- fetch data through typed API modules.
-
-Do not hardcode every new widget in multiple unrelated places. Prefer a registry/catalog pattern.
 
 ## 10. Integration Rules
 
@@ -352,9 +282,8 @@ Minimum checks by change type:
 | Python service/view | targeted `python -m pytest ...` |
 | Django model/migration | `manage.py check`, migration check, focused tests |
 | Import/architecture-sensitive | `python scripts\check_architecture_sizes.py --strict-new` |
-| Frontend component/page | `npx eslint <files>`, `npm run build`, focused tests if available |
 | Studio node | manifest consistency, validation test, executor test |
-| Terminal/AI | focused terminal/AI tests plus frontend build if UI changed |
+| Terminal/AI | focused terminal/AI tests |
 | Integration/egress | permission-deny, redaction, audit, health check tests |
 | Docs only | grep stale references and verify paths |
 
@@ -370,12 +299,6 @@ Architecture guard:
 python scripts\check_architecture_sizes.py --strict-new
 ```
 
-Frontend:
-
-```powershell
-cd frontend
-npm run build
-```
 
 ## 12. Review Checklist
 
@@ -387,7 +310,6 @@ Before accepting a change, ask:
 - Is backend permission enforced?
 - Are secrets redacted?
 - Are risky actions audited?
-- Does the UI handle loading/error/empty/denied states?
 - Are unknown/disabled things handled safely?
 - Did we run the right focused checks?
 - Did docs stay true?
@@ -399,9 +321,7 @@ If any answer is unclear, fix that before expanding the feature.
 Avoid:
 
 - adding one more branch to a large central file;
-- adding frontend-only permission checks;
-- adding API calls inside UI components;
-- adding backend behavior just because a frontend needs a shape;
+- omitting server-side permission checks;
 - silently swallowing unknown runtime types;
 - using admin status as a replacement for permission scopes;
 - putting secrets in examples;

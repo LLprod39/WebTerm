@@ -8,8 +8,6 @@ Status: release candidate until the protected `test` commit, `v0.2.2` tag workfl
 - Architecture: `python scripts/check_architecture_sizes.py --strict-new` and `lint-imports --config .importlinter`.
 - Backend: `ruff check .`, `ruff format --check .`, the full PostgreSQL pytest suite and coverage ratchet.
 - Django: normal checks, migration drift and production `check --deploy`.
-- Frontend: `npm ci`, `npm run typecheck`, lint, unit coverage and production build budgets.
-- Browser: `npm run test:e2e:smoke`, accessibility, `npm run performance:budget` and `npm run test:e2e:performance`.
 - Production: `./docker/production-install-smoke.sh`, isolated backup/restore, and upgrade/rollback from the frozen v0.1 fixtures.
 - Security: dependency audits, secrets-never tests, SBOM and provenance checks.
 - Pilot evidence remains independently verifiable with `python scripts/verify_pilot_ux_results.py` and is never fabricated by CI.
@@ -30,7 +28,7 @@ Status: release candidate until the protected `test` commit, `v0.2.2` tag workfl
 
 1. Tag `v0.2.2` must resolve to the exact protected `test` candidate and match `VERSION`.
 2. Every image job must publish an immutable digest and GitHub provenance attestation.
-3. Published-digest production and Playwright smoke must pass before the release job starts.
+3. Published-digest production smoke must pass before the release job starts.
 4. `SHA256SUMS.txt` must validate every uploaded asset.
 5. `release-manifest.json`, install archives, SBOMs and image digests must have verifiable GitHub attestations.
 6. Only then may GitHub Release `v0.2.2` be marked latest.

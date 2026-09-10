@@ -15,6 +15,7 @@ Public API
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import re
 
@@ -105,11 +106,12 @@ def save_snapshot(
     command: str,
     file_path: str,
     content: str,
+    file_existed: bool | None = None,
 ) -> int:
     """Persist a snapshot and return its PK.
 
     Computes SHA-256 hash for dedup/integrity.  If the previous snapshot
-    for the same server+file has the same hash, skip the duplicate.
+    for the same user+server+file has the same content and existence, skip it.
     """
     from servers.models import CommandSnapshot
 
@@ -119,12 +121,12 @@ def save_snapshot(
 
     # Dedup: skip if last snapshot for this file on this server is identical.
     last = (
-        CommandSnapshot.objects.filter(server_id=server_id, file_path=file_path)
+        CommandSnapshot.objects.filter(server_id=server_id, user_id=user_id, file_path=file_path)
         .order_by("-created_at")
-        .values_list("content_hash", flat=True)
+        .values_list("content_hash", "file_existed")
         .first()
     )
-    if last == h:
+    if last == (h, file_existed):
         return 0  # no-op, content unchanged
 
     snap = CommandSnapshot.objects.create(
@@ -133,6 +135,7 @@ def save_snapshot(
         command=command[:2000],
         file_path=file_path[:1024],
         content=content_str,
+        file_existed=file_existed,
         content_hash=h,
         byte_size=byte_size,
     )
@@ -159,6 +162,7 @@ def list_snapshots(
             "command": r.command,
             "byte_size": r.byte_size,
             "content_truncated": r.content_truncated,
+            "file_existed": r.file_existed,
             "content_hash": r.content_hash,
             "created_at": r.created_at.isoformat(),
             "restored_at": r.restored_at.isoformat() if r.restored_at else None,
@@ -184,6 +188,7 @@ def get_snapshot_detail(snapshot_id: int) -> dict | None:
         "content": r.content,
         "byte_size": r.byte_size,
         "content_truncated": r.content_truncated,
+        "file_existed": r.file_existed,
         "content_hash": r.content_hash,
         "created_at": r.created_at.isoformat(),
         "restored_at": r.restored_at.isoformat() if r.restored_at else None,
@@ -193,8 +198,8 @@ def get_snapshot_detail(snapshot_id: int) -> dict | None:
 def build_restore_command(snapshot_id: int) -> str | None:
     """Generate a shell command that restores the file from *snapshot_id*.
 
-    Uses a heredoc so the content is self-contained. Returns ``None`` if
-    the snapshot does not exist or content is empty.
+    Preserve exact UTF-8 bytes. Preparing a command is not evidence of execution.
+    Legacy empty captures cannot distinguish an empty file from a failed read.
     """
     from servers.models import CommandSnapshot
 
@@ -204,21 +209,15 @@ def build_restore_command(snapshot_id: int) -> str | None:
         return None
     if snap.content_truncated:
         return None
-    if not snap.content and not snap.file_path:
+    if not snap.file_path.startswith("/") or snap.file_path == "/":
         return None
-
-    # Mark as restored
-    from django.utils import timezone
-
-    CommandSnapshot.objects.filter(pk=snapshot_id).update(restored_at=timezone.now())
-
-    # Empty content → file didn't exist before; restore = remove
+    path = _shell_quote(snap.file_path)
+    if snap.file_existed is False:
+        return f"rm -f -- {path}" if not snap.content else None
     if not snap.content:
-        return f"rm -f {_shell_quote(snap.file_path)}"
-
-    # Use heredoc with a unique delimiter
-    delimiter = "_WEUAI_RESTORE_EOF_"
-    return f"cat > {_shell_quote(snap.file_path)} << '{delimiter}'\n{snap.content}\n{delimiter}"
+        return f": > {path}" if snap.file_existed is True else None
+    encoded = base64.b64encode(snap.content.encode("utf-8")).decode("ascii")
+    return f"command -v base64 >/dev/null && printf %s '{encoded}' | base64 -d > {path}"
 
 
 def _shell_quote(path: str) -> str:

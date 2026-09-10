@@ -6,6 +6,8 @@ Covers:
 3. Dedup logic (same hash → skip).
 """
 
+import base64
+
 import pytest
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -138,34 +140,45 @@ class TestSnapshotCRUD:
     def test_get_detail_not_found(self):
         assert get_snapshot_detail(999999) is None
 
-    def test_build_restore_command_heredoc(self):
+    @pytest.mark.parametrize("content", ["original\ncontent\n", "no final newline", "_WEUAI_RESTORE_EOF_\n$(id)\nтекст"])
+    def test_build_restore_command_preserves_bytes(self, content):
         pk = save_snapshot(
             server_id=self.server.id,
             user_id=self.user.id,
             command="sed -i 's/a/b/' /etc/app.conf",
             file_path="/etc/app.conf",
-            content="original\ncontent\n",
+            content=content,
         )
         cmd = build_restore_command(pk)
         assert cmd is not None
         assert "/etc/app.conf" in cmd
-        assert "original\ncontent\n" in cmd
-        assert "_WEUAI_RESTORE_EOF_" in cmd
-        # Check restored_at is set
+        assert base64.b64encode(content.encode()).decode() in cmd
+        assert "base64 -d" in cmd
+        # Preparing a command must not claim it was executed.
         snap = CommandSnapshot.objects.get(pk=pk)
-        assert snap.restored_at is not None
+        assert snap.restored_at is None
 
-    def test_build_restore_empty_content_means_remove(self):
+    @pytest.mark.parametrize("file_existed,expected", [(False, "rm -f -- /tmp/new_file"), (True, ": > /tmp/new_file"), (None, None)])
+    def test_build_restore_empty_content_uses_known_existence(self, file_existed, expected):
         pk = save_snapshot(
             server_id=self.server.id,
             user_id=self.user.id,
             command="echo x > /tmp/new_file",
             file_path="/tmp/new_file",
             content="",
+            file_existed=file_existed,
         )
         cmd = build_restore_command(pk)
-        assert cmd is not None
-        assert "rm -f" in cmd
+        assert cmd == expected
+
+    def test_dedup_preserves_existence_and_personal_history(self):
+        kwargs = {"server_id": self.server.id, "user_id": self.user.id, "command": "tee /tmp/empty", "file_path": "/tmp/empty", "content": ""}
+        assert save_snapshot(**kwargs, file_existed=False) > 0
+        assert save_snapshot(**kwargs, file_existed=True) > 0
+        assert save_snapshot(**kwargs, file_existed=True) == 0
+        other = User.objects.create_user("snapshot_other")
+        kwargs["user_id"] = other.id
+        assert save_snapshot(**kwargs, file_existed=True) > 0
 
     def test_build_restore_not_found(self):
         assert build_restore_command(999999) is None

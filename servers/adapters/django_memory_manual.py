@@ -71,6 +71,7 @@ def sync_manual_knowledge_snapshot(store: Any, knowledge_id: int) -> str:
     knowledge = ServerKnowledge.objects.select_related("server").filter(pk=knowledge_id).first()
     if knowledge is None:
         return ""
+    confidence = float(knowledge.confidence if knowledge.confidence is not None else 1.0)
     prefix = "manual_note" if knowledge.source == "manual" else "knowledge_note"
     memory_key = f"{prefix}:{knowledge.id}"
     if not knowledge.is_active:
@@ -103,7 +104,7 @@ def sync_manual_knowledge_snapshot(store: Any, knowledge_id: int) -> str:
         source_ref=f"knowledge:{knowledge.id}",
         importance_score=0.88,
         stability_score=0.75,
-        confidence=float(knowledge.confidence or 1.0),
+        confidence=confidence,
         verified_at=knowledge.verified_at,
         metadata={
             "category": knowledge.category,
@@ -111,7 +112,7 @@ def sync_manual_knowledge_snapshot(store: Any, knowledge_id: int) -> str:
             "trust_level": TRUST_MANUAL_VERIFIED,
             "verification_status": VERIFICATION_VERIFIED,
             "source_actor_kind": "human",
-            "source_confidence": float(knowledge.confidence or 1.0),
+            "source_confidence": confidence,
             "evidence_refs": [f"knowledge:{knowledge.id}"],
         },
         version_group_id=f"{prefix.replace('_', '-')}-{knowledge.id}",

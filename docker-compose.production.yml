@@ -1118,6 +1118,7 @@ services:
     container_name: mini-prod-frontend
     environment:
       NODE_ENV: production
+      WEBTERM_FRONTEND_ALLOWED_HOSTS: ${WEBTERM_FRONTEND_ALLOWED_HOSTS:-${ALLOWED_HOSTS:-localhost,127.0.0.1}}
     expose:
       - "8080"
     depends_on:

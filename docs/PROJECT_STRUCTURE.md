@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-05-27
 
-This repository is a Django + Channels backend, React/Vite SPA, and Studio automation layer. The root is intentionally kept for entry points that tools expect at the repository top level.
+This repository is a Django + Channels backend and Studio automation layer. The root is intentionally kept for entry points that tools expect at the repository top level.
 
 ## Root Entry Points
 
@@ -26,7 +26,6 @@ This repository is a Django + Channels backend, React/Vite SPA, and Studio autom
 | `studio/` | Pipelines, triggers, runs, MCP registry, reusable agents, skill authoring, pipeline templates, notifications. |
 | `mars/` | MARS guided agent workflow, personal workspaces, run orchestration, worker phases, and live run APIs. |
 | `app/` | Shared LLM/runtime/safety/agent-kernel code. Keep this layer as independent from Django feature apps as possible. |
-| `frontend/` | React 18 + Vite + TypeScript SPA, TanStack Query, Tailwind/Radix local components, Vitest and Playwright tests. |
 | `docker/` | Dockerfiles, nginx configs, and operational smoke scripts. |
 | `config/` | Versioned config that should not live in the root, for example Keycloak profiles. |
 | `scripts/` | Maintained maintenance scripts such as architecture-size checks and setup helpers. |
@@ -47,8 +46,7 @@ These paths are intentionally not documentation sources of truth:
 
 | Path | Treatment |
 | --- | --- |
-| `.venv-wsl/`, `.venv-windows/`, `node_modules/`, `frontend/node_modules/` | OS-specific local dependency installs. Ignored. Never share one virtual environment between Windows and WSL. |
-| `frontend/dist/`, `frontend/playwright-report/`, `frontend/test-results/` | Generated frontend artifacts. Ignored. |
+| `.venv-wsl/`, `.venv-windows/`, `node_modules/` | OS-specific local dependency installs. Ignored. Never share one virtual environment between Windows and WSL. |
 | `runtime_logs/`, `logs/`, `mars_logs/`, `.codex-logs/` | Runtime and agent logs. Ignored. |
 | `agent_projects/` | Generated/local agent project storage. Ignored. |
 | `db.sqlite3`, `*.sqlite`, `*.db`, `media/` | Local runtime data. Ignored. |
@@ -56,7 +54,6 @@ These paths are intentionally not documentation sources of truth:
 
 ## Historical Cleanup Already Reflected
 
-- Root Vite wrapper files are no longer the active frontend source. Frontend commands run from `frontend/`.
 - Old root copies of internal docs were moved under `docs/local/` and are ignored.
 - Backend view monoliths now mostly act as compatibility shims while focused modules own endpoint groups.
 - The old `servers.mcp_tool_runtime` shim and `passwords/` compatibility package are no longer present in this checkout; MCP runtime ownership is now under `studio.mcp_tool_runtime` with an app-level `MCPRuntimeProvider` bridge.

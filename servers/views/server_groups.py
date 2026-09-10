@@ -125,6 +125,37 @@ def group_delete(request, group_id):
 
 @login_required
 @require_feature("servers")
+@require_http_methods(["GET"])
+def group_members(request, group_id):
+    """List actual memberships for the same managers allowed to change them."""
+    group = get_object_or_404(ServerGroup.objects.select_related("user"), id=group_id)
+    if _get_group_role(group, request.user) not in ["owner", "admin"]:
+        return JsonResponse({"error": "Permission denied"}, status=403)
+    memberships = group.memberships.select_related("user").order_by("user__username", "user_id")
+    return JsonResponse(
+        {
+            "group_id": group.id,
+            "owner": {
+                "user_id": group.user_id,
+                "username": group.user.username,
+                "email": group.user.email or "",
+            },
+            "members": [
+                {
+                    "user_id": member.user_id,
+                    "username": member.user.username,
+                    "email": member.user.email or "",
+                    "role": member.role,
+                    "joined_at": member.joined_at.isoformat(),
+                }
+                for member in memberships
+            ],
+        }
+    )
+
+
+@login_required
+@require_feature("servers")
 @require_http_methods(["POST"])
 def group_add_member(request, group_id):
     group = get_object_or_404(ServerGroup, id=group_id)

@@ -208,7 +208,7 @@ async def write_text_file_elevated(
     b64 = base64.b64encode(payload).decode("ascii")
     # Password (if any) is consumed by sudo -S first; remaining stdin is base64 payload.
     #   sudo -S sh -c 'base64 -d > path'  with stdin: password\n + b64
-    shell_cmd = f"sh -c {shlex.quote(f'base64 -d > {target}')}"
+    shell_cmd = f"sh -c {shlex.quote(f'base64 -d > {shlex.quote(target)}')}"
 
     result = await _run_elevated(
         server,

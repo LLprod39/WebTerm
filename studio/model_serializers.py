@@ -117,6 +117,7 @@ def pipeline_run_to_dict(run) -> dict:
         "status": run.status,
         "node_states": serialize_pipeline_node_states(run.node_states),
         "nodes_snapshot": redact_pipeline_nodes(run.nodes_snapshot),
+        "edges_snapshot": run.edges_snapshot,
         "context": run.context,
         "summary": run.summary,
         "error": run.error,

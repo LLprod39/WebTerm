@@ -370,7 +370,8 @@ def server_transfer_owner(request, server_id):
     """Transfer a server inside its existing project tenant."""
     try:
         data = json.loads(request.body or b"{}")
-        target_user_id = int(data.get("target_user_id"))
+        target_user = str(data["target_user"]).strip() if "target_user" in data else None
+        target_user_id = None if target_user is not None else int(data.get("target_user_id"))
     except (json.JSONDecodeError, TypeError, ValueError):
         return JsonResponse({"error": "target_user_id is required"}, status=400)
 
@@ -379,6 +380,7 @@ def server_transfer_owner(request, server_id):
             server_id=server_id,
             actor=request.user,
             target_user_id=target_user_id,
+            target_user=target_user,
         )
     except ServerOwnershipTransferError as exc:
         message = str(exc)
