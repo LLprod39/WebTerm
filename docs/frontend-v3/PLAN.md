@@ -61,17 +61,36 @@ backend       → http://127.0.0.1:9000
 Postgres/Redis → Docker only
 ```
 
-Proxy в `frontend-v3` (как сейчас):
+Proxy в `frontend-v3` (те же префиксы, что в `frontend/vite.config.ts`):
 
 - `/api/` → `9000`
 - `/servers/api/` → `9000`
 - `/ws/` → `9000` (websocket)
 
-Env:
+**Расхождение со старым конфигом (закрыть в Фазе 0):** `frontend/vite.config.ts` явно
+прокидывает `cookie` и domain-auth заголовки (`x-forwarded-user`, `x-remote-user`,
+`remote-user`, `x-auth-request-user`, `x-forwarded-preferred-username`) в `proxyReq`
+**и** в `proxyReqWs` — http-proxy не всегда передаёт Cookie на WS upgrade. В
+`frontend-v3/vite.config.ts` этого нет → терминал по ws через dev-proxy может не
+авторизоваться. Перенести `copyProxyHeaders` 1:1.
 
-- `VITE_DJANGO_URL=http://127.0.0.1:9000`
-- корневой `.env`: `FRONTEND_APP_URL` для v3-сессии при приёмке выставить на `http://127.0.0.1:8081`
-- `.env*` **не** коммитить (Страж)
+Env (`frontend-v3/.env`):
+
+- `VITE_DJANGO_URL=http://127.0.0.1:9000` — target прокси
+- опционально `VITE_DJANGO_WS_URL` / `VITE_WS_HOST` — старый клиент (`frontend/src/lib/api.ts`,
+  `buildWsBase`) умеет ходить на ws мимо прокси; в v3 сохранить те же переменные
+- `.env*` **не** коммитить (Страж) — `frontend-v3/.gitignore` уже исключает `.env`, `.env.local`, `.env.*.local`
+
+Backend (корневой `.env`):
+
+- CORS/CSRF: в `web_ui/settings/security.py` при `DEBUG=true` origin'ы
+  `http://127.0.0.1:8081` и `http://localhost:8081` **уже** входят в дефолт
+  (`_DEFAULT_FRONTEND_ORIGINS`). Для `DJANGO_DEBUG=false` — добавить в
+  `CSRF_TRUSTED_ORIGINS` / `CORS_ALLOWED_ORIGINS` руками.
+- `FRONTEND_APP_URL` используется бэком для **редиректов** (`core_ui/urls.py` index_redirect,
+  `core_ui/views/auth_views.py` — SSO/domain-auth). Он один → в dual-run
+  бэк-редиректы ведут на один фронт. По умолчанию оставляем `8080`; на приёмке
+  переключаем на `http://127.0.0.1:8081`.
 
 Запуск:
 
@@ -93,36 +112,57 @@ npm run dev
 - [x] тёмные ч/б CSS-токены + shell-заглушка
 - [x] `.env.example`, `.gitignore`
 - [x] коммит скелета (`dd731d8`)
+- [x] proxy: перенести `copyProxyHeaders` (cookie + domain-auth headers, `proxyReq` и `proxyReqWs`) из `frontend/vite.config.ts`
+- [x] `frontend-v3/README.md` — сейчас шаблон Vite; заменить на короткий запуск/порты/ссылку на этот план
+- [x] закоммитить `frontend-v3/public/icons.svg` (висит untracked) или убрать
 
 ### Фаза 1 — Матрица экранов ↔ API (Пиксель + Мост)
 
 Таблица маршрутов текущего фронта → API-модули → приоритет переноса.
+Источник маршрутов: `frontend/src/App.tsx`; API-модули лежат в `frontend/src/api/*.ts`,
+общий клиент (request/CSRF/demo-fallback/ws-URL builders) — `frontend/src/lib/api.ts`.
 
-| Приоритет | Экран / path | API / канал | Owner UI |
-| --- | --- | --- | --- |
-| P0 | Login `/login` | `api/auth.ts`, session | Пиксель |
-| P0 | Dashboard `/dashboard` | auth session + минимум без декор-метрик | Пиксель |
-| P0 | Servers `/servers` | `api/servers.ts` | Пиксель |
-| P0 | Terminal (server detail) | ws `/ws/…`, terminal prefs | Пиксель + Мост |
-| P0 | Files | `api/server-files.ts` | Пиксель |
-| P1 | Agents `/agents`, run/config | `api/agents.ts` | Пиксель |
-| P1 | Automation `/automation` | playbooks / workspace API | Пиксель |
-| P1 | Studio `/studio/*` | `api/studio.ts`, runs, mcp, skills | Пиксель |
-| P1 | Chat `/chat` | `api/assistant-chat.ts` | Пиксель |
-| P1 | Mars `/mars` | `api/mars.ts` | Пиксель |
-| P1 | Kubernetes `/kubernetes/*` | `api/kubernetes*.ts` | Пиксель |
-| P2 | Settings `/settings/*` | `api/settings.ts`, users/groups/permissions | Пиксель |
-| P2 | Plugins `/settings/plugins` | `api/plugins.ts` | Пиксель |
-| P2 | Monitoring insights | `api/monitoring*.ts` | Пиксель |
-| P2 | Notifications settings | `api/studio-notifications.ts` | Пиксель |
+| Приоритет | Экран / path | API / канал | FeatureGate | Owner UI |
+| --- | --- | --- | --- | --- |
+| P0 | Login `/login` | `api/auth.ts`, session cookie + CSRF | — | Пиксель |
+| P0 | Index `/` → редирект на первый доступный раздел; `/admin`, `/dashboard/admin` → `/dashboard`; `*` → NotFound | `lib/navigation.ts` `firstAllowedApplicationPath` | — | Пиксель |
+| P0 | First-run gate (`FirstRunReadinessGate` оборачивает **все** приватные маршруты) → `/settings/readiness?firstRun=1` | `lib/first-run-readiness` | `settings` | Пиксель + Мост |
+| P0 | Dashboard `/dashboard` | auth session + servers, без декор-метрик | `dashboard` | Пиксель |
+| P0 | Servers `/servers` | `api/servers.ts`, `api/server-memory.ts` | `servers` | Пиксель |
+| P0 | Terminal `/servers/:id/terminal`, hub `/servers/hub` | ws `/ws/servers/{id}/terminal/`, `api/terminal-preferences.ts`, `api/linux-ui.ts` | `servers` | Пиксель + Мост |
+| P0 | Files (внутри terminal/server) | `api/server-files.ts` (`/servers/api/...`) | `servers` | Пиксель |
+| P1 | Agents `/agents`, run `/agents/run/:runId` | `api/agents.ts`, `api/agent-*.ts` | `agents` | Пиксель |
+| P1 | Automation `/automation/*` | `api/playbooks.ts`, `api/playbook-workspace.ts`, `api/playbook-bundles.ts`, `api/playbook-preflight.ts`, `api/playbook-run-report.ts` | `automation` | Пиксель |
+| P1 | Studio `/studio`, `/studio/drafts`, `/studio/pipeline/:id`, `/studio/pipeline/new`, `/studio/runs`, `/studio/agents`, `/studio/skills`, `/studio/mcp`, `/studio/notifications` | `api/studio.ts`, `lib/studioPipelineDraftsApi.ts`, `api/studio-notifications.ts`; ws `/ws/studio/pipeline-runs/{id}/live/` | `studio`, `studio_pipelines`, `studio_runs`, `studio_agents`, `studio_skills`, `studio_mcp`, `studio_notifications` | Пиксель |
+| P1 | Chat `/chat` | `api/assistant-chat.ts`; ws `/ws/operator/{chatId}/` | `chat` | Пиксель |
+| P1 | Mars `/mars`, `/mars/runs/:runId` | `api/mars.ts`; ws `/ws/mars/runs/{id}/live/` | `mars` | Пиксель |
+| P1 | Kubernetes `/kubernetes`, `/kubernetes/clusters/:clusterId`, `/kubernetes/fleet`, `/kubernetes/devtron`, `/kubernetes/admin` | `api/kubernetes.ts`, `api/kubernetes-actions.ts`, `api/kubernetes-ops-extra.ts`, `api/kubernetes-admin*.ts`; ws `/ws/kubernetes/admin/{logs,watch,exec,port-forward}/{session}/` | `kubernetes` (+ `ready_for_sidebar` с бэка) | Пиксель |
+| P2 | Settings `/settings/{appearance,readiness,limits,ai,ai-connections,access,users,groups,permissions,sso,memory,audit,notifications,kubernetes,plugins}` | `api/settings.ts`, `api/aiProviders.ts`, `api/projects.ts` | `settings`, `ai_connections_personal`, `ai_connections_admin`; `kubernetes`/`plugins` staffOnly | Пиксель |
+| P2 | Plugins `/settings/plugins`, `/plugins/:pluginId/:pageId`, `/marketplace` → redirect | `api/plugins.ts`, `frontend/src/plugins/*` (PluginPageHost) | `plugins` staffOnly | Пиксель |
+| P2 | Monitoring insights `/monitoring/insights` | `api/monitoring.ts`, `api/monitoring-insights.ts`; ws `/ws/monitoring/live/` | `dashboard` staffOnly | Пиксель |
+
+Гейты как сейчас: `FeatureGate feature=…`, `staffOnly`, `aiRoutingOnly`,
+`requiresKubernetesReadiness`; логика — `frontend/src/lib/featureAccess.ts` +
+`lib/navigation.ts`. Новых capability ради UI не добавляем.
 
 Primary nav (источник: `frontend/src/lib/navigation.ts`):
 
 - `/dashboard`, `/servers`, `/kubernetes`, `/agents`, `/automation`, `/chat`, `/studio`, `/mars`, `/settings/plugins`, `/monitoring/insights`, `/settings`
 
-Дочерние studio: `/studio`, `/studio/drafts`, `/studio/skills`, `/studio/mcp`, `/studio/agents`, `/studio/runs`, `/studio/notifications`.
+Отдельно решить (см. §9): `lib/api-demo*` — demo-fallback при недоступном бэке
+(нужен для GitHub Pages `VITE_BASE`). Это не операционная функция → в v3 по умолчанию **не переносим**.
 
-Мост дополняет точными endpoint/ws путями в этом же файле (секция ниже или отдельный `API_MATRIX.md`).
+WS-каналы (все через `buildWsBase()` → `/ws/...`, cookie-auth):
+
+- `/ws/servers/{id}/terminal/`
+- `/ws/studio/pipeline-runs/{id}/live/`
+- `/ws/mars/runs/{id}/live/`
+- `/ws/monitoring/live/`
+- `/ws/operator/{chatId}/`
+- `/ws/kubernetes/admin/{logs|watch|exec|port-forward}/{sessionId}/?...`
+
+Мост проверяет список по бэку (`routing.py`/consumers) и дополняет точными REST endpoint'ами
+в отдельном `API_MATRIX.md`.
 
 ### Фаза 2 — Shell + auth (Пиксель)
 
@@ -137,6 +177,15 @@ Primary nav (источник: `frontend/src/lib/navigation.ts`):
 Servers → Terminal/ws → Files.  
 Логика 1:1 с текущего клиента; визуал новый.
 
+Зависимости P0 (в скелете сейчас только `react`/`react-dom`), брать те же мажоры, что в `frontend/package.json`:
+
+- `react-router-dom` 7 — маршруты/гейты
+- `@tanstack/react-query` 5 — session/servers/readiness запросы (как сейчас)
+- `@xterm/xterm` 6 + `addon-fit`, `addon-search`, `addon-web-links`, `addon-unicode11` — терминал
+- `zod` — если переносим валидацию форм сервера как есть
+
+Не тащить в P0: `@xyflow/react` (pipeline editor, P1), `@codemirror/*` (файловый редактор — решить в Фазе 3, нужен ли для Files или хватит textarea в v3), `recharts`, `framer-motion`, `embla`.
+
 ### Фаза 4 — P1/P2 (Пиксель)
 
 Остальные разделы по матрице.  
@@ -144,11 +193,13 @@ Servers → Terminal/ws → Files.
 
 ### Фаза 5 — Приёмка
 
-- ручной смок (Тест чеклист + пользователь): auth → servers → terminal/ws → files
+- ручной смок (Тест чеклист + пользователь): auth → first-run gate → servers → terminal/ws → files
+- смок через **оба** пути входа: форма `/login` и бэк-редирект (`FRONTEND_APP_URL` → 8081), т.к. SSO/domain-auth идёт через редирект бэка
+- `npm run build` (`tsc -b` + vite) и `npm run lint` — зелёные
 - нет нейрослоп-бейджей (не «скрыты CSS», а удалены)
 - Semgrep короткий по `frontend-v3` (Страж)
-- CORS/CSRF: `FRONTEND_APP_URL=http://127.0.0.1:8081` (LU)
-- решение: заменить `frontend/` или держать v3 основной
+- `FRONTEND_APP_URL=http://127.0.0.1:8081` в корневом `.env` (LU); CORS/CSRF для 8081 в debug уже дефолт
+- решение: заменить `frontend/` или держать v3 основной; учесть `docker/frontend.Dockerfile` (`COPY frontend/ ./`) — при замене менять путь в Dockerfile, а не только папку
 
 ---
 
@@ -193,12 +244,36 @@ Servers → Terminal/ws → Files.
 3. storybook/e2e — **после P0**.
 4. Github PAT — отдельно, не блокер UI.
 5. Dashboard: короткий заголовок + рабочие сущности (servers), без overview-карточек.
-6. Перед auth: `CSRF_TRUSTED_ORIGINS` / CORS включают `http://127.0.0.1:8081` (и localhost).
-7. Auth: session/cookie как сейчас — без localStorage для токенов/SSH-ключей.
+6. CSRF/CORS для `http://127.0.0.1:8081` и `localhost:8081` — в debug уже дефолт бэка (`web_ui/settings/security.py`), для prod — через env. Ничего в коде бэка менять не нужно.
+7. Auth: session/cookie как сейчас — без localStorage для токенов/SSH-ключей (в `frontend/src/api/*` localStorage сейчас не используется — держим так).
+8. `FirstRunReadinessGate` → `/settings/readiness` — часть P0, иначе после логина на чистом бэке некуда попасть.
+9. Demo-fallback (`lib/api-demo*`, `VITE_BASE` для GitHub Pages) в v3 **не** переносим; если понадобится демо — отдельным решением.
+10. `/servers/hub` и `/servers/:id/terminal` рендерят один `TerminalPage` — в v3 тоже один компонент, два маршрута.
+
+---
+
 ## 10. Ближайшие шаги
 
-1. LU дописывает скелет `8081` + коммит.
+1. LU: добить Фазу 0 — `copyProxyHeaders` в vite.config, README, `icons.svg`; коммит.
 2. Команда ревьюит этот MD (вопросы/правки сюда).
-3. Пиксель стартует Фазу 1–2 (матрица детализация + shell/auth).
-4. Мост уточняет ws/API paths для P0.
+3. Пиксель стартует Фазу 1–2 (shell/auth + first-run gate).
+4. Мост сверяет ws-каналы и REST-endpoint'ы P0 с бэком → `API_MATRIX.md`.
 5. Пользователь тыкает руками; сложные автотесты — по запросу.
+
+---
+
+## 11. Ревизия плана (2026-09-13, аудит по коду)
+
+Что исправлено относительно первой версии:
+
+- Proxy v3 **не** «как сейчас»: нет проброса cookie/domain-auth заголовков на HTTP и WS upgrade → добавлено в Фазу 0.
+- Матрица экранов расширена по `frontend/src/App.tsx`: были пропущены `/servers/hub`, `/servers/:id/terminal`, `/agents/run/:runId`, `/studio/pipeline/*`, `/kubernetes/{admin,clusters,fleet,devtron}`, `/mars/runs/:runId`, `/plugins/:pluginId/:pageId`, `/marketplace`, 15 дочерних `/settings/*`, redirect'ы `/`, `/admin`, `/dashboard/admin`, `*`.
+- Добавлен `FirstRunReadinessGate` как P0-зависимость.
+- API-модули привязаны к реальному пути `frontend/src/api/*.ts` (в плане подразумевался `lib/api`, которого нет); добавлены пропущенные `terminal-preferences`, `linux-ui`, `server-memory`, `playbook-*`, `kubernetes-admin*`, `monitoring-insights`, `aiProviders`, `projects`.
+- WS-каналы выписаны из `frontend/src/lib/api.ts` вместо «`/ws/…`».
+- FeatureGate-фичи выписаны по маршрутам; зафиксировано «без новых capability».
+- CORS/CSRF для 8081: уже в дефолте бэка для debug — пункт из «сделать» переведён в «проверить env для prod».
+- `FRONTEND_APP_URL` — это редиректы бэка, а не CORS; отмечено ограничение dual-run.
+- Зависимости P0 перечислены (в скелете только react).
+- Приёмка: добавлены `build`/`lint`, вход через бэк-редирект, путь замены `docker/frontend.Dockerfile`.
+- Открытые вопросы: demo-fallback, README-шаблон, untracked `icons.svg`.
