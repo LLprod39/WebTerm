@@ -226,3 +226,8 @@ scripts/_tmp_*.py
 !docs/pilot/
 docs/pilot/*
 !docs/pilot/*.md
+
+!docs/frontend-v3/
+docs/frontend-v3/*
+!docs/frontend-v3/*.md
+
