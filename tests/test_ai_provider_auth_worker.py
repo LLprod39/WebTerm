@@ -332,6 +332,9 @@ def test_reclaimed_auth_flow_fences_same_named_stale_worker() -> None:
 def test_device_verification_url_is_restricted_to_provider_hosts() -> None:
     assert _allowed_verification_uri("codex_subscription", "https://auth.openai.com/device")
     assert _allowed_verification_uri("grok_subscription", "https://accounts.x.ai/device")
+    assert _allowed_verification_uri("cursor_subscription", "https://authenticator.cursor.sh/login")
+    assert _allowed_verification_uri("cursor_subscription", "https://www.cursor.com/loginDeepControl")
     assert not _allowed_verification_uri("codex_subscription", "https://openai.com.evil.example/device")
     assert not _allowed_verification_uri("grok_subscription", "http://accounts.x.ai/device")
     assert not _allowed_verification_uri("grok_subscription", "https://user:pass@x.ai/device")
+    assert not _allowed_verification_uri("cursor_subscription", "https://cursor.com.evil.example/login")

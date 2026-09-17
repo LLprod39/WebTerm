@@ -3,10 +3,25 @@ from __future__ import annotations
 from loguru import logger
 
 from app.agent_kernel.mcp_runtime import describe_mcp_bindings
+from app.agent_kernel.runtime.outcomes import (
+    EXIT_CONTROL_PLANE,
+    EXIT_LLM_ERROR,
+    EXIT_TIMEOUT,
+    summarize_tool_evidence,
+)
+from app.agent_kernel.sandbox.runtime_errors import is_control_plane_text
 from app.core.llm import LLMProvider, is_thinking_chunk
-from app.execution_policy import safe_payload_preview
 from app.sudo_policy import sudo_policy_prompt
 from servers.agents.agent_inputs import build_agent_materials_prompt
+from servers.agents.agent_report_compact import (
+    COMPACT_REPORT_MAX_CHARS,
+    build_compact_report,
+    build_control_plane_report,
+    coerce_compact_report,
+    compact_journal_facts,
+    compact_steps_summary,
+    iterations_have_control_plane,
+)
 from servers.agents.agent_tools import get_tools_description
 
 
@@ -110,136 +125,110 @@ ACTION: tool_name {{"param1": "value1", "param2": "value2"}}
 Когда задача завершена (больше нет действий), выведи итоговый анализ БЕЗ строки ACTION и без JSON tool-call."""
 
 
-def build_fallback_final_report(engine, iterations: list[dict], *, error: str = "") -> str:
+def _tool_calls_from_iterations(iterations: list[dict] | None) -> list[dict]:
+    calls: list[dict] = []
+    for item in iterations or []:
+        action = str(item.get("action") or "").strip()
+        if not action or action == "final_answer":
+            continue
+        observation = str(item.get("observation") or "")
+        calls.append(
+            {
+                "tool": action,
+                "success": bool(observation) and not is_control_plane_text(observation),
+            }
+        )
+    return calls
+
+
+def _fallback_status(*, exit_reason: str, tool_calls: list[dict] | None, iterations: list[dict] | None = None) -> str:
+    evidence = summarize_tool_evidence(tool_calls or _tool_calls_from_iterations(iterations))
+    if exit_reason == EXIT_CONTROL_PLANE or evidence["control_plane"]:
+        return "❌ Ошибка"
+    if exit_reason == EXIT_TIMEOUT:
+        return "❌ Ошибка"
+    if exit_reason == EXIT_LLM_ERROR:
+        if evidence["exec_succeeded"] > 0 or evidence["exec_count"] > 0:
+            return "⚠️ Частичный успех"
+        return "❌ Ошибка"
+    if evidence["exec_succeeded"] > 0:
+        return "⚠️ Частичный успех"
+    return "❌ Ошибка"
+
+
+def build_fallback_final_report(
+    engine,
+    iterations: list[dict],
+    *,
+    error: str = "",
+    exit_reason: str = "",
+    tool_calls: list[dict] | None = None,
+) -> str:
+    if getattr(engine, "_control_plane_blocked", False) or iterations_have_control_plane(iterations):
+        return build_control_plane_report(engine, iterations)
+
     goal = engine.agent.goal or engine.agent.ai_prompt or "Не указана"
-    action_lines = []
-    evidence_lines = []
-    for item in iterations[-12:]:
-        action = item.get("action") or "final_answer"
-        args = safe_payload_preview(item.get("args", {}), limit=140)
-        observation = str(item.get("observation") or "").strip()
-        if action:
-            action_lines.append(f"- {action}({args})")
-        if observation and observation != "(final answer)":
-            evidence_lines.append(f"- {observation[:240]}")
+    facts = compact_journal_facts(iterations)
+    if not facts:
+        facts = [f"Итераций в журнале: {len(iterations)}."]
+    if error and exit_reason != EXIT_LLM_ERROR:
+        facts.append(f"Синтез отчёта: {error[:160]}")
 
-    if not action_lines:
-        action_lines = ["- Действия агента не были сохранены в журнале итераций."]
-    if not evidence_lines:
-        evidence_lines = ["- Сохранённых доказательств недостаточно для технического вывода."]
-
-    risk_line = (
-        f"- Генерация LLM-отчёта завершилась ошибкой: {error[:500]}"
-        if error
-        else "- Критических проблем не обнаружено по сохранённому журналу; полнота вывода требует ручной проверки."
+    status = _fallback_status(exit_reason=exit_reason, tool_calls=tool_calls, iterations=iterations)
+    if exit_reason == EXIT_LLM_ERROR:
+        summary = f"Цель: {str(goal)[:160]}. Агент оборвался на LLM после уже собранных шагов."
+        next_step = "Повторить запуск: цикл остановился на вызове модели, не на цели."
+    else:
+        summary = f"Цель: {str(goal)[:180]}. Ниже факты из журнала, полный LLM-отчёт недоступен."
+        next_step = "Проверить вкладку «Шаги», если фактов мало."
+    return build_compact_report(
+        title=f"{engine.agent.name}: итог по журналу",
+        summary=summary,
+        facts=facts,
+        next_step=next_step,
+        status=status,
     )
-    status = "⚠️ Частичный успех" if error else "⚠️ Частичный успех"
-    return f"""# Отчёт агента: {engine.agent.name}
-
-> Финальный Markdown собран детерминированным fallback по сохранённому журналу запуска.
-
-## Что произошло
-
-Агент выполнял цель: {goal}. Основной LLM-синтез финального отчёта не дал полноценный структурированный результат, поэтому backend сформировал безопасный fallback-отчёт из сохранённых итераций.
-
-## Итог
-
-Корневая причина не подтверждена фактами. Текущий результат нужно читать как техническую сводку по доступным событиям, а не как полный экспертный анализ.
-
-## Доказательства
-
-{chr(10).join(evidence_lines)}
-
-## Выполненные действия
-
-{chr(10).join(action_lines)}
-
-## Ключевые находки
-
-- Доступно итераций агента: {len(iterations)}.
-- Полный вывод ограничен сохранённым журналом запуска.
-
-## Проблемы и риски
-
-{risk_line}
-
-## Рекомендации
-
-- Проверить вкладки «События», «Логи» и «Ход агента» для первичных данных.
-- При необходимости перезапустить агента после исправления причины сбоя синтеза.
-
----
-
-**Статус:** {status}"""
 
 
-async def generate_final_report(engine, history: list[dict], iterations: list[dict]) -> str:
-    summary_parts = []
-    for item in iterations:
-        if item.get("action"):
-            summary_parts.append(
-                f"Step {item['iteration']}: {item['action']}({safe_payload_preview(item.get('args', {}), limit=100)}) → "
-                f"{item['observation'][:200]}"
-            )
-        else:
-            summary_parts.append(f"Step {item['iteration']}: Final answer")
+async def generate_final_report(
+    engine,
+    history: list[dict],
+    iterations: list[dict],
+    *,
+    exit_reason: str = "",
+    tool_calls: list[dict] | None = None,
+) -> str:
+    if getattr(engine, "_control_plane_blocked", False) or iterations_have_control_plane(iterations):
+        return build_control_plane_report(engine, iterations)
 
-    steps_summary = "\n".join(summary_parts[-20:])
-    prompt = f"""Ты — технический аналитик. Создай профессиональный структурированный отчёт в формате Markdown.
-Язык: русский. Стиль: деловой, конкретный, без воды.
+    steps_summary = compact_steps_summary(iterations)
+    final_answer = ""
+    if history:
+        final_answer = str(history[-1].get("content") or "")[:400]
+    prompt = f"""Ты — технический аналитик. Напиши КОРОТКИЙ финальный отчёт в Markdown.
+Язык: русский. Без воды. Максимум {COMPACT_REPORT_MAX_CHARS} символов.
+Лучше короче лимита, чем вода. Если не влезает — сначала факты, не вступление.
 
-Данные для отчёта:
+Данные:
 - Агент: {engine.agent.name}
 - Цель: {engine.agent.goal or engine.agent.ai_prompt or "Не указана"}
-- Итераций выполнено: {len(iterations)}
-- Шаги агента: {steps_summary}
-- Итоговый ответ агента: {history[-1]["content"][:3000] if history else "Нет данных"}
+- Итераций: {len(iterations)}
+- Журнал:
+{steps_summary}
+- Итог агента: {final_answer or "Нет данных"}
 
-Сгенерируй отчёт СТРОГО в следующем формате — не добавляй лишних секций, не меняй структуру.
-Если корневая причина не подтверждена фактами, прямо напиши: "Корневая причина не подтверждена".
+Жёсткий каркас, ничего лишнего:
+1) `# ...` — одна строка, суть результата
+2) `> ...` — одно предложение
+3) до 5 пунктов `- факт`
+4) опционально одна строка `Дальше: ...`
+5) `**Статус:** ✅ Успех` / `⚠️ Частичный успех` / `❌ Ошибка`
 
-# [Краткое название того что было сделано]
-
-> [Одно предложение — главный итог работы агента]
-
-## Что произошло
-
-[2–4 предложения: что именно проверял агент, какие системы/серверы затронуты, чем завершился запуск]
-
-## Итог
-
-[2–4 предложения об общем результате и текущем состоянии системы]
-
-## Доказательства
-
-- [Факт 1 — конкретный вывод команды, путь, сервис, версия, статус или число]
-- [Факт 2]
-
-## Выполненные действия
-
-- [Действие 1 — конкретно что сделано и что получено]
-- [Действие 2]
-- [...]
-
-## Ключевые находки
-
-- [Находка 1 — факт с конкретными данными: цифры, названия, пути]
-- [Находка 2]
-- [...]
-
-## Проблемы и риски
-
-- [Риск 1 — что может сломаться или что требует проверки]
-- [Если критических проблем нет — написать: Критических проблем не обнаружено]
-
-## Рекомендации
-
-- [Рекомендация 1 — конкретное действие]
-- [Рекомендация 2]
-
----
-
-**Статус:** ✅ Успех / ⚠️ Частичный успех / ❌ Ошибка"""
+Запрещено:
+- секции `##` (включая «Содержание», «Контекст», «Оценка цели», «Что произошло», «Рекомендации»)
+- повторять одно и то же в цитате и в списке
+- писать каркас (`#`, `>`, список, статус) больше одного раза
+- выдумывать факты, которых нет в журнале"""
 
     provider = LLMProvider()
     chunks = []
@@ -264,9 +253,20 @@ async def generate_final_report(engine, history: list[dict], iterations: list[di
             engine.run_record.pk if engine.run_record else "?",
             len(report),
         )
-        if not report:
-            return build_fallback_final_report(engine, iterations, error="LLM вернул пустой финальный отчёт")
-        return report
+        fallback = build_fallback_final_report(
+            engine,
+            iterations,
+            error="LLM вернул пустой отчёт или запрещённые секции",
+            exit_reason=exit_reason,
+            tool_calls=tool_calls,
+        )
+        return coerce_compact_report(report, fallback=fallback)
     except Exception as exc:
         logger.error("Final report generation failed: {}", exc)
-        return build_fallback_final_report(engine, iterations, error=str(exc))
+        return build_fallback_final_report(
+            engine,
+            iterations,
+            error=str(exc),
+            exit_reason=exit_reason,
+            tool_calls=tool_calls,
+        )

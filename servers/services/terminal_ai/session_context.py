@@ -160,11 +160,17 @@ def build_nova_context_bundle(
     persisted_activity: list[dict[str, Any]] | None,
     include_session_context: bool,
     include_recent_activity: bool,
+    briefing_entries: list[dict[str, Any]] | None = None,
+    occupancy_note: str = "",
 ) -> NovaContextBundle:
+    from servers.services.terminal_ai.session_briefing import render_session_briefing
+
     session_view = _build_session_view(snapshot) if include_session_context else {}
     recent_activity = (
         _merge_activity_entries(live_activity or [], persisted_activity or []) if include_recent_activity else []
     )
+    if briefing_entries:
+        recent_activity = _attach_briefing_summaries(recent_activity, briefing_entries)
 
     session_context = ""
     if session_view:
@@ -188,12 +194,22 @@ def build_nova_context_bundle(
         lines.append(f"- источник: {session_view['source']}")
         session_context = "\n".join(lines)
 
+    briefing_text = render_session_briefing(briefing_entries) if include_recent_activity else ""
+    occupancy = str(occupancy_note or "").strip()
     recent_activity_context = ""
-    if recent_activity:
+    if briefing_text:
+        recent_activity_context = briefing_text
+        if occupancy:
+            recent_activity_context += "\n\n" + occupancy
+    elif recent_activity:
         lines = [
             "Недавние действия пользователя в этой terminal-сессии:",
         ]
         for item in recent_activity:
+            summary = str(item.get("summary") or "").strip()
+            if summary:
+                lines.append(f"- {summary}")
+                continue
             parts = [f"- {item['command']}"]
             if item.get("cwd"):
                 parts.append(f"cwd={item['cwd']}")
@@ -202,6 +218,10 @@ def build_nova_context_bundle(
             parts.append(f"source={item['source']}")
             lines.append(" | ".join(parts))
         recent_activity_context = "\n".join(lines)
+        if occupancy:
+            recent_activity_context += "\n\n" + occupancy
+    elif occupancy:
+        recent_activity_context = occupancy
 
     ui_payload: dict[str, Any] = {}
     if session_view:
@@ -272,12 +292,47 @@ def _normalize_activity_entry(raw: dict[str, Any] | None) -> dict[str, Any] | No
     exit_code_raw = entry.get("exit_code")
     exit_code = int(exit_code_raw) if isinstance(exit_code_raw, int) else None
     source = _clean_value(entry.get("source"), 40) or "session"
-    return {
+    summary = _clean_value(entry.get("summary"), 280)
+    payload = {
         "command": command,
         "cwd": cwd,
         "exit_code": exit_code,
         "source": source,
     }
+    if summary:
+        payload["summary"] = summary
+    return payload
+
+
+def _attach_briefing_summaries(
+    activity: list[dict[str, Any]],
+    briefing_entries: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_key: dict[tuple[str, str, int | None], str] = {}
+    for raw in briefing_entries:
+        if not isinstance(raw, dict):
+            continue
+        summary = str(raw.get("summary") or "").strip()
+        command = _sanitize_command_preview(raw.get("command"))
+        if not summary or not command:
+            continue
+        exit_code_raw = raw.get("exit_code")
+        exit_code = int(exit_code_raw) if isinstance(exit_code_raw, int) else None
+        by_key[(command, str(raw.get("cwd") or ""), exit_code)] = summary
+    merged: list[dict[str, Any]] = []
+    for item in activity:
+        key = (str(item.get("command") or ""), str(item.get("cwd") or ""), item.get("exit_code"))
+        summary = str(item.get("summary") or "") or by_key.get(key, "")
+        if summary:
+            merged.append({**item, "summary": summary})
+        else:
+            merged.append(item)
+    if not merged:
+        for raw in briefing_entries:
+            entry = _normalize_activity_entry(raw if isinstance(raw, dict) else None)
+            if entry:
+                merged.append(entry)
+    return merged[:_MAX_ACTIVITY_ENTRIES]
 
 
 def _extract_env_hints(source: dict[str, Any]) -> dict[str, str]:
@@ -338,6 +393,21 @@ def _resolve_cwd(base: str, target: str) -> str:
     if current.startswith("/"):
         return posixpath.normpath(posixpath.join(current, goal))
     return goal
+
+
+def sanitize_command_preview(command: Any) -> str:
+    return _sanitize_command_preview(command)
+
+
+def resolve_remote_path(path: str, cwd: str = "") -> str:
+    """Resolve a possibly-relative remote path against a known cwd."""
+
+    raw = str(path or "").strip()
+    if not raw:
+        return raw
+    if raw.startswith("/") or raw == "~" or raw.startswith("~/"):
+        return raw
+    return _resolve_cwd(cwd, raw) or raw
 
 
 def _sanitize_command_preview(command: Any) -> str:

@@ -249,10 +249,11 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
                     }
                 )
             table = {
-                "title": f"Агенты · {payload.get('count', len(rows))}",
+                "title": f"Агенты · {payload.get('total') or payload.get('count', len(rows))}",
                 "headers": headers,
                 "rows": rows,
                 "kind": "agents",
+                "total": int(payload.get("total") or len(items)),
                 "items": items,
                 "interactive": True,
             }
@@ -301,11 +302,13 @@ def maybe_attach_table_metadata(message: ChatMessage, tool_result: dict[str, Any
                     }
                 )
             table = {
-                "title": f"Playbook / runbook · {payload.get('count', len(rows))}",
+                "title": f"Playbook / runbook · {payload.get('total') or payload.get('count', len(rows))}",
                 "headers": ["Playbook / runbook", "Назначение и последний запуск"],
                 "rows": rows,
                 "kind": "playbooks",
+                "total": int(payload.get("total") or len(items)),
                 "items": items,
+                "interactive": True,
             }
 
     if table is None:

@@ -198,15 +198,14 @@ def _outcome_for_run(run: AgentRun, document: str, coverage: dict[str, Any]) -> 
         details = {key: saved_details[key] for key in detail_keys if key in saved_details}
     technical_outcome = outcome
     technical_reason = reason
-    explicit_partial = bool(
-        re.search(r"(?:статус[^\n]{0,40}частич|partial\s+success)", document, flags=re.IGNORECASE)
-    )
     partial_coverage = bool(
         coverage.get("total")
         and coverage.get("checked") is not None
         and int(coverage["checked"]) < int(coverage["total"])
     )
-    if outcome == "failed" and document and exit_reason == "llm_error" and (explicit_partial or partial_coverage):
+    # Do not remap failed→partial just because the markdown says «частич».
+    # Coverage is real evidence that some objects were checked.
+    if outcome == "failed" and document and exit_reason == "llm_error" and partial_coverage:
         outcome = "partial"
         source = "kernel_and_report"
         details = {
@@ -214,11 +213,10 @@ def _outcome_for_run(run: AgentRun, document: str, coverage: dict[str, Any]) -> 
             "technical_outcome": technical_outcome,
             "technical_reason": technical_reason,
         }
-        if partial_coverage:
-            reason = (
-                f"Проверено {coverage['checked']} из {coverage['total']} {coverage.get('unit') or 'объектов'}; "
-                f"техническое завершение: {technical_reason or exit_reason}."
-            )
+        reason = (
+            f"Проверено {coverage['checked']} из {coverage['total']} {coverage.get('unit') or 'объектов'}; "
+            f"техническое завершение: {technical_reason or exit_reason}."
+        )
     elif outcome == "unknown" and document:
         outcome = "inconclusive"
     return {
@@ -1058,20 +1056,28 @@ def _operation_counts(items: list[dict[str, Any]]) -> dict[str, int]:
 
 
 def _delivery_for_run(run: AgentRun, events: list[dict[str, Any]], report_ready: bool) -> dict[str, Any]:
+    from core_ui.services.user_notifications import resolve_user_telegram_chat_id
+
     configured_delivery = normalize_report_delivery(run.agent.report_delivery if run.agent_id and run.agent else {})
     telegram = configured_delivery.get("telegram") or {}
     enabled = bool(telegram.get("enabled"))
     notification_config = load_notification_config()
     bot_token_present = bool(str(notification_config.get("telegram_bot_token") or "").strip())
-    configured_chat_id = str(telegram.get("chat_id") or notification_config.get("telegram_chat_id") or "").strip()
+    owner = getattr(run, "user", None) or (run.agent.user if run.agent_id and run.agent else None)
+    configured_chat_id = (
+        str(telegram.get("chat_id") or "").strip()
+        or resolve_user_telegram_chat_id(owner)
+        or str(notification_config.get("telegram_chat_id") or "").strip()
+    )
     configured = bool(enabled and bot_token_present and configured_chat_id)
     delivery_events = [event for event in events if event.get("event_type") in DELIVERY_EVENT_TYPES]
     latest = delivery_events[-1] if delivery_events else None
     event_type = str((latest or {}).get("event_type") or "")
     payload = (latest or {}).get("payload") if isinstance((latest or {}).get("payload"), dict) else {}
+    skip_reason = str(payload.get("reason") or "").strip().lower()
     historical_config_block = bool(
         event_type == "agent_report_delivery_skipped"
-        and str(payload.get("reason") or "").strip().lower() == "telegram_not_configured"
+        and skip_reason in {"telegram_not_configured", "telegram_bot_missing", "telegram_chat_missing"}
     )
     if historical_config_block:
         configured = False
@@ -1081,7 +1087,12 @@ def _delivery_for_run(run: AgentRun, events: list[dict[str, Any]], report_ready:
     description = "Внешняя доставка выключена."
     if enabled and not configured:
         status, severity, label = "blocked", "warning", "Требуется настройка"
-        description = "Для Telegram не настроены bot token или chat id."
+        if not bot_token_present:
+            description = "Администратор ещё не настроил токен Telegram-бота."
+        elif not configured_chat_id:
+            description = "Укажите свой Telegram chat ID в Настройки → Оповещения."
+        else:
+            description = "Для Telegram не настроены bot token или chat id."
     elif enabled and not report_ready:
         status, label, description = "waiting_report", "Ждёт отчёт", "Доставка начнётся после формирования отчёта."
     elif event_type == "agent_report_delivery_accepted":
@@ -1105,6 +1116,10 @@ def _delivery_for_run(run: AgentRun, events: list[dict[str, Any]], report_ready:
     blocked_reason = ""
     if not enabled:
         blocked_reason = "delivery_disabled"
+    elif not bot_token_present:
+        blocked_reason = "telegram_bot_missing"
+    elif not configured_chat_id:
+        blocked_reason = "telegram_chat_missing"
     elif not configured:
         blocked_reason = "telegram_not_configured"
     elif not report_ready:
@@ -1136,6 +1151,7 @@ def _delivery_for_run(run: AgentRun, events: list[dict[str, Any]], report_ready:
         "summary": _text(description, limit=700),
         "can_retry": can_retry,
         "blocked_reason": blocked_reason,
+        # Personal chat ID — never send end users to Studio (platform bot is staff-only).
         "setup_url": "/settings/notifications",
         "attempt_id": _text(payload.get("attempt_id"), limit=80),
         "attempt_count": len(attempt_ids) + unkeyed_attempts,
@@ -1148,7 +1164,24 @@ def _report_generation(run: AgentRun, document: dict[str, Any], outcome: dict[st
     stored_outcome = run.execution_outcome if isinstance(run.execution_outcome, dict) else {}
     stored = stored_outcome.get("report_generation")
     stored = stored if isinstance(stored, dict) else {}
-    if document["available"] and outcome.get("exit_reason") == "llm_error":
+    stored_status = str(stored.get("status") or "")
+    if stored_status == "ready" and document["available"]:
+        status, label, severity, error = "ready", "Отчёт готов", "success", ""
+    elif stored_status == "failed" and document["available"]:
+        status, label, severity = "ready_with_fallback", "Отчёт готов по сохранённым данным", "warning"
+        error = _text(
+            stored.get("error")
+            or (outcome.get("details") or {}).get("technical_reason")
+            or outcome.get("reason")
+            or "LLM call failed",
+            limit=700,
+        )
+    elif document["available"] and outcome.get("exit_reason") == "llm_error" and stored_status not in {
+        "ready",
+        "ready_with_fallback",
+        "generating",
+        "failed",
+    }:
         status, label, severity = "ready_with_fallback", "Отчёт готов по сохранённым данным", "warning"
         error = _text((outcome.get("details") or {}).get("technical_reason") or "LLM call failed", limit=700)
     elif stored.get("status") in {"generating", "ready", "ready_with_fallback", "failed"}:

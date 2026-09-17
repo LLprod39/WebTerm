@@ -23,6 +23,13 @@ class CliRunnerRuntimeError(RuntimeError):
     pass
 
 
+_TARGET_HOME_ENV = {
+    "codex_subscription": ("CODEX_HOME", "/credentials/codex"),
+    "grok_subscription": ("GROK_HOME", "/credentials/grok"),
+    "cursor_subscription": ("HOME", "/credentials/cursor"),
+}
+
+
 def build_cli_runner_docker_command(
     config: RunnerManagerConfig,
     request: RunnerRequestV1,
@@ -33,8 +40,10 @@ def build_cli_runner_docker_command(
     if not _RUNNER_ID.fullmatch(resolved_runner_id):
         raise CliRunnerRuntimeError("Runner id must contain 32 lowercase hexadecimal characters")
     credential_volume = f"{config.credential_volume_prefix}{request.connection_ref}"
-    target_home = "/credentials/codex" if request.target_id == "codex_subscription" else "/credentials/grok"
-    home_env = "CODEX_HOME" if request.target_id == "codex_subscription" else "GROK_HOME"
+    home = _TARGET_HOME_ENV.get(request.target_id)
+    if home is None:
+        raise CliRunnerRuntimeError("Unsupported subscription runner target")
+    home_env, target_home = home
     command = [
         config.docker_command,
         "run",

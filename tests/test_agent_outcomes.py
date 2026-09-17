@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from app.agent_kernel.runtime.outcomes import (
+    EXIT_CONTROL_PLANE,
     EXIT_EMPTY_LLM,
     EXIT_FINAL_ANSWER,
+    EXIT_LLM_ERROR,
     EXIT_MAX_ITERATIONS,
     EXIT_TIMEOUT,
     ON_PARTIAL_ABORT,
@@ -23,10 +25,10 @@ def test_react_timeout_is_failed():
     assert outcome.status == "failed"
 
 
-def test_react_max_iterations_is_partial_completed():
+def test_react_max_iterations_is_partial_when_commands_succeeded():
     outcome = resolve_react_outcome(
         exit_reason=EXIT_MAX_ITERATIONS,
-        tool_calls=[{"tool": "ssh_execute"}, {"tool": "read_console"}],
+        tool_calls=[{"tool": "ssh_execute", "success": True}, {"tool": "read_console", "success": True}],
         tools_available=True,
     )
     assert outcome.outcome == "partial"
@@ -44,13 +46,47 @@ def test_react_final_answer_without_tools_is_partial():
     assert outcome.status == "completed"
 
 
-def test_react_final_answer_with_tools_is_success():
+def test_react_final_answer_with_successful_tools_is_success():
     outcome = resolve_react_outcome(
         exit_reason=EXIT_FINAL_ANSWER,
-        tool_calls=[{"tool": "ssh_execute"}],
+        tool_calls=[{"tool": "ssh_execute", "success": True}],
         tools_available=True,
     )
     assert outcome.outcome == "success"
+    assert outcome.status == "completed"
+
+
+def test_react_final_answer_with_failed_ssh_execute_is_failed():
+    outcome = resolve_react_outcome(
+        exit_reason=EXIT_FINAL_ANSWER,
+        tool_calls=[{"tool": "ssh_execute", "success": False, "error_kind": "control_plane"}],
+        tools_available=True,
+    )
+    assert outcome.outcome == "failed"
+    assert outcome.status == "failed"
+
+
+def test_react_control_plane_exit_is_failed():
+    outcome = resolve_react_outcome(
+        exit_reason=EXIT_CONTROL_PLANE,
+        tool_calls=[{"tool": "ssh_execute", "success": False, "error_kind": "control_plane"}],
+        tools_available=True,
+    )
+    assert outcome.outcome == "failed"
+    assert outcome.status == "failed"
+    assert "Docker" in outcome.reason
+
+
+def test_react_mixed_command_results_are_partial():
+    outcome = resolve_react_outcome(
+        exit_reason=EXIT_FINAL_ANSWER,
+        tool_calls=[
+            {"tool": "ssh_execute", "success": True},
+            {"tool": "ssh_execute", "success": False},
+        ],
+        tools_available=True,
+    )
+    assert outcome.outcome == "partial"
     assert outcome.status == "completed"
 
 
@@ -73,6 +109,27 @@ def test_react_empty_llm_without_tools_is_failed():
     )
     assert outcome.outcome == "failed"
     assert outcome.status == "failed"
+
+
+def test_react_llm_error_without_tools_is_failed():
+    outcome = resolve_react_outcome(
+        exit_reason=EXIT_LLM_ERROR,
+        tool_calls=[],
+        tools_available=True,
+    )
+    assert outcome.outcome == "failed"
+    assert outcome.status == "failed"
+
+
+def test_react_llm_error_after_successful_commands_is_partial():
+    outcome = resolve_react_outcome(
+        exit_reason=EXIT_LLM_ERROR,
+        tool_calls=[{"tool": "ssh_execute", "success": True}],
+        tools_available=True,
+    )
+    assert outcome.outcome == "partial"
+    assert outcome.status == "completed"
+    assert "partial work preserved" in outcome.reason
 
 
 def test_multi_failed_tasks_not_silent_completed():

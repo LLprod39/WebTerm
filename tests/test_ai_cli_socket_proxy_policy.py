@@ -7,9 +7,11 @@ from app.ai_cli_socket_proxy_policy import AiCliProxyPolicyConfig, authorize_ai_
 
 CODEX_IMAGE = "registry.example/webterm-ai-cli-codex@sha256:" + "a" * 64
 GROK_IMAGE = "registry.example/webterm-ai-cli-grok@sha256:" + "b" * 64
+CURSOR_IMAGE = "registry.example/webterm-ai-cli-cursor@sha256:" + "c" * 64
 CONFIG = AiCliProxyPolicyConfig(
     codex_runner_image=CODEX_IMAGE,
     grok_runner_image=GROK_IMAGE,
+    cursor_runner_image=CURSOR_IMAGE,
     egress_network="webterm-ai-cli-egress",
 )
 
@@ -77,6 +79,7 @@ def test_missing_provider_specific_digest_is_denied() -> None:
     config = AiCliProxyPolicyConfig(
         codex_runner_image="",
         grok_runner_image=GROK_IMAGE,
+        cursor_runner_image=CURSOR_IMAGE,
         egress_network="webterm-ai-cli-egress",
     )
     decision = authorize_ai_cli_docker_request(

@@ -199,6 +199,8 @@ class TerminalSessionOperations:
 
                 self._transport_state.nova_session_context = await self._probe_nova_session_context(merged_env)
                 self._transport_state.nova_recent_activity = []
+                self._transport_state.session_briefing = []
+                self._ai_state.nova_conversation.reset()
                 await self._emit_terminal_session()
 
             except Exception as e:
@@ -315,6 +317,8 @@ class TerminalSessionOperations:
         cwd: str,
         exit_code: int | None,
         source: str,
+        output_tail: str = "",
+        cwd_after: str = "",
     ) -> None:
         self._transport_state.nova_recent_activity = terminal_nova_context.append_nova_recent_activity(
             self._transport_state.nova_recent_activity,
@@ -323,14 +327,40 @@ class TerminalSessionOperations:
             exit_code=exit_code,
             source=source,
         )
+        from servers.services.terminal_ai.session_briefing import append_briefing_entry, build_briefing_entry
+
+        entry = build_briefing_entry(
+            command=command,
+            cwd=cwd,
+            exit_code=exit_code,
+            source=source,
+            output_tail=output_tail,
+            cwd_after=cwd_after,
+        )
+        self._transport_state.session_briefing = append_briefing_entry(
+            self._transport_state.session_briefing,
+            entry,
+        )
+        if entry and self._transport_state.nova_recent_activity:
+            self._transport_state.nova_recent_activity[-1]["summary"] = entry["summary"]
 
     async def _collect_nova_context_bundle(self):
+        from servers.services.terminal_ai.pty_occupancy import inspect_pty_occupancy, occupancy_prompt_note
+
+        occupancy = inspect_pty_occupancy(
+            input_buffer=self._manual_state.input_buffer,
+            input_forwarding_held=self._manual_state.input_forwarding_held,
+            manual_active_command_id=self._manual_state.active_command_id,
+            ai_active_command_id=self._ai_state.active_command.command_id,
+        )
         return await terminal_nova_context.collect_nova_context_bundle(
             server_id=self.server.id if self.server else None,
             session_id=self._transport_state.server_connection_id or "",
             session_context=self._transport_state.nova_session_context,
             live_activity=self._transport_state.nova_recent_activity,
             ai_settings=self._ai_state.settings,
+            briefing_entries=self._transport_state.session_briefing,
+            occupancy_note=occupancy_prompt_note(occupancy),
         )
 
     async def _handle_resize(self, content: dict[str, Any]):

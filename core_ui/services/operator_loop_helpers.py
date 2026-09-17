@@ -482,7 +482,7 @@ def _fallback_answer_from_metadata(metadata: dict[str, Any] | None) -> str:
                 facts.append(f"Доступно {count} {noun}; активных запусков — {active}.")
             elif kind == "playbooks":
                 count = len(items)
-                facts.append(f"Доступно {count} playbook/runbook; полный каталог приведён в таблице.")
+                facts.append(f"Доступно {count} playbook/runbook.")
             elif kind == "forecasts":
                 risky = sum(
                     1 for item in items if str(item.get("severity") or "").lower() in {"critical", "high", "warning"}
@@ -527,10 +527,30 @@ def _is_card_placeholder(text: str) -> bool:
 @sync_to_async
 def _ensure_visible_answer(message_id: int) -> str | None:
     """Guarantee a grounded text summary and return it when it must be streamed to the client."""
-    msg = ChatMessage.objects.filter(pk=message_id).first()
+    msg = ChatMessage.objects.select_related("session").filter(pk=message_id).first()
     if not msg:
         return None
     current = (msg.content or "").strip()
+    from core_ui.services.operator_channel import (
+        build_telegram_digest,
+        is_telegram_session,
+        looks_like_card_pointer,
+        looks_like_tech_dump,
+    )
+
+    telegram = is_telegram_session(msg.session)
+    if telegram:
+        if current and not looks_like_card_pointer(current) and not looks_like_tech_dump(current):
+            # Keep model prose; presenter will append digest for Telegram delivery.
+            return None
+        digest = build_telegram_digest(msg.metadata)
+        summary = digest or _fallback_answer_from_metadata(msg.metadata)
+        if not summary or summary == current:
+            return None
+        msg.content = summary
+        msg.save(update_fields=["content"])
+        return summary
+
     if current and not _is_card_placeholder(current):
         return None
     summary = _fallback_answer_from_metadata(msg.metadata)

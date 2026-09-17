@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kubernetes · кокпит v1</title>
+  <style>
+    /* ─── Neutral Modern tokens (verbatim) ─────────────────────────── */
+    :root {
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --surface-warm: var(--surface);
+      --fg: #111111;
+      --fg-2: var(--fg);
+      --muted: #6b6b6b;
+      --meta: var(--muted);
+      --border: #e5e5e5;
+      --border-soft: var(--border);
+      --accent: #2f6feb;
+      --accent-on: #ffffff;
+      --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+      --accent-active: color-mix(in oklab, var(--accent), black 14%);
+      --success: #17a34a;
+      --warn: #eab308;
+      --danger: #dc2626;
+      --font-display: "Inter", -apple-system, system-ui, sans-serif;
+      --font-body: "Inter", -apple-system, system-ui, sans-serif;
+      --font-mono: ui-monospace, "JetBrains Mono", monospace;
+      --text-xs: 12px;
+      --text-sm: 14px;
+      --text-base: 16px;
+      --text-lg: 20px;
+      --text-xl: 24px;
+      --text-2xl: 32px;
+      --text-3xl: 48px;
+      --text-4xl: 64px;
+      --leading-body: 1.5;
+      --leading-tight: 1.2;
+      --tracking-display: -0.01em;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-12: 48px;
+      --space-20: 80px;
+      --section-y-desktop: 80px;
+      --section-y-tablet: 48px;
+      --section-y-phone: 32px;
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-pill: 9999px;
+      --elev-flat: none;
+      --elev-ring: 0 0 0 1px var(--border);
+      --elev-raised: 0 2px 8px color-mix(in oklab, var(--fg), transparent 92%);
+      --focus-ring: 0 0 0 3px color-mix(in oklab, var(--accent), transparent 70%);
+      --motion-fast: 150ms;
+      --motion-base: 200ms;
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+      --container-max: 1200px;
+      --container-gutter-desktop: 24px;
+      --container-gutter-tablet: 16px;
+      --container-gutter-phone: 12px;
+
+      /* seed-compatible aliases */
+      --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+      --fg-soft: color-mix(in oklch, var(--fg) 6%, transparent);
+      --fs-h1: clamp(28px, 3.2vw, 36px);
+      --fs-h2: clamp(20px, 2.4vw, 24px);
+      --fs-h3: 16px;
+      --fs-lead: 15px;
+      --fs-body: 14px;
+      --fs-meta: 12px;
+      --gap-xs: 8px;
+      --gap-sm: 12px;
+      --gap-md: 20px;
+      --gap-lg: 24px;
+      --gap-xl: 32px;
+      --gap-2xl: 48px;
+      --container: 1440px;
+      --gutter: clamp(12px, 2vw, 24px);
+      --radius: var(--radius-sm);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; height: 100%; }
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--fs-body);
+      line-height: var(--leading-body);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; color: inherit; }
+    p { text-wrap: pretty; margin: 0; }
+    h1, h2, h3, h4 {
+      text-wrap: balance;
+      font-family: var(--font-display);
+      letter-spacing: var(--tracking-display);
+      margin: 0;
+    }
+
+    .container {
+      max-width: var(--container);
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+    .stack { display: flex; flex-direction: column; }
+    .stack > * + * { margin-top: var(--gap-md); }
+    .row { display: flex; align-items: center; gap: var(--gap-sm); }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--gap-md); }
+
+    .h1, h1 { font-size: var(--fs-h1); line-height: var(--leading-tight); font-weight: 600; }
+    .h2, h2 { font-size: var(--fs-h2); line-height: var(--leading-tight); font-weight: 600; }
+    .h3, h3 { font-size: var(--fs-h3); font-weight: 600; line-height: 1.3; }
+    .lead { font-size: var(--fs-lead); line-height: 1.5; color: var(--muted); max-width: 60ch; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0;
+    }
+    .meta { font-family: var(--font-mono); font-size: var(--fs-meta); color: var(--muted); }
+    .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .topnav {
+      position: sticky; top: 0; z-index: 20;
+      background: color-mix(in oklch, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topnav-inner {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--gap-md); padding-block: 12px; flex-wrap: wrap;
+    }
+    .topnav .logo {
+      font-family: var(--font-display);
+      font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
+    }
+    .topnav nav { display: flex; gap: var(--gap-lg); }
+    .topnav nav a { font-size: 13px; color: var(--muted); }
+    .topnav nav a:hover { color: var(--fg); }
+    .topnav nav a.is-active { color: var(--fg); font-weight: 500; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      border: 1px solid transparent;
+      font-size: var(--text-sm);
+      font-weight: 500;
+      letter-spacing: -0.005em;
+      transition: background var(--motion-fast) var(--ease-standard),
+                  border-color var(--motion-fast) var(--ease-standard),
+                  color var(--motion-fast) var(--ease-standard);
+    }
+    .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+    .btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--border); }
+    .btn-secondary:hover { border-color: var(--fg); }
+    .btn-ghost { background: transparent; color: var(--fg); border-color: transparent; padding-inline: 8px; }
+    .btn-ghost:hover { color: var(--accent); }
+    .btn-sm { padding: 7px 12px; font-size: 13px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: var(--radius-pill);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 3px 9px;
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .input, .textarea, .select {
+      width: 100%;
+      padding: 9px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: 14px;
+    }
+    .select { appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; padding-right: 28px; }
+    .input:focus, .textarea:focus, .select:focus {
+      outline: none;
+      box-shadow: var(--focus-ring);
+      border-color: var(--accent);
+    }
+    .textarea { min-height: 88px; resize: vertical; line-height: 1.5; font-family: var(--font-mono); font-size: 12px; }
+
+    .ds-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ds-table th, .ds-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    .ds-table th {
+      color: var(--muted); font-weight: 500;
+      font-family: var(--font-mono); font-size: 11px;
+      letter-spacing: 0.04em; text-transform: uppercase;
+    }
+    .ds-table tbody tr { cursor: pointer; transition: background var(--motion-fast) var(--ease-standard); }
+    .ds-table tbody tr:hover { background: var(--fg-soft); }
+    .ds-table tbody tr.is-selected { background: var(--accent-soft); }
+    .ds-table .num-col { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+
+    .rule { border: 0; border-top: 1px solid var(--border); margin: 0; }
+
+    /* ─── cockpit layout ───────────────────────────────────────────── */
+    .cockpit {
+      padding-block: var(--space-6);
+      min-height: calc(100vh - 57px);
+    }
+    .cockpit-head {
+      display: flex; flex-wrap: wrap; align-items: end;
+      justify-content: space-between; gap: var(--space-4);
+      margin-bottom: var(--space-5);
+    }
+    .cockpit-head .lead { margin-top: 6px; }
+
+    .health-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-5);
+    }
+    .health-cell {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+    }
+    .health-cell .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .health-cell .value {
+      font-family: var(--font-mono);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+    .health-cell .hint { margin-top: 8px; font-size: 12px; color: var(--muted); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.55fr) minmax(240px, 0.9fr);
+      grid-template-rows: minmax(380px, 1fr) auto;
+      gap: var(--space-4);
+      align-items: stretch;
+    }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      display: flex; flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--space-3);
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel-head h2 { font-size: 14px; letter-spacing: -0.01em; }
+    .panel-body { flex: 1; min-height: 0; overflow: auto; }
+    .panel-body.pad { padding: 12px 14px; }
+    .panel-foot {
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      background: color-mix(in oklch, var(--bg) 65%, var(--surface));
+    }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted); flex-shrink: 0;
+    }
+    .status-dot.ok { background: var(--success); }
+    .status-dot.warn { background: var(--warn); }
+    .status-dot.bad { background: var(--danger); }
+
+    .status-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 11px;
+      color: var(--muted);
+    }
+
+    .log-view {
+      margin: 0;
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: var(--fg);
+      min-height: 280px;
+    }
+    .log-line-err { color: var(--danger); }
+    .log-line-warn { color: color-mix(in oklab, var(--warn), var(--fg) 35%); }
+
+    .ai-box {
+      display: flex; flex-direction: column; gap: 12px;
+      height: 100%;
+    }
+    .ai-box .ai-empty {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .ai-box .ai-result h3 { margin-bottom: 8px; font-size: 14px; }
+    .ai-box .ai-result p { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+    .ai-box .ai-steps {
+      margin: 0; padding-left: 18px;
+      color: var(--fg); font-size: 13px;
+    }
+    .ai-box .ai-steps li + li { margin-top: 6px; }
+    .ai-box .ai-meta {
+      margin-top: auto;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .events-list { list-style: none; margin: 0; padding: 0; }
+    .events-list li {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+    }
+    .events-list li:last-child { border-bottom: 0; }
+    .events-list .when { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .events-list .what { color: var(--fg); }
+    .events-list .what span { color: var(--muted); display: block; margin-top: 2px; font-size: 12px; }
+
+    .exec-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .exec-out {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      min-height: 64px;
+      color: var(--fg);
+    }
+    .exec-out:empty::before {
+      content: "Вывод команды появится здесь.";
+      color: var(--muted);
+    }
+
+    .ns-control {
+      display: flex; align-items: center; gap: 10px;
+      min-width: min(320px, 100%);
+    }
+    .ns-control .field { flex: 1; min-width: 180px; }
+
+    .pagefoot {
+      padding-block: var(--space-6);
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    @media (max-width: 1100px) {
+      .workspace {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
+      }
+      .panel-pods { grid-column: 1 / -1; }
+      .panel-logs { grid-column: 1; }
+      .panel-ai { grid-column: 2; }
+      .panel-events { grid-column: 1; }
+      .panel-exec { grid-column: 2; }
+      .health-strip { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 720px) {
+      .workspace { grid-template-columns: 1fr; }
+      .panel-pods, .panel-logs, .panel-ai, .panel-events, .panel-exec { grid-column: 1; }
+      .health-strip { grid-template-columns: 1fr 1fr; }
+      .topnav nav { display: none; }
+      .exec-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 420px) {
+      .health-strip { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner">
+      <div class="row" style="gap: 14px;">
+        <span class="logo">WebTerm</span>
+        <span class="tag">Kubernetes · v1</span>
+      </div>
+      <nav aria-label="Разделы продукта">
+        <a href="#">Серверы</a>
+        <a href="#" class="is-active">Kubernetes</a>
+        <a href="#">Автоматизация</a>
+        <a href="#">Агенты</a>
+      </nav>
+      <span class="meta">кластер · prod-eu-1</span>
+    </div>
+  </header>
+
+  <main id="content">
+    <section class="cockpit" data-od-id="cockpit">
+      <div class="container">
+        <div class="cockpit-head">
+          <div>
+            <p class="eyebrow">Рабочее место</p>
+            <h1>Кокпит Kubernetes</h1>
+            <p class="lead">Один экран: namespace → под → логи → объяснение → команда. Без лишнего.</p>
+          </div>
+          <div class="ns-control">
+            <div class="field">
+              <label for="ns-select">Namespace</label>
+              <select id="ns-select" class="select" aria-label="Выбор namespace">
+                <option value="default">default</option>
+                <option value="production" selected>production</option>
+                <option value="staging">staging</option>
+                <option value="monitoring">monitoring</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="health-strip" aria-label="Быстрый health overview" id="health-strip">
+          <div class="health-cell">
+            <div class="label">Поды Ready</div>
+            <div class="value num" id="stat-ready">—</div>
+            <div class="hint" id="stat-ready-hint">из выбранного namespace</div>
+          </div>
+          <div class="health-cell">
+            <div class="label">Не Ready</div>
+            <div class="value num" id="stat-bad">—</div>
+            <div class="hint">CrashLoop / Pending</div>
+          </div>
+          <div class="health-cell">
+            <div class="label">События (15 мин)</div>
+            <div class="value num" id="stat-events">—</div>
+            <div class="hint">Warning + Normal</div>
+          </div>
+          <div class="health-cell">
+            <div class="label">Выбранный под</div>
+            <div class="value" style="font-size: 15px; font-family: var(--font-mono); word-break: break-all;" id="stat-pod">—</div>
+            <div class="hint" id="stat-pod-status">статус</div>
+          </div>
+        </div>
+
+        <div class="workspace">
+          <!-- Pods -->
+          <div class="panel panel-pods" data-od-id="pods">
+            <div class="panel-head">
+              <h2>Поды</h2>
+              <span class="meta" id="pod-count">0</span>
+            </div>
+            <div class="panel-body">
+              <table class="ds-table" id="pod-table">
+                <thead>
+                  <tr>
+                    <th>Имя</th>
+                    <th>Статус</th>
+                    <th class="num-col">Restarts</th>
+                  </tr>
+                </thead>
+                <tbody id="pod-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Logs -->
+          <div class="panel panel-logs" data-od-id="logs">
+            <div class="panel-head">
+              <div>
+                <h2>Логи</h2>
+                <p class="meta" id="log-title" style="margin-top: 2px;">Выберите под</p>
+              </div>
+              <div class="row">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-stream" aria-pressed="false">Стрим: выкл</button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <pre class="log-view" id="log-view" aria-live="polite">Выберите под слева, чтобы открыть логи.</pre>
+            </div>
+            <div class="panel-foot">
+              <div class="row-between" style="flex-wrap: wrap;">
+                <span class="meta" id="log-meta">хвост · 200 строк · контейнер app</span>
+                <button type="button" class="btn btn-primary btn-sm" id="btn-explain" disabled>Объяснить логи</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- AI -->
+          <div class="panel panel-ai" data-od-id="ai">
+            <div class="panel-head">
+              <h2>ИИ · разбор логов</h2>
+              <span class="tag">только explain</span>
+            </div>
+            <div class="panel-body pad">
+              <div class="ai-box" id="ai-box">
+                <p class="ai-empty" id="ai-empty">Нажмите «Объяснить логи» рядом с логом — здесь появится краткий разбор и шаги фикса. Без автодействий по кластеру.</p>
+                <div class="ai-result" id="ai-result" hidden>
+                  <h3 id="ai-headline"></h3>
+                  <p id="ai-summary"></p>
+                  <ol class="ai-steps" id="ai-steps"></ol>
+                  <div class="ai-meta" id="ai-meta"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Events -->
+          <div class="panel panel-events" data-od-id="events">
+            <div class="panel-head">
+              <h2>События</h2>
+              <span class="meta">namespace</span>
+            </div>
+            <div class="panel-body">
+              <ul class="events-list" id="events-list"></ul>
+            </div>
+          </div>
+
+          <!-- Exec -->
+          <div class="panel panel-exec" data-od-id="exec">
+            <div class="panel-head">
+              <h2>Exec</h2>
+              <span class="meta" id="exec-target">под не выбран</span>
+            </div>
+            <div class="panel-body pad">
+              <div class="exec-row">
+                <div class="field">
+                  <label for="exec-cmd">Команда в контейнере</label>
+                  <input id="exec-cmd" class="input" type="text" placeholder="например: ls -la /var/log" autocomplete="off" />
+                </div>
+                <button type="button" class="btn btn-secondary" id="btn-exec" disabled>Выполнить</button>
+              </div>
+              <div class="exec-out" id="exec-out" role="status"></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <footer class="pagefoot" data-od-id="footer">
+    <div class="container row-between">
+      <span>WebTerm · Kubernetes</span>
+      <span class="meta">prod-eu-1 · read / exec по правам</span>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const DATA = {
+        default: {
+          pods: [
+            { id: "web-api-7d9f", name: "web-api-7d9f4c-xk2m", status: "Running", ready: true, restarts: 0, container: "app" },
+            { id: "redis-0", name: "redis-0", status: "Running", ready: true, restarts: 1, container: "redis" }
+          ],
+          events: [
+            { t: "12:01", type: "Normal", text: "Pulled image redis:7.2", obj: "redis-0" },
+            { t: "11:58", type: "Normal", text: "Started container app", obj: "web-api-7d9f4c-xk2m" }
+          ],
+          logs: {
+            "web-api-7d9f": [
+              "2026-09-14T18:41:02Z INFO  listening on :8080",
+              "2026-09-14T18:41:08Z INFO  GET /healthz 200 1ms",
+              "2026-09-14T18:42:11Z INFO  GET /v1/items 200 18ms"
+            ],
+            "redis-0": [
+              "1:M 14 Sep 2026 18:40:01.112 * Ready to accept connections",
+              "1:M 14 Sep 2026 18:41:22.001 * Background saving started"
+            ]
+          },
+          explain: {
+            "web-api-7d9f": {
+              headline: "Под в норме, ошибок в хвосте нет",
+              summary: "Лог выглядит штатно: сервис поднялся и отвечает на health/API без исключений.",
+              steps: ["Ничего чинить не нужно.", "Если нужен инцидент — сверьте метрики latency отдельно."]
+            },
+            "redis-0": {
+              headline: "Redis в норме",
+              summary: "Контейнер принимает соединения, фоновый save без признаков OOM.",
+              steps: ["Мониторьте maxmemory, если нагрузка растёт.", "Проверьте persistence policy при следующем рестарте."]
+            }
+          }
+        },
+        production: {
+          pods: [
+            { id: "checkout-a1", name: "checkout-api-6bc8f9d7-a1p2", status: "CrashLoopBackOff", ready: false, restarts: 14, container: "app" },
+            { id: "checkout-b2", name: "checkout-api-6bc8f9d7-b2q9", status: "Running", ready: true, restarts: 2, container: "app" },
+            { id: "payments-0", name: "payments-worker-0", status: "Running", ready: true, restarts: 0, container: "worker" },
+            { id: "ingress-1", name: "ingress-nginx-controller-1", status: "Running", ready: true, restarts: 0, container: "controller" }
+          ],
+          events: [
+            { t: "18:44", type: "Warning", text: "Back-off restarting failed container app", obj: "checkout-api-6bc8f9d7-a1p2" },
+            { t: "18:43", type: "Warning", text: "Liveness probe failed: HTTP 500", obj: "checkout-api-6bc8f9d7-a1p2" },
+            { t: "18:40", type: "Normal", text: "Scaled replica set to 2", obj: "checkout-api" },
+            { t: "18:22", type: "Normal", text: "Assigned to node ip-10-0-12-8", obj: "payments-worker-0" }
+          ],
+          logs: {
+            "checkout-a1": [
+              "2026-09-14T18:42:01Z INFO  starting checkout-api",
+              "2026-09-14T18:42:01Z INFO  loading config from /etc/checkout/config.yaml",
+              "2026-09-14T18:42:02Z ERROR dial tcp 10.0.4.22:5432: connect: connection refused",
+              "2026-09-14T18:42:02Z FATAL database unavailable — exiting",
+              "2026-09-14T18:43:11Z ERROR Liveness probe failed: HTTP 500"
+            ],
+            "checkout-b2": [
+              "2026-09-14T18:40:12Z INFO  starting checkout-api",
+              "2026-09-14T18:40:13Z INFO  db connected host=pg-primary.production.svc",
+              "2026-09-14T18:41:02Z INFO  POST /checkout 201 44ms",
+              "2026-09-14T18:43:55Z WARN  retrying payment provider (1/3)"
+            ],
+            "payments-0": [
+              "2026-09-14T18:39:01Z INFO  worker ready queue=payments",
+              "2026-09-14T18:41:18Z INFO  job j-9921 succeeded"
+            ],
+            "ingress-1": [
+              "I0914 18:38:01.001 controller.go:222] Configuration changes detected, backend reload required.",
+              "I0914 18:38:01.220 controller.go:240] Backend successfully reloaded."
+            ]
+          },
+          explain: {
+            "checkout-a1": {
+              headline: "Падение из‑за недоступной БД",
+              summary: "Под уходит в CrashLoop: при старте не открывается TCP к Postgres 10.0.4.22:5432, затем liveness отдаёт 500.",
+              steps: [
+                "Проверьте Service/Endpoints Postgres в production и что 10.0.4.22 жив.",
+                "Сверьте DATABASE_URL / secret у checkout-api с актуальным хостом.",
+                "После восстановления БД удалите под или дождитесь успешного рестарта — restarts уже 14."
+              ]
+            },
+            "checkout-b2": {
+              headline: "Под жив, есть ретраи к провайдеру",
+              summary: "Старт и БД в порядке. В хвосте — предупреждение о ретрае payment provider, это пока не фатально.",
+              steps: [
+                "Смотрите метрики ошибок провайдера и DLQ.",
+                "Если ретраи растут — откройте логи payments-worker рядом."
+              ]
+            },
+            "payments-0": {
+              headline: "Воркер обрабатывает очередь штатно",
+              summary: "Нет ошибок в хвосте; последний job завершился успешно.",
+              steps: ["Действий не требуется.", "При задержке очереди смотрите lag в метриках."]
+            },
+            "ingress-1": {
+              headline: "Контроллер перезагрузил backend",
+              summary: "Обычный reload конфигурации, признаков ошибки нет.",
+              steps: ["Ничего чинить не нужно."]
+            }
+          }
+        },
+        staging: {
+          pods: [
+            { id: "web-stg", name: "web-6f4d-stg", status: "Running", ready: true, restarts: 0, container: "app" },
+            { id: "migrate", name: "migrate-job-9xk", status: "Completed", ready: true, restarts: 0, container: "job" },
+            { id: "canary", name: "api-canary-0", status: "Pending", ready: false, restarts: 0, container: "app" }
+          ],
+          events: [
+            { t: "17:10", type: "Warning", text: "FailedScheduling: 0/3 nodes available", obj: "api-canary-0" },
+            { t: "16:55", type: "Normal", text: "Job completed", obj: "migrate-job-9xk" }
+          ],
+          logs: {
+            "web-stg": ["INFO ready", "GET / 200"],
+            "migrate": ["Running migrations…", "OK applied 3"],
+            "canary": ["(под ещё не запущен — логов нет)"]
+          },
+          explain: {
+            "web-stg": {
+              headline: "Staging web в норме",
+              summary: "Короткий хвост без ошибок.",
+              steps: ["Ок для smoke-проверки."]
+            },
+            "migrate": {
+              headline: "Миграции прошли",
+              summary: "Job завершился, применено 3 миграции.",
+              steps: ["Проверьте схему на staging перед промоушеном."]
+            },
+            "canary": {
+              headline: "Под Pending — нет места на нодах",
+              summary: "Событие FailedScheduling: 0/3 nodes available. Логов приложения ещё нет.",
+              steps: [
+                "Проверьте requests/limits canary и свободные ресурсы узлов.",
+                "Либо ослабьте affinity/taints, либо добавьте capacity."
+              ]
+            }
+          }
+        },
+        monitoring: {
+          pods: [
+            { id: "prom", name: "prometheus-0", status: "Running", ready: true, restarts: 0, container: "prometheus" },
+            { id: "grafana", name: "grafana-5c7d-x", status: "Running", ready: true, restarts: 0, container: "grafana" }
+          ],
+          events: [
+            { t: "15:02", type: "Normal", text: "SuccessfulCreate", obj: "prometheus-0" }
+          ],
+          logs: {
+            "prom": ["level=info msg=\"Server is ready to receive web requests.\""],
+            "grafana": ["logger=http.server t=2026-09-14 msg=\"HTTP Server Listen\" address=[::]:3000"]
+          },
+          explain: {
+            "prom": {
+              headline: "Prometheus готов принимать запросы",
+              summary: "Стартовый лог без ошибок.",
+              steps: ["Действий не требуется."]
+            },
+            "grafana": {
+              headline: "Grafana слушает :3000",
+              summary: "HTTP-сервер поднят.",
+              steps: ["Действий не требуется."]
+            }
+          }
+        }
+      };
+
+      const el = {
+        ns: document.getElementById("ns-select"),
+        tbody: document.getElementById("pod-tbody"),
+        podCount: document.getElementById("pod-count"),
+        logView: document.getElementById("log-view"),
+        logTitle: document.getElementById("log-title"),
+        logMeta: document.getElementById("log-meta"),
+        btnExplain: document.getElementById("btn-explain"),
+        btnStream: document.getElementById("btn-stream"),
+        btnExec: document.getElementById("btn-exec"),
+        execCmd: document.getElementById("exec-cmd"),
+        execOut: document.getElementById("exec-out"),
+        execTarget: document.getElementById("exec-target"),
+        events: document.getElementById("events-list"),
+        aiEmpty: document.getElementById("ai-empty"),
+        aiResult: document.getElementById("ai-result"),
+        aiHeadline: document.getElementById("ai-headline"),
+        aiSummary: document.getElementById("ai-summary"),
+        aiSteps: document.getElementById("ai-steps"),
+        aiMeta: document.getElementById("ai-meta"),
+        statReady: document.getElementById("stat-ready"),
+        statBad: document.getElementById("stat-bad"),
+        statEvents: document.getElementById("stat-events"),
+        statPod: document.getElementById("stat-pod"),
+        statPodStatus: document.getElementById("stat-pod-status")
+      };
+
+      let selectedPodId = null;
+      let streaming = false;
+      let streamTimer = null;
+
+      function statusClass(status, ready) {
+        if (status === "CrashLoopBackOff" || status === "Failed") return "bad";
+        if (status === "Pending" || status === "Unknown") return "warn";
+        if (ready) return "ok";
+        return "warn";
+      }
+
+      function renderEvents(ns) {
+        const list = DATA[ns].events;
+        el.events.innerHTML = list.map(function (e) {
+          return (
+            '<li>' +
+              '<span class="when">' + e.t + '</span>' +
+              '<div class="what">' +
+                '<strong>' + e.type + '</strong> · ' + e.text +
+                '<span>' + e.obj + '</span>' +
+              '</div>' +
+            '</li>'
+          );
+        }).join("");
+        el.statEvents.textContent = String(list.length);
+      }
+
+      function renderHealth(ns) {
+        const pods = DATA[ns].pods;
+        const ready = pods.filter(function (p) { return p.ready; }).length;
+        const bad = pods.length - ready;
+        el.statReady.textContent = String(ready);
+        el.statBad.textContent = String(bad);
+        el.podCount.textContent = String(pods.length);
+      }
+
+      function colorizeLogs(lines) {
+        return lines.map(function (line) {
+          var cls = "";
+          if (/ERROR|FATAL|Failed|crash/i.test(line)) cls = "log-line-err";
+          else if (/WARN|Warning|Back-off/i.test(line)) cls = "log-line-warn";
+          return cls
+            ? '<span class="' + cls + '">' + escapeHtml(line) + "</span>"
+            : escapeHtml(line);
+        }).join("\n");
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function clearAi() {
+        el.aiEmpty.hidden = false;
+        el.aiResult.hidden = true;
+        el.aiSteps.innerHTML = "";
+      }
+
+      function showLogs(ns, pod) {
+        var lines = (DATA[ns].logs[pod.id] || ["(нет логов)"]).slice();
+        el.logView.innerHTML = colorizeLogs(lines);
+        el.logTitle.textContent = pod.name + " · " + pod.container;
+        el.logMeta.textContent = "хвост · " + lines.length + " строк · контейнер " + pod.container;
+        el.btnExplain.disabled = false;
+        el.btnExec.disabled = false;
+        el.execTarget.textContent = pod.name;
+        el.statPod.textContent = pod.name;
+        el.statPodStatus.textContent = pod.status + (pod.ready ? " · Ready" : " · NotReady");
+        clearAi();
+      }
+
+      function selectPod(ns, podId) {
+        selectedPodId = podId;
+        var pod = DATA[ns].pods.find(function (p) { return p.id === podId; });
+        if (!pod) return;
+        Array.prototype.forEach.call(el.tbody.querySelectorAll("tr"), function (tr) {
+          tr.classList.toggle("is-selected", tr.getAttribute("data-id") === podId);
+        });
+        showLogs(ns, pod);
+      }
+
+      function renderPods(ns) {
+        var pods = DATA[ns].pods;
+        el.tbody.innerHTML = pods.map(function (p) {
+          var sc = statusClass(p.status, p.ready);
+          return (
+            '<tr data-id="' + p.id + '" tabindex="0">' +
+              '<td><span class="row" style="gap:8px;"><span class="status-dot ' + sc + '"></span><span class="num">' + escapeHtml(p.name) + '</span></span></td>' +
+              '<td><span class="status-chip"><span class="status-dot ' + sc + '"></span>' + escapeHtml(p.status) + '</span></td>' +
+              '<td class="num-col num">' + p.restarts + '</td>' +
+            '</tr>'
+          );
+        }).join("");
+
+        Array.prototype.forEach.call(el.tbody.querySelectorAll("tr"), function (tr) {
+          tr.addEventListener("click", function () {
+            selectPod(ns, tr.getAttribute("data-id"));
+          });
+          tr.addEventListener("keydown", function (ev) {
+            if (ev.key === "Enter" || ev.key === " ") {
+              ev.preventDefault();
+              selectPod(ns, tr.getAttribute("data-id"));
+            }
+          });
+        });
+
+        renderHealth(ns);
+        renderEvents(ns);
+
+        var preferred = pods.find(function (p) { return !p.ready; }) || pods[0];
+        if (preferred) selectPod(ns, preferred.id);
+        else {
+          selectedPodId = null;
+          el.logView.textContent = "В namespace нет подов.";
+          el.btnExplain.disabled = true;
+          el.btnExec.disabled = true;
+          el.execTarget.textContent = "под не выбран";
+          el.statPod.textContent = "—";
+          el.statPodStatus.textContent = "статус";
+          clearAi();
+        }
+      }
+
+      function explain() {
+        var ns = el.ns.value;
+        if (!selectedPodId) return;
+        var pack = DATA[ns].explain[selectedPodId];
+        if (!pack) return;
+        el.aiEmpty.hidden = true;
+        el.aiResult.hidden = false;
+        el.aiHeadline.textContent = pack.headline;
+        el.aiSummary.textContent = pack.summary;
+        el.aiSteps.innerHTML = pack.steps.map(function (s) {
+          return "<li>" + escapeHtml(s) + "</li>";
+        }).join("");
+        el.aiMeta.textContent = "контекст: " + ns + " / " + selectedPodId + " · режим: explain-only";
+      }
+
+      function runExec() {
+        var ns = el.ns.value;
+        var pod = DATA[ns].pods.find(function (p) { return p.id === selectedPodId; });
+        if (!pod) return;
+        var cmd = (el.execCmd.value || "").trim();
+        if (!cmd) {
+          el.execOut.textContent = "Введите команду.";
+          return;
+        }
+        var stamp = new Date().toISOString().slice(11, 19);
+        var fake;
+        if (/^ls/.test(cmd)) {
+          fake = "config.yaml\napp.log\ncache/\n";
+        } else if (/hostname/.test(cmd)) {
+          fake = pod.name + "\n";
+        } else if (/env|printenv/.test(cmd)) {
+          fake = "NAMESPACE=" + ns + "\nPOD=" + pod.name + "\nCONTAINER=" + pod.container + "\n";
+        } else {
+          fake = "ok · simulated exit 0\n";
+        }
+        el.execOut.textContent =
+          "[" + stamp + "] " + pod.name + " $ " + cmd + "\n" + fake;
+      }
+
+      function toggleStream() {
+        streaming = !streaming;
+        el.btnStream.setAttribute("aria-pressed", streaming ? "true" : "false");
+        el.btnStream.textContent = streaming ? "Стрим: вкл" : "Стрим: выкл";
+        if (streamTimer) {
+          clearInterval(streamTimer);
+          streamTimer = null;
+        }
+        if (!streaming) return;
+        streamTimer = setInterval(function () {
+          if (!selectedPodId) return;
+          var ns = el.ns.value;
+          var lines = DATA[ns].logs[selectedPodId];
+          if (!lines) return;
+          var tick = new Date().toISOString();
+          lines.push(tick + " INFO  heartbeat ok");
+          if (lines.length > 40) lines.shift();
+          var pod = DATA[ns].pods.find(function (p) { return p.id === selectedPodId; });
+          if (pod) showLogs(ns, pod);
+        }, 2200);
+      }
+
+      el.ns.addEventListener("change", function () {
+        if (streamTimer) {
+          clearInterval(streamTimer);
+          streamTimer = null;
+          streaming = false;
+          el.btnStream.setAttribute("aria-pressed", "false");
+          el.btnStream.textContent = "Стрим: выкл";
+        }
+        el.execOut.textContent = "";
+        renderPods(el.ns.value);
+      });
+      el.btnExplain.addEventListener("click", explain);
+      el.btnExec.addEventListener("click", runExec);
+      el.execCmd.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") runExec();
+      });
+      el.btnStream.addEventListener("click", toggleStream);
+
+      renderPods(el.ns.value);
+    })();
+  </script>
+</body>
+</html>
+

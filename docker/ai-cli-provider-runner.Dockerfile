@@ -16,15 +16,15 @@ RUN python -m venv --without-pip /opt/venv
 
 COPY --chown=10001:10001 app/ai_runtime /app/app/ai_runtime
 COPY --chown=10001:10001 ai_cli_runner_manager /app/ai_cli_runner_manager
-RUN install -d -o 10001 -g 10001 /credentials /credentials/codex /credentials/grok /workspace
+RUN install -d -o 10001 -g 10001 /credentials /credentials/codex /credentials/grok /credentials/cursor /workspace
 
 USER 10001:10001
 WORKDIR /workspace
 ENTRYPOINT ["python", "-m", "ai_cli_runner_manager.provider_runtime"]
 
-# Codex and Grok are deliberately separate release artifacts. The runner
+# Codex, Grok, and Cursor are deliberately separate release artifacts. The runner
 # manager selects one immutable digest from the requested provider target, so a
-# compromised or stale provider image cannot impersonate the other provider.
+# compromised or stale provider image cannot impersonate another provider.
 FROM runtime-base AS codex
 USER root
 COPY ai_cli_runner_manager/provider-requirements.lock /app/provider-requirements.lock
@@ -49,4 +49,22 @@ RUN test -n "${GROK_BUILD_URL}" \
     && echo "${GROK_BUILD_SHA256}  /tmp/grok" | sha256sum --check --strict - \
     && install -o root -g root -m 0755 /tmp/grok /usr/local/bin/grok \
     && rm -f /tmp/grok
+USER 10001:10001
+
+FROM runtime-base AS cursor
+ARG CURSOR_AGENT_URL
+ARG CURSOR_AGENT_SHA256
+USER root
+# Cursor agent CLI is supplied as a reviewed official artifact. Empty inputs,
+# non-HTTPS URLs, malformed checksums, download failures and checksum mismatches
+# all fail the image build before the binary is installed.
+RUN test -n "${CURSOR_AGENT_URL}" \
+    && test -n "${CURSOR_AGENT_SHA256}" \
+    && case "${CURSOR_AGENT_URL}" in https://*) ;; *) exit 1 ;; esac \
+    && echo "${CURSOR_AGENT_SHA256}" | grep -Eq '^[0-9a-f]{64}$' \
+    && curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+        "${CURSOR_AGENT_URL}" -o /tmp/agent \
+    && echo "${CURSOR_AGENT_SHA256}  /tmp/agent" | sha256sum --check --strict - \
+    && install -o root -g root -m 0755 /tmp/agent /usr/local/bin/agent \
+    && rm -f /tmp/agent
 USER 10001:10001

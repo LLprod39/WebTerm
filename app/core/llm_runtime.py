@@ -109,6 +109,8 @@ def _is_ollama_connect_error(e: Exception) -> bool:
 
 
 def _is_retryable_error(e: Exception) -> bool:
+    if getattr(e, "retryable", None) is True:
+        return True
     if _is_timeout_error(e):
         return True
     try:
@@ -120,6 +122,10 @@ def _is_retryable_error(e: Exception) -> bool:
         pass
     s = str(e).lower()
     if "timeout" in s or "timed out" in s:
+        return True
+    if "cursor runtime failed" in s or "cursor runtime timed out" in s:
+        return True
+    if "codex runtime failed" in s or "grok runtime failed" in s:
         return True
     code = getattr(e, "status_code", None) or getattr(e, "code", None)
     if code is not None:

@@ -106,6 +106,13 @@ class AgentContext:
     session_context: str = ""
     recent_activity_context: str = ""
     ui_context_payload: dict[str, Any] = field(default_factory=dict)
+    seed_history: list[dict[str, Any]] = field(default_factory=list)
+    seed_todos: list[dict[str, Any]] = field(default_factory=list)
+    pending_user_messages: list[str] = field(default_factory=list)
+    continuation: bool = False
+    run_primary_shell: Callable[..., Awaitable[Any]] | None = None
+    primary_cwd: str = ""
+    primary_cwd_getter: Callable[[], str] | None = None
 
     # Tuning knobs.
     max_iterations: int = DEFAULT_MAX_ITERATIONS
@@ -148,7 +155,12 @@ async def run_agent_loop(
         open_target=ctx.open_target,
         dry_run=ctx.dry_run,
         sudo_policy=ctx.sudo_policy,
+        run_primary_shell=ctx.run_primary_shell,
+        primary_cwd=ctx.primary_cwd,
+        primary_cwd_getter=ctx.primary_cwd_getter,
     )
+    if ctx.seed_todos:
+        tool_ctx.todos[:] = [dict(item) for item in ctx.seed_todos if isinstance(item, dict)]
 
     system_prompt = build_system_prompt(
         tools=tools,
@@ -157,9 +169,10 @@ async def run_agent_loop(
         rules_context=ctx.rules_context,
         memory_context=ctx.memory_context,
         sudo_policy=ctx.sudo_policy,
+        continuation=bool(ctx.continuation),
     )
 
-    history: list[dict[str, Any]] = []
+    history: list[dict[str, Any]] = list(ctx.seed_history or [])
     iterations = 0
     tool_calls = 0
     final_text = ""
@@ -176,6 +189,8 @@ async def run_agent_loop(
                 "context": dict(ctx.ui_context_payload) if ctx.ui_context_payload else {},
             }
         )
+        if tool_ctx.todos:
+            await ctx.emit({"type": "agent_todo_update", "todos": list(tool_ctx.todos)})
 
     try:
         while iterations < ctx.max_iterations:
@@ -193,6 +208,11 @@ async def run_agent_loop(
                 break
 
             iterations += 1
+            pending = list(ctx.pending_user_messages)
+            if pending:
+                del ctx.pending_user_messages[: len(pending)]
+                for message in pending:
+                    history.append({"turn": iterations, "role": "user", "content": message})
             user_prompt = build_user_turn_prompt(
                 user_message=ctx.user_message,
                 history=history,
@@ -323,7 +343,6 @@ async def run_agent_loop(
     except asyncio.CancelledError:
         stopped = True
         stop_reason = "cancelled"
-        raise
     finally:
         todos_out = [Todo.model_validate(t) for t in tool_ctx.todos]
         # Always produce a non-empty Russian partial summary when the loop
@@ -365,6 +384,7 @@ async def run_agent_loop(
         stopped=stopped,
         stop_reason=stop_reason,
         todos=todos_out,
+        history=list(history),
     )
 
 

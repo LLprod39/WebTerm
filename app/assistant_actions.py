@@ -22,6 +22,7 @@ class AssistantActionContext:
     input_payload: dict[str, Any]
     request: Any | None = None
     source: str = "assistant_chat"
+    channel: str = ""
 
 
 AssistantActionHandler = Callable[[AssistantActionContext], dict[str, Any]]

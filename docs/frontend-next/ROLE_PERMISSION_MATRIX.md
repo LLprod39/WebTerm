@@ -1,18 +1,40 @@
 # Roles and permission matrix
 
-Источник: core_ui/views/auth_views.py, core_ui/access.py, decorators, scoped research/GOVERNANCE_CONTRACTS.md.
+Источник: `core_ui/models/access.py` (`FEATURE_CHOICES`), `core_ui/access.py`, `frontend/src/lib/accessUiText.ts` (`ACCESS_FEATURE_META`), FeatureGate в SPA.
 
-| Область | Требование |
-|---|---|
-| Shell / проекты | authenticated session |
-| Servers / monitoring / terminal | features.servers + server capabilities для действия |
-| Playbooks / agents | backend automation permissions и ownership |
-| Studio / pipeline | features.studio + active project + owner/staff; websocket owner-only |
-| Kubernetes | features.kubernetes; admin sessions имеют отдельные grants/expiry |
-| Access / audit | features.settings + is_staff |
-| AI routing | can_manage_ai_routing; staff_default недостаточен |
-| Plugins | features.plugins (содержит staff + release flag) |
-| Server memory | owner; lifecycle admin endpoints дополнительно is_staff |
+Коды прав (**не переименовывать**) — это feature keys API. Подписи в UI локализуются на фронте.
 
-Нельзя считать скрытие кнопок защитой backend. Ошибка 403 видна пользователю, 401 завершает локальную сессию и очищает query cache. Tri-state override null означает наследовать, false — запретить, true — разрешить. Tenant switch отменяет и очищает предыдущие запросы.
+| Key | RU UI | Что открывает |
+|---|---|---|
+| `servers` | Серверы | `/servers`, терминал; servers CRUD/ops |
+| `dashboard` | Панель | `/dashboard` |
+| `agents` | Агенты | `/agents`, отчёты запусков |
+| `chat` | Чат (ассистент) | `/chat` |
+| `automation` | Автоматизация (плейбуки) | `/automation/*` |
+| `ai_connections_personal` | AI-подключения (личные) | Settings → AI (личные) |
+| `ai_connections_admin` | AI-подключения (админ workspace) | Workspace AI providers (opt-in) |
+| `studio` | Студия | `/studio` hub |
+| `studio_pipelines` | Студия: Пайплайны | pipeline editor API |
+| `studio_runs` | Студия: Запуски | runs API |
+| `studio_agents` | Студия: Агент-конфиги | `/api/studio/agents/` |
+| `studio_skills` | Студия: Скиллы | skills API |
+| `studio_mcp` | Студия: MCP | MCP registry |
+| `studio_notifications` | Студия: Уведомления | Studio alerts |
+| `kubernetes` | Кубернетес | `/kubernetes*` inventory + approvals |
+| `kubernetes_admin_read` | Kubernetes: углублённый просмотр | live YAML/logs/watch (opt-in) |
+| `kubernetes_admin_write` | Kubernetes: изменение кластера | apply/patch/scale/delete (opt-in) |
+| `kubernetes_break_glass` | Kubernetes: аварийный доступ (exec) | exec/port-forward (opt-in) |
+| `kubernetes_secret_read` | Kubernetes: чтение секретов | secret values (opt-in + env) |
+| `mars` | MARS (диагностика) | `/mars*` (opt-in) |
+| `settings` | Настройки | `/settings/*` (кроме AI-connections) |
+| `orchestrator` | Оркестратор (legacy) | legacy tools API (не основной Chat) |
+| `knowledge_base` | База знаний | RAG / KB API |
+| `web_research` | Веб-исследование (инструмент чата) | chat web tool (opt-in) |
 
+**Opt-in даже для staff** (`EXPLICIT_OPT_IN_FEATURES`): k8s admin/break/secret, mars, web_research, `ai_connections_admin`.
+
+**Профиль «Кастомный»** = `access_profile: "custom"`, не «тип права». Роль «Администратор» = `is_staff`.
+
+**Plugins** в матрице выдачи Users нет (staff + release flag отдельно).
+
+Общие правила: скрытие кнопок ≠ защита backend. 403 виден пользователю, 401 сбрасывает сессию. Tri-state override: inherit / allow / deny.

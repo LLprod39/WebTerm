@@ -13,6 +13,7 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 from channels.layers import get_channel_layer
+from django.db.models import Q
 from django.utils import timezone
 from loguru import logger
 
@@ -117,6 +118,8 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
     """Return an active turn or a recent pre-persistence terminal acknowledgement."""
 
     def _load() -> dict[str, Any] | None:
+        from core_ui.services.operator_dispatch import release_expired_operator_dispatches
+
         stale_before = timezone.now() - timedelta(seconds=90)
         ChatTurnState.objects.filter(
             session_id=chat_id,
@@ -124,11 +127,13 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
             status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
             updated_at__lt=stale_before,
         ).update(status=ChatTurnState.STATUS_FAILED, error="worker_heartbeat_lost")
+        release_expired_operator_dispatches(session_id=chat_id)
+        now = timezone.now()
         dispatch = (
-            OperatorTurnDispatch.objects.filter(
-                session_id=chat_id,
-                session__user_id=user_id,
-                status__in={OperatorTurnDispatch.STATUS_QUEUED, OperatorTurnDispatch.STATUS_CLAIMED},
+            OperatorTurnDispatch.objects.filter(session_id=chat_id, session__user_id=user_id)
+            .filter(
+                Q(status=OperatorTurnDispatch.STATUS_QUEUED)
+                | Q(status=OperatorTurnDispatch.STATUS_CLAIMED, lease_expires_at__gt=now)
             )
             .order_by("-id")
             .first()

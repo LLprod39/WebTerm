@@ -10,10 +10,12 @@ class ChatSession(models.Model):
     KIND_MANUAL = "manual"
     KIND_DUTY = "duty"
     KIND_INCIDENT = "incident"
+    KIND_TELEGRAM = "telegram"
     KIND_CHOICES = [
         (KIND_MANUAL, "Manual"),
         (KIND_DUTY, "Duty"),
         (KIND_INCIDENT, "Incident"),
+        (KIND_TELEGRAM, "Telegram"),
     ]
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="chat_sessions")

@@ -123,6 +123,72 @@ Outcome: failed — LLM call failed
 
 
 @pytest.mark.django_db
+def test_report_v2_does_not_remap_llm_error_just_because_fallback_says_partial():
+    user, client = _owner_client("report-v2-no-wording-remap")
+    report = """# Проверка логов: итог по журналу
+
+> Цель: снять логи. Полный LLM-отчёт недоступен.
+
+- ssh_execute: docker logs nginx
+
+**Статус:** ⚠️ Частичный успех
+"""
+    run = _run(user, status=AgentRun.STATUS_FAILED, report=report)
+    run.ai_analysis = "LLM call failed"
+    run.execution_outcome = {
+        "outcome": "failed",
+        "status": "failed",
+        "reason": "LLM call failed",
+        "exit_reason": "llm_error",
+        "tool_call_count": 1,
+        "report_generation": {"status": "failed", "error": "LLM call failed"},
+    }
+    run.save(update_fields=["ai_analysis", "execution_outcome"])
+
+    payload = client.get(f"/servers/api/agents/runs/{run.id}/report/v2/").json()
+
+    assert payload["lifecycle"]["status"] == "failed"
+    assert payload["outcome"]["status"] == "failed"
+    assert payload["outcome"]["exit_reason"] == "llm_error"
+    assert payload["report_generation"]["status"] == "ready_with_fallback"
+
+
+@pytest.mark.django_db
+def test_report_v2_ready_report_not_downgraded_by_loop_llm_error():
+    user, client = _owner_client("report-v2-ready-report")
+    report = """# Логи сняты частично
+
+> Команды на сервере уже отработали, цикл оборвался на LLM.
+
+- docker logs nginx --tail 100
+
+**Статус:** ⚠️ Частичный успех
+"""
+    run = _run(user, status=AgentRun.STATUS_COMPLETED, report=report)
+    run.execution_outcome = {
+        "outcome": "partial",
+        "status": "completed",
+        "reason": "Agent loop aborted on the LLM; partial work preserved",
+        "exit_reason": "llm_error",
+        "tool_call_count": 6,
+        "report_generation": {
+            "status": "ready",
+            "generated_at": timezone.now().isoformat(),
+            "error": "",
+        },
+    }
+    run.save(update_fields=["execution_outcome"])
+
+    payload = client.get(f"/servers/api/agents/runs/{run.id}/report/v2/").json()
+
+    assert payload["outcome"]["status"] == "partial"
+    assert payload["outcome"]["exit_reason"] == "llm_error"
+    assert payload["report_generation"]["status"] == "ready"
+    assert payload["report_generation"]["error"] == ""
+    assert payload["report_generation"]["label"] == "Отчёт готов"
+
+
+@pytest.mark.django_db
 def test_legacy_adapter_is_read_only_and_understands_numbered_sections():
     user, client = _owner_client("report-v2-legacy")
     run = _run(

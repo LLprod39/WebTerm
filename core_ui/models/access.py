@@ -18,6 +18,8 @@ FEATURE_CHOICES = [
     ("studio_skills", "Studio Skills"),
     ("studio_mcp", "Studio MCP"),
     ("studio_notifications", "Studio Notifications"),
+    ("telegram_notifications", "Telegram Notifications"),
+    ("telegram_assistant", "Telegram AI Assistant"),
     ("kubernetes", "Kubernetes"),
     ("kubernetes_admin_read", "Kubernetes Admin Read"),
     ("kubernetes_admin_write", "Kubernetes Admin Write"),
@@ -32,7 +34,14 @@ FEATURE_CHOICES = [
 
 # Features allowed by default for non-staff users (aligned with pilot_user).
 # Settings remain opt-in, and the admin dashboard stays staff-only.
-DEFAULT_ALLOWED_FEATURES = {"servers", "agents", "dashboard", "chat"}
+DEFAULT_ALLOWED_FEATURES = {
+    "servers",
+    "agents",
+    "dashboard",
+    "chat",
+    "telegram_notifications",
+    "telegram_assistant",
+}
 # Features that must be granted explicitly even for staff users.
 EXPLICIT_OPT_IN_FEATURES = {
     "kubernetes",

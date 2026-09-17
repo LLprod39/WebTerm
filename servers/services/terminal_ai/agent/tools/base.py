@@ -123,9 +123,26 @@ class ToolContext:
     scratch: dict[str, Any] = field(default_factory=dict)
 
     # --- session flags -----------------------------------------------------
+    # Optional primary-target shell runner (hidden Nova PTY). When set,
+    # ``shell`` on the session's own server uses this instead of conn.run().
+    run_primary_shell: Callable[[str, int], Awaitable[Any]] | None = None
+    primary_cwd: str = ""
+    primary_cwd_getter: Callable[[], str] | None = None
     dry_run: bool = False
-    default_timeout: float = 30.0
     sudo_policy: str = "disabled"
+
+    def live_primary_cwd(self) -> str:
+        """Hidden-PTY cwd when available, otherwise the snapshot from loop start."""
+
+        getter = self.primary_cwd_getter
+        if getter is not None:
+            try:
+                value = str(getter() or "").strip()
+                if value:
+                    return value
+            except Exception:
+                pass
+        return str(self.primary_cwd or "").strip()
 
     # ----------------------------------------------------------------------
     # Target resolution helpers

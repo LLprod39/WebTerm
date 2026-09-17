@@ -81,7 +81,57 @@ _HOST_ALIASES: dict[str, str] = {
     "redis": "redis",
     "бастион": "bastion",
     "bastion": "bastion",
+    "никитавм": "nikitavm",
+    "никита": "nikita",
 }
+
+# Basic Russian phonetic transliteration for host matching (никитавм ↔ nikitavm).
+_CYR_TO_LAT: dict[str, str] = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "e",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "sch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+}
+
+
+def transliterate_cyrillic(text: str) -> str:
+    """Map Cyrillic letters to a simple Latin form for inventory name matching."""
+    out: list[str] = []
+    for ch in str(text or "").lower():
+        if ch in _CYR_TO_LAT:
+            out.append(_CYR_TO_LAT[ch])
+        else:
+            out.append(ch)
+    return "".join(out)
 
 
 def user_wants_inventory_card(user_message: str | None) -> bool:
@@ -115,7 +165,7 @@ def user_wants_named_host_action(user_message: str | None) -> bool:
 
 
 def normalize_host_hint(token: str | None) -> str:
-    """Map «графаны» → grafana, trim junk."""
+    """Map «графаны» → grafana, «никитавм» → nikitavm, trim junk."""
     raw = str(token or "").strip().strip("«»\"'.,);:")
     if not raw:
         return ""
@@ -130,6 +180,13 @@ def normalize_host_hint(token: str | None) -> str:
                 return _HOST_ALIASES[stem]
             if stem + "а" in _HOST_ALIASES:
                 return _HOST_ALIASES[stem + "а"]
+    # Cyrillic → Latin so «никитавм» matches inventory name nikitavm
+    if any(("а" <= ch <= "я") or ch == "ё" for ch in low):
+        latin = transliterate_cyrillic(low)
+        if latin and latin != low:
+            if latin in _HOST_ALIASES:
+                return _HOST_ALIASES[latin]
+            return latin
     return raw
 
 
@@ -206,18 +263,19 @@ def prefer_resolve_server_for_message(
 
 
 def server_matches_query(server, q: str) -> bool:
-    """Loose name/host match: grafana ↔ grafana-01, графаны → grafana."""
+    """Loose name/host match: grafana ↔ grafana-01, графаны → grafana, никитавм → nikitavm."""
     q_raw = (q or "").strip()
     if not q_raw:
         return True
     q_norm = normalize_host_hint(q_raw).lower()
     q_low = q_raw.lower()
+    q_latin = transliterate_cyrillic(q_low)
     name = (getattr(server, "name", None) or "").lower()
     host = (getattr(server, "host", None) or "").lower()
     tags = str(getattr(server, "tags", "") or "").lower()
     if str(getattr(server, "id", "")) == q_low:
         return True
-    for token in {q_low, q_norm}:
+    for token in {q_low, q_norm, q_latin}:
         if not token:
             continue
         if token in name or token in host or token in tags:

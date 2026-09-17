@@ -370,19 +370,8 @@ def retry_pending_credential_cleanup(*, limit: int = 10) -> int:
             locked = AIProviderConnection.objects.select_for_update().get(pk=connection_id)
             if locked.enabled or locked.status != AIProviderConnection.STATUS_DISABLED:
                 continue
-            locked.status = AIProviderConnection.STATUS_REVOKED
-            locked.credential_ref = ""
-            locked.health = {key: value for key, value in (locked.health or {}).items() if key != "cleanup_pending"}
-            locked.last_error_code = ""
-            locked.save(
-                update_fields=[
-                    "status",
-                    "credential_ref",
-                    "health",
-                    "last_error_code",
-                    "updated_at",
-                ]
-            )
+            # Credentials cleaned — drop the row instead of leaving a revoked stub.
+            locked.delete()
             cleaned += 1
     return cleaned
 
@@ -484,11 +473,14 @@ def _allowed_verification_uri(target_id: str, value: str) -> bool:
     parsed = urlparse(value)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         return False
-    allowed_hosts = (
-        {"auth.openai.com", "chatgpt.com", "openai.com"}
-        if target_id == "codex_subscription"
-        else {"accounts.x.ai", "x.ai", "grok.com"}
-    )
+    if target_id == "codex_subscription":
+        allowed_hosts = {"auth.openai.com", "chatgpt.com", "openai.com"}
+    elif target_id == "grok_subscription":
+        allowed_hosts = {"accounts.x.ai", "x.ai", "grok.com"}
+    elif target_id == "cursor_subscription":
+        allowed_hosts = {"cursor.com", "cursor.sh", "authenticator.cursor.sh"}
+    else:
+        return False
     hostname = parsed.hostname.lower()
     return any(hostname == host or hostname.endswith(f".{host}") for host in allowed_hosts)
 

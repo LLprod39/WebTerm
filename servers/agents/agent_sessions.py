@@ -22,7 +22,8 @@ from typing import Any
 import asyncssh
 from loguru import logger
 
-from app.agent_kernel.sandbox.ephemeral_runner import agent_command_uses_docker
+from app.agent_kernel.sandbox.ephemeral_runner import agent_command_uses_docker, probe_agent_command_docker
+from app.agent_kernel.sandbox.runtime_errors import AgentCommandRuntimeError
 from app.sudo_policy import normalize_sudo_policy
 from servers.agents.agent_sessions_exec import AgentSessionExecMixin
 from servers.monitoring.monitor import _build_connect_kwargs
@@ -122,6 +123,12 @@ class AgentSessionManager(AgentSessionExecMixin):
         validate_pilot_ssh_destination(server.host, server.port)
 
         if agent_command_uses_docker():
+            try:
+                docker_version = await probe_agent_command_docker()
+            except AgentCommandRuntimeError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — preflight must fail closed
+                raise AgentCommandRuntimeError(str(exc)) from exc
             session.connected_at = time.monotonic()
             self.connections[server.id] = session
             self._name_to_id[server.name.lower()] = server.id
@@ -133,9 +140,15 @@ class AgentSessionManager(AgentSessionExecMixin):
                         "server_name": server.name,
                         "event": "connected",
                         "runtime": "ephemeral_container",
+                        "docker_version": docker_version,
                     },
                 )
-            logger.info("Agent isolated session ready: {} ({})", server.name, server.host)
+            logger.info(
+                "Agent isolated session ready: {} ({}) docker={}",
+                server.name,
+                server.host,
+                docker_version,
+            )
             return
 
         kwargs = await _build_connect_kwargs(server)

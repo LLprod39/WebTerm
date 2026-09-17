@@ -34,6 +34,7 @@ elif POLICY_KIND == "ai-cli":
     POLICY_CONFIG = AiCliProxyPolicyConfig(
         codex_runner_image=os.environ["AI_CLI_CODEX_RUNNER_IMAGE"],
         grok_runner_image=os.environ["AI_CLI_GROK_RUNNER_IMAGE"],
+        cursor_runner_image=os.environ["AI_CLI_CURSOR_RUNNER_IMAGE"],
         egress_network=os.environ["AI_CLI_DOCKER_NETWORK"],
         credential_volume_prefix=os.getenv("AI_CLI_CREDENTIAL_VOLUME_PREFIX", "webterm-ai-cli-cred-"),
         egress_proxy_url=os.getenv("AI_CLI_EGRESS_PROXY_URL", "http://ai-cli-egress-proxy:3128"),

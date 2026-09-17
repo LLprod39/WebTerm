@@ -54,6 +54,56 @@ def _staff_required(request) -> JsonResponse | None:
     return None
 
 
+def _user_owns_provider(user, provider: K8sProvider) -> bool:
+    return bool(user and getattr(provider, "created_by_id", None) == getattr(user, "id", None))
+
+
+def _provider_manage_denied(request, provider: K8sProvider | None = None, *, kind: str | None = None) -> JsonResponse | None:
+    """Staff can manage any provider. Regular users may manage only their own kubeconfig (or legacy Rancher) connections."""
+    if getattr(request.user, "is_staff", False):
+        return None
+    resolved_kind = kind or (provider.kind if provider else "")
+    allowed_self_serve = {K8sProvider.KIND_KUBECONFIG, K8sProvider.KIND_RANCHER}
+    if resolved_kind and resolved_kind not in allowed_self_serve:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Devtron and Fleet connections are admin-only. Add your own cluster with a kubeconfig file.",
+                "code": "admin_required",
+            },
+            status=403,
+        )
+    if provider is not None and getattr(provider, "scope", K8sProvider.SCOPE_PERSONAL) == K8sProvider.SCOPE_PLATFORM:
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Platform connections are admin-only.",
+                "code": "admin_required",
+            },
+            status=403,
+        )
+    if provider is not None and not _user_owns_provider(request.user, provider):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "You can only manage cluster connections that you added.",
+                "code": "owner_required",
+            },
+            status=403,
+        )
+    return None
+
+
+def _providers_queryset_for_user(user):
+    qs = K8sProvider.objects.all()
+    if getattr(user, "is_staff", False):
+        return qs
+    return qs.filter(
+        created_by=user,
+        kind__in=[K8sProvider.KIND_KUBECONFIG, K8sProvider.KIND_RANCHER],
+    ).exclude(scope=K8sProvider.SCOPE_PLATFORM)
+
+
 def _json_body(request) -> tuple[dict[str, Any], JsonResponse | None]:
     try:
         data = json.loads(request.body.decode("utf-8") or "{}")
@@ -105,15 +155,24 @@ def _provider_payload_from_body(
     secret_ref = str(data.get("secret_ref", provider.secret_ref if provider else "") or "").strip()
     secret_value = str(data.get("secret_value") or "").strip() if "secret_value" in data else ""
     labels = data.get("labels", provider.labels if provider else {})
+    scope = str(data.get("scope", provider.scope if provider else K8sProvider.SCOPE_PERSONAL) or "").strip()
 
     if not name:
         return {}, "", "name is required."
     if kind not in dict(K8sProvider.KIND_CHOICES):
-        return {}, "", "kind must be rancher or devtron."
-    if not base_url.startswith(("https://", "http://")):
+        return {}, "", "kind must be rancher, devtron, or kubeconfig."
+    if kind == K8sProvider.KIND_KUBECONFIG:
+        # base_url may be filled from kubeconfig server after parse; allow empty on create when secret_value present
+        if base_url and not base_url.startswith(("https://", "http://")):
+            return {}, "", "base_url must start with http:// or https://."
+        if not base_url:
+            base_url = "https://kubeconfig.local"
+    elif not base_url.startswith(("https://", "http://")):
         return {}, "", "base_url must start with http:// or https://."
     if auth_mode not in dict(K8sProvider.AUTH_CHOICES):
         return {}, "", "auth_mode is invalid."
+    if scope not in dict(K8sProvider.SCOPE_CHOICES):
+        scope = K8sProvider.SCOPE_PERSONAL
     if not isinstance(labels, dict):
         return {}, "", "labels must be an object."
     if auth_mode == K8sProvider.AUTH_NONE and secret_value:
@@ -133,6 +192,7 @@ def _provider_payload_from_body(
             "enabled": enabled,
             "auth_mode": auth_mode,
             "secret_ref": secret_ref,
+            "scope": scope,
             "labels": labels,
         },
         secret_value,

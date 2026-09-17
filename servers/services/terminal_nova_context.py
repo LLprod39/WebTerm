@@ -72,6 +72,8 @@ async def collect_nova_context_bundle(
     session_context: dict[str, Any] | None,
     live_activity: list[dict[str, Any]] | None,
     ai_settings: dict[str, Any] | None,
+    briefing_entries: list[dict[str, Any]] | None = None,
+    occupancy_note: str = "",
 ):
     include_session_context = bool((ai_settings or {}).get("nova_session_context_enabled", True))
     include_recent_activity = bool((ai_settings or {}).get("nova_recent_activity_enabled", True))
@@ -95,6 +97,8 @@ async def collect_nova_context_bundle(
         persisted_activity=persisted_activity,
         include_session_context=include_session_context,
         include_recent_activity=include_recent_activity,
+        briefing_entries=list(briefing_entries or []),
+        occupancy_note=occupancy_note,
     )
 
 

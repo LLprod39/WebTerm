@@ -51,7 +51,12 @@ async def finalize_successful_run(
         exit_reason,
         iteration,
     )
-    final_report = await engine._generate_final_report(history, iterations_log)
+    final_report = await engine._generate_final_report(
+        history,
+        iterations_log,
+        exit_reason=exit_reason,
+        tool_calls=tool_calls_log,
+    )
     final_report = await engine.hook_manager.run_finished(
         final_report,
         verification_summary,

@@ -113,6 +113,11 @@ def register_operator_mutate_tools() -> None:
                     "server_ids": {"type": "array", "items": {"type": "integer"}},
                     "check_mode": {"type": "boolean"},
                     "concurrency": {"type": "integer"},
+                    "extra_vars": {
+                        "type": "object",
+                        "description": "Runtime Ansible variables required by the playbook (key/value).",
+                        "additionalProperties": True,
+                    },
                 },
                 "required": ["playbook_id", "server_ids"],
             },

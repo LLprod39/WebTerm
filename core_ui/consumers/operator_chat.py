@@ -37,6 +37,11 @@ from core_ui.services.operator_turn_runtime import (
     stop_active_turn,
 )
 
+# Keep English key stable for clients that match the string; RU is the user-facing copy.
+TURN_BUSY_MESSAGE = (
+    "Сейчас уже выполняется другой ответ. Дождитесь завершения или нажмите Стоп."
+)
+
 
 class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
     def __init__(self, *args, **kwargs):
@@ -159,7 +164,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Session not found"})
             return
         if await is_chat_busy(self._chat_id):
-            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            await self.send_json({"type": "error", "message": TURN_BUSY_MESSAGE})
             return
 
         session = await self._get_session()
@@ -167,9 +172,6 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
         if session is None or user is None:
             await self.send_json({"type": "error", "message": "Session not found"})
             return
-
-        # Optimistic ack so UI can show thinking before first model token
-        await broadcast_operator_event(self._chat_id, {"type": "turn_started", "chat_id": self._chat_id})
 
         started = await start_message_turn(
             chat_id=self._chat_id,
@@ -180,7 +182,12 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             provider_binding=content.get("provider_binding"),
         )
         if not started:
-            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            await self.send_json({"type": "error", "message": TURN_BUSY_MESSAGE})
+            return
+
+        # Ack only after durable enqueue so a race cannot leave the UI "thinking"
+        # with a Turn already in progress error and no real dispatch.
+        await broadcast_operator_event(self._chat_id, {"type": "turn_started", "chat_id": self._chat_id})
 
     async def _handle_stop(self):
         if self._chat_id is None:
@@ -206,7 +213,7 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Session not found"})
             return
         if await is_chat_busy(self._chat_id):
-            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            await self.send_json({"type": "error", "message": TURN_BUSY_MESSAGE})
             return
 
         user = await self._get_user()
@@ -215,10 +222,6 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Action not found"})
             return
 
-        await broadcast_operator_event(
-            self._chat_id,
-            {"type": "turn_started", "chat_id": self._chat_id, "phase": "action"},
-        )
         started = await start_action_turn(
             chat_id=self._chat_id,
             action=action,
@@ -227,7 +230,13 @@ class OperatorChatConsumer(AsyncJsonWebsocketConsumer):
             thinking=thinking,
         )
         if not started:
-            await self.send_json({"type": "error", "message": "Turn already in progress"})
+            await self.send_json({"type": "error", "message": TURN_BUSY_MESSAGE})
+            return
+
+        await broadcast_operator_event(
+            self._chat_id,
+            {"type": "turn_started", "chat_id": self._chat_id, "phase": "action"},
+        )
 
     @database_sync_to_async
     def _has_feature(self) -> bool:

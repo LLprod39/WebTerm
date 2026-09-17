@@ -58,7 +58,7 @@ def test_render_pipeline_workers_have_runtime_env():
         ),
         "mini-prod-scheduled-pipelines": "python manage.py run_scheduled_pipelines --daemon --interval 60",
         "mini-prod-monitor": "python manage.py run_monitor --quick-interval 300 --deep-interval 600 --concurrency 5",
-        "mini-prod-telegram-bot": "python manage.py run_telegram_bot",
+        "mini-prod-telegram-bot": "python manage.py run_telegram_hub",
     }
 
     for name, command in expected.items():
@@ -173,7 +173,7 @@ def test_compose_production_studio_workers_are_declared():
         "${HISTORY_PRUNE_BATCH_SIZE:-1000}",
     ]
     assert "python manage.py run_monitor" in " ".join(services["monitor"]["command"])
-    assert services["telegram-bot"]["command"] == ["sh", "-lc", "python manage.py run_telegram_bot"]
+    assert services["telegram-bot"]["command"] == ["sh", "-lc", "python manage.py run_telegram_hub"]
     assert services["telegram-bot"]["profiles"] == ["telegram-bot"]
     assert services["telegram-bot"]["environment"]["TELEGRAM_BOT_POLL_TOKEN"].startswith("${TELEGRAM_BOT_TOKEN:")
     assert services["scheduled-pipelines"]["environment"]["TELEGRAM_BOT_POLL_TOKEN"] == ""

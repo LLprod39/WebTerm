@@ -10,6 +10,7 @@ from kubernetes_ops.models import (
     K8sAppRef,
     K8sAuditEvent,
     K8sCluster,
+    K8sClusterAccess,
     K8sFleetBundle,
     K8sPodRef,
     K8sProvider,
@@ -136,6 +137,7 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
 
     def test_kubernetes_reader_can_use_read_only_surface_and_get_policy_metadata(self):
         user = self.create_user("k8s-reader")
+        K8sClusterAccess.objects.create(cluster=self.cluster, user=user, granted_by=user, namespaces=[])
         self.client.force_login(user)
 
         for route_name, kwargs in self.read_only_routes():
@@ -149,6 +151,9 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
         self.assertTrue(payload["access_policy"]["can_read_log_snapshots"])
         self.assertFalse(payload["access_policy"]["can_audit_deeplinks"])
         self.assertFalse(payload["access_policy"]["can_admin_providers"])
+        self.assertTrue(payload["access_policy"]["can_connect_clusters"])
+        self.assertTrue(payload["access_policy"]["can_manage_own_rancher_providers"])
+        self.assertTrue(payload["access_policy"]["can_manage_own_connections"])
         self.assertFalse(payload["access_policy"]["can_create_diagnosis_draft"])
         self.assertTrue(payload["access_policy"]["can_request_action_approval"])
         self.assertFalse(payload["access_policy"]["can_execute_approved_action"])
@@ -167,27 +172,87 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
         self.assertIn("pod.exec", payload["access_policy"]["blocked_capabilities"])
         overview = self.client.get(reverse("api_kubernetes_overview")).json()
         self.assertEqual(overview["access_policy"], payload["access_policy"])
-        self.assertEqual(overview["providers"][0]["base_url"], "")
-        self.assertFalse(overview["providers"][0]["connection_details_visible"])
+        self.assertEqual(overview["providers"], [])
         self.assertEqual(overview["clusters"][0]["links"], {})
         self.assertEqual(overview["apps"][0]["links"], {})
         self.assertEqual(overview["workloads"][0]["links"], {})
-        self.assertEqual(overview["fleet_rollouts"][0]["links"], {})
+        self.assertEqual(overview["fleet_rollouts"], [])
         self.assertFalse(overview["clusters"][0]["external_links_policy"]["visible"])
         self.assertNotIn("rancher.example.test", json.dumps(overview))
         self.assertNotIn("devtron.example.test", json.dumps(overview))
 
-    def test_kubernetes_reader_cannot_read_provider_config(self):
+    def test_kubernetes_reader_without_grant_cannot_see_platform_cluster(self):
+        user = self.create_user("k8s-no-grant")
+        self.client.force_login(user)
+        listed = self.client.get(reverse("api_kubernetes_clusters"))
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["clusters"], [])
+        detail = self.client.get(
+            reverse("api_kubernetes_cluster_detail", kwargs={"cluster_id": f"cluster_{self.cluster.id}"})
+        )
+        self.assertEqual(detail.status_code, 404)
+
+    def test_kubernetes_reader_lists_only_own_providers_and_cannot_read_shared_provider_detail(self):
         user = self.create_user("k8s-provider-config-reader")
         self.client.force_login(user)
 
-        for route_name, kwargs in (
-            ("api_kubernetes_providers", {}),
-            ("api_kubernetes_provider_detail", {"provider_id": self.provider.id}),
-        ):
-            response = self.client.get(reverse(route_name, kwargs=kwargs))
-            self.assertEqual(response.status_code, 403, route_name)
-            self.assertEqual(response.json()["code"], "admin_required", route_name)
+        listed = self.client.get(reverse("api_kubernetes_providers"))
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["providers"], [])
+
+        detail = self.client.get(
+            reverse("api_kubernetes_provider_detail", kwargs={"provider_id": self.provider.id})
+        )
+        self.assertEqual(detail.status_code, 403)
+        self.assertEqual(detail.json()["code"], "owner_required")
+
+    def test_kubernetes_reader_can_create_and_sync_own_rancher_provider(self):
+        user = self.create_user("k8s-self-serve")
+        self.client.force_login(user)
+
+        create = self.client.post(
+            reverse("api_kubernetes_providers"),
+            data=json.dumps(
+                {
+                    "name": "my-rancher",
+                    "kind": K8sProvider.KIND_RANCHER,
+                    "base_url": "https://rancher.mine.test",
+                    "auth_mode": K8sProvider.AUTH_NONE,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(create.status_code, 201, create.content)
+        provider_id = create.json()["provider"]["id"]
+        self.assertTrue(create.json()["provider"]["is_owner"])
+        self.assertEqual(create.json()["provider"]["base_url"], "https://rancher.mine.test")
+
+        sync = self.client.post(
+            reverse("api_kubernetes_provider_sync", kwargs={"provider_id": provider_id}),
+            data=json.dumps({"dry_run": True}),
+            content_type="application/json",
+        )
+        self.assertEqual(sync.status_code, 200, sync.content)
+
+        forbidden_devtron = self.client.post(
+            reverse("api_kubernetes_providers"),
+            data=json.dumps(
+                {
+                    "name": "my-devtron",
+                    "kind": K8sProvider.KIND_DEVTRON,
+                    "base_url": "https://devtron.mine.test",
+                    "auth_mode": K8sProvider.AUTH_NONE,
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(forbidden_devtron.status_code, 403)
+        self.assertEqual(forbidden_devtron.json()["code"], "admin_required")
+
+        readiness = self.client.get(reverse("api_kubernetes_readiness")).json()
+        self.assertTrue(readiness["access_policy"]["can_connect_clusters"])
+        self.assertTrue(readiness["access_policy"]["can_manage_own_rancher_providers"])
+        self.assertFalse(readiness["access_policy"]["can_admin_providers"])
 
     def test_kubernetes_staff_can_read_sanitized_external_fallback_links(self):
         user = self.create_user("k8s-staff-fallback-links", is_staff=True)
@@ -271,7 +336,8 @@ class KubernetesOpsPermissionMatrixTests(TestCase):
                 content_type="application/json",
             )
             self.assertEqual(response.status_code, 403, route_name)
-            self.assertEqual(response.json()["code"], "admin_required", route_name)
+            # Devtron / sync-all → admin_required; touching someone else's Rancher → owner_required.
+            self.assertIn(response.json()["code"], {"admin_required", "owner_required"}, route_name)
 
     def test_studio_diagnosis_requires_studio_feature_but_not_provider_admin(self):
         user = self.create_user("k8s-diagnosis-reader", grant_studio=True, is_staff=False)

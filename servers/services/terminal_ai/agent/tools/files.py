@@ -119,6 +119,10 @@ class ReadFileTool:
         path = args.path.strip()
         if not path:
             return tool_err("empty path")
+        if target is not None and target.is_primary:
+            from servers.services.terminal_ai.session_context import resolve_remote_path
+
+            path = resolve_remote_path(path, ctx.live_primary_cwd())
 
         q_path = shlex.quote(path)
         # Combined stat + dd call to fetch metadata + bytes in one round-trip.
@@ -228,6 +232,10 @@ class EditFileTool:
         path = args.path.strip()
         if not path:
             return tool_err("empty path")
+        if target is not None and target.is_primary:
+            from servers.services.terminal_ai.session_context import resolve_remote_path
+
+            path = resolve_remote_path(path, ctx.live_primary_cwd())
 
         if ctx.dry_run:
             return tool_ok(
@@ -357,6 +365,10 @@ class ListFilesTool:
             return err
 
         path = args.path.strip() or "."
+        if target is not None and target.is_primary:
+            from servers.services.terminal_ai.session_context import resolve_remote_path
+
+            path = resolve_remote_path(path, ctx.live_primary_cwd()) or path
         q_path = shlex.quote(path)
         flags = "-la" if args.all_files else "-l"
         cmd = f"ls {flags} --time-style=+%s {q_path} 2>&1"

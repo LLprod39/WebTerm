@@ -1,0 +1,27 @@
+import { type NodeProps } from "@xyflow/react";
+import { Send } from "lucide-react";
+import { NodeBase } from "./NodeBase";
+import { useI18n } from "@/lib/i18n";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeRuntimeProps } from "./runtimeProps";
+
+export function TelegramNode({ data, selected }: NodeProps) {
+  const { lang } = useI18n();
+  const d = data as Record<string, unknown>;
+  const chatId = d?.chat_id as string | undefined;
+  return (
+    <NodeBase
+      selected={selected}
+      label={(d?.label as string) || getNodeTypeInfo("output/telegram", lang).label}
+      icon={<Send className="h-4 w-4 text-success" />}
+      description={chatId ? `${localize(lang, "Чат", "Chat")}: ${chatId}` : localize(lang, "Настройте bot token и chat ID", "Configure bot token & chat ID")}
+      accentColor="border-success/40"
+      categoryColor="hsl(var(--success))"
+      sourcePorts={[
+        { id: "success", label: getNodeBranchLabel("success", lang), className: "!bg-success/70 hover:!bg-success", labelClassName: "text-success" },
+        { id: "error", label: getNodeBranchLabel("error", lang), className: "!bg-destructive/70 hover:!bg-destructive", labelClassName: "text-destructive" },
+      ]}
+      {...getNodeRuntimeProps(d)}
+    />
+  );
+}

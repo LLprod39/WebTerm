@@ -85,12 +85,33 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
     queryset = playbooks_visible_to(ctx.user).order_by("name", "id")
     if query:
         queryset = queryset.filter(Q(name__icontains=query) | Q(description__icontains=query))
-    rows = [_catalog_row(playbook) for playbook in queryset[:limit]]
+    total = queryset.count()
+    show_limit = min(limit, 12)
+    rows = [_catalog_row(playbook) for playbook in queryset[:show_limit]]
+    hint = (
+        "Summarize the catalog with «показаны N из M». "
+        "List up to 8 names (id · name). Use operator.resolve_playbook for details; "
+        "operator.run_playbook when the user asked to launch."
+    )
+    if getattr(ctx, "channel", "") == "telegram":
+        from core_ui.services.operator_channel import telegram_reply_hint
+
+        hint = telegram_reply_hint(show_in_chat=True)
     return {
+        "ok": True,
+        "ui_table": False,
         "count": len(rows),
-        "query": query,
+        "total": total,
+        "shown": len(rows),
+        "query": query or None,
+        "summary": {
+            "total": total,
+            "shown": len(rows),
+            "names": [f"{row['id']} · {row['name']}" for row in rows[:8]],
+        },
         "playbooks": rows,
-        "reply_hint": "Summarize the accessible catalog or ask which playbook to inspect. Use operator.resolve_playbook for full details.",
+        "reply_hint": hint,
+        "target_url": "/automation/playbooks",
     }
 
 
@@ -234,8 +255,16 @@ def resolve_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
         "count": len(safe_matches),
         "matches": safe_matches,
         "error": (
-            "Multiple accessible playbooks match; ask the user to choose one of these names."
+            "Multiple accessible playbooks match. If the user asked to RUN one and a single "
+            "name is an obvious best match, call operator.run_playbook with that playbook_id. "
+            "Otherwise ask the user to choose one of these names (numbered list)."
             if len(safe_matches) > 1
             else "No accessible playbook matches this name."
+        ),
+        "reply_hint": (
+            "Ambiguous playbook matches. Prefer an obvious unique name when the user said «запусти»; "
+            "else numbered choices id · name."
+            if len(safe_matches) > 1
+            else "No match — ask for a clearer playbook name."
         ),
     }

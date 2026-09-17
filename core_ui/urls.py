@@ -24,6 +24,7 @@ from .views import (
     settings_activity_views,
     settings_config_views,
     terminal_preferences,
+    user_notifications,
 )
 
 
@@ -102,6 +103,11 @@ urlpatterns = [
         name="api_ai_provider_grant_detail",
     ),
     path(
+        "api/ai/providers/principals/",
+        ai_provider_views.api_ai_provider_principals,
+        name="api_ai_provider_principals",
+    ),
+    path(
         "api/ai/providers/preferences/",
         ai_provider_views.api_ai_provider_preferences,
         name="api_ai_provider_preferences",
@@ -171,6 +177,13 @@ urlpatterns = [
     ),
     # Terminal preferences
     path("api/terminal/preferences/", terminal_preferences.api_terminal_preferences, name="api_terminal_preferences"),
+    # Personal notification destinations (Telegram chat id)
+    path("api/me/notifications/", user_notifications.api_my_notifications, name="api_my_notifications"),
+    path(
+        "api/me/notifications/test-telegram/",
+        user_notifications.api_my_notifications_test_telegram,
+        name="api_my_notifications_test_telegram",
+    ),
     # Dashboard layout (Distinct path to avoid conflicts)
     path(
         "api/dashboard-custom/layout/<str:dashboard_type>/",

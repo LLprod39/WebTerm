@@ -74,6 +74,10 @@ def sync_kubernetes_providers(
             results.append(sync_rancher_provider(provider, dry_run=dry_run, transport=transport))
         elif provider.kind == K8sProvider.KIND_DEVTRON:
             results.append(sync_devtron_provider(provider, dry_run=dry_run, transport=transport))
+        elif provider.kind == K8sProvider.KIND_KUBECONFIG:
+            from kubernetes_ops.services.kubeconfig import sync_kubeconfig_provider
+
+            results.append(sync_kubeconfig_provider(provider, dry_run=dry_run))
     return results
 
 

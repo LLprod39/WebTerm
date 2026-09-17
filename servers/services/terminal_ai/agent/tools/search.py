@@ -75,6 +75,11 @@ class GrepTool:
         pattern = args.pattern.strip()
         if not pattern:
             return tool_err("empty pattern")
+        search_path = args.path
+        if target is not None and target.is_primary:
+            from servers.services.terminal_ai.session_context import resolve_remote_path
+
+            search_path = resolve_remote_path(args.path, ctx.live_primary_cwd())
 
         flags = ["-rn"]
         if args.regex:
@@ -89,7 +94,7 @@ class GrepTool:
         # Limit output server-side to avoid huge transfers.
         max_out = int(args.max_matches) * (MAX_MATCH_LEN + 100)
         flag_str = " ".join(flags)
-        cmd = f"grep {flag_str} -- {shlex.quote(pattern)} {shlex.quote(args.path)} 2>/dev/null | head -c {max_out}"
+        cmd = f"grep {flag_str} -- {shlex.quote(pattern)} {shlex.quote(search_path)} 2>/dev/null | head -c {max_out}"
 
         try:
             res = await asyncio.wait_for(conn.run(cmd, check=False), timeout=GREP_TIMEOUT_SEC)
@@ -128,7 +133,7 @@ class GrepTool:
 
         if not matches:
             return tool_ok(
-                f"No matches for {pattern!r} in {args.path} on {target.name}.",
+                f"No matches for {pattern!r} in {search_path} on {target.name}.",
                 data={
                     "pattern": pattern,
                     "target": target.name,
@@ -137,7 +142,7 @@ class GrepTool:
             )
 
         summary = (
-            f"Matches for {pattern!r} in {args.path} on {target.name}: "
+            f"Matches for {pattern!r} in {search_path} on {target.name}: "
             f"{len(matches)}{' (capped)' if len(matches) == args.max_matches else ''}"
         )
         body = "\n".join(f"  {m['path']}:{m['line']}: {m['text']}" for m in matches)

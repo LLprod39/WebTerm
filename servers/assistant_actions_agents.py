@@ -25,7 +25,36 @@ from servers.services.server_query import (
 def list_agents(ctx: AssistantActionContext) -> dict:
     mode = str(ctx.input_payload.get("mode") or "").strip() or None
     agents = list_agents_for_user(ctx.user, mode_filter=mode)
-    return {"agents": agents, "count": len(agents), "target_url": "/agents"}
+    total = len(agents)
+    show_limit = 12
+    slim = agents[:show_limit]
+    hint = (
+        "Summarize agents with «показаны N из M». Max ~8 names. "
+        "Do not dump full configs or say the answer was truncated."
+    )
+    if getattr(ctx, "channel", "") == "telegram":
+        from core_ui.services.operator_channel import telegram_reply_hint
+
+        hint = telegram_reply_hint(show_in_chat=True)
+    return {
+        "ok": True,
+        "ui_table": False,
+        "agents": slim,
+        "count": len(slim),
+        "total": total,
+        "shown": len(slim),
+        "summary": {
+            "total": total,
+            "shown": len(slim),
+            "names": [
+                str(item.get("name") or item.get("id") or "")
+                for item in slim[:8]
+                if isinstance(item, dict)
+            ],
+        },
+        "reply_hint": hint,
+        "target_url": "/agents",
+    }
 
 
 def _human_agent_name(name: str, goal: str, description: str = "") -> str:

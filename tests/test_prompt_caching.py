@@ -76,6 +76,20 @@ class TestPlannerPromptParts:
         system, user = build_planner_prompt_parts(**self._base_args())
         assert full == f"{system}\n\n{user}"
 
+    def test_session_briefing_and_occupancy_in_user_prompt(self):
+        from servers.services.terminal_ai.prompts import build_planner_prompt_parts
+
+        _system, user = build_planner_prompt_parts(
+            **self._base_args(),
+            session_briefing="Оператор перешёл в каталог `/tmp`.",
+            occupancy_note="Оператор сейчас набирает: `echo hello`.",
+        )
+        assert "ЧТО УЖЕ ПРОИСХОДИЛО" in user
+        assert "перешёл в каталог" in user
+        assert "СТРОКА ВВОДА ОБЩЕГО ТЕРМИНАЛА" in user
+        assert "echo hello" in user
+        assert "перешёл в каталог" not in _system
+
     def test_dry_run_block_in_system(self):
         from servers.services.terminal_ai.prompts import build_planner_prompt_parts
 

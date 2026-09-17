@@ -59,10 +59,27 @@ def test_count_consecutive_tool_failures():
     log = [
         {"result": "ok exit_code=0"},
         {"result": "Blocked: dangerous"},
-        {"result": "SSH error: timeout"},
+        {"result": "CONTROL_PLANE: канал выполнения недоступен"},
     ]
     assert count_consecutive_tool_failures(log) == 2
     assert count_consecutive_tool_failures([{"result": "all good exit_code=0"}]) == 0
+
+
+def test_hard_stop_on_control_plane_error():
+    from servers.agents.agent_runtime_guidance import should_hard_stop_control_plane
+
+    assert should_hard_stop_control_plane(
+        tool="ssh_execute",
+        error_kind="control_plane",
+        observation="CONTROL_PLANE: docker.sock",
+        success=False,
+    )
+    assert not should_hard_stop_control_plane(
+        tool="ssh_execute",
+        error_kind="",
+        observation="exit_code=0",
+        success=True,
+    )
 
 
 def test_budget_profiles_complex_above_standard():
@@ -85,3 +102,5 @@ def test_agent_engine_runner_wires_mid_run_replan():
     assert "should_inject_mid_run_replan" in src
     assert "mid_run_replan_message" in src
     assert "_mid_run_replan_injected" in src
+    assert "should_hard_stop_control_plane" in src
+    assert "EXIT_CONTROL_PLANE" in src

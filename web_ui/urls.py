@@ -30,6 +30,7 @@ admin.site.index_title = "Управление"
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/settings/readiness/", settings_readiness_views.api_settings_readiness, name="api_settings_readiness"),
+    path("", include("telegram_hub.urls")),
     path("", include("core_ui.urls")),
     path("servers/", include("servers.urls")),
     path("api/studio/", include("studio.urls")),

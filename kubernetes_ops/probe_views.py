@@ -8,7 +8,9 @@ from loguru import logger
 from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from kubernetes_ops.models import K8sAuditEvent, K8sProvider
+from kubernetes_ops.services.kubeconfig import probe_kubeconfig_provider
 from kubernetes_ops.services.provider_probe import probe_kubernetes_provider, probe_result_payload
+from kubernetes_ops.views_helpers import _provider_manage_denied
 
 
 def _safe_json(handler):
@@ -19,27 +21,41 @@ def _safe_json(handler):
         return internal_error_response(None, exc)
 
 
-def _staff_required(request) -> JsonResponse | None:
-    if not getattr(request.user, "is_staff", False):
-        return JsonResponse(
-            {"success": False, "error": "Admin access is required.", "code": "admin_required"}, status=403
-        )
-    return None
-
-
 @login_required
 @require_feature("kubernetes")
 @require_http_methods(["POST"])
 def api_kubernetes_provider_probe(request, provider_id: int):
     def handler():
-        denied = _staff_required(request)
-        if denied:
-            return denied
         provider = K8sProvider.objects.filter(id=provider_id).first()
         if provider is None:
             return JsonResponse({"success": False, "error": "Provider not found"}, status=404)
-        result = probe_kubernetes_provider(provider)
-        payload = probe_result_payload(result)
+        denied = _provider_manage_denied(request, provider)
+        if denied:
+            return denied
+        if provider.kind == K8sProvider.KIND_KUBECONFIG:
+            kc = probe_kubeconfig_provider(provider)
+            payload = {
+                "provider_id": provider.id,
+                "provider_name": provider.name,
+                "provider_kind": provider.kind,
+                "success": kc.success,
+                "status": kc.status,
+                "path": "/api/v1/namespaces",
+                "item_count": kc.namespace_count,
+                "payload_keys": [],
+                "duration_ms": kc.duration_ms,
+                "checked_at": kc.checked_at,
+                "error": kc.error,
+                "server": kc.server,
+                "context": kc.context,
+            }
+            success = kc.success
+            status = kc.status
+        else:
+            result = probe_kubernetes_provider(provider)
+            payload = probe_result_payload(result)
+            success = result.success
+            status = result.status
         K8sAuditEvent.objects.create(
             user=request.user,
             username_snapshot=getattr(request.user, "username", ""),
@@ -48,13 +64,10 @@ def api_kubernetes_provider_probe(request, provider_id: int):
             payload={
                 "provider_id": provider.id,
                 "kind": provider.kind,
-                "status": result.status,
-                "success": result.success,
-                "path": result.path,
-                "item_count": result.item_count,
-                "duration_ms": result.duration_ms,
+                "status": status,
+                "success": success,
             },
         )
-        return JsonResponse({"success": result.success, "probe": payload})
+        return JsonResponse({"success": success, "probe": payload})
 
     return _safe_json(handler)

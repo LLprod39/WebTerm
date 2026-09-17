@@ -136,6 +136,22 @@ class TerminalAiExecutionOperations:
             output_snippet=output,
             exit_code=exit_code,
         )
+        cwd = str((self._transport_state.nova_session_context or {}).get("cwd") or "")
+        self._append_nova_recent_activity(
+            command=command,
+            cwd=cwd,
+            exit_code=exit_code,
+            source="ai",
+            output_tail=output or "",
+        )
+        if item_exec_mode != "direct":
+            from servers.services.terminal_ai.session_context import apply_successful_command_context
+
+            self._transport_state.nova_session_context = apply_successful_command_context(
+                self._transport_state.nova_session_context,
+                command=command,
+                exit_code=exit_code,
+            )
         if unavailable_cmd := unavailable_command_name(command, exit_code):
             self._ai_state.unavailable_commands.add(unavailable_cmd)
         recovery_action = await handle_fast_error_recovery(
@@ -212,6 +228,12 @@ class TerminalAiExecutionOperations:
         clean_cmd = self._normalize_command_text(cmd)
         if not clean_cmd:
             return -1, ""
+
+        occupancy_result = await self._ensure_human_pty_idle(cmd_id)
+        if occupancy_result == "cancel":
+            return 1, "WEUAI_PTY_OCCUPIED: operator cancelled insert into the shared terminal"
+        if occupancy_result == "timeout":
+            return 1, "WEUAI_PTY_OCCUPIED: timed out waiting for the shared terminal to become idle"
 
         is_streaming = self._is_streaming_command(clean_cmd)
         is_install = self._is_install_command(clean_cmd)
@@ -432,4 +454,56 @@ class TerminalAiExecutionOperations:
             self._transport_state.ssh_proc.stdin.write(text[i : i + step])
             await asyncio.sleep(delay)
 
-    # ── Nova agent entry point ─────────────────────────────────────────────
+    async def _ensure_human_pty_idle(self, cmd_id: int) -> str:
+        from servers.services.terminal_ai.pty_occupancy import inspect_pty_occupancy, wait_for_pty_idle
+
+        def inspect():
+            return inspect_pty_occupancy(
+                input_buffer=self._manual_state.input_buffer,
+                input_forwarding_held=self._manual_state.input_forwarding_held,
+                manual_active_command_id=self._manual_state.active_command_id,
+                ai_active_command_id=self._ai_state.active_command.command_id,
+                current_ai_command_id=cmd_id,
+            )
+
+        async def on_typed(occupancy):
+            preview = occupancy.preview or "(непустая строка)"
+            q_id = f"q_pty_{self._new_run_id()}"
+            try:
+                reply = await self._ai_state.run.ask_user(
+                    q_id=q_id,
+                    event={
+                        "type": "ai_question",
+                        "q_id": q_id,
+                        "question": (
+                            "В общем терминале уже набрана команда:\n"
+                            f"`{preview}`\n\n"
+                            "ИИ не будет печатать поверх этой строки, пока вы не закончите ввод."
+                        ),
+                        "source": "pty_occupancy",
+                        "options": [
+                            {
+                                "label": "Подождать Enter",
+                                "value": "wait",
+                                "description": "ИИ подождёт, пока строка станет пустой.",
+                            },
+                            {
+                                "label": "Отменить вставку",
+                                "value": "cancel",
+                                "description": "Эту команду ИИ не отправит в терминал.",
+                            },
+                        ],
+                        "allow_multiple": False,
+                        "free_text_allowed": False,
+                    },
+                    send_event=self._send_ai_event,
+                    timeout_seconds=300.0,
+                )
+            except TimeoutError:
+                return "cancel"
+            except asyncio.CancelledError:
+                raise
+            text = str(reply or "").strip().lower()
+            return "wait" if text in {"wait", "allow_once", "allow", "yes", "y", "да"} else "cancel"
+
+        return await wait_for_pty_idle(inspect, on_typed_input=on_typed)

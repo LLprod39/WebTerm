@@ -22,6 +22,7 @@ def _config() -> RunnerManagerConfig:
         token="manager-token",
         codex_runner_image="registry.example/webterm-codex@sha256:" + "a" * 64,
         grok_runner_image="registry.example/webterm-grok@sha256:" + "b" * 64,
+        cursor_runner_image="registry.example/webterm-cursor@sha256:" + "c" * 64,
         docker_network="webterm-ai-cli-egress",
     )
 
@@ -88,11 +89,23 @@ def test_run_command_is_hardened_and_has_no_host_credentials() -> None:
     assert command[-1] == config.grok_runner_image
 
 
+def test_cursor_run_command_sets_home_credential_dir() -> None:
+    config = _config()
+    request = _request(target_id="cursor_subscription")
+
+    command = build_cli_runner_docker_command(config, request, runner_id="3" * 32)
+
+    assert "HOME=/credentials/cursor" in command
+    assert "WEBTERM_AI_CLI_TARGET=cursor_subscription" in command
+    assert command[-1] == config.cursor_runner_image
+
+
 def test_config_requires_immutable_runner_image() -> None:
     config = RunnerManagerConfig(
         token="token",
         codex_runner_image="webterm-codex:latest",
         grok_runner_image="registry.example/webterm-grok@sha256:" + "b" * 64,
+        cursor_runner_image="registry.example/webterm-cursor@sha256:" + "c" * 64,
         docker_network="webterm-ai-cli-egress",
     )
     with pytest.raises(RuntimeError, match="CODEX_RUNNER_IMAGE"):
@@ -102,10 +115,22 @@ def test_config_requires_immutable_runner_image() -> None:
 def test_config_requires_both_provider_images(monkeypatch) -> None:
     monkeypatch.setenv("AI_CLI_RUNNER_MANAGER_TOKEN", "token")
     monkeypatch.setenv("AI_CLI_CODEX_RUNNER_IMAGE", "registry.example/codex@sha256:" + "a" * 64)
+    monkeypatch.setenv("AI_CLI_CURSOR_RUNNER_IMAGE", "registry.example/cursor@sha256:" + "c" * 64)
     monkeypatch.delenv("AI_CLI_GROK_RUNNER_IMAGE", raising=False)
     config = RunnerManagerConfig.from_env()
 
     with pytest.raises(RuntimeError, match="GROK_RUNNER_IMAGE"):
+        config.validate_startup()
+
+
+def test_config_requires_cursor_provider_image(monkeypatch) -> None:
+    monkeypatch.setenv("AI_CLI_RUNNER_MANAGER_TOKEN", "token")
+    monkeypatch.setenv("AI_CLI_CODEX_RUNNER_IMAGE", "registry.example/codex@sha256:" + "a" * 64)
+    monkeypatch.setenv("AI_CLI_GROK_RUNNER_IMAGE", "registry.example/grok@sha256:" + "b" * 64)
+    monkeypatch.delenv("AI_CLI_CURSOR_RUNNER_IMAGE", raising=False)
+    config = RunnerManagerConfig.from_env()
+
+    with pytest.raises(RuntimeError, match="CURSOR_RUNNER_IMAGE"):
         config.validate_startup()
 
 

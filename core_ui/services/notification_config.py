@@ -16,6 +16,8 @@ _NOTIF_SECRET_KEYS = {"telegram_bot_token", "smtp_password"}
 _NOTIF_DEFAULTS = {
     "telegram_bot_token": "",
     "telegram_chat_id": "",
+    "telegram_assistant_enabled": True,
+    "telegram_personal_bots_enabled": True,
     "notify_email": "",
     "smtp_host": "",
     "smtp_port": "587",
@@ -41,6 +43,8 @@ def _base_notification_config() -> dict[str, Any]:
         or getattr(django_settings, "TELEGRAM_BOT_TOKEN", "")
         or "",
         "telegram_chat_id": os.getenv("TELEGRAM_CHAT_ID", "") or getattr(django_settings, "TELEGRAM_CHAT_ID", "") or "",
+        "telegram_assistant_enabled": True,
+        "telegram_personal_bots_enabled": True,
         "notify_email": (
             os.getenv("PIPELINE_NOTIFY_EMAIL", "")
             or getattr(django_settings, "PIPELINE_NOTIFY_EMAIL", "")
@@ -77,8 +81,16 @@ def load_notification_config(config_path: str | Path | None = None) -> dict[str,
     base = _base_notification_config()
     saved = _read_saved_notification_config(config_path)
     for key, value in saved.items():
-        if key in base and key not in _NOTIF_SECRET_KEYS and value:
-            base[key] = value
+        if key in base and key not in _NOTIF_SECRET_KEYS and value not in (None, ""):
+            if key in {"telegram_assistant_enabled", "telegram_personal_bots_enabled"}:
+                base[key] = bool(value) if not isinstance(value, str) else value.strip().lower() in {
+                    "1",
+                    "true",
+                    "yes",
+                    "on",
+                }
+            else:
+                base[key] = value
     for key in _NOTIF_SECRET_KEYS:
         managed_value = _managed_notification_secret(key)
         if managed_value:

@@ -16,6 +16,7 @@ from loguru import logger
 
 from app.agent_kernel.mcp_runtime import load_mcp_bindings
 from app.agent_kernel.runtime.outcomes import (
+    EXIT_CONTROL_PLANE,
     EXIT_EMPTY_LLM,
     EXIT_FINAL_ANSWER,
     EXIT_LLM_ERROR,
@@ -333,6 +334,7 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
                     "status": str(tool_result_facts.get("status") or "unknown"),
                     "exit_code": tool_result_facts.get("exit_code"),
                     "error": safe_error,
+                    "error_kind": str(tool_result_facts.get("error_kind") or ""),
                     "timestamp": timezone.now().isoformat(),
                 }
             )
@@ -379,8 +381,39 @@ async def run_agent_engine(engine: Any, run_record: AgentRun | None = None) -> A
             from servers.agents.agent_runtime_guidance import (
                 count_consecutive_tool_failures,
                 mid_run_replan_message,
+                should_hard_stop_control_plane,
                 should_inject_mid_run_replan,
             )
+
+            error_kind = str(tool_result_facts.get("error_kind") or "")
+            if should_hard_stop_control_plane(
+                tool=action_name,
+                error_kind=error_kind,
+                observation=redacted_observation,
+                success=tool_result_facts.get("success"),
+            ):
+                engine._control_plane_blocked = True
+                exit_reason = EXIT_CONTROL_PLANE
+                stop_note = (
+                    "CONTROL_PLANE: канал выполнения недоступен. "
+                    "Повтор команд и ask_user бесполезны — завершаю запуск."
+                )
+                history.append({"role": "user", "content": stop_note})
+                logger.error(
+                    "agent_run {} hard-stop control_plane: tool={} kind={}",
+                    run.pk,
+                    action_name,
+                    error_kind or "inferred",
+                )
+                await engine._emit(
+                    "agent_status",
+                    {
+                        "status": "control_plane_blocked",
+                        "iteration": iteration,
+                        "message": stop_note,
+                    },
+                )
+                break
 
             if not getattr(engine, "_mid_run_replan_injected", False):
                 consecutive_failures = count_consecutive_tool_failures(tool_calls_log)

@@ -32,7 +32,7 @@ from .chat import (
     ChatTurnState,
     OperatorTurnDispatch,
 )
-from .preferences import DashboardLayout, TerminalPreference
+from .preferences import DashboardLayout, TerminalPreference, UserNotificationPreference
 from .projects import Project, ProjectMembership
 from .secrets import ManagedSecret
 
@@ -53,6 +53,7 @@ __all__ = [
     "LLMUsageLog",
     "ManagedSecret",
     "TerminalPreference",
+    "UserNotificationPreference",
     "DashboardLayout",
     "Project",
     "ProjectMembership",

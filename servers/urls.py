@@ -115,6 +115,11 @@ urlpatterns = [
         name="server_transfer_owner",
     ),
     path("api/<int:server_id>/shares/", server_shares.server_share_list, name="server_share_list"),
+    path(
+        "api/<int:server_id>/shares/candidates/",
+        server_shares.server_share_candidates,
+        name="server_share_candidates",
+    ),
     path("api/<int:server_id>/share/", server_shares.server_share_create, name="server_share_create"),
     path(
         "api/<int:server_id>/shares/<int:share_id>/revoke/",

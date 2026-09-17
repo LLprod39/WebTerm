@@ -6,7 +6,6 @@ import type {
   NodeState,
   Values,
 } from "@/api/automation";
-import { catalogTitle } from "./editor/catalog";
 
 export type CanvasData = Record<string, unknown> & {
   backend: PipelineNode;
@@ -15,12 +14,6 @@ export type CanvasData = Record<string, unknown> & {
   runView?: boolean;
   issueCount?: number;
   connectedHandles?: string[];
-  /** Show an inline "add first step" placeholder next to this node. */
-  ghost?: boolean;
-  /** Whether the manifest asks for approval before running. */
-  approval?: boolean;
-  /** Human summary of the node configuration (see summarizeNode). */
-  summary?: string;
   actions?: {
     onAddOutput?: (nodeId: string, handle: string) => void;
     onConfigure?: (nodeId: string) => void;
@@ -110,7 +103,8 @@ export function graphSignature(
 
 export function schemaDefaults(manifest: NodeManifest): Values {
   const defaults: Values = {
-    label: catalogTitle(manifest.type, manifest),
+    label:
+      manifest.type.split("/").at(-1)?.replaceAll("_", " ") ?? manifest.type,
   };
   for (const [key, schema] of Object.entries(
     manifest.input_schema.properties ?? {},

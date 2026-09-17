@@ -95,6 +95,11 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
             "playbook",
             "плейбук",
             "runbook",
+            "ansible",
+            "ансибл",
+            "асмбл",
+            "ансмбл",
+            "запуст",
         )
     ):
         prefixes.update({"operator.", "server."})
@@ -258,6 +263,7 @@ def execute_tool(
     arguments: dict[str, Any],
     request=None,
     source: str = "operator_chat",
+    channel: str = "",
 ) -> dict[str, Any]:
     """Run a tool handler immediately (read tools / already confirmed mutates)."""
     spec = get_action_spec(action_type)
@@ -282,6 +288,7 @@ def execute_tool(
                 input_payload=dict(arguments or {}),
                 request=request,
                 source=source,
+                channel=str(channel or ""),
             )
         )
     except AssistantActionError as exc:
@@ -300,7 +307,12 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
     # Prefer a stable order so critical lookup fields survive truncation.
     if isinstance(result, dict):
         payload = result.get("result") if isinstance(result.get("result"), dict) else result
-        if isinstance(payload, dict) and ("name_index" in payload or payload.get("ui_table") is False):
+        prefer_summary = isinstance(payload, dict) and (
+            "name_index" in payload
+            or payload.get("ui_table") is False
+            or ("summary" in payload and "reply_hint" in payload)
+        )
+        if prefer_summary and isinstance(payload, dict):
             preferred_keys = (
                 "ok",
                 "found",
@@ -309,6 +321,7 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                 "server_name",
                 "match",
                 "reply_hint",
+                "summary",
                 "name_index",
                 "count",
                 "status_counts",
@@ -323,9 +336,31 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
             for key in preferred_keys:
                 if key in payload:
                     ordered[key] = payload[key]
-            for key, value in payload.items():
-                if key not in ordered:
+            # When summary+reply_hint exist, drop bulky arrays from the model view first.
+            if "summary" in ordered and "reply_hint" in ordered:
+                for key, value in payload.items():
+                    if key in ordered:
+                        continue
+                    if key in {
+                        "servers",
+                        "matches",
+                        "sample_names",
+                        "alerts",
+                        "agents",
+                        "mcp_servers",
+                        "skills",
+                        "capability_registry",
+                        "nodes",
+                        "capability_packs",
+                        "task_families",
+                        "resources",
+                    }:
+                        continue
                     ordered[key] = value
+            else:
+                for key, value in payload.items():
+                    if key not in ordered:
+                        ordered[key] = value
             if result is not payload and "result" in result:
                 wrapped = {**result, "result": ordered}
                 text = json.dumps(wrapped, ensure_ascii=False, default=str)
@@ -333,18 +368,45 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                 text = json.dumps(ordered, ensure_ascii=False, default=str)
             if len(text) <= max_chars:
                 return text
-            # Drop bulky arrays first, keep name_index / match
+            # Drop bulky arrays first, keep name_index / match / summary
             slim = {
-                k: v for k, v in ordered.items() if k not in {"servers", "matches", "sample_names", "alerts", "agents"}
+                k: v
+                for k, v in ordered.items()
+                if k
+                not in {
+                    "servers",
+                    "matches",
+                    "sample_names",
+                    "alerts",
+                    "agents",
+                    "mcp_servers",
+                    "skills",
+                }
             }
+            # Prefer summary-only envelope when still too large
+            if "summary" in slim and "reply_hint" in slim and len(json.dumps(slim, ensure_ascii=False, default=str)) > max_chars:
+                slim = {
+                    "ok": slim.get("ok", True),
+                    "reply_hint": slim.get("reply_hint"),
+                    "summary": slim.get("summary"),
+                    "count": slim.get("count"),
+                    "ui_table": slim.get("ui_table"),
+                    "target_url": slim.get("target_url"),
+                }
             slim_text = json.dumps(
                 {**result, "result": slim} if result is not payload and "result" in result else slim,
                 ensure_ascii=False,
                 default=str,
             )
             if len(slim_text) <= max_chars:
-                return slim_text + "…[rows omitted]"
-            return slim_text[: max_chars - 20] + "…[truncated]"
+                return slim_text + ("…[rows omitted]" if slim is not ordered else "")
+            # Last resort: summary-only, never mid-JSON cut of a huge blob
+            summary_only = {
+                "ok": True,
+                "reply_hint": ordered.get("reply_hint") or "Summarize the tool summary fields only.",
+                "summary": ordered.get("summary") or {"note": "result truncated"},
+            }
+            return json.dumps(summary_only, ensure_ascii=False, default=str)[:max_chars]
 
     text = json.dumps(result, ensure_ascii=False, default=str)
     if len(text) <= max_chars:

@@ -1,0 +1,24 @@
+import { type NodeProps } from "@xyflow/react";
+import { Timer } from "lucide-react";
+import { NodeBase } from "./NodeBase";
+import { useI18n } from "@/lib/i18n";
+import { getNodeBranchLabel, getNodeTypeInfo, localize } from "./nodeMeta";
+import { getNodeRuntimeProps } from "./runtimeProps";
+
+export function WaitNode({ data, selected }: NodeProps) {
+  const { lang } = useI18n();
+  const d = data as Record<string, unknown>;
+  const minutes = d?.wait_minutes as number | undefined;
+  return (
+    <NodeBase
+      selected={selected}
+      label={(d?.label as string) || getNodeTypeInfo("logic/wait", lang).label}
+      icon={<Timer className="h-4 w-4 text-warning" />}
+      description={minutes ? localize(lang, `Пауза на ${minutes} мин.`, `Pause for ${minutes} minute(s)`) : localize(lang, "Настройте длительность паузы", "Configure wait duration")}
+      accentColor="border-warning/40"
+      categoryColor="hsl(var(--warning))"
+      sourcePorts={[{ id: "done", label: getNodeBranchLabel("done", lang) }]}
+      {...getNodeRuntimeProps(d)}
+    />
+  );
+}

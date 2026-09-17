@@ -49,6 +49,7 @@ def enqueue_operator_action(
 def _enqueue(*, session, kind: str, payload: dict[str, Any], action=None) -> OperatorTurnDispatch | None:
     try:
         with transaction.atomic():
+            release_expired_operator_dispatches(session_id=int(session.pk))
             return OperatorTurnDispatch.objects.create(
                 session=session,
                 action=action,
@@ -60,10 +61,33 @@ def _enqueue(*, session, kind: str, payload: dict[str, Any], action=None) -> Ope
         return None
 
 
+def release_expired_operator_dispatches(*, session_id: int | None = None) -> int:
+    """Fail CLAIMED rows whose lease already expired so the session can accept work again.
+
+    Dead/restarted workers leave CLAIMED rows that otherwise block
+    ``cu_opdispatch_one_active_session`` and surface as ``Turn already in progress``.
+    """
+    now = timezone.now()
+    qs = OperatorTurnDispatch.objects.filter(
+        status=OperatorTurnDispatch.STATUS_CLAIMED,
+        lease_expires_at__lte=now,
+    )
+    if session_id is not None:
+        qs = qs.filter(session_id=int(session_id))
+    return qs.update(
+        status=OperatorTurnDispatch.STATUS_FAILED,
+        completed_at=now,
+        lease_expires_at=now,
+        error="lease_expired",
+    )
+
+
 def operator_dispatch_busy(chat_id: int) -> bool:
-    return OperatorTurnDispatch.objects.filter(
-        session_id=int(chat_id),
-        status__in=[OperatorTurnDispatch.STATUS_QUEUED, OperatorTurnDispatch.STATUS_CLAIMED],
+    release_expired_operator_dispatches(session_id=int(chat_id))
+    now = timezone.now()
+    return OperatorTurnDispatch.objects.filter(session_id=int(chat_id)).filter(
+        Q(status=OperatorTurnDispatch.STATUS_QUEUED)
+        | Q(status=OperatorTurnDispatch.STATUS_CLAIMED, lease_expires_at__gt=now)
     ).exists()
 
 
@@ -150,17 +174,22 @@ def _finish_operator_dispatch(
     error: str = "",
 ) -> str:
     now = timezone.now()
+    worker = str(worker_name or "default")[:120]
     with transaction.atomic():
         dispatch = OperatorTurnDispatch.objects.select_for_update().filter(pk=dispatch_id).first()
         if dispatch is None or dispatch.status == OperatorTurnDispatch.STATUS_CANCELED:
             return OperatorTurnDispatch.STATUS_CANCELED
-        owned = (
+        same_claim = (
             dispatch.status == OperatorTurnDispatch.STATUS_CLAIMED
-            and dispatch.claimed_by == str(worker_name or "default")[:120]
+            and dispatch.claimed_by == worker
             and dispatch.attempt_count == int(attempt_count)
-            and bool(dispatch.lease_expires_at and dispatch.lease_expires_at > now)
         )
-        if not owned:
+        lease_alive = bool(dispatch.lease_expires_at and dispatch.lease_expires_at > now)
+        if not same_claim:
+            return "lease_lost"
+        # Successful work must not leave a CLAIMED row when the lease races out
+        # on the final heartbeat boundary — that stuck the chat as busy.
+        if not lease_alive and error:
             return "lease_lost"
         latest_turn = dispatch.session.turn_states.order_by("-id").first()
         dispatch.turn = latest_turn

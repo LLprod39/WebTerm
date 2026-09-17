@@ -15,15 +15,18 @@ from typing import Any
 import asyncssh
 from django.conf import settings
 
+from app.agent_kernel.sandbox.runtime_errors import (
+    KIND_CONTROL_PLANE,
+    AgentCommandRuntimeError,
+    docker_socket_gid_label,
+    error_from_runner_failure,
+    format_control_plane_message,
+)
 from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 
 _IMMUTABLE_IMAGE = re.compile(r"^(?:[a-z0-9][a-z0-9._:/-]*@)?sha256:[0-9a-f]{64}$")
 _RUNNER_ID = re.compile(r"^[0-9a-f]{32}$")
 _RUNNER_INPUT_LIMIT = 1024 * 1024
-
-
-class AgentCommandRuntimeError(RuntimeError):
-    """The isolated command runner could not safely execute the request."""
 
 
 @dataclass(frozen=True)
@@ -60,7 +63,10 @@ def build_agent_command_docker_command(*, ssh_agent_socket: str = "", runner_id:
     image = str(getattr(settings, "AGENT_COMMAND_RUNNER_IMAGE", "") or "").strip()
     if not agent_command_image_is_immutable(image):
         raise AgentCommandRuntimeError(
-            "AGENT_COMMAND_RUNNER_IMAGE must be an immutable sha256 image ID or repository@sha256 digest."
+            format_control_plane_message(
+                "AGENT_COMMAND_RUNNER_IMAGE must be an immutable sha256 image ID or repository@sha256 digest."
+            ),
+            kind=KIND_CONTROL_PLANE,
         )
 
     resolved_runner_id = runner_id or secrets.token_hex(16)
@@ -109,6 +115,45 @@ def build_agent_command_docker_command(*, ssh_agent_socket: str = "", runner_id:
 def _bounded(value: Any, limit: int) -> str:
     text = str(value or "")
     return text if len(text) <= limit else text[:limit] + "\n...[truncated by WebTerm]"
+
+
+async def probe_agent_command_docker(*, timeout_seconds: int = 8) -> str:
+    """Fail closed if this process cannot talk to the Docker API."""
+    if not agent_command_uses_docker():
+        return "host-test"
+    docker_bin = str(getattr(settings, "AGENT_COMMAND_DOCKER_COMMAND", "docker") or "docker")
+    process = await asyncio.create_subprocess_exec(
+        docker_bin,
+        "version",
+        "--format",
+        "{{.Server.Version}}",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=max(1, timeout_seconds))
+    except TimeoutError as exc:
+        process.kill()
+        await process.wait()
+        raise AgentCommandRuntimeError(
+            format_control_plane_message(f"таймаут docker version ({timeout_seconds}s)"),
+            kind=KIND_CONTROL_PLANE,
+        ) from exc
+    if process.returncode != 0:
+        detail = _bounded(stderr.decode("utf-8", errors="replace"), 500) or f"exit {process.returncode}"
+        raise error_from_runner_failure(detail, default_kind=KIND_CONTROL_PLANE)
+    version = stdout.decode("utf-8", errors="replace").strip() or "unknown"
+    return version
+
+
+def announce_agent_command_docker_channel() -> None:
+    """Log socket GID so operators can match a permission-denied failure."""
+    from loguru import logger
+
+    logger.info(
+        "agent execution docker channel: DOCKER_SOCKET_GID={}",
+        docker_socket_gid_label(),
+    )
 
 
 async def _execute_on_host_for_tests(
@@ -211,7 +256,10 @@ async def execute_ephemeral_ssh_command(
     except TimeoutError as exc:
         process.kill()
         await process.wait()
-        raise AgentCommandRuntimeError(f"Ephemeral agent command runner timed out after {timeout}s.") from exc
+        raise AgentCommandRuntimeError(
+            format_control_plane_message(f"Ephemeral agent command runner timed out after {timeout}s."),
+            kind=KIND_CONTROL_PLANE,
+        ) from exc
     if process.returncode != 0:
         detail = _bounded(stderr.decode("utf-8", errors="replace"), 2000)
         if not detail:
@@ -220,13 +268,19 @@ async def execute_ephemeral_ssh_command(
                 detail = _bounded(error_payload.get("error"), 2000) if isinstance(error_payload, dict) else ""
             except (UnicodeDecodeError, json.JSONDecodeError):
                 detail = ""
-        raise AgentCommandRuntimeError(f"Ephemeral agent command runner failed: {detail or process.returncode}")
+        raise error_from_runner_failure(detail or str(process.returncode))
     try:
         result = json.loads(stdout.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise AgentCommandRuntimeError("Ephemeral agent command runner returned an invalid response.") from exc
+        raise AgentCommandRuntimeError(
+            format_control_plane_message("Ephemeral agent command runner returned an invalid response."),
+            kind=KIND_CONTROL_PLANE,
+        ) from exc
     if not isinstance(result, dict) or result.get("schema") != "webterm.agent-command-result.v1":
-        raise AgentCommandRuntimeError("Ephemeral agent command runner returned an unsupported response.")
+        raise AgentCommandRuntimeError(
+            format_control_plane_message("Ephemeral agent command runner returned an unsupported response."),
+            kind=KIND_CONTROL_PLANE,
+        )
     return AgentCommandResult(
         stdout=_bounded(result.get("stdout"), output_limit),
         stderr=_bounded(result.get("stderr"), output_limit),

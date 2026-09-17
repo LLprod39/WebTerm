@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from servers.services.terminal_ai.active_command import TerminalAiActiveCommandState
+from servers.services.terminal_ai.nova_conversation import NovaConversationState
 from servers.services.terminal_ai.run_controller import TerminalAiRunController
 from servers.services.terminal_ai.session import TerminalAiSession
 
@@ -31,6 +32,7 @@ class TerminalAiState:
     audit_context: dict[str, Any] = field(default_factory=dict)
     background_tasks: set[asyncio.Task[Any]] = field(default_factory=set)
     extra_connections: dict[str, Any] = field(default_factory=dict)
+    nova_conversation: NovaConversationState = field(default_factory=NovaConversationState)
 
     @property
     def lock(self) -> asyncio.Lock:
@@ -58,3 +60,4 @@ class TerminalAiState:
         self.error_retries.clear()
         self.audit_context.clear()
         self.extra_connections.clear()
+        self.nova_conversation.reset()

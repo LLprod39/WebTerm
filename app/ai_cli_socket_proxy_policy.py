@@ -35,6 +35,7 @@ _MAX_CREATE_BODY = 1024 * 1024
 class AiCliProxyPolicyConfig:
     codex_runner_image: str
     grok_runner_image: str
+    cursor_runner_image: str
     egress_network: str
     credential_volume_prefix: str = "webterm-ai-cli-cred-"
     egress_proxy_url: str = "http://ai-cli-egress-proxy:3128"
@@ -44,10 +45,16 @@ class AiCliProxyPolicyConfig:
             return self.codex_runner_image
         if target == "grok_subscription":
             return self.grok_runner_image
+        if target == "cursor_subscription":
+            return self.cursor_runner_image
         return ""
 
     def configured_runner_images(self) -> frozenset[str]:
-        return frozenset(image for image in (self.codex_runner_image, self.grok_runner_image) if image)
+        return frozenset(
+            image
+            for image in (self.codex_runner_image, self.grok_runner_image, self.cursor_runner_image)
+            if image
+        )
 
 
 ContainerInspector = Callable[[str], dict[str, Any] | None]
@@ -89,6 +96,13 @@ def _environment_violation(values: Any, config: AiCliProxyPolicyConfig) -> str:
         expected = {
             "WEBTERM_AI_CLI_TARGET": target,
             "GROK_HOME": "/credentials/grok",
+            "HTTP_PROXY": config.egress_proxy_url,
+            "HTTPS_PROXY": config.egress_proxy_url,
+        }
+    elif target == "cursor_subscription":
+        expected = {
+            "WEBTERM_AI_CLI_TARGET": target,
+            "HOME": "/credentials/cursor",
             "HTTP_PROXY": config.egress_proxy_url,
             "HTTPS_PROXY": config.egress_proxy_url,
         }

@@ -60,6 +60,11 @@ class TerminalIoOperations:
         self._transport_state.stderr_task = None
         self._transport_state.wait_task = None
 
+        nova_pty = self._transport_state.nova_pty
+        self._transport_state.nova_pty = None
+        if nova_pty is not None:
+            await nova_pty.close()
+
         try:
             if self._transport_state.ssh_proc:
                 await close_ssh_handle(self._transport_state.ssh_proc)

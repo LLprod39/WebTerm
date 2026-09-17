@@ -3640,7 +3640,7 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
-        "summary": "Get/create duty session, toggle enabled, or force a briefing.",
+        "summary": "Duty chat removed — endpoint kept only to return a clear gone response.",
         "tags": [
           "assistant"
         ],
@@ -3692,7 +3692,7 @@
             "$ref": "#/components/responses/InternalError"
           }
         },
-        "summary": "Get/create duty session, toggle enabled, or force a briefing.",
+        "summary": "Duty chat removed — endpoint kept only to return a clear gone response.",
         "tags": [
           "assistant"
         ],
@@ -4043,6 +4043,47 @@
           "health"
         ],
         "x-django-view-name": "api_health"
+      }
+    },
+    "/api/kubernetes/access/candidates/": {
+      "get": {
+        "operationId": "api_kubernetes_access_candidates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Access Candidates",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_access_candidates"
       }
     },
     "/api/kubernetes/actions/": {
@@ -6985,6 +7026,192 @@
         "x-django-view-name": "api_kubernetes_cluster_detail"
       }
     },
+    "/api/kubernetes/clusters/{cluster_id}/access/": {
+      "get": {
+        "operationId": "api_kubernetes_cluster_access_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Cluster Access",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_cluster_access"
+      },
+      "post": {
+        "operationId": "api_kubernetes_cluster_access_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Cluster Access",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_cluster_access"
+      }
+    },
+    "/api/kubernetes/clusters/{cluster_id}/access/{grant_id}/revoke/": {
+      "post": {
+        "operationId": "api_kubernetes_cluster_access_revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "cluster_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Cluster Access Revoke",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_cluster_access_revoke"
+      }
+    },
     "/api/kubernetes/clusters/{cluster_id}/events/": {
       "get": {
         "operationId": "api_kubernetes_cluster_events_get",
@@ -7297,6 +7524,337 @@
           "kubernetes"
         ],
         "x-django-view-name": "api_kubernetes_cluster_workloads"
+      }
+    },
+    "/api/kubernetes/connections/": {
+      "get": {
+        "operationId": "api_kubernetes_connections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Connections",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connections"
+      }
+    },
+    "/api/kubernetes/connections/kubeconfig/": {
+      "post": {
+        "operationId": "api_kubernetes_connections_kubeconfig_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Connections Kubeconfig",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connections_kubeconfig"
+      }
+    },
+    "/api/kubernetes/connections/parse/": {
+      "post": {
+        "operationId": "api_kubernetes_connection_parse_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Preview contexts from kubeconfig without storing secrets.",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connection_parse"
+      }
+    },
+    "/api/kubernetes/connections/{connection_id}/": {
+      "delete": {
+        "operationId": "api_kubernetes_connection_delete_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Connection Delete",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connection_delete"
+      }
+    },
+    "/api/kubernetes/connections/{connection_id}/probe/": {
+      "post": {
+        "operationId": "api_kubernetes_connection_probe_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Connection Probe",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connection_probe"
+      }
+    },
+    "/api/kubernetes/connections/{connection_id}/rotate/": {
+      "post": {
+        "operationId": "api_kubernetes_connection_rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connection_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Kubernetes Connection Rotate",
+        "tags": [
+          "kubernetes"
+        ],
+        "x-django-view-name": "api_kubernetes_connection_rotate"
       }
     },
     "/api/kubernetes/devtron/apps/": {
@@ -9215,6 +9773,675 @@
           "mars"
         ],
         "x-django-view-name": "mars:workspace_detail"
+      }
+    },
+    "/api/me/notifications/": {
+      "get": {
+        "operationId": "api_my_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "GET/PUT /api/me/notifications/ — personal Telegram chat destination.",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_my_notifications"
+      },
+      "patch": {
+        "operationId": "api_my_notifications_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "GET/PUT /api/me/notifications/ — personal Telegram chat destination.",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_my_notifications"
+      },
+      "put": {
+        "operationId": "api_my_notifications_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "GET/PUT /api/me/notifications/ — personal Telegram chat destination.",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_my_notifications"
+      }
+    },
+    "/api/me/notifications/test-telegram/": {
+      "post": {
+        "operationId": "api_my_notifications_test_telegram_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "POST /api/me/notifications/test-telegram/ — test via platform bot + my chat id.",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_my_notifications_test_telegram"
+      }
+    },
+    "/api/me/telegram/bots/": {
+      "get": {
+        "operationId": "api_me_telegram_bots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bots",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bots"
+      },
+      "post": {
+        "operationId": "api_me_telegram_bots_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bots",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bots"
+      }
+    },
+    "/api/me/telegram/bots/{bot_id}/": {
+      "delete": {
+        "operationId": "api_me_telegram_bot_detail_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bot Detail",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bot_detail"
+      },
+      "get": {
+        "operationId": "api_me_telegram_bot_detail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bot Detail",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bot_detail"
+      },
+      "patch": {
+        "operationId": "api_me_telegram_bot_detail_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bot Detail",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bot_detail"
+      }
+    },
+    "/api/me/telegram/bots/{bot_id}/test/": {
+      "post": {
+        "operationId": "api_me_telegram_bot_test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Bot Test",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_bot_test"
+      }
+    },
+    "/api/me/telegram/link-codes/": {
+      "post": {
+        "operationId": "api_me_telegram_link_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Link Codes",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_link_codes"
+      }
+    },
+    "/api/me/telegram/links/": {
+      "get": {
+        "operationId": "api_me_telegram_links_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Links",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_links"
+      }
+    },
+    "/api/me/telegram/links/{link_id}/": {
+      "delete": {
+        "operationId": "api_me_telegram_link_delete_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "link_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Me Telegram Link Delete",
+        "tags": [
+          "me"
+        ],
+        "x-django-view-name": "api_me_telegram_link_delete"
       }
     },
     "/api/models/": {
@@ -15894,6 +17121,112 @@
           "studio"
         ],
         "x-django-view-name": "studio:skill_workspace_file"
+      }
+    },
+    "/api/studio/telegram/bots/": {
+      "get": {
+        "operationId": "api_studio_telegram_bots_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Studio Telegram Bots",
+        "tags": [
+          "studio"
+        ],
+        "x-django-view-name": "api_studio_telegram_bots"
+      }
+    },
+    "/api/studio/telegram/bots/{bot_id}/": {
+      "patch": {
+        "operationId": "api_studio_telegram_bot_detail_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bot_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "name": "example"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/MutationSchema"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Api Studio Telegram Bot Detail",
+        "tags": [
+          "studio"
+        ],
+        "x-django-view-name": "api_studio_telegram_bot_detail"
       }
     },
     "/api/studio/templates/": {
@@ -25582,6 +26915,58 @@
           "servers"
         ],
         "x-django-view-name": "servers:server_share_list"
+      }
+    },
+    "/servers/api/{server_id}/shares/candidates/": {
+      "get": {
+        "operationId": "servers_server_share_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "server_id",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiSuccessResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
+          "401": {
+            "$ref": "#/components/responses/AuthenticationRequired"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        },
+        "summary": "Bounded user directory for server share typeahead (owners only).",
+        "tags": [
+          "servers"
+        ],
+        "x-django-view-name": "servers:server_share_candidates"
       }
     },
     "/servers/api/{server_id}/shares/{share_id}/revoke/": {

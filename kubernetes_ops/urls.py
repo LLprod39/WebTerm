@@ -1,6 +1,7 @@
 from django.urls import path
 
 from kubernetes_ops import (
+    access_views,
     action_views,
     admin_action_views,
     admin_apply_views,
@@ -18,6 +19,7 @@ from kubernetes_ops import (
     admin_workload_views,
     audit_views,
     capability_views,
+    connection_views,
     describe_views,
     devtron_views,
     diagnostic_views,
@@ -266,6 +268,47 @@ urlpatterns = [
         "providers/<int:provider_id>/probe/",
         probe_views.api_kubernetes_provider_probe,
         name="api_kubernetes_provider_probe",
+    ),
+    path("connections/", connection_views.api_kubernetes_connections, name="api_kubernetes_connections"),
+    path(
+        "connections/parse/",
+        connection_views.api_kubernetes_connection_parse,
+        name="api_kubernetes_connection_parse",
+    ),
+    path(
+        "connections/kubeconfig/",
+        connection_views.api_kubernetes_connections_kubeconfig,
+        name="api_kubernetes_connections_kubeconfig",
+    ),
+    path(
+        "connections/<int:connection_id>/probe/",
+        connection_views.api_kubernetes_connection_probe,
+        name="api_kubernetes_connection_probe",
+    ),
+    path(
+        "connections/<int:connection_id>/rotate/",
+        connection_views.api_kubernetes_connection_rotate,
+        name="api_kubernetes_connection_rotate",
+    ),
+    path(
+        "connections/<int:connection_id>/",
+        connection_views.api_kubernetes_connection_delete,
+        name="api_kubernetes_connection_delete",
+    ),
+    path(
+        "access/candidates/",
+        access_views.api_kubernetes_access_candidates,
+        name="api_kubernetes_access_candidates",
+    ),
+    path(
+        "clusters/<str:cluster_id>/access/",
+        access_views.api_kubernetes_cluster_access,
+        name="api_kubernetes_cluster_access",
+    ),
+    path(
+        "clusters/<str:cluster_id>/access/<int:grant_id>/revoke/",
+        access_views.api_kubernetes_cluster_access_revoke,
+        name="api_kubernetes_cluster_access_revoke",
     ),
     path("clusters/", views.api_kubernetes_clusters, name="api_kubernetes_clusters"),
     path(

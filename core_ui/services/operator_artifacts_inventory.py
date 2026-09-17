@@ -75,8 +75,20 @@ def compress_inventory_assistant_content(message: ChatMessage) -> bool:
 
     Returns True when content was rewritten. Platform-enforced so the model cannot
     spam role descriptions even if it ignores the system prompt.
+
+    Telegram has no inventory card — skip compression so the text (or channel digest)
+    can carry the host list.
     """
     if not message:
+        return False
+    from core_ui.services.operator_channel import is_telegram_session
+
+    session = getattr(message, "session", None)
+    if session is None and getattr(message, "session_id", None):
+        from core_ui.models import ChatSession
+
+        session = ChatSession.objects.filter(pk=message.session_id).only("kind", "pinned_context").first()
+    if is_telegram_session(session):
         return False
     meta = message.metadata if isinstance(message.metadata, dict) else {}
     tables = meta.get("tables") if isinstance(meta.get("tables"), list) else []

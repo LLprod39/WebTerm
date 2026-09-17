@@ -112,11 +112,12 @@ x-backend-worker: &backend-worker
     - playbook_validator_socket:/run/playbook-validator
     - mars_codex_home:/mars-codex-home
     - mars_gemini_home:/mars-gemini-home
-  # Контейнер работает под uid 10001, а docker.sock смонтирован как root:root 0660.
-  # Без группы владельца сокета любой `docker image inspect` внутри воркера падает с
-  # permission denied, и изолированный Ansible-образ выглядит как «недоступный».
-  # На Docker Desktop (WSL2) gid сокета = 0; на Linux-хосте задайте DOCKER_SOCKET_GID.
+  # Контейнер работает под uid 10001. docker.sock на Linux обычно root:docker,
+  # на Docker Desktop gid скачет между 0 и 1000. Без обеих групп `docker version`
+  # падает с permission denied, и агент не выполняет команды на целевом хосте.
+  # Linux: DOCKER_SOCKET_GID=$(stat -c '%g' /var/run/docker.sock)
   group_add:
+    - "0"
     - "${DOCKER_SOCKET_GID:-0}"
   depends_on:
     backend:
@@ -261,9 +262,9 @@ services:
       - playbook_validator_socket:/run/playbook-validator
       - mars_codex_home:/mars-codex-home
       - mars_gemini_home:/mars-gemini-home
-    # См. комментарий в x-backend-worker: без группы владельца docker.sock
-    # процесс под uid 10001 не видит Docker API.
+    # См. x-backend-worker: нужны группа 0 и DOCKER_SOCKET_GID — sock gid на Desktop плавает.
     group_add:
+      - "0"
       - "${DOCKER_SOCKET_GID:-0}"
     depends_on:
       postgres:
@@ -312,6 +313,16 @@ services:
         "sh",
         "-lc",
         "python manage.py run_scheduled_pipelines --daemon --interval ${PIPELINE_SCHEDULER_INTERVAL:-60}",
+      ]
+
+  pipeline-execution:
+    <<: *backend-worker
+    container_name: mini-prod-pipeline-execution
+    command:
+      [
+        "sh",
+        "-lc",
+        "python manage.py run_pipeline_execution_plane --interval ${PIPELINE_EXECUTION_INTERVAL_SECONDS:-5} --lease-seconds ${PIPELINE_EXECUTION_LEASE_SECONDS:-180} --global-concurrency ${PIPELINE_EXECUTION_GLOBAL_CONCURRENCY:-4} --per-user-concurrency ${PIPELINE_EXECUTION_PER_USER_CONCURRENCY:-2} --worker-key \"$${HOSTNAME:-compose}\"",
       ]
 
   scheduled-agents:
@@ -427,6 +438,7 @@ services:
       DOCKER_PROXY_POLICY: ai-cli
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
+      AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:?AI_CLI_CURSOR_RUNNER_IMAGE is required}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -482,6 +494,7 @@ services:
       AI_CLI_RUNNER_MANAGER_TOKEN: "${AI_CLI_RUNNER_MANAGER_TOKEN:?AI_CLI_RUNNER_MANAGER_TOKEN is required}"
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
+      AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:?AI_CLI_CURSOR_RUNNER_IMAGE is required}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -530,8 +543,9 @@ services:
   telegram-bot:
     <<: *backend-worker
     container_name: mini-prod-telegram-bot
-    profiles: ["telegram-bot"]
-    command: ["sh", "-lc", "python manage.py run_telegram_bot"]
+    # Always start with the stack: without this long-poll worker the platform
+    # bot never sees inbound messages (Studio token alone is not enough).
+    command: ["sh", "-lc", "python manage.py run_telegram_hub"]
 
   mars-agent:
     build:

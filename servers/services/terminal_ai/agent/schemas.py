@@ -121,3 +121,4 @@ class AgentResult(BaseModel):
     stopped: bool = False  # True when halted via budget/interrupt, not done
     stop_reason: str = ""
     todos: list[Todo] = Field(default_factory=list)
+    history: list[dict[str, Any]] = Field(default_factory=list)

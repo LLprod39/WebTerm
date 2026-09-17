@@ -330,6 +330,9 @@ def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, setti
         status_code = 200
         text = "ok"
 
+        def json(self):
+            return {"ok": True, "result": {"message_id": 1}}
+
     class FakeAsyncClient:
         def __init__(self, *args, **kwargs):
             pass
@@ -344,6 +347,11 @@ def test_studio_notification_endpoints_with_mocked_transports(monkeypatch, setti
             return FakeTelegramResponse()
 
     monkeypatch.setattr("httpx.AsyncClient", FakeAsyncClient)
+    # Also stub high-level client in case response shape changes.
+    async def fake_send_message(self, **kwargs):
+        return {"status": "completed", "message_ids": [1], "last_message_id": 1, "chunks_sent": 1}
+
+    monkeypatch.setattr("telegram_hub.client.TelegramClient.send_message", fake_send_message)
 
     telegram = client.post("/api/studio/notifications/test-telegram/")
     assert telegram.status_code == 200

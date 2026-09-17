@@ -4,7 +4,6 @@ import json
 
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
-from loguru import logger
 
 from app.assistant_actions import AssistantActionError
 from core_ui.ai_model_policy import operational_provider_binding
@@ -12,9 +11,7 @@ from core_ui.api_errors import internal_error_response
 from core_ui.decorators import require_feature
 from core_ui.models import AssistantAction
 from core_ui.services.assistant_chat import (
-    cancel_action,
     create_chat_session,
-    execute_action,
     get_chat_session,
     handle_user_message,
     list_chat_sessions,
@@ -99,48 +96,10 @@ def api_assistant_artifacts(request, chat_id: int):
 
 
 @require_feature("chat")
+@require_http_methods(["GET", "POST"])
 def api_assistant_duty(request):
-    """Get/create duty session, toggle enabled, or force a briefing."""
-    from core_ui.services.operator_duty import (
-        deliver_morning_briefing,
-        duty_enabled,
-        get_or_create_duty_session,
-        set_duty_enabled,
-    )
-
-    if request.method == "GET":
-        session = get_or_create_duty_session(request.user)
-        return JsonResponse(
-            {
-                **serialize_chat_session(session, include_messages=True),
-                "duty_enabled": duty_enabled(session),
-            }
-        )
-
-    if request.method == "POST":
-        data = _json_body(request)
-        if "enabled" in data:
-            session = set_duty_enabled(request.user, enabled=bool(data.get("enabled")))
-            return JsonResponse(
-                {
-                    **serialize_chat_session(session),
-                    "duty_enabled": duty_enabled(session),
-                }
-            )
-        if data.get("brief_now"):
-            result = deliver_morning_briefing(request.user, force=True)
-            session = get_or_create_duty_session(request.user)
-            return JsonResponse(
-                {
-                    "ok": True,
-                    "result": result,
-                    "chat": serialize_chat_session(session, include_messages=True),
-                }
-            )
-        session = get_or_create_duty_session(request.user)
-        return JsonResponse(serialize_chat_session(session, include_messages=True), status=201)
-
-    return _err("Method not allowed", 405)
+    """Duty chat removed — endpoint kept only to return a clear gone response."""
+    return _err("Duty chat has been removed", 410)
 
 
 @require_feature("chat")
@@ -163,7 +122,7 @@ def api_assistant_chat_detail(request, chat_id: int):
             update_fields.append("pinned_context")
         if "kind" in data:
             kind = str(data.get("kind") or "").strip()
-            if kind in {"manual", "duty", "incident"}:
+            if kind in {"manual", "incident"}:
                 session.kind = kind
                 update_fields.append("kind")
         if "provider_binding" in data:
@@ -270,34 +229,11 @@ def _get_action_for_user(user, action_id: int) -> AssistantAction | None:
     return AssistantAction.objects.select_related("session", "message", "user").filter(pk=action_id, user=user).first()
 
 
-def _resume_operator_if_parked(action: AssistantAction, *, request=None, cancelled: bool = False) -> None:
-    """Best-effort resume of operator loop after confirm/cancel."""
-    try:
-        import asyncio
-
-        from core_ui.services.operator_loop import resume_after_action
-
-        async def _run():
-            await resume_after_action(action=action, request=request, cancelled=cancelled)
-
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    pool.submit(lambda: asyncio.run(_run())).result(timeout=180)
-            else:
-                loop.run_until_complete(_run())
-        except RuntimeError:
-            asyncio.run(_run())
-    except Exception as exc:  # noqa: BLE001 — confirm must still return action result
-        logger.warning("assistant action resume failed action_id={}: {}", action.pk, exc)
-
-
 @require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_action_confirm(request, action_id: int):
+    from core_ui.services.assistant_confirm import confirm_action_and_resume
+
     action = _get_action_for_user(request.user, action_id)
     if action is None:
         return _err("Action not found", 404)
@@ -307,16 +243,13 @@ def api_assistant_action_confirm(request, action_id: int):
         return _err(f"Action is {action.status}", 409)
     data = _json_body(request)
     typed_confirm = str(data.get("typed_confirm") or data.get("confirm_token") or "").strip() or None
-    action = execute_action(action, request=request, confirmed=True, typed_confirm=typed_confirm)
+    action = confirm_action_and_resume(action, request=request, typed_confirm=typed_confirm)
     if action.status == AssistantAction.STATUS_RUNNING:
         # Another worker won the atomic execution claim. It owns both execution
         # and turn resume; this request must not feed an incomplete result to LLM.
         return JsonResponse(serialize_action(action), status=202)
     if action.status == AssistantAction.STATUS_REQUIRES_CONFIRMATION and action.error:
         return JsonResponse(serialize_action(action), status=400)
-    _resume_operator_if_parked(action, request=request, cancelled=False)
-    # Re-fetch message content after possible resume
-    action.refresh_from_db()
     status = 200 if action.status == AssistantAction.STATUS_COMPLETED else 400
     return JsonResponse(serialize_action(action), status=status)
 
@@ -324,9 +257,10 @@ def api_assistant_action_confirm(request, action_id: int):
 @require_feature("chat")
 @require_http_methods(["POST"])
 def api_assistant_action_cancel(request, action_id: int):
+    from core_ui.services.assistant_confirm import cancel_action_and_resume
+
     action = _get_action_for_user(request.user, action_id)
     if action is None:
         return _err("Action not found", 404)
-    action = cancel_action(action)
-    _resume_operator_if_parked(action, request=request, cancelled=True)
+    action = cancel_action_and_resume(action, request=request)
     return JsonResponse(serialize_action(action))

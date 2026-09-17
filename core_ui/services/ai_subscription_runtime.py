@@ -106,27 +106,16 @@ async def stream_persisted_subscription_events(
 
     connection = await _load_connection(invocation)
     if connection is None:
+        with suppress(ProviderRuntimeError):
+            await sync_to_async(release_provider_lease, thread_sensitive=True)(
+                str(lease.lease_token), owner_id=owner_id
+            )
         raise ProviderRuntimeError(
             "provider_transport_unavailable",
             "Subscription invocation did not pin a provider connection",
         )
     connection_ref = await _ensure_connection_ref(connection)
     invocation_ref = f"invocation_{invocation.public_id.hex}"
-    request = RunnerRequestV1(
-        action=RunnerAction.RUN,
-        connection_ref=connection_ref,
-        target_id=invocation.target_id,
-        invocation_id=invocation_ref,
-        model_id=context.binding.model_id if context.binding else None,
-        reasoning_effort=context.binding.reasoning_effort if context.binding else None,
-        provider_session_id=context.provider_session_id or None,
-        system_prompt=system_prompt,
-        messages=messages,
-        tools=tools,
-        tool_policy=context.tool_policy,
-        output_schema=context.output_schema,
-        idempotency_key=context.idempotency_key,
-    )
     client = AiCliRunnerClient()
     lease_lost = asyncio.Event()
     heartbeat_task = asyncio.create_task(
@@ -147,6 +136,30 @@ async def stream_persisted_subscription_events(
     terminal_event: ProviderEventV1 | None = None
     terminal_recorded = False
     try:
+        try:
+            request = RunnerRequestV1(
+                action=RunnerAction.RUN,
+                connection_ref=connection_ref,
+                target_id=invocation.target_id,
+                invocation_id=invocation_ref,
+                model_id=context.binding.model_id if context.binding else None,
+                reasoning_effort=context.binding.reasoning_effort if context.binding else None,
+                provider_session_id=context.provider_session_id or None,
+                system_prompt=system_prompt,
+                messages=messages,
+                tools=tools,
+                tool_policy=context.tool_policy,
+                output_schema=context.output_schema,
+                idempotency_key=context.idempotency_key,
+            )
+        except Exception as exc:
+            # Protocol/validation errors previously leaked the acquired lease.
+            await _fail_invocation(invocation.pk, "provider_protocol_error", **fence)
+            terminal_recorded = True
+            raise ProviderRuntimeError(
+                "provider_protocol_error",
+                str(exc) or "Subscription runner request is invalid",
+            ) from exc
         with start_span(
             "ai.provider.manager.stream",
             kind=SpanKind.CLIENT,

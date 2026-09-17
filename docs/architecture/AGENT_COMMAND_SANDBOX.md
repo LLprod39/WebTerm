@@ -24,6 +24,10 @@ new single-shot container through `servers.services.agent_command_runner`.
   `agent-command-docker-proxy` on an internal control network; its body-aware
   policy permits only the pinned image, managed name/label, non-root user,
   exact limits, lifecycle endpoints, and optional configured SSH-agent socket.
+- Local compose still mounts `docker.sock` into `agent-execution`. Set
+  `DOCKER_SOCKET_GID` to the socket owner gid or `docker version` / `ssh_execute`
+  fail with `CONTROL_PLANE` before any SSH to the target host. `open_connection`
+  probes Docker API and does not open a persistent SSH session.
 
 `AGENT_COMMAND_RUNTIME=host` exists solely for automated tests and additionally
 requires both Django `TESTING=True` and

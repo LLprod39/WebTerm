@@ -25,6 +25,7 @@ from app.agent_kernel.runtime.parsing import parse_response
 from app.agent_kernel.sandbox.manager import SandboxManager
 from app.agent_kernel.tools.registry import ToolRegistry
 from app.core.llm import LLMProvider, is_thinking_chunk
+from app.core.llm_runtime import RETRY_BACKOFF, _is_retryable_error
 from app.core.model_utils import resolve_provider_and_model
 from core_ui.audit import audit_context
 from servers.adapters.memory_store import DjangoServerMemoryStore
@@ -295,23 +296,39 @@ class AgentEngine(AgentEngineOpsMixin):
         """Call LLM with conversation history. Raises on failure."""
         prompt = self._history_to_prompt(history)
         provider = LLMProvider()
-        chunks = []
-        try:
-            execution_context = await self._execution_context_for("ops")
-            with self._audit_scope():
-                async for chunk in provider.stream_chat(
-                    prompt,
-                    model=self.model_preference,
-                    specific_model=self.specific_model,
-                    purpose="ops",
-                    execution_context=execution_context,
-                ):
-                    if not is_thinking_chunk(chunk):
-                        chunks.append(chunk)
-        except Exception as exc:
-            logger.error("LLM call failed: {}", exc)
-            raise
-        return "".join(chunks)
+        max_attempts = 2
+        last_exc: Exception | None = None
+        for attempt in range(max_attempts):
+            chunks: list[str] = []
+            try:
+                execution_context = await self._execution_context_for("ops")
+                with self._audit_scope():
+                    async for chunk in provider.stream_chat(
+                        prompt,
+                        model=self.model_preference,
+                        specific_model=self.specific_model,
+                        purpose="ops",
+                        execution_context=execution_context,
+                    ):
+                        if not is_thinking_chunk(chunk):
+                            chunks.append(chunk)
+                return "".join(chunks)
+            except Exception as exc:
+                last_exc = exc
+                if not _is_retryable_error(exc) or attempt >= max_attempts - 1:
+                    logger.error("LLM call failed: {}", exc)
+                    raise
+                delay = RETRY_BACKOFF[min(attempt, len(RETRY_BACKOFF) - 1)]
+                logger.warning(
+                    "Retryable ops LLM error (attempt {}/{}): {}, sleep {}s",
+                    attempt + 1,
+                    max_attempts,
+                    exc,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        assert last_exc is not None
+        raise last_exc
 
     async def _execution_context_for(self, purpose: str):
         return await build_agent_execution_context(self, purpose, surface="agent")
@@ -391,8 +408,21 @@ class AgentEngine(AgentEngineOpsMixin):
     # Final report
     # ------------------------------------------------------------------
 
-    async def _generate_final_report(self, history: list[dict], iterations: list[dict]) -> str:
-        return await generate_final_report(self, history, iterations)
+    async def _generate_final_report(
+        self,
+        history: list[dict],
+        iterations: list[dict],
+        *,
+        exit_reason: str = "",
+        tool_calls: list[dict] | None = None,
+    ) -> str:
+        return await generate_final_report(
+            self,
+            history,
+            iterations,
+            exit_reason=exit_reason,
+            tool_calls=tool_calls,
+        )
 
     # ------------------------------------------------------------------
     # DB helpers

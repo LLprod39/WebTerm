@@ -46,7 +46,10 @@ def register_assistant_actions() -> None:
         AssistantActionSpec(
             action_type="studio.capabilities.registry",
             label="Show Studio capabilities",
-            description="Read the Studio capability registry with matching MCP servers, skills, and task families.",
+            description=(
+                "Read a short Studio capabilities summary (MCP/skill counts and names, task families). "
+                "Do not use for general «what can you do» questions."
+            ),
             required_feature="studio",
             risk="read",
             handler=capability_registry,

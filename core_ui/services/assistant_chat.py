@@ -125,7 +125,11 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
 
 
 def list_chat_sessions(user) -> list[dict[str, Any]]:
-    sessions = ChatSession.objects.filter(user=user).order_by("-updated_at")[:50]
+    sessions = (
+        ChatSession.objects.filter(user=user)
+        .exclude(kind=ChatSession.KIND_DUTY)
+        .order_by("-updated_at")[:50]
+    )
     return [serialize_chat_session(session) for session in sessions]
 
 

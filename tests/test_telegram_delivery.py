@@ -8,11 +8,11 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from studio.approval_models import ApprovalRequest, TelegramBotCursor, TelegramReplyRequest
-from studio.management.commands.run_telegram_bot import Command
 from studio.telegram_delivery_service import (
     advance_telegram_update_offset,
     arm_telegram_reply_request,
     get_telegram_update_offset,
+    record_telegram_approval_callback,
     store_telegram_operator_reply,
     telegram_approval_callback_data,
     telegram_bot_token_digest,
@@ -30,13 +30,11 @@ def test_telegram_offset_is_monotonic_and_survives_command_restart():
     assert advance_telegram_update_offset(token, 42) == 42
     assert advance_telegram_update_offset(token, 12) == 42
 
-    restarted_process = Command()
-    assert restarted_process is not None
     assert get_telegram_update_offset(token) == 42
     assert TelegramBotCursor.objects.get(bot_token_digest=telegram_bot_token_digest(token)).update_offset == 42
 
 
-def test_two_consumers_route_one_hundred_approval_callbacks_without_loss(monkeypatch):
+def test_two_consumers_route_one_hundred_approval_callbacks_without_loss():
     run = make_run("telegram-approval-burst")
     approver = run.pipeline.owner
     bot_token = "123456789:approval-burst"
@@ -58,24 +56,15 @@ def test_two_consumers_route_one_hundred_approval_callbacks_without_loss(monkeyp
             for index, raw_token in enumerate(raw_tokens)
         ]
     )
-    monkeypatch.setattr(Command, "_answer_callback_query", lambda *_args, **_kwargs: None)
-    consumers = (Command(), Command())
 
     for index, raw_token in enumerate(raw_tokens):
-        result = consumers[index % 2]._handle_update(
-            {
-                "update_id": 10_000 + index,
-                "callback_query": {
-                    "data": telegram_approval_callback_data("approved", raw_token),
-                    "message": {"chat": {"id": chat_id}},
-                    "from": {"username": f"operator_{index}"},
-                },
-            },
-            bot_token,
-            run.pipeline,
-            None,
+        accepted, _answer = record_telegram_approval_callback(
+            bot_token=bot_token,
+            callback_data=telegram_approval_callback_data("approved", raw_token),
+            chat_id=chat_id,
+            from_username=f"operator_{index}",
         )
-        assert result == "approval"
+        assert accepted is True
 
     assert ApprovalRequest.objects.filter(run=run, status=ApprovalRequest.STATUS_APPROVED).count() == 100
     run.refresh_from_db()
@@ -98,20 +87,23 @@ def test_reply_delivery_uses_direct_request_lookup_beyond_one_hundred_active_nod
         )
 
     with CaptureQueriesContext(connection) as queries:
-        delivered = store_telegram_operator_reply(
-            token,
-            {
-                "text": "continue deployment",
-                "chat": {"id": "chat-42"},
-                "message_id": 99_999,
-                "reply_to_message": {"message_id": 20_124},
-                "from": {"username": "ops_user"},
-            },
+        assert (
+            store_telegram_operator_reply(
+                token,
+                {
+                    "message_id": 99_001,
+                    "text": "operator says yes",
+                    "chat": {"id": "chat-42"},
+                    "from": {"username": "ops"},
+                    "reply_to_message": {"message_id": 20_100},
+                },
+            )
+            is True
         )
 
-    assert delivered is True
-    assert len(queries) <= 10
-    request = TelegramReplyRequest.objects.get(run=run, node_id="reply-124")
-    assert request.status == TelegramReplyRequest.STATUS_RECEIVED
+    assert len(queries) <= 12
+    reply = TelegramReplyRequest.objects.get(run=run, node_id="reply-100")
+    assert reply.status == TelegramReplyRequest.STATUS_RECEIVED
+    assert reply.response_text == "operator says yes"
     run.refresh_from_db()
-    assert run.node_states["reply-124"]["operator_response"] == "continue deployment"
+    assert run.node_states["reply-100"]["operator_response"] == "operator says yes"

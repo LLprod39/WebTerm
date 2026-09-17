@@ -6,8 +6,15 @@ from django.utils import timezone
 from loguru import logger
 
 from app.agent_kernel.domain.roles import ROLE_SPECS
+from app.agent_kernel.sandbox.runtime_errors import is_control_plane_text
 from app.core.llm import LLMProvider
 from servers.agents.agent_inputs import build_agent_materials_prompt
+from servers.agents.agent_report_compact import (
+    COMPACT_MULTI_REPORT_MAX_CHARS,
+    build_compact_report,
+    coerce_compact_report,
+    iterations_have_control_plane,
+)
 from servers.agents.multi_agent_engine_config import MAX_PLAN_TASKS
 from servers.agents.multi_agent_plan_helpers import (
     build_tasks_table,
@@ -203,72 +210,60 @@ async def replan_multi_agent_tasks(
 
 async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list[dict], orchestrator_log: list) -> str:
     """Generate the final consolidated report."""
+    tasks_table = build_tasks_table(plan_tasks)
+    control_plane = any(
+        is_control_plane_text(f"{task.get('result')} {task.get('error')}")
+        or iterations_have_control_plane(task.get("iterations"))
+        for task in plan_tasks
+    )
+    if control_plane or getattr(engine, "_control_plane_blocked", False):
+        report = _fallback_multi_agent_report(
+            goal,
+            plan_tasks,
+            tasks_table,
+            error="CONTROL_PLANE: канал выполнения на хосте WebTerm недоступен",
+            control_plane=True,
+        )
+        orchestrator_log.append({"role": "assistant", "content": report, "timestamp": timezone.now().isoformat()})
+        return report
+
     task_summaries = []
     for task in plan_tasks:
         status_emoji = {"done": "✅", "failed": "❌", "skipped": "⏭️", "running": "⚠️"}.get(task["status"], "❓")
         result_text = task.get("result", "") or task.get("error", "Нет данных")
-        task_summaries.append(f"{status_emoji} **{task['name']}**: {result_text[:400]}")
+        task_summaries.append(f"{status_emoji} **{task['name']}**: {str(result_text)[:160]}")
 
-    tasks_block = "\n\n".join(task_summaries)
-    tasks_table = build_tasks_table(plan_tasks)
+    tasks_block = "\n".join(task_summaries)
 
-    system_prompt = """Ты — старший технический аналитик. Создай профессиональный деловой отчёт в формате Markdown.
-Язык: русский. Стиль: чёткий, структурированный, без воды. Только факты и конкретные данные.
+    system_prompt = """Ты — старший технический аналитик. Пиши КОРОТКИЙ деловой отчёт в Markdown.
+Язык: русский. Без воды. Только факты.
 
-ПРАВИЛА ФОРМАТИРОВАНИЯ:
-- В отчёте секция «Результаты по задачам» уже заполнена готовой таблицей — НЕ переписывай и НЕ меняй её.
-- Списки — через дефис (-), без лишних отступов.
-- Не повторяй одно и то же в разных секциях.
-- Если корневая причина не подтверждена фактами, так и напиши; не выдумывай её."""
+ПРАВИЛА:
+- Не больше ~1200 символов до таблицы задач.
+- Запрещены секции «Содержание», «Контекст», «Оценка цели», «Что произошло», «Доказательства».
+- Если в запросе есть таблица «Результаты по задачам» — вставь её как есть.
+- Не повторяй одно и то же.
+- Не выдумывай факты."""
 
-    user_msg = f"""Создай финальный отчёт по результатам работы агентного пайплайна.
+    user_msg = f"""Создай короткий финальный отчёт.
 
-Цель пайплайна: {goal}
+Цель: {goal}
 
-Результаты задач (для контекста):
+Результаты:
 {tasks_block}
 
-Сгенерируй отчёт СТРОГО в следующем формате. Секцию «Результаты по задачам» оформи ТОЧНО так (скопируй таблицу как есть):
-
-# [Название — кратко суть результата]
-
-> [Одно предложение — главный итог пайплайна]
-
-## Что произошло
-
-[2–4 предложения: какая цель была у пайплайна, какие агенты/серверы участвовали, чем завершился запуск]
-
-## Итог
-
-[3–4 предложения: общий результат, статус системы, ключевые выводы]
+Каркас:
+1) `# ...` — одна строка
+2) `> ...` — одно предложение
+3) до 5 пунктов `- факт`
+4) секция строго в таком виде:
 
 ## Результаты по задачам
 
 {tasks_table}
 
-## Доказательства
-
-- [Факт 1 — конкретный результат задачи, команда, статус сервиса, число, путь или версия]
-- [Факт 2]
-
-## Ключевые находки
-
-- **[Категория]:** [Факт с конкретными данными — цифры, имена, версии]
-- **[Категория]:** [...]
-
-## Проблемы и риски
-
-- [Проблема — что обнаружено и почему важно]
-- [Если критических проблем нет — написать: Критических проблем не обнаружено]
-
-## Рекомендации
-
-1. [Конкретное действие — что именно сделать]
-2. [Следующий шаг]
-
----
-
-**Статус пайплайна:** ✅ Успех / ⚠️ Частичный успех / ❌ Ошибка"""
+5) опционально `Дальше: ...`
+6) `**Статус пайплайна:** ✅ Успех` / `⚠️ Частичный успех` / `❌ Ошибка`"""
 
     orchestrator_log.append({"role": "user", "content": user_msg, "timestamp": timezone.now().isoformat()})
     provider = LLMProvider()
@@ -286,77 +281,60 @@ async def synthesize_multi_agent_report(engine: Any, goal: str, plan_tasks: list
                 if chunks and len(chunks) % 20 == 0:
                     await engine._emit("agent_report", {"text": "".join(chunks), "interim": True})
         result = "".join(chunks).strip()
+        fallback = _fallback_multi_agent_report(
+            goal, plan_tasks, tasks_table, error="LLM вернул пустой или слишком длинный отчёт"
+        )
         if not result:
-            return _fallback_multi_agent_report(
-                goal, plan_tasks, tasks_table, error="LLM вернул пустой финальный отчёт"
-            )
-        orchestrator_log.append({"role": "assistant", "content": result, "timestamp": timezone.now().isoformat()})
-        return inject_tasks_table_into_report(result, tasks_table)
+            return fallback
+        merged = inject_tasks_table_into_report(result, tasks_table)
+        coerced = coerce_compact_report(merged, fallback=fallback, max_chars=COMPACT_MULTI_REPORT_MAX_CHARS)
+        orchestrator_log.append({"role": "assistant", "content": coerced, "timestamp": timezone.now().isoformat()})
+        return coerced
     except Exception as exc:
         logger.error("Synthesis failed: {}", exc)
         return _fallback_multi_agent_report(goal, plan_tasks, tasks_table, error=str(exc))
 
 
-def _fallback_multi_agent_report(goal: str, plan_tasks: list[dict], tasks_table: str, *, error: str = "") -> str:
+def _fallback_multi_agent_report(
+    goal: str,
+    plan_tasks: list[dict],
+    tasks_table: str,
+    *,
+    error: str = "",
+    control_plane: bool = False,
+) -> str:
     done = [task for task in plan_tasks if task.get("status") == "done"]
     failed = [task for task in plan_tasks if task.get("status") == "failed"]
-    skipped = [task for task in plan_tasks if task.get("status") == "skipped"]
-    evidence = []
-    for task in plan_tasks[:8]:
-        result_text = str(task.get("result") or task.get("error") or task.get("thought") or "").strip()
+    facts: list[str] = []
+    for task in plan_tasks[:5]:
+        result_text = " ".join(str(task.get("result") or task.get("error") or "").split())[:160]
         if result_text:
-            evidence.append(f"- {task.get('name', 'Задача')}: {result_text[:240]}")
-    if not evidence:
-        evidence = ["- Сохранённых результатов задач недостаточно для технического вывода."]
-
-    risk_lines = []
-    if failed:
-        risk_lines.extend(f"- Задача не выполнена: {task.get('name', 'Без названия')}" for task in failed[:5])
-    if skipped:
-        risk_lines.extend(f"- Задача пропущена: {task.get('name', 'Без названия')}" for task in skipped[:5])
+            facts.append(f"{task.get('name', 'Задача')}: {result_text}")
     if error:
-        risk_lines.append(f"- Генерация LLM-отчёта завершилась ошибкой: {error[:500]}")
-    if not risk_lines:
-        risk_lines = [
-            "- Критических проблем не обнаружено по сохранённым задачам; полнота вывода требует ручной проверки."
-        ]
-
-    status = "❌ Ошибка" if failed else "⚠️ Частичный успех"
-    return f"""# Отчёт пайплайна
-
-> Финальный Markdown собран детерминированным fallback по сохранённым задачам пайплайна.
-
-## Что произошло
-
-Пайплайн выполнял цель: {goal}. Основной LLM-синтез финального отчёта не дал полноценный структурированный результат, поэтому backend сформировал безопасный fallback-отчёт из сохранённых задач.
-
-## Итог
-
-Выполнено задач: {len(done)} из {len(plan_tasks)}. Корневая причина не подтверждена фактами; вывод ниже основан только на сохранённых результатах задач.
-
-## Результаты по задачам
-
-{tasks_table}
-
-## Доказательства
-
-{chr(10).join(evidence)}
-
-## Ключевые находки
-
-- Доступно задач пайплайна: {len(plan_tasks)}.
-- Успешно завершено задач: {len(done)}.
-- Провалено задач: {len(failed)}.
-
-## Проблемы и риски
-
-{chr(10).join(risk_lines)}
-
-## Рекомендации
-
-1. Проверить вкладки «События», «Логи» и «Ход агента» для первичных данных.
-2. Повторить запуск или перепланировать оставшиеся задачи после устранения проблем.
-
----
-
-**Статус пайплайна:** {status}"""
+        facts.append(error[:180])
+    if not facts:
+        facts = [f"Задач: {len(plan_tasks)}, успешно: {len(done)}, провалено: {len(failed)}."]
+    status = "❌ Ошибка" if failed or control_plane else "⚠️ Частичный успех"
+    summary = (
+        "Команды на целевых серверах не запускались: у WebTerm нет доступа к Docker."
+        if control_plane
+        else f"Цель: {str(goal)[:160]}. LLM-синтез недоступен, ниже факты и таблица задач."
+    )
+    next_step = (
+        "Выставить DOCKER_SOCKET_GID и пересоздать agent-execution."
+        if control_plane
+        else "Проверить вкладку «Шаги» и повторить проваленные задачи."
+    )
+    body = build_compact_report(
+        title="Пайплайн: канал выполнения недоступен" if control_plane else "Отчёт пайплайна",
+        summary=summary,
+        facts=facts,
+        next_step=next_step,
+        status=status,
+    )
+    # Keep the required task table after the compact narrative.
+    status_line = ""
+    if "**Статус:**" in body:
+        body, status_line = body.rsplit("**Статус:**", 1)
+        status_line = f"**Статус пайплайна:**{status_line}".strip()
+    return f"{body.strip()}\n\n## Результаты по задачам\n\n{tasks_table}\n\n{status_line}".strip()

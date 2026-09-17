@@ -13,15 +13,21 @@ class ProviderTarget(StrEnum):
     OLLAMA_LOCAL = "ollama_local"
     CODEX_SUBSCRIPTION = "codex_subscription"
     GROK_SUBSCRIPTION = "grok_subscription"
+    CURSOR_SUBSCRIPTION = "cursor_subscription"
 
 
 CANONICAL_PROVIDER_TARGETS = frozenset(target.value for target in ProviderTarget)
 SUBSCRIPTION_PROVIDER_TARGETS = frozenset(
-    {ProviderTarget.CODEX_SUBSCRIPTION.value, ProviderTarget.GROK_SUBSCRIPTION.value}
+    {
+        ProviderTarget.CODEX_SUBSCRIPTION.value,
+        ProviderTarget.GROK_SUBSCRIPTION.value,
+        ProviderTarget.CURSOR_SUBSCRIPTION.value,
+    }
 )
 
 # Existing public IDs remain accepted at input boundaries. They never change
 # meaning: ``grok`` is still the xAI API, while Grok Build is a distinct target.
+# Host ``cursor`` (API-key CLI) stays separate from ``cursor_subscription``.
 LEGACY_PROVIDER_TARGET_ALIASES: dict[str, str] = {
     "openai": ProviderTarget.OPENAI_API,
     "grok": ProviderTarget.GROK_API,
@@ -33,6 +39,7 @@ LEGACY_PROVIDER_TARGET_ALIASES: dict[str, str] = {
     "codex_cli": ProviderTarget.CODEX_SUBSCRIPTION,
     "grok_cli": ProviderTarget.GROK_SUBSCRIPTION,
     "grok_build": ProviderTarget.GROK_SUBSCRIPTION,
+    "cursor_cli": ProviderTarget.CURSOR_SUBSCRIPTION,
 }
 
 _LEGACY_RUNTIME_PROVIDER_IDS: dict[str, str] = {

@@ -3,8 +3,9 @@ import asyncio
 import pytest
 from django.test import override_settings
 
+from app.ai_runtime import ProviderRuntimeError
 from app.core.llm import LLMProvider, _is_timeout_error, _log_llm_usage, _provider_timeout_seconds
-from app.core.llm_runtime import _grok_reasoning_effort
+from app.core.llm_runtime import _grok_reasoning_effort, _is_retryable_error
 from app.core.model_config import ModelManager, model_manager
 from core_ui.audit import audit_context
 
@@ -13,6 +14,14 @@ def test_is_timeout_error_detects_timeout_variants():
     assert _is_timeout_error(TimeoutError())
     assert _is_timeout_error(TimeoutError("timed out"))
     assert not _is_timeout_error(RuntimeError("boom"))
+
+
+def test_is_retryable_error_accepts_cursor_runtime_failures():
+    assert _is_retryable_error(ProviderRuntimeError("provider_runtime_error", "Cursor runtime failed", retryable=True))
+    assert _is_retryable_error(RuntimeError("Cursor runtime failed"))
+    assert not _is_retryable_error(
+        ProviderRuntimeError("provider_runtime_error", "Cursor CLI refused the workspace without --trust")
+    )
 
 
 @override_settings(

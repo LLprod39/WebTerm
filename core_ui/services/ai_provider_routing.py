@@ -11,6 +11,7 @@ from django.db.models import Count, Max
 from django.utils import timezone
 
 from app.ai_runtime import (
+    ExecutionMode,
     LLMExecutionContext,
     ProviderBinding,
     ProviderRouteUnavailableError,
@@ -25,7 +26,12 @@ from core_ui.models.ai_providers import (
     AIProviderPool,
     AIProviderPreference,
 )
-from core_ui.services.ai_provider_access import can_use_binding, can_use_connection
+from core_ui.services.ai_provider_access import (
+    assert_principal_capacity,
+    can_use_binding,
+    can_use_connection,
+    principal_has_capacity,
+)
 
 
 def binding_from_preference(preference: AIProviderPreference | None) -> ProviderBinding | None:
@@ -235,6 +241,13 @@ def _select_pool_connection(pool: AIProviderPool, context: LLMExecutionContext) 
             connection.leases.filter(status=AIProviderLease.STATUS_ACTIVE).values_list("slot", flat=True)
         )
         if any(slot not in active_slots for slot in range(1, connection.concurrency_limit + 1)):
+            if not principal_has_capacity(
+                connection,
+                user_id=context.actor_user_id,
+                project_id=context.project_id,
+                mode=context.mode,
+            ):
+                continue
             weight = max(1, int(memberships[connection.pk]))
             # Durable weighted debt prevents the all-idle tie from selecting the
             # lowest primary key forever. Active load remains a second signal.
@@ -327,6 +340,16 @@ def _acquire_locked_connection_lease(
             retryable=True,
             details={"connection_id": connection.pk},
         )
+    try:
+        mode = ExecutionMode(str(invocation.mode or ExecutionMode.INTERACTIVE.value))
+    except ValueError:
+        mode = ExecutionMode.INTERACTIVE
+    assert_principal_capacity(
+        connection,
+        user_id=invocation.user_id,
+        project_id=invocation.project_id,
+        mode=mode,
+    )
     max_fencing_token = connection.leases.aggregate(value=Max("fencing_token"))["value"] or 0
     lease = AIProviderLease.objects.create(
         invocation=invocation,
@@ -381,4 +404,5 @@ def binding_requires_cli(binding: ProviderBinding) -> bool:
     return binding.target_id in {
         ProviderTarget.CODEX_SUBSCRIPTION.value,
         ProviderTarget.GROK_SUBSCRIPTION.value,
+        ProviderTarget.CURSOR_SUBSCRIPTION.value,
     }

@@ -20,8 +20,10 @@ def test_legacy_provider_ids_keep_api_meaning() -> None:
     assert canonicalize_target_id("openai") == "openai_api"
     assert canonicalize_target_id("grok") == "grok_api"
     assert canonicalize_target_id("grok_build") == "grok_subscription"
+    assert canonicalize_target_id("cursor_cli") == "cursor_subscription"
     assert legacy_runtime_provider_id("grok") == "grok"
     assert legacy_runtime_provider_id("grok_subscription") is None
+    assert legacy_runtime_provider_id("cursor_subscription") is None
 
 
 def test_provider_binding_rejects_connection_and_pool_together() -> None:

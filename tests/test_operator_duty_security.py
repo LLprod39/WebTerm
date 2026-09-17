@@ -164,12 +164,12 @@ def test_execute_action_is_idempotent_after_completion():
 
 
 @pytest.mark.django_db
-def test_duty_session_and_briefing():
+def test_duty_session_and_briefing_removed():
     user = User.objects.create_user(username="duty-user", password="x")
     _grant(user, "orchestrator", "servers")
-    session = get_or_create_duty_session(user)
-    assert session.kind == ChatSession.KIND_DUTY
-    assert session.title == "Дежурный"
+
+    with pytest.raises(RuntimeError, match="Duty chat has been removed"):
+        get_or_create_duty_session(user)
 
     facts = {
         "server_count": 2,
@@ -180,38 +180,29 @@ def test_duty_session_and_briefing():
         "agent_runs": [],
     }
     md = render_briefing_markdown(facts)
-    assert "брифинг" in md.lower() or "Briefing" in md
     assert "stg" in md
 
     result = deliver_morning_briefing(user, force=True)
-    assert result is not None
-    assert result.get("session_id") == session.pk
-    session.refresh_from_db()
-    assert session.messages.filter(metadata__source="operator_duty").exists() or session.messages.count() >= 1
+    assert result == {"skipped": True, "reason": "duty_removed"}
 
-    set_duty_enabled(user, enabled=False)
-    skipped = deliver_morning_briefing(user, force=False)
-    # force=False and disabled → skip; with force=True still works
-    assert skipped is None or skipped.get("skipped") or True
+    with pytest.raises(RuntimeError, match="Duty chat has been removed"):
+        set_duty_enabled(user, enabled=False)
 
 
 @pytest.mark.django_db
-def test_duty_api_and_confirm_typed_http():
+def test_duty_api_gone():
     user = User.objects.create_user(username="duty-api", password="x")
-    _grant(user, "orchestrator", "servers")
+    _grant(user, "orchestrator", "servers", "chat")
     client = Client()
     client.force_login(user)
 
     resp = client.get("/api/assistant/duty/")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["kind"] == "duty"
-    assert body.get("duty_enabled") is True
+    assert resp.status_code == 410
+    assert "removed" in resp.json().get("error", "").lower()
 
     brief = client.post(
         "/api/assistant/duty/",
         data=json.dumps({"brief_now": True}),
         content_type="application/json",
     )
-    assert brief.status_code == 200
-    assert brief.json().get("ok") is True
+    assert brief.status_code == 410

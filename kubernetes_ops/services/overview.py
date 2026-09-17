@@ -16,37 +16,50 @@ from kubernetes_ops.services.readiness import build_kubernetes_readiness_report
 
 
 def build_overview_payload(user=None) -> dict[str, Any]:
-    clusters = list(K8sCluster.objects.all().order_by("environment", "name"))
-    apps = list(K8sAppRef.objects.select_related("cluster").all().order_by("cluster__name", "namespace", "name")[:50])
-    bundles = list(K8sFleetBundle.objects.all().order_by("name")[:50])
+    from kubernetes_ops.services.access import visible_clusters_queryset
+    from kubernetes_ops.views_helpers import _providers_queryset_for_user
+
+    visible_clusters = visible_clusters_queryset(user) if user is not None else K8sCluster.objects.none()
+    clusters = list(visible_clusters.order_by("environment", "name"))
+    cluster_ids = [cluster.id for cluster in clusters]
+    apps = list(
+        K8sAppRef.objects.select_related("cluster")
+        .filter(cluster_id__in=cluster_ids)
+        .order_by("cluster__name", "namespace", "name")[:50]
+    )
+    bundles = list(K8sFleetBundle.objects.all().order_by("name")[:50]) if getattr(user, "is_staff", False) else []
     workloads = list(
         K8sWorkloadRef.objects.select_related("cluster")
-        .all()
+        .filter(cluster_id__in=cluster_ids)
         .order_by("cluster__name", "namespace", "kind", "name")[:50]
     )
-    provider_rows = list(K8sProvider.objects.all().order_by("kind", "name"))
-    app_counts = K8sAppRef.objects.aggregate(
+    provider_rows = list(_providers_queryset_for_user(user).order_by("kind", "name")) if user is not None else []
+    app_counts = K8sAppRef.objects.filter(cluster_id__in=cluster_ids).aggregate(
         total=Count("id"),
         degraded=Count("id", filter=Q(health=K8sCluster.HEALTH_DEGRADED)),
         warning=Count("id", filter=Q(health=K8sCluster.HEALTH_WARNING)),
     )
-    cluster_counts = K8sCluster.objects.aggregate(
+    cluster_counts = visible_clusters.aggregate(
         total=Count("id"),
         degraded=Count("id", filter=Q(health=K8sCluster.HEALTH_DEGRADED)),
         warning=Count("id", filter=Q(health=K8sCluster.HEALTH_WARNING)),
     )
-    fleet_counts = K8sFleetBundle.objects.aggregate(
-        total=Count("id"),
-        degraded=Count("id", filter=Q(status=K8sFleetBundle.STATUS_DEGRADED)),
-        rolling=Count("id", filter=Q(status=K8sFleetBundle.STATUS_ROLLING)),
-        paused=Count("id", filter=Q(status=K8sFleetBundle.STATUS_PAUSED)),
+    fleet_counts = (
+        K8sFleetBundle.objects.aggregate(
+            total=Count("id"),
+            degraded=Count("id", filter=Q(status=K8sFleetBundle.STATUS_DEGRADED)),
+            rolling=Count("id", filter=Q(status=K8sFleetBundle.STATUS_ROLLING)),
+            paused=Count("id", filter=Q(status=K8sFleetBundle.STATUS_PAUSED)),
+        )
+        if getattr(user, "is_staff", False)
+        else {"total": 0, "degraded": 0, "rolling": 0, "paused": 0}
     )
-    workload_counts = K8sWorkloadRef.objects.aggregate(
+    workload_counts = K8sWorkloadRef.objects.filter(cluster_id__in=cluster_ids).aggregate(
         total=Count("id"),
         degraded=Count("id", filter=Q(health=K8sCluster.HEALTH_DEGRADED)),
         warning=Count("id", filter=Q(health=K8sCluster.HEALTH_WARNING)),
     )
-    event_counts = K8sEvent.objects.aggregate(
+    event_counts = K8sEvent.objects.filter(cluster_id__in=cluster_ids).aggregate(
         error=Count("id", filter=Q(severity=K8sEvent.SEVERITY_ERROR)),
         warning=Count("id", filter=Q(severity=K8sEvent.SEVERITY_WARNING)),
     )

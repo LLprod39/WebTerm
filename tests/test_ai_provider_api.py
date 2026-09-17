@@ -162,6 +162,7 @@ def test_staff_without_admin_capability_cannot_enumerate_or_manage_workspace_cre
             "project_role": "",
             "allow_interactive": True,
             "allow_unattended": False,
+            "max_slots": None,
         }
     ]
     assert client.get(f"/api/ai/providers/auth-flows/{flow.public_id}/").status_code == 200
@@ -277,6 +278,77 @@ def test_preference_rejects_reasoning_unsupported_by_model(client) -> None:
     assert response.json()["code"] == "invalid_request"
 
 
+def test_preference_saves_cursor_model_and_ignores_reasoning(client) -> None:
+    user = User.objects.create_user("cursor-picker", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope="personal",
+        owner=user,
+        name="Personal Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_cursor_picker",
+    )
+    client.force_login(user)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "cursor_subscription",
+                    "connection_id": connection.pk,
+                    "model_id": "auto",
+                    "reasoning_effort": "high",
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    preference = response.json()["preference"]["binding"]
+    assert preference["model_id"] == "auto"
+    assert preference["reasoning_effort"] is None
+
+
+def test_preference_saves_cursor_model_without_reasoning(client) -> None:
+    user = User.objects.create_user("cursor-no-reasoning", password="pw")
+    _project(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope="personal",
+        owner=user,
+        name="Personal Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="connection_cursor_no_reasoning",
+    )
+    client.force_login(user)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "cursor_subscription",
+                    "connection_id": connection.pk,
+                    "model_id": "gpt-5",
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    preference = response.json()["preference"]["binding"]
+    assert preference["model_id"] == "gpt-5"
+    assert preference["reasoning_effort"] is None
+
+
 def test_invalid_concurrency_is_a_bounded_client_error(client) -> None:
     user = User.objects.create_user("operator", password="pw")
     _project(user)
@@ -302,6 +374,177 @@ def test_invalid_concurrency_is_a_bounded_client_error(client) -> None:
         "code": "validation_error",
         "fields": {"concurrency_limit": ["Must be an integer"]},
     }
+
+
+def test_owner_can_patch_connection_concurrency_limit(client) -> None:
+    user = User.objects.create_user("operator", password="pw")
+    _project(user)
+    client.force_login(user)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=user,
+        created_by=user,
+        name="testCURSOR",
+        concurrency_limit=1,
+        status=AIProviderConnection.STATUS_CONNECTED,
+        enabled=True,
+    )
+
+    response = client.patch(
+        f"/api/ai/providers/connections/{connection.pk}/",
+        data=json.dumps({"concurrency_limit": 4}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["connection"]["concurrency_limit"] == 4
+    connection.refresh_from_db()
+    assert connection.concurrency_limit == 4
+
+    too_high = client.patch(
+        f"/api/ai/providers/connections/{connection.pk}/",
+        data=json.dumps({"concurrency_limit": 99}),
+        content_type="application/json",
+    )
+    assert too_high.status_code == 400
+
+
+def test_grant_on_personal_connection_auto_promotes_to_workspace(client) -> None:
+    admin = User.objects.create_user("grant-promote-admin", password="pw")
+    peer = User.objects.create_user("grant-promote-peer", password="pw")
+    _project(admin)
+    UserAppPermission.objects.update_or_create(user=admin, feature="ai_connections_admin", defaults={"allowed": True})
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=admin,
+        created_by=admin,
+        name="testCURSOR",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        concurrency_limit=3,
+    )
+    client.force_login(admin)
+
+    response = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps(
+            {
+                "connection_id": connection.pk,
+                "user_id": peer.pk,
+                "allow_interactive": True,
+                "allow_unattended": False,
+                "max_slots": 2,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 201
+    assert response.json()["grant"]["user"]["id"] == peer.pk
+    assert response.json()["grant"]["max_slots"] == 2
+
+    connection.refresh_from_db()
+    assert connection.scope == AIProviderConnection.SCOPE_WORKSPACE
+    assert connection.owner_id is None
+    assert AIProviderConnectionGrant.objects.filter(connection=connection, user=admin).exists()
+    assert AIProviderConnectionGrant.objects.filter(connection=connection, user=peer, max_slots=2).exists()
+
+    listed = client.get("/api/ai/providers/connections/")
+    assert listed.status_code == 200
+    serialized = next(item for item in listed.json()["connections"] if item["id"] == connection.pk)
+    assert serialized["scope"] == "workspace"
+    assert serialized["manageable"] is True
+    assert {grant["user"]["id"] for grant in serialized["grants"]} >= {admin.pk, peer.pk}
+
+
+def test_admin_can_promote_personal_connection_to_workspace(client) -> None:
+    admin = User.objects.create_user("scope-admin", password="pw")
+    _project(admin)
+    UserAppPermission.objects.update_or_create(user=admin, feature="ai_connections_admin", defaults={"allowed": True})
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=admin,
+        created_by=admin,
+        name="testCURSOR",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        concurrency_limit=3,
+    )
+    client.force_login(admin)
+
+    response = client.patch(
+        f"/api/ai/providers/connections/{connection.pk}/",
+        data=json.dumps({"scope": "workspace"}),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    payload = response.json()["connection"]
+    assert payload["scope"] == "workspace"
+    assert payload["owner_id"] is None
+    grants = payload["grants"]
+    assert len(grants) == 1
+    assert grants[0]["user"]["id"] == admin.pk
+    assert grants[0]["allow_interactive"] is True
+    assert grants[0]["allow_unattended"] is True
+
+    connection.refresh_from_db()
+    assert connection.scope == AIProviderConnection.SCOPE_WORKSPACE
+    assert connection.owner_id is None
+
+
+def test_admin_can_grant_group_with_max_slots_and_patch(client) -> None:
+    from django.contrib.auth.models import Group
+
+    admin = User.objects.create_user("ai-admin", password="pw")
+    _project(admin)
+    UserAppPermission.objects.update_or_create(user=admin, feature="ai_connections_admin", defaults={"allowed": True})
+    group = Group.objects.create(name="ops-cli")
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=admin,
+        name="Workspace Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        concurrency_limit=4,
+    )
+    client.force_login(admin)
+
+    created = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps(
+            {
+                "connection_id": connection.pk,
+                "group_id": group.pk,
+                "allow_interactive": True,
+                "allow_unattended": True,
+                "max_slots": 2,
+            }
+        ),
+        content_type="application/json",
+    )
+    assert created.status_code == 201
+    grant = created.json()["grant"]
+    assert grant["group"]["id"] == group.pk
+    assert grant["user"] is None
+    assert grant["max_slots"] == 2
+    assert grant["allow_unattended"] is True
+
+    patched = client.patch(
+        f"/api/ai/providers/grants/{grant['id']}/",
+        data=json.dumps({"max_slots": 3, "allow_unattended": False}),
+        content_type="application/json",
+    )
+    assert patched.status_code == 200
+    assert patched.json()["grant"]["max_slots"] == 3
+    assert patched.json()["grant"]["allow_unattended"] is False
+
+    cleared = client.patch(
+        f"/api/ai/providers/grants/{grant['id']}/",
+        data=json.dumps({"max_slots": None}),
+        content_type="application/json",
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["grant"]["max_slots"] is None
 
 
 def test_revoke_fails_closed_and_retains_reference_for_offline_cleanup(client, monkeypatch) -> None:
@@ -336,9 +579,7 @@ def test_revoke_fails_closed_and_retains_reference_for_offline_cleanup(client, m
         lambda _connection: True,
     )
     assert retry_pending_credential_cleanup() == 1
-    connection.refresh_from_db()
-    assert connection.status == AIProviderConnection.STATUS_REVOKED
-    assert connection.credential_ref == ""
+    assert not AIProviderConnection.objects.filter(pk=connection.pk).exists()
 
 
 def test_string_false_does_not_enable_connection(client) -> None:
@@ -579,6 +820,7 @@ def test_destructive_provider_mutations_emit_metadata_only_audit_events(client, 
         == 200
     )
     assert client.delete(f"/api/ai/providers/connections/{connection.pk}/").status_code == 200
+    assert not AIProviderConnection.objects.filter(pk=connection.pk).exists()
 
     rows = list(
         UserActivityLog.objects.filter(
@@ -598,3 +840,196 @@ def test_destructive_provider_mutations_emit_metadata_only_audit_events(client, 
     }
     assert preference.pk is not None
     assert "credential-secret-must-not-be-audited" not in repr([row.metadata for row in rows])
+
+
+def test_owner_assigns_cli_preference_to_grantee(client) -> None:
+    owner = User.objects.create_user("assign-owner", password="pw")
+    peer = User.objects.create_user("assign-peer", password="pw")
+    _project(owner)
+    _project(peer)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=owner,
+        name="Shared Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="assign_cli_ref",
+    )
+    AIProviderConnectionGrant.objects.create(
+        connection=connection,
+        user=peer,
+        allow_interactive=True,
+        allow_unattended=True,
+    )
+    client.force_login(owner)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "target_user_id": peer.pk,
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "cursor_subscription",
+                    "connection_id": connection.pk,
+                    "model_id": "auto",
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    assert response.json()["preference"]["user_id"] == peer.pk
+    assert response.json()["preference"]["binding"]["connection_id"] == connection.pk
+
+    listed = client.get(f"/api/ai/providers/preferences/?for_user_id={peer.pk}")
+    assert listed.status_code == 200, listed.content
+    assert listed.status_code == 200
+    prefs = listed.json()["preferences"]
+    assert len(prefs) == 1
+    assert prefs[0]["purpose"] == "assistant"
+    assert prefs[0]["binding"]["connection_id"] == connection.pk
+
+
+def test_assign_cli_preference_denied_without_grant(client) -> None:
+    owner = User.objects.create_user("assign-deny-owner", password="pw")
+    peer = User.objects.create_user("assign-deny-peer", password="pw")
+    _project(owner)
+    _project(peer)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=owner,
+        name="Shared Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="assign_deny_ref",
+    )
+    client.force_login(owner)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "target_user_id": peer.pk,
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "cursor_subscription",
+                    "connection_id": connection.pk,
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+    assert response.json()["code"] == "permission_denied"
+
+
+def test_grant_with_assign_preferences_writes_assistant(client) -> None:
+    owner = User.objects.create_user("grant-assign-owner", password="pw")
+    peer = User.objects.create_user("grant-assign-peer", password="pw")
+    _project(owner)
+    _project(peer)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_PERSONAL,
+        owner=owner,
+        created_by=owner,
+        name="Personal Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="grant_assign_ref",
+    )
+    client.force_login(owner)
+
+    response = client.post(
+        "/api/ai/providers/grants/",
+        data=json.dumps(
+            {
+                "connection_id": connection.pk,
+                "user_id": peer.pk,
+                "allow_interactive": True,
+                "allow_unattended": False,
+                "max_slots": 1,
+                "assign_preferences": {"purposes": ["assistant"], "project_scoped": True},
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["grant"]["user"]["id"] == peer.pk
+    assert len(payload["assigned_preferences"]) == 1
+    assert payload["assigned_preferences"][0]["purpose"] == "assistant"
+    assert payload["assigned_preferences"][0]["binding"]["connection_id"] == connection.pk
+
+    connection.refresh_from_db()
+    assert connection.scope == AIProviderConnection.SCOPE_WORKSPACE
+    pref = AIProviderPreference.objects.get(user=peer, purpose="assistant")
+    assert pref.connection_id == connection.pk
+
+
+def test_stranger_cannot_assign_preference_for_other_user(client) -> None:
+    owner = User.objects.create_user("stranger-owner", password="pw")
+    peer = User.objects.create_user("stranger-peer", password="pw")
+    stranger = User.objects.create_user("stranger-actor", password="pw")
+    _project(owner)
+    _project(peer)
+    _project(stranger)
+    connection = AIProviderConnection.objects.create(
+        target_id="cursor_subscription",
+        scope=AIProviderConnection.SCOPE_WORKSPACE,
+        created_by=owner,
+        name="Owned Cursor",
+        status=AIProviderConnection.STATUS_CONNECTED,
+        credential_ref="stranger_ref",
+    )
+    AIProviderConnectionGrant.objects.create(
+        connection=connection,
+        user=peer,
+        allow_interactive=True,
+    )
+    client.force_login(stranger)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purpose": "assistant",
+                "target_user_id": peer.pk,
+                "project_scoped": True,
+                "binding": {
+                    "target_id": "cursor_subscription",
+                    "connection_id": connection.pk,
+                },
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 403
+
+
+def test_admin_can_assign_platform_api_preference(client) -> None:
+    admin = User.objects.create_user("api-assign-admin", password="pw")
+    peer = User.objects.create_user("api-assign-peer", password="pw")
+    _project(admin)
+    _project(peer)
+    UserAppPermission.objects.update_or_create(user=admin, feature="ai_connections_admin", defaults={"allowed": True})
+    client.force_login(admin)
+
+    response = client.put(
+        "/api/ai/providers/preferences/",
+        data=json.dumps(
+            {
+                "purposes": ["assistant", "agents"],
+                "target_user_id": peer.pk,
+                "project_scoped": True,
+                "binding": {"target_id": "grok_api"},
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    prefs = response.json()["preferences"]
+    assert {item["purpose"] for item in prefs} == {"assistant", "agents"}
+    assert all(item["binding"]["target_id"] == "grok_api" for item in prefs)

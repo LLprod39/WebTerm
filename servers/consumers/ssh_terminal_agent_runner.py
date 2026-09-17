@@ -20,6 +20,7 @@ class TerminalAgentRunOperations:
         user_message: str,
         chat_mode: str,
     ) -> None:
+        cancelled = False
         try:
             with audit_context(**self._ai_state.audit_context):
                 await self._ai_run_agent(
@@ -27,11 +28,31 @@ class TerminalAgentRunOperations:
                     chat_mode=chat_mode,
                 )
         except asyncio.CancelledError:
-            raise
+            cancelled = True
         finally:
             async with self._ai_state.lock:
                 self._ai_state.run.clear_task_if_current()
+        if cancelled or self._ai_state.session.stop_requested:
             await self._send_ai_event(terminal_events.ai_status("idle"))
+            return
+        leftovers = [
+            str(message).strip()
+            for message in self._ai_state.nova_conversation.pending_user_messages
+            if str(message).strip()
+        ]
+        if leftovers and self._transport_state.ssh_conn is not None:
+            self._ai_state.nova_conversation.pending_user_messages[:] = leftovers[1:]
+            self._ai_state.nova_conversation.running = True
+            async with self._ai_state.lock:
+                if not self._ai_state.run.has_active_task():
+                    self._ai_state.run.start_task(
+                        self._run_ai_agent_background(
+                            user_message=leftovers[0],
+                            chat_mode=chat_mode,
+                        )
+                    )
+            return
+        await self._send_ai_event(terminal_events.ai_status("idle"))
 
     async def _ai_run_agent(
         self,
@@ -54,6 +75,7 @@ class TerminalAgentRunOperations:
         from servers.services.terminal_ai.agent.tools import ServerTarget, UserPromptRequest
 
         if not self._transport_state.ssh_conn or not self.server:
+            self._ai_state.nova_conversation.running = False
             await self._send_ai_event(terminal_events.ai_error("SSH connection required for agent mode"))
             return
 
@@ -87,6 +109,52 @@ class TerminalAgentRunOperations:
             memory_context = await self._ai_build_agent_memory_context(server_ids)
 
         nova_context = await self._collect_nova_context_bundle()
+
+        from servers.services.terminal_ai.hidden_pty import ensure_hidden_pty
+        from servers.services.terminal_ai.nova_conversation import persist_nova_result, should_continue_nova
+
+        conversation = self._ai_state.nova_conversation
+        conversation.running = True
+        try:
+            self._transport_state.nova_pty = await ensure_hidden_pty(
+                self._transport_state.nova_pty,
+                self._transport_state.ssh_conn,
+            )
+        except Exception as exc:
+            conversation.running = False
+            await self._send_ai_event(terminal_events.ai_error(f"Не удалось открыть скрытый PTY Nova: {exc}"))
+            return
+
+        hidden_pty = self._transport_state.nova_pty
+        nova_cwd = str((hidden_pty.cwd if hidden_pty is not None else "") or "")
+        if nova_cwd:
+            extra_cwd = f"- cwd скрытого PTY Nova: {nova_cwd}"
+            if extra_cwd not in (nova_context.session_context or ""):
+                nova_context.session_context = (
+                    f"{nova_context.session_context}\n{extra_cwd}".strip()
+                    if nova_context.session_context
+                    else extra_cwd
+                )
+
+        async def _run_primary_shell(cmd: str, timeout: int = 30):
+            session = self._transport_state.nova_pty
+            if session is None:
+                raise RuntimeError("hidden Nova PTY is not attached")
+            cwd_before = str(session.cwd or "")
+            exit_code, output = await session.run_command(cmd, timeout=float(timeout))
+            self._append_nova_recent_activity(
+                command=cmd,
+                cwd=cwd_before,
+                exit_code=int(exit_code),
+                source="nova",
+                output_tail=str(output or ""),
+                cwd_after=str(session.cwd or cwd_before),
+            )
+            return exit_code, output
+
+        def _hidden_cwd() -> str:
+            session = self._transport_state.nova_pty
+            return str(session.cwd or "") if session is not None else ""
 
         # ask_user pump: reuse the existing `ai_question` / `ai_reply`
         # bridge. The client already knows how to respond (same flow as
@@ -165,16 +233,38 @@ class TerminalAgentRunOperations:
             ui_context_payload=nova_context.ui_payload,
             dry_run=bool((self._ai_state.settings or {}).get("dry_run", False)),
             sudo_policy=nova_sudo_policy,
+            seed_history=conversation.snapshot_history(),
+            seed_todos=conversation.snapshot_todos(),
+            pending_user_messages=conversation.pending_user_messages,
+            continuation=should_continue_nova(conversation),
+            run_primary_shell=_run_primary_shell,
+            primary_cwd=_hidden_cwd(),
+            primary_cwd_getter=_hidden_cwd,
         )
 
+        result = None
         try:
             result = await run_agent_loop(ctx, default_tool_set())
         except asyncio.CancelledError:
+            conversation.running = False
             raise
         except Exception as exc:  # noqa: BLE001 — never crash the consumer
             logger.warning("agent loop failed: %s", exc)
             await self._send_ai_event(terminal_events.ai_error(f"Agent loop failed: {exc}"))
+            persist_nova_result(
+                conversation,
+                todos=conversation.snapshot_todos(),
+                history=conversation.snapshot_history(),
+                final_text=conversation.last_final_text,
+            )
             return
+
+        persist_nova_result(
+            conversation,
+            todos=list(result.todos or []),
+            history=list(result.history or []),
+            final_text=(result.final_text or "").strip(),
+        )
 
         # Persist the final assistant reply to chat history so future
         # turns see it.

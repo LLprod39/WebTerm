@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import contextlib
 
-import httpx
+import httpx  # noqa: F401  (re-export: tests patch servers.report_delivery.httpx.AsyncClient)
 from asgiref.sync import sync_to_async
 
 from core_ui.services.notification_config import load_notification_config
+from core_ui.services.user_notifications import resolve_user_telegram_chat_id
 from servers.agents.agent_inputs import format_telegram_report_message, normalize_report_delivery
 from servers.run_events import record_run_event_async
+from telegram_hub.client import TelegramAPIError, TelegramClient, redacted_chat_id
 
 
 def _redacted_chat_id(chat_id: str) -> str:
-    value = str(chat_id or "").strip()
-    if not value:
-        return ""
-    if len(value) <= 4:
-        return "***"
-    return f"***{value[-4:]}"
+    return redacted_chat_id(chat_id)
 
 
 def _refresh_report_payload(run_id: int) -> None:
@@ -33,6 +30,24 @@ async def _record_delivery_event(run_id: int, event_type: str, payload: dict) ->
         await sync_to_async(_refresh_report_payload, thread_sensitive=True)(run_id)
 
 
+def _owner_user(run):
+    user = getattr(run, "user", None)
+    if user is not None:
+        return user
+    agent = getattr(run, "agent", None)
+    return getattr(agent, "user", None) if agent is not None else None
+
+
+def resolve_telegram_chat_id(run, telegram: dict, cfg: dict) -> str:
+    agent_chat = str(telegram.get("chat_id") or "").strip()
+    if agent_chat:
+        return agent_chat
+    user_chat = resolve_user_telegram_chat_id(_owner_user(run))
+    if user_chat:
+        return user_chat
+    return str(cfg.get("telegram_chat_id") or "").strip()
+
+
 async def deliver_agent_report_async(run, *, attempt_id: str = "") -> None:
     agent = getattr(run, "agent", None)
     delivery = normalize_report_delivery(getattr(agent, "report_delivery", {}) if agent else {})
@@ -42,15 +57,27 @@ async def deliver_agent_report_async(run, *, attempt_id: str = "") -> None:
 
     cfg = load_notification_config()
     bot_token = str(cfg.get("telegram_bot_token") or "").strip()
-    chat_id = str(telegram.get("chat_id") or cfg.get("telegram_chat_id") or "").strip()
-    if not bot_token or not chat_id:
+    chat_id = await sync_to_async(resolve_telegram_chat_id, thread_sensitive=True)(run, telegram, cfg)
+    if not bot_token:
         await _record_delivery_event(
             run.id,
             "agent_report_delivery_skipped",
             {
                 "channel": "telegram",
-                "reason": "telegram_not_configured",
-                "message": "Telegram bot token or chat id is not configured.",
+                "reason": "telegram_bot_missing",
+                "message": "Telegram bot token is not configured.",
+                "attempt_id": str(attempt_id or "")[:80],
+            },
+        )
+        return
+    if not chat_id:
+        await _record_delivery_event(
+            run.id,
+            "agent_report_delivery_skipped",
+            {
+                "channel": "telegram",
+                "reason": "telegram_chat_missing",
+                "message": "Telegram chat id is not configured for this user.",
                 "attempt_id": str(attempt_id or "")[:80],
             },
         )
@@ -62,38 +89,34 @@ async def deliver_agent_report_async(run, *, attempt_id: str = "") -> None:
         include_link=bool(telegram.get("include_link", True)),
     )
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": message,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                },
-            )
-        if response.status_code == 200:
-            await _record_delivery_event(
-                run.id,
-                "agent_report_delivery_sent",
-                {
-                    "channel": "telegram",
-                    "chat_id": _redacted_chat_id(chat_id),
-                    "attempt_id": str(attempt_id or "")[:80],
-                },
-            )
-            return
+        client = TelegramClient(bot_token, timeout=15)
+        await client.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
         await _record_delivery_event(
             run.id,
-            "agent_report_delivery_failed",
+            "agent_report_delivery_sent",
             {
                 "channel": "telegram",
                 "chat_id": _redacted_chat_id(chat_id),
-                "status_code": response.status_code,
-                "body": response.text[:300],
                 "attempt_id": str(attempt_id or "")[:80],
             },
         )
+    except TelegramAPIError as exc:
+        payload = {
+            "channel": "telegram",
+            "chat_id": _redacted_chat_id(chat_id),
+            "body": str(exc.payload or str(exc))[:300],
+            "attempt_id": str(attempt_id or "")[:80],
+        }
+        if exc.status_code is not None:
+            payload["status_code"] = int(exc.status_code)
+        else:
+            payload["error"] = str(exc)
+        await _record_delivery_event(run.id, "agent_report_delivery_failed", payload)
     except Exception as exc:
         await _record_delivery_event(
             run.id,

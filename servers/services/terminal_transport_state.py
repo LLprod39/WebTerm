@@ -8,6 +8,8 @@ from typing import Any
 
 import asyncssh
 
+from servers.services.terminal_ai.hidden_pty import HiddenPtySession
+
 
 @dataclass
 class TerminalTransportState:
@@ -28,6 +30,8 @@ class TerminalTransportState:
     intercept_editors: bool = True
     nova_session_context: dict[str, Any] = field(default_factory=dict)
     nova_recent_activity: list[dict[str, Any]] = field(default_factory=list)
+    session_briefing: list[dict[str, Any]] = field(default_factory=list)
+    nova_pty: HiddenPtySession | None = None
 
     def reset_for_connect(self) -> None:
         self.ssh_conn = None
@@ -45,6 +49,8 @@ class TerminalTransportState:
         self.intercept_editors = True
         self.nova_session_context.clear()
         self.nova_recent_activity.clear()
+        self.session_briefing.clear()
+        self.nova_pty = None
 
     def reset_after_disconnect(self) -> None:
         self.ssh_conn = None
@@ -59,3 +65,5 @@ class TerminalTransportState:
         self.marker_line_buffer = {"stdout": "", "stderr": ""}
         self.nova_session_context.clear()
         self.nova_recent_activity.clear()
+        self.session_briefing.clear()
+        self.nova_pty = None

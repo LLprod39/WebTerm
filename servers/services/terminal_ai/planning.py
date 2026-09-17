@@ -70,6 +70,8 @@ async def plan_terminal_commands(
     llm_factory=None,
     max_chars: int = 20000,
     execution_context=None,
+    session_briefing: str = "",
+    occupancy_note: str = "",
 ) -> dict[str, Any]:
     """
     Ask the LLM to choose answer/ask/execute mode and planned commands.
@@ -91,6 +93,8 @@ async def plan_terminal_commands(
         chat_mode=chat_mode,
         execution_mode=execution_mode,
         dry_run=dry_run,
+        session_briefing=session_briefing,
+        occupancy_note=occupancy_note,
     )
     llm = factory()
     out = ""

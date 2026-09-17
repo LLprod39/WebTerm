@@ -30,10 +30,12 @@ def _stub_live_terminal_ai_policy_for_unit_loop(monkeypatch):
     monkeypatch.setattr(
         "servers.services.terminal_ai.agent.tools.shell.is_terminal_ai_read_only_for_user",
         lambda _server_id, _user_id: False,
+        raising=False,
     )
     monkeypatch.setattr(
         "servers.services.terminal_ai.agent.tools.files.is_terminal_ai_read_only_for_user",
         lambda _server_id, _user_id: False,
+        raising=False,
     )
 
 

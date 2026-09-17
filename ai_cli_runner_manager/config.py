@@ -14,6 +14,7 @@ class RunnerManagerConfig:
     token: str
     codex_runner_image: str = ""
     grok_runner_image: str = ""
+    cursor_runner_image: str = ""
     credential_volume_prefix: str = "webterm-ai-cli-cred-"
     docker_command: str = "docker"
     docker_network: str = "webterm-ai-cli-egress"
@@ -31,6 +32,7 @@ class RunnerManagerConfig:
             token=os.getenv("AI_CLI_RUNNER_MANAGER_TOKEN", "").strip(),
             codex_runner_image=os.getenv("AI_CLI_CODEX_RUNNER_IMAGE", "").strip(),
             grok_runner_image=os.getenv("AI_CLI_GROK_RUNNER_IMAGE", "").strip(),
+            cursor_runner_image=os.getenv("AI_CLI_CURSOR_RUNNER_IMAGE", "").strip(),
             credential_volume_prefix=os.getenv("AI_CLI_CREDENTIAL_VOLUME_PREFIX", "webterm-ai-cli-cred-").strip(),
             docker_command=os.getenv("AI_CLI_DOCKER_COMMAND", "docker").strip() or "docker",
             docker_network=os.getenv("AI_CLI_DOCKER_NETWORK", "webterm-ai-cli-egress").strip(),
@@ -50,6 +52,8 @@ class RunnerManagerConfig:
             raise RuntimeError("AI_CLI_CODEX_RUNNER_IMAGE must be an immutable image digest")
         if not self.fake_runtime and not _IMMUTABLE_IMAGE.fullmatch(self.grok_runner_image):
             raise RuntimeError("AI_CLI_GROK_RUNNER_IMAGE must be an immutable image digest")
+        if not self.fake_runtime and not _IMMUTABLE_IMAGE.fullmatch(self.cursor_runner_image):
+            raise RuntimeError("AI_CLI_CURSOR_RUNNER_IMAGE must be an immutable image digest")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{3,63}", self.credential_volume_prefix):
             raise RuntimeError("AI_CLI_CREDENTIAL_VOLUME_PREFIX has an invalid format")
         if not self.docker_network or self.docker_network in {"host", "none", "bridge"}:
@@ -68,4 +72,6 @@ class RunnerManagerConfig:
             return self.codex_runner_image
         if target_id == "grok_subscription":
             return self.grok_runner_image
+        if target_id == "cursor_subscription":
+            return self.cursor_runner_image
         raise RuntimeError("Unsupported subscription runner target")

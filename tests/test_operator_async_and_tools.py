@@ -181,6 +181,7 @@ def test_prepare_list_servers_arguments_policy():
     assert resolved["q"] == "grafana"
 
     assert normalize_host_hint("графаны") == "grafana"
+    assert normalize_host_hint("никитавм") == "nikitavm"
     assert extract_server_hint("метрики @lunix") == "lunix"
     assert extract_server_hint("Подключись к серверу grafana-01") == "grafana-01"
     assert extract_server_hint("Проверь метрики сервера графаны") == "grafana"

@@ -9,9 +9,18 @@ from django.db import models
 class K8sProvider(models.Model):
     KIND_RANCHER = "rancher"
     KIND_DEVTRON = "devtron"
+    KIND_KUBECONFIG = "kubeconfig"
     KIND_CHOICES = [
         (KIND_RANCHER, "Rancher"),
         (KIND_DEVTRON, "Devtron"),
+        (KIND_KUBECONFIG, "Kubeconfig"),
+    ]
+
+    SCOPE_PERSONAL = "personal"
+    SCOPE_PLATFORM = "platform"
+    SCOPE_CHOICES = [
+        (SCOPE_PERSONAL, "Personal"),
+        (SCOPE_PLATFORM, "Platform"),
     ]
 
     AUTH_NONE = "none"
@@ -25,13 +34,21 @@ class K8sProvider(models.Model):
 
     name = models.CharField(max_length=120)
     kind = models.CharField(max_length=30, choices=KIND_CHOICES)
-    base_url = models.URLField()
+    base_url = models.URLField(blank=True, default="")
     enabled = models.BooleanField(default=True)
     auth_mode = models.CharField(max_length=30, choices=AUTH_CHOICES, default=AUTH_SECRET_REF)
     secret_ref = models.CharField(max_length=200, blank=True, default="")
+    scope = models.CharField(max_length=20, choices=SCOPE_CHOICES, default=SCOPE_PERSONAL)
     labels = models.JSONField(default=dict, blank=True)
     last_sync_at = models.DateTimeField(null=True, blank=True)
     last_error = models.TextField(blank=True, default="")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="k8s_providers",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -42,6 +59,7 @@ class K8sProvider(models.Model):
         ]
         indexes = [
             models.Index(fields=["kind", "enabled"], name="k8s_provider_kind_enabled_idx"),
+            models.Index(fields=["created_by", "kind"], name="k8s_provider_owner_kind_idx"),
         ]
 
     def __str__(self) -> str:
@@ -92,6 +110,56 @@ class K8sCluster(models.Model):
 
     def __str__(self) -> str:
         return self.name
+
+
+class K8sClusterAccess(models.Model):
+    """Admin-granted access to a platform cluster (optional namespace allow-list)."""
+
+    cluster = models.ForeignKey(K8sCluster, on_delete=models.CASCADE, related_name="access_grants")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="k8s_cluster_access_grants",
+    )
+    granted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="k8s_cluster_access_granted",
+    )
+    namespaces = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Empty list = entire cluster (subject to kube RBAC). Non-empty = allow-list.",
+    )
+    can_view_logs = models.BooleanField(default=True)
+    can_exec = models.BooleanField(default=False)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_revoked = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["cluster", "user"], name="k8s_cluster_access_cluster_user_unique"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "is_revoked"], name="k8s_access_user_revoked_idx"),
+            models.Index(fields=["cluster", "is_revoked"], name="k8s_access_cluster_revoked_idx"),
+            models.Index(fields=["expires_at"], name="k8s_access_expires_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.cluster.name} -> {self.user_id}"
+
+    def is_active(self) -> bool:
+        from django.utils import timezone
+
+        if self.is_revoked:
+            return False
+        return not (self.expires_at and timezone.now() >= self.expires_at)
 
 
 class K8sNamespace(models.Model):

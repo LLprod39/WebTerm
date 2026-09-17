@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -8,6 +9,7 @@ import pytest
 
 from ai_cli_runner_manager.adapters.codex import codex_account_is_chatgpt, codex_notification_events
 from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_output_schema, tool_response_events
+from ai_cli_runner_manager.adapters.cursor import cursor_stream_events, parse_cursor_login_url
 from ai_cli_runner_manager.adapters.grok import (
     _grok_device_auth,
     grok_update_event,
@@ -161,6 +163,113 @@ def test_non_json_tool_response_fails_closed() -> None:
     events = tool_response_events("I executed it directly", request)
 
     assert events[0].to_dict()["type"] == "error"
+
+
+def test_cursor_login_url_is_parsed_from_cli_output() -> None:
+    line = "Open https://authenticator.cursor.sh/login?token=abc to continue."
+    assert parse_cursor_login_url(line) == "https://authenticator.cursor.sh/login?token=abc"
+
+
+def test_cursor_workspace_trust_error_is_mapped() -> None:
+    from ai_cli_runner_manager.adapters.cursor import _cursor_exit_error
+
+    event = _cursor_exit_error(
+        1,
+        "Workspace Trust Required\nPass --trust if you trust this directory",
+    )
+    assert event.to_dict()["type"] == "error"
+    assert "--trust" in event.payload["message"]
+    assert event.payload.get("retryable") is False
+
+
+def test_cursor_runtime_failed_is_retryable() -> None:
+    from ai_cli_runner_manager.adapters.cursor import _safe_cursor_error
+
+    event = _safe_cursor_error(RuntimeError("broken pipe"))
+    assert event.to_dict()["type"] == "error"
+    assert event.payload["message"] == "Cursor runtime failed"
+    assert event.payload["retryable"] is True
+
+    timed_out = _safe_cursor_error(TimeoutError())
+    assert timed_out.payload["retryable"] is True
+    assert "timed out" in timed_out.payload["message"].lower()
+
+
+def test_cursor_result_event_exposes_tool_json_text() -> None:
+    payload = {
+        "text": "",
+        "tool_calls": [{"name": "operator_list_servers", "arguments": "{\"show_in_chat\":true}"}],
+    }
+    line = json.dumps(
+        {
+            "type": "result",
+            "subtype": "success",
+            "session_id": "sess-1",
+            "result": json.dumps(payload),
+        }
+    )
+    events = cursor_stream_events(line)
+    assert events[0].type is ProviderEventType.TEXT_DELTA
+    assert events[0].payload["source"] == "result"
+    assert "operator_list_servers" in events[0].payload["text"]
+    assert events[1].type is ProviderEventType.COMPLETED
+    assert events[1].payload["provider_session_id"] == "sess-1"
+
+
+def test_tool_name_aliases_accept_dotted_action_type() -> None:
+    request = replace(
+        _request(),
+        tools=[{"name": "operator_list_servers", "action_type": "operator.list_servers"}],
+    )
+    events = tool_response_events(
+        '{"text":"16 servers","tool_calls":[{"name":"operator.list_servers","arguments":"{\\"show_in_chat\\":true}"}]}',
+        request,
+    )
+    assert events[0].type is ProviderEventType.TEXT_DELTA
+    assert events[1].type is ProviderEventType.TOOL_REQUEST
+    assert events[1].payload["name"] == "operator_list_servers"
+    assert events[1].payload["arguments"] == {"show_in_chat": True}
+
+
+def test_empty_tool_response_reports_empty_detail() -> None:
+    request = replace(_request(), tools=[{"name": "server.read"}])
+    events = tool_response_events("   ", request)
+    assert events[0].type is ProviderEventType.ERROR
+    assert "empty response" in events[0].payload["message"]
+
+
+def test_cursor_prompt_requires_final_json_only() -> None:
+    request = replace(
+        _request(provider_session_id=None),
+        target_id="cursor_subscription",
+        tools=[{"name": "operator_list_servers", "description": "List servers"}],
+    )
+    prompt = prompt_from_request(request)
+    assert "Cursor-specific rules" in prompt
+    assert "operator_list_servers" in prompt
+    assert "FINAL assistant/result message MUST be only that JSON object" in prompt
+
+
+def test_prose_wrapped_tool_json_is_extracted() -> None:
+    request = replace(_request(), tools=[{"name": "server.read"}])
+    events = tool_response_events(
+        'Sure.\n{"text":"ok","tool_calls":[{"name":"server.read","arguments":"{}"}]}\nThanks',
+        request,
+    )
+    assert events[0].type is ProviderEventType.TEXT_DELTA
+    assert events[1].type is ProviderEventType.TOOL_REQUEST
+
+
+def test_cursor_stream_json_assistant_delta_is_normalized() -> None:
+    line = json.dumps(
+        {
+            "type": "assistant",
+            "message": {"content": [{"type": "text", "text": "hello"}]},
+        }
+    )
+    events = cursor_stream_events(line)
+    assert events[0].type is ProviderEventType.TEXT_DELTA
+    assert events[0].payload["text"] == "hello"
 
 
 @pytest.mark.asyncio

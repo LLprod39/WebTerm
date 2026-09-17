@@ -92,6 +92,33 @@ def _looks_like_agent_run_request(message: str) -> bool:
     return any(word in lower for word in run_words)
 
 
+def _is_product_capabilities_ask(lower: str) -> bool:
+    """True for «что умеешь/можешь» — not for «можешь проверить диск»."""
+    phrases = (
+        "что умеешь",
+        "что можешь",
+        "что ты умеешь",
+        "что ты можешь",
+        "чем можешь",
+        "чем умеешь",
+        "чем помочь",
+        "какие возможности",
+        "твои возможности",
+        "what can you",
+        "what do you do",
+        "can you help",
+    )
+    if any(phrase in lower for phrase in phrases):
+        return True
+    tokens = lower.replace("?", " ").replace("!", " ").split()
+    # Short pure asks like «умеешь?» — avoid «можешь …» task requests.
+    if "умеешь" in lower and len(tokens) <= 6:
+        return True
+    if len(tokens) <= 2 and tokens and tokens[0] in {"умеешь", "можешь", "capabilities"}:
+        return True
+    return False
+
+
 def _resolve_agent_from_context(
     runtime_context: dict[str, Any],
     *,
@@ -147,6 +174,13 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
     actions: list[dict[str, Any]] = []
     reply = "Понял. Могу подготовить действие и показать его перед выполнением."
 
+    greet_words = ("привет", "здравствуй", "добрый", "hello", "hi", "hey")
+    if any(word in lower for word in greet_words) and len(lower.split()) <= 4:
+        reply = (
+            "Привет. Я Оператор WebTerm — могу проверить флот, метрики, алерты, "
+            "серверы и playbook'и. Что нужно?"
+        )
+
     pipeline_words = ("pipeline", "пайплайн", "пайплаин", "воркфлоу", "workflow")
     create_words = ("созда", "состав", "собер", "постро", "сдела", "create", "build", "draft")
     if any(word in lower for word in pipeline_words) and any(word in lower for word in create_words):
@@ -176,16 +210,35 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
         )
         reply = "Покажу доступные пайплайны."
 
-    if not actions and any(word in lower for word in ("возможн", "capabil", "умеешь", "can you")):
+    if not actions and _is_product_capabilities_ask(lower):
+        # Product intro — not Studio registry dump.
+        explicit_studio = any(
+            word in lower
+            for word in ("studio", "студи", "mcp", "skill", "скилл", "реестр", "registry", "пайплайн", "pipeline")
+        )
+        if not explicit_studio:
+            from core_ui.services.operator_loop_prompt import OPERATOR_CAPABILITIES_INTRO_RU
+
+            reply = OPERATOR_CAPABILITIES_INTRO_RU
+
+    if not actions and (
+        ("реестр" in lower and "возможн" in lower)
+        or ("studio" in lower and any(word in lower for word in ("возможн", "capabil", "реестр", "registry")))
+        or ("capabilities" in lower and "registry" in lower)
+        or (
+            any(word in lower for word in ("возможн", "capabil"))
+            and any(word in lower for word in ("studio", "студи", "mcp", "skill", "скилл", "реестр", "registry"))
+        )
+    ):
         actions.append(
             {
                 "action_type": "studio.capabilities.registry",
                 "title": "Показать возможности Studio",
-                "description": "Получить registry доступных node families, MCP servers и skills.",
+                "description": "Получить краткий summary доступных node families, MCP servers и skills.",
                 "input": {},
             }
         )
-        reply = "Покажу доступные возможности Studio и связанные ресурсы."
+        reply = "Кратко покажу доступные возможности Studio (без сырого registry dump)."
 
     if not actions and "mcp" in lower and any(word in lower for word in ("спис", "покажи", "list", "show")):
         actions.append(

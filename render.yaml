@@ -472,7 +472,7 @@ services:
     plan: starter
     dockerfilePath: ./docker/backend.Dockerfile
     dockerContext: .
-    dockerCommand: python manage.py run_telegram_bot
+    dockerCommand: python manage.py run_telegram_hub
     envVars:
       - fromGroup: mini-prod-backend-common
       - key: DJANGO_SECRET_KEY

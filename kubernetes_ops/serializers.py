@@ -70,6 +70,14 @@ def _staff_external_access(user) -> bool:
     return bool(getattr(user, "is_staff", False))
 
 
+def _provider_connection_visible(user, provider: K8sProvider | None = None) -> bool:
+    if _staff_external_access(user):
+        return True
+    if not user or provider is None:
+        return False
+    return bool(getattr(provider, "created_by_id", None) == getattr(user, "id", None))
+
+
 def _external_links_policy(user) -> dict[str, Any]:
     visible = _staff_external_access(user)
     return {
@@ -153,17 +161,23 @@ def serialize_provider(provider: K8sProvider, *, user=None) -> dict[str, Any]:
         "missing": "missing",
         "disabled": "disabled",
     }.get(str(freshness["sync_status"]), "unknown")
+    visible = _provider_connection_visible(user, provider)
     return {
         "id": provider.id,
         "name": provider.name,
         "kind": provider.kind,
-        "base_url": provider.base_url if _staff_external_access(user) else "",
+        "scope": getattr(provider, "scope", K8sProvider.SCOPE_PERSONAL),
+        "base_url": provider.base_url if visible else "",
         "enabled": provider.enabled,
         "auth_mode": provider.auth_mode,
         "has_secret_ref": bool(provider.secret_ref),
         "secret_storage": provider_secret_storage(provider),
-        "labels": _safe_metadata(provider.labels or {}) if _staff_external_access(user) else {},
-        "connection_details_visible": _staff_external_access(user),
+        "labels": _safe_metadata(provider.labels or {}) if visible else {},
+        "connection_details_visible": visible,
+        "created_by_id": getattr(provider, "created_by_id", None),
+        "is_owner": bool(
+            user and getattr(provider, "created_by_id", None) == getattr(user, "id", None)
+        ),
         "last_sync_at": iso_or_none(provider.last_sync_at),
         "last_error": provider.last_error,
         "provider_health": provider_health,
@@ -175,12 +189,20 @@ def serialize_provider(provider: K8sProvider, *, user=None) -> dict[str, Any]:
 
 def serialize_cluster(cluster: K8sCluster, *, user=None) -> dict[str, Any]:
     freshness = sync_freshness(cluster.last_sync_at)
+    labels = cluster.labels if isinstance(cluster.labels, dict) else {}
+    provider_kind = ""
+    if cluster.rancher_provider_id:
+        provider_kind = K8sProvider.KIND_RANCHER
+    elif labels.get("source") == "kubeconfig" or str(cluster.rancher_cluster_id or "").startswith("kubeconfig:"):
+        provider_kind = K8sProvider.KIND_KUBECONFIG
+    elif cluster.devtron_cluster_id:
+        provider_kind = K8sProvider.KIND_DEVTRON
     return {
         "id": f"cluster_{cluster.id}",
         "database_id": cluster.id,
         "name": cluster.name,
         "environment": cluster.environment,
-        "provider": K8sProvider.KIND_RANCHER if cluster.rancher_provider_id else "",
+        "provider": provider_kind,
         "health": cluster.health,
         "nodes_ready": cluster.nodes_ready,
         "nodes_total": cluster.nodes_total,

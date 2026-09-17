@@ -37,13 +37,18 @@ VALID_ACCESS_PROFILES = {
 }
 
 # Closed pilot: user dashboard + servers surface + agents. No Studio/K8s/MARS/settings.
-PILOT_USER_FEATURES = frozenset({"dashboard", "servers", "agents", "chat"})
+# telegram_assistant: platform-bot AI link for every pilot; personal BotFather bots
+# stay gated by admin flag telegram_personal_bots_enabled in the UI/API.
+PILOT_USER_FEATURES = frozenset(
+    {"dashboard", "servers", "agents", "chat", "telegram_notifications", "telegram_assistant"}
+)
 
 _PROFILE_TRUE_FEATURES = {
     "pilot_user": set(PILOT_USER_FEATURES),
     "pilot_operator": {
         *PILOT_USER_FEATURES,
         "automation",
+        "telegram_assistant",
     },
     "server_only": {"servers"},
     "operator_server_only": {"servers"},
@@ -56,6 +61,7 @@ _PROFILE_TRUE_FEATURES = {
         "studio_notifications",
         "automation",
         "chat",
+        "telegram_assistant",
     },
     "team_admin_no_secrets": {
         "servers",
@@ -70,6 +76,7 @@ _PROFILE_TRUE_FEATURES = {
         "chat",
         "knowledge_base",
         "automation",
+        "telegram_assistant",
     },
 }
 

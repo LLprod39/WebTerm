@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Any
 
-import httpx
+import httpx  # noqa: F401  (re-export: executor nodes/tests patch httpx.AsyncClient via this module)
 
 from core_ui.services.notification_config import load_notification_config
 
@@ -118,37 +117,22 @@ async def _send_telegram_message(
     reply_markup: dict[str, Any] | None = None,
     disable_web_page_preview: bool = False,
 ) -> dict[str, Any]:
-    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-    chunks = [message[i : i + 4000] for i in range(0, len(message), 4000)] or [""]
-    sent = 0
-    message_ids: list[int] = []
+    from telegram_hub.client import TelegramClient
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        for index, chunk in enumerate(chunks):
-            payload: dict[str, Any] = {
-                "chat_id": chat_id,
-                "text": chunk,
-            }
-            if parse_mode:
-                payload["parse_mode"] = parse_mode
-            if disable_web_page_preview:
-                payload["disable_web_page_preview"] = True
-            if reply_markup and index == len(chunks) - 1:
-                payload["reply_markup"] = reply_markup
-
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                err = str(resp.text or "")[:200]
-                return {"status": "failed", "error": f"Telegram API error {resp.status_code}: {err}"}
-            with contextlib.suppress(Exception):
-                resp_payload = resp.json()
-                message_id = int(((resp_payload.get("result") or {}) or {}).get("message_id"))
-                message_ids.append(message_id)
-            sent += 1
-
+    client = TelegramClient(bot_token, timeout=30)
+    try:
+        result = await client.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode=parse_mode or None,
+            reply_markup=reply_markup,
+            disable_web_page_preview=disable_web_page_preview,
+        )
+    except Exception as exc:
+        return {"status": "failed", "error": str(exc)[:200]}
     return {
         "status": "completed",
-        "output": f"📱 Telegram message sent to {chat_id} ({sent} chunk(s))",
-        "message_ids": message_ids,
-        "last_message_id": message_ids[-1] if message_ids else None,
+        "output": f"📱 Telegram message sent to {chat_id} ({result.get('chunks_sent', 1)} chunk(s))",
+        "message_ids": result.get("message_ids") or [],
+        "last_message_id": result.get("last_message_id"),
     }

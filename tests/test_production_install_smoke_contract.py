@@ -36,12 +36,15 @@ def test_release_publishes_and_smokes_separate_ai_cli_images() -> None:
         ("ai-cli-runner-manager", "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE"),
         ("ai-cli-codex-runner", "AI_CLI_CODEX_RUNNER_IMAGE"),
         ("ai-cli-grok-runner", "AI_CLI_GROK_RUNNER_IMAGE"),
+        ("ai-cli-cursor-runner", "AI_CLI_CURSOR_RUNNER_IMAGE"),
     ):
         assert f"name: {name}" in workflow
         assert workflow.count(f'"{name}": "{env_name}"') == 2
     assert "target: codex" in workflow
     assert "target: grok" in workflow
+    assert "target: cursor" in workflow
     assert "GROK_BUILD_SHA256" in workflow
+    assert "CURSOR_AGENT_SHA256" in workflow
     assert 'F13A_WITH_AI_CLI: "1"' in workflow
     assert "UID 10001 credential volume passed" in smoke
     assert "ai-cli-egress-policy.txt" in smoke
@@ -49,6 +52,7 @@ def test_release_publishes_and_smokes_separate_ai_cli_images() -> None:
     assert '"postgres:5432"' in smoke
     assert '"api.openai.com:443"' in smoke
     assert '"api.x.ai:443"' in smoke
+    assert '"api2.cursor.sh:443"' in smoke
 
 
 def test_ai_cli_images_install_only_hashed_locks_and_security_audits_them() -> None:
@@ -60,9 +64,9 @@ def test_ai_cli_images_install_only_hashed_locks_and_security_audits_them() -> N
 
     assert "--require-hashes -r /app/ai_cli_runner_manager/requirements.lock" in manager_dockerfile
     assert "--require-hashes --requirement /app/provider-requirements.lock" in provider_dockerfile
+    assert "/opt/venv/bin/python -m pip uninstall --yes pip setuptools wheel" in provider_dockerfile
     assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in backend_dockerfile
     assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in manager_dockerfile
-    assert "/opt/venv/bin/pip uninstall --yes pip setuptools wheel" in provider_dockerfile
     for lock in ("ai_cli_runner_manager/requirements.lock", "ai_cli_runner_manager/provider-requirements.lock"):
         text = (ROOT / lock).read_text(encoding="utf-8")
         assert "--hash=sha256:" in text

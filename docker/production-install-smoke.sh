@@ -193,6 +193,7 @@ values = {
     "AI_CLI_RUNNER_MANAGER_TOKEN": secrets.token_urlsafe(48),
     "AI_CLI_CODEX_RUNNER_IMAGE": os.environ.get("AI_CLI_CODEX_RUNNER_IMAGE", ""),
     "AI_CLI_GROK_RUNNER_IMAGE": os.environ.get("AI_CLI_GROK_RUNNER_IMAGE", ""),
+    "AI_CLI_CURSOR_RUNNER_IMAGE": os.environ.get("AI_CLI_CURSOR_RUNNER_IMAGE", ""),
     "WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE": os.environ.get("WEBTERM_AI_CLI_DOCKER_PROXY_IMAGE", ""),
     "WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE": os.environ.get("WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE", ""),
     "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE": os.environ.get("WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE", ""),
@@ -486,7 +487,7 @@ for denied in (
         raise SystemExit(f"egress policy allowed {denied}: HTTP {status}")
     print(f"deny {denied}=403")
 
-for allowed in ("api.openai.com:443", "api.x.ai:443"):
+for allowed in ("api.openai.com:443", "api.x.ai:443", "api2.cursor.sh:443"):
     status = proxy_status(allowed)
     if status != 200:
         raise SystemExit(f"official provider endpoint unavailable {allowed}: HTTP {status}")

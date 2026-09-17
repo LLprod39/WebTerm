@@ -15,7 +15,7 @@ QA (ручной смок): Тест + пользователь
 Собрать новый фронт в отдельной папке `frontend-v3`, который:
 
 1. Переносит **всю рабочую функциональность** текущего `frontend/` (auth, servers, terminal/ws, files, automation, studio, agents, k8s, settings и т.д.).
-2. Меняет **только визуал и копирайт**: жёсткий ч/б минимализм в духе эталона до rewrite (`fa00a74`), удобный для Admin/DevOps.
+2. Меняет **только визуал и копирайт**: корпоративный B2B-стиль (светлая тема, синий accent, карточки, RU-статусы) — понятный руководителю и удобный инженеру. См. [`UI_SPEC.md`](UI_SPEC.md).
 3. Убирает нейрослоп: декоративные тексты, бейджи без источника, бесполезный поиск/даты на главной, «умные» индикаторы, AI-звучащую навигацию.
 
 Не цель: придумать новый продукт или ломать бэкенд.
@@ -30,8 +30,8 @@ QA (ручной смок): Тест + пользователь
 | Старый фронт | `frontend/` остаётся на порту **8080** до приёмки |
 | Новый фронт | порт **8081** |
 | Backend | оба proxy на `http://127.0.0.1:9000` |
-| Тема | дефолт **тёмный** ч/б; светлый — переключателем |
-| Эталон стиля | `fa00a74` (минимализм), **не** ashita/flow/pulse из DESIGN.md |
+| Тема | **v2 (2026-09-13): дефолт светлый, корпоративный B2B, accent синий `#2563eb`; тёмная — переключателем.** (v1 «тёмный ч/б» отменён) |
+| Эталон стиля | [`UI_SPEC.md`](UI_SPEC.md) v2 — Atlassian / Datadog / Grafana Enterprise уровень; **не** ashita/flow/pulse и не ч/б `fa00a74` |
 | Контракты | session / servers / terminal / ws / files и остальные API — **1:1**, без ломки |
 | Тесты | пока ручные; тяжёлый Playwright — только по явной команде |
 | Nightly Audit | снаружи команды, не в канале |
@@ -41,12 +41,12 @@ QA (ручной смок): Тест + пользователь
 
 ## 3. Принципы UI (анти-нейрослоп)
 
-1. Текст только операционный: что это, что делать, что сломалось.
-2. Нет декоративных метрик/бейджей без реального поля API.
+1. Текст операционный: что это, что делать, что сломалось. Одна строка описания под заголовком — допустима.
+2. Нет декоративных метрик/бейджей без реального поля API. KPI-карточки из API — да.
 3. Нет «приветствий», motivational copy, пустых search/date на главной.
-4. Навигация короткая: понятные названия (Servers, Terminal, Settings…), без маркетинга.
-5. Плотность под DevOps: таблицы, статусы, действия; воздух минимальный.
-6. Светлый режим — тот же layout, только токены цвета.
+4. Навигация короткая: понятные русские названия, без маркетинга.
+5. Плотность средняя: карточки → таблицы; статусы — русские подписи в Badge.
+6. Тёмный режим — тот же layout, только токены цвета.
 
 Если бэк отдаёт поля только под декор — Мост фиксирует список → Ядро чистит точечно (не блокер v3).
 
@@ -166,30 +166,74 @@ WS-каналы (все через `buildWsBase()` → `/ws/...`, cookie-auth):
 
 ### Фаза 2 — Shell + auth (Пиксель)
 
-- layout: sidebar / topbar минимальные
-- theme tokens dark/light
-- login + session gate
-- feature-access как сейчас (без новых «capabilities» ради UI)
-- ноль нейрослоп-копирайта на login/dashboard
+- [x] layout: sidebar / topbar минимальные
+- [x] theme tokens dark/light
+- [x] login + session gate
+- [x] feature-access как сейчас (без новых «capabilities» ради UI)
+- [x] ноль нейрослоп-копирайта на login/dashboard
+- [x] FirstRunReadinessGate → `/settings/readiness`
 
 ### Фаза 3 — P0 функциональность (Пиксель, стыки Мост)
 
-Servers → Terminal/ws → Files.  
-Логика 1:1 с текущего клиента; визуал новый.
+- [x] Servers list + create/delete/test
+- [x] Terminal/ws (`/servers/:id/terminal`, hub)
+- [x] Files panel (list/read/write/mkdir/delete, textarea editor)
+- [x] `docs/frontend-v3/API_MATRIX.md` (P0 endpoints)
 
-Зависимости P0 (в скелете сейчас только `react`/`react-dom`), брать те же мажоры, что в `frontend/package.json`:
+Зависимости P0 установлены: `react-router-dom` 7, `@tanstack/react-query` 5, `@xterm/xterm` 6 + fit/search/web-links/unicode11.
 
-- `react-router-dom` 7 — маршруты/гейты
-- `@tanstack/react-query` 5 — session/servers/readiness запросы (как сейчас)
-- `@xterm/xterm` 6 + `addon-fit`, `addon-search`, `addon-web-links`, `addon-unicode11` — терминал
-- `zod` — если переносим валидацию форм сервера как есть
+Не тащить в P0: `@xyflow/react`, `@codemirror/*`, `recharts`, `framer-motion`, `embla`.
 
-Не тащить в P0: `@xyflow/react` (pipeline editor, P1), `@codemirror/*` (файловый редактор — решить в Фазе 3, нужен ли для Files или хватит textarea в v3), `recharts`, `framer-motion`, `embla`.
+### Фаза D — UI design system (Пиксель)
+
+См. [`DESIGN.md`](DESIGN.md) (кратко) и полную спецификацию:
+
+| Документ | Назначение |
+| --- | --- |
+| [`UI_SPEC.md`](UI_SPEC.md) | Токены, примитивы, оверлеи, паттерны, копирайт, a11y |
+| [`MODALS_REGISTRY.md`](MODALS_REGISTRY.md) | Реестр всех Dialog/Drawer/Confirm (~55 ID) |
+| [`screens/`](screens/) | Поэкранные спеки 00–14 (кнопки, поля, статусы, anti-slop) |
+
+- [x] DESIGN.md + CSS tokens + IBM Plex Sans / JetBrains Mono
+- [x] примитивы: Button, Badge/StatusDot, PageHeader, DataTable, EmptyState/InlineError, PageShell
+- [x] shell: секции nav, иконки, inset active bar, sticky topbar `webterm / section`
+- [x] экраны P0: Login (split), Готовность (summary cards + filter + severity checklist), Панель/Серверы, Терминал + Files
+- [x] статусы как Badge; mono на host/path/CLI; primary CTA
+- [x] UI pass 2: denser surfaces, brand mark, checklist rail, login hero
+- [x] **UI_SPEC + MODALS_REGISTRY + screens/00–14** (детальный план до кнопки/модалки)
 
 ### Фаза 4 — P1/P2 (Пиксель)
 
-Остальные разделы по матрице.  
-Параллельно вычищать копирайт/навигацию.
+- [x] **Рестайл v2:** `index.css` под токены UI_SPEC §2 (light default, accent `#2563eb`, surface, soft-тона, shadow), `theme.tsx` default → `light`
+- [x] Рестайл примитивов + Card, Tabs, KpiCard, Field, Avatar, ForbiddenState, IconButton, Skeleton
+- [x] Оверлеи: Dialog, ConfirmDialog, PromptDialog, Drawer, Toast, DropdownMenu, Tooltip
+- [x] Рестайл P0 (shell, login, dashboard, servers, terminal, readiness) под v2; FeatureGate → ForbiddenState
+- [x] Полный SRV-01 (auth_method / key / sudo) + mobile sidebar Drawer
+- [x] P1: Agents list/create + Agent Run page (`/agents/run/:runId`)
+- [x] P1: Automation catalog (`/automation`) — list/create/delete
+- [x] P1: Playbook editor (`/automation/playbooks/:id`) — YAML draft save + publish
+- [x] P1: Playbook run wizard + results (`…/run`, `/automation/runs/:runId`)
+- [x] P1: Studio hub (`/studio`) — pipelines list/create/delete
+- [x] P1: Chat hub (`/chat`) — threads + HTTP compose (без full WS stream)
+- [x] P1: Chat WS streaming + confirm/cancel actions
+- [x] P1: MARS wizard + run monitor (`/mars`, `/mars/runs/:runId`)
+- [x] P1: Kubernetes cockpit (`/kubernetes`) — overview + diagnose drawer
+- [x] P1: Kubernetes cluster detail + fleet (`/kubernetes/clusters/:id`, `/fleet`)
+- [x] P1: Settings account + AI connections
+- [x] P1: Settings access users + audit journal
+- [x] P1: Studio pipeline editor (list-based nodes, save/run) `/studio/pipelines/:id`
+- [x] P1: Studio hubs — runs / agents / skills / mcp
+- [x] P1: Settings groups + permissions + SSO
+- [x] P1: Kubernetes admin sessions + Devtron
+- [x] P1: Monitoring insights
+- [x] P1: Settings AI / models routing
+- [x] P1: Studio notifications + SVG graph canvas
+- [x] P1: Settings limits/budgets
+- [x] P1: Studio run detail `/studio/runs/:id`
+- [x] P1: MARS workspace create/delete
+- [ ] Плагины — отложено по запросу (PlaceholderPage)
+- [ ] Держать UI_SPEC / screens в синхроне при переносе экранов
+
 
 ### Фаза 5 — Приёмка
 
@@ -254,15 +298,31 @@ Servers → Terminal/ws → Files.
 
 ## 10. Ближайшие шаги
 
-1. LU: добить Фазу 0 — `copyProxyHeaders` в vite.config, README, `icons.svg`; коммит.
-2. Команда ревьюит этот MD (вопросы/правки сюда).
-3. Пиксель стартует Фазу 1–2 (shell/auth + first-run gate).
-4. Мост сверяет ws-каналы и REST-endpoint'ы P0 с бэком → `API_MATRIX.md`.
-5. Пользователь тыкает руками; сложные автотесты — по запросу.
+1. ~~LU: добить Фазу 0~~ — сделано.
+2. ~~Пиксель: Фаза 2–3 (shell/auth + servers/terminal/files)~~ — сделано.
+3. ~~Пиксель: Фаза D (UI design system + P0 screens)~~ — сделано (`DESIGN.md`).
+4. ~~Пиксель: детальная UI-спека (UI_SPEC + MODALS_REGISTRY + screens/00–14)~~ — сделано.
+5. Пользователь: ручной смок UI на `:8081` (login → readiness → servers → terminal).
+6. Пиксель: Фаза 4 — P1/P2 экраны **по `screens/*.md`** + оверлеи (Dialog/Drawer/Toast).
+7. Мост: дополнить `API_MATRIX.md` REST для P1.
+8. Автотесты — только по запросу.
 
 ---
 
-## 11. Ревизия плана (2026-09-13, аудит по коду)
+## 11. UI-спецификация (2026-09-13)
+
+Пакет документов для Фазы 4 (реализация по спеке, не «на глаз»):
+
+- [`UI_SPEC.md`](UI_SPEC.md) — дизайн-система **v2 (corporate B2B, light, accent `#2563eb`)**
+- [`MODALS_REGISTRY.md`](MODALS_REGISTRY.md) — ~55 диалогов
+- [`screens/README.md`](screens/README.md) — индекс 00–14 + **таблица соответствия v1 → v2** для визуальных формулировок
+- Текущий `frontend-v3/src/index.css` — ещё v1 (тёмный ч/б); переписывается в Фазе 4
+
+Покрытие инвентаря старого `frontend/`: каждый экран из App.tsx имеет файл в `screens/`; каждый диалог из инвентаря — строку в `MODALS_REGISTRY` или пометку «убрано» в конце реестра / в § anti-slop экрана. Чеклист: [`COVERAGE.md`](COVERAGE.md).
+
+---
+
+## 12. Ревизия плана (2026-09-13, аудит по коду)
 
 Что исправлено относительно первой версии:
 

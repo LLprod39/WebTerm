@@ -214,14 +214,28 @@ def _planner_user_prompt(
     safe_history: str,
     safe_tail: str,
     safe_user_msg: str,
+    safe_briefing: str = "",
+    safe_occupancy: str = "",
 ) -> str:
     """Per-request user message for the planner LLM call."""
+    briefing_block = ""
+    if safe_briefing:
+        briefing_block = f"""
+═══ ЧТО УЖЕ ПРОИСХОДИЛО В ЭТОЙ СЕССИИ (untrusted — sanitised) ═══
+{safe_briefing}
+"""
+    occupancy_block = ""
+    if safe_occupancy:
+        occupancy_block = f"""
+═══ СТРОКА ВВОДА ОБЩЕГО ТЕРМИНАЛА ═══
+{safe_occupancy}
+"""
     return f"""═══ ИСТОРИЯ ДИАЛОГА (untrusted — sanitised) ═══
 {safe_history}
 
 ═══ ПОСЛЕДНИЙ ВЫВОД ТЕРМИНАЛА (untrusted — sanitised) ═══
 {safe_tail}
-
+{briefing_block}{occupancy_block}
 ═══ ТЕКУЩИЙ ЗАПРОС ПОЛЬЗОВАТЕЛЯ (untrusted — sanitised) ═══
 {safe_user_msg}
 
@@ -238,6 +252,8 @@ def _planner_common_args(
     chat_mode: str,
     execution_mode: str,
     dry_run: bool = False,
+    session_briefing: str = "",
+    occupancy_note: str = "",
 ) -> tuple[str, str]:
     """Shared helper: returns ``(system_prompt, user_prompt)``."""
     chat_mode_block = build_chat_mode_block(chat_mode)
@@ -249,6 +265,8 @@ def _planner_common_args(
     safe_tail = sanitize_for_prompt(terminal_tail, mode="observation", fallback=_EMPTY_PLACEHOLDER)
     safe_user_msg = sanitize_for_prompt(user_message, mode="context", fallback="")
     safe_history = build_history_text(history)
+    safe_briefing = sanitize_for_prompt(session_briefing, mode="context", fallback="") if session_briefing else ""
+    safe_occupancy = sanitize_for_prompt(occupancy_note, mode="context", fallback="") if occupancy_note else ""
 
     system = _planner_system_prompt(
         chat_mode_block=chat_mode_block,
@@ -262,6 +280,8 @@ def _planner_common_args(
         safe_history=safe_history,
         safe_tail=safe_tail,
         safe_user_msg=safe_user_msg,
+        safe_briefing=safe_briefing,
+        safe_occupancy=safe_occupancy,
     )
     return system, user
 
@@ -276,6 +296,8 @@ def build_planner_prompt(
     chat_mode: str,
     execution_mode: str,
     dry_run: bool = False,
+    session_briefing: str = "",
+    occupancy_note: str = "",
 ) -> str:
     """Build the planning prompt that produces :class:`TerminalPlanResponse`.
 
@@ -292,6 +314,8 @@ def build_planner_prompt(
         chat_mode=chat_mode,
         execution_mode=execution_mode,
         dry_run=dry_run,
+        session_briefing=session_briefing,
+        occupancy_note=occupancy_note,
     )
     return f"{system}\n\n{user}"
 
@@ -306,6 +330,8 @@ def build_planner_prompt_parts(
     chat_mode: str,
     execution_mode: str,
     dry_run: bool = False,
+    session_briefing: str = "",
+    occupancy_note: str = "",
 ) -> tuple[str, str]:
     """Build the planning prompt split into ``(system_prompt, user_prompt)``.
 
@@ -328,6 +354,8 @@ def build_planner_prompt_parts(
         chat_mode=chat_mode,
         execution_mode=execution_mode,
         dry_run=dry_run,
+        session_briefing=session_briefing,
+        occupancy_note=occupancy_note,
     )
 
 

@@ -44,6 +44,28 @@ class TerminalPreference(models.Model):
         return f"{self.user.username}: {self.theme_name} {self.font_size}px"
 
 
+class UserNotificationPreference(models.Model):
+    """Where this user wants personal Telegram alerts (uses platform bot token)."""
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notification_preference",
+    )
+    telegram_chat_id = models.CharField(max_length=64, blank=True, default="")
+    telegram_enabled = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["user"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username}: telegram={'on' if self.telegram_enabled else 'off'}"
+
+
 class DashboardLayout(models.Model):
     """Stores user-specific dashboard layouts and widget configurations."""
 

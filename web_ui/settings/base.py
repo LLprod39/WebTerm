@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     "channels",
     "corsheaders",
     "core_ui",
+    "telegram_hub.apps.TelegramHubConfig",
     "plugin_marketplace.apps.PluginMarketplaceConfig",
     "servers",
     "studio",

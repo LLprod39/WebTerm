@@ -11,12 +11,17 @@ import asyncio
 import re
 from typing import TYPE_CHECKING, Any
 
+from app.agent_kernel.sandbox.runtime_errors import (
+    KIND_CONTROL_PLANE,
+    AgentCommandRuntimeError,
+    classify_agent_runtime_detail,
+    format_runtime_error,
+)
 from app.command_execution_gate import evaluate_command_execution_gate
 from app.plugins.agent_tools import plugin_agent_tool_specs
 
 if TYPE_CHECKING:
     from servers.agents.agent_sessions import AgentSessionManager
-
 
 from servers.agents.agent_tools_base import ToolResult
 from servers.agents.agent_tools_materials import (
@@ -79,8 +84,12 @@ async def tool_ssh_execute(session: AgentSessionManager, *, server: str, command
         )
     except TimeoutError:
         return ToolResult(False, f"Command timed out after {session.command_timeout}s: {command}")
+    except AgentCommandRuntimeError as exc:
+        kind = getattr(exc, "kind", KIND_CONTROL_PLANE)
+        return ToolResult(False, str(exc), data={"error_kind": kind})
     except Exception as exc:
-        return ToolResult(False, f"SSH error: {exc}")
+        kind = classify_agent_runtime_detail(exc)
+        return ToolResult(False, format_runtime_error(kind, str(exc)), data={"error_kind": kind})
 
 
 async def tool_read_console(session: AgentSessionManager, *, server: str, lines: int = 80, **_kw) -> ToolResult:
@@ -123,9 +132,19 @@ async def tool_open_connection(session: AgentSessionManager, *, server: str, **_
 
     try:
         await session.open(srv_obj)
-        return ToolResult(True, f"Connected to {srv_obj.name} ({srv_obj.host}).")
+        return ToolResult(
+            True,
+            (
+                f"Канал выполнения готов для {srv_obj.name} ({srv_obj.host}). "
+                "Это не постоянная SSH-сессия: команда пойдёт через изолированный runner."
+            ),
+        )
+    except AgentCommandRuntimeError as exc:
+        kind = getattr(exc, "kind", KIND_CONTROL_PLANE)
+        return ToolResult(False, str(exc), data={"error_kind": kind})
     except Exception as exc:
-        return ToolResult(False, f"Connection failed: {exc}")
+        kind = classify_agent_runtime_detail(exc)
+        return ToolResult(False, format_runtime_error(kind, str(exc)), data={"error_kind": kind})
 
 
 async def tool_close_connection(session: AgentSessionManager, *, server: str, **_kw) -> ToolResult:
@@ -249,7 +268,7 @@ AGENT_TOOLS: dict[str, dict[str, Any]] = {
     },
     "open_connection": {
         "fn": tool_open_connection,
-        "description": "Open a new SSH connection to a server (if not already connected).",
+        "description": "Prepare the isolated command channel for a server. Does not open a persistent SSH session.",
         "tool_spec": {
             "category": "service",
             "risk": "exec",

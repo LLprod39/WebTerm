@@ -25,6 +25,6 @@ STUDIO_WORKER_SPECS = {
     },
     "telegram-bot": {
         "worker_kind": STUDIO_TELEGRAM_BOT_WORKER,
-        "command": "python manage.py run_telegram_bot",
+        "command": "python manage.py run_telegram_hub",
     },
 }

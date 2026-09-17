@@ -123,6 +123,8 @@ class TerminalAgentSupportOperations:
         chat_mode: str = "agent",
         execution_mode: str = "step",
         dry_run: bool = False,
+        session_briefing: str = "",
+        occupancy_note: str = "",
     ) -> dict[str, Any]:
         """
         Ask internal LLM to decide mode and return JSON:
@@ -155,6 +157,8 @@ class TerminalAgentSupportOperations:
             chat_mode=chat_mode,
             execution_mode=execution_mode,
             dry_run=dry_run,
+            session_briefing=session_briefing,
+            occupancy_note=occupancy_note,
             semaphore=_TERMINAL_AI_LLM_SEMAPHORE,
             execution_context=await self._terminal_execution_context("terminal_planning"),
         )

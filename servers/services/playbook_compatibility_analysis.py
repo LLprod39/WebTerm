@@ -80,7 +80,56 @@ _BUILTIN_VARS = {
     "query",
     "role_path",
 }
-COMPATIBILITY_ANALYZER_VERSION = 3
+# User-supplied ansible connection/auth vars that must still be provided at runtime
+# when referenced (not gathered by setup/facts).
+_ANSIBLE_USER_SUPPLIED_PREFIXES = (
+    "ansible_password",
+    "ansible_become_password",
+    "ansible_ssh_pass",
+    "ansible_ssh_private_key",
+    "ansible_private_key",
+    "ansible_api_key",
+    "ansible_token",
+    "ansible_vault",
+)
+COMPATIBILITY_ANALYZER_VERSION = 4
+
+
+def _root_var_name(name: str) -> str:
+    return str(name or "").split(".", 1)[0].strip()
+
+
+def is_gatherable_ansible_fact(name: str) -> bool:
+    """True for names Ansible gathers via setup/facts (not user secrets).
+
+    ``ansible_hostname``, ``ansible_memtotal_mb``, ``ansible_facts.os_family`` etc.
+    must not hard-block playbook runs as missing runtime variables.
+    """
+    root = _root_var_name(name).lower()
+    if not root:
+        return False
+    if root in _BUILTIN_VARS:
+        return True
+    if root.startswith("ansible_facts"):
+        return True
+    if not root.startswith("ansible_"):
+        return False
+    for prefix in _ANSIBLE_USER_SUPPLIED_PREFIXES:
+        if root == prefix or root.startswith(prefix + "_"):
+            return False
+    # Remaining ansible_* are treated as gatherable facts / connection defaults.
+    return True
+
+
+def is_user_required_runtime_variable(name: str, *, declared_vars: set[str] | None = None) -> bool:
+    """Variable must be supplied via extra_vars / binding before run."""
+    root = _root_var_name(name)
+    declared = declared_vars or set()
+    if root in declared or root in _BUILTIN_VARS:
+        return False
+    if is_gatherable_ansible_fact(name):
+        return False
+    return True
 
 
 def _load_yaml(source_yaml: str) -> list[dict[str, Any]]:
@@ -362,7 +411,22 @@ def analyze_playbook_compatibility(
             _issue("unbound_host_selector", "warning", f"Map '{selector}' to WebTerm servers or groups", "hosts")
         )
 
-    required_vars = sorted(name for name in used_vars if name.split(".", 1)[0] not in declared_vars | _BUILTIN_VARS)
+    fact_refs = sorted(name for name in used_vars if is_gatherable_ansible_fact(name) and _root_var_name(name) not in declared_vars)
+    required_vars = sorted(
+        name
+        for name in used_vars
+        if is_user_required_runtime_variable(name, declared_vars=declared_vars)
+    )
+    if fact_refs:
+        issues.append(
+            _issue(
+                "gathered_facts_referenced",
+                "warning",
+                "Playbook references Ansible gathered facts (provided at runtime by setup): "
+                + ", ".join(fact_refs[:12]),
+                "vars",
+            )
+        )
     if required_vars:
         issues.append(
             _issue("required_variables", "warning", "Runtime values required: " + ", ".join(required_vars[:12]), "vars")

@@ -28,6 +28,14 @@ def test_every_node_manifest_exposes_input_and_output_schemas():
         assert isinstance(manifest.output_schema.get("properties"), dict), node_type
 
 
+def test_llm_query_manifest_allows_auto_provider():
+    props = NODE_MANIFESTS["agent/llm_query"].input_schema["properties"]
+    provider = props["provider"]
+    assert provider["default"] == "auto"
+    assert "auto" in provider["enum"]
+    assert set(provider["enum"]) >= {"auto", "gemini", "openai"}
+
+
 def test_check_node_manifest_consistency_command_reports_success():
     out = StringIO()
 

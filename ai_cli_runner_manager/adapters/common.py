@@ -65,32 +65,38 @@ def tool_output_schema(request: RunnerRequestV1) -> dict[str, Any] | None:
 
 def tool_response_events(raw: str, request: RunnerRequestV1) -> list[ProviderEventV1]:
     """Translate a constrained CLI JSON response into WebTerm tool events."""
-    parsed = _extract_json_object(raw)
+    compact = str(raw or "").strip()
+    if request.tools and not compact:
+        return [_tool_protocol_error("empty response")]
+    parsed = _extract_json_object(compact)
     if parsed is None:
         if request.tools:
-            return [_tool_protocol_error()]
-        return [ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": raw})] if raw.strip() else []
+            return [_tool_protocol_error("invalid JSON")]
+        return [ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": raw})] if compact else []
     events: list[ProviderEventV1] = []
     text = str(parsed.get("text") or parsed.get("reply") or "")
     if text:
         events.append(ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": text}))
-    allowed = {str(tool.get("name") or "") for tool in request.tools}
+    allowed_by_norm = _allowed_tool_names(request.tools)
     calls = parsed.get("tool_calls")
     if not isinstance(calls, list):
-        return [_tool_protocol_error()]
+        return [_tool_protocol_error("missing tool_calls")]
     for call in calls:
         if not isinstance(call, dict):
-            return [_tool_protocol_error()]
-        name = str(call.get("name") or "")
+            return [_tool_protocol_error("invalid tool_calls entry")]
+        raw_name = str(call.get("name") or "")
+        resolved_name = _resolve_allowed_tool_name(raw_name, allowed_by_norm)
         arguments = _decode_tool_arguments(call.get("arguments"))
-        if name not in allowed or not isinstance(arguments, dict):
-            return [_tool_protocol_error()]
+        if resolved_name is None:
+            return [_tool_protocol_error(f"unknown tool {raw_name or '<empty>'}")]
+        if not isinstance(arguments, dict):
+            return [_tool_protocol_error(f"invalid arguments for {resolved_name}")]
         events.append(
             ProviderEventV1(
                 ProviderEventType.TOOL_REQUEST,
                 {
                     "id": str(call.get("id") or f"call_{uuid.uuid4().hex[:12]}"),
-                    "name": name,
+                    "name": resolved_name,
                     "arguments": arguments,
                 },
             )
@@ -98,15 +104,45 @@ def tool_response_events(raw: str, request: RunnerRequestV1) -> list[ProviderEve
     return events
 
 
-def _tool_protocol_error() -> ProviderEventV1:
+def _tool_protocol_error(detail: str = "") -> ProviderEventV1:
+    message = "CLI provider returned an invalid or unauthorized tool request"
+    if detail:
+        message = f"{message}: {detail}"
     return ProviderEventV1(
         ProviderEventType.ERROR,
         {
             "code": "provider_tool_protocol_invalid",
-            "message": "CLI provider returned an invalid or unauthorized tool request",
+            "message": message,
             "retryable": False,
         },
     )
+
+
+def _normalise_tool_name(name: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(name or "").strip()).strip("_")
+    return cleaned[:64]
+
+
+def _allowed_tool_names(tools: list[dict[str, Any]]) -> dict[str, str]:
+    """Map normalised aliases to the canonical tool name from the request."""
+    allowed: dict[str, str] = {}
+    for tool in tools:
+        function = tool.get("function") if isinstance(tool.get("function"), dict) else tool
+        name = str(function.get("name") or tool.get("name") or "")
+        if not name:
+            continue
+        allowed[_normalise_tool_name(name)] = name
+        # Accept dotted action_type forms when present on the catalog entry.
+        action_type = str(tool.get("action_type") or "")
+        if action_type:
+            allowed[_normalise_tool_name(action_type)] = name
+    return allowed
+
+
+def _resolve_allowed_tool_name(name: str, allowed_by_norm: dict[str, str]) -> str | None:
+    if name in allowed_by_norm.values():
+        return name
+    return allowed_by_norm.get(_normalise_tool_name(name))
 
 
 def _decode_tool_arguments(value: Any) -> dict[str, Any] | None:
@@ -167,23 +203,50 @@ def _with_tool_protocol(prompt: str, request: RunnerRequestV1) -> str:
         "Use an empty tool_calls array for a final text answer. No Markdown around JSON.\n"
         f"WebTerm tools: {json.dumps(catalog, ensure_ascii=False, separators=(',', ':'))}"
     )
+    if request.target_id == "cursor_subscription":
+        names = ", ".join(item["name"] for item in catalog)
+        instruction = (
+            f"{instruction}\n"
+            "Cursor-specific rules: the FINAL assistant/result message MUST be only that JSON object. "
+            "Do not put the JSON only in thinking. Do not wrap it in Markdown fences. "
+            f"Tool names must match exactly one of: {names}."
+        )
     return f"{prompt}\n\n{instruction}".strip()
+
+
+def _looks_like_tool_protocol(value: dict[str, Any]) -> bool:
+    return "tool_calls" in value and ("text" in value or "reply" in value)
 
 
 def _extract_json_object(raw: str) -> dict[str, Any] | None:
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", str(raw or "").strip(), flags=re.IGNORECASE)
+    if not text:
+        return None
     try:
         parsed = json.loads(text)
-        return parsed if isinstance(parsed, dict) else None
+        if isinstance(parsed, dict):
+            return parsed
     except json.JSONDecodeError:
-        start, end = text.find("{"), text.rfind("}")
-        if start < 0 or end <= start:
-            return None
+        pass
+
+    # Prefer the first object that matches the tool protocol when prose wraps JSON.
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", text):
         try:
-            parsed = json.loads(text[start : end + 1])
+            parsed, _end = decoder.raw_decode(text[match.start() :])
         except json.JSONDecodeError:
-            return None
-        return parsed if isinstance(parsed, dict) else None
+            continue
+        if isinstance(parsed, dict) and _looks_like_tool_protocol(parsed):
+            return parsed
+
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return None
+    try:
+        parsed = json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def safe_model_dump(value: Any) -> dict[str, Any]:

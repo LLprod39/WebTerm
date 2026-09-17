@@ -95,6 +95,7 @@ class Command(BaseCommand):
             return
 
         self.stdout.write(self.style.SUCCESS(f"Starting agent execution plane worker ({worker_key})"))
+        self._announce_docker_channel()
         last_summary = {"processed": 0, "completed": 0, "failed": 0, "empty_polls": 0, "stale_cleaned": 0}
         fatal_error = ""
         try:
@@ -131,6 +132,24 @@ class Command(BaseCommand):
             raise
         finally:
             stop_background_worker("agent_execution", worker_key=worker_key, summary=last_summary, error=fatal_error)
+
+    @staticmethod
+    def _announce_docker_channel() -> None:
+        from django.conf import settings as django_settings
+
+        from app.agent_kernel.sandbox.ephemeral_runner import (
+            announce_agent_command_docker_channel,
+            probe_agent_command_docker,
+        )
+
+        announce_agent_command_docker_channel()
+        if bool(getattr(django_settings, "TESTING", False)):
+            return
+        try:
+            version = asyncio.run(probe_agent_command_docker())
+            logger.info("agent execution docker preflight ok: server={}", version)
+        except Exception as exc:
+            logger.error("agent execution docker preflight failed: {}", exc)
 
     def _run_once(
         self,

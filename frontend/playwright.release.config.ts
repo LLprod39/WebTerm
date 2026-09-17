@@ -1,14 +1,23 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
+
+const baseURL = process.env.WEBTERM_RELEASE_BASE_URL;
+if (!baseURL) {
+  throw new Error("WEBTERM_RELEASE_BASE_URL is required");
+}
+
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "release-published.spec.ts",
-  workers: 1,
   timeout: 60_000,
-  reporter: [["list"], ["html", { open: "never" }]],
+  expect: { timeout: 10_000 },
+  retries: 0,
+  reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   use: {
-    ...devices["Desktop Chrome"],
-    baseURL: process.env.WEBTERM_RELEASE_BASE_URL,
+    baseURL,
+    ignoreHTTPSErrors: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    video: "retain-on-failure",
+    viewport: { width: 1440, height: 900 },
   },
+  projects: [{ name: "chromium-release", use: { browserName: "chromium" } }],
 });

@@ -7,7 +7,7 @@ Usage:
 
 After running, follow the printed instructions to:
   1. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in Studio → Notifications.
-  2. Register the webhook URL with Telegram's setWebhook API.
+  2. Run `python manage.py run_telegram_hub` (long-polling, no webhook needed).
   3. Send a message to your bot — the pipeline runs automatically.
 """
 
@@ -59,14 +59,13 @@ class Command(BaseCommand):
         self.stdout.write("    TELEGRAM_BOT_TOKEN=<your_bot_token>")
         self.stdout.write("    TELEGRAM_CHAT_ID=<your_chat_id>")
         self.stdout.write("")
-        self.stdout.write("STEP 3 — Register the webhook with Telegram:")
-        self.stdout.write("  Replace YOUR_DOMAIN and YOUR_BOT_TOKEN below, then run:")
+        self.stdout.write("STEP 3 — Run the Telegram poll worker (no public URL required):")
+        self.stdout.write("  python manage.py run_telegram_hub")
+        self.stdout.write("  # or: docker compose --profile telegram-bot up -d telegram-bot")
         self.stdout.write("")
+        self.stdout.write("  Alternative (webhook, requires public HTTPS):")
         self.stdout.write("  curl -X POST https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook \\")
         self.stdout.write(f'    -d \'{{"url": "https://YOUR_DOMAIN{webhook_path}"}}\'')
-        self.stdout.write("")
-        self.stdout.write("  Your webhook path:")
-        self.stdout.write(f"    {webhook_path}")
         self.stdout.write("")
         self.stdout.write("DONE — Open the pipeline in Studio:")
         self.stdout.write(f"  /studio/pipeline/{pipeline.id}")

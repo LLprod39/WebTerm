@@ -68,6 +68,9 @@ jobs:
           - name: ai-cli-grok-runner
             dockerfile: docker/ai-cli-provider-runner.Dockerfile
             target: grok
+          - name: ai-cli-cursor-runner
+            dockerfile: docker/ai-cli-provider-runner.Dockerfile
+            target: cursor
     steps:
       - name: Checkout exact tag
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
@@ -83,6 +86,8 @@ jobs:
           TARGET: ${{ matrix.target }}
           GROK_BUILD_URL: ${{ vars.GROK_BUILD_URL }}
           GROK_BUILD_SHA256: ${{ vars.GROK_BUILD_SHA256 }}
+          CURSOR_AGENT_URL: ${{ vars.CURSOR_AGENT_URL }}
+          CURSOR_AGENT_SHA256: ${{ vars.CURSOR_AGENT_SHA256 }}
         run: |
           set -euo pipefail
           revision_tag="sha-${GITHUB_SHA::12}"
@@ -96,6 +101,14 @@ jobs:
             build_args+=(
               --build-arg "GROK_BUILD_URL=$GROK_BUILD_URL"
               --build-arg "GROK_BUILD_SHA256=$GROK_BUILD_SHA256"
+            )
+          fi
+          if [ "${TARGET:-}" = "cursor" ]; then
+            [[ "${CURSOR_AGENT_URL:-}" =~ ^https:// ]]
+            [[ "${CURSOR_AGENT_SHA256:-}" =~ ^[0-9a-f]{64}$ ]]
+            build_args+=(
+              --build-arg "CURSOR_AGENT_URL=$CURSOR_AGENT_URL"
+              --build-arg "CURSOR_AGENT_SHA256=$CURSOR_AGENT_SHA256"
             )
           fi
           docker build "${build_args[@]}" \
@@ -177,6 +190,7 @@ jobs:
               "ai-cli-runner-manager": "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE",
               "ai-cli-codex-runner": "AI_CLI_CODEX_RUNNER_IMAGE",
               "ai-cli-grok-runner": "AI_CLI_GROK_RUNNER_IMAGE",
+              "ai-cli-cursor-runner": "AI_CLI_CURSOR_RUNNER_IMAGE",
           }
           lines = []
           for name, env_name in mapping.items():
@@ -280,6 +294,7 @@ jobs:
               "ai-cli-runner-manager",
               "ai-cli-codex-runner",
               "ai-cli-grok-runner",
+              "ai-cli-cursor-runner",
           ]
           images = {}
           for name in names:
@@ -307,6 +322,7 @@ jobs:
               "ai-cli-runner-manager": "WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE",
               "ai-cli-codex-runner": "AI_CLI_CODEX_RUNNER_IMAGE",
               "ai-cli-grok-runner": "AI_CLI_GROK_RUNNER_IMAGE",
+              "ai-cli-cursor-runner": "AI_CLI_CURSOR_RUNNER_IMAGE",
           }
           env_text = "\n".join(f"{env_names[name]}={images[name]}" for name in names) + "\n"
           Path("release-assets/manifest/release-images.env").write_text(env_text, encoding="utf-8")

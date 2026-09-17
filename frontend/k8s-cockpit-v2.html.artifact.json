@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "k8s-cockpit-v2.html",
+  "entry": "k8s-cockpit-v2.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-09-14T19:48:09.066Z",
+  "updatedAt": "2026-09-14T19:48:09.066Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

@@ -214,6 +214,33 @@ def _resume_turns(turns: list[ChatTurnState], *, payload: dict[str, Any], tool_n
                     "actions": actions,
                 },
             )
+            # Telegram has no WS consumer — push the final answer via Celery presenter.
+            try:
+                from core_ui.models import AssistantAction as _AA
+                from core_ui.services.operator_channel import is_telegram_session
+                from telegram_hub.assistant_bridge import enqueue_telegram_delivery_for_session
+
+                session_obj = getattr(turn_obj, "session", None)
+                if session_obj is None:
+                    from core_ui.models import ChatSession
+
+                    session_obj = ChatSession.objects.filter(pk=cid).first()
+                if is_telegram_session(session_obj):
+                    action_ids = [
+                        int(a.pk)
+                        for a in list(getattr(result, "actions", None) or [])
+                        if getattr(a, "pk", None)
+                        and getattr(a, "status", None) == _AA.STATUS_REQUIRES_CONFIRMATION
+                    ]
+                    enqueue_telegram_delivery_for_session(
+                        session_id=cid,
+                        assistant_message_id=(
+                            result.assistant_message.pk if getattr(result, "assistant_message", None) else None
+                        ),
+                        action_ids=action_ids,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("telegram async deliver enqueue skipped turn=%s: %s", turn_obj.pk, exc)
 
         try:
             _a2s(_run_one)()

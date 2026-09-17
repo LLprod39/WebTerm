@@ -556,6 +556,7 @@ services:
       DOCKER_PROXY_POLICY: ai-cli
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:-}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:-}
+      AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:-}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -626,6 +627,7 @@ services:
       AI_CLI_RUNNER_MANAGER_TOKEN: ${AI_CLI_RUNNER_MANAGER_TOKEN:-}
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:-}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:-}
+      AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:-}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -1095,13 +1097,13 @@ services:
     <<: *backend-worker
     container_name: mini-prod-telegram-bot
     profiles: ["telegram-bot"]
-    command: ["sh", "-lc", "python manage.py run_telegram_bot"]
+    command: ["sh", "-lc", "python manage.py run_telegram_hub"]
     environment:
       <<: *backend-worker-environment
       # Must stay a soft default. Compose interpolates every service before it
       # filters by profile, so a `:?` guard here makes the whole file unusable
       # for operators who never enable the telegram-bot profile. The command
-      # itself refuses to start without a token (run_telegram_bot.handle).
+      # itself refuses to start without a token (run_telegram_hub / ensure_platform_bot).
       TELEGRAM_BOT_POLL_TOKEN: "${TELEGRAM_BOT_TOKEN:-}"
 
   mars-agent:

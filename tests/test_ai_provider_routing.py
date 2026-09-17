@@ -805,3 +805,70 @@ def test_provider_trace_attributes_are_metadata_only() -> None:
     assert marker not in serialized
     assert context.idempotency_key not in serialized
     assert "prompt" not in serialized.lower()
+
+
+def test_user_grant_max_slots_blocks_second_lease() -> None:
+    user = User.objects.create_user("cli-user")
+    project = _workspace(user)
+    connection = _connection(owner=None, name="Shared Cursor", concurrency_limit=4)
+    AIProviderConnectionGrant.objects.create(
+        connection=connection,
+        user=user,
+        allow_interactive=True,
+        max_slots=1,
+    )
+    binding = ProviderBinding("codex_subscription", connection_id=connection.pk)
+    first, lease = create_invocation_with_lease(
+        _context(user, project, binding=binding, idempotency_key="user-slot-1"),
+        owner_id="worker-a",
+    )
+    assert lease is not None
+    assert first.user_id == user.pk
+
+    with pytest.raises(ProviderRuntimeError) as exc:
+        create_invocation_with_lease(
+            _context(user, project, binding=binding, idempotency_key="user-slot-2"),
+            owner_id="worker-b",
+        )
+    assert exc.value.code == "provider_principal_capacity_unavailable"
+
+    release_provider_lease(str(lease.lease_token), owner_id="worker-a")
+    second, lease2 = create_invocation_with_lease(
+        _context(user, project, binding=binding, idempotency_key="user-slot-3"),
+        owner_id="worker-c",
+    )
+    assert lease2 is not None
+    assert second.pk != first.pk
+
+
+def test_group_grant_max_slots_is_shared_pool() -> None:
+    from django.contrib.auth.models import Group
+
+    group = Group.objects.create(name="cli-ops")
+    alice = User.objects.create_user("alice-cli")
+    bob = User.objects.create_user("bob-cli")
+    alice.groups.add(group)
+    bob.groups.add(group)
+    project = _workspace(alice)
+    connection = _connection(owner=None, name="Shared Group Cursor", concurrency_limit=4)
+    AIProviderConnectionGrant.objects.create(
+        connection=connection,
+        group=group,
+        allow_interactive=True,
+        max_slots=1,
+    )
+    binding = ProviderBinding("codex_subscription", connection_id=connection.pk)
+
+    _inv, lease = create_invocation_with_lease(
+        _context(alice, project, binding=binding, idempotency_key="group-slot-alice"),
+        owner_id="worker-alice",
+    )
+    assert lease is not None
+
+    with pytest.raises(ProviderRuntimeError) as exc:
+        create_invocation_with_lease(
+            _context(bob, project, binding=binding, idempotency_key="group-slot-bob"),
+            owner_id="worker-bob",
+        )
+    assert exc.value.code == "provider_principal_capacity_unavailable"
+    assert "Group" in str(exc.value)

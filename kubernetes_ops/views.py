@@ -16,6 +16,7 @@ from kubernetes_ops.serializers import (
     serialize_app,
     serialize_cluster,
     serialize_fleet_bundle,
+    serialize_namespace,
     serialize_provider,
 )
 from kubernetes_ops.services.overview import build_overview_payload
@@ -30,7 +31,9 @@ from kubernetes_ops.views_helpers import (
     _delete_managed_provider_secret_if_external,
     _json_body,
     _namespace_summaries,
+    _provider_manage_denied,
     _provider_payload_from_body,
+    _providers_queryset_for_user,
     _safe_json,
     _staff_required,
     _sync_result_payload,
@@ -58,36 +61,39 @@ def api_kubernetes_overview(request):
 def api_kubernetes_providers(request):
     def handler():
         if request.method == "GET":
-            denied = _staff_required(request)
-            if denied:
-                return denied
+            providers = _providers_queryset_for_user(request.user)
             return JsonResponse(
                 {
                     "success": True,
                     "providers": [
-                        serialize_provider(provider, user=request.user) for provider in K8sProvider.objects.all()
+                        serialize_provider(provider, user=request.user) for provider in providers
                     ],
                 }
             )
 
-        denied = _staff_required(request)
-        if denied:
-            return denied
         data, error_response = _json_body(request)
         if error_response:
             return error_response
         payload, secret_value, error = _provider_payload_from_body(data)
         if error:
             return JsonResponse({"success": False, "error": error}, status=400)
+        denied = _provider_manage_denied(request, kind=payload.get("kind"))
+        if denied:
+            return denied
         if secret_value:
             payload["secret_ref"] = ""
-        provider = K8sProvider.objects.create(**payload)
+        provider = K8sProvider.objects.create(**payload, created_by=request.user)
         managed_secret_created = _apply_provider_secret_value(provider, secret_value)
         _audit(
             request,
             "k8s.provider.create",
             provider=provider.name,
-            payload={"provider_id": provider.id, "kind": provider.kind, "managed_secret": managed_secret_created},
+            payload={
+                "provider_id": provider.id,
+                "kind": provider.kind,
+                "managed_secret": managed_secret_created,
+                "created_by": getattr(request.user, "id", None),
+            },
         )
         return JsonResponse({"success": True, "provider": serialize_provider(provider, user=request.user)}, status=201)
 
@@ -103,11 +109,11 @@ def api_kubernetes_provider_detail(request, provider_id: int):
         if provider is None:
             return JsonResponse({"success": False, "error": "Provider not found"}, status=404)
         if request.method == "GET":
-            denied = _staff_required(request)
+            denied = _provider_manage_denied(request, provider)
             if denied:
                 return denied
             return JsonResponse({"success": True, "provider": serialize_provider(provider, user=request.user)})
-        denied = _staff_required(request)
+        denied = _provider_manage_denied(request, provider)
         if denied:
             return denied
         if request.method == "DELETE":
@@ -122,6 +128,9 @@ def api_kubernetes_provider_detail(request, provider_id: int):
         payload, secret_value, error = _provider_payload_from_body(data, provider)
         if error:
             return JsonResponse({"success": False, "error": error}, status=400)
+        kind_denied = _provider_manage_denied(request, provider, kind=payload.get("kind"))
+        if kind_denied:
+            return kind_denied
         old_ref = provider.secret_ref
         if secret_value:
             payload["secret_ref"] = old_ref
@@ -173,9 +182,6 @@ def api_kubernetes_sync(request):
 @require_http_methods(["POST"])
 def api_kubernetes_provider_sync(request, provider_id: int):
     def handler():
-        denied = _staff_required(request)
-        if denied:
-            return denied
         data, error_response = _json_body(request)
         if error_response:
             return error_response
@@ -183,6 +189,9 @@ def api_kubernetes_provider_sync(request, provider_id: int):
         provider = K8sProvider.objects.filter(id=provider_id).first()
         if provider is None:
             return JsonResponse({"success": False, "error": "Provider not found"}, status=404)
+        denied = _provider_manage_denied(request, provider)
+        if denied:
+            return denied
         results = sync_kubernetes_providers(provider_id=provider.id, dry_run=dry_run)
         _audit(
             request,
@@ -200,25 +209,33 @@ def api_kubernetes_provider_sync(request, provider_id: int):
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_clusters(request):
-    return _safe_json(
-        lambda: JsonResponse(
-            {
-                "success": True,
-                "clusters": [serialize_cluster(cluster, user=request.user) for cluster in K8sCluster.objects.all()],
-            }
-        )
-    )
+    from kubernetes_ops.services.access import cluster_access_origin, visible_clusters_queryset
+
+    def handler():
+        clusters = visible_clusters_queryset(request.user)
+        payload = []
+        for cluster in clusters:
+            item = serialize_cluster(cluster, user=request.user)
+            item["access_origin"] = cluster_access_origin(request.user, cluster)
+            payload.append(item)
+        return JsonResponse({"success": True, "clusters": payload})
+
+    return _safe_json(handler)
 
 
 @login_required
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_cluster_detail(request, cluster_id: str):
+    from kubernetes_ops.services.access import cluster_access_origin, user_can_view_cluster
+
     def handler():
         cluster = _cluster_or_none(cluster_id)
-        if cluster is None:
+        if cluster is None or not user_can_view_cluster(request.user, cluster):
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
-        return JsonResponse({"success": True, "cluster": serialize_cluster(cluster, user=request.user)})
+        item = serialize_cluster(cluster, user=request.user)
+        item["access_origin"] = cluster_access_origin(request.user, cluster)
+        return JsonResponse({"success": True, "cluster": item})
 
     return _safe_json(handler)
 
@@ -227,15 +244,30 @@ def api_kubernetes_cluster_detail(request, cluster_id: str):
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_cluster_namespaces(request, cluster_id: str):
+    from kubernetes_ops.services.access import filter_namespaces_queryset, user_can_view_cluster
+
     def handler():
         cluster = _cluster_or_none(cluster_id)
-        if cluster is None:
+        if cluster is None or not user_can_view_cluster(request.user, cluster):
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
+        allowed_qs = filter_namespaces_queryset(request.user, cluster)
+        native = list(allowed_qs)
+        if native:
+            namespaces = [serialize_namespace(namespace, user=request.user) for namespace in native]
+        else:
+            # Fall back to summary helper only when allow-list is unrestricted empty inventory
+            from kubernetes_ops.services.access import allowed_namespaces_for_cluster
+
+            allowed = allowed_namespaces_for_cluster(request.user, cluster)
+            namespaces = _namespace_summaries(cluster, user=request.user)
+            if allowed is not None:
+                allowed_set = set(allowed)
+                namespaces = [item for item in namespaces if item.get("name") in allowed_set]
         return JsonResponse(
             {
                 "success": True,
                 "cluster": serialize_cluster(cluster, user=request.user),
-                "namespaces": _namespace_summaries(cluster, user=request.user),
+                "namespaces": namespaces,
             }
         )
 
@@ -246,15 +278,22 @@ def api_kubernetes_cluster_namespaces(request, cluster_id: str):
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_cluster_workloads(request, cluster_id: str):
+    from kubernetes_ops.services.access import allowed_namespaces_for_cluster, user_can_view_cluster
+
     def handler():
         cluster = _cluster_or_none(cluster_id)
-        if cluster is None:
+        if cluster is None or not user_can_view_cluster(request.user, cluster):
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
+        workloads = _workload_rows(cluster, user=request.user)
+        allowed = allowed_namespaces_for_cluster(request.user, cluster)
+        if allowed is not None:
+            allowed_set = set(allowed)
+            workloads = [item for item in workloads if item.get("namespace") in allowed_set]
         return JsonResponse(
             {
                 "success": True,
                 "cluster": serialize_cluster(cluster, user=request.user),
-                "workloads": _workload_rows(cluster, user=request.user),
+                "workloads": workloads,
             }
         )
 
@@ -265,15 +304,26 @@ def api_kubernetes_cluster_workloads(request, cluster_id: str):
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_cluster_events(request, cluster_id: str):
+    from kubernetes_ops.services.access import allowed_namespaces_for_cluster, user_can_view_cluster
+
     def handler():
         cluster = _cluster_or_none(cluster_id)
-        if cluster is None:
+        if cluster is None or not user_can_view_cluster(request.user, cluster):
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
+        events = _cluster_event_rows(cluster)
+        allowed = allowed_namespaces_for_cluster(request.user, cluster)
+        if allowed is not None:
+            allowed_set = set(allowed)
+            events = [
+                item
+                for item in events
+                if not item.get("namespace") or item.get("namespace") in allowed_set
+            ]
         return JsonResponse(
             {
                 "success": True,
                 "cluster": serialize_cluster(cluster, user=request.user),
-                "events": _cluster_event_rows(cluster),
+                "events": events,
             }
         )
 

@@ -267,16 +267,7 @@ class Command(BaseCommand):
             briefing_counter += 1
             if briefing_counter >= briefing_every_n:
                 briefing_counter = 0
-                try:
-                    from core_ui.services.operator_duty import deliver_briefings_for_all_users
-
-                    briefing_summary = await sync_to_async(deliver_briefings_for_all_users, thread_sensitive=True)(
-                        force=False
-                    )
-                    if briefing_summary.get("delivered"):
-                        logger.info("Monitor: operator duty briefings {}", briefing_summary)
-                except Exception as exc:
-                    logger.error("Monitor: operator duty briefing failed: {}", exc)
+                # Duty chat removed — morning briefings disabled.
 
             ai_counter += 1
             # No first-cycle bootstrap: LLM passes are costly, wait for history.

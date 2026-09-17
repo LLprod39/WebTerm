@@ -50,6 +50,27 @@ def should_inject_mid_run_replan(
     return bool(consecutive_failures >= 2 and iteration >= 3)
 
 
+def should_hard_stop_control_plane(
+    *,
+    tool: str | None,
+    error_kind: str | None,
+    observation: str | None,
+    success: bool | None = None,
+) -> bool:
+    """Stop the ReAct loop on the first WebTerm Docker-channel failure."""
+    if success is True:
+        return False
+    kind = str(error_kind or "").strip().lower()
+    if kind == "control_plane":
+        return True
+    text = str(observation or "").lower()
+    if "control_plane" in text or "канал выполнения" in text:
+        return True
+    if tool in {"ssh_execute", "open_connection", "run_script_material"} and "docker.sock" in text:
+        return True
+    return False
+
+
 def count_consecutive_tool_failures(tool_calls_log: list[dict[str, Any]] | None) -> int:
     """Count trailing failed tool results from the end of the tool log."""
     count = 0
@@ -64,6 +85,8 @@ def count_consecutive_tool_failures(tool_calls_log: list[dict[str, Any]] | None)
             or "failed" in lower[:80]
             or "permission denied" in lower
             or "not found or not connected" in lower
+            or "control_plane" in lower
+            or "канал выполнения" in lower
         )
         # Heuristic success markers from ToolResult
         success = (

@@ -89,6 +89,7 @@ def kubernetes_permission_policy(user) -> dict[str, Any]:
     has_studio_pipelines = bool(authenticated and feature_allowed_for_user(user, STUDIO_PIPELINES_FEATURE))
     can_read = authenticated and has_kubernetes
     can_admin = can_read and is_staff
+    can_connect_clusters = can_read
     can_admin_read = can_read and admin_mode_enabled and has_admin_read
     can_admin_write = can_read and admin_mode_enabled and has_admin_write
     can_break_glass = can_read and admin_mode_enabled and has_break_glass
@@ -154,9 +155,12 @@ def kubernetes_permission_policy(user) -> dict[str, Any]:
         "can_request_action_approval": can_read,
         "can_execute_approved_action": native_action_request_execution_enabled
         and (can_apply_yaml or can_restart or can_scale or can_patch or can_delete),
+        "can_connect_clusters": can_connect_clusters,
         "can_admin_providers": can_admin,
         "can_sync_providers": can_admin,
         "can_probe_providers": can_admin,
+        "can_manage_own_rancher_providers": can_connect_clusters,
+        "can_manage_own_connections": can_connect_clusters,
         "can_admin_read": can_admin_read,
         "can_live_resource_get": can_admin_read,
         "can_live_resource_watch": can_admin_read,
@@ -205,8 +209,9 @@ def kubernetes_permission_check(user) -> dict[str, Any]:
             "required": True,
         }
     detail = (
-        "Explicit Kubernetes feature is required for reads and action approval requests; provider write/sync/probe "
-        "are staff-only; low-level Admin Mode uses separate explicit grants; exec/debug/mutations are disabled."
+        "Explicit Kubernetes feature is required for reads and action approval requests; users can add their own "
+        "Rancher cluster connections; Devtron/Fleet provider admin and sync-all remain staff-only; "
+        "low-level Admin Mode uses separate explicit grants; exec/debug/mutations are disabled."
     )
     if policy["can_create_diagnosis_draft"]:
         detail += " Studio diagnosis draft creation is available."

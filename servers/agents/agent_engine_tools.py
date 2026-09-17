@@ -16,6 +16,7 @@ _SAFE_TOOL_RESULT_DATA_KEYS = {
     "code",
     "dry_run",
     "duration_ms",
+    "error_kind",
     "exit_code",
     "exit_status",
     "runtime",
@@ -60,6 +61,13 @@ async def execute_agent_tool(engine: Any, name: str, args: dict) -> str:
         )
         engine._policy_blocked_count = int(getattr(engine, "_policy_blocked_count", 0) or 0) + 1
         _store_tool_result_facts(engine, success=False, error=message)
+        return message
+    if name == "ask_user" and bool(getattr(engine, "_control_plane_blocked", False)):
+        message = (
+            "CONTROL_PLANE: канал выполнения недоступен. "
+            "Ответ оператора не нужен — Docker API на хосте WebTerm недоступен."
+        )
+        _store_tool_result_facts(engine, success=False, data={"error_kind": "control_plane"}, error=message)
         return message
 
     spec = engine.tool_registry.get(name) if engine.tool_registry else None

@@ -42,8 +42,37 @@ def capability_registry(ctx: AssistantActionContext) -> dict[str, Any]:
         parsed_server_count = int(server_count) if server_count not in (None, "") else None
     except (TypeError, ValueError) as exc:
         raise AssistantActionError("server_count must be an integer") from exc
+    registry = build_studio_capability_registry(ctx.user, server_count=parsed_server_count)
+    resources = registry.get("resources") if isinstance(registry.get("resources"), dict) else {}
+    mcp_servers = resources.get("mcp_servers") if isinstance(resources.get("mcp_servers"), list) else []
+    skills = resources.get("skills") if isinstance(resources.get("skills"), list) else []
+    families = registry.get("task_families") if isinstance(registry.get("task_families"), list) else []
+    ready = [str(item.get("name") or item.get("slug") or "") for item in families if item.get("readiness") == "ready"]
+    partial = [
+        str(item.get("name") or item.get("slug") or "") for item in families if item.get("readiness") == "partial"
+    ]
+    # Chat-facing payload: keep this small. Full registry belongs in Studio UI / pipeline context.
     return {
-        "capability_registry": build_studio_capability_registry(ctx.user, server_count=parsed_server_count),
+        "ok": True,
+        "ui_table": False,
+        "reply_hint": (
+            "Summarize Studio capabilities in 2–4 short human lines. "
+            "Mention counts and a few names only. "
+            "Do NOT dump MCP ids, skill slugs, truncated JSON, or narrate «registry получен»."
+        ),
+        "summary": {
+            "mcp_count": len(mcp_servers),
+            "mcp_names": [str(item.get("name") or "") for item in mcp_servers[:8] if item.get("name")],
+            "skill_count": len(skills),
+            "skill_names": [
+                str(item.get("name") or item.get("slug") or "")
+                for item in skills[:8]
+                if item.get("name") or item.get("slug")
+            ],
+            "ready_families": [name for name in ready if name][:8],
+            "partial_families": [name for name in partial if name][:8],
+            "server_count": resources.get("server_count"),
+        },
         "target_url": "/studio",
     }
 
@@ -59,7 +88,34 @@ def list_mcp_servers(ctx: AssistantActionContext) -> dict[str, Any]:
         if query and query not in blob:
             continue
         items.append(payload)
-    return {"mcp_servers": items[:25], "count": len(items), "target_url": "/studio/mcp"}
+    slim = items[:25]
+    return {
+        "ok": True,
+        "ui_table": False,
+        "count": len(slim),
+        "query": query or None,
+        "reply_hint": (
+            "Summarize MCP servers in 2–4 short lines (names + transport/test status). "
+            "Do NOT dump ids, URLs, commands, or truncated JSON."
+        ),
+        "summary": {
+            "mcp_count": len(slim),
+            "mcp_names": [str(item.get("name") or "") for item in slim[:12] if item.get("name")],
+            "transports": sorted(
+                {str(item.get("transport") or "") for item in slim if item.get("transport")}
+            )[:8],
+        },
+        "mcp_servers": [
+            {
+                "name": item.get("name"),
+                "transport": item.get("transport"),
+                "last_test_ok": item.get("last_test_ok"),
+                "description": str(item.get("description") or "")[:120],
+            }
+            for item in slim
+        ],
+        "target_url": "/studio/mcp",
+    }
 
 
 def list_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:
@@ -79,7 +135,38 @@ def list_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:
         if query and query not in blob:
             continue
         items.append(payload)
-    return {"skills": items[:50], "count": len(items), "target_url": "/studio/skills"}
+    slim = items[:50]
+    return {
+        "ok": True,
+        "ui_table": False,
+        "count": len(slim),
+        "query": query or None,
+        "reply_hint": (
+            "Summarize Studio skills in 2–4 short lines (names + safety). "
+            "Do NOT dump full slugs lists or truncated JSON unless the user asked for a specific skill."
+        ),
+        "summary": {
+            "skill_count": len(slim),
+            "skill_names": [
+                str(item.get("name") or item.get("slug") or "")
+                for item in slim[:12]
+                if item.get("name") or item.get("slug")
+            ],
+            "categories": sorted(
+                {str(item.get("category") or "") for item in slim if item.get("category")}
+            )[:8],
+        },
+        "skills": [
+            {
+                "name": item.get("name") or item.get("slug"),
+                "category": item.get("category"),
+                "safety_level": item.get("safety_level"),
+                "service": item.get("service"),
+            }
+            for item in slim
+        ],
+        "target_url": "/studio/skills",
+    }
 
 
 def validate_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:

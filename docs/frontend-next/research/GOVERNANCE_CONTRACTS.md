@@ -130,7 +130,7 @@ Source: `core_ui/views/ai_provider_views.py`, `core_ui/models/ai_providers.py`. 
 | --- | --- |
 | GET `catalog/` | `{success,targets:[{id,label,auth?,kind}],purposes,scopes,models_by_target}`; model choices/reasoning lists must come from this response |
 | GET `connections/` | `{success,connections:Connection[]}` |
-| POST `connections/` | `{target_id:"codex_subscription"|"grok_subscription",scope:"personal"|"workspace",name,concurrency_limit?:1..8}` → 201 `{success,connection}` |
+| POST `connections/` | `{target_id:"codex_subscription"|"grok_subscription"|"cursor_subscription",scope:"personal"|"workspace",name,concurrency_limit?:1..8}` → 201 `{success,connection}` |
 | GET/PATCH `connections/{id}/` | PATCH name/enabled/concurrency_limit → `{success,connection}`; manageable owner/admin |
 | DELETE `connections/{id}/` | `{success,revoked:true}` OR 202 `{success:true,revoked:false,cleanup_pending:true,code:"provider_credential_cleanup_pending"}`; latter is pending, not completed revoke |
 | POST `connections/{id}/auth/` | `{}` → 202 `{success,auth_flow}`; unavailable transport 503 |

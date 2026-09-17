@@ -1,0 +1,60 @@
+import { Minus, Plus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+
+import { clampNumber, t, type NodePanelLang } from "./shared";
+
+type IterationStepperProps = {
+  lang: NodePanelLang;
+  value: number;
+  min?: number;
+  max?: number;
+  onChange: (nextValue: number) => void;
+};
+
+export function IterationStepper({
+  lang,
+  value,
+  min = 1,
+  max = 20,
+  onChange,
+}: IterationStepperProps) {
+  const safeValue = clampNumber(value || min, min, max);
+  const canDecrement = safeValue > min;
+  const canIncrement = safeValue < max;
+
+  return (
+    <div className="flex h-10 items-center rounded-lg border border-border/70 bg-background/70 px-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 rounded-md"
+        aria-label={t(lang, "Уменьшить число шагов", "Decrease iterations")}
+        onClick={() => canDecrement && onChange(safeValue - 1)}
+        disabled={!canDecrement}
+      >
+        <Minus className="h-4 w-4" />
+      </Button>
+      <div className="flex flex-1 flex-col items-center justify-center">
+        <span className="text-lg font-semibold tabular-nums text-foreground" aria-live="polite">
+          {safeValue}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {min}-{max}
+        </span>
+      </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 rounded-md"
+        aria-label={t(lang, "Увеличить число шагов", "Increase iterations")}
+        onClick={() => canIncrement && onChange(safeValue + 1)}
+        disabled={!canIncrement}
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}

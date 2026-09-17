@@ -8,7 +8,6 @@ import smtplib
 from email.mime.text import MIMEText
 from pathlib import Path
 
-import httpx
 from django.conf import settings as django_settings
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
@@ -108,22 +107,32 @@ def api_notification_settings(request):
         masked = dict(cfg)
         if masked.get("smtp_password"):
             masked["smtp_password"] = "••••••••"
-        if masked.get("telegram_bot_token") and len(masked["telegram_bot_token"]) > 10:
-            token = masked["telegram_bot_token"]
-            masked["telegram_bot_token"] = token[:8] + "•" * (len(token) - 8)
+        if masked.get("telegram_bot_token"):
+            from telegram_hub.client import mask_bot_token
+
+            masked["telegram_bot_token"] = mask_bot_token(masked["telegram_bot_token"])
         return _ok(masked)
 
     if request.method == "POST":
         data = _json_body(request)
         allowed = set(_NOTIF_DEFAULTS.keys())
         to_save = {key: value for key, value in data.items() if key in allowed}
-        if to_save.get("smtp_password", "").startswith("•"):
+        if str(to_save.get("smtp_password", "")).startswith("•"):
             existing = _load_notif_config()
             to_save["smtp_password"] = existing.get("smtp_password", "")
-        if to_save.get("telegram_bot_token", "").endswith("•" * 4):
+        token_value = str(to_save.get("telegram_bot_token", ""))
+        if token_value.startswith("••••") or token_value.endswith("••••"):
             existing = _load_notif_config()
             to_save["telegram_bot_token"] = existing.get("telegram_bot_token", "")
+        for flag in ("telegram_assistant_enabled", "telegram_personal_bots_enabled"):
+            if flag in to_save:
+                to_save[flag] = bool(to_save[flag])
         _save_notif_config(to_save)
+        # Keep platform TelegramBot row in sync when token changes.
+        if "telegram_bot_token" in to_save and to_save.get("telegram_bot_token"):
+            from telegram_hub.services.bots import ensure_platform_bot
+
+            ensure_platform_bot(token=str(to_save["telegram_bot_token"]))
         return _ok({"ok": True, "saved": list(to_save.keys())})
 
     return _err("Method not allowed", 405)
@@ -137,6 +146,19 @@ def api_notification_test_telegram(request):
     if admin_error:
         return admin_error
 
+    from django.core.cache import cache
+
+    from telegram_hub.client import TelegramClient
+
+    rl_key = f"tg_test_rl:studio:{request.user.pk}"
+    count = cache.get(rl_key)
+    if count is not None and int(count) >= 5:
+        return _err("Too many test messages. Wait a minute.", 429)
+    if count is None:
+        cache.set(rl_key, 1, 60)
+    else:
+        cache.incr(rl_key)
+
     cfg = _load_notif_config()
     bot_token = cfg.get("telegram_bot_token", "").strip()
     chat_id = cfg.get("telegram_chat_id", "").strip()
@@ -145,22 +167,16 @@ def api_notification_test_telegram(request):
         return _err("Telegram bot_token and chat_id must be configured first.")
 
     async def _send():
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": "✅ *WEU Platform* — Telegram notifications are working correctly!",
-                    "parse_mode": "Markdown",
-                },
-            )
-            return resp.status_code, resp.text[:300]
+        client = TelegramClient(bot_token, timeout=15)
+        return await client.send_message(
+            chat_id=chat_id,
+            text="✅ *WEU Platform* — Telegram notifications are working correctly!",
+            parse_mode="Markdown",
+        )
 
     try:
-        code, body = asyncio.run(_send())
-        if code == 200:
-            return _ok({"ok": True, "message": f"Test message sent to chat {chat_id}"})
-        return _err(f"Telegram API returned {code}: {body}")
+        asyncio.run(_send())
+        return _ok({"ok": True, "message": f"Test message sent to chat {chat_id}"})
     except Exception as exc:
         return _err(f"Send failed: {exc}")
 

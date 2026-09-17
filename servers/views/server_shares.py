@@ -6,6 +6,7 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -175,6 +176,42 @@ def server_share_create(request, server_id):
             entity_id=server_id,
         )
         return internal_error_response(request, e)
+
+
+@login_required
+@require_feature("servers")
+@require_http_methods(["GET"])
+def server_share_candidates(request, server_id):
+    """Bounded user directory for server share typeahead (owners only)."""
+    get_object_or_404(Server, id=server_id, user=request.user, is_active=True)
+    query = str(request.GET.get("q") or "").strip()[:100]
+    try:
+        limit = max(1, min(int(request.GET.get("limit") or 12), 50))
+    except (TypeError, ValueError):
+        limit = 12
+
+    user_query = User.objects.filter(is_active=True).exclude(pk=request.user.id)
+    if query:
+        filters = (
+            Q(username__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(email__icontains=query)
+        )
+        if query.isdigit():
+            filters = filters | Q(pk=int(query))
+        user_query = user_query.filter(filters)
+
+    users = [
+        {
+            "id": item.id,
+            "username": item.username,
+            "email": item.email or "",
+            "label": (item.get_full_name() or "").strip() or item.username,
+        }
+        for item in user_query.order_by("username", "id")[:limit]
+    ]
+    return JsonResponse({"success": True, "candidates": users})
 
 
 @login_required

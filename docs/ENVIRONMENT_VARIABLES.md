@@ -207,6 +207,7 @@ Total variables: **362**.
 | `AI_CLI_RUNNER_MANAGER_TOKEN` | tokens here; device login writes only to isolated named Docker volumes. | `operator supplied` |
 | `AI_CLI_CODEX_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
 | `AI_CLI_GROK_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
+| `AI_CLI_CURSOR_RUNNER_IMAGE` | tokens here; device login writes only to isolated named Docker volumes. | `empty` |
 | `AI_CLI_RUNNER_MANAGER_URL` | tokens here; device login writes only to isolated named Docker volumes. | `http://ai-cli-runner-manager:9000` |
 | `AI_CLI_DOCKER_NETWORK` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-egress` |
 | `AI_CLI_CREDENTIAL_VOLUME_PREFIX` | tokens here; device login writes only to isolated named Docker volumes. | `webterm-ai-cli-cred-` |
@@ -225,6 +226,8 @@ Total variables: **362**.
 | `WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE` | enforces the same fail-closed pilot range of 1..8; four is the pilot default. | `empty` |
 | `GROK_BUILD_URL` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
 | `GROK_BUILD_SHA256` | approved official Grok Build binary and checksum; an empty value fails build. | `empty` |
+| `CURSOR_AGENT_URL` | approved official Cursor agent CLI binary and checksum; an empty value fails build. | `empty` |
+| `CURSOR_AGENT_SHA256` | approved official Cursor agent CLI binary and checksum; an empty value fails build. | `empty` |
 | `PILOT_RESTRICTED_MODE` | out of this list; only disposable/snapshot-capable test targets belong here. | `true` |
 | `PILOT_SSH_ALLOWED_HOSTS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |
 | `PILOT_SSH_ALLOWED_CIDRS` | out of this list; only disposable/snapshot-capable test targets belong here. | `empty` |

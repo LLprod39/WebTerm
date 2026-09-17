@@ -136,6 +136,57 @@ def test_different_worker_executes_durable_dispatch_and_persists_turn(monkeypatc
     assert claimed.turn_id is not None
 
 
+@pytest.mark.django_db(transaction=True)
+def test_expired_claimed_dispatch_does_not_block_new_enqueue():
+    user = User.objects.create_user(username="expired-lease-user", password="x")
+    session = ChatSession.objects.create(user=user, title="expired lease")
+    stale = enqueue_operator_message(session=session, message="old", thinking=None)
+    assert stale is not None
+    OperatorTurnDispatch.objects.filter(pk=stale.pk).update(
+        status=OperatorTurnDispatch.STATUS_CLAIMED,
+        claimed_at=timezone.now() - timedelta(minutes=10),
+        claimed_by="dead-worker",
+        attempt_count=1,
+        lease_expires_at=timezone.now() - timedelta(seconds=5),
+    )
+
+    assert operator_dispatch_busy(session.pk) is False
+    stale.refresh_from_db()
+    assert stale.status == OperatorTurnDispatch.STATUS_FAILED
+    assert stale.error == "lease_expired"
+
+    nxt = enqueue_operator_message(session=session, message="next", thinking=None)
+    assert nxt is not None
+    assert nxt.pk != stale.pk
+    assert operator_dispatch_busy(session.pk) is True
+
+
+@pytest.mark.django_db(transaction=True)
+def test_finish_succeeds_when_lease_just_expired():
+    user = User.objects.create_user(username="lease-race-user", password="x")
+    session = ChatSession.objects.create(user=user, title="lease race")
+    dispatch = enqueue_operator_message(session=session, message="done", thinking=None)
+    claimed = claim_next_operator_dispatch(worker_name="worker-a", lease_seconds=180)
+    assert claimed is not None
+    OperatorTurnDispatch.objects.filter(pk=claimed.pk).update(
+        lease_expires_at=timezone.now() - timedelta(seconds=1),
+    )
+    ChatTurnState.objects.create(session=session, status=ChatTurnState.STATUS_DONE)
+
+    from core_ui.services.operator_dispatch import _finish_operator_dispatch
+
+    status = _finish_operator_dispatch(
+        claimed.pk,
+        worker_name="worker-a",
+        attempt_count=int(claimed.attempt_count),
+        error="",
+    )
+    claimed.refresh_from_db()
+    assert status == OperatorTurnDispatch.STATUS_COMPLETED
+    assert claimed.status == OperatorTurnDispatch.STATUS_COMPLETED
+    assert operator_dispatch_busy(session.pk) is False
+
+
 def test_orchestration_modules_do_not_keep_process_local_run_registries():
     from core_ui.services import operator_turn_runtime
     from studio.pipeline import pipeline_runtime

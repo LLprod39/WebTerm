@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from dataclasses import replace
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
@@ -51,6 +52,21 @@ CODEX_SUBSCRIPTION_MODELS = [
     {"id": "gpt-5.3-codex-spark", "label": "GPT-5.3 Codex Spark", "default_reasoning_effort": "high", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
 ]
 
+# Catalog matches Cursor CLI `--model` values documented for the pinned agent binary.
+CURSOR_SUBSCRIPTION_MODELS = [
+    {"id": "auto", "label": "Auto", "default_reasoning_effort": None, "reasoning_efforts": []},
+    {"id": "gpt-5", "label": "GPT-5", "default_reasoning_effort": None, "reasoning_efforts": []},
+    {"id": "sonnet-4-thinking", "label": "Sonnet 4 Thinking", "default_reasoning_effort": None, "reasoning_efforts": []},
+]
+
+_SUBSCRIPTION_CLI_TARGETS = frozenset(
+    {
+        ProviderTarget.CODEX_SUBSCRIPTION.value,
+        ProviderTarget.GROK_SUBSCRIPTION.value,
+        ProviderTarget.CURSOR_SUBSCRIPTION.value,
+    }
+)
+
 
 def _body(request) -> dict[str, Any]:
     try:
@@ -88,9 +104,15 @@ class _FieldsValidationError(ValueError):
 def _strict_int(value: Any, *, field: str, minimum: int, maximum: int | None = None) -> int:
     if isinstance(value, bool):
         raise _FieldsValidationError({field: "Must be an integer, not a boolean"})
-    if not isinstance(value, int):
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw.isdigit() and not (raw.startswith("-") and raw[1:].isdigit()):
+            raise _FieldsValidationError({field: "Must be an integer"})
+        parsed = int(raw)
+    elif isinstance(value, int):
+        parsed = value
+    else:
         raise _FieldsValidationError({field: "Must be an integer"})
-    parsed = value
     if parsed < minimum or (maximum is not None and parsed > maximum):
         limit = f" between {minimum} and {maximum}" if maximum is not None else f" at least {minimum}"
         raise _FieldsValidationError({field: f"Must be{limit}"})
@@ -110,6 +132,17 @@ def _provider_surface_guard(request, *, admin: bool = False) -> JsonResponse | N
 
 def _can_admin_ai_connections(user, *, request=None) -> bool:
     return user_can_feature(user, "ai_connections_admin", request=request)
+
+
+def _can_manage_connection_grants(user, connection: AIProviderConnection, *, request=None) -> bool:
+    """Admins, personal owners, or original creators can share a connection."""
+    if _can_admin_ai_connections(user, request=request):
+        return True
+    if connection.owner_id == user.pk:
+        return True
+    if connection.created_by_id == user.pk:
+        return True
+    return False
 
 
 def _strict_bool(value: Any, *, field: str, default: bool | None = None) -> bool:
@@ -188,11 +221,12 @@ def _serialize_connection(connection: AIProviderConnection, user, *, include_gra
         "last_error_code": connection.last_error_code,
         "last_verified_at": connection.last_verified_at.isoformat() if connection.last_verified_at else None,
         "access": _connection_access(connection, user),
-        "manageable": bool(connection.owner_id == user.pk or _can_admin_ai_connections(user)),
+        # Keep share/manage UI after personal→workspace promote (owner cleared, created_by remains).
+        "manageable": _can_manage_connection_grants(user, connection),
         "created_at": connection.created_at.isoformat(),
         "updated_at": connection.updated_at.isoformat(),
     }
-    if include_grants and _can_admin_ai_connections(user):
+    if include_grants and _can_manage_connection_grants(user, connection):
         payload["grants"] = [
             _serialize_grant(item) for item in connection.grants.select_related("user", "group", "project")
         ]
@@ -209,7 +243,15 @@ def _serialize_grant(grant: AIProviderConnectionGrant) -> dict[str, Any]:
         "project_role": grant.project_role,
         "allow_interactive": grant.allow_interactive,
         "allow_unattended": grant.allow_unattended,
+        "max_slots": grant.max_slots,
     }
+
+
+def _parse_grant_max_slots(data: dict[str, Any]) -> int | None:
+    """null/omitted/0 => unlimited; otherwise 1..8."""
+    if "max_slots" not in data or data.get("max_slots") in (None, "", 0, "0"):
+        return None
+    return _strict_int(data.get("max_slots"), field="max_slots", minimum=1, maximum=8)
 
 
 def _connection_queryset_for(user):
@@ -236,7 +278,9 @@ def _connection_queryset_for(user):
             ).allowed
         ):
             allowed_ids.append(connection.pk)
-    return candidates.filter(models.Q(owner=user) | models.Q(pk__in=allowed_ids))
+    return candidates.filter(
+        models.Q(owner=user) | models.Q(created_by=user) | models.Q(pk__in=allowed_ids)
+    )
 
 
 @login_required
@@ -260,10 +304,21 @@ def api_ai_provider_catalog(request):
                     "auth": "device_code",
                     "kind": "subscription_cli",
                 },
+                {
+                    "id": ProviderTarget.CURSOR_SUBSCRIPTION.value,
+                    "label": "Cursor CLI (Cursor subscription)",
+                    "auth": "browser",
+                    "kind": "subscription_cli",
+                },
                 *[
                     {"id": target.value, "label": target.value, "kind": "platform"}
                     for target in ProviderTarget
-                    if target not in {ProviderTarget.CODEX_SUBSCRIPTION, ProviderTarget.GROK_SUBSCRIPTION}
+                    if target
+                    not in {
+                        ProviderTarget.CODEX_SUBSCRIPTION,
+                        ProviderTarget.GROK_SUBSCRIPTION,
+                        ProviderTarget.CURSOR_SUBSCRIPTION,
+                    }
                 ],
             ],
             "purposes": [item[0] for item in AIProviderPreference.PURPOSE_CHOICES],
@@ -271,6 +326,7 @@ def api_ai_provider_catalog(request):
             "models_by_target": {
                 ProviderTarget.CODEX_SUBSCRIPTION.value: CODEX_SUBSCRIPTION_MODELS,
                 ProviderTarget.GROK_SUBSCRIPTION.value: [],
+                ProviderTarget.CURSOR_SUBSCRIPTION.value: CURSOR_SUBSCRIPTION_MODELS,
             },
         }
     )
@@ -294,10 +350,7 @@ def api_ai_provider_connections(request):
         target_id = canonicalize_target_id(str(data.get("target_id") or ""))
     except ValueError as exc:
         return _error(str(exc))
-    if target_id not in {
-        ProviderTarget.CODEX_SUBSCRIPTION.value,
-        ProviderTarget.GROK_SUBSCRIPTION.value,
-    }:
+    if target_id not in _SUBSCRIPTION_CLI_TARGETS:
         return _error("Only subscription CLI targets can create connections")
     scope = str(data.get("scope") or AIProviderConnection.SCOPE_PERSONAL)
     if scope not in {AIProviderConnection.SCOPE_PERSONAL, AIProviderConnection.SCOPE_WORKSPACE}:
@@ -332,11 +385,9 @@ def api_ai_provider_connections(request):
 
 def _manageable_connection(request, connection_id: int) -> AIProviderConnection | JsonResponse:
     connection = get_object_or_404(AIProviderConnection, pk=connection_id)
-    if connection.owner_id == request.user.pk:
+    if _can_manage_connection_grants(request.user, connection, request=request):
         return connection
-    if not _can_admin_ai_connections(request.user, request=request):
-        return _error("Connection is not manageable", 403, code="permission_denied")
-    return connection
+    return _error("Connection is not manageable", 403, code="permission_denied")
 
 
 @login_required
@@ -389,18 +440,19 @@ def api_ai_provider_connection_detail(request, connection_id: int):
         connection.credential_ref = ""
         connection.health = {key: value for key, value in (connection.health or {}).items() if key != "cleanup_pending"}
         connection.last_error_code = ""
-        connection.save(
-            update_fields=["enabled", "status", "credential_ref", "health", "last_error_code", "updated_at"]
-        )
+        connection_id = connection.pk
+        target_id = connection.target_id
+        scope = connection.scope
+        connection.delete()
         _audit_provider_mutation(
             request,
             action="ai_provider.connection.revoke",
             entity_type="ai_provider_connection",
-            entity_id=connection.pk,
-            target_id=connection.target_id,
-            scope=connection.scope,
+            entity_id=connection_id,
+            target_id=target_id,
+            scope=scope,
         )
-        return JsonResponse({"success": True, "revoked": True})
+        return JsonResponse({"success": True, "revoked": True, "deleted": True})
     try:
         data = _body(request)
     except ValueError as exc:
@@ -426,6 +478,50 @@ def api_ai_provider_connection_detail(request, connection_id: int):
             )
         except _FieldsValidationError as exc:
             return _validation_error(exc.fields)
+    if "scope" in data:
+        new_scope = str(data.get("scope") or "").strip()
+        if new_scope not in {AIProviderConnection.SCOPE_PERSONAL, AIProviderConnection.SCOPE_WORKSPACE}:
+            return _validation_error({"scope": "Must be personal or workspace"})
+        if new_scope != connection.scope:
+            if not _can_admin_ai_connections(request.user, request=request):
+                return _error("Only AI connection admins can change scope", 403, code="permission_denied")
+            try:
+                with transaction.atomic():
+                    if new_scope == AIProviderConnection.SCOPE_WORKSPACE:
+                        previous_owner_id = connection.owner_id
+                        connection.scope = AIProviderConnection.SCOPE_WORKSPACE
+                        connection.owner = None
+                        connection.save()
+                        # Keep former owner usable until explicit grants are managed.
+                        if previous_owner_id:
+                            AIProviderConnectionGrant.objects.update_or_create(
+                                connection=connection,
+                                user_id=previous_owner_id,
+                                defaults={
+                                    "allow_interactive": True,
+                                    "allow_unattended": True,
+                                    "max_slots": None,
+                                },
+                            )
+                    else:
+                        connection.scope = AIProviderConnection.SCOPE_PERSONAL
+                        connection.owner = request.user
+                        connection.save()
+                        AIProviderPoolMember.objects.filter(connection=connection).delete()
+                        connection.grants.all().delete()
+            except IntegrityError as exc:
+                return _error(f"Could not change connection scope: {exc}", 409, code="conflict")
+            _audit_provider_mutation(
+                request,
+                action="ai_provider.connection.scope_change",
+                entity_type="ai_provider_connection",
+                entity_id=connection.pk,
+                target_id=connection.target_id,
+                scope=connection.scope,
+            )
+            return JsonResponse(
+                {"success": True, "connection": _serialize_connection(connection, request.user, include_grants=True)}
+            )
     connection.save()
     return JsonResponse(
         {"success": True, "connection": _serialize_connection(connection, request.user, include_grants=True)}
@@ -490,8 +586,7 @@ def api_ai_provider_auth_flow(request, flow_id):
     if denied := _provider_surface_guard(request):
         return denied
     flow = get_object_or_404(AIConnectionAuthFlow.objects.select_related("connection"), public_id=flow_id)
-    manageable = flow.connection.owner_id == request.user.pk or _can_admin_ai_connections(request.user, request=request)
-    if not manageable:
+    if not _can_manage_connection_grants(request.user, flow.connection, request=request):
         return _error("Auth flow is not accessible", 403, code="permission_denied")
     return JsonResponse({"success": True, "auth_flow": _serialize_auth_flow(flow)})
 
@@ -568,7 +663,7 @@ def api_ai_provider_pools(request):
         target_id = canonicalize_target_id(str(data.get("target_id") or ""))
     except ValueError as exc:
         return _error(str(exc))
-    if target_id not in {ProviderTarget.CODEX_SUBSCRIPTION.value, ProviderTarget.GROK_SUBSCRIPTION.value}:
+    if target_id not in _SUBSCRIPTION_CLI_TARGETS:
         return _error("Pools accept only subscription CLI targets")
     name = str(data.get("name") or "").strip()[:120]
     if not name:
@@ -726,9 +821,26 @@ def api_ai_provider_pool_detail(request, pool_id: int):
 
 
 @login_required
+@require_http_methods(["GET"])
+def api_ai_provider_principals(request):
+    """Lightweight user/group directory for CLI access grants (no access-admin required)."""
+    if denied := _provider_surface_guard(request):
+        return denied
+    users = [
+        {"id": row.pk, "username": row.username}
+        for row in User.objects.filter(is_active=True).order_by("username").only("id", "username")[:500]
+    ]
+    groups = [
+        {"id": row.pk, "name": row.name}
+        for row in Group.objects.order_by("name").only("id", "name")[:200]
+    ]
+    return JsonResponse({"success": True, "users": users, "groups": groups})
+
+
+@login_required
 @require_http_methods(["POST"])
 def api_ai_provider_grants(request):
-    if denied := _provider_surface_guard(request, admin=True):
+    if denied := _provider_surface_guard(request):
         return denied
     try:
         data = _body(request)
@@ -745,15 +857,47 @@ def api_ai_provider_grants(request):
         defaults = {
             "allow_interactive": _strict_bool(data.get("allow_interactive"), field="allow_interactive", default=True),
             "allow_unattended": _strict_bool(data.get("allow_unattended"), field="allow_unattended", default=False),
+            "max_slots": _parse_grant_max_slots(data),
         }
     except _FieldsValidationError as exc:
         return _validation_error(exc.fields)
-    connection = AIProviderConnection.objects.filter(
-        pk=connection_id,
-        scope=AIProviderConnection.SCOPE_WORKSPACE,
-    ).first()
+    connection = AIProviderConnection.objects.filter(pk=connection_id).first()
     if connection is None:
-        return _validation_error({"connection_id": "Workspace connection does not exist"})
+        return _validation_error({"connection_id": "Connection does not exist"})
+    if connection.status == AIProviderConnection.STATUS_REVOKED:
+        return _validation_error({"connection_id": "Connection is revoked"})
+    if not _can_manage_connection_grants(request.user, connection, request=request):
+        return _error("Connection grants are not manageable", 403, code="permission_denied")
+    if principal_name == "project_id" and not _can_admin_ai_connections(request.user, request=request):
+        return _error("Only AI connection admins can grant to projects", 403, code="permission_denied")
+
+    # Sharing requires workspace ACL. Promote personal connections automatically.
+    if connection.scope == AIProviderConnection.SCOPE_PERSONAL:
+        previous_owner_id = connection.owner_id
+        connection.scope = AIProviderConnection.SCOPE_WORKSPACE
+        connection.owner = None
+        connection.save(update_fields=["scope", "owner", "updated_at"])
+        if previous_owner_id:
+            AIProviderConnectionGrant.objects.update_or_create(
+                connection=connection,
+                user_id=previous_owner_id,
+                defaults={
+                    "allow_interactive": True,
+                    "allow_unattended": True,
+                    "max_slots": None,
+                },
+            )
+        _audit_provider_mutation(
+            request,
+            action="ai_provider.connection.scope_change",
+            entity_type="ai_provider_connection",
+            entity_id=connection.pk,
+            target_id=connection.target_id,
+            scope=connection.scope,
+        )
+    elif connection.scope != AIProviderConnection.SCOPE_WORKSPACE:
+        return _validation_error({"connection_id": "Connection cannot receive grants"})
+
     if principal_name == "user_id":
         user = User.objects.filter(pk=principal_id).first()
         if user is None:
@@ -783,26 +927,92 @@ def api_ai_provider_grants(request):
             project_role=role,
             defaults=defaults,
         )
-    return JsonResponse({"success": True, "grant": _serialize_grant(grant)}, status=201)
+
+    assigned_preferences: list[dict[str, Any]] = []
+    assign_raw = data.get("assign_preferences")
+    if assign_raw is not None:
+        if principal_name != "user_id":
+            return _validation_error({"assign_preferences": "Only user grants can assign preferences"})
+        if not isinstance(assign_raw, dict):
+            return _validation_error({"assign_preferences": "Must be an object"})
+        try:
+            purposes = _parse_preference_purposes(
+                {"purposes": assign_raw.get("purposes") or ["assistant"]}
+            )
+            project_scoped = _strict_bool(
+                assign_raw.get("project_scoped"),
+                field="assign_preferences.project_scoped",
+                default=True,
+            )
+        except ValueError as exc:
+            return _error(str(exc))
+        except _FieldsValidationError as exc:
+            return _validation_error(exc.fields)
+        model_id = assign_raw.get("model_id")
+        reasoning_effort = assign_raw.get("reasoning_effort")
+        try:
+            assigned_preferences = _assign_connection_preferences(
+                request,
+                connection=connection,
+                target_user=user,
+                purposes=purposes,
+                project_scoped=project_scoped,
+                model_id=str(model_id) if model_id else None,
+                reasoning_effort=str(reasoning_effort) if reasoning_effort else None,
+            )
+        except _FieldsValidationError as exc:
+            return _validation_error(exc.fields)
+
+    payload: dict[str, Any] = {"success": True, "grant": _serialize_grant(grant)}
+    if assigned_preferences:
+        payload["assigned_preferences"] = assigned_preferences
+    return JsonResponse(payload, status=201)
 
 
 @login_required
-@require_http_methods(["DELETE"])
+@require_http_methods(["PATCH", "DELETE"])
 def api_ai_provider_grant_detail(request, grant_id: int):
-    if denied := _provider_surface_guard(request, admin=True):
+    if denied := _provider_surface_guard(request):
         return denied
     grant = get_object_or_404(AIProviderConnectionGrant.objects.select_related("connection"), pk=grant_id)
     connection = grant.connection
-    grant.delete()
-    _audit_provider_mutation(
-        request,
-        action="ai_provider.grant.delete",
-        entity_type="ai_provider_connection_grant",
-        entity_id=grant_id,
-        target_id=connection.target_id,
-        scope=connection.scope,
-    )
-    return JsonResponse({"success": True})
+    if not _can_manage_connection_grants(request.user, connection, request=request):
+        return _error("Connection grants are not manageable", 403, code="permission_denied")
+    if request.method == "DELETE":
+        grant.delete()
+        _audit_provider_mutation(
+            request,
+            action="ai_provider.grant.delete",
+            entity_type="ai_provider_connection_grant",
+            entity_id=grant_id,
+            target_id=connection.target_id,
+            scope=connection.scope,
+        )
+        return JsonResponse({"success": True})
+
+    try:
+        data = _body(request)
+    except ValueError as exc:
+        return _error(str(exc))
+    try:
+        if "allow_interactive" in data:
+            grant.allow_interactive = _strict_bool(data.get("allow_interactive"), field="allow_interactive")
+        if "allow_unattended" in data:
+            grant.allow_unattended = _strict_bool(data.get("allow_unattended"), field="allow_unattended")
+        if "max_slots" in data:
+            grant.max_slots = _parse_grant_max_slots(data)
+    except _FieldsValidationError as exc:
+        return _validation_error(exc.fields)
+    grant.save()
+    return JsonResponse({"success": True, "grant": _serialize_grant(grant)})
+
+
+def _json_payload(response: JsonResponse) -> dict[str, Any]:
+    try:
+        payload = json.loads(response.content.decode("utf-8") or "{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _serialize_preference(preference: AIProviderPreference) -> dict[str, Any]:
@@ -821,6 +1031,147 @@ def _serialize_preference(preference: AIProviderPreference) -> dict[str, Any]:
     }
 
 
+def _user_has_direct_connection_grant(connection: AIProviderConnection, user_id: int) -> bool:
+    return connection.grants.filter(user_id=user_id).exists()
+
+
+def _can_inspect_user_preferences(user, *, request=None) -> bool:
+    if _can_admin_ai_connections(user, request=request):
+        return True
+    return AIProviderConnection.objects.filter(
+        models.Q(owner=user) | models.Q(created_by=user),
+    ).exclude(status=AIProviderConnection.STATUS_REVOKED).exists()
+
+
+def _authorize_preference_assignment(
+    request,
+    *,
+    binding: ProviderBinding,
+    target_user: User,
+) -> JsonResponse | None:
+    """Managers may assign CLI bindings to grantees; platform API only for admins."""
+    if binding.target_id in _SUBSCRIPTION_CLI_TARGETS:
+        if binding.connection_id is None:
+            return _error("CLI preference assignment requires a connection_id", 400)
+        connection = AIProviderConnection.objects.filter(pk=binding.connection_id).first()
+        if connection is None or connection.target_id != binding.target_id:
+            return _error("Connection does not exist or targets another provider", 400)
+        if not _can_manage_connection_grants(request.user, connection, request=request):
+            return _error("Connection grants are not manageable", 403, code="permission_denied")
+        if not _can_admin_ai_connections(request.user, request=request):
+            if not _user_has_direct_connection_grant(connection, target_user.pk):
+                return _error(
+                    "Target user must already have a grant on this connection",
+                    403,
+                    code="permission_denied",
+                )
+        return None
+    if not _can_admin_ai_connections(request.user, request=request):
+        return _error(
+            "Only AI connection admins can assign platform API preferences",
+            403,
+            code="permission_denied",
+        )
+    return None
+
+
+def _parse_preference_purposes(data: dict[str, Any]) -> list[str]:
+    allowed = {item[0] for item in AIProviderPreference.PURPOSE_CHOICES}
+    raw_purposes = data.get("purposes")
+    if raw_purposes is not None:
+        if not isinstance(raw_purposes, list) or not raw_purposes:
+            raise _FieldsValidationError({"purposes": "Must be a non-empty list of purposes"})
+        purposes: list[str] = []
+        for item in raw_purposes:
+            purpose = str(item or "")
+            if purpose not in allowed:
+                raise _FieldsValidationError({"purposes": f"Unknown preference purpose: {purpose}"})
+            if purpose not in purposes:
+                purposes.append(purpose)
+        return purposes
+    purpose = str(data.get("purpose") or "")
+    if purpose not in allowed:
+        raise ValueError("Unknown preference purpose")
+    return [purpose]
+
+
+def _upsert_preference_for_user(
+    request,
+    *,
+    data: dict[str, Any],
+    target_user: User | None,
+    project_id: int | None,
+    purpose: str,
+    workspace_default: bool,
+    assigned: bool,
+) -> JsonResponse:
+    filters = {
+        "user": None if workspace_default else target_user,
+        "project_id": project_id,
+        "purpose": purpose,
+    }
+    response = _save_preference(
+        request,
+        data=data,
+        filters=filters,
+        workspace_default=workspace_default,
+        project_id=project_id,
+        access_user=None if workspace_default else target_user,
+        skip_access_check=assigned and workspace_default is False,
+    )
+    if assigned and response.status_code < 400:
+        preference_id = (_json_payload(response).get("preference") or {}).get("id")
+        if preference_id:
+            _audit_provider_mutation(
+                request,
+                action="ai_provider.preference.assign",
+                entity_type="ai_provider_preference",
+                entity_id=preference_id,
+                target_id=str((data.get("binding") or {}).get("target_id") or ""),
+                scope="assigned",
+            )
+    return response
+
+
+def _assign_connection_preferences(
+    request,
+    *,
+    connection: AIProviderConnection,
+    target_user: User,
+    purposes: list[str],
+    project_scoped: bool,
+    model_id: str | None = None,
+    reasoning_effort: str | None = None,
+) -> list[dict[str, Any]]:
+    project_id = _active_project_id(request.user) if project_scoped else None
+    binding_payload: dict[str, Any] = {
+        "target_id": connection.target_id,
+        "connection_id": connection.pk,
+    }
+    if model_id:
+        binding_payload["model_id"] = model_id
+    if reasoning_effort:
+        binding_payload["reasoning_effort"] = reasoning_effort
+    saved: list[dict[str, Any]] = []
+    for purpose in purposes:
+        response = _upsert_preference_for_user(
+            request,
+            data={
+                "binding": binding_payload,
+                "require_unattended": purpose in {"agents", "internal"},
+            },
+            target_user=target_user,
+            project_id=project_id,
+            purpose=purpose,
+            workspace_default=False,
+            assigned=True,
+        )
+        if response.status_code >= 400:
+            raise _FieldsValidationError({"assign_preferences": _json_payload(response).get("error") or "assign failed"})
+        saved.append(_json_payload(response)["preference"])
+    return saved
+
+
 def _save_preference(
     request,
     *,
@@ -828,6 +1179,8 @@ def _save_preference(
     filters: dict[str, Any],
     workspace_default: bool,
     project_id: int | None,
+    access_user=None,
+    skip_access_check: bool = False,
 ) -> JsonResponse:
     try:
         binding = ProviderBinding.from_dict(data.get("binding") or {})
@@ -841,6 +1194,13 @@ def _save_preference(
             supported = model["reasoning_efforts"] if model else CODEX_SUBSCRIPTION_MODELS[0]["reasoning_efforts"]
             if binding.reasoning_effort not in supported:
                 return _error("Reasoning effort is not supported by the selected Codex model")
+    elif binding.target_id == ProviderTarget.CURSOR_SUBSCRIPTION.value:
+        model = next((item for item in CURSOR_SUBSCRIPTION_MODELS if item["id"] == binding.model_id), None)
+        if binding.model_id and model is None:
+            return _error("Unknown Cursor subscription model")
+        # Cursor CLI has no reasoning_effort; ignore any value from older clients/UI.
+        if binding.reasoning_effort:
+            binding = replace(binding, reasoning_effort=None)
     elif binding.reasoning_effort:
         return _error("Reasoning effort is currently supported only for Codex subscriptions")
     if binding.connection_id is not None:
@@ -853,13 +1213,14 @@ def _save_preference(
         pool = AIProviderPool.objects.filter(pk=binding.pool_id, enabled=True).first()
         if pool is None or pool.target_id != binding.target_id:
             return _error("Pool does not exist or targets another provider")
-    if not workspace_default:
+    if not workspace_default and not skip_access_check:
         try:
             require_unattended = _strict_bool(data.get("require_unattended"), field="require_unattended", default=False)
         except _FieldsValidationError as exc:
             return _validation_error(exc.fields)
         mode = ExecutionMode.UNATTENDED if require_unattended else ExecutionMode.INTERACTIVE
-        decision = can_use_binding(binding, user_id=request.user.pk, project_id=project_id, mode=mode)
+        subject = access_user if access_user is not None else request.user
+        decision = can_use_binding(binding, user_id=subject.pk, project_id=project_id, mode=mode)
         if not decision.allowed:
             return _error(
                 f"Selected binding is unavailable: {decision.reason}",
@@ -884,6 +1245,31 @@ def api_ai_provider_preferences(request):
         return denied
     project_id = _active_project_id(request.user)
     if request.method == "GET":
+        for_user_raw = request.GET.get("for_user_id")
+        if for_user_raw not in (None, ""):
+            try:
+                for_user_id = _strict_int(for_user_raw, field="for_user_id", minimum=1)
+            except _FieldsValidationError as exc:
+                return _validation_error(exc.fields)
+            if not _can_inspect_user_preferences(request.user, request=request):
+                return _error("Preference inspection is not allowed", 403, code="permission_denied")
+            target_user = User.objects.filter(pk=for_user_id, is_active=True).first()
+            if target_user is None:
+                return _validation_error({"for_user_id": "User does not exist"})
+            scope_filter = models.Q(project__isnull=True)
+            if project_id:
+                scope_filter |= models.Q(project_id=project_id)
+            rows = list(
+                AIProviderPreference.objects.filter(scope_filter, user=target_user).select_related("connection", "pool")
+            )
+            return JsonResponse(
+                {
+                    "success": True,
+                    "preferences": [_serialize_preference(item) for item in rows],
+                    "workspace_defaults": [],
+                    "for_user_id": target_user.pk,
+                }
+            )
         scope_filter = models.Q(project__isnull=True)
         if project_id:
             scope_filter |= models.Q(project_id=project_id)
@@ -902,29 +1288,56 @@ def api_ai_provider_preferences(request):
         )
     try:
         data = _body(request)
-        purpose = str(data.get("purpose") or "")
-        if purpose not in {item[0] for item in AIProviderPreference.PURPOSE_CHOICES}:
-            raise ValueError("Unknown preference purpose")
     except ValueError as exc:
         return _error(str(exc))
     try:
+        purposes = _parse_preference_purposes(data)
         workspace_default = _strict_bool(data.get("workspace_default"), field="workspace_default", default=False)
         project_scoped = _strict_bool(data.get("project_scoped"), field="project_scoped", default=True)
+        target_user_id = data.get("target_user_id")
+        if target_user_id is not None:
+            target_user_id = _strict_int(target_user_id, field="target_user_id", minimum=1)
+    except ValueError as exc:
+        return _error(str(exc))
     except _FieldsValidationError as exc:
         return _validation_error(exc.fields)
+    if workspace_default and target_user_id is not None:
+        return _error("workspace_default cannot be combined with target_user_id")
     if workspace_default and (denied := _provider_surface_guard(request, admin=True)):
         return denied
     preference_project_id = project_id if project_scoped else None
     if workspace_default and preference_project_id is None:
         return _error("An active project is required for a workspace default")
-    filters = {
-        "user": None if workspace_default else request.user,
-        "project_id": preference_project_id,
-        "purpose": purpose,
-    }
+
+    target_user = request.user
+    assigned = False
+    if target_user_id is not None:
+        target_user = User.objects.filter(pk=target_user_id, is_active=True).first()
+        if target_user is None:
+            return _validation_error({"target_user_id": "User does not exist"})
+        assigned = True
+        try:
+            binding = ProviderBinding.from_dict(data.get("binding") or {})
+        except ValueError as exc:
+            return _error(str(exc))
+        if request.method != "DELETE":
+            denied_assign = _authorize_preference_assignment(request, binding=binding, target_user=target_user)
+            if denied_assign is not None:
+                return denied_assign
+        else:
+            if not _can_inspect_user_preferences(request.user, request=request):
+                return _error("Preference assignment is not allowed", 403, code="permission_denied")
+
     if request.method == "DELETE":
-        deleted_ids = list(AIProviderPreference.objects.filter(**filters).values_list("pk", flat=True))
-        AIProviderPreference.objects.filter(pk__in=deleted_ids).delete()
+        deleted_ids: list[int] = []
+        for purpose in purposes:
+            filters = {
+                "user": None if workspace_default else target_user,
+                "project_id": preference_project_id,
+                "purpose": purpose,
+            }
+            deleted_ids.extend(list(AIProviderPreference.objects.filter(**filters).values_list("pk", flat=True)))
+            AIProviderPreference.objects.filter(**filters).delete()
         if workspace_default:
             for preference_id in deleted_ids:
                 _audit_provider_mutation(
@@ -934,11 +1347,31 @@ def api_ai_provider_preferences(request):
                     entity_id=preference_id,
                     scope="workspace",
                 )
-        return JsonResponse({"success": True})
-    return _save_preference(
-        request,
-        data=data,
-        filters=filters,
-        workspace_default=workspace_default,
-        project_id=preference_project_id,
-    )
+        elif assigned:
+            for preference_id in deleted_ids:
+                _audit_provider_mutation(
+                    request,
+                    action="ai_provider.preference.assign_clear",
+                    entity_type="ai_provider_preference",
+                    entity_id=preference_id,
+                    scope="assigned",
+                )
+        return JsonResponse({"success": True, "deleted": len(deleted_ids)})
+
+    saved: list[dict[str, Any]] = []
+    for purpose in purposes:
+        response = _upsert_preference_for_user(
+            request,
+            data=data,
+            target_user=None if workspace_default else target_user,
+            project_id=preference_project_id,
+            purpose=purpose,
+            workspace_default=workspace_default,
+            assigned=assigned,
+        )
+        if response.status_code >= 400:
+            return response
+        saved.append(_json_payload(response)["preference"])
+    if len(saved) == 1:
+        return JsonResponse({"success": True, "preference": saved[0]})
+    return JsonResponse({"success": True, "preferences": saved})

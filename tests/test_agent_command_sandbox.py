@@ -175,6 +175,36 @@ async def test_agent_command_secrets_are_sent_only_on_stdin(monkeypatch, tmp_pat
 
 
 @pytest.mark.asyncio
+async def test_agent_command_docker_sock_denied_is_control_plane(monkeypatch) -> None:
+    class FakeProcess:
+        returncode = 1
+
+        async def communicate(self, payload: bytes):
+            _ = payload
+            return (
+                b"",
+                b"permission denied while trying to connect to the docker API at unix:///var/run/docker.sock",
+            )
+
+    async def fake_spawn(*args, **kwargs):
+        _ = args, kwargs
+        return FakeProcess()
+
+    monkeypatch.setattr("asyncio.create_subprocess_exec", fake_spawn)
+    with (
+        override_settings(AGENT_COMMAND_RUNTIME="docker", AGENT_COMMAND_RUNNER_IMAGE=IMMUTABLE_IMAGE),
+        pytest.raises(AgentCommandRuntimeError, match="CONTROL_PLANE") as raised,
+    ):
+        await execute_ephemeral_ssh_command(
+            connect_kwargs={"host": "prod.example", "port": 22, "username": "deploy"},
+            command="true",
+            known_hosts_text="prod.example ssh-ed25519 AAAATEST\n",
+        )
+    assert raised.value.kind == "control_plane"
+    assert "целевом сервере не запускались" in str(raised.value)
+
+
+@pytest.mark.asyncio
 async def test_full_agent_open_does_not_connect_from_backend_in_docker_mode(monkeypatch) -> None:
     server = SimpleNamespace(id=7, name="prod", host="prod.example", port=22, user=None, group=None)
     manager = AgentSessionManager([server])
@@ -182,12 +212,34 @@ async def test_full_agent_open_does_not_connect_from_backend_in_docker_mode(monk
     async def forbidden_connect_kwargs(_server):
         raise AssertionError("backend must not prepare a direct SSH session")
 
+    async def fake_probe():
+        return "27.3.1"
+
     monkeypatch.setattr("servers.agents.agent_sessions._build_connect_kwargs", forbidden_connect_kwargs)
+    monkeypatch.setattr("servers.agents.agent_sessions.probe_agent_command_docker", fake_probe)
     with override_settings(AGENT_COMMAND_RUNTIME="docker"):
         await manager.open(server)
 
     assert manager.connections[7].conn is None
     assert manager.connections[7].proc is None
+
+
+@pytest.mark.asyncio
+async def test_full_agent_open_fails_closed_when_docker_probe_fails(monkeypatch) -> None:
+    from app.agent_kernel.sandbox.runtime_errors import AgentCommandRuntimeError, format_control_plane_message
+
+    server = SimpleNamespace(id=8, name="prod", host="prod.example", port=22, user=None, group=None)
+    manager = AgentSessionManager([server])
+
+    async def fake_probe():
+        raise AgentCommandRuntimeError(
+            format_control_plane_message("permission denied unix:///var/run/docker.sock")
+        )
+
+    monkeypatch.setattr("servers.agents.agent_sessions.probe_agent_command_docker", fake_probe)
+    with override_settings(AGENT_COMMAND_RUNTIME="docker"), pytest.raises(AgentCommandRuntimeError, match="CONTROL_PLANE"):
+        await manager.open(server)
+    assert manager.connections == {}
 
 
 def test_mini_and_studio_agent_paths_have_no_direct_ssh_connect() -> None:

@@ -14,6 +14,7 @@ from app.ai_runtime import ExecutionMode, ProviderTarget
 SUBSCRIPTION_TARGET_CHOICES = [
     (ProviderTarget.CODEX_SUBSCRIPTION.value, "Codex subscription"),
     (ProviderTarget.GROK_SUBSCRIPTION.value, "Grok subscription"),
+    (ProviderTarget.CURSOR_SUBSCRIPTION.value, "Cursor subscription"),
 ]
 ALL_TARGET_CHOICES = [(target.value, target.value) for target in ProviderTarget]
 
@@ -191,6 +192,8 @@ class AIProviderConnectionGrant(models.Model):
     project_role = models.CharField(max_length=20, blank=True, default="")
     allow_interactive = models.BooleanField(default=True)
     allow_unattended = models.BooleanField(default=False)
+    # null = no principal quota (only connection.concurrency_limit applies)
+    max_slots = models.PositiveSmallIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -202,6 +205,10 @@ class AIProviderConnectionGrant(models.Model):
                     | Q(user__isnull=True, group__isnull=True, project__isnull=False)
                 ),
                 name="cu_ai_grant_one_principal",
+            ),
+            models.CheckConstraint(
+                condition=Q(max_slots__isnull=True) | Q(max_slots__gte=1, max_slots__lte=8),
+                name="cu_ai_grant_max_slots_range",
             ),
             models.UniqueConstraint(
                 fields=["connection", "user"],

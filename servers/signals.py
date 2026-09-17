@@ -253,18 +253,6 @@ def ingest_alert(sender, instance: ServerAlert, created: bool, **kwargs):
         )
     if created and not instance.is_resolved:
         transaction.on_commit(lambda: _launch_monitoring_pipelines(instance.pk))
-        if instance.severity == ServerAlert.SEVERITY_CRITICAL:
-            alert_id = instance.pk
-
-            def _duty_note():
-                from core_ui.services.operator_duty import post_critical_alert_to_duty
-                from servers.models import ServerAlert as SA
-
-                alert = SA.objects.select_related("server", "server__user").filter(pk=alert_id).first()
-                if alert:
-                    post_critical_alert_to_duty(alert)
-
-            transaction.on_commit(_duty_note)
 
 
 def _launch_monitoring_pipelines(alert_id: int) -> None:

@@ -30,6 +30,7 @@ SERVER_SSH_PRIVATE_KEY_NAMESPACE = "server_ssh_private_key"
 MCP_ENV_NAMESPACE = "mcp_secret_env"
 LLM_API_KEY_NAMESPACE = "llm_api_key"
 LLM_API_KEY_OBJECT_ID = 1
+TELEGRAM_BOT_TOKEN_NAMESPACE = "telegram_bot_token"
 NOTIFICATION_SECRET_NAMESPACE = "notification_secret"
 NOTIFICATION_SECRET_OBJECT_ID = 1
 KUBERNETES_PROVIDER_TOKEN_NAMESPACE = "kubernetes_provider_token"
@@ -364,6 +365,35 @@ def has_notification_secret(key: str) -> bool:
     if not secret_key:
         return False
     return _has(NOTIFICATION_SECRET_NAMESPACE, NOTIFICATION_SECRET_OBJECT_ID, key=secret_key)
+
+
+def set_telegram_bot_token(bot_id: int, token: str) -> None:
+    value = (token or "").strip()
+    if not value:
+        _delete(TELEGRAM_BOT_TOKEN_NAMESPACE, int(bot_id), key="default")
+        return
+    _upsert(
+        TELEGRAM_BOT_TOKEN_NAMESPACE,
+        int(bot_id),
+        {"secret": value},
+        key="default",
+        metadata={"kind": "telegram_bot_token"},
+    )
+
+
+def get_telegram_bot_token(bot_id: int) -> str:
+    payload = _get(TELEGRAM_BOT_TOKEN_NAMESPACE, int(bot_id), key="default", default={})
+    if isinstance(payload, dict):
+        return str(payload.get("secret") or "")
+    return ""
+
+
+def delete_telegram_bot_token(bot_id: int) -> None:
+    _delete(TELEGRAM_BOT_TOKEN_NAMESPACE, int(bot_id), key="default")
+
+
+def has_telegram_bot_token(bot_id: int) -> bool:
+    return _has(TELEGRAM_BOT_TOKEN_NAMESPACE, int(bot_id), key="default")
 
 
 def _normalize_llm_provider(provider: str) -> str:

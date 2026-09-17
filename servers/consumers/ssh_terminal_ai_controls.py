@@ -68,6 +68,7 @@ class TerminalAiControlOperations:
         ai_session.clear()
         apply_legacy_ai_queue_state(self, ai_session)
         clear_active_command(self._ai_state.active_command)
+        self._ai_state.nova_conversation.running = False
 
     @staticmethod
     def _normalize_execution_mode(mode: str) -> str:
@@ -162,13 +163,26 @@ class TerminalAiControlOperations:
         )
 
     async def _initialize_ai_request(self, request: _AiRequestInput) -> bool:
+        from servers.services.terminal_ai.nova_conversation import is_live_nova_followup
+
         async with self._ai_state.lock:
-            await self._cancel_ai_locked()
+            nova = self._ai_state.nova_conversation
+            nova_running = bool(nova.running and self._ai_state.run.has_active_task())
             prev_memory_enabled = bool((self._ai_state.settings or {}).get("memory_enabled", True))
             new_memory_enabled = bool(request.settings.get("memory_enabled", True))
             memory_disabled_now = prev_memory_enabled and not new_memory_enabled
             self._ai_state.settings = self._clone_ai_settings(request.settings)
             self._ai_state.allowlist_patterns = list(self._ai_state.settings.get("allowlist_patterns") or [])
+
+            if is_live_nova_followup(requested_mode=request.requested_mode, running=nova_running):
+                nova.enqueue_interjection(request.message)
+                if memory_disabled_now:
+                    self._ai_state.history = []
+                    nova.reset()
+                    nova.running = True
+                return memory_disabled_now
+
+            await self._cancel_ai_locked()
             ai_session = sync_legacy_ai_queue_state(self, self._TerminalAiSessionCls)
             ai_session.reset_for_new_request(
                 user_message=request.message,
@@ -178,8 +192,12 @@ class TerminalAiControlOperations:
                 marker_token=self._new_marker_token(),
             )
             apply_legacy_ai_queue_state(self, ai_session)
+            if request.requested_mode != "agent":
+                nova.running = False
             if not bool(self._ai_state.settings.get("memory_enabled", True)):
                 self._ai_state.history = []
+                if request.requested_mode != "agent":
+                    nova.reset()
         return memory_disabled_now
 
     async def _wipe_persisted_ai_history(self) -> None:
@@ -240,8 +258,15 @@ class TerminalAiControlOperations:
     async def _start_agent_request(self, request: _AiRequestInput) -> bool:
         if request.requested_mode != "agent":
             return False
+
         with audit_context(**self._ai_state.audit_context):
             async with self._ai_state.lock:
+                nova = self._ai_state.nova_conversation
+                if self._ai_state.run.has_active_task() and nova.running:
+                    return True
+                if nova.pending_user_messages and nova.pending_user_messages[-1] == request.message:
+                    nova.pending_user_messages.pop()
+                nova.running = True
                 self._ai_state.run.start_task(
                     self._run_ai_agent_background(
                         user_message=request.message,
@@ -260,6 +285,16 @@ class TerminalAiControlOperations:
                     self._user_id,
                     self.server.id,
                 )
+                from servers.services.terminal_ai.pty_occupancy import inspect_pty_occupancy, occupancy_prompt_note
+                from servers.services.terminal_ai.session_briefing import render_session_briefing
+
+                occupancy = inspect_pty_occupancy(
+                    input_buffer=self._manual_state.input_buffer,
+                    input_forwarding_held=self._manual_state.input_forwarding_held,
+                    manual_active_command_id=self._manual_state.active_command_id,
+                    ai_active_command_id=self._ai_state.active_command.command_id,
+                )
+
                 plan_obj = await self._ai_plan_commands(
                     user_message=request.message,
                     rules_context=rules_context,
@@ -271,6 +306,8 @@ class TerminalAiControlOperations:
                     chat_mode=request.chat_mode,
                     execution_mode=request.requested_mode,
                     dry_run=bool(self._ai_state.settings.get("dry_run", False)),
+                    session_briefing=render_session_briefing(self._transport_state.session_briefing),
+                    occupancy_note=occupancy_prompt_note(occupancy),
                 )
             except Exception as e:
                 err_msg = str(e).strip() or "Unknown error"
@@ -545,6 +582,7 @@ class TerminalAiControlOperations:
             self._ai_state.history = []
             self._ai_state.session.last_done_items = []
             self._ai_state.session.last_report = ""
+            self._ai_state.nova_conversation.reset()
         # F2-9: also wipe the persistent DB copy so a page reload does not
         # restore the history the user just cleared.
         try:

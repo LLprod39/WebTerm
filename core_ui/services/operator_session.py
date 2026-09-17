@@ -80,14 +80,16 @@ def start_operator_turn(
         .first()
     )
     if active and active.status == ChatTurnState.STATUS_AWAITING_CONFIRM:
-        raise ValueError("Session has a pending confirmation — confirm or cancel it first")
+        raise ValueError(
+            "Сначала подтвердите или отмените действие ниже (кнопки в чате), либо отправьте /new"
+        )
     if active and active.status == ChatTurnState.STATUS_AWAITING_ASYNC:
-        raise ValueError("Session is waiting for an async run to finish — wait or start a new chat")
+        raise ValueError("Сессия ждёт завершения фонового запуска — подождите или отправьте /new")
     if active and active.status == ChatTurnState.STATUS_RUNNING:
         # Still fresh — another turn is in flight (e.g. concurrent WS)
-        raise ValueError("Turn already in progress — wait a moment and try again")
+        raise ValueError("Сейчас обрабатывается другой запрос — подождите пару секунд")
     if active and active.status == ChatTurnState.STATUS_RESUMING:
-        raise ValueError("Turn is resuming — wait a moment and try again")
+        raise ValueError("Оператор продолжает предыдущий шаг — подождите пару секунд")
 
     with transaction.atomic():
         # Serialize turn creation across ASGI workers/tabs.  The process-local
@@ -107,7 +109,7 @@ def start_operator_turn(
                 ChatTurnState.STATUS_RESUMING,
             },
         ).exists():
-            raise ValueError("Turn already in progress — wait, confirm, or cancel it first")
+            raise ValueError("Уже есть активный шаг — подождите, подтвердите или отмените его (или /new)")
         user_message = ChatMessage.objects.create(session=session, role=ChatMessage.ROLE_USER, content=text)
         if session.messages.count() <= 1 or session.title in {"", "Новый чат"}:
             session.title = text[:80] or session.title
@@ -128,9 +130,13 @@ def start_operator_turn(
             history.insert(0, {"role": "user", "content": note})
         pinned = session.pinned_context or {}
         if pinned:
+            from core_ui.services.operator_channel import is_telegram_session, pinned_context_for_history
+
             # Keep short — local models stall on multi-KB context prefixes
-            chips = json.dumps(pinned, ensure_ascii=False)[:600]
-            history.insert(0, {"role": "user", "content": f"Pinned context: {chips}"})
+            history_pin = pinned_context_for_history(pinned) if is_telegram_session(session) else pinned
+            if history_pin:
+                chips = json.dumps(history_pin, ensure_ascii=False)[:600]
+                history.insert(0, {"role": "user", "content": f"Pinned context: {chips}"})
             # Human commands from the chat-side live terminal dock
             term = pinned.get("terminal_activity") if isinstance(pinned, dict) else None
             if isinstance(term, dict):

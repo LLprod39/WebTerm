@@ -8,7 +8,10 @@ from typing import Any
 
 from servers.models_inventory import Server
 from servers.models_playbook_workspace import PlaybookBindingProfile, PlaybookRevision, PlaybookValidation
-from servers.services.playbook_compatibility_analysis import analyze_playbook_compatibility
+from servers.services.playbook_compatibility_analysis import (
+    analyze_playbook_compatibility,
+    is_user_required_runtime_variable,
+)
 from servers.services.playbook_compatibility_inventory import (
     compile_runtime_playbook_yaml,
     normalize_inventory_bindings,
@@ -248,8 +251,13 @@ def _compatibility_report(
         _block(blockers[0].get("message") or "Playbook compatibility check failed", report)
     if report.get("missing_bindings"):
         _block("Map every playbook host selector before running", report)
-    missing_variables = sorted(set(report.get("required_variables") or []) - set(runtime_variables))
+    missing_variables = sorted(
+        name
+        for name in set(report.get("required_variables") or [])
+        if name not in runtime_variables and is_user_required_runtime_variable(name)
+    )
     if missing_variables:
+        report["missing_runtime_variables"] = missing_variables
         report.setdefault("issues", []).append(
             {
                 "code": "unresolved_required_variables",

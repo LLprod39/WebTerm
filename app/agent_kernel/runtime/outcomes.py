@@ -31,6 +31,7 @@ EXIT_TIMEOUT = "timeout"
 EXIT_MAX_ITERATIONS = "max_iterations"
 EXIT_EMPTY_LLM = "empty_llm"
 EXIT_LLM_ERROR = "llm_error"
+EXIT_CONTROL_PLANE = "control_plane"
 
 ON_PARTIAL_ERROR = "error"
 ON_PARTIAL_SUCCESS = "success"
@@ -81,6 +82,45 @@ def summarize_plan_tasks(plan_tasks: list[dict[str, Any]] | None) -> dict[str, i
     return counts
 
 
+_EXEC_TOOLS = {"ssh_execute", "open_connection", "run_script_material"}
+
+
+def _entry_text(entry: dict[str, Any]) -> str:
+    return " ".join(
+        str(entry.get(key) or "")
+        for key in ("result", "result_preview", "error", "error_kind", "observation")
+    )
+
+
+def _is_control_plane_call(entry: dict[str, Any]) -> bool:
+    if str(entry.get("error_kind") or "").strip().lower() == "control_plane":
+        return True
+    text = _entry_text(entry).lower()
+    return "control_plane" in text or "канал выполнения" in text or "docker.sock" in text
+
+
+def _tool_succeeded(entry: dict[str, Any]) -> bool | None:
+    if "success" in entry and entry.get("success") is not None:
+        return bool(entry.get("success"))
+    return None
+
+
+def summarize_tool_evidence(tool_calls: list[dict[str, Any]] | None) -> dict[str, Any]:
+    calls = [entry for entry in (tool_calls or []) if isinstance(entry, dict)]
+    exec_calls = [entry for entry in calls if str(entry.get("tool") or "") in _EXEC_TOOLS]
+    control_plane = any(_is_control_plane_call(entry) for entry in calls)
+    succeeded = [entry for entry in exec_calls if _tool_succeeded(entry) is True]
+    failed = [entry for entry in exec_calls if _tool_succeeded(entry) is False]
+    unknown = [entry for entry in exec_calls if _tool_succeeded(entry) is None]
+    # Entries without a success flag: treat non-empty exec results as unknown, not success.
+    return {
+        "exec_count": len(exec_calls),
+        "exec_succeeded": len(succeeded),
+        "exec_failed": len(failed) + len(unknown),
+        "control_plane": control_plane,
+    }
+
+
 def resolve_react_outcome(
     *,
     exit_reason: str,
@@ -97,9 +137,12 @@ def resolve_react_outcome(
         EXIT_TIMEOUT: "Agent session timed out",
         EXIT_MAX_ITERATIONS: "Max iterations exhausted without proven completion",
         EXIT_EMPTY_LLM: "Empty LLM response",
-        EXIT_LLM_ERROR: "LLM call failed",
+        EXIT_LLM_ERROR: "Agent loop aborted on the LLM",
         EXIT_FINAL_ANSWER: "Agent returned a final answer",
+        EXIT_CONTROL_PLANE: "Agent command channel (Docker) is unavailable on the WebTerm host",
     }.get(exit_reason, f"Exit reason: {exit_reason or 'unknown'}")
+
+    evidence = summarize_tool_evidence(tool_calls)
 
     if exit_reason == EXIT_STOPPED:
         return AgentOutcome(
@@ -112,11 +155,32 @@ def resolve_react_outcome(
             exit_reason=exit_reason,
         )
 
-    if exit_reason in {EXIT_TIMEOUT, EXIT_LLM_ERROR}:
+    if exit_reason in {EXIT_TIMEOUT, EXIT_CONTROL_PLANE}:
         return AgentOutcome(
             outcome=OUTCOME_FAILED,
             status=STATUS_FAILED,
             reason=reason_base,
+            tool_call_count=tool_call_count,
+            pending_verifications=pending,
+            verification_summary=verification_summary,
+            exit_reason=exit_reason,
+        )
+
+    if exit_reason == EXIT_LLM_ERROR:
+        if evidence["control_plane"] or tool_call_count == 0:
+            return AgentOutcome(
+                outcome=OUTCOME_FAILED,
+                status=STATUS_FAILED,
+                reason=reason_base,
+                tool_call_count=tool_call_count,
+                pending_verifications=pending,
+                verification_summary=verification_summary,
+                exit_reason=exit_reason,
+            )
+        return AgentOutcome(
+            outcome=OUTCOME_PARTIAL,
+            status=STATUS_COMPLETED,
+            reason="Agent loop aborted on the LLM; partial work preserved",
             tool_call_count=tool_call_count,
             pending_verifications=pending,
             verification_summary=verification_summary,
@@ -145,6 +209,16 @@ def resolve_react_outcome(
         )
 
     if exit_reason == EXIT_MAX_ITERATIONS:
+        if evidence["control_plane"] or (evidence["exec_count"] > 0 and evidence["exec_succeeded"] == 0):
+            return AgentOutcome(
+                outcome=OUTCOME_FAILED,
+                status=STATUS_FAILED,
+                reason="Max iterations exhausted without a working command channel",
+                tool_call_count=tool_call_count,
+                pending_verifications=pending,
+                verification_summary=verification_summary,
+                exit_reason=exit_reason,
+            )
         return AgentOutcome(
             outcome=OUTCOME_PARTIAL,
             status=STATUS_COMPLETED,
@@ -173,6 +247,28 @@ def resolve_react_outcome(
             status=STATUS_COMPLETED,
             reason="Final answer without tool evidence while tools were available",
             tool_call_count=0,
+            pending_verifications=pending,
+            verification_summary=verification_summary,
+            exit_reason=exit_reason or EXIT_FINAL_ANSWER,
+        )
+
+    if evidence["control_plane"] or (evidence["exec_count"] > 0 and evidence["exec_succeeded"] == 0):
+        return AgentOutcome(
+            outcome=OUTCOME_FAILED,
+            status=STATUS_FAILED,
+            reason="Command channel failed; goal was not executed on the target server",
+            tool_call_count=tool_call_count,
+            pending_verifications=pending,
+            verification_summary=verification_summary,
+            exit_reason=exit_reason or EXIT_FINAL_ANSWER,
+        )
+
+    if evidence["exec_failed"] > 0 and evidence["exec_succeeded"] > 0:
+        return AgentOutcome(
+            outcome=OUTCOME_PARTIAL,
+            status=STATUS_COMPLETED,
+            reason="Some commands succeeded but the goal is not fully proven",
+            tool_call_count=tool_call_count,
             pending_verifications=pending,
             verification_summary=verification_summary,
             exit_reason=exit_reason or EXIT_FINAL_ANSWER,

@@ -223,7 +223,7 @@ def test_readiness_lists_required_workers_and_runtime_context():
     assert workers["monitor"]["issues"][0]["code"] == "worker_not_running"
     assert workers["scheduled-pipelines"]["required_by"] == 1
     assert workers["pipeline-execution"]["command"] == "python manage.py run_pipeline_execution_plane"
-    assert workers["telegram-bot"]["command"] == "python manage.py run_telegram_bot"
+    assert workers["telegram-bot"]["command"] == "python manage.py run_telegram_hub"
     item = payload["pipelines"][0]
     assert item["status"] == "warning"
     assert "Some triggers require runtime context before launch." in item["warnings"]

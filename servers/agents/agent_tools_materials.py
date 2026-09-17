@@ -8,6 +8,12 @@ import json
 import re
 from typing import TYPE_CHECKING
 
+from app.agent_kernel.sandbox.runtime_errors import (
+    KIND_CONTROL_PLANE,
+    AgentCommandRuntimeError,
+    classify_agent_runtime_detail,
+    format_runtime_error,
+)
 from app.command_execution_gate import evaluate_command_execution_gate
 from servers.agents.agent_tools_base import ToolResult
 
@@ -280,8 +286,12 @@ exit 0
         out = await session.execute(sid, f"bash -lc {shlex.quote(remote)}")
     except TimeoutError:
         return ToolResult(False, f"Script material timed out (server timeout). material={item.get('id')}")
+    except AgentCommandRuntimeError as exc:
+        kind = getattr(exc, "kind", KIND_CONTROL_PLANE)
+        return ToolResult(False, str(exc), data={"error_kind": kind})
     except Exception as exc:
-        return ToolResult(False, f"SSH error while running script material: {exc}")
+        kind = classify_agent_runtime_detail(exc)
+        return ToolResult(False, format_runtime_error(kind, str(exc)), data={"error_kind": kind})
 
     stdout = str(out.get("stdout") or "")
     stderr = str(out.get("stderr") or "")

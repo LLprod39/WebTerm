@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kubernetes · кокпит v2</title>
+  <style>
+    :root {
+      --bg: #fafafa; --surface: #ffffff; --fg: #111111; --muted: #6b6b6b;
+      --border: #e5e5e5; --accent: #2f6feb; --accent-on: #ffffff;
+      --success: #17a34a; --warn: #eab308; --danger: #dc2626;
+      --font: "Inter", -apple-system, system-ui, sans-serif;
+      --mono: ui-monospace, "JetBrains Mono", monospace;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--font); }
+    button, select, input { font: inherit; }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 28px 20px 48px; }
+    .eyebrow { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+    h1 { font-size: clamp(28px, 3vw, 36px); line-height: 1.15; margin: 0; letter-spacing: -.01em; }
+    .lead { margin: 10px 0 0; color: var(--muted); max-width: 48ch; font-size: 17px; }
+    .top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn { border: 1px solid var(--border); background: var(--surface); border-radius: var(--radius); padding: 11px 16px; cursor: pointer; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-on); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .badge { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+    .badge.ok { color: var(--success); border-color: color-mix(in oklab, var(--success), white 70%); }
+    .badge.bad { color: var(--danger); border-color: color-mix(in oklab, var(--danger), white 70%); }
+    .badge.warn { color: #a16207; border-color: color-mix(in oklab, var(--warn), white 55%); }
+    .controls { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+    label { display: grid; gap: 8px; color: var(--muted); font-size: 14px; }
+    select, input { width: 100%; height: 48px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 0 14px; color: var(--fg); font-size: 16px; }
+    .pills { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+    .pill { min-width: 7.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 12px 14px; }
+    .pill b { display: block; margin-top: 6px; font: 600 20px/1 var(--mono); }
+    .grid { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.5fr); gap: 18px; }
+    .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; min-height: 560px; display: flex; flex-direction: column; overflow: hidden; }
+    .ph { padding: 18px 20px; border-bottom: 1px solid var(--border); }
+    .ph h2 { margin: 0; font-size: 18px; }
+    .ph p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+    .search { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .list { overflow: auto; flex: 1; }
+    .pod { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--border); background: transparent; padding: 16px 20px; cursor: pointer; display: grid; gap: 8px; }
+    .pod:hover { background: #f3f3f3; }
+    .pod.is-active { background: color-mix(in oklab, var(--accent) 10%, white); }
+    .pod-top { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .pod-name { font-weight: 600; font-size: 16px; }
+    .meta { font: 12px/1.4 var(--mono); color: var(--muted); }
+    .tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--border); }
+    .tab { border: 0; background: transparent; padding: 10px 14px; border-radius: 8px 8px 0 0; color: var(--muted); cursor: pointer; }
+    .tab.is-active { background: #f0f0f0; color: var(--fg); font-weight: 600; }
+    .pane { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    .pane.is-active { display: flex; }
+    .logbar { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+    .logs { flex: 1; overflow: auto; background: #f4f4f4; padding: 16px 20px; font: 14px/1.55 var(--mono); white-space: pre-wrap; word-break: break-all; margin: 0; min-height: 220px; }
+    .explain { border-top: 1px solid var(--border); padding: 18px 20px; }
+    .explain h3 { margin: 0 0 8px; font-size: 16px; }
+    .explain ol { margin: 8px 0 0; padding-left: 20px; }
+    .events li { list-style: none; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .events { margin: 0; padding: 0; overflow: auto; }
+    .exec { padding: 20px; display: grid; gap: 12px; }
+    .exec-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+    .out { border: 1px dashed var(--border); border-radius: var(--radius); padding: 14px; min-height: 120px; color: var(--muted); font: 14px/1.5 var(--mono); background: #fafafa; }
+    .connect { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 28px; max-width: 720px; margin: 24px auto; display: none; }
+    .connect h2 { margin: 0 0 8px; font-size: 24px; }
+    .connect ol { margin: 20px 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+    .connect li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+    .n { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: var(--radius); display: grid; place-items: center; font: 600 14px var(--mono); }
+    body.is-empty .workspace, body.is-empty .controls { display: none; }
+    body.is-empty .connect { display: block; }
+    @media (max-width: 980px) {
+      .controls { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .panel { min-height: 420px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <p class="eyebrow">Kubernetes</p>
+        <h1>Кокпит</h1>
+        <p class="lead">Выберите namespace, откройте под, смотрите логи и получите короткое объяснение.</p>
+      </div>
+      <div class="actions">
+        <span class="badge ok" id="connBadge">Кластер подключён</span>
+        <button class="btn" type="button" id="toggleEmpty">Показать «нет кластера»</button>
+        <button class="btn" type="button">Обновить</button>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label>Кластер
+        <select id="cluster"><option>prod-eu-1</option><option>staging</option></select>
+      </label>
+      <label>Namespace
+        <select id="ns"><option value="production">production</option><option value="payments">payments</option></select>
+      </label>
+      <div class="pills">
+        <div class="pill">Ready<b id="readyStat">1/2</b></div>
+        <div class="pill">Проблемы<b id="issueStat">1</b></div>
+        <div class="pill">Warnings<b>1</b></div>
+      </div>
+    </div>
+
+    <div class="connect" id="connect">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <h2 style="margin:0">Подключение</h2>
+        <span class="badge" id="roleBadge">Для всех · только справка</span>
+      </div>
+      <p style="color:var(--muted);margin:0" id="connectLead">Вкладка доступна всем. Настройки кластера делает только администратор.</p>
+      <ol id="connectSteps">
+        <li><span class="n">1</span><div><strong>Что вы видите</strong><div style="color:var(--muted);margin-top:4px">Кластер → область → под → логи</div></div></li>
+        <li><span class="n">2</span><div><strong>Если список пустой</strong><div style="color:var(--muted);margin-top:4px">Попросите администратора подключить провайдер и Sync</div></div></li>
+        <li><span class="n">3</span><div><strong>Обычный цикл</strong><div style="color:var(--muted);margin-top:4px">Проблемный под → логи → объяснить</div></div></li>
+        <li><span class="n">4</span><div><strong>Куда не заходить</strong><div style="color:var(--muted);margin-top:4px">Настройки Kubernetes закрыты для не-админов</div></div></li>
+      </ol>
+      <div id="connectCta" class="note" style="border:1px dashed var(--border);border-radius:12px;padding:14px 16px;color:var(--muted)">
+        Нужен доступ? Напишите администратору — он подключит провайдер один раз для команды.
+      </div>
+      <div style="margin-top:12px">
+        <label style="display:inline-flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)">
+          <input type="checkbox" id="asAdmin" /> Показать вид администратора
+        </label>
+      </div>
+    </div>
+
+    <div class="grid workspace">
+      <section class="panel">
+        <div class="ph"><h2>Поды</h2><p id="nsLabel">Namespace · production</p></div>
+        <div class="search"><input placeholder="Поиск по имени пода…" /></div>
+        <div class="list" id="podList"></div>
+      </section>
+
+      <section class="panel">
+        <div class="ph">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:start">
+            <div>
+              <h2 id="podTitle">—</h2>
+              <p class="meta" id="podMeta">Выберите под слева</p>
+            </div>
+            <span class="badge" id="podBadge">—</span>
+          </div>
+        </div>
+        <div class="tabs" role="tablist">
+          <button class="tab is-active" data-tab="logs" type="button">Логи</button>
+          <button class="tab" data-tab="events" type="button">События</button>
+          <button class="tab" data-tab="exec" type="button">Exec</button>
+        </div>
+        <div class="pane is-active" id="pane-logs">
+          <div class="logbar">
+            <div class="meta" id="logTarget">—</div>
+            <div class="actions">
+              <button class="btn" type="button">Обновить снимок</button>
+              <button class="btn btn-primary" type="button" id="explainBtn">Объяснить логи</button>
+            </div>
+          </div>
+          <pre class="logs" id="logs"></pre>
+          <div class="explain" id="explain">
+            <h3>ИИ · разбор логов</h3>
+            <p style="color:var(--muted);margin:0">Нажмите «Объяснить логи» — здесь появится гипотеза и безопасные проверки.</p>
+          </div>
+        </div>
+        <div class="pane" id="pane-events">
+          <ul class="events" id="events"></ul>
+        </div>
+        <div class="pane" id="pane-exec">
+          <div class="exec">
+            <div class="exec-row">
+              <input id="cmd" placeholder="например: ls -la /var/log" />
+              <button class="btn" type="button" id="runExec">Выполнить</button>
+            </div>
+            <div class="out" id="execOut">UI-заглушка: сетевой exec в v1 отключён.</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const pods = {
+      production: [
+        { id: "p1", name: "checkout-api-a1", phase: "CrashLoopBackOff", ready: "0/1", restarts: 14, node: "node-a", bad: true,
+          logs: "ERROR dial tcp 10.0.4.22:5432: connect: connection refused\\nFATAL database unavailable — exiting\\nLiveness probe failed: HTTP 500" },
+        { id: "p2", name: "checkout-web-9c", phase: "Running", ready: "1/1", restarts: 0, node: "node-b", bad: false,
+          logs: "INFO listening on :8080\\nINFO ready" }
+      ],
+      payments: [
+        { id: "p3", name: "payments-worker-2", phase: "Running", ready: "1/1", restarts: 1, node: "node-c", bad: false,
+          logs: "INFO job claimed\\nINFO done" }
+      ]
+    };
+    const events = {
+      production: [{ t: "18:44:02", sev: "warning", reason: "BackOff", msg: "Back-off restarting failed container app", ref: "Pod/checkout-api-a1" }],
+      payments: []
+    };
+
+    let selected = null;
+    const list = document.getElementById("podList");
+    const ns = document.getElementById("ns");
+
+    function renderPods() {
+      const items = pods[ns.value] || [];
+      document.getElementById("nsLabel").textContent = "Namespace · " + ns.value;
+      document.getElementById("readyStat").textContent = items.filter(p => !p.bad).length + "/" + items.length;
+      document.getElementById("issueStat").textContent = String(items.filter(p => p.bad).length);
+      list.innerHTML = items.map(p => `
+        <button class="pod ${selected && selected.id === p.id ? "is-active" : ""}" data-id="${p.id}" type="button">
+          <div class="pod-top"><span class="pod-name">${p.name}</span><span class="badge ${p.bad ? "bad" : "ok"}">${p.phase}</span></div>
+          <div class="meta">${p.ready} ready · ${p.restarts} рестартов · ${p.node}</div>
+        </button>`).join("");
+      list.querySelectorAll(".pod").forEach(btn => btn.addEventListener("click", () => {
+        selected = items.find(p => p.id === btn.dataset.id);
+        renderPods();
+        renderSelected();
+      }));
+      document.getElementById("events").innerHTML = (events[ns.value] || []).map(e => `
+        <li><div class="meta">${e.t} · <span class="badge warn">${e.sev}</span> · ${e.reason}</div>
+        <div style="margin-top:8px;font-size:16px">${e.msg}</div>
+        <div class="meta" style="margin-top:6px">${e.ref}</div></li>`).join("") || "<li style='padding:20px;color:var(--muted)'>Событий нет</li>";
+      if (!selected || selected && !(items.find(p => p.id === selected.id))) {
+        selected = items.find(p => p.bad) || items[0] || null;
+        renderSelected();
+        renderPods();
+      }
+    }
+
+    function renderSelected() {
+      if (!selected) {
+        document.getElementById("podTitle").textContent = "Рабочая зона";
+        document.getElementById("podMeta").textContent = "Выберите под слева";
+        document.getElementById("podBadge").textContent = "—";
+        document.getElementById("logs").textContent = "";
+        document.getElementById("logTarget").textContent = "—";
+        return;
+      }
+      document.getElementById("podTitle").textContent = selected.name;
+      document.getElementById("podMeta").textContent = ns.value + " · " + selected.node + " · " + selected.restarts + " рестартов";
+      const badge = document.getElementById("podBadge");
+      badge.textContent = selected.phase;
+      badge.className = "badge " + (selected.bad ? "bad" : "ok");
+      document.getElementById("logs").textContent = selected.logs.replace(/\\n/g, "\n");
+      document.getElementById("logTarget").textContent = ns.value + "/" + selected.name;
+      document.getElementById("explain").innerHTML = "<h3>ИИ · разбор логов</h3><p style='color:var(--muted);margin:0'>Нажмите «Объяснить логи» — здесь появится гипотеза и безопасные проверки.</p>";
+    }
+
+    document.querySelectorAll(".tab").forEach(tab => tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("is-active"));
+      document.querySelectorAll(".pane").forEach(p => p.classList.remove("is-active"));
+      tab.classList.add("is-active");
+      document.getElementById("pane-" + tab.dataset.tab).classList.add("is-active");
+    }));
+
+    document.getElementById("explainBtn").addEventListener("click", () => {
+      if (!selected) return;
+      document.getElementById("explain").innerHTML = `
+        <h3>ИИ · разбор логов <span class="badge warn">medium</span></h3>
+        <p><strong>Гипотеза.</strong> Контейнер падает из‑за недоступной БД (connection refused :5432).</p>
+        <p style="color:var(--muted)">Сигналы: connection refused, CrashLoop, liveness 500.</p>
+        <ol><li>Проверить Service/Endpoints Postgres в namespace</li><li>Сверить secret с DSN</li><li>Посмотреть warning-события пода</li></ol>
+        <p class="meta" style="margin-top:12px">Локальный mock · без мутаций кластера</p>`;
+    });
+
+    document.getElementById("runExec").addEventListener("click", () => {
+      document.getElementById("execOut").textContent = "Выполнение команд в контейнере будет доступно после подключения Exec API.";
+    });
+
+    document.getElementById("toggleEmpty").addEventListener("click", () => {
+      document.body.classList.toggle("is-empty");
+      document.getElementById("connBadge").textContent = document.body.classList.contains("is-empty") ? "Нужно подключение" : "Кластер подключён";
+      document.getElementById("connBadge").className = "badge " + (document.body.classList.contains("is-empty") ? "warn" : "ok");
+    });
+
+    const asAdmin = document.getElementById("asAdmin");
+    const roleBadge = document.getElementById("roleBadge");
+    const connectLead = document.getElementById("connectLead");
+    const connectSteps = document.getElementById("connectSteps");
+    const connectCta = document.getElementById("connectCta");
+
+    function renderConnectRole() {
+      const admin = asAdmin.checked;
+      roleBadge.textContent = admin ? "Админ · можно настраивать" : "Для всех · только справка";
+      connectLead.textContent = admin
+        ? "Настройки Kubernetes доступны только администраторам. Подключите провайдер один раз — дальше команда работает с подами и логами."
+        : "Вкладка доступна всем. Настройки кластера делает только администратор.";
+      connectSteps.innerHTML = admin
+        ? `<li><span class="n">1</span><div><strong>Откройте настройки</strong><div style="color:var(--muted);margin-top:4px">/settings/kubernetes</div></div></li>
+           <li><span class="n">2</span><div><strong>Добавьте провайдер</strong><div style="color:var(--muted);margin-top:4px">Rancher / URL + credentials</div></div></li>
+           <li><span class="n">3</span><div><strong>Нажмите Sync</strong><div style="color:var(--muted);margin-top:4px">Появятся кластеры и namespaces</div></div></li>
+           <li><span class="n">4</span><div><strong>Вернитесь на Поды</strong><div style="color:var(--muted);margin-top:4px">область → под → логи → объяснить</div></div></li>`
+        : `<li><span class="n">1</span><div><strong>Что вы видите</strong><div style="color:var(--muted);margin-top:4px">Кластер → область → под → логи</div></div></li>
+           <li><span class="n">2</span><div><strong>Если список пустой</strong><div style="color:var(--muted);margin-top:4px">Попросите администратора подключить провайдер и Sync</div></div></li>
+           <li><span class="n">3</span><div><strong>Обычный цикл</strong><div style="color:var(--muted);margin-top:4px">Проблемный под → логи → объяснить</div></div></li>
+           <li><span class="n">4</span><div><strong>Куда не заходить</strong><div style="color:var(--muted);margin-top:4px">Настройки Kubernetes закрыты для не-админов</div></div></li>`;
+      connectCta.innerHTML = admin
+        ? `<button class="btn btn-primary" type="button">Открыть настройки Kubernetes</button>`
+        : `Нужен доступ? Напишите администратору — он подключит провайдер один раз для команды.`;
+      connectCta.className = admin ? "" : "note";
+      connectCta.style.cssText = admin ? "" : "border:1px dashed var(--border);border-radius:12px;padding:14px 16px;color:var(--muted)";
+    }
+    asAdmin.addEventListener("change", renderConnectRole);
+
+    ns.addEventListener("change", () => { selected = null; renderPods(); });
+    renderPods();
+  </script>
+</body>
+</html>

@@ -7,7 +7,11 @@ import json
 import os
 import sys
 
-from ai_cli_runner_manager.adapters import CodexSubscriptionAdapter, GrokSubscriptionAdapter
+from ai_cli_runner_manager.adapters import (
+    CodexSubscriptionAdapter,
+    CursorSubscriptionAdapter,
+    GrokSubscriptionAdapter,
+)
 from ai_cli_runner_manager.protocol import RunnerProtocolError, RunnerRequestV1, error_event
 
 
@@ -25,7 +29,16 @@ async def _main() -> int:
     if os.getenv("WEBTERM_AI_CLI_TARGET") != request.target_id:
         _write(error_event("provider_target_mismatch", "Runner target does not match container policy").to_dict())
         return 2
-    adapter = CodexSubscriptionAdapter() if request.target_id == "codex_subscription" else GrokSubscriptionAdapter()
+    adapters = {
+        "codex_subscription": CodexSubscriptionAdapter,
+        "grok_subscription": GrokSubscriptionAdapter,
+        "cursor_subscription": CursorSubscriptionAdapter,
+    }
+    adapter_cls = adapters.get(request.target_id)
+    if adapter_cls is None:
+        _write(error_event("provider_target_unsupported", "Runner target is not supported").to_dict())
+        return 2
+    adapter = adapter_cls()
     async for event in adapter.stream(request):
         _write(event.to_dict())
     return 0

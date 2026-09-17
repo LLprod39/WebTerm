@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-07-31
 
-This folder is the public architecture entry point. The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
+This folder is the public architecture entry point. The human-readable product map (modules, data flow, screens, buttons) is [PRODUCT_MODULE_MAP.md](PRODUCT_MODULE_MAP.md). The enforced working contract is [ARCHITECTURE_CONTRACT.md](ARCHITECTURE_CONTRACT.md), and accepted decisions are indexed in [adr/README.md](adr/README.md).
 
 Production agent SSH isolation is defined in [AGENT_COMMAND_SANDBOX.md](AGENT_COMMAND_SANDBOX.md).
 Append-only agent event integrity and export are defined in [AGENT_AUDIT_INTEGRITY.md](AGENT_AUDIT_INTEGRITY.md).

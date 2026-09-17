@@ -56,11 +56,16 @@ def api_kubernetes_pod_detail(request, pod_id: str):
 @require_feature("kubernetes")
 @require_GET
 def api_kubernetes_cluster_pods(request, cluster_id: str):
+    from kubernetes_ops.services.access import allowed_namespaces_for_cluster, user_can_view_cluster
+
     def handler():
         cluster = _cluster_or_none(cluster_id)
-        if cluster is None:
+        if cluster is None or not user_can_view_cluster(request.user, cluster):
             return JsonResponse({"success": False, "error": "Cluster not found"}, status=404)
         pods = K8sPodRef.objects.filter(cluster=cluster).select_related("cluster")
+        allowed = allowed_namespaces_for_cluster(request.user, cluster)
+        if allowed is not None:
+            pods = pods.filter(namespace__in=allowed)
         return JsonResponse(
             {
                 "success": True,

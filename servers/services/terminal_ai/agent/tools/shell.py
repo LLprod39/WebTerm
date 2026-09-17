@@ -68,8 +68,9 @@ class ShellTool:
     name: str = "shell"
     description: str = (
         "Execute a single shell command on one of the authorised servers "
-        "via a non-PTY SSH channel and return its stdout/stderr + exit "
-        "code. Use for diagnostics, file queries, service control, etc. "
+        "and return its stdout/stderr + exit code. On the session's own "
+        "server this runs in a hidden persistent PTY (cwd/env/venv survive "
+        "between calls). Extra servers still use a fresh SSH channel. "
         "Do NOT use for interactive editors (vim/nano/less) — use "
         "`read_file` / `edit_file` instead. Set `target` to route to an "
         "authorised extra server (see `list_targets`); leave empty to "
@@ -231,6 +232,35 @@ class ShellTool:
                     "dry_run": True,
                     "cmd": cmd,
                     "target": target.name,
+                },
+            )
+
+        timeout = min(max(int(args.timeout or 30), 1), _MAX_TIMEOUT_SEC)
+        if target.is_primary and ctx.run_primary_shell is not None:
+            try:
+                exit_code, combined = await ctx.run_primary_shell(cmd, timeout)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("agent shell hidden PTY failed on %s: %s", target.name, exc)
+                return tool_err(f"{type(exc).__name__}: {exc}")
+            exit_code = int(exit_code) if exit_code is not None else 1
+            text = str(combined or "")
+            if sudo_notes:
+                text = "\n".join(sudo_notes) + "\n" + text
+            if len(text) > _MAX_OUTPUT_CHARS:
+                text = (
+                    f"[... {len(text) - _MAX_OUTPUT_CHARS} chars truncated ...]\n" + text[-_MAX_OUTPUT_CHARS:]
+                )
+            output_payload = (f"Target: {target.name}\nExit: {exit_code}\n{text}").strip()
+            return tool_ok(
+                output_payload,
+                data={
+                    "exit_code": exit_code,
+                    "cmd": cmd,
+                    "target": target.name,
+                    "sudo_notes": list(sudo_notes),
+                    "via": "hidden_pty",
                 },
             )
 

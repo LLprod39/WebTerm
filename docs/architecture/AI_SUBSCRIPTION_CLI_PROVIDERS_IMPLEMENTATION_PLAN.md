@@ -1,14 +1,14 @@
-# Codex CLI и Grok CLI как AI-провайдеры WebTerm
+# Codex CLI, Grok CLI и Cursor CLI как AI-провайдеры WebTerm
 
 - Статус: реализовано в коде, требуется live conformance/deployment gate
-- Актуально на: 2026-08-11
+- Актуально на: 2026-09-15
 - Целевой профиль: self-hosted, 5–30 внутренних пользователей
-- Transport IDs: `codex_subscription`, `grok_subscription`
+- Transport IDs: `codex_subscription`, `grok_subscription`, `cursor_subscription`
 - Feature flag: `AI_CLI_SUBSCRIPTIONS_ENABLED=false` по умолчанию
 
 ## 1. Итоговое решение
 
-WebTerm поддерживает Codex CLI и Grok CLI как отдельные subscription transports рядом с существующими API и Ollama. Подписка не маскируется под API-ключ и не меняет смысл существующих provider IDs.
+WebTerm поддерживает Codex CLI, Grok CLI и Cursor CLI как отдельные subscription transports рядом с существующими API и Ollama. Подписка не маскируется под API-ключ и не меняет смысл существующих provider IDs.
 
 Пользователь или администратор:
 
@@ -26,6 +26,7 @@ WebTerm поддерживает Codex CLI и Grok CLI как отдельные
 - Workspace connections создаёт staff/admin; доступ default-deny через явные user/group/project grants.
 - Workspace pool выбирает доступного healthy member, после чего конкретный connection закрепляется за session/run.
 - Default concurrency для connection — `1`; увеличение является явным admin-решением.
+- На `AIProviderConnectionGrant` поле `max_slots` (1–8 или null): для user-гранта — личный потолок; для group-гранта — общий пул участников; при нескольких подходящих грантах лимиты применяются все (AND). Жёсткий потолок connection.concurrency_limit сохраняется. Переполнение → `provider_principal_capacity_unavailable`.
 - Поддерживаются interactive и unattended/scheduled вызовы.
 - Scheduled jobs сохраняют binding snapshot до постановки в очередь.
 - Есть defaults по назначению и override конкретного объекта/запуска.
@@ -47,8 +48,9 @@ WebTerm поддерживает Codex CLI и Grok CLI как отдельные
 | `ollama_local` | Ollama HTTP | `ollama` |
 | `codex_subscription` | isolated Codex SDK/CLI | `codex`, `codex_cli` |
 | `grok_subscription` | isolated Grok ACP/CLI | `grok_cli`, `grok_build` |
+| `cursor_subscription` | isolated Cursor agent CLI | `cursor_cli` |
 
-`grok` всегда означает xAI API. `grok_subscription` всегда означает subscription CLI. Subscription target никогда не преобразуется в API target.
+`grok` всегда означает xAI API. `grok_subscription` всегда означает subscription CLI. Host `cursor` (API-key CLI на хосте) остаётся отдельным от `cursor_subscription`. Subscription target никогда не преобразуется в API target.
 
 ## 4. Архитектура
 
@@ -64,6 +66,7 @@ flowchart LR
     Runner --> Egress["Allowlisted egress proxy"]
     Egress --> Codex["OpenAI auth/runtime"]
     Egress --> Grok["xAI auth/runtime"]
+    Egress --> Cursor["Cursor auth/runtime"]
     Runner --> Cred["Scoped credential volume"]
     Resolve --> Tools["Existing WebTerm tool gateway"]
     Tools --> Policy["ACL + policy + confirmation + audit"]
@@ -312,19 +315,27 @@ Subscription CLI нельзя использовать как embedding backend.
 
 ### 15.1 Собрать provider image
 
-Получить exact official Grok Build artifact URL и SHA-256 из утверждённого release record, затем:
+Собрать отдельные targets `codex`, `grok` и `cursor`. Для Grok и Cursor нужны утверждённые official artifact URL и SHA-256:
 
 ```powershell
 docker build `
   -f docker/ai-cli-provider-runner.Dockerfile `
+  --target grok `
   --build-arg GROK_BUILD_URL=$env:GROK_BUILD_URL `
   --build-arg GROK_BUILD_SHA256=$env:GROK_BUILD_SHA256 `
-  -t webterm-ai-cli-provider:approved .
+  -t webterm-ai-cli-grok-runner:approved .
 
-docker image inspect webterm-ai-cli-provider:approved --format '{{.Id}}'
+docker build `
+  -f docker/ai-cli-provider-runner.Dockerfile `
+  --target cursor `
+  --build-arg CURSOR_AGENT_URL=$env:CURSOR_AGENT_URL `
+  --build-arg CURSOR_AGENT_SHA256=$env:CURSOR_AGENT_SHA256 `
+  -t webterm-ai-cli-cursor-runner:approved .
+
+docker image inspect webterm-ai-cli-cursor-runner:approved --format '{{.Id}}'
 ```
 
-Значение `sha256:<64 hex>` из inspect записать в `AI_CLI_RUNNER_IMAGE`. Tag `latest` manager отклонит.
+Значение `sha256:<64 hex>` из inspect записать в `AI_CLI_CURSOR_RUNNER_IMAGE` (аналогично `AI_CLI_CODEX_RUNNER_IMAGE` / `AI_CLI_GROK_RUNNER_IMAGE`). Tag `latest` manager отклонит.
 
 ### 15.2 Настроить environment
 

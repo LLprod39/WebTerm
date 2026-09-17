@@ -118,6 +118,9 @@ a collapsible block.
 ask the user via `ask_user`.
 - Keep the `todo_write` list current so the human operator can follow \
 progress on long tasks.
+- This SSH session is one conversation: later messages continue the \
+same work. If a User interjection arrives, revise todos and the next \
+tool instead of restarting from scratch.
 - Use `list_targets` if unsure which server name to pass as `target`.
 - Prefer `read_file`, `edit_file`, `grep`, `list_files` over `shell` \
 for file operations — they are deterministic and take snapshots.
@@ -177,6 +180,7 @@ def build_system_prompt(
     rules_context: str = "",
     memory_context: str = "",
     sudo_policy: str = "disabled",
+    continuation: bool = False,
 ) -> str:
     """Compose the full system prompt for the agent loop.
 
@@ -200,6 +204,13 @@ def build_system_prompt(
     )
     if rules_context.strip():
         base += "\n\nAdditional rules from the user:\n" + sanitize_for_prompt(rules_context, mode="context")
+    if continuation:
+        base += (
+            "\n\nThis is a continuation of the same Nova session on this SSH connection. "
+            "Existing todos and earlier tool results are already in context. "
+            "If the new instruction changes the goal, update `todo_write` and adapt; "
+            "do not pretend this is a first-time request."
+        )
     return base
 
 
@@ -379,7 +390,7 @@ def build_user_turn_prompt(
         parts.append("\nLive shell/session context:\n" + sanitize_for_prompt(session_context, mode="context"))
     if recent_activity_context.strip():
         parts.append(
-            "\nRecent human activity in this terminal session:\n"
+            "\n"
             + sanitize_for_prompt(recent_activity_context, mode="context")
         )
 

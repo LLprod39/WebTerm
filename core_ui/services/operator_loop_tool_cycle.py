@@ -126,11 +126,14 @@ async def process_tool_calls(
             )
 
         if is_read_tool(action_type):
+            from core_ui.services.operator_channel import session_channel
+
             result = await sync_to_async(execute_tool)(
                 user=user,
                 action_type=action_type,
                 arguments=arguments,
                 request=request,
+                channel=session_channel(session),
             )
             # Persist charts / artifacts from read tools when applicable
             if assistant_message:

@@ -467,6 +467,16 @@ ensure_ai_cli_image() {
     fi
     build_args+=(--build-arg "GROK_BUILD_URL=$grok_url" --build-arg "GROK_BUILD_SHA256=$grok_sha")
   fi
+  if [[ "$target" == "cursor" ]]; then
+    local cursor_url cursor_sha
+    cursor_url="$(read_env_value "CURSOR_AGENT_URL")"
+    cursor_sha="$(read_env_value "CURSOR_AGENT_SHA256")"
+    if [[ ! "$cursor_url" =~ ^https:// ]] || [[ ! "$cursor_sha" =~ ^[0-9a-f]{64}$ ]]; then
+      echo "Error: local Cursor build requires HTTPS CURSOR_AGENT_URL and a lowercase 64-hex CURSOR_AGENT_SHA256" >&2
+      exit 1
+    fi
+    build_args+=(--build-arg "CURSOR_AGENT_URL=$cursor_url" --build-arg "CURSOR_AGENT_SHA256=$cursor_sha")
+  fi
 
   echo "==> Building $key"
   docker build "${build_args[@]}" "$ROOT_DIR"
@@ -511,6 +521,11 @@ ensure_ai_cli_images() {
     "webterm-ai-cli-grok-runner:installer" \
     "docker/ai-cli-provider-runner.Dockerfile" \
     "grok"
+  ensure_ai_cli_image \
+    "AI_CLI_CURSOR_RUNNER_IMAGE" \
+    "webterm-ai-cli-cursor-runner:installer" \
+    "docker/ai-cli-provider-runner.Dockerfile" \
+    "cursor"
 }
 
 validate_optional_profiles() {
@@ -539,7 +554,8 @@ validate_optional_profiles() {
       WEBTERM_AI_CLI_EGRESS_PROXY_IMAGE \
       WEBTERM_AI_CLI_RUNNER_MANAGER_IMAGE \
       AI_CLI_CODEX_RUNNER_IMAGE \
-      AI_CLI_GROK_RUNNER_IMAGE; do
+      AI_CLI_GROK_RUNNER_IMAGE \
+      AI_CLI_CURSOR_RUNNER_IMAGE; do
       value="$(read_env_value "$key")"
       if ! is_immutable_image_ref "$value"; then
         echo "Error: $key must be an immutable sha256 image ID or repository digest" >&2
