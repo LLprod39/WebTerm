@@ -182,6 +182,11 @@ class TelegramUpdateRouter:
         if store_telegram_operator_reply(token, message):
             return "reply"
 
+        from servers.agents.agent_hitl import try_store_agent_telegram_reply
+
+        if try_store_agent_telegram_reply(token, message):
+            return "agent_reply"
+
         from_user = message.get("from") or {}
         text = str(message.get("text") or "").strip()
         result = try_typed_confirm_from_reply(

@@ -97,6 +97,8 @@ class HiddenPtySession:
         if self.proc is None:
             return -1, "hidden PTY is not attached"
 
+        # Hold the lock for the full command lifecycle so a timed-out
+        # foreground process cannot leave later stdin writes queued behind it.
         async with self._lock:
             cmd_id = int(self.next_id)
             self.next_id += 1
@@ -113,21 +115,88 @@ class HiddenPtySession:
             marker_cmd = f'{var}=$?; echo "{NOVA_PTY_MARKER_PREFIX}{cmd_id}:${{{var}}}__"'
             stdin.write(marker_cmd + "\n")
 
-        try:
-            exit_code = int(await asyncio.wait_for(future, timeout=max(1.0, float(timeout))))
-        except TimeoutError:
-            self._exit_futures.pop(cmd_id, None)
-            snippet = self.output[output_at:][-OUTPUT_LIMIT:]
-            return 124, snippet or f"TIMEOUT after {timeout:.0f}s"
-        except asyncio.CancelledError:
-            self._exit_futures.pop(cmd_id, None)
-            raise
-        finally:
-            self._exit_futures.pop(cmd_id, None)
+            try:
+                exit_code = int(await asyncio.wait_for(future, timeout=max(1.0, float(timeout))))
+            except TimeoutError:
+                self._exit_futures.pop(cmd_id, None)
+                snippet = self.output[output_at:][-OUTPUT_LIMIT:]
+                interrupted = await self._interrupt_and_resync()
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
 
-        snippet = self.output[output_at:][-OUTPUT_LIMIT:]
-        self.apply_cwd_from_command(text, exit_code)
-        return exit_code, snippet
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "post-fix",
+                        "hypothesisId": "F",
+                        "location": "hidden_pty.py:timeout_124",
+                        "message": "hidden PTY command timeout -> exit 124",
+                        "data": {
+                            "timeout_sec": float(timeout),
+                            "cmd_preview": text[:200],
+                            "snippet_chars": len(snippet or ""),
+                            "interrupted": bool(interrupted),
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[3] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
+                return 124, snippet or f"TIMEOUT after {timeout:.0f}s"
+            except asyncio.CancelledError:
+                self._exit_futures.pop(cmd_id, None)
+                raise
+            finally:
+                self._exit_futures.pop(cmd_id, None)
+
+            snippet = self.output[output_at:][-OUTPUT_LIMIT:]
+            self.apply_cwd_from_command(text, exit_code)
+            return exit_code, snippet
+
+    async def _interrupt_and_resync(self) -> bool:
+        """Best-effort: interrupt a hung foreground command and re-sync the shell.
+
+        Without this, a stuck ``docker``/sudo call leaves the hidden PTY wedged
+        and every subsequent ``run_command`` times out with empty output.
+        """
+        stdin = getattr(self.proc, "stdin", None) if self.proc is not None else None
+        if stdin is None:
+            return False
+        try:
+            # SIGINT twice, then SIGQUIT — mirrors interactive terminal recovery.
+            stdin.write("\x03")
+            await asyncio.sleep(0.15)
+            stdin.write("\x03")
+            await asyncio.sleep(0.15)
+            stdin.write("\x1c")
+            await asyncio.sleep(0.1)
+
+            sync_id = int(self.next_id)
+            self.next_id += 1
+            loop = asyncio.get_running_loop()
+            future: asyncio.Future[int] = loop.create_future()
+            self._exit_futures[sync_id] = future
+            stdin.write(f'echo "{NOVA_PTY_MARKER_PREFIX}{sync_id}:0__"\n')
+            try:
+                await asyncio.wait_for(future, timeout=3.0)
+                return True
+            except TimeoutError:
+                logger.warning("hidden PTY resync after timeout failed (cmd still wedged?)")
+                return False
+            finally:
+                self._exit_futures.pop(sync_id, None)
+        except Exception:
+            logger.debug("hidden PTY interrupt/resync failed", exc_info=True)
+            return False
 
     def apply_cwd_from_command(self, command: str, exit_code: int | None) -> None:
         from servers.services.terminal_ai.session_context import apply_successful_command_context

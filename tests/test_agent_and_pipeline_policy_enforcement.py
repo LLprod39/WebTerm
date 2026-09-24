@@ -59,6 +59,38 @@ def test_agent_engine_accepts_explicit_final_without_action():
     )
 
 
+def test_agent_engine_reprompts_false_no_ssh_mcp_blocker_even_if_looks_final():
+    """Regression for runs like #2169: model invents missing Ops tools / Cursor Ask."""
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute", "open_connection", "read_console", "report"]
+    engine.mcp_tools = {}
+    engine._missing_action_reprompts = 0
+
+    text = (
+        "THOUGHT: Проверяю доступные MCP/Ops-инструменты.\n"
+        "# Логи на nikitavm не проверены — нет SSH/MCP\n"
+        "Live-чтение недоступно: в этой сессии нет Ops-инструментов "
+        "(`ssh_execute`, `open_connection`, `read_console`).\n"
+        "Каталог динамических MCP: найден только namespace `cursor` (AwaitShell).\n"
+        "Режим сессии: Ask. Итог: проверка не выполнена."
+    )
+    assert engine._should_reprompt_missing_action(text, [])
+    correction = engine._missing_action_correction()
+    assert "ssh_execute" in correction
+    assert "Cursor" in correction or "cursor" in correction.lower()
+
+
+def test_agent_engine_does_not_reprompt_false_blocker_without_tools():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = []
+    engine.mcp_tools = {}
+
+    assert not engine._should_reprompt_missing_action(
+        "THOUGHT: В сессии нет SSH/MCP, выполнить нельзя.",
+        [],
+    )
+
+
 def test_agent_engine_accepts_final_after_tool_call():
     engine = AgentEngine.__new__(AgentEngine)
     engine.enabled_tools = ["ssh_execute"]

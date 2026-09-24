@@ -53,6 +53,41 @@ _HOST_ACTION_RE = re.compile(
     re.I,
 )
 
+# Update / deploy / checkout a Git branch on a host — prefer agent.create+run over catalog browsing.
+_DEPLOY_OR_UPDATE_RE = re.compile(
+    r"(?:"
+    r"обнов|"
+    r"update\b|"
+    r"upgrad|"
+    r"депло|"
+    r"deploy|"
+    r"roll\s*out|"
+    r"rollout|"
+    r"github\.com|"
+    r"gitlab\.|"
+    r"bitbucket\.|"
+    r"git@|"
+    r"ветк|"
+    r"branch\b|"
+    r"верси[яию]|"
+    r"на\s+эту\s+верси|"
+    r"frontend-v\d|"
+    r"репозитор|"
+    r"из\s+git|"
+    r"git\s+pull|"
+    r"checkout\b"
+    r")",
+    re.I,
+)
+
+DEPLOY_ACTION_NUDGE = (
+    "Пользователь просит обновить/задеплоить на сервер. "
+    "Пустой или нерелевантный каталог playbook/агентов — НЕ финальный ответ. "
+    "Сейчас вызови agent.create (mode=full; name на русском; goal и system_prompt с URL/веткой "
+    "из запроса; server_ids с уже найденного хоста), затем сразу agent.run. "
+    "Confirm-кнопки появятся сами. Не спрашивай URL повторно, если он уже в сообщении."
+)
+
 _HOST_HINT_RE = re.compile(
     r"(?:"
     r"@([\w.-]{2,64})"
@@ -162,6 +197,14 @@ def user_wants_named_host_action(user_message: str | None) -> bool:
     if user_wants_inventory_card(text):
         return False
     return bool(_HOST_ACTION_RE.search(text))
+
+
+def user_wants_deploy_or_update(user_message: str | None) -> bool:
+    """True when the operator asked to update/deploy/checkout a version or Git branch."""
+    text = str(user_message or "").strip()
+    if not text:
+        return False
+    return bool(_DEPLOY_OR_UPDATE_RE.search(text))
 
 
 def normalize_host_hint(token: str | None) -> str:

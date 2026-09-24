@@ -15,6 +15,7 @@ _LLM_PROVIDER_KEYS = {
     "grok": ("GROK_API_KEY",),
     "claude": ("ANTHROPIC_API_KEY",),
     "ollama": ("OLLAMA_API_KEY",),
+    "openrouter": ("OPENROUTER_API_KEY",),
 }
 _SEVERITY_RANK = {"ready": 0, "warning": 1, "error": 2}
 
@@ -49,7 +50,7 @@ def _managed_llm_key(provider: str) -> bool:
 
 def _llm_provider_ready(provider: str) -> bool:
     if provider == "auto":
-        return any(_llm_provider_ready(item) for item in ("gemini", "openai", "grok", "claude", "ollama"))
+        return any(_llm_provider_ready(item) for item in ("gemini", "openai", "grok", "claude", "ollama", "openrouter"))
     if provider == "ollama":
         return (
             _has_value(os.getenv("OLLAMA_BASE_URL"))

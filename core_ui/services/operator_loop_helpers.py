@@ -72,6 +72,49 @@ def _compress_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [{"role": "user", "content": summary}, *keep_tail]
 
 
+_DEPLOY_MUTATING_TOOL_MARKERS = (
+    "agent_create",
+    "agent.create",
+    "agent_run",
+    "agent.run",
+    "operator_run_command",
+    "operator.run_command",
+    "operator_run_playbook",
+    "operator.run_playbook",
+    "operator_run_fanout",
+    "operator.run_fanout",
+    "operator_create_playbook",
+    "operator.create_playbook",
+)
+
+
+def _tool_name_is_deploy_action(name: str) -> bool:
+    from app.core.llm_tools import normalise_tool_name
+
+    normalised = normalise_tool_name(name or "")
+    dotted = str(name or "").strip().lower().replace("_", ".")
+    markers = {normalise_tool_name(m) for m in _DEPLOY_MUTATING_TOOL_MARKERS}
+    markers |= {m.replace("_", ".") for m in _DEPLOY_MUTATING_TOOL_MARKERS}
+    return normalised in markers or dotted in markers
+
+
+def messages_have_deploy_mutating_tool(messages: list[dict[str, Any]] | None) -> bool:
+    """True when this turn already called create/run agent, SSH, or playbook launch."""
+    for msg in messages or []:
+        if msg.get("role") != "assistant":
+            continue
+        content = msg.get("content")
+        if isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict) or block.get("type") != "tool_use":
+                    continue
+                if _tool_name_is_deploy_action(str(block.get("name") or "")):
+                    return True
+        elif isinstance(content, str) and "agent.create" in content.lower():
+            return True
+    return False
+
+
 async def _emit(on_event: EventCallback | None, event: dict[str, Any]) -> None:
     if on_event is None:
         return

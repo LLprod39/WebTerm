@@ -280,6 +280,7 @@ class MultiAgentEngine:
                 pending_question=question,
                 plan_tasks=plan_tasks,
             )
+            await self._emit("agent_question", {"question": question})
 
         async def clear_waiting() -> None:
             await sync_to_async(self._update_run)(run, status=AgentRun.STATUS_RUNNING, pending_question="")
@@ -450,17 +451,21 @@ class MultiAgentEngine:
     # User reply (ask_user flow)
     # ------------------------------------------------------------------
 
-    async def _wait_for_user_reply(self, timeout: float = 3600) -> str:
+    async def _wait_for_user_reply(self, timeout: float | None = None) -> str:
         if self.session:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             self.session.user_reply_future = loop.create_future()
             await self._sync_runtime_control()
             try:
+                if timeout is None:
+                    return await self.session.user_reply_future
                 return await asyncio.wait_for(self.session.user_reply_future, timeout=timeout)
             except (TimeoutError, asyncio.CancelledError) as exc:
                 if self._stop_requested:
                     raise RuntimeError("Stopped by user") from exc
-                return "Нет ответа (таймаут)"
+                if isinstance(exc, TimeoutError):
+                    return "Нет ответа (таймаут)"
+                raise
         return "Нет сессии"
 
     # ------------------------------------------------------------------

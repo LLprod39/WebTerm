@@ -54,6 +54,40 @@ class TerminalAgentSupportOperations:
             ),
             thread_sensitive=True,
         )()
+        # Drop deleted/revoked CLI connections so terminal AI falls back to
+        # Settings → AI providers instead of hard-failing forever.
+        if stored_binding:
+            from app.ai_runtime import ExecutionMode, ProviderBinding
+            from core_ui.services.ai_provider_access import can_use_binding
+            from core_ui.services.ai_provider_routing import is_orphan_binding_reason
+
+            binding_obj = (
+                stored_binding
+                if isinstance(stored_binding, ProviderBinding)
+                else ProviderBinding.from_dict(stored_binding)
+            )
+
+            def _sanitize_stored():
+                decision = can_use_binding(
+                    binding_obj,
+                    user_id=self._user_id,
+                    project_id=getattr(self.server, "project_id", None),
+                    mode=ExecutionMode.INTERACTIVE,
+                )
+                if decision.allowed or not is_orphan_binding_reason(decision.reason):
+                    return stored_binding, False
+                state.provider_binding = {}
+                state.provider_session_id = ""
+                state.save(update_fields=["provider_binding", "provider_session_id"])
+                return {}, True
+
+            stored_binding, cleared = await sync_to_async(_sanitize_stored, thread_sensitive=True)()
+            if cleared:
+                logger.info(
+                    "Cleared orphaned terminal provider binding for user_id=%s server_id=%s",
+                    self._user_id,
+                    self.server.id,
+                )
         return await abuild_execution_context(
             actor_user_id=self._user_id,
             project_id=getattr(self.server, "project_id", None),

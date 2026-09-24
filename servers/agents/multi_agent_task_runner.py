@@ -218,6 +218,7 @@ async def _ask_user_for_task(engine: Any, action_args: dict) -> str:
             status=AgentRun.STATUS_WAITING,
             pending_question=question,
         )
+    await engine._emit("agent_question", {"question": question})
     await engine._emit("agent_status", {"status": "waiting"})
     answer = await engine._wait_for_user_reply()
     if engine.run_record:

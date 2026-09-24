@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
 # Todo items (the agent maintains a live checklist visible to the user)
@@ -103,6 +103,34 @@ class AgentStep(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
     # When tool == "done": final assistant reply to the user.
     final_text: str = Field(default="", max_length=6000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_common_llm_shapes(cls, value: Any) -> Any:
+        """Tolerate models that omit ``tool`` or use alternate keys.
+
+        Runtime evidence (debug-a0b238): provider returned ~19-char JSON like
+        ``{"final_text":"..."}`` without ``tool``, which crashed the loop as
+        ``ValueError: LLM output invalid: tool: Field required``.
+        """
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        tool = str(data.get("tool") or "").strip()
+        if not tool:
+            alias = data.get("name") or data.get("function") or data.get("action")
+            if isinstance(alias, str) and alias.strip():
+                tool = alias.strip()
+            elif str(data.get("final_text") or "").strip():
+                tool = "done"
+            elif isinstance(data.get("args"), dict) and str(
+                (data.get("args") or {}).get("final_text") or ""
+            ).strip():
+                tool = "done"
+                data.setdefault("final_text", data["args"].get("final_text"))
+        if tool:
+            data["tool"] = tool
+        return data
 
 
 # ---------------------------------------------------------------------------

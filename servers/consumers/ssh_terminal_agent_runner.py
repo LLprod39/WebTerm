@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from typing import Any
 
 from loguru import logger
@@ -130,11 +131,12 @@ class TerminalAgentRunOperations:
         if nova_cwd:
             extra_cwd = f"- cwd скрытого PTY Nova: {nova_cwd}"
             if extra_cwd not in (nova_context.session_context or ""):
-                nova_context.session_context = (
+                updated_session_context = (
                     f"{nova_context.session_context}\n{extra_cwd}".strip()
                     if nova_context.session_context
                     else extra_cwd
                 )
+                nova_context = replace(nova_context, session_context=updated_session_context)
 
         async def _run_primary_shell(cmd: str, timeout: int = 30):
             session = self._transport_state.nova_pty

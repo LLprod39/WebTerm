@@ -20,11 +20,13 @@ from servers.operator.tools_actions import (
     server_metrics,
 )
 from servers.operator.tools_hints import (
+    DEPLOY_ACTION_NUDGE,
     extract_server_hint,
     normalize_host_hint,
     prefer_resolve_server_for_message,
     prepare_list_servers_arguments,
     server_matches_query,
+    user_wants_deploy_or_update,
     user_wants_inventory_card,
     user_wants_named_host_action,
 )
@@ -44,6 +46,7 @@ from servers.operator.tools_monitoring import (
 from servers.operator.tools_playbooks import list_playbooks, playbook_runs, resolve_playbook
 
 __all__ = [
+    "DEPLOY_ACTION_NUDGE",
     "extract_server_hint",
     "fleet_ai_insights",
     "fleet_status",
@@ -68,6 +71,7 @@ __all__ = [
     "server_matches_query",
     "server_memory",
     "server_metrics",
+    "user_wants_deploy_or_update",
     "user_wants_inventory_card",
     "user_wants_named_host_action",
 ]

@@ -42,6 +42,11 @@ from servers.worker_state import heartbeat_background_worker
 def _make_event_callback(run_id: int):
     async def callback(event_type: str, data: dict):
         await record_run_event_async(run_id, event_type, data or {})
+        if event_type == "agent_question":
+            from servers.agents.agent_hitl import on_agent_question_event
+
+            with contextlib.suppress(Exception):
+                await on_agent_question_event(run_id, data or {})
         layer = get_channel_layer()
         if not layer:
             return

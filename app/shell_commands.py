@@ -202,7 +202,7 @@ def analyze_shell_command(command: str) -> ShellCommandAnalysis:
 
 _SIMPLE_READ_ONLY_PATTERN = re.compile(
     r"^(?:sudo\s+(?:-n\s+)?)?"
-    r"(?:ls|cat|grep|head|tail|pwd|whoami|printenv|ps|ss|netstat|"
+    r"(?:ls|cat|grep|head|tail|pwd|whoami|printenv|ps|pgrep|ss|netstat|"
     r"df|free|uptime|du|uname|id|groups|which|stat|wc|cut|tr|echo|printf|"
     r"test|true|false)(?:\s|$)",
     re.IGNORECASE,

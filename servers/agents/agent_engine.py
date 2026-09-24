@@ -74,6 +74,24 @@ _FINAL_COMPLETION_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+# Model invents "no SSH/MCP" / Cursor Ask blockers while native Ops tools are enabled.
+_FALSE_TOOLS_UNAVAILABLE_RE = re.compile(
+    r"("
+    r"нет\s+(?:ssh|mcp|ops)\b|"
+    r"нет\s+ops[- ]?инструмент|"
+    r"нет\s+доступн\w*\s+(?:ssh|mcp|ops|инструмент)|"
+    r"в\s+(?:этой\s+)?сессии\s+нет|"
+    r"инструмент\w*\s+недоступ|"
+    r"без\s+(?:канала\s+)?(?:ssh_execute|ssh|mcp)|"
+    r"no\s+(?:ssh|mcp|ops)(?:[- ]tools?)?\b|"
+    r"tools?\s+(?:are\s+)?(?:not\s+)?(?:available|missing)|"
+    r"namespace\s+[`'\"]?cursor\b|"
+    r"\bcursor\b.{0,40}\b(?:awaitshell|ask\s+mode|websearch)\b|"
+    r"режим\s+сессии:\s*ask\b|"
+    r"переключ\w+\s+в\s+agent\s+mode"
+    r")",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class AgentEngine(AgentEngineOpsMixin):
@@ -358,6 +376,10 @@ class AgentEngine(AgentEngineOpsMixin):
         completed run with zero evidence. Allow up to 2 reprompts early in the
         run (before many tools have run), when tools are available and the text
         still expresses action intent rather than completion.
+
+        Also catch false blockers: the model claims SSH/MCP/Ops tools are missing
+        (or confuses the session with Cursor Ask mode) while native tools are
+        enabled — that must not become a final answer with zero tool evidence.
         """
         if len(tool_calls_log) > 2:
             return False
@@ -371,6 +393,8 @@ class AgentEngine(AgentEngineOpsMixin):
             return False
         if "ACTION:" in text.upper():
             return False
+        if _FALSE_TOOLS_UNAVAILABLE_RE.search(text):
+            return True
         if _FINAL_COMPLETION_RE.search(text):
             return False
         return bool(_MISSING_ACTION_INTENT_RE.search(text))
@@ -378,11 +402,13 @@ class AgentEngine(AgentEngineOpsMixin):
     def _missing_action_correction(self) -> str:
         available = ", ".join([*self.enabled_tools, *self.mcp_tools.keys()]) or "нет доступных инструментов"
         return (
-            "FORMAT ERROR: ты описал следующий шаг, но не вызвал инструмент. "
-            "Продолжай работу и верни ответ строго в формате:\n"
+            "FORMAT ERROR: инструменты в этой сессии УЖЕ доступны. "
+            "Не утверждай отсутствие SSH/MCP/Ops и не ссылайся на Cursor Ask/MCP — "
+            "это другой runtime. Продолжай работу и верни ответ строго в формате:\n"
             "THOUGHT: <коротко зачем нужен следующий шаг>\n"
             'ACTION: tool_name {"param1": "value"}\n'
             f"Доступные инструменты: {available}. "
+            "Сейчас вызови нужный инструмент (например open_connection или ssh_execute). "
             "Не заверши задачу, пока не соберёшь факты через инструменты."
         )
 

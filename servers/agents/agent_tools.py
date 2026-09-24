@@ -191,14 +191,13 @@ async def tool_ask_user(session: AgentSessionManager, *, question: str, **_kw) -
     await session.event_callback("agent_question", {"question": question})
     if session.user_reply_future is not None and not session.user_reply_future.done():
         session.user_reply_future.cancel()
-    session.user_reply_future = asyncio.get_event_loop().create_future()
+    session.user_reply_future = asyncio.get_running_loop().create_future()
     try:
-        answer = await asyncio.wait_for(session.user_reply_future, timeout=300)
+        # Wait until the operator replies or the run is stopped (future cancelled).
+        answer = await session.user_reply_future
         return ToolResult(True, f"User replied: {answer}")
     except asyncio.CancelledError:
         return ToolResult(False, "User input was interrupted.")
-    except TimeoutError:
-        return ToolResult(False, "User did not reply within 5 minutes.")
 
 
 async def tool_analyze_output(session: AgentSessionManager, *, text: str, question: str, **_kw) -> ToolResult:

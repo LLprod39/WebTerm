@@ -305,6 +305,37 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
             )
             reply = "Подготовил запуск агента. Перед стартом нужно подтверждение."
 
+    if not actions:
+        from servers.operator.tools_hints import user_wants_deploy_or_update
+
+        if user_wants_deploy_or_update(lower):
+            actions.append(
+                {
+                    "action_type": "agent.create",
+                    "title": "Создать агента для обновления",
+                    "description": (
+                        "Собрать full-агента под задачу обновления/деплоя из сообщения пользователя "
+                        "и затем запустить его после подтверждения."
+                    ),
+                    "input": {
+                        "mode": "full",
+                        "goal": text[:2000],
+                        "description": text[:2000],
+                        "system_prompt": (
+                            "Ты операционный агент WebTerm. Выполни задачу обновления/деплоя из goal: "
+                            "проверь окружение на сервере через ssh_execute, выполни шаги по порядку, "
+                            "проверь результат, спроси ask_user только если без этого нельзя продолжить, "
+                            "в конце короткий report. Не выдумывай секреты. Отвечай на русском."
+                        ),
+                        "ai_prompt": text[:500],
+                    },
+                }
+            )
+            reply = (
+                "Подготовлю агента под обновление/деплой из вашего запроса. "
+                "После создания нужно будет подтвердить запуск."
+            )
+
     if (
         not actions
         and "сервер" in lower

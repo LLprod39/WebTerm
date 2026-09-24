@@ -108,6 +108,22 @@ def test_builtin_read_only_allowlist_auto_runs(command):
     assert verdict.requires_approval is False
 
 
+@pytest.mark.parametrize(
+    "command",
+    [
+        "timeout 8s bash -lc 'pgrep -af dockerd || true'",
+        "sudo -n timeout 10s bash -lc 'systemctl is-active docker.service'",
+        "sudo -n timeout 10s bash -lc 'sudo -n journalctl -u docker.service -n 20 --no-pager'",
+    ],
+)
+def test_timeout_bash_wrappers_unwrap_to_read_only(command):
+    verdict = evaluate_command_execution_gate(command)
+
+    assert verdict.auto_run_allowed is True
+    assert verdict.requires_approval is False
+    assert "unwrapped" in verdict.reason
+
+
 class _AgentSessionStub:
     def __init__(self, reply: str | None):
         self.command_timeout = 30

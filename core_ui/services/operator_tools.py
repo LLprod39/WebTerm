@@ -77,6 +77,11 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
         prefixes.add("studio.")
     if any(word in text for word in ("агент", "agent", "run #", "отчёт рана", "отчет рана")):
         prefixes.update({"agent.", "agents."})
+    # Deploy/update without the word «агент» must still see agent.create + agent.run.
+    from servers.operator.tools_hints import user_wants_deploy_or_update
+
+    if user_wants_deploy_or_update(text):
+        prefixes.update({"agent.", "agents.", "operator.", "server."})
     if any(
         word in text
         for word in (

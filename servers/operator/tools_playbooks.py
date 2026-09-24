@@ -88,15 +88,23 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
     total = queryset.count()
     show_limit = min(limit, 12)
     rows = [_catalog_row(playbook) for playbook in queryset[:show_limit]]
-    hint = (
-        "Summarize the catalog with «показаны N из M». "
-        "List up to 8 names (id · name). Use operator.resolve_playbook for details; "
-        "operator.run_playbook when the user asked to launch."
-    )
+    if total == 0:
+        hint = (
+            "Catalog empty (0 playbooks). If the user asked to update/deploy/install on a server, "
+            "do NOT stop and do NOT only list agents — call agent.create (mode=full, goal+system_prompt "
+            "with URL/branch from the user message, server_ids) then agent.run. Confirm buttons follow."
+        )
+    else:
+        hint = (
+            "Summarize the catalog with «показаны N из M». "
+            "List up to 8 names (id · name). Use operator.resolve_playbook for details; "
+            "operator.run_playbook when the user asked to launch."
+        )
     if getattr(ctx, "channel", "") == "telegram":
         from core_ui.services.operator_channel import telegram_reply_hint
 
-        hint = telegram_reply_hint(show_in_chat=True)
+        tg_hint = telegram_reply_hint(show_in_chat=True)
+        hint = f"{hint} {tg_hint}" if total == 0 else tg_hint
     return {
         "ok": True,
         "ui_table": False,

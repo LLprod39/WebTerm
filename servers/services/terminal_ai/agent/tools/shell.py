@@ -89,11 +89,25 @@ class ShellTool:
     ) -> bool:
         if ctx.prompt_user is None:
             return False
+        sudo_policy = str(ctx.sudo_policy or "disabled")
+        reason_labels = {
+            "unclassifiable": "команда слишком сложная для авто-разрешения (скобки/обёртки)",
+            "outside_allowlist": "команда не в списке безопасных read-only",
+            "dangerous": "команда помечена как опасная",
+        }
+        reason_text = reason_labels.get(str(reason or ""), str(reason or "unknown"))
+        if sudo_policy == "approved":
+            header = (
+                "Это НЕ запрос sudo — sudo для Nova уже разрешён в настройках.\n"
+                "Нужно одноразовое разрешение safety-gate на команду:\n"
+            )
+        else:
+            header = "Nova запрашивает одноразовое разрешение на команду:\n"
         reply = await ctx.prompt_user(
             UserPromptRequest(
                 question=(
-                    "Nova запрашивает одноразовое разрешение на команду:\n"
-                    f"`{cmd}`\n\nСервер: {target.display_name or target.name}. Причина: {reason}."
+                    f"{header}"
+                    f"`{cmd}`\n\nСервер: {target.display_name or target.name}. Причина: {reason_text}."
                 ),
                 timeout_seconds=300,
                 options=[
@@ -179,12 +193,73 @@ class ShellTool:
 
         gate = evaluate_command_execution_gate(cmd)
 
+        # #region agent log
+        try:
+            import json as _json
+            import time as _time
+            from pathlib import Path as _Path
+
+            _log = {
+                "sessionId": "a0b238",
+                "runId": "post-fix",
+                "hypothesisId": "E",
+                "location": "shell.py:gate",
+                "message": "nova shell gate decision",
+                "data": {
+                    "target": getattr(target, "name", None),
+                    "server_id": getattr(target, "server_id", None),
+                    "is_primary": bool(getattr(target, "is_primary", False)),
+                    "requires_approval": bool(gate.requires_approval),
+                    "gate_reason": getattr(gate, "reason", None),
+                    "sudo_policy": str(ctx.sudo_policy or "disabled"),
+                    "cmd_preview": cmd[:200],
+                    "arg_timeout": int(args.timeout or 30),
+                    "uses_sudo": "sudo" in cmd.lower(),
+                },
+                "timestamp": int(_time.time() * 1000),
+            }
+            for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[5] / "debug-a0b238.log"):
+                try:
+                    with _p.open("a", encoding="utf-8") as _f:
+                        _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                    break
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        # #endregion
+
         if gate.requires_approval and not await self._approve_command_once(
             cmd=cmd,
             target=target,
             reason=gate.reason,
             ctx=ctx,
         ):
+            # #region agent log
+            try:
+                import json as _json
+                import time as _time
+                from pathlib import Path as _Path
+
+                _log = {
+                    "sessionId": "a0b238",
+                    "runId": "pre-fix",
+                    "hypothesisId": "C,E",
+                    "location": "shell.py:approval_denied",
+                    "message": "nova shell approval denied or timed out at prompt",
+                    "data": {"gate_reason": getattr(gate, "reason", None), "cmd_preview": cmd[:160]},
+                    "timestamp": int(_time.time() * 1000),
+                }
+                for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[5] / "debug-a0b238.log"):
+                    try:
+                        with _p.open("a", encoding="utf-8") as _f:
+                            _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                        break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            # #endregion
             return tool_err(
                 f"command requires explicit operator approval: {cmd[:120]}",
                 output="Команда не выполнена: оператор не дал одноразовое разрешение.",
@@ -236,7 +311,40 @@ class ShellTool:
             )
 
         timeout = min(max(int(args.timeout or 30), 1), _MAX_TIMEOUT_SEC)
+        # nikitavm evidence: docker CLI often needs >30s even for `ps`/`inspect`
+        # against a busy daemon; keep a higher floor without exceeding the cap.
+        if "docker" in cmd.lower():
+            timeout = max(timeout, min(90, _MAX_TIMEOUT_SEC))
         if target.is_primary and ctx.run_primary_shell is not None:
+            # #region agent log
+            try:
+                import json as _json
+                import time as _time
+                from pathlib import Path as _Path
+
+                _log = {
+                    "sessionId": "a0b238",
+                    "runId": "pre-fix",
+                    "hypothesisId": "A",
+                    "location": "shell.py:exec_start",
+                    "message": "nova primary shell exec start",
+                    "data": {
+                        "target": getattr(target, "name", None),
+                        "timeout_sec": timeout,
+                        "cmd_preview": cmd[:200],
+                    },
+                    "timestamp": int(_time.time() * 1000),
+                }
+                for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[5] / "debug-a0b238.log"):
+                    try:
+                        with _p.open("a", encoding="utf-8") as _f:
+                            _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                        break
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            # #endregion
             try:
                 exit_code, combined = await ctx.run_primary_shell(cmd, timeout)
             except asyncio.CancelledError:
@@ -251,6 +359,43 @@ class ShellTool:
             if len(text) > _MAX_OUTPUT_CHARS:
                 text = (
                     f"[... {len(text) - _MAX_OUTPUT_CHARS} chars truncated ...]\n" + text[-_MAX_OUTPUT_CHARS:]
+                )
+            # Match extra-SSH path: wall-clock timeout must not look like success.
+            # Pre-fix logs showed ok=true + exit_code=124, which kept Nova retrying.
+            if exit_code == 124:
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
+
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "post-fix",
+                        "hypothesisId": "A",
+                        "location": "shell.py:exit_124_as_err",
+                        "message": "nova primary shell timeout mapped to tool_err",
+                        "data": {
+                            "target": getattr(target, "name", None),
+                            "timeout_sec": timeout,
+                            "cmd_preview": cmd[:200],
+                            "output_chars": len(text),
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[5] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
+                return tool_err(
+                    f"command timed out after {timeout}s on {target.name}",
+                    output=(f"Target: {target.name}\nExit: 124\n{text}").strip(),
                 )
             output_payload = (f"Target: {target.name}\nExit: {exit_code}\n{text}").strip()
             return tool_ok(

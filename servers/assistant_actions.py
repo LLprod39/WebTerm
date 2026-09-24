@@ -128,8 +128,8 @@ def register_assistant_actions() -> None:
                             "concrete (5+ sentences): numbered steps to reach the goal, which commands/tools "
                             "to run and in what order, how to verify each step, when to ask_user (missing "
                             "creds / ambiguous choice), what the final report must contain, and safety rules "
-                            "(no destructive commands without need, never print secrets). Runtime inputs like "
-                            "a repo URL are given at run time — do NOT hardcode or ask for them here."
+                            "(no destructive commands without need, never print secrets). If the user already "
+                            "gave a repo URL or branch, put them into goal/system_prompt — do NOT ask again."
                         ),
                     },
                     "ai_prompt": {

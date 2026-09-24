@@ -1418,6 +1418,8 @@ def build_agent_run_report_v2(run: AgentRun) -> dict[str, Any]:
             "goal": _text((run.agent.goal or run.agent.ai_prompt) if run.agent_id and run.agent else "", limit=1_200),
             "server_id": run.server_id,
             "server_name": _text(run.server.name if run.server_id and run.server else "—", limit=200),
+            "pending_question": _text(run.pending_question),
+            "status": run.status,
         },
         "lifecycle": lifecycle,
         "outcome": outcome,

@@ -350,8 +350,8 @@ async def _request_material_execution_approval(
         previous.cancel()
     session.user_reply_future = asyncio.get_running_loop().create_future()
     try:
-        answer = await asyncio.wait_for(session.user_reply_future, timeout=300)
-    except (asyncio.CancelledError, TimeoutError):
+        answer = await session.user_reply_future
+    except asyncio.CancelledError:
         return False
     return str(answer).strip().lower() in {
         "approve",

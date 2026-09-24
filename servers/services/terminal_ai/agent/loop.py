@@ -222,13 +222,113 @@ async def run_agent_loop(
 
             try:
                 execution_context = await _execution_context_for_iteration(ctx)
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
+
+                    _hist_chars = sum(len(str(h.get("content") or "")) for h in history)
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "pre-fix",
+                        "hypothesisId": "B,D",
+                        "location": "loop.py:llm_start",
+                        "message": "nova LLM call start",
+                        "data": {
+                            "iteration": iterations,
+                            "primary": getattr(ctx.primary, "name", None),
+                            "server_id": getattr(ctx.primary, "server_id", None),
+                            "timeout_sec": ctx.iteration_timeout_sec,
+                            "user_prompt_chars": len(user_prompt or ""),
+                            "system_prompt_chars": len(system_prompt or ""),
+                            "history_turns": len(history),
+                            "history_chars": _hist_chars,
+                            "tool_calls_so_far": tool_calls,
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[4] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
+                _llm_t0 = asyncio.get_running_loop().time()
                 step = await _llm_next_step_with_retry(
                     system_prompt,
                     user_prompt,
                     timeout_sec=ctx.iteration_timeout_sec,
                     execution_context=execution_context,
                 )
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
+
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "pre-fix",
+                        "hypothesisId": "B,D",
+                        "location": "loop.py:llm_ok",
+                        "message": "nova LLM call ok",
+                        "data": {
+                            "iteration": iterations,
+                            "elapsed_sec": round(asyncio.get_running_loop().time() - _llm_t0, 3),
+                            "tool": getattr(step, "tool", None),
+                            "args_timeout": (step.args or {}).get("timeout") if isinstance(step.args, dict) else None,
+                            "cmd_preview": str((step.args or {}).get("cmd") or "")[:160] if isinstance(step.args, dict) else "",
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[4] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
             except TimeoutError:
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
+
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "pre-fix",
+                        "hypothesisId": "B,D",
+                        "location": "loop.py:llm_timeout",
+                        "message": "nova LLM timeout",
+                        "data": {
+                            "iteration": iterations,
+                            "timeout_sec": ctx.iteration_timeout_sec,
+                            "user_prompt_chars": len(user_prompt or ""),
+                            "history_turns": len(history),
+                            "tool_calls_so_far": tool_calls,
+                            "primary": getattr(ctx.primary, "name", None),
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[4] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
                 stopped = True
                 stop_reason = "llm_timeout"
                 break
@@ -236,6 +336,38 @@ async def run_agent_loop(
                 raise
             except Exception as exc:  # noqa: BLE001
                 logger.warning("agent LLM call failed: %s", exc)
+                # #region agent log
+                try:
+                    import json as _json
+                    import time as _time
+                    from pathlib import Path as _Path
+
+                    _log = {
+                        "sessionId": "a0b238",
+                        "runId": "post-fix",
+                        "hypothesisId": "B",
+                        "location": "loop.py:llm_error",
+                        "message": "nova LLM error",
+                        "data": {
+                            "iteration": iterations,
+                            "error_type": type(exc).__name__,
+                            "error": str(exc)[:400],
+                            "user_prompt_chars": len(user_prompt or ""),
+                            "history_turns": len(history),
+                            "tool_calls_so_far": tool_calls,
+                        },
+                        "timestamp": int(_time.time() * 1000),
+                    }
+                    for _p in (_Path("/workspace/debug-a0b238.log"), _Path(__file__).resolve().parents[4] / "debug-a0b238.log"):
+                        try:
+                            with _p.open("a", encoding="utf-8") as _f:
+                                _f.write(_json.dumps(_log, ensure_ascii=False) + "\n")
+                            break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                # #endregion
                 if ctx.emit is not None:
                     await ctx.emit({"type": "agent_error", "iteration": iterations, "message": str(exc)[:400]})
                 stopped = True
