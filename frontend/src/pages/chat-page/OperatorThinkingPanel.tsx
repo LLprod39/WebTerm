@@ -73,7 +73,37 @@ function safeToolPreview(value?: string) {
   return redacted.length > 140 ? `${redacted.slice(0, 137)}…` : redacted;
 }
 
-/** Compact activity timeline. It exposes safe stages and tool summaries, never raw chain-of-thought. */
+/** Soft muted dots — quiet "in progress" cue, no bright accent. */
+function ThinkingDots({ reduceMotion }: { reduceMotion: boolean | null }) {
+  return (
+    <span className="inline-flex items-center gap-[3px]" aria-hidden="true" data-testid="ai-working-dots">
+      {[0, 1, 2].map((i) => (
+        <span
+          key={i}
+          className={cn(
+            "h-1 w-1 rounded-full bg-muted-foreground/55",
+            !reduceMotion && "animate-bounce",
+          )}
+          style={
+            reduceMotion
+              ? undefined
+              : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
+          }
+        />
+      ))}
+    </span>
+  );
+}
+
+/** English-only stage labels — intentional product choice for the live status chip. */
+const STAGE_LABEL: Record<ActivityKind, string> = {
+  analyzing: "Thinking…",
+  checking: "Thinking…",
+  executing: "Working…",
+  composing: "Writing…",
+};
+
+/** Quiet activity line. Safe stages + tool summaries only — never raw chain-of-thought. */
 export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
   phase,
   startedAt,
@@ -129,37 +159,37 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
 
   const elapsed = startedAt ? formatElapsed(Math.max(0, now - startedAt)) : "";
   const activity = resolveActivity({ phase, statusMessage, toolSteps });
-  const labels: Record<ActivityKind, { ru: string; en: string }> = {
-    analyzing: { ru: "Анализирует", en: "Analyzing" },
-    checking: { ru: "Проверяет данные", en: "Checking data" },
-    executing: { ru: "Выполняет", en: "Working" },
-    composing: { ru: "Формирует ответ", en: "Composing answer" },
-  };
-  const label = localize(lang, labels[activity].ru, labels[activity].en);
+  const label = STAGE_LABEL[activity];
   const showBody = expanded && hasDetails;
   const transition = reduceMotion ? { duration: 0 } : { duration: 0.17, ease };
+
+  const rowClass = cn(
+    "inline-flex min-h-7 max-w-full items-center gap-1.5 px-0.5 py-0.5 text-left text-[13px] text-muted-foreground",
+    compact && "text-[12px]",
+  );
 
   const row = (
     <>
       {hasDetails ? (
         expanded ? (
-          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
         )
       ) : (
-        <Loader2
-          className={cn("h-3.5 w-3.5 shrink-0 opacity-65", !reduceMotion && "animate-spin")}
-        />
+        <ThinkingDots reduceMotion={reduceMotion} />
       )}
-      <span aria-live="polite" className="font-medium tracking-tight">
+      {hasDetails ? <ThinkingDots reduceMotion={reduceMotion} /> : null}
+      <span aria-live="polite" className="min-w-0 truncate tracking-tight">
         {label}
       </span>
       {elapsed ? (
-        <span className="font-mono text-[11px] tabular-nums text-muted-foreground/65">{elapsed}</span>
+        <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground/55">
+          {elapsed}
+        </span>
       ) : null}
       {iteration != null && iteration > 1 ? (
-        <span className="text-[11px] text-muted-foreground/45">· {iteration}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground/40">· {iteration}</span>
       ) : null}
     </>
   );
@@ -168,8 +198,9 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
     <motion.div
       layout={!reduceMotion}
       transition={transition}
-      className={cn("max-w-[min(42rem,100%)]", compact && "text-[12px]")}
+      className="max-w-[min(42rem,100%)]"
       data-operator-activity
+      data-ai-working="true"
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -184,19 +215,20 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
               type="button"
               aria-expanded={expanded}
               aria-controls={detailsId}
+              aria-label={label}
               onClick={() => {
                 manuallyToggledRef.current = true;
                 setExpanded((value) => !value);
               }}
-              className="group inline-flex min-h-7 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left text-[13px] text-muted-foreground transition-colors [transition-duration:120ms] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 active:scale-[0.98] motion-reduce:transform-none"
+              className={cn(
+                rowClass,
+                "rounded-sm transition-colors [transition-duration:120ms] hover:text-foreground/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border active:scale-[0.99] motion-reduce:transform-none",
+              )}
             >
               {row}
             </button>
           ) : (
-            <div
-              role="status"
-              className="inline-flex min-h-7 items-center gap-1.5 px-1 py-0.5 text-[13px] text-muted-foreground"
-            >
+            <div role="status" aria-label={label} className={rowClass}>
               {row}
             </div>
           )}
@@ -213,7 +245,7 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
             animate={{ opacity: 1, height: "auto", y: 0 }}
             exit={reduceMotion ? { opacity: 1 } : { opacity: 0, height: 0, y: -2 }}
             transition={transition}
-            className="mt-1.5 overflow-hidden border-l border-border/60 pl-3"
+            className="mt-1.5 overflow-hidden border-l border-border/50 pl-3"
           >
             {needsConfirmation ? (
               <p className="mb-2 flex items-center gap-1.5 text-[12px] text-warning">
@@ -248,16 +280,16 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
                       <span className="mt-0.5 flex h-4 w-4 items-center justify-center" aria-hidden="true">
                         {step.status === "running" ? (
                           <Loader2
-                            className={cn("h-3 w-3 opacity-65", !reduceMotion && "animate-spin")}
+                            className={cn("h-3 w-3 opacity-55", !reduceMotion && "animate-spin")}
                           />
                         ) : step.status === "done" ? (
-                          <Check className="h-3 w-3 text-success/80" />
+                          <Check className="h-3 w-3 text-success/70" />
                         ) : (
                           <AlertCircle className="h-3 w-3 text-destructive" />
                         )}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate font-mono text-[11px] text-foreground/75">
+                        <span className="block truncate font-mono text-[11px] text-foreground/70">
                           {step.name}
                         </span>
                         {preview ? (
@@ -269,7 +301,7 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
                       <span
                         className={cn(
                           "text-[10px]",
-                          step.status === "error" ? "text-destructive" : "text-muted-foreground/55",
+                          step.status === "error" ? "text-destructive" : "text-muted-foreground/50",
                         )}
                       >
                         <span className="block">{statusLabel}</span>

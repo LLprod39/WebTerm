@@ -14,6 +14,7 @@ import {
   fetchAssistantChat,
   fetchAssistantChats,
   updateAssistantChat,
+  type AssistantAction,
   type AssistantChatMessage,
   type AssistantChatSession,
 } from "@/api";
@@ -81,12 +82,40 @@ export function useChatPageController() {
   const [pendingUsers, setPendingUsers] = useState<ScopedPendingMap<ScopedPendingUser>>({});
   const [pendingSends, setPendingSends] = useState<ScopedPendingMap<ScopedPendingSend>>({});
   const [actionWorkingId, setActionWorkingId] = useState<number | null>(null);
-  const [tasksPanelOpen, setTasksPanelOpen] = useState(true);
+  /** Single right context rail: Tasks | Terminal | Details (mutually exclusive tabs). */
+  const [contextRail, setContextRail] = useState<{
+    open: boolean;
+    tab: "tasks" | "terminal" | "details";
+  }>({
+    open: false,
+    tab: "tasks",
+  });
+  const [selectedAction, setSelectedAction] = useState<AssistantAction | null>(null);
   /** True while the view is pinned to the newest message — gates autoscroll. */
   const [atBottom, setAtBottom] = useState(true);
   const [renamingChatId, setRenamingChatId] = useState<number | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [sessionDock, setSessionDock] = useState<OperatorSessionState>(EMPTY_OPERATOR_SESSION);
+
+  const openContextRail = useCallback((tab: "tasks" | "terminal" | "details") => {
+    setContextRail({ open: true, tab });
+  }, []);
+
+  const closeContextRail = useCallback(() => {
+    setContextRail((prev) => ({ ...prev, open: false }));
+  }, []);
+
+  const toggleContextRailTab = useCallback((tab: "tasks" | "terminal" | "details") => {
+    setContextRail((prev) => {
+      if (prev.open && prev.tab === tab) return { ...prev, open: false };
+      return { open: true, tab };
+    });
+  }, []);
+
+  const openActionDetails = useCallback((action: AssistantAction) => {
+    setSelectedAction(action);
+    setContextRail({ open: true, tab: "details" });
+  }, []);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -170,9 +199,17 @@ export function useChatPageController() {
         mode: opts.mode || prev.mode || "agent",
         lines: prev.serverId === opts.serverId ? prev.lines : [],
       }));
+      setContextRail({ open: true, tab: "terminal" });
     },
     [],
   );
+
+  const closeSessionDock = useCallback(() => {
+    setSessionDock((prev) => ({ ...prev, open: false }));
+    setContextRail((prev) =>
+      prev.tab === "terminal" ? { ...prev, open: false } : prev,
+    );
+  }, []);
 
   const pushSessionLine = useCallback((line: Omit<OperatorSessionLine, "id" | "at"> & { id?: string }) => {
     setSessionDock((prev) => {
@@ -271,6 +308,18 @@ export function useChatPageController() {
   const activeChat = activeChatQuery.data;
   const messages = useMemo(() => activeChat?.messages || [], [activeChat?.messages]);
   const activeTurn = activeChat?.active_turn;
+
+  /** Prefer the freshest action snapshot from chat messages when the rail is open. */
+  const actionDetails = useMemo(() => {
+    if (!selectedAction) return null;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const actions = messages[i].metadata?.actions || [];
+      const hit = actions.find((a) => a.id === selectedAction.id);
+      if (hit) return hit;
+    }
+    return selectedAction;
+  }, [selectedAction, messages]);
+
   const {
     pinnedServers,
     pinnedUsers,
@@ -652,8 +701,16 @@ export function useChatPageController() {
     pendingUserEpoch,
     pendingUserBaselineIds,
     actionWorkingId,
-    tasksPanelOpen,
-    setTasksPanelOpen,
+    contextRail,
+    setContextRail,
+    openContextRail,
+    closeContextRail,
+    toggleContextRailTab,
+    openActionDetails,
+    selectedAction,
+    actionDetails,
+    /** True when the context rail is open (any tab) — hides inline plan on desktop. */
+    contextRailOpen: contextRail.open,
     atBottom,
     setAtBottom,
     renamingChatId,
@@ -668,6 +725,7 @@ export function useChatPageController() {
     paletteRef,
     activeChatId,
     openSessionDock,
+    closeSessionDock,
     handleHumanCommand,
     chatsQuery,
     activeChatQuery,

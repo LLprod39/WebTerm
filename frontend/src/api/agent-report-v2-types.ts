@@ -12,6 +12,8 @@ export interface AgentRunReportV2Run {
   agent_mode: string;
   server_id: number | null;
   server_name: string;
+  pending_question?: string;
+  status?: string;
 }
 
 export interface AgentRunReportV2Lifecycle {

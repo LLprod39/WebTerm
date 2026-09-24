@@ -259,8 +259,34 @@ export function useAgentRunReportController(runId: number) {
     setPreparedAction(actions[kind]);
   }, []);
 
+  const submitReply = useCallback(async (answerRaw?: string) => {
+    if (!viewModel) return;
+    const answer = String(answerRaw ?? replyText).trim();
+    if (!answer) throw new Error("Введите ответ для агента.");
+    setActionPending(true);
+    setActionError(null);
+    setActionNotice(null);
+    try {
+      await replyToAgent(viewModel.run.id, answer);
+      setReplyText("");
+      setActionNotice("Ответ отправлен агенту.");
+      await refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Действие не выполнено.";
+      setActionError(message);
+      throw error instanceof Error ? error : new Error(message);
+    } finally {
+      setActionPending(false);
+    }
+  }, [refresh, replyText, viewModel]);
+
   const confirmPrepared = useCallback(async () => {
     if (!preparedAction || !viewModel) return;
+    if (preparedAction.kind === "reply") {
+      await submitReply(replyText);
+      setPreparedAction(null);
+      return;
+    }
     setActionPending(true);
     setActionError(null);
     setActionNotice(null);
@@ -269,18 +295,11 @@ export function useAgentRunReportController(runId: number) {
       if (preparedAction.kind === "approve") await approvePipelinePlan(viewModel.run.id);
       if (preparedAction.kind === "cleanup") await cleanupStaleAgentRun(viewModel.run.id);
       if (preparedAction.kind === "retry-delivery") await retryAgentRunReportDelivery(viewModel.run.id);
-      if (preparedAction.kind === "reply") {
-        const answer = replyText.trim();
-        if (!answer) throw new Error("Введите ответ для агента.");
-        await replyToAgent(viewModel.run.id, answer);
-        setReplyText("");
-      }
-      const notices: Record<PreparedReportMutation, string> = {
+      const notices: Record<Exclude<PreparedReportMutation, "reply">, string> = {
         stop: "Остановка запуска запрошена.",
         approve: "План подтверждён.",
         cleanup: "Зависший запуск очищен.",
         "retry-delivery": "Повторная доставка поставлена в очередь.",
-        reply: "Ответ отправлен агенту.",
       };
       setActionNotice(notices[preparedAction.kind]);
       setPreparedAction(null);
@@ -290,7 +309,7 @@ export function useAgentRunReportController(runId: number) {
     } finally {
       setActionPending(false);
     }
-  }, [preparedAction, refresh, replyText, viewModel]);
+  }, [preparedAction, refresh, replyText, submitReply, viewModel]);
 
   return {
     tab,
@@ -319,6 +338,7 @@ export function useAgentRunReportController(runId: number) {
     setPreparedAction,
     prepare,
     confirmPrepared,
+    submitReply,
     actionPending,
     actionError,
     actionNotice,

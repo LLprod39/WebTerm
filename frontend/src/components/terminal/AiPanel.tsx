@@ -24,6 +24,7 @@ import type {
 import { AiMessageRenderer } from "./ai-panel/AiPanelMessages";
 import { AiPanelSettingsDialog } from "./ai-panel/AiPanelSettingsDialog";
 import { AgentTodoMsg } from "./ai-panel/AgentTimelineMessages";
+import { novaContextFingerprint } from "./nova-context";
 
 interface AiPanelProps {
   onClose: () => void;
@@ -205,9 +206,9 @@ export function AiPanel({
 
   // Sticky-todo logic: find the latest agent_todo message and show it
   // pinned to the top of the scroll area while an agent run is active
-  // (between agent_start and agent_stopped / agent_done). After the run
-  // finishes, we stop pinning so the chronological position in the
-  // timeline remains visible during scroll-back.
+  // (between agent_start and agent_stopped / agent_done). Normal
+  // completion emits agent_done (not agent_stopped) and clears
+  // isGenerating — unpin then so the checklist does not hang forever.
   const { stickyTodo, stickyTodoId } = useMemo(() => {
     let runActive = false;
     let latestTodo: AiMessage | null = null;
@@ -222,11 +223,12 @@ export function AiPanel({
         latestTodo = messages[i];
       }
     }
+    const pin = runActive && isGenerating;
     return {
-      stickyTodo: runActive ? latestTodo : null,
-      stickyTodoId: runActive ? latestTodo?.id : null,
+      stickyTodo: pin ? latestTodo : null,
+      stickyTodoId: pin ? latestTodo?.id : null,
     };
-  }, [messages]);
+  }, [isGenerating, messages]);
 
   const canGenerateReport = messages.length > 0 && !isGenerating;
 
@@ -348,7 +350,7 @@ export function AiPanel({
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
           {stickyTodo ? (
             <div className="sticky top-0 z-10 -mx-3 -mt-3 mb-1 border-b border-border/40 bg-background/95 px-3 pt-2 pb-2 ">
-              <AgentTodoMsg msg={stickyTodo} />
+              <AgentTodoMsg key={stickyTodo.id} msg={stickyTodo} defaultOpen />
             </div>
           ) : null}
           {messages.length === 0 ? (
@@ -384,6 +386,9 @@ export function AiPanel({
               const visible = stickyTodoId
                 ? messages.filter((m) => m.id !== stickyTodoId)
                 : messages;
+              // Track last agent_start session fingerprint so unchanged
+              // Nova Context strips are not repeated down the timeline.
+              let lastContextFp = "";
               return visible.map((message, idx) => {
                 // Mark first/last in a contiguous run of agent messages
                 // so the TimelineRow clips the vertical line at the ends.
@@ -392,6 +397,12 @@ export function AiPanel({
                 const next = idx < visible.length - 1 ? visible[idx + 1] : null;
                 const prevIsAgent = !!prev && (prev.type || "").startsWith("agent_");
                 const nextIsAgent = !!next && (next.type || "").startsWith("agent_");
+                let showContext: boolean | undefined;
+                if (message.type === "agent_start") {
+                  const fp = novaContextFingerprint(message.agentContext);
+                  showContext = Boolean(fp) && fp !== lastContextFp;
+                  if (fp) lastContextFp = fp;
+                }
                 return (
                   <AiMessageRenderer
                     key={message.id}
@@ -403,13 +414,15 @@ export function AiPanel({
                     onExplainCommand={onExplainCommand}
                     isFirstAgent={isAgent && !prevIsAgent}
                     isLastAgent={isAgent && !nextIsAgent}
+                    showContext={showContext}
                   />
                 );
               });
             })()
           )}
 
-          {isGenerating ? (
+          {isGenerating &&
+          !messages.some((m) => (m.type || "").startsWith("agent_")) ? (
             <div className="flex items-center gap-2 px-0.5 py-1 text-xs text-muted-foreground">
               <div className="flex gap-1">
                 {[0, 150, 300].map((delay) => (

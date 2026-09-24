@@ -17,6 +17,7 @@ export const AGENT_PROVIDER_OPTIONS = [
   { value: "openai", label: "OpenAI" },
   { value: "grok", label: "Grok" },
   { value: "claude", label: "Claude" },
+  { value: "openrouter", label: "OpenRouter" },
   { value: "ollama", label: "Ollama" },
 ] as const;
 
@@ -224,9 +225,9 @@ export function isLivePipelineRunStatus(status: string | null | undefined) {
   return status === "running" || status === "pending";
 }
 
-export type ModelProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
+export type ModelProvider = "gemini" | "grok" | "openai" | "claude" | "ollama" | "openrouter";
 
-export const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude", "ollama"];
+export const MODEL_PROVIDERS: ModelProvider[] = ["gemini", "grok", "openai", "claude", "ollama", "openrouter"];
 
 export function isModelProvider(value: string): value is ModelProvider {
   return MODEL_PROVIDERS.includes(value as ModelProvider);
@@ -234,7 +235,7 @@ export function isModelProvider(value: string): value is ModelProvider {
 
 export function getModelsForProvider(models: ModelsResponse | undefined, provider: string): string[] {
   if (!models || !isModelProvider(provider)) return [];
-  return models[provider];
+  return models[provider] || [];
 }
 
 export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNode): Record<string, unknown> {

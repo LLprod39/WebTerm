@@ -7,12 +7,13 @@ import {
   Loader2,
   Menu,
   Plus,
+  Terminal,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMemo, useRef } from "react";
 
-import type { AssistantChatMessage } from "@/api";
+import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -47,9 +48,11 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     operatorWs,
     sessionTokens,
     activePlan,
-    tasksPanelOpen,
-    setTasksPanelOpen,
+    contextRail,
+    contextRailOpen,
+    toggleContextRailTab,
     clearLastChatAndNew,
+    sessionDock,
     scrollerRef,
     handleScrollerScroll,
     showEmptyStarter,
@@ -66,6 +69,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     pinServer,
     unpinServer,
     openSessionDock,
+    openActionDetails,
     pendingUserText,
     pendingUserEpoch,
     pendingUserBaselineIds,
@@ -95,7 +99,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     : isBusy
       ? {
           key: "working",
-          text: localize(lang, "Работает в фоне…", "Working in background…"),
+          text: "Thinking…",
           className: "text-muted-foreground",
         }
       : {
@@ -175,6 +179,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     unpinServer,
     dispatchMessage,
     openSessionDock,
+    openActionDetails,
   });
   messageHandlersRef.current = {
     handleConfirm,
@@ -186,6 +191,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     unpinServer,
     dispatchMessage,
     openSessionDock,
+    openActionDetails,
   };
 
   const stableMessageHandlers = useMemo(
@@ -198,6 +204,8 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
         messageHandlersRef.current.handleSaveRunbook(message),
       onRetry: () => messageHandlersRef.current.handleRetry(),
       onAsk: (prompt: string) => messageHandlersRef.current.dispatchMessage(prompt),
+      onOpenActionDetails: (action: AssistantAction) =>
+        messageHandlersRef.current.openActionDetails(action),
     }),
     [],
   );
@@ -304,8 +312,29 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
                 transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
-                className={headerStatus.className}
+                className={cn(
+                  "flex items-center gap-1.5",
+                  headerStatus.className,
+                )}
               >
+                {isBusy && (headerStatus.key === "working" || headerStatus.key === "waiting") ? (
+                  <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
+                    {[0, 1, 2].map((i) => (
+                      <span
+                        key={i}
+                        className={cn(
+                          "h-1 w-1 rounded-full bg-muted-foreground/55",
+                          !reduceMotion && "animate-bounce",
+                        )}
+                        style={
+                          reduceMotion
+                            ? undefined
+                            : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
+                        }
+                      />
+                    ))}
+                  </span>
+                ) : null}
                 {headerStatus.text}
               </motion.p>
             </AnimatePresence>
@@ -327,12 +356,28 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
               variant="ghost"
               className={cn(
                 "h-8 gap-1.5 rounded-sm px-2.5 text-xs",
-                tasksPanelOpen && "text-primary",
+                contextRail.open && contextRail.tab === "tasks" && "text-primary",
               )}
-              onClick={() => setTasksPanelOpen((v) => !v)}
+              onClick={() => toggleContextRailTab("tasks")}
               title={localize(lang, "Панель задач", "Tasks panel")}
+              aria-pressed={contextRail.open && contextRail.tab === "tasks"}
             >
               <ListChecks className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+          {sessionDock.open && sessionDock.serverId ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn(
+                "h-8 gap-1.5 rounded-sm px-2.5 text-xs",
+                contextRail.open && contextRail.tab === "terminal" && "text-primary",
+              )}
+              onClick={() => toggleContextRailTab("terminal")}
+              title={localize(lang, "Терминал", "Terminal")}
+              aria-pressed={contextRail.open && contextRail.tab === "terminal"}
+            >
+              <Terminal className="h-3.5 w-3.5" />
             </Button>
           ) : null}
           <Button
@@ -439,6 +484,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                     onConfirmAction={stableMessageHandlers.onConfirm}
                     onCancelAction={stableMessageHandlers.onCancel}
                     onUndoAction={stableMessageHandlers.onUndo}
+                    onOpenActionDetails={stableMessageHandlers.onOpenActionDetails}
                     onSaveRunbook={stableMessageHandlers.onSaveRunbook}
                     onRetry={
                       !isBusy && message.role === "assistant" && index === visibleMessages.length - 1
@@ -492,6 +538,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                     onConfirmAction={stableMessageHandlers.onConfirm}
                     onCancelAction={stableMessageHandlers.onCancel}
                     onUndoAction={stableMessageHandlers.onUndo}
+                    onOpenActionDetails={stableMessageHandlers.onOpenActionDetails}
                     onSaveRunbook={stableMessageHandlers.onSaveRunbook}
                     onRetry={isReconcilingLiveTurn ? stableMessageHandlers.onRetry : undefined}
                     serverPanelActions={serverPanelActions}
@@ -618,7 +665,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={reduceMotion ? undefined : { opacity: 0 }}
                                 transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
-                                className={cn(tasksPanelOpen && "lg:hidden")}
+                                className={cn(contextRailOpen && "lg:hidden")}
                               >
                                 <PlanChecklist plan={operatorWs.livePlan} />
                               </motion.div>

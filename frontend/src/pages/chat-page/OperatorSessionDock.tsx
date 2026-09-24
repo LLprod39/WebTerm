@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, Terminal, X } from "lucide-react";
+import { ExternalLink, Terminal } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { XTerminal, type TerminalConnectionStatus } from "@/components/terminal/XTerminal";
@@ -10,7 +10,6 @@ import type { OperatorSessionLine, OperatorSessionState } from "./operatorSessio
 
 type Props = {
   session: OperatorSessionState;
-  onClose: () => void;
   onModeChange: (mode: "agent" | "live") => void;
   onHumanCommand: (cmd: string) => void;
 };
@@ -24,17 +23,16 @@ function lineClass(line: OperatorSessionLine): string {
 }
 
 /**
- * Side shell next to operator chat.
- * Opens only for real SSH (run_command / Live). Metrics never open this.
- * Layout: chat flex-1 shrinks; dock is a fixed-width dark pane.
+ * Terminal/session content for the shared context rail (no outer aside chrome).
+ * Metrics never open this — only real SSH (run_command / Live).
  */
-export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCommand }: Props) {
+export function OperatorSessionDock({ session, onModeChange, onHumanCommand }: Props) {
   const { lang } = useI18n();
   const logRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<TerminalConnectionStatus>("connecting");
   const lineBuf = useRef("");
 
-  const open = session.open && Boolean(session.serverId);
+  const active = session.open && Boolean(session.serverId);
 
   useEffect(() => {
     if (!logRef.current) return;
@@ -74,20 +72,25 @@ export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCom
     [onHumanCommand],
   );
 
-  if (!open || !session.serverId) return null;
+  if (!active || !session.serverId) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+        <Terminal className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+        <p className="max-w-[14rem] text-[12px] leading-relaxed text-muted-foreground">
+          {localize(
+            lang,
+            "Терминал откроется, когда агент выполнит команду на сервере.",
+            "The terminal opens when the agent runs a command on a server.",
+          )}
+        </p>
+      </div>
+    );
+  }
 
   const title = session.serverName || `server #${session.serverId}`;
 
   return (
-    <aside
-      className={cn(
-        "flex h-full w-[min(100%,26rem)] shrink-0 flex-col overflow-hidden",
-        "border-l border-border bg-card",
-        "animate-in slide-in-from-right-3 fade-in-0 duration-300 motion-reduce:animate-none",
-      )}
-      aria-label={localize(lang, "Терминал", "Terminal")}
-    >
-      {/* Slim chrome */}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden" aria-label={localize(lang, "Терминал", "Terminal")}>
       <header className="flex h-10 shrink-0 items-center gap-2.5 px-3">
         <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusDot)} />
         <div className="min-w-0 flex-1">
@@ -122,14 +125,6 @@ export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCom
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </Link>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          aria-label={localize(lang, "Закрыть", "Close")}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
       </header>
 
       <div className="mx-3 h-px shrink-0 bg-border" />
@@ -190,6 +185,6 @@ export function OperatorSessionDock({ session, onClose, onModeChange, onHumanCom
           </div>
         </div>
       )}
-    </aside>
+    </div>
   );
 }

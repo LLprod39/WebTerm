@@ -5,6 +5,7 @@ import { parseAiQuestionPayload } from "@/components/terminal/ai-question";
 import { parseNovaContextPayload } from "@/components/terminal/nova-context";
 
 import { nextId, type TabAiState } from "./model";
+import { finalizeAgentRunTodos } from "./finalizeAgentRunTodos";
 
 type UpdateTabAiState = (tabId: string, updater: (state: TabAiState) => TabAiState) => void;
 
@@ -389,7 +390,7 @@ export function handleTerminalPageWsEvent({
       ...state,
       isGenerating: false,
       messages: [
-        ...state.messages,
+        ...finalizeAgentRunTodos(state.messages, "cancelled"),
         {
           id: nextId(),
           role: "system",
@@ -403,7 +404,14 @@ export function handleTerminalPageWsEvent({
   }
 
   if (type === "agent_done" || type === "agent_error") {
-    updateTabAiState(tabId, (state) => ({ ...state, isGenerating: false }));
+    updateTabAiState(tabId, (state) => ({
+      ...state,
+      isGenerating: false,
+      messages: finalizeAgentRunTodos(
+        state.messages,
+        type === "agent_error" ? "cancelled" : "completed",
+      ),
+    }));
     return;
   }
 

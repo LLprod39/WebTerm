@@ -38,7 +38,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    const toggle = screen.getByRole("button", { name: /Проверяет данные/i });
+    const toggle = screen.getByRole("button", { name: /Thinking/i });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("inventory.list")).toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE_CHAIN|first secret/)).not.toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Проверяет данные/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -79,7 +79,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Выполняет/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Working/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -116,7 +116,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Анализирует/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -131,29 +131,34 @@ describe("OperatorThinkingPanel", () => {
     const { rerender } = render(
       panel({ phase: "thinking", toolSteps: steps, preferExpanded: true }),
     );
-    expect(screen.getByRole("button", { name: /Проверяет данные/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
 
     rerender(panel({ phase: "streaming", toolSteps: steps, preferExpanded: true }));
-    expect(screen.getByRole("button", { name: /Формирует ответ/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Writing/i })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
     expect(screen.queryByText("health.check")).not.toBeInTheDocument();
   });
 
-  it("uses the safe composing stage and disables continuous spinner motion for reduced motion", () => {
-    const { container } = render(
+  it("shows a quiet English Thinking status with muted dots", () => {
+    render(
       panel({
         phase: "streaming",
         statusMessage: "private backend streaming detail",
       }),
     );
 
-    expect(screen.getByRole("status")).toHaveTextContent("Формирует ответ");
+    const status = screen.getByRole("status");
+    expect(status).toHaveAttribute("aria-label", "Writing…");
+    expect(status).toHaveTextContent("Writing…");
+    expect(status).not.toHaveTextContent(/ИИ|работает|Анализирует|Формирует/i);
     expect(screen.queryByText(/private backend streaming detail/)).not.toBeInTheDocument();
-    expect(container.querySelector("svg")).not.toHaveClass("animate-spin");
+    expect(screen.getByTestId("ai-working-dots")).toBeInTheDocument();
+    expect(status.className).toMatch(/text-muted-foreground/);
+    expect(status.className).not.toMatch(/border-ai|bg-ai|text-ai/);
   });
 });

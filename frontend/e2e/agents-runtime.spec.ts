@@ -310,25 +310,26 @@ test("answers a pending agent question from the run page", async ({ page }) => {
 
   await page.goto("/agents");
   await expect(page.getByText("Interactive Rollout").first()).toBeVisible();
-  await expect(page.getByText("Needs answer").first()).toBeVisible();
-  await expect(page.getByText("Agent question: Можно перезапустить nginx сейчас?")).toBeVisible();
-  await page.getByRole("link", { name: /Answer/i }).click();
-  await expect(page).toHaveURL(/\/agents\/run\/907$/);
+  await expect(page.getByText("Needs answer").or(page.getByText("ждёт ответа")).first()).toBeVisible();
+  await expect(page.getByText("Можно перезапустить nginx сейчас?").first()).toBeVisible();
+  await page.getByRole("link", { name: /Answer|Ответить/i }).first().click();
+  await expect(page).toHaveURL(/\/agents\/run\/907/);
 
   await expect(page.locator("h1", { hasText: "Interactive Rollout" })).toBeVisible();
-  await expect(page.getByText("Нужен ваш ответ").first()).toBeVisible();
+  await expect(page.getByText(/Agent is waiting for your reply|Агент ждёт вашего ответа/).first()).toBeVisible();
   await expect(page.getByText("Можно перезапустить nginx сейчас?").first()).toBeVisible();
+  await expect(page.getByText("Ждёт вас").first()).toBeVisible();
 
-  await page.getByLabel("Ответ агенту").fill("Да, перезапускай nginx в текущем окне.");
-  await page.getByRole("button", { name: "Отправить" }).click();
+  await page.getByLabel(/Reply to agent|Ответ агенту/).fill("Да, перезапускай nginx в текущем окне.");
+  await page.getByRole("button", { name: /Send|Отправить/ }).last().click();
 
   const replyPath = "/servers/api/agents/runs/907/reply/";
   await expect.poll(() => harness.getCalls(replyPath, "POST").length).toBe(1);
   expect(harness.getCalls(replyPath, "POST")[0].body).toEqual({
     answer: "Да, перезапускай nginx в текущем окне.",
   });
-  await expect(page.getByText("Ответ отправлен агенту.")).toBeVisible();
-  await expect(page.getByText("Вопрос агента")).toHaveCount(0);
+  await expect(page.getByText(/Ответ отправлен агенту|Reply sent/).first()).toBeVisible();
+  await expect(page.getByText(/Agent is waiting for your reply|Агент ждёт вашего ответа/)).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Материалы/ }).click();
   await page.getByRole("button", { name: /События/ }).first().click();

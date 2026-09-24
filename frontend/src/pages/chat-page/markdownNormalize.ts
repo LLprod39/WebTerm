@@ -20,14 +20,90 @@ function normalizeProse(raw: string) {
   text = cleanGfmTableBlocks(text);
   text = ensureTableSeparator(text);
   text = text.replace(/^(#{1,6})([^\s#])/gm, "$1 $2");
-  // Some providers concatenate independently streamed Russian sentences
-  // without preserving the boundary whitespace ("готово.Доступно"). Keep
-  // URLs and decimal/version dots intact by repairing Cyrillic starts only.
-  text = text.replace(/([.!?…])(?=[А-ЯЁ])/g, "$1 ");
+  // Streamed sentences often arrive glued ("готово.Доступно", "алерт.#1", "78.nikitavm").
+  // Do not touch version numbers (1.2.3) or domains (example.com).
+  text = text.replace(/([.!?…])(?=[А-ЯЁA-Z#@])/g, "$1 ");
+  text = text.replace(/(?<=[\dа-яёА-ЯЁ)])\.([a-z])/g, ". $1");
   text = text.replace(/([.!?…])\s+([-*•])\s+/g, "$1\n$2 ");
-  // Collapse 3+ blank lines
+  text = liftInlineMetrics(text);
+  text = breakDenseProse(text);
   text = text.replace(/\n{3,}/g, "\n\n");
   return text;
+}
+
+/**
+ * Turn a single huge paragraph into scannable blocks: paragraph breaks on
+ * topic shifts (alerts, metrics, SSH, questions) so chat does not look like a log dump.
+ */
+function breakDenseProse(text: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((block) => breakLongParagraph(block))
+    .join("\n\n");
+}
+
+/** Split sentences without breaking decimals (5.8), versions (1.2.3), or domains (a.b). */
+function splitSentences(text: string): string[] {
+  const parts: string[] = [];
+  let buf = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    buf += ch;
+    if (!/[.!?…]/.test(ch)) continue;
+    const prev = text[i - 1] || "";
+    const next = text[i + 1] || "";
+    if (ch === "." && /\d/.test(prev) && /\d/.test(next)) continue;
+    if (ch === "." && /[A-Za-z]/.test(prev) && /[A-Za-z]/.test(next)) continue;
+    parts.push(buf.trim());
+    buf = "";
+    while (text[i + 1] === " ") i += 1;
+  }
+  if (buf.trim()) parts.push(buf.trim());
+  return parts.filter(Boolean);
+}
+
+function breakLongParagraph(para: string): string {
+  const trimmed = para.trim();
+  if (!trimmed || trimmed.length < 200) return para;
+  if (trimmed.includes("\n")) return para;
+  if (/^\s*[`|#>-]/.test(trimmed) || /^\s*\d+\.\s/.test(trimmed)) return para;
+
+  const sentences = splitSentences(trimmed);
+  if (sentences.length < 3) return para;
+
+  const out: string[] = [];
+  let buf = "";
+  for (const s of sentences) {
+    const topicShift =
+      /^(alert|алерт|ssh|cpu|ram|disk|диск|ip\b|скажи|что\b|ошиб|error|не удалось|healthy|unreachable|снимок|метрик)/i.test(
+        s,
+      ) ||
+      /\b(CPU|RAM|SSH|disk_percent|unreachable)\b/.test(s) ||
+      /\?\s*$/.test(s);
+    if (buf && (topicShift || buf.length > 140)) {
+      out.push(buf.trim());
+      buf = s;
+    } else {
+      buf = buf ? `${buf} ${s}` : s;
+    }
+  }
+  if (buf) out.push(buf.trim());
+  return out.length > 1 ? out.join("\n\n") : para;
+}
+
+/** Pull trailing "CPU x%, RAM y%, disk z%" clauses onto their own bullet lines. */
+function liftInlineMetrics(text: string): string {
+  return text.replace(
+    /([.!?…:])\s*((?:CPU|RAM)\s+\d+(?:\.\d+)?%\s*,\s*(?:CPU|RAM)\s+\d+(?:\.\d+)?%(?:\s*,\s*(?:диск|Disk|disk)\s+[\d\s./()%A-Za-z-]{0,60})?)\s*([.!?…])/gi,
+    (_m, end: string, metrics: string, stop: string) => {
+      const parts = metrics
+        .split(/,\s+(?=(?:CPU|RAM|диск|Disk|disk)\b)/i)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (parts.length < 2) return `${end} ${metrics.trim()}${stop}`;
+      return `${end}\n\n${parts.map((p) => `- ${p}`).join("\n")}\n\n`;
+    },
+  );
 }
 
 /** Drop markdown table blocks from text (when we already render structured tables). */

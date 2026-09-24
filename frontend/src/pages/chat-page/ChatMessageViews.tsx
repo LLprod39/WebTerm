@@ -1,13 +1,19 @@
 import { memo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Check, CheckCircle2, Circle, Copy, Loader2, MapPin, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
+import { Bot, Check, CheckCircle2, ChevronDown, Circle, Copy, Loader2, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import {
+  actionCommandLine,
+  actionPreviewLine,
+  actionResultOutput,
+  actionServerLabel,
+} from "./actionPreview";
 import { actionRiskLabel, actionStatusLabel, formatDateTime, statusTone } from "./chatHelpers";
 import { DataTableCard, type DataTable } from "./DataTableCard";
 import { InteractiveAlertsPanel, type InteractiveAlertItem } from "./InteractiveAlertsPanel";
@@ -56,7 +62,9 @@ export function MetricSeriesReportCard({ chart }: { chart: MetricSeriesChart }) 
   const min = Math.min(...series);
   const max = Math.max(...series);
   const delta = last - first;
-  const quietThreshold = Math.max(0.5, (max - min) * 0.08);
+  const span = max - min;
+  const quietThreshold = Math.max(0.5, span * 0.08);
+  const flat = span <= quietThreshold;
   const trend = Math.abs(delta) <= quietThreshold
     ? localize(lang, "Без резких изменений", "No material change")
     : delta > 0
@@ -70,110 +78,58 @@ export function MetricSeriesReportCard({ chart }: { chart: MetricSeriesChart }) 
       role="img"
       aria-label={localize(lang, `График метрики ${title}`, `${title} metric chart`)}
       data-testid="metric-series-report"
-      className="w-full max-w-[640px] min-h-[190px] overflow-hidden rounded-sm border border-border/60 bg-card/65 shadow-sm sm:min-h-[220px]"
+      className="w-full max-w-[420px] overflow-hidden rounded-sm border border-border/50 bg-card/40"
     >
-      <figcaption className="flex flex-wrap items-start justify-between gap-3 border-b border-border/45 px-4 py-3.5 sm:px-5">
+      <figcaption className="flex items-center justify-between gap-3 px-3 py-2">
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/60">
-            {localize(lang, "Отчёт по метрике", "Metric report")}
-          </div>
-          <h3 className="mt-1 truncate text-sm font-semibold tracking-tight text-foreground">{title}</h3>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            {chart.summary || trend} · {localize(lang, "диапазон", "range")} {range}
+          <div className="truncate text-[12px] font-medium tracking-tight text-foreground">{title}</div>
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            {chart.summary || trend}
+            {!flat ? ` · ${range}` : null}
           </p>
         </div>
-        <div className="shrink-0 text-right">
-          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-            {localize(lang, "Сейчас", "Current")}
-          </div>
-          <div className="mt-0.5 text-2xl font-semibold tabular-nums tracking-tight text-foreground">
-            {formatMetricValue(last, chart.unit)}
-          </div>
+        <div className="shrink-0 text-right font-mono text-[15px] font-semibold tabular-nums tracking-tight text-foreground">
+          {formatMetricValue(last, chart.unit)}
         </div>
       </figcaption>
-      <div className="px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
-        <div className="h-24 min-h-24 w-full overflow-hidden text-primary/80 sm:h-28 sm:min-h-28">
-          <Sparkline
-            data={series}
-            height={112}
-            width={600}
-            strokeWidth={1.75}
-            className="h-24 w-full sm:h-28"
-          />
+      {!flat ? (
+        <div className="px-3 pb-2">
+          <div className="h-8 w-full overflow-hidden text-primary/80">
+            <Sparkline
+              data={series}
+              height={32}
+              width={400}
+              strokeWidth={1.5}
+              className="h-8 w-full"
+            />
+          </div>
         </div>
-      </div>
+      ) : null}
     </figure>
   );
 }
 
-function actionServerLabel(action: AssistantAction): string {
-  const blast = action.blast_radius || {};
-  if (Array.isArray(blast.server_names) && blast.server_names.length) {
-    return String(blast.server_names[0]);
-  }
-  const input = (action.input || {}) as Record<string, unknown>;
-  if (input.server_name) return String(input.server_name);
-  if (input.server_id != null) return `#${input.server_id}`;
-  return "";
-}
-
-function actionCommandLine(action: AssistantAction): string {
-  const dry = action.dry_run_preview || {};
-  if (typeof dry.command === "string" && dry.command.trim()) return dry.command.trim();
-  const input = (action.input || {}) as Record<string, unknown>;
-  const cmd = input.command ?? input.cmd;
-  if (typeof cmd === "string" && cmd.trim()) return cmd.trim();
-  return "";
-}
-
-function actionResultOutput(action: AssistantAction): string {
-  const result = (action.result || {}) as Record<string, unknown>;
-  const nested = (result.result && typeof result.result === "object" ? result.result : result) as Record<
-    string,
-    unknown
-  >;
-  const out =
-    (typeof nested.output === "string" && nested.output) ||
-    (typeof nested.stdout === "string" && nested.stdout) ||
-    (typeof result.output === "string" && result.output) ||
-    (typeof result.stdout === "string" && result.stdout) ||
-    "";
-  return String(out).trim();
-}
-
-function actionTargetLabel(action: AssistantAction): string {
-  const blast = (action.blast_radius || {}) as Record<string, unknown>;
-  const serverNames = Array.isArray(blast.server_names)
-    ? blast.server_names.map(String).filter(Boolean)
-    : [];
-  if (serverNames.length) return serverNames.join(", ");
-  const input = (action.input || {}) as Record<string, unknown>;
-  const explicit = input.server_name ?? input.target_name ?? input.target ?? input.project_name;
-  if (explicit != null && String(explicit).trim()) return String(explicit);
-  if (action.target_url) return action.target_url;
-  return "";
-}
-
-/** Confirmation card with immutable target preview and typed-confirm support. */
+/** Compact action chip in the stream; full details live in Context Rail. */
 export function ActionCard({
   action,
   isWorking,
   onConfirm,
   onCancel,
   onUndo,
+  onOpenDetails,
 }: {
   action: AssistantAction;
   isWorking: boolean;
   onConfirm: (actionId: number, typedConfirm?: string) => void;
   onCancel: (actionId: number) => void;
   onUndo?: (actionId: number) => void;
+  onOpenDetails?: (action: AssistantAction) => void;
 }) {
   const { lang } = useI18n();
   const [typedConfirm, setTypedConfirm] = useState("");
   const canConfirm = action.status === "requires_confirmation";
   const canCancel = action.status === "requires_confirmation" || action.status === "proposed";
 
-  const server = actionServerLabel(action);
   const blast = (action.blast_radius || {}) as Record<string, unknown>;
   const serverNames = Array.isArray(blast.server_names)
     ? blast.server_names.map(String).filter(Boolean)
@@ -188,9 +144,12 @@ export function ActionCard({
       ? typedConfirm.trim().toUpperCase() === "FANOUT"
       : typedConfirm.trim().toLocaleLowerCase() === typedToken.toLocaleLowerCase()
   );
-  const cmd = actionCommandLine(action);
-  const output = action.status === "completed" ? actionResultOutput(action) : "";
-  const target = actionTargetLabel(action);
+  const preview = actionPreviewLine(action);
+  const hasUndo =
+    action.status === "completed" &&
+    Boolean(onUndo) &&
+    Boolean(action.undo_payload) &&
+    Object.keys(action.undo_payload || {}).length > 0;
   const statusDot =
     action.status === "completed"
       ? "bg-success/80"
@@ -203,88 +162,57 @@ export function ActionCard({
             : "bg-muted-foreground/40";
 
   return (
-    <div className="max-w-[min(640px,100%)] overflow-hidden rounded-sm border border-border/55 bg-card/55 shadow-sm">
-      <div className="flex min-w-0 items-start justify-between gap-3 border-b border-border/45 px-3.5 py-3">
-        <div className="flex min-w-0 items-start gap-2.5">
-          <span className={cn("mt-2 h-1.5 w-1.5 shrink-0 rounded-full", statusDot)} />
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-semibold tracking-tight text-foreground">
+    <div className="max-w-[min(640px,100%)] overflow-hidden rounded-sm border border-border/55 bg-card/55">
+      <div className="flex min-w-0 items-center gap-2 px-3 py-2">
+        <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", statusDot)} />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="truncate text-[12px] font-semibold tracking-tight text-foreground">
               {action.title || action.action_type}
-            </div>
-            <div className="mt-0.5 font-mono text-[10px] text-muted-foreground/65">{action.action_type}</div>
+            </span>
+            <span className={cn("rounded-sm border px-1.5 py-px text-[10px] font-medium", statusTone(action.status))}>
+              {actionStatusLabel(action.status, lang)}
+            </span>
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-sm border px-1.5 py-px text-[10px] font-medium",
+                action.risk === "dangerous"
+                  ? "border-destructive/35 bg-destructive/10 text-destructive"
+                  : action.risk === "read"
+                    ? "border-success/30 bg-success/10 text-success"
+                    : "border-warning/30 bg-warning/10 text-warning",
+              )}
+            >
+              <ShieldCheck className="h-3 w-3" />
+              {actionRiskLabel(action.risk, lang)}
+            </span>
           </div>
+          {preview ? (
+            <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground/80">
+              {preview}
+            </div>
+          ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-          <span className={cn("rounded-sm border px-2 py-0.5 text-[10px] font-medium", statusTone(action.status))}>
-            {actionStatusLabel(action.status, lang)}
-          </span>
-          <span className={cn(
-            "inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[10px] font-medium",
-            action.risk === "dangerous"
-              ? "border-destructive/35 bg-destructive/10 text-destructive"
-              : action.risk === "read"
-                ? "border-success/30 bg-success/10 text-success"
-                : "border-warning/30 bg-warning/10 text-warning",
-          )}>
-            <ShieldCheck className="h-3 w-3" />
-            {actionRiskLabel(action.risk, lang)}
-          </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {onOpenDetails ? (
+            <button
+              type="button"
+              className="rounded-sm border border-border/70 px-2 py-1 text-[10.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              onClick={() => onOpenDetails(action)}
+            >
+              {localize(lang, "детали", "details")}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <div className="space-y-3 px-3.5 py-3">
-        {action.description ? (
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              {localize(lang, "Что произойдёт", "What will happen")}
-            </div>
-            <p className="mt-1 text-[12px] leading-5 text-foreground/90">{action.description}</p>
-          </div>
-        ) : null}
-
-        {(target || server || targetCount > 0) ? (
-          <div className="rounded-lg border border-border/50 bg-background/45 px-3 py-2">
-            <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <div className="min-w-0">
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                  {localize(lang, "Где", "Where")}
-                </div>
-                <div className="mt-0.5 break-words text-[12px] font-medium text-foreground">
-                  {target || server || localize(lang, `${targetCount} целей`, `${targetCount} targets`)}
-                </div>
-                {targetCount > 1 ? (
-                  <div className="mt-0.5 text-[10.5px] text-warning">
-                    {localize(lang, `Охват: ${targetCount} целей`, `Blast radius: ${targetCount} targets`)}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          </div>
-        ) : null}
-
-        {cmd ? (
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-              {localize(lang, "Команда / операция", "Command / operation")}
-            </div>
-            <pre className="mt-1 overflow-x-auto rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-[11px] leading-4 text-foreground">$ {cmd}</pre>
-          </div>
-        ) : null}
-
-          {output ? (
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-                {localize(lang, "Результат", "Result")}
-              </div>
-              <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-success/20 bg-success/[0.04] px-3 py-2 font-mono text-[10.5px] leading-4 text-muted-foreground/90">
-                {output.length > 4000 ? `${output.slice(0, 4000)}\n…` : output}
-              </pre>
-            </div>
+      {canConfirm ? (
+        <div className="space-y-2 border-t border-border/45 px-3 py-2">
+          {action.description ? (
+            <p className="line-clamp-2 text-[11.5px] leading-4 text-foreground/85">{action.description}</p>
           ) : null}
-
-          {canConfirm && targetCount > 0 ? (
-            <div className="rounded-lg border border-warning/25 bg-warning/[0.06] px-3 py-2 text-[10.5px] leading-4 text-muted-foreground">
+          {targetCount > 0 ? (
+            <div className="text-[10.5px] leading-4 text-muted-foreground">
               <span className="font-medium text-foreground">
                 {localize(lang, "Затронет", "Targets")}: {targetCount}
               </span>
@@ -292,8 +220,7 @@ export function ActionCard({
               {serverNames.length > 8 ? ` +${serverNames.length - 8}` : null}
             </div>
           ) : null}
-
-          {canConfirm && typedRequired ? (
+          {typedRequired ? (
             <label className="block space-y-1 text-[10.5px] text-warning">
               <span>{typedHint || localize(lang, `Введите ${typedToken}`, `Type ${typedToken}`)}</span>
               <input
@@ -307,62 +234,73 @@ export function ActionCard({
               />
             </label>
           ) : null}
-
           {action.error ? <p className="text-[11px] text-destructive/90">{action.error}</p> : null}
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <button
+              type="button"
+              className="rounded-sm bg-primary px-3 py-1.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+              disabled={isWorking || !typedMatches}
+              onClick={() => onConfirm(action.id, typedRequired ? typedConfirm.trim() : undefined)}
+            >
+              {isWorking ? (
+                <Loader2 className="inline h-3 w-3 animate-spin motion-reduce:animate-none" />
+              ) : (
+                localize(lang, "подтвердить", "confirm")
+              )}
+            </button>
+            {canCancel ? (
+              <button
+                type="button"
+                className="rounded-sm border border-border/70 px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+                disabled={isWorking}
+                onClick={() => onCancel(action.id)}
+              >
+                {localize(lang, "отмена", "cancel")}
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
-          {(canConfirm || canCancel || (action.status === "completed" && onUndo && action.undo_payload)) && (
-            <div className="flex flex-wrap items-center gap-2 border-t border-border/45 pt-3 text-[11px]">
-              {canConfirm ? (
-                <button
-                  type="button"
-                  className="rounded-lg bg-primary px-3 py-1.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
-                  disabled={isWorking || !typedMatches}
-                  onClick={() => onConfirm(action.id, typedRequired ? typedConfirm.trim() : undefined)}
-                >
-                  {isWorking ? (
-                    <Loader2 className="inline h-3 w-3 animate-spin motion-reduce:animate-none" />
-                  ) : (
-                    localize(lang, "подтвердить", "confirm")
-                  )}
-                </button>
-              ) : null}
-              {canCancel ? (
-                <button
-                  type="button"
-                  className="rounded-lg border border-border/70 px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
-                  disabled={isWorking}
-                  onClick={() => onCancel(action.id)}
-                >
-                  {localize(lang, "отмена", "cancel")}
-                </button>
-              ) : null}
-              {action.status === "completed" &&
-              action.undo_payload &&
-              Object.keys(action.undo_payload).length > 0 &&
-              onUndo ? (
-                <button
-                  type="button"
-                  className="rounded-lg border border-border/70 px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                  disabled={isWorking}
-                  onClick={() => onUndo(action.id)}
-                >
-                  {localize(lang, "откат", "undo")}
-                </button>
-              ) : null}
-              {action.target_url && action.status === "completed" ? (
-                <Link
-                  to={action.target_url}
-                  className="rounded-lg border border-border/70 px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                >
-                  {localize(lang, "открыть", "open")}
-                </Link>
-              ) : null}
-            </div>
-          )}
-      </div>
+      {!canConfirm && (hasUndo || (action.target_url && action.status === "completed") || canCancel || action.error) ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/45 px-3 py-1.5 text-[11px]">
+          {action.error ? <p className="w-full text-[11px] text-destructive/90">{action.error}</p> : null}
+          {canCancel ? (
+            <button
+              type="button"
+              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+              disabled={isWorking}
+              onClick={() => onCancel(action.id)}
+            >
+              {localize(lang, "отмена", "cancel")}
+            </button>
+          ) : null}
+          {hasUndo && onUndo ? (
+            <button
+              type="button"
+              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              disabled={isWorking}
+              onClick={() => onUndo(action.id)}
+            >
+              {localize(lang, "откат", "undo")}
+            </button>
+          ) : null}
+          {action.target_url && action.status === "completed" ? (
+            <Link
+              to={action.target_url}
+              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {localize(lang, "открыть", "open")}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
+
+// Re-export helpers for tests / panels that previously imported from this module.
+export { actionCommandLine, actionResultOutput, actionServerLabel };
 
 export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } }) {
   const { lang } = useI18n();
@@ -432,6 +370,7 @@ type MessageBubbleProps = {
   onConfirmAction: (actionId: number, typedConfirm?: string) => void;
   onCancelAction: (actionId: number) => void;
   onUndoAction?: (actionId: number) => void;
+  onOpenActionDetails?: (action: AssistantAction) => void;
   onSaveRunbook?: (message: AssistantChatMessage) => void;
   /** Re-send the previous user message; provided only for the latest assistant message. */
   onRetry?: () => void;
@@ -450,12 +389,52 @@ type MessageBubbleProps = {
   animateSupportingContent?: boolean;
 };
 
+/** Collapses stacked metrics/tables/charts so one reply does not eat the viewport. */
+function MessageEvidenceFold({
+  count,
+  defaultOpen,
+  forceFold = false,
+  children,
+}: {
+  count: number;
+  defaultOpen: boolean;
+  forceFold?: boolean;
+  children: ReactNode;
+}) {
+  const { lang } = useI18n();
+  const [open, setOpen] = useState(defaultOpen);
+  if (count <= 1 && !forceFold) return <>{children}</>;
+
+  return (
+    <div className="max-w-[min(420px,100%)] overflow-hidden rounded-sm border border-border/40 bg-card/20">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-foreground/[0.03]"
+        aria-expanded={open}
+      >
+        <ChevronDown
+          className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+        <span className="font-medium text-foreground">
+          {localize(lang, "Данные ответа", "Reply data")}
+        </span>
+        <span className="font-mono text-[10px] tabular-nums text-muted-foreground">
+          {count}
+        </span>
+      </button>
+      {open ? <div className="space-y-2 border-t border-border/30 px-2 py-2">{children}</div> : null}
+    </div>
+  );
+}
+
 function MessageBubbleComponent({
   message,
   actionWorkingId,
   onConfirmAction,
   onCancelAction,
   onUndoAction,
+  onOpenActionDetails,
   onSaveRunbook,
   onRetry,
   serverPanelActions,
@@ -500,14 +479,71 @@ function MessageBubbleComponent({
   const hasStructuredTable = tables.some(
     (t) => (t.rows?.length || 0) > 0 || t.kind === "forecasts" || Boolean(t.interactive),
   );
+  const hasChart = Boolean(chart?.series && chart.series.length >= 2);
+  const evidenceBlocks =
+    (webSources.length ? 1 : 0) +
+    (metrics ? 1 : 0) +
+    (hasChart ? 1 : 0) +
+    tables.length;
   const hasSupportingContent = Boolean(
-    webSources.length ||
-      metrics ||
-      plan ||
-      (chart?.series && chart.series.length >= 2) ||
-      tables.length ||
-      actions.length,
+    evidenceBlocks || plan || actions.length,
   );
+
+  const evidenceBody = evidenceBlocks ? (
+    <>
+      <WebSourcesCard sources={webSources} />
+      {metrics ? <MetricsSnapshotCard data={metrics} /> : null}
+      {hasChart ? <MetricSeriesReportCard chart={chart!} /> : null}
+      {tables.map((t, i) => {
+        if (t.kind === "servers" && Array.isArray(t.items) && t.items.length) {
+          return (
+            <InteractiveServersPanel
+              key={`${t.title || "servers"}-${i}`}
+              title={t.title}
+              items={t.items as InteractiveServerItem[]}
+              actions={serverPanelActions}
+              defaultExpanded={Boolean((t as { default_expanded?: boolean }).default_expanded)}
+              note={typeof (t as { note?: string }).note === "string" ? (t as { note?: string }).note : undefined}
+            />
+          );
+        }
+        if (t.kind === "alerts" && Array.isArray(t.items) && t.items.length) {
+          return (
+            <InteractiveAlertsPanel
+              key={`${t.title || "alerts"}-${i}`}
+              title={t.title}
+              items={t.items as InteractiveAlertItem[]}
+              onAsk={serverPanelActions?.onAsk}
+            />
+          );
+        }
+        if (t.kind === "agents" && Array.isArray(t.items) && t.items.length) {
+          return (
+            <InteractiveAgentsPanel
+              key={`${t.title || "agents"}-${i}`}
+              title={t.title}
+              items={t.items as InteractiveAgentItem[]}
+              actions={agentPanelActions || { onAsk: serverPanelActions?.onAsk }}
+            />
+          );
+        }
+        if (t.kind === "forecasts") {
+          const forecastItems = (Array.isArray(t.items) ? t.items : []) as InteractiveForecastItem[];
+          return (
+            <InteractiveForecastsPanel
+              key={`${t.title || "forecasts"}-${i}`}
+              title={t.title}
+              items={forecastItems}
+              empty={Boolean(t.empty) || forecastItems.length === 0}
+              summary={typeof t.summary === "string" ? t.summary : undefined}
+              actions={forecastPanelActions || { onAsk: serverPanelActions?.onAsk }}
+            />
+          );
+        }
+        return <DataTableCard key={`${t.title || "table"}-${i}`} table={t} />;
+      })}
+    </>
+  ) : null;
 
   return (
     <motion.div
@@ -550,7 +586,14 @@ function MessageBubbleComponent({
         </div>
         {turnActivity}
         {message.content ? (
-          <div className="max-w-[min(640px,100%)]" data-message-markdown>
+          <div
+            className={cn(
+              "max-w-[min(640px,100%)]",
+              streaming && "text-foreground/80 [&_.operator-md_p]:text-foreground/80",
+            )}
+            data-message-markdown
+            data-streaming={streaming ? "true" : undefined}
+          >
             <OperatorMarkdown
               content={message.content}
               streaming={streaming}
@@ -569,63 +612,20 @@ function MessageBubbleComponent({
             transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
             className="space-y-2"
           >
-        <WebSourcesCard sources={webSources} />
-        {metrics ? <MetricsSnapshotCard data={metrics} /> : null}
+        {evidenceBody ? (
+          <MessageEvidenceFold
+            count={evidenceBlocks}
+            defaultOpen={evidenceBlocks <= 1 && actions.length === 0}
+            forceFold={actions.length > 0}
+          >
+            {evidenceBody}
+          </MessageEvidenceFold>
+        ) : null}
         {plan ? (
           <div className="max-w-[min(920px,100%)]">
             <PlanChecklist plan={plan} />
           </div>
         ) : null}
-        {chart?.series && chart.series.length >= 2 ? <MetricSeriesReportCard chart={chart} /> : null}
-        {tables.map((t, i) => {
-          if (t.kind === "servers" && Array.isArray(t.items) && t.items.length) {
-            return (
-              <InteractiveServersPanel
-                key={`${t.title || "servers"}-${i}`}
-                title={t.title}
-                items={t.items as InteractiveServerItem[]}
-                actions={serverPanelActions}
-                defaultExpanded={Boolean((t as { default_expanded?: boolean }).default_expanded)}
-                note={typeof (t as { note?: string }).note === "string" ? (t as { note?: string }).note : undefined}
-              />
-            );
-          }
-          if (t.kind === "alerts" && Array.isArray(t.items) && t.items.length) {
-            return (
-              <InteractiveAlertsPanel
-                key={`${t.title || "alerts"}-${i}`}
-                title={t.title}
-                items={t.items as InteractiveAlertItem[]}
-                onAsk={serverPanelActions?.onAsk}
-              />
-            );
-          }
-          if (t.kind === "agents" && Array.isArray(t.items) && t.items.length) {
-            return (
-              <InteractiveAgentsPanel
-                key={`${t.title || "agents"}-${i}`}
-                title={t.title}
-                items={t.items as InteractiveAgentItem[]}
-                actions={agentPanelActions || { onAsk: serverPanelActions?.onAsk }}
-              />
-            );
-          }
-          if (t.kind === "forecasts") {
-            const forecastItems = (Array.isArray(t.items) ? t.items : []) as InteractiveForecastItem[];
-            // Show even when empty — clean «no risks» card with recheck/analyze
-            return (
-              <InteractiveForecastsPanel
-                key={`${t.title || "forecasts"}-${i}`}
-                title={t.title}
-                items={forecastItems}
-                empty={Boolean(t.empty) || forecastItems.length === 0}
-                summary={typeof t.summary === "string" ? t.summary : undefined}
-                actions={forecastPanelActions || { onAsk: serverPanelActions?.onAsk }}
-              />
-            );
-          }
-          return <DataTableCard key={`${t.title || "table"}-${i}`} table={t} />;
-        })}
         {actions.length ? (
           <div className="max-w-[min(920px,100%)] space-y-1.5">
             {actions.map((action) => (
@@ -636,6 +636,7 @@ function MessageBubbleComponent({
                 onConfirm={onConfirmAction}
                 onCancel={onCancelAction}
                 onUndo={onUndoAction}
+                onOpenDetails={onOpenActionDetails}
               />
             ))}
           </div>

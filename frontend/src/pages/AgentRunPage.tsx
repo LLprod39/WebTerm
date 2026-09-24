@@ -1,4 +1,5 @@
-import { Link, useParams } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { AlertTriangle, ArrowLeft, CheckCircle2, FileCheck2, FolderArchive, ListOrdered, RefreshCw, Square } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/system/ConfirmDialog";
@@ -9,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AgentRunExecutionV2 } from "./agent-run/AgentRunExecutionV2";
 import { AgentRunMaterialsV2 } from "./agent-run/AgentRunMaterialsV2";
 import { AgentRunResultV2 } from "./agent-run/AgentRunResultV2";
+import { OperatorHitlReply } from "./agent-run/OperatorHitlReply";
 import { formatDuration } from "./agent-run/formatters";
 import { useAgentRunReportController } from "./agent-run/useAgentRunReportController";
 
@@ -30,11 +32,41 @@ function PageState({ title, description, loading = false, danger = false }: { ti
   );
 }
 
+function useOperatorQuestionNotification(question: string, runId: number, agentName: string) {
+  const seenRef = useRef("");
+  useEffect(() => {
+    const key = `${runId}:${question}`;
+    if (!question.trim() || seenRef.current === key) return;
+    seenRef.current = key;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    const title = agentName || `Запуск #${runId}`;
+    const body = question.slice(0, 180);
+    const show = () => {
+      try {
+        new Notification(title, { body, tag: `agent-hitl-${runId}` });
+      } catch {
+        /* ignore */
+      }
+    };
+    if (Notification.permission === "granted") show();
+    else if (Notification.permission === "default") {
+      void Notification.requestPermission().then((perm) => {
+        if (perm === "granted") show();
+      });
+    }
+  }, [agentName, question, runId]);
+}
+
 export default function AgentRunPage() {
   const { runId } = useParams<{ runId: string }>();
+  const [searchParams] = useSearchParams();
   const rid = Number.parseInt(runId || "0", 10);
   const controller = useAgentRunReportController(rid);
   const viewModel = controller.viewModel;
+  const focusReply = searchParams.get("focus") === "reply" || searchParams.get("reply") === "1";
+  const pendingQuestion = String(viewModel?.run.pendingQuestion || "").trim();
+
+  useOperatorQuestionNotification(pendingQuestion, rid, viewModel?.run.agentName || "");
 
   if (rid <= 0) return <PageState title="Некорректный номер запуска" danger />;
   if (controller.reportQuery.isLoading) return <PageState title="Загружаем отчёт…" loading />;
@@ -83,13 +115,17 @@ export default function AgentRunPage() {
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6">
-        {viewModel.run.pendingQuestion ? (
-          <section aria-labelledby="operator-question-heading" className="mb-4 rounded-sm border border-warning/35 bg-warning/10 p-4">
-            <h2 id="operator-question-heading" className="font-semibold text-foreground">Агент ждёт вашего ответа</h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">{viewModel.run.pendingQuestion}</p>
-            <label className="mt-3 block text-sm font-medium text-foreground">Ответ<textarea className="mt-1 min-h-24 w-full rounded-sm border border-input bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={controller.replyText} onChange={(event) => controller.setReplyText(event.target.value)} /></label>
-            <Button type="button" size="sm" className="mt-3" disabled={!controller.replyText.trim()} onClick={() => controller.prepare("reply")}>Подготовить отправку</Button>
-          </section>
+        {pendingQuestion ? (
+          <div className="sticky top-[4.5rem] z-10 mb-4">
+            <OperatorHitlReply
+              question={pendingQuestion}
+              value={controller.replyText}
+              onChange={controller.setReplyText}
+              onSubmit={(answer) => controller.submitReply(answer)}
+              submitting={controller.actionPending}
+              autoFocus={Boolean(focusReply) || Boolean(pendingQuestion)}
+            />
+          </div>
         ) : null}
 
         <Tabs value={controller.tab} onValueChange={(value) => controller.selectTab(value as typeof controller.tab)} className="space-y-4">

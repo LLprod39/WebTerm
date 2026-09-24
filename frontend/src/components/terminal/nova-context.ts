@@ -74,3 +74,25 @@ export function parseNovaContextPayload(value: unknown): NovaContextPayload {
   }
   return result;
 }
+
+/**
+ * Stable identity for session context used to skip duplicate Nova Context
+ * strips on consecutive agent_start events. Compares cwd / user / hostname /
+ * shell only — recent_activity churn must not re-open a full context block.
+ */
+export function novaContextFingerprint(context?: NovaContextPayload | null): string {
+  if (!context) return "";
+  const s = context.session;
+  const sessionPart = s
+    ? [s.cwd ?? "", s.user ?? "", s.hostname ?? "", s.shell ?? ""].join("\0")
+    : "";
+  const hasSession = sessionPart.replace(/\0/g, "").length > 0;
+  if (hasSession) return sessionPart;
+  if (context.recent_activity?.length) return "activity-only";
+  return "";
+}
+
+export function hasNovaContextContent(context?: NovaContextPayload | null): boolean {
+  if (!context) return false;
+  return Boolean(context.session || (context.recent_activity?.length ?? 0) > 0);
+}

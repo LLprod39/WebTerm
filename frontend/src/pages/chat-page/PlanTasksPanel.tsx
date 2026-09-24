@@ -1,6 +1,5 @@
 import { Check, Circle, ListChecks, Loader2, X } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { localize, useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -30,19 +29,25 @@ function stepState(status?: string): "done" | "failed" | "running" | "pending" {
   return "pending";
 }
 
-/** Cursor-style task tracker docked on the right: live plan steps with progress. */
-export function PlanTasksPanel({
-  plan,
-  open,
-  onClose,
-}: {
-  plan: PlanData | null;
-  open: boolean;
-  onClose: () => void;
-}) {
+/** Plan steps content for the shared context rail (no outer chrome / fixed width). */
+export function PlanTasksPanel({ plan }: { plan: PlanData | null }) {
   const { lang } = useI18n();
   const steps = plan?.steps || [];
-  if (!open || !plan || !steps.length) return null;
+
+  if (!plan || !steps.length) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+        <ListChecks className="h-5 w-5 text-muted-foreground" strokeWidth={1.5} />
+        <p className="max-w-[14rem] text-[12px] leading-relaxed text-muted-foreground">
+          {localize(
+            lang,
+            "План задач появится здесь, когда агент начнёт работу.",
+            "A task plan will appear here when the agent starts working.",
+          )}
+        </p>
+      </div>
+    );
+  }
 
   const done = steps.filter((s) => stepState(s.status) === "done").length;
   const failed = steps.some((s) => stepState(s.status) === "failed");
@@ -51,32 +56,18 @@ export function PlanTasksPanel({
   const complete = plan.status === "completed" || done === total;
 
   return (
-    <aside className="hidden w-72 shrink-0 flex-col border-l border-border/70 bg-card/50 lg:flex">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/70 px-3">
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <ListChecks className="h-4 w-4 text-primary" />
-          {localize(lang, "Задачи", "Tasks")}
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 px-3 pt-3">
+        <div className="mb-2 flex items-center gap-2">
           <span className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground">
             {done}/{total}
           </span>
+          {plan.title ? (
+            <div className="line-clamp-2 min-w-0 text-[12.5px] font-medium leading-snug text-foreground">
+              {plan.title}
+            </div>
+          ) : null}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 p-0"
-          onClick={onClose}
-          aria-label={localize(lang, "Скрыть", "Hide")}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-
-      <div className="shrink-0 px-3 pt-3">
-        {plan.title ? (
-          <div className="mb-2 line-clamp-2 text-[12.5px] font-medium leading-snug text-foreground">
-            {plan.title}
-          </div>
-        ) : null}
         <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
           <div
             className={cn(
@@ -129,6 +120,6 @@ export function PlanTasksPanel({
           );
         })}
       </ol>
-    </aside>
+    </div>
   );
 }

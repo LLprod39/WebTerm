@@ -284,4 +284,49 @@ describe("schema-driven agent report view model", () => {
       unit,
     });
   });
+
+  it("maps pending_question and waiting lifecycle into the operator reply banner state", () => {
+    const viewModel = createReportViewModel(
+      report2156({
+        run: {
+          id: 2156,
+          agent_id: 301,
+          agent_name: "Проверка логов",
+          agent_type: "log_audit",
+          agent_mode: "full",
+          server_id: 17,
+          server_name: "nikitavm",
+          pending_question: "SAFE заблокировал бэкап. Разрешить?",
+          status: "waiting",
+        },
+        lifecycle: {
+          status: "waiting",
+          label: "Ждёт ответа",
+          is_active: true,
+          is_terminal: false,
+          started_at: "2026-08-25T13:29:26.000Z",
+          completed_at: null,
+          duration_ms: 90_000,
+          can_cleanup: false,
+        },
+        outcome: {
+          status: "running",
+          label: "Выполняется",
+          reason: "",
+          exit_reason: "",
+          source: "test",
+          severity: "info",
+          details: {},
+        },
+      }),
+    );
+
+    expect(viewModel.run.pendingQuestion).toBe("SAFE заблокировал бэкап. Разрешить?");
+    expect(viewModel.header).toMatchObject({
+      statusLabel: "Ждёт вас",
+      statusTone: "warning",
+      pulse: true,
+      summary: "SAFE заблокировал бэкап. Разрешить?",
+    });
+  });
 });

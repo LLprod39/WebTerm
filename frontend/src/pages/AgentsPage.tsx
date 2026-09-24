@@ -263,6 +263,9 @@ export default function AgentsPage() {
         onStop={onStop}
         onDelete={onDelete}
         onTogglePause={onTogglePause}
+        onReplySent={() => {
+          void queryClient.invalidateQueries({ queryKey: ["agents"] });
+        }}
       />
 
       <CreateAgentDialog

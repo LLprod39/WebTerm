@@ -349,6 +349,7 @@ export function AiMessageRenderer({
   onExplainCommand,
   isFirstAgent,
   isLastAgent,
+  showContext,
 }: {
   msg: AiMessage;
   settings: AiAssistantSettings;
@@ -358,6 +359,7 @@ export function AiMessageRenderer({
   onExplainCommand?: (cmd: AiCommand) => void;
   isFirstAgent?: boolean;
   isLastAgent?: boolean;
+  showContext?: boolean;
 }) {
   const type = msg.type || "text";
 
@@ -374,6 +376,7 @@ export function AiMessageRenderer({
           msg={msg}
           isFirstAgent={isFirstAgent}
           isLastAgent={isLastAgent}
+          showContext={showContext}
         />
       </div>
     );

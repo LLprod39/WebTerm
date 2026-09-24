@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   Brain,
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   ListTodo,
   Loader2,
@@ -10,7 +11,9 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 import type { AiMessage } from "../ai-types";
+import { hasNovaContextContent } from "../nova-context";
 import { NovaContextCard } from "../nova/NovaContextCard";
 import { AgentToolMsg } from "./AgentToolMsg";
 
@@ -21,19 +24,26 @@ type TimelineDot = "start" | "think" | "tool-ok" | "tool-err" | "tool-run" | "to
 // Run-started marker — intentionally subdued so it reads as a
 // boundary, not a hero banner. "Nova" is the brand word, primary
 // target is a muted monospace chip.
-function AgentStartMsg({ msg }: { msg: AiMessage }) {
+function AgentStartMsg({
+  msg,
+  showContext = true,
+}: {
+  msg: AiMessage;
+  showContext?: boolean;
+}) {
   const extras = msg.agentExtras ?? [];
+  const contextVisible = showContext && hasNovaContextContent(msg.agentContext);
   return (
-    <div className="space-y-2">
+    <div className={contextVisible ? "space-y-1" : undefined}>
       <div
-        className="flex flex-wrap items-center gap-1.5 rounded-md border border-border/50 bg-background/40 px-2.5 py-1.5 text-xs text-muted-foreground"
+        className="flex flex-wrap items-center gap-1.5 px-0.5 py-0.5 text-xs text-muted-foreground"
         title={msg.content || undefined}
       >
         <Sparkles className="h-3 w-3 text-primary/80" />
         <span className="font-medium text-foreground">Nova</span>
         <span className="opacity-40">·</span>
         <ServerIcon className="h-2.5 w-2.5 opacity-60" />
-        <code className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-foreground/80">
+        <code className="rounded border border-border/40 bg-secondary/30 px-1 py-0 font-mono text-foreground/80">
           {msg.agentPrimary || "primary"}
         </code>
         {extras.length > 0 ? (
@@ -42,7 +52,7 @@ function AgentStartMsg({ msg }: { msg: AiMessage }) {
             {extras.slice(0, 3).map((name) => (
               <code
                 key={name}
-                className="rounded border border-border/50 bg-secondary/40 px-1 py-0 font-mono text-xs text-muted-foreground"
+                className="rounded border border-border/40 bg-secondary/30 px-1 py-0 font-mono text-xs text-muted-foreground"
               >
                 {name}
               </code>
@@ -53,7 +63,7 @@ function AgentStartMsg({ msg }: { msg: AiMessage }) {
           </>
         ) : null}
       </div>
-      <NovaContextCard context={msg.agentContext} />
+      {contextVisible ? <NovaContextCard context={msg.agentContext} /> : null}
     </div>
   );
 }
@@ -80,48 +90,88 @@ function AgentThinkingMsg({ msg }: { msg: AiMessage }) {
   );
 }
 
-export function AgentTodoMsg({ msg }: { msg: AiMessage }) {
+export function AgentTodoMsg({
+  msg,
+  defaultOpen = true,
+}: {
+  msg: AiMessage;
+  /** Expanded by default; user can collapse to a one-line progress strip. */
+  defaultOpen?: boolean;
+}) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(defaultOpen);
   const todos = msg.agentTodos || [];
   if (todos.length === 0) return null;
   const completed = todos.filter((t) => t.status === "completed").length;
+  const current =
+    todos.find((t) => t.status === "in_progress") ||
+    todos.find((t) => t.status === "pending");
+
   return (
-    <div className="overflow-hidden rounded-md border border-border/60 bg-card/70">
-      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 text-xs font-medium text-foreground">
-        <ListTodo className="h-3 w-3 text-muted-foreground" />
-        <span>Todo</span>
-        <span className="ml-auto font-mono text-xs text-muted-foreground">
+    <div className="overflow-hidden rounded-md border border-border/55 bg-card/80 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors hover:bg-secondary/30"
+      >
+        <ListTodo className="h-3.5 w-3.5 shrink-0 text-ai" />
+        <span className="font-semibold tracking-tight text-foreground">
+          {t("terminal.ai.todo.title")}
+        </span>
+        <span className="font-mono tabular-nums text-muted-foreground">
           {completed}/{todos.length}
         </span>
-      </div>
-      <ul className="space-y-1 px-3 py-2 text-[12px]">
-        {todos.map((t) => {
-          const icon =
-            t.status === "completed" ? (
-              <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
-            ) : t.status === "in_progress" ? (
-              <Loader2 className="h-3 w-3 shrink-0 animate-spin text-warning" />
-            ) : t.status === "cancelled" ? (
-              <X className="h-3 w-3 shrink-0 text-muted-foreground" />
-            ) : (
-              <CircleDot className="h-3 w-3 shrink-0 text-muted-foreground" />
+        {!open && current ? (
+          <>
+            <span className="opacity-40" aria-hidden="true">
+              ·
+            </span>
+            <span className="min-w-0 flex-1 truncate text-foreground/85">{current.content}</span>
+          </>
+        ) : (
+          <span className="flex-1" />
+        )}
+        <span className="sr-only">
+          {open ? t("terminal.ai.todo.collapse") : t("terminal.ai.todo.expand")}
+        </span>
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open ? (
+        <ul className="space-y-1 border-t border-border/40 px-3 py-2 text-[12px]">
+          {todos.map((todo) => {
+            const icon =
+              todo.status === "completed" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />
+              ) : todo.status === "in_progress" ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-warning" />
+              ) : todo.status === "cancelled" ? (
+                <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              ) : (
+                <CircleDot className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" />
+              );
+            return (
+              <li
+                key={todo.id}
+                className={`flex items-start gap-2 rounded-sm px-1 py-0.5 ${
+                  todo.status === "in_progress" ? "bg-warning/5" : ""
+                } ${
+                  todo.status === "completed"
+                    ? "text-muted-foreground line-through"
+                    : todo.status === "cancelled"
+                      ? "text-muted-foreground/60 line-through"
+                      : "text-foreground"
+                }`}
+              >
+                <span className="pt-0.5">{icon}</span>
+                <span className="min-w-0 break-words leading-snug">{todo.content}</span>
+              </li>
             );
-          return (
-            <li
-              key={t.id}
-              className={`flex items-start gap-2 ${
-                t.status === "completed"
-                  ? "text-muted-foreground line-through"
-                  : t.status === "cancelled"
-                    ? "text-muted-foreground/60 line-through"
-                    : "text-foreground"
-              }`}
-            >
-              <span className="pt-0.5">{icon}</span>
-              <span className="min-w-0 break-words">{t.content}</span>
-            </li>
-          );
-        })}
-      </ul>
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -217,16 +267,19 @@ export function AgentTimelineMessage({
   msg,
   isFirstAgent,
   isLastAgent,
+  showContext,
 }: {
   msg: AiMessage;
   isFirstAgent?: boolean;
   isLastAgent?: boolean;
+  /** When false, skip Nova Context strip (unchanged session vs previous start). */
+  showContext?: boolean;
 }) {
   const type = msg.type || "text";
   const dot = dotKindForMsg(msg);
   const content =
     type === "agent_start" ? (
-      <AgentStartMsg msg={msg} />
+      <AgentStartMsg msg={msg} showContext={showContext} />
     ) : type === "agent_thinking" ? (
       <AgentThinkingMsg msg={msg} />
     ) : type === "agent_tool" ? (

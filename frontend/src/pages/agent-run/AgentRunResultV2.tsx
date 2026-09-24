@@ -61,11 +61,16 @@ function EmptyReport({ viewModel }: { viewModel: ReportViewModel }) {
       </div>
     );
   }
+  const waiting = Boolean(viewModel.run.pendingQuestion?.trim());
   return (
     <div className="rounded-sm border border-dashed border-border px-5 py-10 text-center">
-      <p className="text-sm font-medium text-foreground">Отчёт ещё готовится</p>
+      <p className="text-sm font-medium text-foreground">
+        {waiting ? "Агент ждёт ответа выше" : "Отчёт ещё готовится"}
+      </p>
       <p className="mt-1 text-sm text-muted-foreground">
-        Когда агент закончит, здесь появится полный текст.
+        {waiting
+          ? "После ответа агент продолжит работу, и здесь появится полный текст."
+          : "Когда агент закончит, здесь появится полный текст."}
       </p>
     </div>
   );

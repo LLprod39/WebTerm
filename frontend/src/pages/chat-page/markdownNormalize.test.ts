@@ -57,6 +57,26 @@ describe("normalizeOperatorMarkdown", () => {
     );
   });
 
+  it("breaks a dense operator wall-of-text into readable paragraphs", () => {
+    const raw =
+      "Снимаю снимок nikitavm (id 33) и разбираю алерт #12378.nikitavm · IP 79.100.193.234:2201. " +
+      "Сейчас healthy: CPU 0.3%, RAM 19.5%, диск / 5.7% (11/247 GB). " +
+      "SSH-диагностика не удалась: нет request context для credentials. " +
+      "Скажи, что именно проверить дальше?";
+    const out = normalizeOperatorMarkdown(raw);
+    expect(out).toContain("алерт #12378. nikitavm");
+    expect(out.split("\n\n").length).toBeGreaterThanOrEqual(3);
+    expect(out).toMatch(/Скажи, что именно проверить дальше\?/);
+  });
+
+  it("lifts inline CPU/RAM/disk clauses into a short bullet list", () => {
+    const raw = "Сервер online. CPU 7.1%, RAM 19%, диск / 5.8% (11/247 GB). Дальше проверю SSH.";
+    const out = normalizeOperatorMarkdown(raw);
+    expect(out).toContain("- CPU 7.1%");
+    expect(out).toContain("- RAM 19%");
+    expect(out).toMatch(/диск \/\s*5\.8%/i);
+  });
+
   it("never rewrites fenced or inline code while normalizing surrounding prose", () => {
     const raw = [
       "До.После",

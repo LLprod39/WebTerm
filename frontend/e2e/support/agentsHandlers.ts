@@ -295,6 +295,105 @@ export function makeAgentsHandler(
       return detail ? json(detail) : json({ success: false }, 404);
     }
 
+    if (req.path.match(/^\/servers\/api\/agents\/runs\/\d+\/report\/v2\/$/) && req.method === "GET") {
+      const runId = Number(req.path.split("/")[5]);
+      const detail = runDetails.get(runId);
+      if (!detail) return json({ success: false }, 404);
+      const run = detail.run;
+      const isWaiting = run.status === "waiting" || Boolean(run.pending_question);
+      const isActive = ["running", "pending", "paused", "waiting", "plan_review"].includes(run.status);
+      return json({
+        success: true,
+        schema_version: 2,
+        run: {
+          id: run.id,
+          agent_id: run.agent_id,
+          agent_name: run.agent_name,
+          agent_type: run.agent_type,
+          agent_mode: run.agent_mode,
+          server_id: 1,
+          server_name: run.server_name,
+          pending_question: run.pending_question || "",
+          status: run.status,
+        },
+        lifecycle: {
+          status: run.status,
+          label: isWaiting ? "Ждёт ответа" : isActive ? "Выполняется" : run.status,
+          is_active: isActive,
+          is_terminal: !isActive,
+          started_at: run.started_at,
+          completed_at: run.completed_at,
+          duration_ms: run.duration_ms || 0,
+          can_cleanup: false,
+        },
+        outcome: {
+          status: isWaiting ? "running" : isActive ? "running" : "unknown",
+          label: isWaiting ? "Ждёт вас" : isActive ? "Выполняется" : "Нет подтверждённого результата",
+          reason: run.pending_question || "",
+          exit_reason: "",
+          source: "test",
+          severity: isWaiting ? "warning" : "info",
+          details: {},
+        },
+        evidence_state: {
+          status: "pending",
+          label: "Сбор доказательств продолжается",
+          summary: "",
+          coverage: { checked: null, total: null, unit: "объектов", ratio: null },
+        },
+        report_generation: {
+          status: "generating",
+          label: "Отчёт формируется",
+          ready: false,
+          error: "",
+          generated_at: null,
+        },
+        delivery: {
+          enabled: false,
+          configured: false,
+          channel: "",
+          status: "disabled",
+          label: "Доставка выключена",
+          description: "",
+          target: "",
+          severity: "info",
+          can_retry: false,
+          blocked_reason: "",
+          setup_url: "",
+          next_action: "",
+          updated_at: null,
+          attempt_count: 0,
+          last_attempt_at: null,
+        },
+        indicators: [],
+        findings: [],
+        actions: [],
+        phases: [],
+        counts: { events: 0, activities: 0, artifacts: 0 },
+        report_revision: "r2-test",
+        event_high_watermark: { sequence_no: 0, total: 0, updated_at: null },
+        updated_at: run.started_at,
+        document: {
+          available: false,
+          title: "",
+          format: "markdown",
+          size_bytes: 0,
+          size_label: "0 B",
+          checksum_sha256: "",
+          preview: "",
+          preview_truncated: false,
+          detail_url: "",
+          download_url: "",
+        },
+        evidence_links: {
+          events: `/servers/api/agents/runs/${run.id}/events/`,
+          activity: `/servers/api/agents/runs/${run.id}/activity/`,
+          artifacts: `/servers/api/agents/runs/${run.id}/artifacts/`,
+          audit_export: "",
+        },
+      });
+    }
+
     if (req.path.match(/^\/servers\/api\/agents\/runs\/\d+\/report\/$/) && req.method === "GET") {
       const runId = Number(req.path.split("/")[5]);
       const detail = runDetails.get(runId);

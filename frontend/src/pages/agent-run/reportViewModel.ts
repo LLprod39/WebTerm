@@ -536,7 +536,14 @@ function v2ViewModel(report: AgentRunReportV2Response): ReportViewModel {
       evidenceRefs: (item.evidence_refs || []).map((ref) => text(ref.ref)),
     }));
   const delivery = report.delivery;
-  const outcomeTone = reportTone(report.outcome.severity || report.outcome.status);
+  const lifecycleStatus = text(report.lifecycle.status);
+  const waitingForOperator = lifecycleStatus === "waiting" || Boolean(text(report.run.pending_question));
+  const outcomeTone = waitingForOperator
+    ? ("warning" as StatusTone)
+    : reportTone(report.outcome.severity || report.outcome.status);
+  const headerStatusLabel = waitingForOperator
+    ? "Ждёт вас"
+    : text(report.outcome.label, report.outcome.status);
   const transitionDelivery = delivery as typeof delivery & { summary?: string };
   // Только KPI задачи из схемы. Outcome/доставка уже в шапке и DeliveryLine —
   // дубли в strip делали любой отчёт одинаково шумным.
@@ -562,22 +569,24 @@ function v2ViewModel(report: AgentRunReportV2Response): ReportViewModel {
       agentMode: text(report.run.agent_mode),
       serverId: report.run.server_id,
       serverName: text(report.run.server_name),
-      lifecycleStatus: text(report.lifecycle.status),
+      lifecycleStatus: lifecycleStatus,
       isActive: Boolean(report.lifecycle.is_active),
       isTerminal: Boolean(report.lifecycle.is_terminal),
       canCleanup: Boolean(report.lifecycle.can_cleanup),
       canApprove: report.lifecycle.status === "plan_review",
-      pendingQuestion: "",
+      pendingQuestion: text(report.run.pending_question),
       startedAt: report.lifecycle.started_at,
       completedAt: report.lifecycle.completed_at,
       durationMs: report.lifecycle.duration_ms || 0,
     },
     header: {
       title: text(report.run.agent_name, `Отчёт #${report.run.id}`),
-      summary: localizedTechnicalText(report.outcome.reason || documentPreviewSummary(report.document?.preview) || report.evidence_state.summary) || "Отчёт пока формируется.",
-      statusLabel: text(report.outcome.label, report.outcome.status),
+      summary: waitingForOperator
+        ? text(report.run.pending_question, "Агент ждёт вашего ответа.")
+        : localizedTechnicalText(report.outcome.reason || documentPreviewSummary(report.document?.preview) || report.evidence_state.summary) || "Отчёт пока формируется.",
+      statusLabel: headerStatusLabel,
       statusTone: outcomeTone,
-      pulse: false,
+      pulse: waitingForOperator || Boolean(report.lifecycle.is_active),
     },
     axes: [
       { id: "lifecycle", label: "Запуск", value: text(report.lifecycle.label), detail: text(report.lifecycle.status), tone: lifecycleTone, pulse: report.lifecycle.is_active },

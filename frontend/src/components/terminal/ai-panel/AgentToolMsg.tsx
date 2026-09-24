@@ -8,6 +8,7 @@ import {
   Wrench,
 } from "lucide-react";
 import type { AiMessage } from "../ai-types";
+import { cn } from "@/lib/utils";
 
 function formatDuration(ms?: number): string {
   if (ms === undefined || ms < 0) return "";
@@ -60,14 +61,21 @@ export function AgentToolMsg({ msg }: { msg: AiMessage }) {
   );
   const outputLines = output ? output.split("\n") : [];
   const errorState = !ok || nonZeroExit;
+  const firstOutputLine = outputLines.find((line) => line.trim().length > 0) ?? "";
   return (
-    <div className={`overflow-hidden rounded-lg border ${errorState ? "border-destructive/40" : "border-border/50"}`}>
+    <div
+      className={cn(
+        "overflow-hidden border-b border-border/30 last:border-b-0",
+        errorState && "border-destructive/35",
+      )}
+    >
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className={`flex w-full items-center gap-1.5 px-2 py-1 text-left text-xs transition-colors hover:bg-secondary/30 ${
-          errorState ? "bg-destructive/5 text-destructive" : "bg-secondary/15 text-foreground"
-        }`}
+        className={cn(
+          "flex w-full items-center gap-1.5 px-1.5 py-1 text-left text-xs transition-colors hover:bg-secondary/25",
+          errorState ? "text-destructive" : "text-foreground",
+        )}
         title={cmdPreview || tool}
       >
         {statusIcon}
@@ -92,7 +100,7 @@ export function AgentToolMsg({ msg }: { msg: AiMessage }) {
           </span>
         ) : null}
         {duration ? (
-          <span className="shrink-0 text-xs text-muted-foreground">{duration}</span>
+          <span className="shrink-0 tabular-nums text-xs text-muted-foreground">{duration}</span>
         ) : null}
         {expanded ? (
           <ChevronUp className="h-3 w-3 shrink-0 opacity-40" />
@@ -101,7 +109,7 @@ export function AgentToolMsg({ msg }: { msg: AiMessage }) {
         )}
       </button>
       {expanded ? (
-        <div className="space-y-1.5 border-t border-border/30 bg-background/40 px-2 py-1.5 text-xs">
+        <div className="space-y-1.5 border-t border-border/25 bg-background/30 px-1.5 py-1.5 text-xs">
           {Object.keys(args).length > 0 ? (
             <details className="group">
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
@@ -126,20 +134,13 @@ export function AgentToolMsg({ msg }: { msg: AiMessage }) {
             </p>
           ) : null}
         </div>
-      ) : output ? (
-        // Collapsed inline preview — up to 2 lines of output so the user
-        // sees immediate feedback without expanding.
-        <div className="border-t border-border/20 bg-background/30 px-2 py-0.5 font-mono text-xs leading-snug text-muted-foreground/80">
-          <div className="max-h-8 overflow-hidden">
-            {outputLines.slice(0, 2).map((line, idx) => (
-              <div key={idx} className="truncate">
-                {line || "\u00a0"}
-              </div>
-            ))}
-          </div>
-          {outputLines.length > 2 ? (
-            <div className="text-xs italic text-muted-foreground/60">
-              +{outputLines.length - 2} строк — кликните чтобы раскрыть
+      ) : firstOutputLine ? (
+        // Collapsed: single-line result preview only.
+        <div className="px-1.5 pb-1 font-mono text-[11px] leading-snug text-muted-foreground/75">
+          <div className="truncate">{firstOutputLine}</div>
+          {outputLines.filter((l) => l.trim()).length > 1 ? (
+            <div className="text-[10px] italic text-muted-foreground/55">
+              +{outputLines.filter((l) => l.trim()).length - 1} — кликните чтобы раскрыть
             </div>
           ) : null}
         </div>

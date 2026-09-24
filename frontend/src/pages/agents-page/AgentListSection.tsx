@@ -4,6 +4,7 @@ import { ChevronDown, MoreHorizontal, ShieldCheck, Workflow } from "lucide-react
 import { ActionIcons, AgentIcons, NavIcons } from "@/lib/app-icons";
 
 import type { AgentItem, AgentRuntimeRunItem } from "@/lib/api";
+import { replyToAgent } from "@/lib/api";
 import { localize } from "@/lib/i18n";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
+import { OperatorHitlReply } from "../agent-run/OperatorHitlReply";
 import {
   agentModeLabel,
   formatScheduleConfigLabel,
@@ -45,6 +47,7 @@ type AgentListSectionProps = {
   onStop: (agent: AgentItem) => void;
   onDelete: (agent: AgentItem) => void;
   onTogglePause?: (agent: AgentItem) => void;
+  onReplySent?: () => void;
 };
 
 /** Quiet per-mode text colour: mini = teal, full = violet, multi = blue. */
@@ -107,8 +110,11 @@ export function AgentListSection({
   onStop,
   onDelete,
   onTogglePause,
+  onReplySent,
 }: AgentListSectionProps) {
   const [search, setSearch] = useState("");
+  const [replyDrafts, setReplyDrafts] = useState<Record<number, string>>({});
+  const [replyingRunId, setReplyingRunId] = useState<number | null>(null);
 
   const visibleAgents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -120,6 +126,21 @@ export function AgentListSection({
         (ag.server_names ?? []).some((name) => name.toLowerCase().includes(query)),
     );
   }, [agents, search]);
+
+  const sendInlineReply = async (runId: number, answer: string) => {
+    setReplyingRunId(runId);
+    try {
+      await replyToAgent(runId, answer);
+      setReplyDrafts((prev) => {
+        const next = { ...prev };
+        delete next[runId];
+        return next;
+      });
+      onReplySent?.();
+    } finally {
+      setReplyingRunId(null);
+    }
+  };
 
   if (totalCount === 0) {
     return (
@@ -258,7 +279,8 @@ export function AgentListSection({
               const activeRun = activeRunByAgentId.get(ag.id);
               const activeRunMeta = activeRunStatus(activeRun, ag.active_run_id, lang);
               const activeRunQuestion = String(activeRun?.pending_question || "").trim();
-              const activeRunCta = activeRunMeta.status === "waiting"
+              const needsReply = Boolean(activeRunQuestion) || activeRunMeta.status === "waiting";
+              const activeRunCta = needsReply
                 ? localize(lang, "Ответить", "Answer")
                 : activeRunMeta.status === "plan_review"
                   ? localize(lang, "Открыть план", "Open plan")
@@ -272,13 +294,16 @@ export function AgentListSection({
                   : "");
               const scheduled = isAgentScheduled(ag);
               const runMeta = ag.active_run_id
-                ? localize(lang, `выполняется · ${formatRuntimeAge(activeRun?.age_seconds)}`, `running · ${formatRuntimeAge(activeRun?.age_seconds)}`)
+                ? needsReply
+                  ? localize(lang, `ждёт ответа · ${formatRuntimeAge(activeRun?.age_seconds)}`, `waiting · ${formatRuntimeAge(activeRun?.age_seconds)}`)
+                  : localize(lang, `выполняется · ${formatRuntimeAge(activeRun?.age_seconds)}`, `running · ${formatRuntimeAge(activeRun?.age_seconds)}`)
                 : lastRunLabel(ag, lang);
               const scheduleMeta = isPaused
                 ? localize(lang, "на паузе", "paused")
                 : scheduled
                   ? [formatScheduleConfigLabel(ag.schedule_config, ag.schedule_minutes, lang), dueLabel].filter(Boolean).join(" · ")
                   : localize(lang, "вручную", "manual");
+              const activeRunId = ag.active_run_id;
 
               return (
                 <div
@@ -311,11 +336,19 @@ export function AgentListSection({
                         <p className="mt-0.5 truncate text-xs text-muted-foreground/75 lg:hidden">
                           {[runMeta, serverLabel(ag), scheduleMeta].filter(Boolean).join(" · ")}
                         </p>
-                        {activeRunQuestion ? (
-                          <p className="mt-1.5 flex max-w-2xl items-start gap-1.5 rounded-sm border border-warning/30 bg-warning/10 px-2 py-1.5 text-xs leading-4 text-foreground">
-                            <NavIcons.chat className="mt-0.5 h-3 w-3 shrink-0 text-warning" strokeWidth={1.5} aria-hidden />
-                            <span className="min-w-0 break-words">{activeRunQuestion}</span>
-                          </p>
+                        {activeRunQuestion && activeRunId ? (
+                          <div className="mt-2 max-w-2xl">
+                            <OperatorHitlReply
+                              compact
+                              question={activeRunQuestion}
+                              value={replyDrafts[activeRunId] || ""}
+                              onChange={(value) =>
+                                setReplyDrafts((prev) => ({ ...prev, [activeRunId]: value }))
+                              }
+                              onSubmit={(answer) => sendInlineReply(activeRunId, answer)}
+                              submitting={replyingRunId === activeRunId}
+                            />
+                          </div>
                         ) : null}
                         {!ag.active_run_id && blockedReason ? (
                           <p className="mt-1 max-w-2xl break-words text-xs leading-4 text-warning/90">{blockedReason}</p>
@@ -336,8 +369,8 @@ export function AgentListSection({
                     <div className="flex shrink-0 items-center justify-self-end gap-1 self-center">
                       {ag.active_run_id ? (
                         <Button asChild size="sm" className="h-8 gap-1.5 shadow-elev-1">
-                          <Link to={`/agents/run/${ag.active_run_id}`}>
-                            {activeRunMeta.status === "waiting" ? <NavIcons.chat className="h-3.5 w-3.5" strokeWidth={1.5} /> : null}
+                          <Link to={`/agents/run/${ag.active_run_id}${needsReply ? "?focus=reply" : ""}`}>
+                            {needsReply ? <NavIcons.chat className="h-3.5 w-3.5" strokeWidth={1.5} /> : null}
                             {activeRunCta}
                           </Link>
                         </Button>

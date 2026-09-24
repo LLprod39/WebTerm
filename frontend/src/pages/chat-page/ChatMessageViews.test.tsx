@@ -40,24 +40,44 @@ function dangerousAction(): AssistantAction {
   };
 }
 
+function completedAction(): AssistantAction {
+  return {
+    ...dangerousAction(),
+    id: 43,
+    title: "Run command",
+    status: "completed",
+    risk: "read",
+    requires_confirmation: false,
+    blast_radius: { server_ids: [1], server_names: ["nikitavm"], count: 1 },
+    dry_run_preview: { command: "journalctl -p err -n 50 --no-pager" },
+    result: { output: "-- No entries --" },
+  };
+}
+
 
 describe("ActionCard", () => {
-  it("requires the exact typed token and shows the frozen blast radius", () => {
+  it("keeps confirm controls inline and hides full where/command sections", () => {
     const onConfirm = vi.fn();
+    const onOpenDetails = vi.fn();
     render(
       <ActionCard
         action={dangerousAction()}
         isWorking={false}
         onConfirm={onConfirm}
         onCancel={vi.fn()}
+        onOpenDetails={onOpenDetails}
       />,
     );
 
-    expect(screen.getAllByText(/web-01, web-02/)).toHaveLength(2);
-    expect(screen.getByText(/Что произойдёт|What will happen/i)).toBeInTheDocument();
-    expect(screen.getByText(/Где|Where/i)).toBeInTheDocument();
+    expect(screen.getByText(/Затронет|Targets/i)).toBeInTheDocument();
+    expect(screen.getByText(/web-01, web-02/)).toBeInTheDocument();
+    expect(screen.getByText(/Run uptime on the selected servers/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Что произойдёт|What will happen/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Где|Where/i)).not.toBeInTheDocument();
     expect(screen.getByText(/runtime/i)).toBeInTheDocument();
-    expect(screen.getByText("$ uptime")).toBeInTheDocument();
+    expect(screen.getByText(/\$ uptime/)).toBeInTheDocument();
+    expect(screen.queryByRole("presentation")).not.toBeInTheDocument();
+
     const confirm = screen.getByRole("button", { name: /подтвердить|confirm/i });
     expect(confirm).toBeDisabled();
 
@@ -67,11 +87,34 @@ describe("ActionCard", () => {
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledWith(42, "FANOUT");
+
+    fireEvent.click(screen.getByRole("button", { name: /детали|details/i }));
+    expect(onOpenDetails).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }));
+  });
+
+  it("renders a compact completed chip without result body", () => {
+    const onOpenDetails = vi.fn();
+    render(
+      <ActionCard
+        action={completedAction()}
+        isWorking={false}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+        onOpenDetails={onOpenDetails}
+      />,
+    );
+
+    expect(screen.getByText("Run command")).toBeInTheDocument();
+    expect(screen.getByText(/Готово|Done/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Результат|Result/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("-- No entries --")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /детали|details/i }));
+    expect(onOpenDetails).toHaveBeenCalled();
   });
 });
 
 describe("MetricSeriesReportCard", () => {
-  it("renders a responsive, stable report card with chart semantics and summary", () => {
+  it("renders a compact report with chart semantics and summary", () => {
     render(
       <MetricSeriesReportCard
         chart={{
@@ -85,9 +128,99 @@ describe("MetricSeriesReportCard", () => {
     const report = screen.getByTestId("metric-series-report");
     expect(report).toHaveAttribute("role", "img");
     expect(report).toHaveAttribute("aria-label", expect.stringMatching(/CPU web-01/i));
-    expect(report).toHaveClass("w-full", "max-w-[640px]", "min-h-[190px]", "sm:min-h-[220px]");
+    expect(report).toHaveClass("w-full", "max-w-[420px]");
+    expect(report).not.toHaveClass("min-h-[190px]");
     expect(screen.getByText("31%")).toBeInTheDocument();
     expect(screen.getByText(/Рост на 13%|Up 13%/i)).toBeInTheDocument();
+  });
+
+  it("hides the sparkline when the series is flat", () => {
+    const { container } = render(
+      <MetricSeriesReportCard
+        chart={{
+          title: "disk_percent",
+          series: [5, 5, 5, 5],
+          unit: "%",
+        }}
+      />,
+    );
+    expect(screen.getByText("5.0%")).toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeNull();
+  });
+});
+
+describe("MessageBubble evidence fold", () => {
+  it("collapses stacked metrics/chart/alerts behind a disclosure", () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 92,
+          role: "assistant",
+          content: "Сводка по серверу.",
+          created_at: "2026-08-25T12:00:00Z",
+          metadata: {
+            metrics: {
+              name: "nikitavm",
+              status: "healthy",
+              cpu_percent: 7,
+              mem_percent: 19,
+            },
+            chart: { title: "disk", series: [5, 5, 5], unit: "%" },
+            tables: [
+              {
+                title: "Алерты",
+                kind: "alerts",
+                items: Array.from({ length: 5 }, (_, i) => ({
+                  id: i + 1,
+                  title: "Server unreachable",
+                  server_name: "nikitavm",
+                  severity: "critical",
+                })),
+              },
+            ],
+          },
+        }}
+        actionWorkingId={null}
+        onConfirmAction={vi.fn()}
+        onCancelAction={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Данные ответа|Reply data/i)).toBeInTheDocument();
+    expect(screen.queryByText("nikitavm")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Данные ответа|Reply data/i }));
+    expect(screen.getByText("nikitavm")).toBeInTheDocument();
+    expect(screen.getByText(/×5/)).toBeInTheDocument();
+  });
+
+  it("folds a single metrics block when the message also has actions", () => {
+    render(
+      <MessageBubble
+        message={{
+          id: 93,
+          role: "assistant",
+          content: "Проверил логи.",
+          created_at: "2026-08-25T12:00:00Z",
+          metadata: {
+            metrics: {
+              name: "nikitavm",
+              status: "healthy",
+              cpu_percent: 2.7,
+              mem_percent: 19,
+            },
+            actions: [completedAction()],
+          },
+        }}
+        actionWorkingId={null}
+        onConfirmAction={vi.fn()}
+        onCancelAction={vi.fn()}
+        onOpenActionDetails={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Данные ответа|Reply data/i)).toBeInTheDocument();
+    expect(screen.queryByText("2.7%")).not.toBeInTheDocument();
+    expect(screen.getByText("Run command")).toBeInTheDocument();
   });
 });
 

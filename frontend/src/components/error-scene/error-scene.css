@@ -1,0 +1,44 @@
+@keyframes error-tear {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(28px);
+    opacity: 0;
+  }
+}
+
+@keyframes error-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.55;
+  }
+  100% {
+    transform: translateY(140px);
+    opacity: 0;
+  }
+}
+
+.error-tear {
+  opacity: 0;
+  animation: error-tear 2.4s ease-in-out infinite;
+}
+
+.error-scan {
+  animation: error-scan 3.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .error-tear,
+  .error-scan {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}

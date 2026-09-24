@@ -43,26 +43,33 @@ function statusTone(status: string): string {
   return "bg-muted text-muted-foreground";
 }
 
+function formatPct(pct: number | null): string {
+  if (pct == null) return "—";
+  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
+}
+
 function MetricBar({
   label,
   icon,
   pct,
   suffix,
+  dense = false,
 }: {
   label: string;
   icon: ReactNode;
   pct: number | null;
   suffix?: string;
+  dense?: boolean;
 }) {
   return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className="flex items-center gap-1.5 text-muted-foreground">
+    <div className={dense ? "space-y-0.5" : "space-y-1"}>
+      <div className="flex items-center justify-between gap-2 text-[10.5px]">
+        <span className="flex min-w-0 items-center gap-1 text-muted-foreground">
           {icon}
-          {label}
+          <span className="truncate">{label}</span>
         </span>
-        <span className="font-mono tabular-nums text-foreground/90">
-          {pct == null ? "—" : `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`}
+        <span className="shrink-0 font-mono tabular-nums text-foreground/90">
+          {formatPct(pct)}
           {suffix ? <span className="ml-1 text-muted-foreground/70">{suffix}</span> : null}
         </span>
       </div>
@@ -89,85 +96,89 @@ export function MetricsSnapshotCard({ data }: { data: MetricsSnapshot }) {
     .slice(0, 6);
   const status = String(data.status || "unknown");
 
-  // Prefer non-root mounts that are hot; always show root first if present
   const rootMount = mounts.find((m) => m.mount === "/");
   const otherMounts = mounts.filter((m) => m.mount !== "/");
   const orderedMounts = rootMount ? [rootMount, ...otherMounts] : mounts;
+  const showRootBar = root != null && !rootMount;
+  const stamp = data.collected_at
+    ? data.collected_at.slice(0, 19).replace("T", " ")
+    : null;
 
   return (
-    <div className="w-full max-w-[360px] overflow-hidden rounded-sm border border-border/50 bg-card/40 shadow-sm">
-      <div className="flex items-start justify-between gap-2 border-b border-border/40 px-3.5 py-2.5">
+    <div className="w-full max-w-[360px] overflow-hidden rounded-sm border border-border/50 bg-card/40">
+      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
         <div className="min-w-0">
-          <div className="truncate text-[13px] font-semibold tracking-tight text-foreground">
-            {data.name || (data.server_id ? `server #${data.server_id}` : "metrics")}
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-[12px] font-semibold tracking-tight text-foreground">
+              {data.name || (data.server_id ? `server #${data.server_id}` : "metrics")}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-sm px-1.5 py-px text-[10px] font-medium capitalize",
+                statusTone(status),
+              )}
+            >
+              {status}
+            </span>
           </div>
-          {data.host ? (
-            <div className="truncate font-mono text-[10px] text-muted-foreground/70">{data.host}</div>
+          {data.host || stamp || data.note ? (
+            <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground/70">
+              {[data.host, data.note || (stamp ? localize(lang, `снимок · ${stamp}`, `sample · ${stamp}`) : null)]
+                .filter(Boolean)
+                .join(" · ")}
+            </div>
           ) : null}
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-sm px-2 py-0.5 text-[10px] font-medium capitalize",
-            statusTone(status),
-          )}
-        >
-          {status}
-        </span>
       </div>
 
-      <div className="space-y-3 px-3.5 py-3">
-        <MetricBar
-          label="CPU"
-          icon={<Activity className="h-3 w-3" />}
-          pct={cpu}
-        />
-        <MetricBar
-          label="RAM"
-          icon={<MemoryStick className="h-3 w-3" />}
-          pct={mem}
-        />
-        {root != null && !rootMount ? (
+      <div className="grid grid-cols-3 gap-2 border-t border-border/30 px-2.5 py-2">
+        <MetricBar dense label="CPU" icon={<Activity className="h-3 w-3" />} pct={cpu} />
+        <MetricBar dense label="RAM" icon={<MemoryStick className="h-3 w-3" />} pct={mem} />
+        {showRootBar ? (
           <MetricBar
-            label={localize(lang, "Диск /", "Disk /")}
+            dense
+            label={localize(lang, "Диск", "Disk")}
             icon={<HardDrive className="h-3 w-3" />}
             pct={root}
           />
-        ) : null}
-
-        {orderedMounts.length ? (
-          <div className="space-y-2 border-t border-border/30 pt-2.5">
-            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
-              {localize(lang, "Тома", "Mounts")}
-            </div>
-            {orderedMounts.map((m, i) => {
-              const pct = clampPct(m.percent);
-              const used =
-                m.used_gb != null && m.total_gb != null
-                  ? `${Number(m.used_gb).toFixed(0)}/${Number(m.total_gb).toFixed(0)} GB`
-                  : undefined;
-              return (
-                <MetricBar
-                  key={`${m.mount || i}`}
-                  label={String(m.mount || "—")}
-                  icon={<HardDrive className="h-3 w-3 opacity-60" />}
-                  pct={pct}
-                  suffix={used}
-                />
-              );
-            })}
-          </div>
-        ) : null}
+        ) : orderedMounts[0] ? (
+          <MetricBar
+            dense
+            label={String(orderedMounts[0].mount || localize(lang, "Диск", "Disk"))}
+            icon={<HardDrive className="h-3 w-3" />}
+            pct={clampPct(orderedMounts[0].percent)}
+            suffix={
+              orderedMounts[0].used_gb != null && orderedMounts[0].total_gb != null
+                ? `${Number(orderedMounts[0].used_gb).toFixed(0)}/${Number(orderedMounts[0].total_gb).toFixed(0)}G`
+                : undefined
+            }
+          />
+        ) : (
+          <MetricBar dense label={localize(lang, "Диск", "Disk")} icon={<HardDrive className="h-3 w-3" />} pct={null} />
+        )}
       </div>
 
-      {(data.note || data.collected_at) && (
-        <div className="border-t border-border/30 px-3.5 py-2 text-[10px] leading-4 text-muted-foreground/70">
-          {data.note
-            ? data.note
-            : data.collected_at
-              ? localize(lang, `снимок · ${data.collected_at.slice(0, 19).replace("T", " ")}`, `sample · ${data.collected_at.slice(0, 19).replace("T", " ")}`)
-              : null}
+      {orderedMounts.length > 1 ? (
+        <div className="space-y-1 border-t border-border/30 px-2.5 py-1.5">
+          {orderedMounts.slice(1, 3).map((m, i) => {
+            const pct = clampPct(m.percent);
+            const used =
+              m.used_gb != null && m.total_gb != null
+                ? `${Number(m.used_gb).toFixed(0)}/${Number(m.total_gb).toFixed(0)} GB`
+                : undefined;
+            return (
+              <MetricBar
+                key={`${m.mount || i}`}
+                dense
+                label={String(m.mount || "—")}
+                icon={<HardDrive className="h-3 w-3 opacity-60" />}
+                pct={pct}
+                suffix={used}
+              />
+            );
+          })}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
