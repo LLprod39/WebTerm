@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import type { SettingsConfig } from "@/lib/api";
 import { API_KEY_PROVIDERS, getProviderLabel, LLM_PROVIDERS } from "./constants";
 import { OllamaRuntimeSettings } from "./OllamaRuntimeSettings";
+import { ProviderModelPicker } from "./ProviderModelPicker";
 import { PurposeModelSelector } from "./PurposeModelSelector";
 import { SectionCard } from "./SectionCard";
 import type { UseAiSettingsFormResult } from "./useAiSettingsForm";
@@ -30,7 +31,7 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
         description="Основной провайдер и модель для общего режима"
       >
         <div className="space-y-5">
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
             {form.providerOverview.map((providerItem) => (
               <button
                 key={providerItem.value}
@@ -91,40 +92,22 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
               hint={
                 modelControlsDisabled
                   ? "Только администратор может менять модели и провайдеры."
-                  : form.availableModels.length
-                    ? `${getProviderLabel(form.provider)} · модель из каталога`
-                    : `${getProviderLabel(form.provider)} · ручной ввод модели`
+                  : form.provider === "openrouter"
+                    ? "Вставьте id с openrouter.ai или выберите из каталога (Free / Paid)."
+                    : form.availableModels.length
+                      ? `${getProviderLabel(form.provider)} · модель из каталога или ручной ввод`
+                      : `${getProviderLabel(form.provider)} · ручной ввод модели`
               }
             >
-              {form.availableModels.length > 0 ? (
-                <Select value={form.model} onValueChange={form.setModel} disabled={modelControlsDisabled}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {form.availableModels.map((providerModel) => (
-                      <SelectItem key={providerModel} value={providerModel}>{providerModel}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <div className="flex gap-2">
-                  <Input
-                    value={form.model}
-                    onChange={(e) => form.setModel(e.target.value)}
-                    placeholder="Название модели"
-                    className="h-9"
-                    disabled={modelControlsDisabled}
-                  />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-9 px-3"
-                    onClick={form.onRefreshModels}
-                    disabled={modelControlsDisabled || form.refreshing}
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5", form.refreshing && "animate-spin")} />
-                  </Button>
-                </div>
-              )}
+              <ProviderModelPicker
+                provider={form.provider}
+                value={form.model}
+                availableModels={form.availableModels}
+                disabled={modelControlsDisabled}
+                refreshing={form.refreshing}
+                onChange={form.setModel}
+                onRefresh={form.onRefreshModels}
+              />
             </SettingsField>
           </div>
 

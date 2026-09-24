@@ -19,6 +19,7 @@ export const LLM_PROVIDERS = [
   { value: "gemini", label: "Gemini (Google)" },
   { value: "openai", label: "OpenAI" },
   { value: "claude", label: "Claude (Anthropic)" },
+  { value: "openrouter", label: "OpenRouter" },
   { value: "ollama", label: "Ollama" },
 ];
 
@@ -61,6 +62,7 @@ export const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   grok: "grok_set",
   openai: "openai_set",
   claude: "claude_set",
+  openrouter: "openrouter_set",
   ollama: "ollama_set",
 };
 
@@ -69,6 +71,7 @@ export const API_KEY_PROVIDERS = [
   { value: "grok", name: "Grok", statusKey: "grok_set", envName: "GROK_API_KEY", placeholder: "xai-..." },
   { value: "openai", name: "OpenAI", statusKey: "openai_set", envName: "OPENAI_API_KEY", placeholder: "sk-..." },
   { value: "claude", name: "Claude", statusKey: "claude_set", envName: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
+  { value: "openrouter", name: "OpenRouter", statusKey: "openrouter_set", envName: "OPENROUTER_API_KEY", placeholder: "sk-or-..." },
   { value: "ollama", name: "Ollama Cloud", statusKey: "ollama_cloud_set", envName: "OLLAMA_API_KEY", placeholder: "ollama key" },
 ];
 
@@ -109,6 +112,13 @@ export const PROVIDER_METADATA: Record<
     badge: "Анализ текста",
     brand: "Anthropic",
     slogan: "Полезен для разборов, аккуратных отчётов и сложных инструкций.",
+  },
+  openrouter: {
+    accentColor: "bg-info",
+    textColor: "text-info",
+    badge: "Единый шлюз",
+    brand: "OpenRouter",
+    slogan: "Доступ к моделям разных вендоров через один API-ключ.",
   },
   ollama: {
     accentColor: "bg-info",
@@ -204,6 +214,7 @@ export function getProviderEnabled(config: SettingsConfig, provider: string): bo
   if (provider === "openai") return config.openai_enabled;
   if (provider === "claude") return config.claude_enabled;
   if (provider === "ollama") return config.ollama_enabled;
+  if (provider === "openrouter") return Boolean(config.openrouter_enabled);
   return config.grok_enabled;
 }
 
@@ -212,5 +223,6 @@ export function getSavedModelForProvider(config: SettingsConfig, provider: strin
   if (provider === "openai") return config.chat_model_openai || "";
   if (provider === "claude") return config.chat_model_claude || "";
   if (provider === "ollama") return config.chat_model_ollama || "";
+  if (provider === "openrouter") return config.chat_model_openrouter || "";
   return config.chat_model_grok || "";
 }

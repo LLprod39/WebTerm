@@ -174,6 +174,45 @@ async def stream_provider_chat(
             yield chunk
         return
 
+    elif model == "openrouter":
+        if not model_manager.config.openrouter_enabled:
+            raise ProviderRuntimeError("provider_disabled", "OpenRouter API is disabled")
+
+        if not provider.openrouter_api_key:
+            raise ProviderRuntimeError("provider_auth_required", "OpenRouter API key is not configured")
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {provider.openrouter_api_key}",
+            "HTTP-Referer": "https://webtrerm.local",
+            "X-Title": "WebTrerm",
+        }
+        openrouter_model = specific_model or model_manager.get_chat_model("openrouter")
+        request = build_chat_completions_request(
+            api_url="https://openrouter.ai/api/v1/chat/completions",
+            target_model=openrouter_model,
+            prompt=prompt,
+            system_prompt=system_prompt,
+            json_mode=json_mode,
+            temperature=0.7,
+        )
+
+        async for chunk in stream_openai_compatible_response(
+            provider="openrouter",
+            display_name="OpenRouter",
+            request=request,
+            headers=headers,
+            target_model=openrouter_model,
+            prompt=prompt,
+            purpose=purpose,
+            timeout_seconds=float(_provider_timeout_seconds("openrouter")),
+            max_attempts=_retry_attempts(),
+            usage_logger=_log_llm_usage,
+            trust_env=True,
+        ):
+            yield chunk
+        return
+
     elif model == "claude":
         if not model_manager.config.claude_enabled:
             raise ProviderRuntimeError("provider_disabled", "Claude API is disabled")

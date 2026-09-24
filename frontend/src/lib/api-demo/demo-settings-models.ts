@@ -78,7 +78,9 @@ export function demoSettingsModelsFallback<T>(path: string, _options: RequestIni
             ? ["claude-sonnet-4-6"]
             : requestedProvider === "grok"
               ? ["grok-3"]
-              : ["gemini-2.0-flash"];
+              : requestedProvider === "openrouter"
+                ? ["openai/gpt-4o-mini", "anthropic/claude-sonnet-4"]
+                : ["gemini-2.0-flash"];
     return { success: true, provider: requestedProvider, models: demoModels, count: demoModels.length } as T;
   }
   if (path.includes("/api/models")) return DEMO_MODELS as T;

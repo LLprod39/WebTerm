@@ -97,6 +97,19 @@ def test_resolve_stream_provider_returns_requested_provider_unchanged():
     assert model == "gemini-test"
 
 
+def test_resolve_stream_provider_accepts_openrouter_api_target():
+    manager = _ModelManager("openrouter", "openai/gpt-4o-mini", SimpleNamespace())
+    provider, model = resolve_stream_provider(
+        requested_provider="openrouter_api",
+        requested_specific_model="anthropic/claude-sonnet-4",
+        purpose="agent",
+        model_manager=manager,
+        keys=RuntimeProviderKeys(),
+        ollama_base_url="",
+    )
+    assert (provider, model) == ("openrouter", "anthropic/claude-sonnet-4")
+
+
 def test_resolve_stream_provider_accepts_canonical_api_target():
     manager = _ModelManager("openai", "gpt-test", SimpleNamespace())
     provider, model = resolve_stream_provider(

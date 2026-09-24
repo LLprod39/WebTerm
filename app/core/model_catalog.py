@@ -29,6 +29,12 @@ DEFAULT_CLAUDE_MODELS = [
     "claude-haiku-4-5-20251001",
 ]
 
+DEFAULT_OPENROUTER_MODELS = [
+    "openai/gpt-4o-mini",
+    "anthropic/claude-sonnet-4",
+    "google/gemini-2.0-flash-001",
+]
+
 
 @dataclass(frozen=True)
 class ProviderModelSpec:
@@ -91,6 +97,14 @@ PROVIDER_MODEL_SPECS: dict[str, ProviderModelSpec] = {
         available_models_attr="available_ollama_models",
         default_models=tuple(DEFAULT_OLLAMA_MODELS),
         enabled_field="ollama_enabled",
+    ),
+    "openrouter": ProviderModelSpec(
+        provider="openrouter",
+        chat_model_field="chat_model_openrouter",
+        agent_model_fields=("agent_model_openrouter",),
+        available_models_attr="available_openrouter_models",
+        default_models=tuple(DEFAULT_OPENROUTER_MODELS),
+        enabled_field="openrouter_enabled",
     ),
 }
 

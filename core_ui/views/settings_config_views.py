@@ -17,7 +17,7 @@ from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm
 from core_ui.models import UserActivityLog
 from core_ui.services.settings_status import ldap_status_payload, selected_provider_readiness
 
-LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "ollama"}
+LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "ollama", "openrouter"}
 DOMAIN_AUTH_SETTINGS_KEYS = {
     "domain_auth_enabled",
     "domain_auth_header",
@@ -54,6 +54,9 @@ def _set_runtime_api_key(provider: str, value: str) -> None:
     elif provider == "ollama":
         model_manager.ollama_api_key = resolved or None
         model_manager.set_api_keys(ollama_key=resolved or None)
+    elif provider == "openrouter":
+        model_manager.openrouter_api_key = resolved or None
+        model_manager.set_api_keys(openrouter_key=resolved or None)
 
 
 def _reset_llm_provider_cache() -> None:
@@ -98,6 +101,8 @@ def _save_api_keys_from_payload(data: dict) -> list[str]:
                 fallback = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
             elif provider_key == "ollama":
                 fallback = (os.getenv("OLLAMA_API_KEY") or "").strip()
+            elif provider_key == "openrouter":
+                fallback = (os.getenv("OPENROUTER_API_KEY") or "").strip()
             _set_runtime_api_key(provider_key, fallback)
             changed.append(f"{provider_key}_api_key_cleared")
 
@@ -128,6 +133,7 @@ def _api_key_status(config) -> dict:
         "openai_set": _has_api_key("openai", "OPENAI_API_KEY", "CODEX_API_KEY"),
         "anthropic_set": _has_api_key("claude", "ANTHROPIC_API_KEY"),
         "claude_set": _has_api_key("claude", "ANTHROPIC_API_KEY"),
+        "openrouter_set": _has_api_key("openrouter", "OPENROUTER_API_KEY"),
         "ollama_local_set": bool(
             getattr(config, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
         ),
@@ -154,16 +160,19 @@ def _settings_config_payload(config, delegate_ui: str) -> dict:
         "openai_enabled": getattr(config, "openai_enabled", False),
         "claude_enabled": getattr(config, "claude_enabled", False),
         "ollama_enabled": getattr(config, "ollama_enabled", False),
+        "openrouter_enabled": getattr(config, "openrouter_enabled", False),
         "chat_model_gemini": config.chat_model_gemini,
         "chat_model_grok": config.chat_model_grok,
         "chat_model_openai": getattr(config, "chat_model_openai", "gpt-5-mini"),
         "chat_model_claude": getattr(config, "chat_model_claude", "claude-sonnet-4-6"),
         "chat_model_ollama": getattr(config, "chat_model_ollama", "") or "",
+        "chat_model_openrouter": getattr(config, "chat_model_openrouter", "openai/gpt-4o-mini"),
         "rag_model": config.rag_model,
         "agent_model_gemini": config.agent_model_gemini,
         "agent_model_grok": config.agent_model_grok,
         "agent_model_openai": getattr(config, "agent_model_openai", "gpt-5-mini"),
         "agent_model_ollama": getattr(config, "agent_model_ollama", "") or "",
+        "agent_model_openrouter": getattr(config, "agent_model_openrouter", "openai/gpt-4o-mini"),
         "ollama_base_url": getattr(config, "ollama_base_url", "http://127.0.0.1:11434") or "http://127.0.0.1:11434",
         "ollama_runtime_mode": getattr(config, "ollama_runtime_mode", "auto") or "auto",
         "ollama_cloud_enabled": getattr(config, "ollama_cloud_enabled", False),
@@ -244,8 +253,10 @@ def _allowed_settings_keys() -> set[str]:
         "openai_enabled",
         "claude_enabled",
         "ollama_enabled",
+        "openrouter_enabled",
         "chat_model_claude",
         "chat_model_ollama",
+        "chat_model_openrouter",
         "default_orchestrator_mode",
         "ralph_max_iterations",
         "ralph_completion_promise",
@@ -262,6 +273,7 @@ def _allowed_settings_keys() -> set[str]:
         "orchestrator_llm_provider",
         "orchestrator_llm_model",
         "agent_model_ollama",
+        "agent_model_openrouter",
         "openai_reasoning_effort",
         "log_terminal_commands",
         "log_ai_assistant",
@@ -359,7 +371,7 @@ def _enable_selected_providers(data: dict) -> None:
         "internal_llm_provider",
     ):
         provider = data.get(provider_key)
-        if provider in ("gemini", "grok", "openai", "claude", "ollama"):
+        if provider in ("gemini", "grok", "openai", "claude", "ollama", "openrouter"):
             data[f"{provider}_enabled"] = True
 
 

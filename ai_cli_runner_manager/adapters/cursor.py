@@ -31,6 +31,29 @@ _STATUS_UNAUTHENTICATED = re.compile(
     re.IGNORECASE,
 )
 
+# Cursor CLI is always launched with --mode=ask (safe ephemeral workspace).
+# Without this bridge, Cursor invents "no ssh_execute / Cursor Ask / MCP cursor
+# namespace" and refuses WebTerm ReAct ACTION lines that an external executor runs.
+_WEBTERM_CURSOR_ASK_BRIDGE = """\
+[WebTerm runtime bridge — read carefully]
+You are running inside Cursor CLI `--mode=ask` in an isolated WebTerm runner.
+Ask mode here is intentional and does NOT mean Ops tools are unavailable.
+
+Rules:
+- Do NOT search Cursor IDE MCP namespaces (cursor / AwaitShell / Task / WebSearch).
+- Do NOT refuse with "Ask mode", "no ssh_execute in Cursor", or "connect Ops/SSH MCP".
+- If the prompt lists THOUGHT/ACTION or tools like ssh_execute, open_connection,
+  read_console, report — those are WebTerm Ops tools. Emit them as TEXT so WebTerm
+  can execute them outside this CLI. Your job is to plan and output ACTION lines.
+- Never claim SSH/Ops tools are missing when they appear in the prompt's tool list.
+"""
+
+
+def cursor_prompt_from_request(request: RunnerRequestV1) -> str:
+    """Prefix every Cursor Ask prompt with the WebTerm bridge instructions."""
+    body = prompt_from_request(request)
+    return f"{_WEBTERM_CURSOR_ASK_BRIDGE}\n\n{body}"
+
 
 class CursorCliError(RuntimeError):
     pass
@@ -172,7 +195,7 @@ async def _cursor_is_authenticated() -> bool:
 
 
 async def _cursor_run(request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
-    prompt = prompt_from_request(request)
+    prompt = cursor_prompt_from_request(request)
     model = (request.model_id or "auto").strip() or "auto"
     args = [
         "agent",

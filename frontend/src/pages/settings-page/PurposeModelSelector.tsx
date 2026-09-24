@@ -1,11 +1,9 @@
 import type { ElementType } from "react";
-import { RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SettingsField } from "@/components/settings/SettingsPageShell";
 import { cn } from "@/lib/utils";
 import { getProviderLabel, LLM_PROVIDERS } from "./constants";
+import { ProviderModelPicker } from "./ProviderModelPicker";
 
 type PurposeModelSelectorProps = {
   label: string;
@@ -64,35 +62,15 @@ export function PurposeModelSelector({
           </Select>
         </SettingsField>
         <SettingsField label="Модель">
-          {availableModels.length > 0 ? (
-            <Select value={model} onValueChange={onModelChange} disabled={disabled}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {availableModels.map((m) => (
-                  <SelectItem key={m} value={m}>{m}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <div className="flex gap-1.5">
-              <Input
-                value={model}
-                onChange={(e) => onModelChange(e.target.value)}
-                placeholder="Model name"
-                className="h-9 text-sm"
-                disabled={disabled}
-              />
-              <Button
-                size="icon"
-                variant="outline"
-                className="h-9 w-9 shrink-0"
-                onClick={onRefresh}
-                disabled={disabled || refreshing}
-              >
-                <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
-              </Button>
-            </div>
-          )}
+          <ProviderModelPicker
+            provider={provider}
+            value={model}
+            availableModels={availableModels}
+            disabled={disabled}
+            refreshing={refreshing}
+            onChange={onModelChange}
+            onRefresh={onRefresh}
+          />
         </SettingsField>
       </div>
 
@@ -100,19 +78,6 @@ export function PurposeModelSelector({
         <span>{getProviderLabel(provider)}</span>
         <span>{availableModels.length ? `${availableModels.length} в каталоге` : "Ручной ввод"}</span>
       </div>
-
-      {availableModels.length > 0 && !disabled ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-8 justify-start px-2 text-xs text-muted-foreground"
-          onClick={onRefresh}
-          disabled={refreshing}
-        >
-          <RefreshCw className={cn("mr-1.5 h-3 w-3", refreshing && "animate-spin")} />
-          Обновить список
-        </Button>
-      ) : null}
     </div>
   );
 }

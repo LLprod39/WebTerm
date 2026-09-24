@@ -6,7 +6,7 @@ from loguru import logger
 
 from app.core.llm_secrets import get_managed_llm_api_keys
 
-LLM_KEY_PROVIDERS = ("gemini", "grok", "openai", "claude", "ollama")
+LLM_KEY_PROVIDERS = ("gemini", "grok", "openai", "claude", "ollama", "openrouter")
 
 
 async def load_managed_llm_keys() -> dict[str, str]:
@@ -45,10 +45,15 @@ def apply_managed_llm_keys(provider: Any, model_manager: Any, keys: dict[str, st
         provider.anthropic_api_key = claude_key
         provider._anthropic_client = None
 
+    openrouter_key = (keys.get("openrouter") or "").strip()
+    if openrouter_key:
+        provider.openrouter_api_key = openrouter_key
+
     model_manager.set_api_keys(
         gemini_key=gemini_key or None,
         grok_key=grok_key or None,
         anthropic_key=claude_key or None,
         openai_key=openai_key or None,
         ollama_key=ollama_key or None,
+        openrouter_key=openrouter_key or None,
     )

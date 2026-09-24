@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-KNOWN_MODEL_PROVIDERS = {"auto", "gemini", "openai", "grok", "claude", "ollama"}
+KNOWN_MODEL_PROVIDERS = {"auto", "gemini", "openai", "grok", "claude", "ollama", "openrouter"}
 
 
 def resolve_provider_and_model(

@@ -57,10 +57,31 @@ def resolve_execution_context(
     user_default = _user_preference(context)
     workspace_default = _workspace_preference(context)
     route = resolve_provider_route(
-        explicit=explicit_binding or context.binding,
-        stored=stored_binding,
-        user_default=binding_from_preference(user_default),
-        workspace_default=binding_from_preference(workspace_default) or platform_default,
+        explicit=_usable_or_none(
+            explicit_binding or context.binding,
+            user_id=context.actor_user_id,
+            project_id=context.project_id,
+            mode=context.mode,
+        ),
+        stored=_usable_or_none(
+            stored_binding,
+            user_id=context.actor_user_id,
+            project_id=context.project_id,
+            mode=context.mode,
+        ),
+        user_default=_usable_or_none(
+            binding_from_preference(user_default),
+            user_id=context.actor_user_id,
+            project_id=context.project_id,
+            mode=context.mode,
+        ),
+        workspace_default=_usable_or_none(
+            binding_from_preference(workspace_default) or platform_default,
+            user_id=context.actor_user_id,
+            project_id=context.project_id,
+            mode=context.mode,
+        )
+        or platform_default,
         can_use=lambda binding: can_use_binding(
             binding,
             user_id=context.actor_user_id,
@@ -69,6 +90,51 @@ def resolve_execution_context(
         ).as_route_decision(),
     )
     return context.with_binding(route.binding)
+
+
+_ORPHAN_BINDING_REASONS = frozenset(
+    {
+        "connection does not exist",
+        "connection is disabled",
+        "pool does not exist or is disabled",
+    }
+)
+
+
+def is_orphan_binding_reason(reason: str) -> bool:
+    """True when a binding points at a deleted/disabled/revoked connection or pool."""
+    normalized = str(reason or "").strip()
+    if normalized in _ORPHAN_BINDING_REASONS:
+        return True
+    # e.g. "connection status is revoked"
+    return normalized.startswith("connection status is ")
+
+
+def _usable_or_none(
+    binding: ProviderBinding | None,
+    *,
+    user_id: int | None,
+    project_id: int | None,
+    mode: ExecutionMode,
+) -> ProviderBinding | None:
+    """Drop deleted/revoked stored routes so platform defaults can take over.
+
+    Real access denials (missing grants, wrong owner) stay in place and still
+    fail closed inside ``resolve_provider_route``.
+    """
+    if binding is None:
+        return None
+    decision = can_use_binding(
+        binding,
+        user_id=user_id,
+        project_id=project_id,
+        mode=mode,
+    )
+    if decision.allowed:
+        return binding
+    if is_orphan_binding_reason(decision.reason):
+        return None
+    return binding
 
 
 def _user_preference(context: LLMExecutionContext) -> AIProviderPreference | None:

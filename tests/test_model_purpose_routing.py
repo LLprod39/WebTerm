@@ -218,3 +218,25 @@ class TestA4ExpandedTerminalPurposes:
         provider, model = mgr.resolve_purpose("agent")
         assert provider == "openai"
         assert model == "gpt-5"
+
+
+class TestOpenRouterPurposeRouting:
+    def test_openrouter_internal_provider_uses_chat_model(self):
+        mgr = _make_manager(
+            internal_llm_provider="openrouter",
+            chat_model_openrouter="openai/gpt-4o-mini",
+            agent_model_openrouter="anthropic/claude-sonnet-4",
+        )
+        provider, model = mgr.resolve_purpose("chat")
+        assert provider == "openrouter"
+        assert model == "openai/gpt-4o-mini"
+
+    def test_openrouter_agent_uses_agent_model(self):
+        mgr = _make_manager(
+            internal_llm_provider="openrouter",
+            chat_model_openrouter="openai/gpt-4o-mini",
+            agent_model_openrouter="anthropic/claude-sonnet-4",
+        )
+        provider, model = mgr.resolve_purpose("agent")
+        assert provider == "openrouter"
+        assert model == "anthropic/claude-sonnet-4"

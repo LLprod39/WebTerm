@@ -76,6 +76,7 @@ class LLMProvider:
         self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")
         self.ollama_api_key = os.getenv("OLLAMA_API_KEY")
+        self.openrouter_api_key = os.getenv("OPENROUTER_API_KEY")
 
         # Set keys in model manager
         model_manager.set_api_keys(
@@ -84,6 +85,7 @@ class LLMProvider:
             anthropic_key=self.anthropic_api_key,
             openai_key=self.openai_api_key,
             ollama_key=self.ollama_api_key,
+            openrouter_key=self.openrouter_api_key,
         )
 
         # Lazy initialization of clients
@@ -170,6 +172,9 @@ class LLMProvider:
         elif model == "ollama":
             self.ollama_api_key = key
             model_manager.set_api_keys(ollama_key=key)
+        elif model == "openrouter":
+            self.openrouter_api_key = key
+            model_manager.set_api_keys(openrouter_key=key)
 
     async def stream_chat(
         self,

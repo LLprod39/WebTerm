@@ -54,6 +54,7 @@ def api_models_list(request):
         openai_models = model_manager.get_available_models("openai")
         claude_models = model_manager.get_available_models("claude")
         ollama_models = model_manager.get_available_models("ollama")
+        openrouter_models = model_manager.get_available_models("openrouter")
         ollama_local_models = getattr(model_manager, "available_ollama_local_models", []) or []
         ollama_cloud_models = getattr(model_manager, "available_ollama_cloud_models", []) or []
         config = model_manager.config
@@ -64,6 +65,7 @@ def api_models_list(request):
                 "openai": openai_models,
                 "claude": claude_models,
                 "ollama": ollama_models,
+                "openrouter": openrouter_models,
                 "ollama_local": ollama_local_models,
                 "ollama_cloud": ollama_cloud_models,
                 "rag_defaults": [
@@ -77,11 +79,13 @@ def api_models_list(request):
                     "chat_openai": getattr(config, "chat_model_openai", "gpt-5-mini"),
                     "chat_claude": getattr(config, "chat_model_claude", "claude-sonnet-4-6"),
                     "chat_ollama": getattr(config, "chat_model_ollama", "") or "",
+                    "chat_openrouter": getattr(config, "chat_model_openrouter", "openai/gpt-4o-mini"),
                     "rag_model": config.rag_model,
                     "agent_model_gemini": config.agent_model_gemini,
                     "agent_model_grok": config.agent_model_grok,
                     "agent_model_openai": getattr(config, "agent_model_openai", "gpt-5-mini"),
                     "agent_model_ollama": getattr(config, "agent_model_ollama", "") or "",
+                    "agent_model_openrouter": getattr(config, "agent_model_openrouter", "openai/gpt-4o-mini"),
                     "default_provider": config.default_provider,
                     "ollama_runtime_mode": getattr(config, "ollama_runtime_mode", "auto") or "auto",
                     "ollama_think_mode": getattr(config, "ollama_think_mode", "") or "",
@@ -99,7 +103,7 @@ def api_models_refresh(request):
     """
     Fetch models from a provider API and return the refreshed list.
 
-    Body: { "provider": "gemini|grok|openai|claude|ollama" }
+    Body: { "provider": "gemini|grok|openai|claude|ollama|openrouter" }
     """
     if not user_can_manage_ai_routing(request.user):
         return JsonResponse({"error": "Only admins can refresh provider models"}, status=403)
@@ -110,8 +114,11 @@ def api_models_refresh(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
 
     provider = (data.get("provider") or "").strip().lower()
-    if provider not in {"gemini", "grok", "openai", "claude", "ollama"}:
-        return JsonResponse({"error": "provider must be one of: gemini, grok, openai, claude, ollama"}, status=400)
+    if provider not in {"gemini", "grok", "openai", "claude", "ollama", "openrouter"}:
+        return JsonResponse(
+            {"error": "provider must be one of: gemini, grok, openai, claude, ollama, openrouter"},
+            status=400,
+        )
 
     if provider == "gemini" and not _has_llm_api_key("gemini", "GEMINI_API_KEY"):
         return JsonResponse({"error": "GEMINI_API_KEY is not configured"}, status=400)
@@ -121,6 +128,8 @@ def api_models_refresh(request):
         return JsonResponse({"error": "OPENAI_API_KEY or CODEX_API_KEY is not configured"}, status=400)
     if provider == "claude" and not _has_llm_api_key("claude", "ANTHROPIC_API_KEY"):
         return JsonResponse({"error": "ANTHROPIC_API_KEY is not configured"}, status=400)
+    if provider == "openrouter" and not _has_llm_api_key("openrouter", "OPENROUTER_API_KEY"):
+        return JsonResponse({"error": "OPENROUTER_API_KEY is not configured"}, status=400)
 
     try:
         if provider == "gemini":
@@ -131,6 +140,8 @@ def api_models_refresh(request):
             models = asyncio.run(model_manager.fetch_available_claude_models())
         elif provider == "ollama":
             models = asyncio.run(model_manager.fetch_available_ollama_models())
+        elif provider == "openrouter":
+            models = asyncio.run(model_manager.fetch_available_openrouter_models())
         else:
             models = asyncio.run(model_manager.fetch_available_openai_models())
 

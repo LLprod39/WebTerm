@@ -52,6 +52,7 @@ export interface SettingsConfig {
   grok_enabled: boolean;
   openai_enabled: boolean;
   ollama_enabled: boolean;
+  openrouter_enabled?: boolean;
   ollama_cloud_enabled?: boolean;
   chat_llm_provider: string;
   chat_llm_model: string;
@@ -65,7 +66,9 @@ export interface SettingsConfig {
   chat_model_openai: string;
   chat_model_claude: string;
   chat_model_ollama: string;
+  chat_model_openrouter?: string;
   agent_model_ollama?: string;
+  agent_model_openrouter?: string;
   ollama_base_url?: string;
   ollama_runtime_mode?: string;
   ollama_cloud_base_url?: string;
@@ -137,6 +140,7 @@ export interface ModelsResponse {
   openai: string[];
   claude: string[];
   ollama: string[];
+  openrouter?: string[];
   ollama_local?: string[];
   ollama_cloud?: string[];
   current: {
@@ -146,7 +150,9 @@ export interface ModelsResponse {
     chat_openai: string;
     chat_claude: string;
     chat_ollama?: string;
+    chat_openrouter?: string;
     agent_model_ollama?: string;
+    agent_model_openrouter?: string;
     ollama_runtime_mode?: string;
     ollama_think_mode?: string;
   };
@@ -208,7 +214,7 @@ export interface SettingsReadinessResponse {
   checks: SettingsReadinessCheck[];
 }
 
-export type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
+export type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama" | "openrouter";
 
 export async function fetchSettings() {
   return apiFetch<SettingsConfigResponse>("/api/settings/");

@@ -12,6 +12,7 @@ RUNTIME_ENABLED_FIELDS = {
     "grok": "grok_enabled",
     "claude": "claude_enabled",
     "openai": "openai_enabled",
+    "openrouter": "openrouter_enabled",
 }
 
 
@@ -21,6 +22,7 @@ class RuntimeProviderKeys:
     grok: str = ""
     claude: str = ""
     openai: str = ""
+    openrouter: str = ""
 
     @classmethod
     def from_llm_provider(cls, provider: Any) -> RuntimeProviderKeys:
@@ -29,6 +31,7 @@ class RuntimeProviderKeys:
             grok=(getattr(provider, "grok_api_key", "") or "").strip(),
             claude=(getattr(provider, "anthropic_api_key", "") or "").strip(),
             openai=(getattr(provider, "openai_api_key", "") or "").strip(),
+            openrouter=(getattr(provider, "openrouter_api_key", "") or "").strip(),
         )
 
     def has_key(self, provider: str) -> bool:

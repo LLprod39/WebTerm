@@ -54,6 +54,8 @@ def _provider_timeout_seconds(provider: str, *, endpoint_name: str | None = None
         return _setting_int("LLM_OPENAI_RESPONSES_TIMEOUT_SECONDS", 300, minimum=1)
     if provider == "openai":
         return _setting_int("LLM_OPENAI_STREAM_TIMEOUT_SECONDS", 90, minimum=1)
+    if provider == "openrouter":
+        return _setting_int("LLM_OPENROUTER_STREAM_TIMEOUT_SECONDS", 120, minimum=1)
     return _setting_int("LLM_PROVIDER_TIMEOUT_SECONDS", 90, minimum=1)
 
 

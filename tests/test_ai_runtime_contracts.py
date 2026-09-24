@@ -19,9 +19,12 @@ from app.ai_runtime import (
 def test_legacy_provider_ids_keep_api_meaning() -> None:
     assert canonicalize_target_id("openai") == "openai_api"
     assert canonicalize_target_id("grok") == "grok_api"
+    assert canonicalize_target_id("openrouter") == "openrouter_api"
     assert canonicalize_target_id("grok_build") == "grok_subscription"
     assert canonicalize_target_id("cursor_cli") == "cursor_subscription"
     assert legacy_runtime_provider_id("grok") == "grok"
+    assert legacy_runtime_provider_id("openrouter") == "openrouter"
+    assert legacy_runtime_provider_id("openrouter_api") == "openrouter"
     assert legacy_runtime_provider_id("grok_subscription") is None
     assert legacy_runtime_provider_id("cursor_subscription") is None
 

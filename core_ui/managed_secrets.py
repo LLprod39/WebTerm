@@ -45,6 +45,7 @@ LLM_API_KEY_PROVIDERS = {
     "claude": "ANTHROPIC_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "ollama": "OLLAMA_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
 }
 
 

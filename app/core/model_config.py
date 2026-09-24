@@ -40,6 +40,7 @@ class ModelConfig(BaseModel):
     openai_enabled: bool = False
     claude_enabled: bool = False
     ollama_enabled: bool = False
+    openrouter_enabled: bool = False
 
     # Chat models
     chat_model_gemini: str = "models/gemini-3-flash-preview"
@@ -47,6 +48,7 @@ class ModelConfig(BaseModel):
     chat_model_openai: str = "gpt-5-mini"
     chat_model_claude: str = "claude-sonnet-4-6"
     chat_model_ollama: str = ""
+    chat_model_openrouter: str = "openai/gpt-4o-mini"
 
     # RAG/Embedding models
     rag_model: str = "models/text-embedding-004"  # Gemini embedding
@@ -56,6 +58,7 @@ class ModelConfig(BaseModel):
     agent_model_grok: str = "grok-3"
     agent_model_openai: str = "gpt-5-mini"
     agent_model_ollama: str = ""
+    agent_model_openrouter: str = "openai/gpt-4o-mini"
 
     # Default provider for internal chat/agent routing.
     # Note: "ralph" is NOT a valid provider - it's an orchestrator mode
@@ -63,7 +66,7 @@ class ModelConfig(BaseModel):
 
     # Провайдер для ВНУТРЕННИХ вызовов LLM (генерация workflow, анализ задач).
     # Когда default_provider - CLI agent, внутренние вызовы используют этот провайдер.
-    # Варианты: "gemini", "grok", "openai", "claude", "ollama"
+    # Варианты: "gemini", "grok", "openai", "claude", "ollama", "openrouter"
     internal_llm_provider: str = "grok"
 
     # Default orchestrator mode: react | ralph_internal | ralph_cli
@@ -158,11 +161,13 @@ class ModelManager:
         self.available_ollama_models: list[str] = []
         self.available_ollama_local_models: list[str] = []
         self.available_ollama_cloud_models: list[str] = []
+        self.available_openrouter_models: list[str] = []
         self.gemini_api_key: str | None = None
         self.grok_api_key: str | None = None
         self.openai_api_key: str | None = None
         self.ollama_api_key: str | None = None
         self.anthropic_api_key: str | None = None
+        self.openrouter_api_key: str | None = None
 
     def set_api_keys(
         self,
@@ -171,6 +176,7 @@ class ModelManager:
         anthropic_key: str | None = None,
         openai_key: str | None = None,
         ollama_key: str | None = None,
+        openrouter_key: str | None = None,
     ):
         """Set API keys"""
         if gemini_key:
@@ -183,6 +189,8 @@ class ModelManager:
             self.openai_api_key = openai_key
         if ollama_key:
             self.ollama_api_key = ollama_key
+        if openrouter_key:
+            self.openrouter_api_key = openrouter_key
 
     def _get_ollama_api_key(self) -> str:
         return (self.ollama_api_key or "").strip() or (os.getenv("OLLAMA_API_KEY") or "").strip()
@@ -247,6 +255,9 @@ class ModelManager:
     async def fetch_available_ollama_models(self) -> list[str]:
         return await model_refresh.fetch_available_ollama_models(self)
 
+    async def fetch_available_openrouter_models(self) -> list[str]:
+        return await model_refresh.fetch_available_openrouter_models(self)
+
     def _get_default_gemini_models(self) -> list[str]:
         """Default Gemini models list (fallback)"""
         return get_provider_default_models("gemini")
@@ -262,6 +273,10 @@ class ModelManager:
     def _get_default_ollama_models(self) -> list[str]:
         """Ollama models are local-install specific; default to no cached models."""
         return get_provider_default_models("ollama")
+
+    def _get_default_openrouter_models(self) -> list[str]:
+        """Default OpenRouter models list (fallback)"""
+        return get_provider_default_models("openrouter")
 
     async def refresh_models(self):
         """Refresh available models from both providers"""
@@ -299,6 +314,13 @@ class ModelManager:
 
         if self.config.ollama_enabled:
             await self.fetch_available_ollama_models()
+
+        if (
+            self.openrouter_api_key
+            or (os.getenv("OPENROUTER_API_KEY") or "").strip()
+            or await self._aget_managed_llm_api_key("openrouter")
+        ):
+            await self.fetch_available_openrouter_models()
 
     def resolve_purpose(self, purpose: str) -> tuple[str, str]:
         """Return (provider, model_str) for a given purpose: 'chat', 'agent', 'orchestrator'.

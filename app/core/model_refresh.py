@@ -202,6 +202,52 @@ async def fetch_available_openai_models(manager: Any) -> list[str]:
         return manager._get_default_openai_models()
 
 
+async def fetch_available_openrouter_models(manager: Any) -> list[str]:
+    key = (
+        await manager._aget_managed_llm_api_key("openrouter")
+        or manager.openrouter_api_key
+        or (os.getenv("OPENROUTER_API_KEY") or "").strip()
+    )
+    if key:
+        manager.openrouter_api_key = key
+    if not key:
+        logger.warning("OpenRouter API key not set")
+        return manager._get_default_openrouter_models()
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.get(
+                "https://openrouter.ai/api/v1/models",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "HTTP-Referer": "https://webtrerm.local",
+                    "X-Title": "WebTrerm",
+                },
+            )
+
+            if response.status_code != 200:
+                logger.error(
+                    "OpenRouter API returned status {}: {}",
+                    response.status_code,
+                    redacted_log_text(response.text),
+                )
+                return manager._get_default_openrouter_models()
+
+            payload = response.json()
+            models = sorted(set(extract_model_ids(payload)))
+
+            if not models:
+                logger.warning("OpenRouter API returned empty model list; using defaults")
+                return manager._get_default_openrouter_models()
+
+            manager.available_openrouter_models = models
+            logger.success(f"Fetched {len(models)} OpenRouter models")
+            return models
+    except Exception as exc:
+        logger.error(f"Failed to fetch OpenRouter models: {exc}")
+        return manager._get_default_openrouter_models()
+
+
 async def fetch_available_ollama_models(manager: Any) -> list[str]:
     local_models: list[str] = []
     cloud_models: list[str] = []

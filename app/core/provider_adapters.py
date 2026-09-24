@@ -124,7 +124,7 @@ def _ollama_cloud_base_url(config: Any) -> str:
     )
 
 
-DEFAULT_PROVIDER_ORDER = ("openai", "grok", "gemini", "ollama", "ralph", "cursor", "claude")
+DEFAULT_PROVIDER_ORDER = ("openai", "grok", "gemini", "openrouter", "ollama", "ralph", "cursor", "claude")
 
 PROVIDER_SPECS: dict[str, ProviderSpec] = {
     "gemini": ProviderSpec(
@@ -151,6 +151,14 @@ PROVIDER_SPECS: dict[str, ProviderSpec] = {
         enabled_field="openai_enabled",
         requires_key="OPENAI_API_KEY",
         key_env_names=("OPENAI_API_KEY", "CODEX_API_KEY"),
+    ),
+    "openrouter": ProviderSpec(
+        id="openrouter",
+        provider_type="api",
+        name="OpenRouter",
+        enabled_field="openrouter_enabled",
+        requires_key="OPENROUTER_API_KEY",
+        key_env_names=("OPENROUTER_API_KEY",),
     ),
     "ollama": ProviderSpec(
         id="ollama",

@@ -11,6 +11,7 @@ class ProviderTarget(StrEnum):
     CLAUDE_API = "claude_api"
     GEMINI_API = "gemini_api"
     OLLAMA_LOCAL = "ollama_local"
+    OPENROUTER_API = "openrouter_api"
     CODEX_SUBSCRIPTION = "codex_subscription"
     GROK_SUBSCRIPTION = "grok_subscription"
     CURSOR_SUBSCRIPTION = "cursor_subscription"
@@ -35,6 +36,7 @@ LEGACY_PROVIDER_TARGET_ALIASES: dict[str, str] = {
     "anthropic": ProviderTarget.CLAUDE_API,
     "gemini": ProviderTarget.GEMINI_API,
     "ollama": ProviderTarget.OLLAMA_LOCAL,
+    "openrouter": ProviderTarget.OPENROUTER_API,
     "codex": ProviderTarget.CODEX_SUBSCRIPTION,
     "codex_cli": ProviderTarget.CODEX_SUBSCRIPTION,
     "grok_cli": ProviderTarget.GROK_SUBSCRIPTION,
@@ -48,6 +50,7 @@ _LEGACY_RUNTIME_PROVIDER_IDS: dict[str, str] = {
     ProviderTarget.CLAUDE_API: "claude",
     ProviderTarget.GEMINI_API: "gemini",
     ProviderTarget.OLLAMA_LOCAL: "ollama",
+    ProviderTarget.OPENROUTER_API: "openrouter",
 }
 
 

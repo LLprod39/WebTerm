@@ -125,7 +125,7 @@ async def stream_provider_chat_tools(
             yield event
         return
 
-    if model in {"openai", "grok"}:
+    if model in {"openai", "grok", "openrouter"}:
         if model == "openai":
             if not provider.openai_api_key:
                 yield {"type": "error", "message": "OpenAI API Key not configured"}
@@ -134,6 +134,14 @@ async def stream_provider_chat_tools(
             api_url = "https://api.openai.com/v1/chat/completions"
             target_model = specific_model or model_manager.get_chat_model("openai")
             provider = "openai"
+        elif model == "openrouter":
+            if not provider.openrouter_api_key:
+                yield {"type": "error", "message": "OpenRouter API Key not configured"}
+                return
+            api_key = provider.openrouter_api_key
+            api_url = "https://openrouter.ai/api/v1/chat/completions"
+            target_model = specific_model or model_manager.get_chat_model("openrouter")
+            provider = "openrouter"
         else:
             if not provider.grok_api_key:
                 yield {"type": "error", "message": "Grok API Key not configured"}
@@ -154,7 +162,7 @@ async def stream_provider_chat_tools(
             usage_logger=_log_llm_usage,
             prompt_for_usage=prompt_for_usage,
             provider=provider,
-            trust_env=provider in {"openai", "grok"},
+            trust_env=provider in {"openai", "grok", "openrouter"},
         ):
             yield event
         return

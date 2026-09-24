@@ -19,7 +19,7 @@ import {
 } from "./constants";
 import type { ProviderOverviewItem, RouteModelConfig } from "./aiSettingsTypes";
 
-type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama";
+type RefreshableProvider = "gemini" | "grok" | "openai" | "claude" | "ollama" | "openrouter";
 
 type UseAiSettingsFormArgs = {
   currentConfig?: SettingsConfig;
@@ -90,6 +90,7 @@ export function useAiSettingsForm({
     if (nextProvider === "gemini") return modelsData.gemini || [];
     if (nextProvider === "openai") return modelsData.openai || [];
     if (nextProvider === "claude") return modelsData.claude || [];
+    if (nextProvider === "openrouter") return modelsData.openrouter || [];
     if (nextProvider === "ollama") {
       const localModels = modelsData.ollama_local || [];
       const cloudModels = modelsData.ollama_cloud || [];
@@ -219,6 +220,7 @@ export function useAiSettingsForm({
       if (provider === "openai") payload.chat_model_openai = model;
       if (provider === "claude") payload.chat_model_claude = model;
       if (provider === "ollama") payload.chat_model_ollama = model;
+      if (provider === "openrouter") payload.chat_model_openrouter = model;
       if (isLlmProvider) {
         payload.internal_llm_provider = provider;
         payload.gemini_enabled = provider === "gemini";
@@ -226,6 +228,7 @@ export function useAiSettingsForm({
         payload.openai_enabled = provider === "openai";
         payload.claude_enabled = provider === "claude";
         payload.ollama_enabled = provider === "ollama";
+        payload.openrouter_enabled = provider === "openrouter";
       }
       await saveSettings(payload);
       await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });

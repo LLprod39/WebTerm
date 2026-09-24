@@ -39,4 +39,4 @@ def test_provider_adapters_keep_cli_binary_policy():
 
 
 def test_provider_fallback_order_is_explicit_policy():
-    assert DEFAULT_PROVIDER_ORDER == ("openai", "grok", "gemini", "ollama", "ralph", "cursor", "claude")
+    assert DEFAULT_PROVIDER_ORDER == ("openai", "grok", "gemini", "openrouter", "ollama", "ralph", "cursor", "claude")

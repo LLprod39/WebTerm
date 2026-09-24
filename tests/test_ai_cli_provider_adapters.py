@@ -9,7 +9,12 @@ import pytest
 
 from ai_cli_runner_manager.adapters.codex import codex_account_is_chatgpt, codex_notification_events
 from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_output_schema, tool_response_events
-from ai_cli_runner_manager.adapters.cursor import cursor_stream_events, parse_cursor_login_url
+from ai_cli_runner_manager.adapters.cursor import (
+    _WEBTERM_CURSOR_ASK_BRIDGE,
+    cursor_prompt_from_request,
+    cursor_stream_events,
+    parse_cursor_login_url,
+)
 from ai_cli_runner_manager.adapters.grok import (
     _grok_device_auth,
     grok_update_event,
@@ -52,6 +57,17 @@ def test_new_session_includes_system_and_message_history() -> None:
     assert "System instructions:\nBe concise" in prompt
     assert "USER:\nfirst" in prompt
     assert "ASSISTANT:\nanswer" in prompt
+
+
+def test_cursor_prompt_prefixes_webterm_ask_bridge() -> None:
+    """Cursor CLI always runs --mode=ask; bridge must stop false 'no ssh_execute' refusals."""
+    request = replace(_request(), target_id="cursor_subscription")
+    prompt = cursor_prompt_from_request(request)
+    assert prompt.startswith(_WEBTERM_CURSOR_ASK_BRIDGE)
+    assert "ssh_execute" in prompt
+    assert "AwaitShell" in prompt
+    assert "second" in prompt
+    assert not prompt_from_request(request).startswith("[WebTerm runtime bridge")
 
 
 def test_codex_delta_and_completion_are_normalized() -> None:

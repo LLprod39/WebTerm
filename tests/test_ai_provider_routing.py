@@ -158,6 +158,20 @@ def test_explicit_denied_binding_does_not_fall_back_to_user_default() -> None:
     assert "no matching connection grant" in exc_info.value.details["reason"]
 
 
+def test_orphaned_stored_binding_falls_through_to_platform_default() -> None:
+    """Deleted CLI connections must not permanently brick terminal/assistant AI."""
+    user = User.objects.create_user("operator")
+    resolved = resolve_execution_context(
+        _context(user, None),
+        stored_binding=ProviderBinding("codex_subscription", connection_id=999999),
+        platform_default=ProviderBinding("openrouter_api", model_id="openai/gpt-4o-mini"),
+    )
+
+    assert resolved.binding.target_id == "openrouter_api"
+    assert resolved.binding.model_id == "openai/gpt-4o-mini"
+    assert resolved.binding.connection_id is None
+
+
 def test_user_project_preference_precedes_global_and_workspace_default() -> None:
     user = User.objects.create_user("operator")
     project = _workspace(user)

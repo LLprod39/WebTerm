@@ -146,3 +146,46 @@ async def test_fetch_available_grok_models_accepts_xai_env_and_language_models_p
     assert manager.grok_api_key == "xai-key"
     assert manager.available_grok_models == models
     assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_fetch_available_openrouter_models(monkeypatch):
+    manager = ModelManager()
+    manager.openrouter_api_key = "sk-or-test"
+    calls: list[dict] = []
+
+    async def fake_managed_key(_provider: str) -> str:
+        return ""
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, headers=None, timeout=None):
+            calls.append({"url": url, "headers": headers, "timeout": timeout})
+            assert url == "https://openrouter.ai/api/v1/models"
+            assert headers["Authorization"] == "Bearer sk-or-test"
+            return _FakeResponse(
+                200,
+                {
+                    "data": [
+                        {"id": "openai/gpt-4o-mini"},
+                        {"id": "anthropic/claude-sonnet-4"},
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(manager, "_aget_managed_llm_api_key", fake_managed_key)
+    monkeypatch.setattr("app.core.model_refresh.httpx.AsyncClient", FakeAsyncClient)
+
+    models = await model_refresh.fetch_available_openrouter_models(manager)
+
+    assert models == ["anthropic/claude-sonnet-4", "openai/gpt-4o-mini"]
+    assert manager.available_openrouter_models == models
+    assert len(calls) == 1

@@ -92,6 +92,7 @@ x-backend-worker: &backend-worker
     GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
     GROK_API_KEY: ${GROK_API_KEY:-}
     ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
     WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
     WEBTERM_ANSIBLE_REQUIRE_ISOLATED: ${WEBTERM_ANSIBLE_REQUIRE_ISOLATED:-true}
     WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
@@ -244,6 +245,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       WEBTERM_ANSIBLE_IMAGE: ${WEBTERM_ANSIBLE_IMAGE:-webterm-ansible:latest}
       WEBTERM_ANSIBLE_REQUIRE_ISOLATED: ${WEBTERM_ANSIBLE_REQUIRE_ISOLATED:-true}
       WEBTERM_ANSIBLE_RUNTIME_ROOT: /playbook-runtime
@@ -431,7 +433,10 @@ services:
       dockerfile: docker/playbook-socket-proxy.Dockerfile
     container_name: mini-prod-ai-cli-docker-proxy
     user: "10002:10002"
+    # Как у backend workers: на Docker Desktop sock внутри контейнера часто root:root (gid 0),
+    # а DOCKER_SOCKET_GID на хосте — 1000. Без обеих групп /health даёт 503.
     group_add:
+      - "0"
       - "${DOCKER_SOCKET_GID:-0}"
     environment:
       DOCKER_SOCKET_PATH: /var/run/docker.sock
