@@ -17,6 +17,7 @@ type OpenSessionDock = (opts: {
   serverName?: string;
   host?: string;
   mode?: "agent" | "live";
+  osType?: "linux" | "windows";
 }) => void;
 
 type PushSessionLine = (line: Omit<OperatorSessionLine, "id" | "at"> & { id?: string }) => void;

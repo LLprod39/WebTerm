@@ -74,6 +74,24 @@ describe("inferServerOs", () => {
 
   });
 
+  it("prefers explicit os_type over a stale linux detection", () => {
+
+    expect(
+
+      resolveServerOs({
+
+        os_type: "windows",
+
+        detected_os: "debian",
+
+        name: "app-01",
+
+      }),
+
+    ).toBe("windows");
+
+  });
+
 });
 
 

@@ -4,6 +4,7 @@ export function initialForm(): ServerForm {
   return {
     name: "",
     server_type: "ssh",
+    os_type: "linux",
     host: "",
     port: 22,
     username: "root",
@@ -36,6 +37,7 @@ export function asPayload(form: ServerForm) {
   const payload: Record<string, unknown> = {
     name: effectiveForm.name,
     server_type: effectiveForm.server_type,
+    os_type: effectiveForm.os_type,
     host: effectiveForm.host,
     port: effectiveForm.port,
     username: effectiveForm.username,

@@ -188,7 +188,7 @@ export function useChatPageController() {
   }, []);
 
   const openSessionDock = useCallback(
-    (opts: { serverId: number; serverName?: string; host?: string; mode?: "agent" | "live" }) => {
+    (opts: { serverId: number; serverName?: string; host?: string; mode?: "agent" | "live"; osType?: "linux" | "windows" }) => {
       if (!opts.serverId || opts.serverId <= 0) return;
       setSessionDock((prev) => ({
         ...prev,
@@ -197,6 +197,7 @@ export function useChatPageController() {
         serverName: opts.serverName || prev.serverName || `server #${opts.serverId}`,
         host: opts.host || prev.host || "",
         mode: opts.mode || prev.mode || "agent",
+        osType: opts.osType ?? (prev.serverId === opts.serverId ? prev.osType : "linux"),
         lines: prev.serverId === opts.serverId ? prev.lines : [],
       }));
       setContextRail({ open: true, tab: "terminal" });

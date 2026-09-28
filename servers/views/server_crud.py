@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from app.sudo_policy import SUDO_AUTH_MODE_STORED_PASSWORD, normalize_sudo_auth_mode
@@ -33,6 +34,7 @@ from servers.services.pilot_destination_policy import (
     validate_pilot_ssh_destination,
 )
 from servers.services.server_ownership import ServerOwnershipTransferError, transfer_server_ownership
+from servers.services.terminal_windows import normalize_os_type
 from servers.ssh_host_keys import clear_server_trusted_host_keys, get_server_trusted_host_keys
 from servers.ssh_private_keys import delete_managed_private_key, store_uploaded_private_key
 from servers.views.server_helpers import (
@@ -82,6 +84,10 @@ def server_create(request):
         server_type = str(data.get("server_type", "ssh") or "ssh").strip().lower()
         if server_type != "ssh":
             return JsonResponse({"error": "Invalid server_type"}, status=400)
+        try:
+            os_type = normalize_os_type(data.get("os_type", "linux"))
+        except ValueError:
+            return JsonResponse({"error": "Invalid os_type"}, status=400)
 
         auth_method = str(data.get("auth_method", "password") or "password").strip().lower()
         if auth_method not in ("password", "key", "key_password"):
@@ -117,6 +123,7 @@ def server_create(request):
                 user=request.user,
                 name=data.get("name", ""),
                 server_type=server_type,
+                os_type=os_type,
                 host=data.get("host", ""),
                 port=port,
                 username=data.get("username", ""),
@@ -129,6 +136,17 @@ def server_create(request):
                 corporate_context=data.get("corporate_context", ""),
                 network_config=network_config,
                 group=group,
+                detected_os="windows" if os_type == "windows" else "",
+                detected_os_meta=(
+                    {
+                        "id": "windows",
+                        "pretty_name": "Windows",
+                        "source": "os_type",
+                        "detected_at": timezone.now().isoformat(),
+                    }
+                    if os_type == "windows"
+                    else {}
+                ),
             )
 
             if private_key.strip() and auth_method in ("key", "key_password"):
@@ -155,6 +173,7 @@ def server_create(request):
                 "host": server.host,
                 "port": server.port,
                 "server_type": server.server_type,
+                "os_type": server.os_type,
                 "group_id": server.group_id,
             },
         )
@@ -215,6 +234,25 @@ def server_update(request, server_id):
             if server_type != "ssh":
                 return JsonResponse({"error": "Invalid server_type"}, status=400)
             server.server_type = server_type
+        os_type_changed = False
+        if "os_type" in data:
+            try:
+                next_os_type = normalize_os_type(data.get("os_type"))
+            except ValueError:
+                return JsonResponse({"error": "Invalid os_type"}, status=400)
+            os_type_changed = next_os_type != (server.os_type or "linux")
+            server.os_type = next_os_type
+            if next_os_type == "windows" and (server.detected_os or "") != "windows":
+                server.detected_os = "windows"
+                meta = dict(server.detected_os_meta or {})
+                meta.setdefault("id", "windows")
+                meta.setdefault("pretty_name", "Windows")
+                meta["source"] = "os_type"
+                meta["detected_at"] = timezone.now().isoformat()
+                server.detected_os_meta = meta
+            elif next_os_type == "linux" and (server.detected_os or "") == "windows":
+                server.detected_os = ""
+                server.detected_os_meta = {}
         if "auth_method" in data:
             auth_method = str(data.get("auth_method") or "").strip().lower()
             if auth_method not in ("password", "key", "key_password"):
@@ -297,6 +335,11 @@ def server_update(request, server_id):
             entity_name=server.name,
             metadata={"changed_fields": changed_fields},
         )
+
+        if os_type_changed:
+            from servers.os_detect_service import schedule_os_detect_for_server_ids
+
+            schedule_os_detect_for_server_ids([server.id], force=True)
 
         return JsonResponse(
             {
@@ -428,6 +471,7 @@ def server_get(request, server_id):
             "id": server.id,
             "name": server.name,
             "server_type": server.server_type,
+            "os_type": server.os_type or "linux",
             "host": server.host,
             "port": server.port,
             "username": server.username,

@@ -222,6 +222,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
           serverName: server.name,
           host: server.host,
           mode: "live",
+          osType: server.os_type === "windows" ? "windows" : "linux",
         }),
     }),
     [pinnedServerIds, stableMessageHandlers.onAsk],

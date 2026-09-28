@@ -120,6 +120,18 @@ async def test_handle_terminal_input_persists_uncaptured_block_without_marker():
 
 
 @pytest.mark.asyncio
+async def test_windows_manual_terminal_turns_lone_lf_into_cr():
+    owner = DummyOwner()
+    owner.mutation_allowed = True
+    owner.server.os_type = "windows"
+
+    await owner.handle_input("Get-ChildItem\n")
+
+    assert "Get-ChildItem\r" in "".join(owner._ssh_proc.stdin.writes)
+    assert "\n" not in "".join(owner._ssh_proc.stdin.writes)
+
+
+@pytest.mark.asyncio
 async def test_handle_terminal_input_intercepts_editor_commands_without_persisting():
     owner = DummyOwner()
     owner.mutation_allowed = True

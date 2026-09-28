@@ -190,6 +190,7 @@ def frontend_bootstrap(request):
             "port": int(server.port or 0),
             "username": server.username,
             "server_type": server.server_type or "ssh",
+            "os_type": server.os_type or "linux",
             "status": status,
             "group_id": server.group_id,
             "group_name": group_name,

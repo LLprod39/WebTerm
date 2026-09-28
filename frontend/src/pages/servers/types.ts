@@ -1,6 +1,7 @@
 export interface ServerForm {
   name: string;
   server_type: "ssh";
+  os_type: "linux" | "windows";
   host: string;
   port: number;
   username: string;

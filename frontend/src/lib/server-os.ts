@@ -92,6 +92,8 @@ export interface ServerOsInput {
 
   server_type?: "ssh" | string;
 
+  os_type?: "linux" | "windows" | string | null;
+
   name?: string;
 
   host?: string;
@@ -225,6 +227,12 @@ function isKnownOsKind(value: string): value is ServerOsKind {
 /** Prefer backend-detected OS; fall back to name/tags heuristics. */
 
 export function resolveServerOs(input: ServerOsInput): ServerOsKind {
+
+  if ((input.os_type || "").trim().toLowerCase() === "windows") {
+
+    return "windows";
+
+  }
 
   const detected = (input.detected_os || "").trim().toLowerCase();
 

@@ -17,9 +17,12 @@ class FakeProc:
     def __init__(self):
         self.closed = False
         self.waited = False
-        self.resize_calls: list[tuple[int, int]] = []
+        self.resize_calls: list[tuple] = []
 
-    def change_terminal_size(self, cols: int, rows: int):
+    def change_terminal_size(self, cols: int, rows: int, pixwidth: int = 0, pixheight: int = 0):
+        if pixwidth or pixheight:
+            self.resize_calls.append((cols, rows, pixwidth, pixheight))
+            return
         self.resize_calls.append((cols, rows))
 
     def close(self):
@@ -86,6 +89,32 @@ async def test_open_terminal_ssh_session_builds_pty_process(monkeypatch):
     }
 
 
+@pytest.mark.asyncio
+async def test_open_terminal_ssh_session_requests_conpty_pixels_for_windows(monkeypatch):
+    proc = FakeProc()
+    conn = FakeConn(proc)
+
+    async def fake_build_kwargs(server, *, secret):  # noqa: ANN001
+        return {"host": server.host}
+
+    async def fake_connect(**kwargs):
+        return conn
+
+    monkeypatch.setattr(mod, "build_terminal_connect_kwargs", fake_build_kwargs)
+    server = SimpleNamespace(host="10.0.0.80", port=22, os_type="windows")
+
+    await open_terminal_ssh_session(
+        server=server,
+        secret="secret",
+        term_type="xterm-256color",
+        term_size=TerminalSize(cols=120, rows=40),
+        connect_factory=fake_connect,
+    )
+
+    assert conn.create_kwargs["term_size"] == (120, 40, 960, 640)
+    assert conn.create_kwargs["term_type"] == "xterm-256color"
+
+
 def test_resize_terminal_ssh_session_ignores_invalid_size():
     proc = FakeProc()
 
@@ -93,6 +122,14 @@ def test_resize_terminal_ssh_session_ignores_invalid_size():
     resize_terminal_ssh_session(proc, TerminalSize(cols=100, rows=30))
 
     assert proc.resize_calls == [(100, 30)]
+
+
+def test_resize_terminal_ssh_session_sends_conpty_pixels_for_windows():
+    proc = FakeProc()
+
+    resize_terminal_ssh_session(proc, TerminalSize(cols=100, rows=30), os_type="windows")
+
+    assert proc.resize_calls == [(100, 30, 800, 480)]
 
 
 @pytest.mark.asyncio

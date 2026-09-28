@@ -28,6 +28,7 @@ from servers.services.terminal_ssh_lifecycle import (
     open_terminal_ssh_session,
     resize_terminal_ssh_session,
 )
+from servers.services.terminal_windows import build_session_prelude, host_os_type
 
 _TermSize = terminal_input.TerminalSize
 
@@ -161,9 +162,9 @@ class TerminalSessionOperations:
                         merged_env = {}
                 if not merged_env and isinstance(network_config, dict):
                     merged_env = dict(network_config.get("environment") or {})
-                exports = self._build_exports(merged_env)
-                if exports:
-                    self._transport_state.ssh_proc.stdin.write(exports + "\n")
+                prelude = build_session_prelude(self.server, merged_env)
+                if prelude:
+                    self._transport_state.ssh_proc.stdin.write(prelude)
 
                 await self._safe_send_json({"type": "status", "status": "connected"})
                 await log_user_activity_async(
@@ -368,7 +369,11 @@ class TerminalSessionOperations:
             return
         try:
             term_size = self._parse_term_size(content)
-            resize_terminal_ssh_session(self._transport_state.ssh_proc, term_size)
+            resize_terminal_ssh_session(
+                self._transport_state.ssh_proc,
+                term_size,
+                os_type=host_os_type(self.server),
+            )
         except Exception as e:
             await self._safe_send_json({"type": "error", "message": f"resize failed: {e}"})
 

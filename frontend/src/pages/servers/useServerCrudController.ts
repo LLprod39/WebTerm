@@ -86,6 +86,7 @@ export function useServerCrudController({
     setForm({
       name: details.name,
       server_type: details.server_type,
+      os_type: details.os_type === "windows" ? "windows" : "linux",
       host: details.host,
       port: details.port,
       username: details.username,

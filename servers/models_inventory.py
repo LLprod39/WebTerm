@@ -19,6 +19,12 @@ class Server(models.Model):
     SERVER_TYPE_CHOICES = [
         ("ssh", "SSH (Linux)"),
     ]
+    OS_TYPE_LINUX = "linux"
+    OS_TYPE_WINDOWS = "windows"
+    OS_TYPE_CHOICES = [
+        (OS_TYPE_LINUX, "Linux"),
+        (OS_TYPE_WINDOWS, "Windows"),
+    ]
 
     AUTH_METHOD_CHOICES = [
         ("password", "Password"),
@@ -40,6 +46,12 @@ class Server(models.Model):
         choices=SERVER_TYPE_CHOICES,
         default="ssh",
         help_text="SSH-сервер Linux",
+    )
+    os_type = models.CharField(
+        max_length=16,
+        choices=OS_TYPE_CHOICES,
+        default=OS_TYPE_LINUX,
+        help_text="OS family for the SSH shell: linux (bash) or windows (PowerShell).",
     )
     host = models.CharField(max_length=255)
     port = models.IntegerField(default=22)
@@ -141,6 +153,9 @@ class Server(models.Model):
 
     def is_ssh(self) -> bool:
         return (self.server_type or "ssh") == "ssh"
+
+    def is_windows(self) -> bool:
+        return (self.os_type or self.OS_TYPE_LINUX) == self.OS_TYPE_WINDOWS
 
     def get_connection_string(self) -> str:
         """Get SSH connection string"""

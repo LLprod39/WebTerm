@@ -16,6 +16,7 @@ export interface FrontendServer {
   port: number;
   username: string;
   server_type: "ssh";
+  os_type?: "linux" | "windows";
   status: ServerStatus;
   group_id: number | null;
   group_name: string;
@@ -42,6 +43,7 @@ export interface ServerDetailsResponse {
   port: number;
   username: string;
   server_type: "ssh";
+  os_type?: "linux" | "windows";
   auth_method: "password" | "key" | "key_password";
   key_path: string;
   tags: string;

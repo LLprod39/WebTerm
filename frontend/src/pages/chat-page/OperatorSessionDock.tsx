@@ -173,6 +173,7 @@ export function OperatorSessionDock({ session, onModeChange, onHumanCommand }: P
             >
               <XTerminal
                 serverId={session.serverId}
+                convertEol={session.osType === "windows"}
                 active
                 fontSize={12}
                 lineHeight={1.3}

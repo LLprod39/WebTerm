@@ -214,13 +214,29 @@ export function ServerFormDialog({
                 ) : null}
               </div>
               <div className="space-y-2">
-                <FieldLabel>{t("srv.server_type")}</FieldLabel>
-                <Select value={form.server_type} disabled>
-                  <SelectTrigger aria-label={t("srv.server_type")} className="h-10 bg-secondary/45">
+                <FieldLabel>{t("srv.os_type")}</FieldLabel>
+                <Select
+                  value={form.os_type}
+                  onValueChange={(value) => {
+                    const osType = value === "windows" ? "windows" : "linux";
+                    setForm((state) => ({
+                      ...state,
+                      os_type: osType,
+                      username:
+                        osType === "windows" && state.username === "root"
+                          ? "Administrator"
+                          : osType === "linux" && state.username === "Administrator"
+                            ? "root"
+                            : state.username,
+                    }));
+                  }}
+                >
+                  <SelectTrigger aria-label={t("srv.os_type")} className="h-10 bg-secondary/45">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ssh">{t("srv.server_type_ssh")}</SelectItem>
+                    <SelectItem value="linux">{t("srv.os_type_linux")}</SelectItem>
+                    <SelectItem value="windows">{t("srv.os_type_windows")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

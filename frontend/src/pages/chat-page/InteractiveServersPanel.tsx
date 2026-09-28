@@ -25,7 +25,7 @@ export type ServerPanelActions = {
   onAsk?: (prompt: string) => void;
   onOpenTerminal?: (serverId: number) => void;
   /** Open chat-side live session dock */
-  onOpenSession?: (server: { id: number; name: string; host?: string }) => void;
+  onOpenSession?: (server: { id: number; name: string; host?: string; os_type?: "linux" | "windows" }) => void;
 };
 
 type Props = {

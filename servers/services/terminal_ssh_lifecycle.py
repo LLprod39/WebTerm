@@ -17,6 +17,7 @@ import asyncssh
 from servers.services.pilot_destination_policy import validate_pilot_ssh_destination
 from servers.services.terminal_connection_options import build_terminal_connect_kwargs
 from servers.services.terminal_input import TerminalSize
+from servers.services.terminal_windows import is_windows_host, windows_terminal_pixels
 
 
 @dataclass
@@ -37,19 +38,26 @@ async def open_terminal_ssh_session(
     validate_pilot_ssh_destination(server.host, server.port)
     connect_kwargs = await build_terminal_connect_kwargs(server, secret=secret or "")
     conn = await connect(**connect_kwargs)
+    pixwidth, pixheight = (0, 0)
+    if is_windows_host(server):
+        pixwidth, pixheight = windows_terminal_pixels(term_size)
     proc = await conn.create_process(
         term_type=term_type,
-        term_size=(term_size.cols, term_size.rows, 0, 0),
+        term_size=(term_size.cols, term_size.rows, pixwidth, pixheight),
         encoding="utf-8",
         errors="replace",
     )
     return OpenTerminalSession(conn=conn, proc=proc)
 
 
-def resize_terminal_ssh_session(proc: Any, term_size: TerminalSize) -> None:
+def resize_terminal_ssh_session(proc: Any, term_size: TerminalSize, *, os_type: str = "linux") -> None:
     if not proc:
         return
     if term_size.cols > 0 and term_size.rows > 0:
+        if os_type == "windows":
+            pixwidth, pixheight = windows_terminal_pixels(term_size)
+            proc.change_terminal_size(term_size.cols, term_size.rows, pixwidth, pixheight)
+            return
         proc.change_terminal_size(term_size.cols, term_size.rows)
 
 

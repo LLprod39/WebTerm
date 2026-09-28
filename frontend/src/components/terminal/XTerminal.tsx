@@ -59,6 +59,8 @@ interface XTerminalProps {
   onInterceptInput?: (data: string) => string | null;
   /** Remote working directory for resolving relative file links. */
   cwdRef?: MutableRefObject<string>;
+  /** Turn lone LF into CRLF. Used for Windows ConPTY sessions. */
+  convertEol?: boolean;
   /** Click on a text filename in terminal output. */
   onFileClick?: (absolutePath: string, filename: string) => void;
   /** Enable underline links for text filenames in output. */
@@ -80,6 +82,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
     onError,
     onEvent,
     onFilesDrop,
+    convertEol = false,
     onInterceptInput,
     cwdRef,
     onFileClick,
@@ -150,6 +153,7 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
 
     const term = new Terminal({
       allowProposedApi: true,
+      convertEol,
       // Expose terminal rows through xterm's accessibility tree for keyboard
       // and screen-reader users. This remains compatible with normal input.
       screenReaderMode: true,
@@ -396,8 +400,8 @@ export const XTerminal = forwardRef<TerminalHandle, XTerminalProps>(function XTe
       fileLinkDisposable.dispose();
       term.dispose();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- settings are live-applied below; reconnect only when server changes.
-  }, [serverId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- settings are live-applied below; reconnect when the server or Windows EOL mode changes.
+  }, [serverId, convertEol]);
 
   useEffect(() => {
     if (!active) return;

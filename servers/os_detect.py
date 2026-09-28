@@ -163,7 +163,13 @@ def map_to_os_kind(
     return kind, meta
 
 
-async def _run_detect_command(server: Server, *, secret: str, timeout_seconds: float = 15.0) -> str:
+async def _run_detect_command(
+    server: Server,
+    *,
+    secret: str,
+    timeout_seconds: float = 15.0,
+    command: str | None = None,
+) -> str:
     conn_id = await ssh_manager.connect(
         host=server.host,
         username=server.username,
@@ -177,12 +183,12 @@ async def _run_detect_command(server: Server, *, secret: str, timeout_seconds: f
         # OS probe is read-only and never needs sudo. Avoid loading/decrypting
         # stored sudo passwords (wrong MANAGED_SECRET_KEY would fail the whole probe).
         result = await asyncio.wait_for(
-            ssh_manager.execute(
-                conn_id,
-                OS_DETECT_COMMAND,
-                sudo_auth_mode="none",
-                sudo_password="",
-            ),
+                ssh_manager.execute(
+                    conn_id,
+                    command or OS_DETECT_COMMAND,
+                    sudo_auth_mode="none",
+                    sudo_password="",
+                ),
             timeout=timeout_seconds,
         )
         stdout = str(result.get("stdout") or "")
@@ -224,10 +230,65 @@ def detection_is_stale(server: Server, *, max_age_days: int = 7) -> bool:
     return (timezone.now() - parsed).days >= max_age_days
 
 
+WINDOWS_CAPTION_COMMAND = (
+    "powershell.exe -NoProfile -NonInteractive -Command "
+    '"[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; '
+    '(Get-CimInstance Win32_OperatingSystem).Caption"'
+)
+
+
+def windows_caption_from_probe(raw: str) -> str:
+    """Pick a Windows caption from probe output, ignoring non-OS noise."""
+    for line in reversed((raw or "").splitlines()):
+        caption = line.strip()
+        if caption and "windows" in caption.lower() and "managed secret" not in caption.lower():
+            return caption[:200]
+    return ""
+
+
+async def _detect_windows_os(server: Server) -> dict[str, Any]:
+    """Keep os_type=windows even when the caption probe cannot run."""
+    pretty = "Windows"
+    source = "os_type"
+    probe_error = ""
+    try:
+        secret = await sync_to_async(get_server_auth_secret, thread_sensitive=True)(server)
+        raw = await _run_detect_command(server, secret=secret, command=WINDOWS_CAPTION_COMMAND)
+        caption = windows_caption_from_probe(raw)
+        if caption:
+            pretty = caption
+            source = "ssh"
+    except Exception as exc:
+        probe_error = str(exc)
+        logger.debug("Windows OS caption probe failed for {}: {}", server.name, exc)
+
+    meta: dict[str, Any] = {
+        "id": "windows",
+        "pretty_name": pretty,
+        "detected_at": timezone.now().isoformat(),
+        "source": source,
+    }
+    if probe_error:
+        meta["probe_error"] = probe_error[:300]
+    await sync_to_async(_save_detection)(server, "windows", meta)
+    return {
+        "success": True,
+        "server_id": server.id,
+        "detected_os": "windows",
+        "detected_os_pretty": pretty,
+        "meta": meta,
+        "needs_retry": False,
+        "error": None,
+    }
+
+
 async def detect_server_os(server: Server) -> dict[str, Any]:
     """Connect via SSH and persist detected OS on the server."""
     if not server.is_active:
         return {"success": False, "server_id": server.id, "error": "Server is inactive"}
+
+    if (getattr(server, "os_type", "") or "").strip().lower() == "windows":
+        return await _detect_windows_os(server)
 
     secret = await sync_to_async(get_server_auth_secret, thread_sensitive=True)(server)
     try:

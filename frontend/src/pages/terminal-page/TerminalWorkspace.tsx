@@ -134,6 +134,7 @@ export function TerminalWorkspace({
                   terminalRefs.current[tab.id] = handle;
                 }}
                 serverId={tab.serverId}
+                convertEol={findServer(servers, tab.serverId)?.os_type === "windows"}
                 active={tab.id === activeTabId}
                 themeOverride={resolvedTheme}
                 fontSize={effectiveTerminalFontSize}

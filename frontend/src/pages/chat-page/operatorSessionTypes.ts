@@ -13,6 +13,8 @@ export type OperatorSessionState = {
   host: string;
   /** agent = AI activity log; live = interactive xterm */
   mode: "agent" | "live";
+  /** Shell family for the live terminal. */
+  osType?: "linux" | "windows";
   lines: OperatorSessionLine[];
   /** Recent human commands for operator context */
   humanTrail: Array<{ cmd: string; at: number }>;

@@ -8,6 +8,7 @@ from servers.services import terminal_input
 from servers.services.editor_intercept import detect_editor_command
 from servers.services.server_mutation_policy import is_unprivileged_read_only_command
 from servers.services.terminal_manual_command_state import ManualCommandState
+from servers.services.terminal_windows import is_windows_host, normalize_windows_pty_input
 
 ActivityLogger = Callable[..., Awaitable[Any]]
 PersistManualCommandResult = Callable[..., Awaitable[Any]]
@@ -155,6 +156,8 @@ async def handle_terminal_input(
         return
     if not ssh_proc:
         return
+    if is_windows_host(server):
+        data = normalize_windows_pty_input(data)
 
     try:
         completed_commands = await capture_terminal_input(state, data)
@@ -200,6 +203,9 @@ async def handle_terminal_input(
             and newline_count == 1
             and terminal_input.should_use_manual_command_marker(completed_commands[0])
         )
+        # Bash $? markers are not valid PowerShell and would sit on the prompt.
+        if is_windows_host(server):
+            can_capture_result = False
         if not can_capture_result:
             ssh_proc.stdin.write(data)
             for command in completed_commands:
