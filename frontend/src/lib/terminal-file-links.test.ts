@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import type { ILink, Terminal } from "@xterm/xterm";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createTerminalFileLinkProvider,
   extractTextFilenames,
   hasTextExtension,
   isLikelyEditablePathToken,
@@ -75,5 +77,35 @@ describe("terminal-file-links", () => {
     expect(isLikelyEditablePathToken("app.py;rm")).toBe(false);
     expect(isLikelyEditablePathToken("src/main.py")).toBe(true);
     expect(extractTextFilenames("see src/main.py and also app.py")).toContain("src/main.py");
+  });
+
+  it("reads the 0-based buffer line and keeps a 1-based link range", () => {
+    const lines = ["nikita@nikitavm:~$ ls", "german  test.txt"];
+    const getLine = vi.fn((index: number) => {
+      const text = lines[index];
+      if (text === undefined) return undefined;
+      return { translateToString: () => text };
+    });
+    const term = { buffer: { active: { getLine } } } as unknown as Terminal;
+    const provider = createTerminalFileLinkProvider(term, {
+      getCwd: () => "/home/nikita",
+      onOpen: () => {},
+    });
+
+    let links: ILink[] | undefined;
+    provider.provideLinks(2, (result) => {
+      links = result;
+    });
+
+    expect(getLine).toHaveBeenCalledWith(1);
+    expect(links).toEqual([
+      expect.objectContaining({
+        text: "test.txt",
+        range: {
+          start: { x: 9, y: 2 },
+          end: { x: 16, y: 2 },
+        },
+      }),
+    ]);
   });
 });

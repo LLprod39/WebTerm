@@ -206,7 +206,8 @@ export function createTerminalFileLinkProvider(
         callback(undefined);
         return;
       }
-      const line = term.buffer.active.getLine(bufferLineNumber);
+      // provideLinks is 1-based; IBuffer.getLine is 0-based. range.y stays 1-based.
+      const line = term.buffer.active.getLine(bufferLineNumber - 1);
       if (!line) {
         callback(undefined);
         return;
