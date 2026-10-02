@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from loguru import logger
+logger = logging.getLogger(__name__)
 
 from ai_cli_runner_manager.protocol import RunnerAction, RunnerRequestV1, error_event
 from app.ai_runtime import ProviderEventType, ProviderEventV1
@@ -510,7 +511,7 @@ def _safe_cursor_error(exc: Exception) -> ProviderEventV1:
         return ProviderEventV1(ProviderEventType.LIMIT, {"code": "provider_limit_reached"})
     kind = type(exc).__name__
     preview = " ".join(str(exc).split())[:160]
-    logger.warning("cursor adapter runtime error type={} preview={}", kind, preview)
+    logger.warning("cursor adapter runtime error type=%s preview=%s", kind, preview)
     if isinstance(exc, (TimeoutError, asyncio.TimeoutError)) or "timeout" in value or "timed out" in value:
         return error_event("provider_runtime_error", "Cursor runtime timed out", retryable=True)
     message = "Cursor runtime failed"

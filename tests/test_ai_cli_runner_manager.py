@@ -228,6 +228,26 @@ async def test_revoke_stops_only_matching_runners_and_removes_exact_volume(monke
 
 
 @pytest.mark.asyncio
+async def test_revoke_succeeds_when_volume_does_not_exist(monkeypatch) -> None:
+    class FakeMissingVolumeProcess:
+        def __init__(self) -> None:
+            self.returncode = 1
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            return b"", b"Error response from daemon: get webterm-ai-cli-cred-connection_9999: no such volume\n"
+
+        async def wait(self) -> int:
+            return 1
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return FakeMissingVolumeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    runtime = DockerCliRuntime(_config())
+    assert await runtime.revoke_connection("connection_9999") is True
+
+
+@pytest.mark.asyncio
 async def test_stderr_flood_terminates_runner_immediately(monkeypatch) -> None:
     script = "import sys,time; sys.stderr.buffer.write(b'x'*200000); sys.stderr.flush(); time.sleep(30)"
     monkeypatch.setattr(

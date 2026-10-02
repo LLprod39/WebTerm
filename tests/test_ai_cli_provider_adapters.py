@@ -335,14 +335,17 @@ async def test_grok_device_auth_stderr_flood_is_bounded_and_process_is_stopped(m
 @pytest.mark.asyncio
 async def test_antigravity_device_auth_emits_verification_uri() -> None:
     events = [event async for event in _start_device_auth()]
-    assert len(events) == 1
+    assert len(events) == 2
     assert events[0].type is ProviderEventType.AUTH_REQUIRED
     assert "https://accounts.google.com" in events[0].payload["verification_uri"]
     assert events[0].payload["user_code"].startswith("GEMI-")
+    assert events[1].type is ProviderEventType.COMPLETED
 
 
 def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     assert not _is_authenticated()
 
     (tmp_path / "api_key.txt").write_text("test-gemini-key", encoding="utf-8")

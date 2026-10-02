@@ -238,9 +238,16 @@ class DockerCliRuntime:
             "rm",
             volume_name,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
+            if hasattr(process, "communicate"):
+                _, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
+                if process.returncode == 0:
+                    return True
+                if stderr and (b"no such volume" in stderr.lower() or b"not found" in stderr.lower()):
+                    return True
+                return False
             return await asyncio.wait_for(process.wait(), timeout=15) == 0
         except TimeoutError:
             process.kill()

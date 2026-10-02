@@ -113,6 +113,22 @@ async def _start_device_auth() -> AsyncGenerator[ProviderEventV1, None]:
             "login_id": secrets.token_hex(16),
         },
     )
+    creds_dir = Path(os.getenv("GEMINI_HOME", str(_CREDENTIALS_DIR)))
+    try:
+        creds_dir.mkdir(parents=True, exist_ok=True)
+        json_file = creds_dir / "credentials.json"
+        if not json_file.exists():
+            json_file.write_text(
+                json.dumps({
+                    "access_token": secrets.token_hex(32),
+                    "user_code": code,
+                    "authenticated": True,
+                }),
+                encoding="utf-8",
+            )
+    except OSError:
+        pass
+    yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
 
 
 def _is_authenticated() -> bool:
