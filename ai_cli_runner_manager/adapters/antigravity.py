@@ -21,7 +21,7 @@ _CREDENTIALS_DIR = Path("/credentials/antigravity")
 class AntigravitySubscriptionAdapter:
     async def stream(self, request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
         if request.action is RunnerAction.AUTH_START:
-            async for event in _start_device_auth():
+            async for event in _start_device_auth(api_key=request.api_key):
                 yield event
             return
 
@@ -41,7 +41,21 @@ class AntigravitySubscriptionAdapter:
 
         try:
             creds = _resolve_credentials()
-            api_key = creds.get("api_key") or os.getenv("GEMINI_API_KEY")
+            api_key = (
+                getattr(request, "api_key", None)
+                or creds.get("api_key")
+                or os.getenv("GEMINI_API_KEY")
+            )
+            if not api_key:
+                yield error_event(
+                    "gemini_api_key_missing",
+                    "Gemini API key is required. Please set GEMINI_API_KEY in .env or configure in Settings.",
+                )
+                return
+
+            if api_key and not creds.get("api_key"):
+                _persist_api_key(api_key)
+
             model = request.model_id or _DEFAULT_MODEL
 
             config = LocalAgentConfig(
@@ -102,7 +116,7 @@ class AntigravitySubscriptionAdapter:
             yield _safe_antigravity_error(exc)
 
 
-async def _start_device_auth() -> AsyncGenerator[ProviderEventV1, None]:
+async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[ProviderEventV1, None]:
     """Emit verification URI and user code for Google / Antigravity authentication."""
     code = f"GEMI-{secrets.token_hex(3).upper()}-{secrets.token_hex(3).upper()}"
     yield ProviderEventV1(
@@ -117,18 +131,47 @@ async def _start_device_auth() -> AsyncGenerator[ProviderEventV1, None]:
     try:
         creds_dir.mkdir(parents=True, exist_ok=True)
         json_file = creds_dir / "credentials.json"
+        payload: dict[str, Any] = {
+            "access_token": secrets.token_hex(32),
+            "user_code": code,
+            "authenticated": True,
+        }
+        if api_key:
+            payload["api_key"] = api_key
+            (creds_dir / "api_key.txt").write_text(api_key, encoding="utf-8")
         if not json_file.exists():
-            json_file.write_text(
-                json.dumps({
-                    "access_token": secrets.token_hex(32),
-                    "user_code": code,
-                    "authenticated": True,
-                }),
-                encoding="utf-8",
-            )
+            json_file.write_text(json.dumps(payload), encoding="utf-8")
+        elif api_key:
+            try:
+                existing = json.loads(json_file.read_text(encoding="utf-8"))
+            except Exception:
+                existing = {}
+            existing["api_key"] = api_key
+            existing["authenticated"] = True
+            json_file.write_text(json.dumps(existing), encoding="utf-8")
     except OSError:
         pass
     yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
+
+
+def _persist_api_key(api_key: str) -> None:
+    creds_dir = Path(os.getenv("GEMINI_HOME", str(_CREDENTIALS_DIR)))
+    try:
+        creds_dir.mkdir(parents=True, exist_ok=True)
+        key_file = creds_dir / "api_key.txt"
+        key_file.write_text(api_key, encoding="utf-8")
+        json_file = creds_dir / "credentials.json"
+        payload: dict[str, Any] = {}
+        if json_file.exists():
+            try:
+                payload = json.loads(json_file.read_text(encoding="utf-8"))
+            except Exception:
+                payload = {}
+        payload["api_key"] = api_key
+        payload["authenticated"] = True
+        json_file.write_text(json.dumps(payload), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _is_authenticated() -> bool:
@@ -174,7 +217,7 @@ def _resolve_credentials() -> dict[str, Any]:
 
 def _safe_antigravity_error(exc: Exception) -> ProviderEventV1:
     value = str(exc).lower()
-    if any(marker in value for marker in ("401", "unauthorized", "api_key_invalid", "permission denied", "login required")):
+    if any(marker in value for marker in ("401", "unauthorized", "api_key_invalid", "permission denied", "login required", "api key not valid", "api key is required")):
         return ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
     if any(marker in value for marker in ("429", "rate limit", "resource exhausted", "quota exceeded")):
         return ProviderEventV1(ProviderEventType.LIMIT, {"code": "provider_limit_reached"})

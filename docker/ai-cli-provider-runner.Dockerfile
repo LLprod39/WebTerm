@@ -4,7 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HOME=/home/ai-cli \
     PYTHONPATH=/app \
-    PATH=/opt/venv/bin:/usr/local/bin:${PATH}
+    PATH=/opt/venv/bin:/usr/local/bin:${PATH} \
+    NO_PROXY=127.0.0.1,localhost,::1 \
+    no_proxy=127.0.0.1,localhost,::1
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \

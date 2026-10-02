@@ -195,11 +195,22 @@ async def _run_auth_flow(flow_id: int, *, worker_name: str, fencing_token: int) 
     if flow is None or flow.status != AIConnectionAuthFlow.STATUS_PENDING:
         return
     connection = flow.connection
+    api_key: str | None = None
+    if connection.target_id == "antigravity_subscription":
+        api_key = (os.getenv("GEMINI_API_KEY") or "").strip() or None
+        if not api_key:
+            try:
+                from core_ui.managed_secrets import get_llm_api_key
+                api_key = (get_llm_api_key("gemini") or "").strip() or None
+            except Exception:
+                pass
+
     request = RunnerRequestV1(
         action=(RunnerAction.VERIFY if flow.flow_kind == "verification" else RunnerAction.AUTH_START),
         connection_ref=connection.credential_ref,
         target_id=connection.target_id,
         invocation_id=f"auth_{flow.public_id.hex}",
+        api_key=api_key,
     )
     terminal_type: ProviderEventType | None = None
     error_code = ""

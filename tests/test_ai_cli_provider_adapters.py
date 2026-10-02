@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
+import unittest.mock
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -364,4 +366,37 @@ def test_safe_antigravity_error_sanitization() -> None:
     generic_err = _safe_antigravity_error(RuntimeError("network connection reset"))
     assert generic_err.type is ProviderEventType.ERROR
     assert generic_err.payload["code"] == "provider_runtime_error"
+
+
+@pytest.mark.asyncio
+async def test_antigravity_missing_api_key_yields_error(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    monkeypatch.setitem(sys.modules, "google.antigravity", unittest.mock.MagicMock())
+
+    adapter = AntigravitySubscriptionAdapter()
+    req = RunnerRequestV1(
+        action=RunnerAction.RUN,
+        connection_ref="connection_1234",
+        target_id="antigravity_subscription",
+        invocation_id="invocation_1234",
+        messages=[{"role": "user", "content": "hi"}],
+    )
+    events = [event async for event in adapter.stream(req)]
+    assert len(events) == 1
+    assert events[0].type is ProviderEventType.ERROR
+    assert events[0].payload["code"] == "gemini_api_key_missing"
+
+
+@pytest.mark.asyncio
+async def test_antigravity_device_auth_persists_api_key(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
+    events = [event async for event in _start_device_auth(api_key="test-secret-key")]
+    assert len(events) == 2
+    assert (tmp_path / "api_key.txt").read_text(encoding="utf-8") == "test-secret-key"
+    creds_json = json.loads((tmp_path / "credentials.json").read_text(encoding="utf-8"))
+    assert creds_json["api_key"] == "test-secret-key"
+    assert creds_json["authenticated"] is True
+
 

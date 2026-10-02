@@ -137,6 +137,14 @@ async def stream_persisted_subscription_events(
     terminal_recorded = False
     try:
         try:
+            api_key: str | None = None
+            if invocation.target_id == "antigravity_subscription":
+                api_key = (os.getenv("GEMINI_API_KEY") or "").strip() or None
+                if not api_key:
+                    with suppress(Exception):
+                        from core_ui.managed_secrets import get_llm_api_key
+                        api_key = (get_llm_api_key("gemini") or "").strip() or None
+
             request = RunnerRequestV1(
                 action=RunnerAction.RUN,
                 connection_ref=connection_ref,
@@ -151,6 +159,7 @@ async def stream_persisted_subscription_events(
                 tool_policy=context.tool_policy,
                 output_schema=context.output_schema,
                 idempotency_key=context.idempotency_key,
+                api_key=api_key,
             )
         except Exception as exc:
             # Protocol/validation errors previously leaked the acquired lease.

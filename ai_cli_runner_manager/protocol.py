@@ -43,6 +43,7 @@ class RunnerRequestV1:
     tool_policy: dict[str, Any] = field(default_factory=dict)
     output_schema: dict[str, Any] | None = None
     idempotency_key: str = ""
+    api_key: str | None = None
     schema: str = "webterm.ai-cli-runner-request.v1"
 
     def __post_init__(self) -> None:
@@ -77,6 +78,9 @@ class RunnerRequestV1:
             if reasoning_effort not in _REASONING_EFFORTS:
                 raise RunnerProtocolError("reasoning_effort is not supported")
             object.__setattr__(self, "reasoning_effort", reasoning_effort)
+        if self.api_key is not None:
+            cleaned_key = self.api_key.strip() or None
+            object.__setattr__(self, "api_key", cleaned_key)
 
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> RunnerRequestV1:
@@ -98,6 +102,7 @@ class RunnerRequestV1:
                 tool_policy=_dict(value.get("tool_policy"), "tool_policy"),
                 output_schema=_optional_dict(value.get("output_schema"), "output_schema"),
                 idempotency_key=str(value.get("idempotency_key") or ""),
+                api_key=_optional_string(value.get("api_key")),
             )
         except (TypeError, ValueError) as exc:
             if isinstance(exc, RunnerProtocolError):
@@ -120,6 +125,7 @@ class RunnerRequestV1:
             "tool_policy": self.tool_policy,
             "output_schema": self.output_schema,
             "idempotency_key": self.idempotency_key,
+            "api_key": self.api_key,
         }
 
 
