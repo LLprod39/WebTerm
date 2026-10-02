@@ -8,10 +8,12 @@ from app.ai_cli_socket_proxy_policy import AiCliProxyPolicyConfig, authorize_ai_
 CODEX_IMAGE = "registry.example/webterm-ai-cli-codex@sha256:" + "a" * 64
 GROK_IMAGE = "registry.example/webterm-ai-cli-grok@sha256:" + "b" * 64
 CURSOR_IMAGE = "registry.example/webterm-ai-cli-cursor@sha256:" + "c" * 64
+ANTIGRAVITY_IMAGE = "registry.example/webterm-ai-cli-antigravity@sha256:" + "d" * 64
 CONFIG = AiCliProxyPolicyConfig(
     codex_runner_image=CODEX_IMAGE,
     grok_runner_image=GROK_IMAGE,
     cursor_runner_image=CURSOR_IMAGE,
+    antigravity_runner_image=ANTIGRAVITY_IMAGE,
     egress_network="webterm-ai-cli-egress",
 )
 
@@ -72,6 +74,18 @@ def _authorize(payload: dict[str, Any]):
 
 def test_safe_ai_cli_container_is_allowed() -> None:
     assert _authorize(_payload()).allowed
+
+
+def test_antigravity_container_is_allowed() -> None:
+    payload = _payload()
+    payload["Image"] = ANTIGRAVITY_IMAGE
+    payload["Env"] = [
+        "GEMINI_HOME=/credentials/antigravity",
+        "WEBTERM_AI_CLI_TARGET=antigravity_subscription",
+        "HTTP_PROXY=http://ai-cli-egress-proxy:3128",
+        "HTTPS_PROXY=http://ai-cli-egress-proxy:3128",
+    ]
+    assert _authorize(payload).allowed
 
 
 def test_missing_provider_specific_digest_is_denied() -> None:

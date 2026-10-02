@@ -61,6 +61,7 @@ class RunnerRequestV1:
             ProviderTarget.CODEX_SUBSCRIPTION.value,
             ProviderTarget.GROK_SUBSCRIPTION.value,
             ProviderTarget.CURSOR_SUBSCRIPTION.value,
+            ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value,
         }:
             raise RunnerProtocolError("Runner accepts only subscription targets")
         object.__setattr__(self, "target_id", target_id)

@@ -15,6 +15,7 @@ SUBSCRIPTION_TARGET_CHOICES = [
     (ProviderTarget.CODEX_SUBSCRIPTION.value, "Codex subscription"),
     (ProviderTarget.GROK_SUBSCRIPTION.value, "Grok subscription"),
     (ProviderTarget.CURSOR_SUBSCRIPTION.value, "Cursor subscription"),
+    (ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value, "Antigravity subscription"),
 ]
 ALL_TARGET_CHOICES = [(target.value, target.value) for target in ProviderTarget]
 

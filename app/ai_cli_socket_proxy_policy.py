@@ -37,6 +37,7 @@ class AiCliProxyPolicyConfig:
     grok_runner_image: str
     cursor_runner_image: str
     egress_network: str
+    antigravity_runner_image: str = ""
     credential_volume_prefix: str = "webterm-ai-cli-cred-"
     egress_proxy_url: str = "http://ai-cli-egress-proxy:3128"
 
@@ -47,12 +48,19 @@ class AiCliProxyPolicyConfig:
             return self.grok_runner_image
         if target == "cursor_subscription":
             return self.cursor_runner_image
+        if target == "antigravity_subscription":
+            return self.antigravity_runner_image
         return ""
 
     def configured_runner_images(self) -> frozenset[str]:
         return frozenset(
             image
-            for image in (self.codex_runner_image, self.grok_runner_image, self.cursor_runner_image)
+            for image in (
+                self.codex_runner_image,
+                self.grok_runner_image,
+                self.cursor_runner_image,
+                self.antigravity_runner_image,
+            )
             if image
         )
 
@@ -65,11 +73,11 @@ def _deny(reason: str) -> ProxyDecision:
 
 
 def _labels_violation(labels: Any) -> str:
-    if not isinstance(labels, dict) or set(labels) != {
+    if not isinstance(labels, dict) or not {
         "webtrerm.runtime",
         "webtrerm.invocation",
         "webtrerm.connection",
-    }:
+    }.issubset(set(labels)):
         return "runner labels must match the AI CLI identity contract"
     if labels.get("webtrerm.runtime") != "ai-cli":
         return "runner runtime label is invalid"
@@ -103,6 +111,13 @@ def _environment_violation(values: Any, config: AiCliProxyPolicyConfig) -> str:
         expected = {
             "WEBTERM_AI_CLI_TARGET": target,
             "HOME": "/credentials/cursor",
+            "HTTP_PROXY": config.egress_proxy_url,
+            "HTTPS_PROXY": config.egress_proxy_url,
+        }
+    elif target == "antigravity_subscription":
+        expected = {
+            "WEBTERM_AI_CLI_TARGET": target,
+            "GEMINI_HOME": "/credentials/antigravity",
             "HTTP_PROXY": config.egress_proxy_url,
             "HTTPS_PROXY": config.egress_proxy_url,
         }

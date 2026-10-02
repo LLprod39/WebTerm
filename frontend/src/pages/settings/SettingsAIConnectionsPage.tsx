@@ -80,6 +80,7 @@ function targetLabel(target: string): string {
   if (target === "codex_subscription") return "Codex CLI";
   if (target === "grok_subscription") return "Grok CLI";
   if (target === "cursor_subscription") return "Cursor CLI";
+  if (target === "antigravity_subscription") return "Gemini Antigravity";
   return target;
 }
 
@@ -497,7 +498,7 @@ export default function SettingsAIConnectionsPage() {
               </div>
               <Select value={target} onValueChange={(value) => setTarget(value as AiSubscriptionTarget)}>
                 <SelectTrigger aria-label={text("CLI-провайдер", "CLI provider")}><SelectValue /></SelectTrigger>
-                <SelectContent><SelectItem value="codex_subscription">Codex CLI</SelectItem><SelectItem value="grok_subscription">Grok CLI</SelectItem><SelectItem value="cursor_subscription">Cursor CLI</SelectItem></SelectContent>
+                <SelectContent><SelectItem value="codex_subscription">Codex CLI</SelectItem><SelectItem value="grok_subscription">Grok CLI</SelectItem><SelectItem value="cursor_subscription">Cursor CLI</SelectItem><SelectItem value="antigravity_subscription">Gemini Antigravity</SelectItem></SelectContent>
               </Select>
               <Select value={scope} onValueChange={(value) => setScope(value as "personal" | "workspace")} disabled={!canAdmin}>
                 <SelectTrigger aria-label={text("Область подключения", "Connection scope")}><SelectValue /></SelectTrigger>
@@ -938,7 +939,7 @@ export default function SettingsAIConnectionsPage() {
               <div><h2 id="workspace-ai-title" className="text-base font-semibold">{text("Workspace: пулы", "Workspace pools")}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{text("Несколько workspace-подключений одного провайдера в одном пуле.", "Several workspace connections for one provider in a single pool.")}</p></div>
               <div className="grid gap-3 md:grid-cols-[1fr_220px_auto]">
                 <Input aria-label={text("Название пула", "Pool name")} value={poolName} onChange={(event) => setPoolName(event.target.value)} placeholder={text("Название пула", "Pool name")} />
-                <Select value={poolTarget} onValueChange={(value) => { setPoolTarget(value as AiSubscriptionTarget); setPoolMembers([]); }}><SelectTrigger aria-label={text("Провайдер пула", "Pool provider")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="codex_subscription">Codex CLI</SelectItem><SelectItem value="grok_subscription">Grok CLI</SelectItem><SelectItem value="cursor_subscription">Cursor CLI</SelectItem></SelectContent></Select>
+                <Select value={poolTarget} onValueChange={(value) => { setPoolTarget(value as AiSubscriptionTarget); setPoolMembers([]); }}><SelectTrigger aria-label={text("Провайдер пула", "Pool provider")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="codex_subscription">Codex CLI</SelectItem><SelectItem value="grok_subscription">Grok CLI</SelectItem><SelectItem value="cursor_subscription">Cursor CLI</SelectItem><SelectItem value="antigravity_subscription">Gemini Antigravity</SelectItem></SelectContent></Select>
                 <Button disabled={!poolName.trim() || !poolMembers.length || mutation.isPending} onClick={() => mutation.mutate(async () => { await createAiProviderPool({ name: poolName.trim(), target_id: poolTarget, connection_ids: poolMembers }); setPoolName(""); setPoolMembers([]); })}>{text("Создать пул", "Create pool")}</Button>
               </div>
               <div className="flex flex-wrap gap-3">{workspaceConnections.filter((item) => item.target_id === poolTarget).map((item) => <label key={item.id} className="flex items-center gap-2 text-sm"><Checkbox checked={poolMembers.includes(item.id)} onCheckedChange={(checked) => setPoolMembers((current) => checked ? [...new Set([...current, item.id])] : current.filter((id) => id !== item.id))} />{item.name}</label>)}</div>

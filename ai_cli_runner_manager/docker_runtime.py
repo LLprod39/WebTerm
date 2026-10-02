@@ -27,6 +27,7 @@ _TARGET_HOME_ENV = {
     "codex_subscription": ("CODEX_HOME", "/credentials/codex"),
     "grok_subscription": ("GROK_HOME", "/credentials/grok"),
     "cursor_subscription": ("HOME", "/credentials/cursor"),
+    "antigravity_subscription": ("GEMINI_HOME", "/credentials/antigravity"),
 }
 
 

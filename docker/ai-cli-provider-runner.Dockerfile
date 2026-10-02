@@ -16,7 +16,7 @@ RUN python -m venv --without-pip /opt/venv
 
 COPY --chown=10001:10001 app/ai_runtime /app/app/ai_runtime
 COPY --chown=10001:10001 ai_cli_runner_manager /app/ai_cli_runner_manager
-RUN install -d -o 10001 -g 10001 /credentials /credentials/codex /credentials/grok /credentials/cursor /workspace
+RUN install -d -o 10001 -g 10001 /credentials /credentials/codex /credentials/grok /credentials/cursor /credentials/antigravity /workspace
 
 USER 10001:10001
 WORKDIR /workspace
@@ -68,3 +68,12 @@ RUN test -n "${CURSOR_AGENT_URL}" \
     && install -o root -g root -m 0755 /tmp/agent /usr/local/bin/agent \
     && rm -f /tmp/agent
 USER 10001:10001
+
+FROM runtime-base AS antigravity
+USER root
+COPY ai_cli_runner_manager/provider-requirements.lock /app/provider-requirements.lock
+RUN /opt/venv/bin/python -m ensurepip \
+    && /opt/venv/bin/python -m pip install --no-cache-dir --require-hashes --requirement /app/provider-requirements.lock \
+    && /opt/venv/bin/python -m pip uninstall --yes pip setuptools wheel
+USER 10001:10001
+

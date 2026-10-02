@@ -8,6 +8,7 @@ import os
 import sys
 
 from ai_cli_runner_manager.adapters import (
+    AntigravitySubscriptionAdapter,
     CodexSubscriptionAdapter,
     CursorSubscriptionAdapter,
     GrokSubscriptionAdapter,
@@ -33,6 +34,7 @@ async def _main() -> int:
         "codex_subscription": CodexSubscriptionAdapter,
         "grok_subscription": GrokSubscriptionAdapter,
         "cursor_subscription": CursorSubscriptionAdapter,
+        "antigravity_subscription": AntigravitySubscriptionAdapter,
     }
     adapter_cls = adapters.get(request.target_id)
     if adapter_cls is None:

@@ -31,6 +31,7 @@ function subscriptionTargetLabel(targetId: string): string {
   if (targetId === "codex_subscription") return "Codex CLI";
   if (targetId === "grok_subscription") return "Grok CLI";
   if (targetId === "cursor_subscription") return "Cursor CLI";
+  if (targetId === "antigravity_subscription") return "Gemini Antigravity";
   return targetId;
 }
 

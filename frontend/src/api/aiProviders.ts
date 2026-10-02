@@ -1,6 +1,10 @@
 import { apiFetch } from "@/lib/api";
 
-export type AiSubscriptionTarget = "codex_subscription" | "grok_subscription" | "cursor_subscription";
+export type AiSubscriptionTarget =
+  | "codex_subscription"
+  | "grok_subscription"
+  | "cursor_subscription"
+  | "antigravity_subscription";
 export type AiPurpose = "assistant" | "agents" | "terminal" | "internal";
 export type AiReasoningEffort = "low" | "medium" | "high" | "xhigh" | "max" | "ultra";
 

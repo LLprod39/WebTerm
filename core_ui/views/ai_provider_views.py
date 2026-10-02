@@ -59,11 +59,19 @@ CURSOR_SUBSCRIPTION_MODELS = [
     {"id": "sonnet-4-thinking", "label": "Sonnet 4 Thinking", "default_reasoning_effort": None, "reasoning_efforts": []},
 ]
 
+# Catalog matches Google Antigravity models supported in the runner.
+ANTIGRAVITY_SUBSCRIPTION_MODELS = [
+    {"id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "default_reasoning_effort": "medium", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+    {"id": "gemini-3.1-pro", "label": "Gemini 3.1 Pro", "default_reasoning_effort": "high", "reasoning_efforts": ["low", "medium", "high", "xhigh"]},
+    {"id": "gemini-3-flash-preview", "label": "Gemini 3 Flash Preview", "default_reasoning_effort": None, "reasoning_efforts": []},
+]
+
 _SUBSCRIPTION_CLI_TARGETS = frozenset(
     {
         ProviderTarget.CODEX_SUBSCRIPTION.value,
         ProviderTarget.GROK_SUBSCRIPTION.value,
         ProviderTarget.CURSOR_SUBSCRIPTION.value,
+        ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value,
     }
 )
 
@@ -318,6 +326,7 @@ def api_ai_provider_catalog(request):
                         ProviderTarget.CODEX_SUBSCRIPTION,
                         ProviderTarget.GROK_SUBSCRIPTION,
                         ProviderTarget.CURSOR_SUBSCRIPTION,
+                        ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
                     }
                 ],
             ],
@@ -327,6 +336,7 @@ def api_ai_provider_catalog(request):
                 ProviderTarget.CODEX_SUBSCRIPTION.value: CODEX_SUBSCRIPTION_MODELS,
                 ProviderTarget.GROK_SUBSCRIPTION.value: [],
                 ProviderTarget.CURSOR_SUBSCRIPTION.value: CURSOR_SUBSCRIPTION_MODELS,
+                ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value: ANTIGRAVITY_SUBSCRIPTION_MODELS,
             },
         }
     )
@@ -1201,8 +1211,16 @@ def _save_preference(
         # Cursor CLI has no reasoning_effort; ignore any value from older clients/UI.
         if binding.reasoning_effort:
             binding = replace(binding, reasoning_effort=None)
+    elif binding.target_id == ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value:
+        model = next((item for item in ANTIGRAVITY_SUBSCRIPTION_MODELS if item["id"] == binding.model_id), None)
+        if binding.model_id and model is None:
+            return _error("Unknown Antigravity subscription model")
+        if binding.reasoning_effort:
+            supported = model["reasoning_efforts"] if model else ANTIGRAVITY_SUBSCRIPTION_MODELS[0]["reasoning_efforts"]
+            if binding.reasoning_effort not in supported:
+                return _error("Reasoning effort is not supported by the selected Antigravity model")
     elif binding.reasoning_effort:
-        return _error("Reasoning effort is currently supported only for Codex subscriptions")
+        return _error("Reasoning effort is currently supported only for Codex and Antigravity subscriptions")
     if binding.connection_id is not None:
         connection = AIProviderConnection.objects.filter(pk=binding.connection_id).first()
         if connection is None or connection.target_id != binding.target_id:

@@ -15,6 +15,7 @@ class ProviderTarget(StrEnum):
     CODEX_SUBSCRIPTION = "codex_subscription"
     GROK_SUBSCRIPTION = "grok_subscription"
     CURSOR_SUBSCRIPTION = "cursor_subscription"
+    ANTIGRAVITY_SUBSCRIPTION = "antigravity_subscription"
 
 
 CANONICAL_PROVIDER_TARGETS = frozenset(target.value for target in ProviderTarget)
@@ -23,6 +24,7 @@ SUBSCRIPTION_PROVIDER_TARGETS = frozenset(
         ProviderTarget.CODEX_SUBSCRIPTION.value,
         ProviderTarget.GROK_SUBSCRIPTION.value,
         ProviderTarget.CURSOR_SUBSCRIPTION.value,
+        ProviderTarget.ANTIGRAVITY_SUBSCRIPTION.value,
     }
 )
 
@@ -42,6 +44,11 @@ LEGACY_PROVIDER_TARGET_ALIASES: dict[str, str] = {
     "grok_cli": ProviderTarget.GROK_SUBSCRIPTION,
     "grok_build": ProviderTarget.GROK_SUBSCRIPTION,
     "cursor_cli": ProviderTarget.CURSOR_SUBSCRIPTION,
+    "antigravity": ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
+    "gemini_antigravity": ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
+    "agy": ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
+    "antigravity_cli": ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
+    "antigravity_sdk": ProviderTarget.ANTIGRAVITY_SUBSCRIPTION,
 }
 
 _LEGACY_RUNTIME_PROVIDER_IDS: dict[str, str] = {

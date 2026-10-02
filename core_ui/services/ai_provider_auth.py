@@ -479,6 +479,14 @@ def _allowed_verification_uri(target_id: str, value: str) -> bool:
         allowed_hosts = {"accounts.x.ai", "x.ai", "grok.com"}
     elif target_id == "cursor_subscription":
         allowed_hosts = {"cursor.com", "cursor.sh", "authenticator.cursor.sh"}
+    elif target_id == "antigravity_subscription":
+        allowed_hosts = {
+            "accounts.google.com",
+            "aistudio.google.com",
+            "antigravity.google",
+            "google.com",
+            "cloud.google.com",
+        }
     else:
         return False
     hostname = parsed.hostname.lower()

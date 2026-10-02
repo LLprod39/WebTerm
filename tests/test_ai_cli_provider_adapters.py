@@ -7,6 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
+from ai_cli_runner_manager.adapters.antigravity import (
+    AntigravitySubscriptionAdapter,
+    _is_authenticated,
+    _safe_antigravity_error,
+    _start_device_auth,
+)
 from ai_cli_runner_manager.adapters.codex import codex_account_is_chatgpt, codex_notification_events
 from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_output_schema, tool_response_events
 from ai_cli_runner_manager.adapters.cursor import (
@@ -324,3 +330,35 @@ async def test_grok_device_auth_stderr_flood_is_bounded_and_process_is_stopped(m
     assert events[-1].type is ProviderEventType.ERROR
     assert events[-1].payload["code"] == "provider_protocol_error"
     assert process.terminated or process.killed
+
+
+@pytest.mark.asyncio
+async def test_antigravity_device_auth_emits_verification_uri() -> None:
+    events = [event async for event in _start_device_auth()]
+    assert len(events) == 1
+    assert events[0].type is ProviderEventType.AUTH_REQUIRED
+    assert "https://accounts.google.com" in events[0].payload["verification_uri"]
+    assert events[0].payload["user_code"].startswith("GEMI-")
+
+
+def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
+    assert not _is_authenticated()
+
+    (tmp_path / "api_key.txt").write_text("test-gemini-key", encoding="utf-8")
+    assert _is_authenticated()
+
+
+def test_safe_antigravity_error_sanitization() -> None:
+    auth_err = _safe_antigravity_error(RuntimeError("401 Unauthorized API key"))
+    assert auth_err.type is ProviderEventType.AUTH_REQUIRED
+    assert auth_err.payload == {"authenticated": False}
+
+    limit_err = _safe_antigravity_error(RuntimeError("429 Resource has been exhausted (quota)"))
+    assert limit_err.type is ProviderEventType.LIMIT
+    assert limit_err.payload == {"code": "provider_limit_reached"}
+
+    generic_err = _safe_antigravity_error(RuntimeError("network connection reset"))
+    assert generic_err.type is ProviderEventType.ERROR
+    assert generic_err.payload["code"] == "provider_runtime_error"
+

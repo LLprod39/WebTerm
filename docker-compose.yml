@@ -444,6 +444,7 @@ services:
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
       AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:?AI_CLI_CURSOR_RUNNER_IMAGE is required}
+      AI_CLI_ANTIGRAVITY_RUNNER_IMAGE: ${AI_CLI_ANTIGRAVITY_RUNNER_IMAGE:-}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -500,6 +501,7 @@ services:
       AI_CLI_CODEX_RUNNER_IMAGE: ${AI_CLI_CODEX_RUNNER_IMAGE:?AI_CLI_CODEX_RUNNER_IMAGE is required}
       AI_CLI_GROK_RUNNER_IMAGE: ${AI_CLI_GROK_RUNNER_IMAGE:?AI_CLI_GROK_RUNNER_IMAGE is required}
       AI_CLI_CURSOR_RUNNER_IMAGE: ${AI_CLI_CURSOR_RUNNER_IMAGE:?AI_CLI_CURSOR_RUNNER_IMAGE is required}
+      AI_CLI_ANTIGRAVITY_RUNNER_IMAGE: ${AI_CLI_ANTIGRAVITY_RUNNER_IMAGE:-}
       AI_CLI_DOCKER_NETWORK: ${AI_CLI_DOCKER_NETWORK:-webterm-ai-cli-egress}
       AI_CLI_CREDENTIAL_VOLUME_PREFIX: ${AI_CLI_CREDENTIAL_VOLUME_PREFIX:-webterm-ai-cli-cred-}
       AI_CLI_EGRESS_PROXY_URL: ${AI_CLI_EGRESS_PROXY_URL:-http://ai-cli-egress-proxy:3128}
@@ -621,11 +623,15 @@ services:
       - "${FRONTEND_PORT:-8080}:8080"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      backend:
-        condition: service_healthy
-      frontend:
-        condition: service_healthy
+    extra_hosts:
+      - "backend:host-gateway"
+      - "frontend:host-gateway"
+    # depends_on commented out: backend & frontend run outside Docker
+    # depends_on:
+    #   backend:
+    #     condition: service_healthy
+    #   frontend:
+    #     condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/nginx-health >/dev/null 2>&1 || exit 1"]

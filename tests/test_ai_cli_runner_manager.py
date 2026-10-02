@@ -106,6 +106,7 @@ def test_config_requires_immutable_runner_image() -> None:
         codex_runner_image="webterm-codex:latest",
         grok_runner_image="registry.example/webterm-grok@sha256:" + "b" * 64,
         cursor_runner_image="registry.example/webterm-cursor@sha256:" + "c" * 64,
+        antigravity_runner_image="registry.example/webterm-antigravity@sha256:" + "d" * 64,
         docker_network="webterm-ai-cli-egress",
     )
     with pytest.raises(RuntimeError, match="CODEX_RUNNER_IMAGE"):
@@ -116,6 +117,7 @@ def test_config_requires_both_provider_images(monkeypatch) -> None:
     monkeypatch.setenv("AI_CLI_RUNNER_MANAGER_TOKEN", "token")
     monkeypatch.setenv("AI_CLI_CODEX_RUNNER_IMAGE", "registry.example/codex@sha256:" + "a" * 64)
     monkeypatch.setenv("AI_CLI_CURSOR_RUNNER_IMAGE", "registry.example/cursor@sha256:" + "c" * 64)
+    monkeypatch.setenv("AI_CLI_ANTIGRAVITY_RUNNER_IMAGE", "registry.example/antigravity@sha256:" + "d" * 64)
     monkeypatch.delenv("AI_CLI_GROK_RUNNER_IMAGE", raising=False)
     config = RunnerManagerConfig.from_env()
 
@@ -127,11 +129,41 @@ def test_config_requires_cursor_provider_image(monkeypatch) -> None:
     monkeypatch.setenv("AI_CLI_RUNNER_MANAGER_TOKEN", "token")
     monkeypatch.setenv("AI_CLI_CODEX_RUNNER_IMAGE", "registry.example/codex@sha256:" + "a" * 64)
     monkeypatch.setenv("AI_CLI_GROK_RUNNER_IMAGE", "registry.example/grok@sha256:" + "b" * 64)
+    monkeypatch.setenv("AI_CLI_ANTIGRAVITY_RUNNER_IMAGE", "registry.example/antigravity@sha256:" + "d" * 64)
     monkeypatch.delenv("AI_CLI_CURSOR_RUNNER_IMAGE", raising=False)
     config = RunnerManagerConfig.from_env()
 
     with pytest.raises(RuntimeError, match="CURSOR_RUNNER_IMAGE"):
         config.validate_startup()
+
+
+def test_config_requires_antigravity_provider_image(monkeypatch) -> None:
+    monkeypatch.setenv("AI_CLI_RUNNER_MANAGER_TOKEN", "token")
+    monkeypatch.setenv("AI_CLI_CODEX_RUNNER_IMAGE", "registry.example/codex@sha256:" + "a" * 64)
+    monkeypatch.setenv("AI_CLI_GROK_RUNNER_IMAGE", "registry.example/grok@sha256:" + "b" * 64)
+    monkeypatch.setenv("AI_CLI_CURSOR_RUNNER_IMAGE", "registry.example/cursor@sha256:" + "c" * 64)
+    monkeypatch.delenv("AI_CLI_ANTIGRAVITY_RUNNER_IMAGE", raising=False)
+    config = RunnerManagerConfig.from_env()
+
+    with pytest.raises(RuntimeError, match="ANTIGRAVITY_RUNNER_IMAGE"):
+        config.validate_startup()
+
+
+def test_docker_command_antigravity_subscription() -> None:
+    config = RunnerManagerConfig(
+        token="token",
+        antigravity_runner_image="registry.example/antigravity@sha256:" + "d" * 64,
+    )
+    request = RunnerRequestV1(
+        action=RunnerAction.RUN,
+        connection_ref="conn-12345678",
+        target_id="antigravity_subscription",
+        invocation_id="inv-12345678",
+    )
+    command = build_cli_runner_docker_command(config, request, runner_id="4" * 32)
+    assert "GEMINI_HOME=/credentials/antigravity" in command
+    assert "WEBTERM_AI_CLI_TARGET=antigravity_subscription" in command
+    assert command[-1] == config.antigravity_runner_image
 
 
 @pytest.mark.asyncio
