@@ -451,7 +451,8 @@ def parse_antigravity_oauth_state(verification_uri: str) -> str:
 
 def _auth_failure_from_output(output: str) -> tuple[str, str]:
     plain = _ANSI_RE.sub("", output or "").lower()
-    if "timed out" in plain or "timeout" in plain:
+    # Match the CLI's hard failure, not the prompt line "Waiting for authentication (timeout 60s)..."
+    if "authentication timed out" in plain or "authentication failed or timed out" in plain:
         return (
             "provider_auth_timeout",
             "Google Antigravity sign-in link expired; open the new link and paste a fresh code",
@@ -461,7 +462,7 @@ def _auth_failure_from_output(output: str) -> tuple[str, str]:
             "provider_auth_transport_failed",
             "Google token exchange failed; check AI CLI egress and try sign-in again",
         )
-    if "invalid_grant" in plain or "invalid_request" in plain or "rejected" in plain:
+    if "invalid_grant" in plain or "invalid_request" in plain:
         return (
             "provider_auth_failed",
             "Google Antigravity rejected the authorization code; open the latest link and paste a fresh code once",
