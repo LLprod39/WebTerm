@@ -38,6 +38,7 @@ export { ConditionNode } from "./ConditionNode";
 export { ParallelNode } from "./ParallelNode";
 export { MergeNode } from "./MergeNode";
 export { OutputNode } from "./OutputNode";
+export { OpsNode } from "./OpsNode";
 export { SSHCommandNode } from "./SSHCommandNode";
 export { LLMQueryNode } from "./LLMQueryNode";
 export { MCPCallNode } from "./MCPCallNode";
@@ -57,17 +58,17 @@ export const NODE_TYPES = {
   "agent/ssh_cmd": "SSHCommandNode",
   "agent/llm_query": "LLMQueryNode",
   "agent/mcp_call": "MCPCallNode",
-  "ops/server_snapshot": "OutputNode",
-  "ops/log_query": "OutputNode",
-  "ops/file_action": "OutputNode",
-  "ops/package_action": "OutputNode",
-  "ops/disk_cleanup": "OutputNode",
-  "ops/backup_restore_check": "OutputNode",
-  "ops/service_action": "OutputNode",
-  "ops/docker_action": "OutputNode",
-  "ops/process_action": "OutputNode",
-  "ops/http_check": "OutputNode",
-  "ops/alert_update": "OutputNode",
+  "ops/server_snapshot": "OpsNode",
+  "ops/log_query": "OpsNode",
+  "ops/file_action": "OpsNode",
+  "ops/package_action": "OpsNode",
+  "ops/disk_cleanup": "OpsNode",
+  "ops/backup_restore_check": "OpsNode",
+  "ops/service_action": "OpsNode",
+  "ops/docker_action": "OpsNode",
+  "ops/process_action": "OpsNode",
+  "ops/http_check": "OpsNode",
+  "ops/alert_update": "OpsNode",
   "logic/condition": "ConditionNode",
   "logic/parallel": "ParallelNode",
   "logic/merge": "MergeNode",
