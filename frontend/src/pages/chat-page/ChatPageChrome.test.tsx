@@ -146,6 +146,12 @@ describe("chat page chrome", () => {
       </MemoryRouter>,
     );
 
+    expect(screen.getByRole("heading", { name: "Чат" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Новый чат" })).toBeInTheDocument();
+    expect(screen.queryByText("Автоматизации")).not.toBeInTheDocument();
+    expect(screen.queryByText("Настроить")).not.toBeInTheDocument();
+    expect(screen.getAllByPlaceholderText("Поиск…")).toHaveLength(1);
+
     fireEvent.click(screen.getByRole("button", { name: /Проверка production/ }));
     expect(setSearchParams).toHaveBeenCalledWith({ chat: "17" });
     expect(onNavigate).toHaveBeenCalledOnce();

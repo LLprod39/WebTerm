@@ -327,8 +327,12 @@ export function ChatMessagesPane({
     void navigator.clipboard?.writeText(url).catch(() => undefined);
   };
 
+  const chatRootLabel = localize(lang, "Чат", "Chat");
+  const showTitleCrumb =
+    Boolean(activeChat?.title) && selectedTitle.trim().toLocaleLowerCase() !== chatRootLabel.toLocaleLowerCase();
+
   return (
-    <>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
       <header className="flex min-h-11 shrink-0 items-center justify-between gap-2 px-3 pt-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
           <Button
@@ -358,10 +362,14 @@ export function ChatMessagesPane({
           ) : null}
           <nav className="min-w-0 flex-1">
             <Breadcrumb aria-label={localize(lang, "Местоположение чата", "Chat location")}>
-              <BreadcrumbItem href="/chat">
-                {localize(lang, "Оператор", "Operator")}
-              </BreadcrumbItem>
-              <BreadcrumbItem current>{selectedTitle}</BreadcrumbItem>
+              {showTitleCrumb ? (
+                <>
+                  <BreadcrumbItem href="/chat">{chatRootLabel}</BreadcrumbItem>
+                  <BreadcrumbItem current>{selectedTitle}</BreadcrumbItem>
+                </>
+              ) : (
+                <BreadcrumbItem current>{chatRootLabel}</BreadcrumbItem>
+              )}
             </Breadcrumb>
             <div className="relative mt-0.5 min-h-[1rem] overflow-hidden text-[11px]">
               <AnimatePresence mode="wait" initial={false}>
@@ -814,6 +822,6 @@ export function ChatMessagesPane({
           </div>
         ) : null}
       </AnimatePresence>
-    </>
+    </div>
   );
 }

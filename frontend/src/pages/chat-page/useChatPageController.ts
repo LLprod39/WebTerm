@@ -424,7 +424,7 @@ export function useChatPageController() {
     return total >= 1000 ? `${(total / 1000).toFixed(total >= 10_000 ? 0 : 1)}k` : String(total);
   }, [activeChat?.total_usage]);
 
-  const selectedTitle = activeChat?.title || localize(lang, "Оператор", "Operator");
+  const selectedTitle = activeChat?.title || localize(lang, "Новый чат", "New chat");
 
   const filteredChats = useMemo(() => {
     const q = chatFilter.trim().toLowerCase();

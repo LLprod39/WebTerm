@@ -65,7 +65,7 @@ export function ChatContextRail({
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-full flex-col gap-2.5 overflow-hidden rounded-2xl wt-chat-panel",
+        "flex h-full min-h-0 w-full flex-col gap-2.5 overflow-hidden bg-card/30",
         embedded && "rounded-none border-0 shadow-none",
         className,
       )}

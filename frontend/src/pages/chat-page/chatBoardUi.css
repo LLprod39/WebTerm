@@ -38,12 +38,10 @@
 }
 
 .wt-chat-shell {
-  background:
-    radial-gradient(120% 80% at 10% -10%, hsl(var(--ai) / 0.06), transparent 55%),
-    radial-gradient(90% 70% at 100% 0%, hsl(var(--primary) / 0.05), transparent 50%),
-    hsl(var(--background));
+  background: hsl(var(--background));
 }
 
+/* Legacy floating panel chrome — kept for any remaining consumers. */
 .wt-chat-panel {
   border: 1px solid hsl(var(--border) / 0.7);
   background: hsl(var(--card) / 0.92);

@@ -81,7 +81,10 @@ export default function ChatPage() {
   };
 
   const conversation = (
-    <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl wt-chat-panel">
+    <section
+      data-testid="chat-conversation"
+      className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
+    >
       <ChatMessagesPane
         c={c}
         onOpenHistory={() => setHistoryOpen(true)}
@@ -115,8 +118,8 @@ export default function ChatPage() {
   };
 
   return (
-    // BoardUI-style floating shell: history | conversation | optional context rail.
-    <div className="wt-chat-shell flex h-full max-h-full min-h-0 w-full gap-3 overflow-hidden p-2 text-foreground sm:p-3">
+    // Full-height shell flush with AppSidebar: history | conversation | optional rail.
+    <div className="wt-chat-shell flex h-full min-h-0 w-full overflow-hidden text-foreground">
       <ChatThreadSidebar
         c={c}
         collapsed={historyCollapsed}
@@ -149,14 +152,14 @@ export default function ChatPage() {
         </DrawerContent>
       </Drawer>
 
-      <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {showDesktopRail ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full w-full gap-3">
+          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             <ResizablePanel defaultSize={70} minSize={45} className="min-w-0">
               {conversation}
             </ResizablePanel>
             <ResizableHandle withHandle className="opacity-60" />
-            <ResizablePanel defaultSize={30} minSize={18} maxSize={42} className="min-w-[18rem]">
+            <ResizablePanel defaultSize={30} minSize={18} maxSize={42} className="min-w-[18rem] border-s border-border/60">
               <ChatContextRail {...railProps} />
             </ResizablePanel>
           </ResizablePanelGroup>
