@@ -488,13 +488,14 @@ def _auth_failure_from_output(output: str) -> tuple[str, str, dict[str, str]]:
         if description:
             detail["oauth_error_description"] = description[:160]
     # Prefer concrete OAuth error codes from the token endpoint over generic transport text.
-    if "invalid_grant" in lowered:
+    if detail.get("oauth_error") == "invalid_grant" or "invalid_grant" in lowered:
         return (
             "provider_auth_failed",
             "Google rejected the authorization code (invalid_grant). Open the current link and paste a fresh code once within ~55s",
             detail,
         )
-    if "invalid_request" in lowered or "redirect_uri" in lowered:
+    # Only match oauth2:"invalid_request" — the consent URL itself always contains redirect_uri=.
+    if detail.get("oauth_error") == "invalid_request":
         return (
             "provider_auth_failed",
             "Google rejected the authorization request; open the current sign-in link and try again",
