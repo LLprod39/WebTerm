@@ -451,7 +451,7 @@ async def _run_message_turn(
         )()
         timeout_message = (
             f"Оператор завис на ответе модели (таймаут {OPERATOR_TURN_TIMEOUT_SECONDS}с). "
-            "Проверь авторизацию AI-провайдера или повтори короче."
+            "Повтори короче или проверь AI-провайдера в Настройках → AI."
         )
         await broadcast_operator_event(
             chat_id,

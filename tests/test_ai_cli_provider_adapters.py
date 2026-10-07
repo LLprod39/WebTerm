@@ -607,7 +607,6 @@ def test_normalize_authorization_code_decodes_url_encoding() -> None:
     assert normalize_authorization_code("4%2F0AXlqoi5-TESTCODEVALUE") == "4/0AXlqoi5-TESTCODEVALUE"
 
 
-@pytest.mark.asyncio
 def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)

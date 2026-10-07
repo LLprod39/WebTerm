@@ -229,10 +229,12 @@ async def _run_antigravity_cli(request: RunnerRequestV1) -> AsyncGenerator[Provi
     wait_task = asyncio.create_task(process.wait())
     auth_wait_task = asyncio.create_task(auth_detected.wait())
     timed_out = False
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _CLI_RUN_TIMEOUT_SECONDS
     try:
         # Stream plain-text tokens while waiting; tools path buffers until exit.
         while not request.tools:
-            if auth_detected.is_set() or wait_task.done():
+            if auth_detected.is_set() or wait_task.done() or loop.time() >= deadline:
                 break
             try:
                 item = await asyncio.wait_for(text_queue.get(), timeout=0.2)
@@ -243,9 +245,10 @@ async def _run_antigravity_cli(request: RunnerRequestV1) -> AsyncGenerator[Provi
             if item:
                 yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": item})
 
+        remaining = max(0.0, deadline - loop.time())
         done, not_done = await asyncio.wait(
             {wait_task, auth_wait_task},
-            timeout=_CLI_RUN_TIMEOUT_SECONDS,
+            timeout=remaining,
             return_when=asyncio.FIRST_COMPLETED,
         )
         if not done:
