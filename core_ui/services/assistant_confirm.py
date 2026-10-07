@@ -106,6 +106,27 @@ def confirm_action_and_resume_detailed(
     request=None,
     typed_confirm: str | None = None,
 ) -> ConfirmAndResumeOutcome:
+    # Mark matching plan step running only when execution actually starts.
+    try:
+        from core_ui.services.operator_plan import mark_plan_executing_for_action
+
+        turn = (
+            ChatTurnState.objects.filter(
+                pending_action=action,
+                status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+            )
+            .select_related("assistant_message")
+            .first()
+        )
+        if turn is not None and turn.assistant_message is not None:
+            mark_plan_executing_for_action(
+                message=turn.assistant_message,
+                action_type=action.action_type,
+                title=action.title or "",
+                turn=turn,
+            )
+    except Exception:  # noqa: BLE001
+        logger.debug("plan executing mark skipped for action_id={}", action.pk)
     action = execute_action(action, request=request, confirmed=True, typed_confirm=typed_confirm)
     if action.status == AssistantAction.STATUS_RUNNING:
         return ConfirmAndResumeOutcome(action=action)

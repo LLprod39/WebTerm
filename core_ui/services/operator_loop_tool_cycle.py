@@ -193,9 +193,16 @@ async def process_tool_calls(
             await _emit(on_event, ssh_event)
             continue
 
-        # Plan proposal: single confirm for multi-step plan
+        # Plan proposal: confirm once (or auto-approve in autonomous mode)
         if action_type == "operator.propose_plan":
-            from core_ui.services.operator_plan import normalize_plan
+            from core_ui.services.assistant_chat import execute_action, serialize_action
+            from core_ui.services.operator_plan import (
+                AUTONOMY_AUTONOMOUS,
+                get_autonomy_mode,
+                mark_plan_approved,
+                normalize_plan,
+                save_plan_to_message,
+            )
 
             steps = arguments.get("steps") if isinstance(arguments.get("steps"), list) else []
             frozen_steps: list[dict[str, Any]] = []
@@ -233,6 +240,49 @@ async def process_tool_calls(
                     "steps": frozen_steps,
                 }
             ) or {"title": "Plan", "status": "proposed", "steps": []}
+            autonomy = await sync_to_async(get_autonomy_mode)(session)
+            # Autonomous: publish + auto-approve without parking the turn.
+            if autonomy == AUTONOMY_AUTONOMOUS:
+                approved = mark_plan_approved(normalized_plan)
+                if assistant_message:
+                    await sync_to_async(save_plan_to_message)(assistant_message, approved)
+                    await _set_assistant_metadata(
+                        assistant_message.pk,
+                        {
+                            "source": "operator_loop",
+                            "turn_id": turn.pk,
+                            "action_ids": [a.pk for a in actions if a and a.pk],
+                            "plan": approved,
+                        },
+                    )
+                action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
+                await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
+                await _emit(
+                    on_event,
+                    {
+                        "type": "plan_update",
+                        "turn_id": turn.pk,
+                        "plan": approved,
+                        "status": approved.get("status"),
+                    },
+                )
+                tool_result_blocks.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": truncate_tool_result(
+                            {
+                                "ok": action.status == AssistantAction.STATUS_COMPLETED,
+                                "status": action.status,
+                                "result": {"plan": approved, "auto_approved": True},
+                                "error": action.error,
+                            },
+                            max_chars=TOOL_RESULT_PREVIEW_CHARS,
+                        ),
+                    }
+                )
+                continue
+
             plan_meta = {"plan": normalized_plan}
             if assistant_message:
                 await _set_assistant_metadata(
@@ -297,85 +347,137 @@ async def process_tool_calls(
         )
         actions.append(action)
 
-        # P1.7: inside an APPROVED plan, auto-run non-destructive matching steps
-        # (approving the plan was the consent). Destructive steps still park for
-        # typed confirm below.
+        # Auto-run when autonomy / approved-plan consent allows. Typed-confirm
+        # and other hard floors still park below.
         from core_ui.services.assistant_chat import execute_action, serialize_action
         from core_ui.services.operator_plan import (
+            AUTONOMY_AUTONOMOUS,
+            AUTONOMY_PLAN_ONCE,
             apply_plan_progress,
             approved_plan_step_matches,
+            get_autonomy_mode,
             get_plan_from_message,
+            mark_plan_executing_for_action,
+            mark_plan_step_awaiting_confirm,
+            plan_once_allows_auto_run,
+            save_plan_to_message,
         )
         from core_ui.services.operator_security import action_requires_typed_confirm
 
+        autonomy = await sync_to_async(get_autonomy_mode)(session)
         plan_for_auto = await sync_to_async(get_plan_from_message)(assistant_message) if assistant_message else None
-        if approved_plan_step_matches(
-            plan_for_auto,
-            action_type=action_type,
-            input_payload=arguments,
-        ):
-            needs_typed = await sync_to_async(action_requires_typed_confirm)(action)
-            if not needs_typed:
-                action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
-                ok = action.status == AssistantAction.STATUS_COMPLETED
-                await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
-                updated_plan = await sync_to_async(apply_plan_progress)(
+        needs_typed = await sync_to_async(action_requires_typed_confirm)(action)
+
+        auto_run = False
+        frozen_override: dict[str, Any] | None = None
+        if not needs_typed:
+            if autonomy == AUTONOMY_AUTONOMOUS:
+                auto_run = True
+            elif plan_for_auto and plan_for_auto.get("status") in {"approved", "running"}:
+                if autonomy == AUTONOMY_PLAN_ONCE:
+                    allowed, frozen_override = plan_once_allows_auto_run(
+                        plan_for_auto,
+                        action_type=action_type,
+                        input_payload=arguments,
+                    )
+                    auto_run = allowed
+                else:
+                    auto_run = approved_plan_step_matches(
+                        plan_for_auto,
+                        action_type=action_type,
+                        input_payload=arguments,
+                    )
+
+        if auto_run:
+            if frozen_override and isinstance(frozen_override, dict):
+                # plan_once primary: execute the frozen consented payload.
+                def _apply_frozen(act=action, payload=frozen_override):
+                    act.input_payload = dict(payload)
+                    act.save(update_fields=["input_payload", "updated_at"])
+                    return act
+
+                action = await sync_to_async(_apply_frozen)()
+            if assistant_message:
+                running_plan = await sync_to_async(mark_plan_executing_for_action)(
                     message=assistant_message,
-                    turn=None,
                     action_type=action_type,
-                    ok=ok,
                     title=action.title or "",
+                    turn=None,
                 )
-                if updated_plan:
+                if running_plan:
                     await _emit(
                         on_event,
                         {
                             "type": "plan_update",
                             "turn_id": turn.pk,
-                            "plan": updated_plan,
-                            "status": updated_plan.get("status"),
+                            "plan": running_plan,
+                            "status": running_plan.get("status"),
                         },
                     )
-                if action.undo_payload:
+            action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
+            ok = action.status == AssistantAction.STATUS_COMPLETED
+            await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
+            updated_plan = await sync_to_async(apply_plan_progress)(
+                message=assistant_message,
+                turn=None,
+                action_type=action_type,
+                ok=ok,
+                title=action.title or "",
+                outcome="done" if ok else "failed",
+            )
+            if updated_plan:
+                await _emit(
+                    on_event,
+                    {
+                        "type": "plan_update",
+                        "turn_id": turn.pk,
+                        "plan": updated_plan,
+                        "status": updated_plan.get("status"),
+                    },
+                )
+            if action.undo_payload:
+                await _emit(
+                    on_event,
+                    {
+                        "type": "undo_available",
+                        "action_id": action.pk,
+                        "undo_payload": action.undo_payload,
+                    },
+                )
+            result_payload = {
+                "ok": ok,
+                "status": action.status,
+                "result": action.result_payload,
+                "error": action.error,
+            }
+            tool_result_blocks.append(
+                {
+                    "type": "tool_result",
+                    "tool_use_id": tool_id,
+                    "content": truncate_tool_result(result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS),
+                }
+            )
+            continue
+        # Park-for-confirm: matched pending step → awaiting_confirm (NOT running)
+        try:
+            plan = await sync_to_async(get_plan_from_message)(assistant_message) if assistant_message else None
+            if plan:
+                plan = mark_plan_step_awaiting_confirm(
+                    plan,
+                    action_type=action_type,
+                    title=action.title or "",
+                )
+                if plan and assistant_message:
+                    await sync_to_async(save_plan_to_message)(assistant_message, plan)
                     await _emit(
                         on_event,
                         {
-                            "type": "undo_available",
-                            "action_id": action.pk,
-                            "undo_payload": action.undo_payload,
+                            "type": "plan_update",
+                            "turn_id": turn.pk,
+                            "plan": plan,
+                            "status": plan.get("status"),
                         },
                     )
-                result_payload = {
-                    "ok": ok,
-                    "status": action.status,
-                    "result": action.result_payload,
-                    "error": action.error,
-                }
-                tool_result_blocks.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": truncate_tool_result(result_payload, max_chars=TOOL_RESULT_PREVIEW_CHARS),
-                    }
-                )
-                continue
-        # Mark matching plan step as running
-        try:
-            from core_ui.services.operator_plan import get_plan_from_message, save_plan_to_message
-
-            plan = await sync_to_async(get_plan_from_message)(assistant_message)
-            if plan:
-                for step in plan.get("steps") or []:
-                    if step.get("status") == "pending":
-                        step["status"] = "running"
-                        break
-                plan["status"] = "running"
-                if assistant_message:
-                    await sync_to_async(save_plan_to_message)(assistant_message, plan)
-                await _emit(
-                    on_event,
-                    {"type": "plan_update", "turn_id": turn.pk, "plan": plan, "status": "running"},
-                )
         except Exception as exc:  # noqa: BLE001
             logger.debug("operator plan progress update skipped: {}", exc)
         await _save_turn(
