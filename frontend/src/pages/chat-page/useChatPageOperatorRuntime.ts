@@ -1075,7 +1075,8 @@ export function useChatPageOperatorRuntime({
       !activeChatId ||
       !operatorReady
     ) return;
-    const text = pendingSend;
+    const text = pendingSend ?? "";
+    if (!text.trim()) return;
     if (sendOperatorMessage(text, providerBinding)) {
       setDraft("");
       setPendingSend(null);

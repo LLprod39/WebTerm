@@ -76,7 +76,7 @@ describe("chat page chrome", () => {
                 busy: true,
                 phase: "streaming",
                 statusMessage: "",
-              },
+              } as ChatPageController["operatorWs"],
             })}
           />
         </MemoryRouter>

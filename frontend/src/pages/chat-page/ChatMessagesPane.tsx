@@ -97,7 +97,7 @@ export function ChatMessagesPane({
     scrollToEnd,
   } = c;
 
-  // Busy "Thinking…" lives once (composer AgentThinking / in-thread activity) — not in the header.
+  // Busy status lives once in-thread (OperatorThinkingPanel) — not in the header.
   const headerStatus = activeChat?.active_turn?.status === "awaiting_async" ||
     (isBusy && operatorWs.statusMessage?.includes("Жду"))
     ? {
