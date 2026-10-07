@@ -137,7 +137,8 @@ describe("AppSidebar preview-gated nav", () => {
     const extensions = screen.getByTestId("nav-section-extensions");
     const administration = screen.getByTestId("nav-section-administration");
 
-    expect(within(dashboard).getAllByText("Панель")).toHaveLength(2);
+    // Section label omitted when it duplicates the sole item title.
+    expect(within(dashboard).getAllByText("Панель")).toHaveLength(1);
     expect(within(infrastructure).getByText("Серверы")).toBeInTheDocument();
     expect(within(infrastructure).getByText("Кубернетес")).toBeInTheDocument();
     expect(within(automation).getByText("Агенты")).toBeInTheDocument();
