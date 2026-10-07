@@ -185,24 +185,29 @@ export function MetricCard({
   label,
   value,
   description,
+  hint,
   icon,
   className,
   tone = "default",
 }: {
   label: string;
   value: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
+  /** Alias for description — kept for existing call sites. */
+  hint?: ReactNode;
   icon?: ReactNode;
   className?: string;
-  tone?: "default" | "success" | "warning" | "danger" | "info";
+  tone?: "default" | "neutral" | "success" | "warning" | "danger" | "info";
 }) {
+  const resolvedTone = tone === "neutral" ? "default" : tone;
+  const resolvedDescription = description ?? hint;
   const toneStyles = {
     success: { card: "border-success/20 bg-success/5", icon: "bg-success/12 text-success", bar: "bg-success" },
     warning: { card: "border-warning/20 bg-warning/5", icon: "bg-warning/12 text-warning", bar: "bg-warning" },
     danger: { card: "border-destructive/20 bg-destructive/5", icon: "bg-destructive/12 text-destructive", bar: "bg-destructive" },
     info: { card: "border-primary/20 bg-primary/5", icon: "bg-primary/12 text-primary", bar: "bg-primary" },
     default: { card: "border-border/60 bg-surface-1", icon: "border border-border/60 bg-surface-2 text-muted-foreground", bar: "bg-border" },
-  }[tone];
+  }[resolvedTone];
 
   return (
     <div data-ui-slot="metric-card" className={cn("group relative overflow-hidden rounded-sm border transition-all duration-200 hover:shadow-elev-1", toneStyles.card, className)}>
@@ -212,7 +217,9 @@ export function MetricCard({
           <div className="min-w-0 flex-1">
             <p className="type-label text-muted-foreground">{label}</p>
             <div className="mt-2 type-display tabular-nums text-foreground">{value}</div>
-            <div className="mt-1.5 type-body-sm text-muted-foreground">{description}</div>
+            {resolvedDescription !== undefined && resolvedDescription !== null && resolvedDescription !== "" ? (
+              <div className="mt-1.5 type-body-sm text-muted-foreground">{resolvedDescription}</div>
+            ) : null}
           </div>
           {icon ? (
             <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-sm border border-border/60 transition-colors", toneStyles.icon)}>
@@ -303,11 +310,14 @@ export function EmptyState({
 }: {
   icon?: ReactNode;
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   hint?: ReactNode;
   className?: string;
 }) {
+  const hasDescription =
+    description !== undefined && description !== null && description !== "";
+
   return (
     <div data-ui-slot="empty-state" className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
       {icon ? (
@@ -317,7 +327,9 @@ export function EmptyState({
       ) : null}
       <div className="space-y-1.5">
         <div className="text-sm font-semibold text-foreground/90">{title}</div>
-        <div className="max-w-sm text-xs leading-5 text-muted-foreground">{description}</div>
+        {hasDescription ? (
+          <div className="max-w-sm text-xs leading-5 text-muted-foreground">{description}</div>
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
       {hint ? <div className="max-w-xs text-2xs text-muted-foreground">{hint}</div> : null}

@@ -7,6 +7,7 @@ import { enUS, ru } from "date-fns/locale";
 
 import { fetchAgentDashboardRuns, fetchMonitoringDashboard } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-shell";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Sheet,
@@ -228,9 +229,11 @@ export function NotificationCenter() {
         <ScrollArea className="flex-1">
           <div className="px-3 py-3">
             {grouped.length === 0 ? (
-              <div className="workspace-empty rounded-lg border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                {localize(lang, "Пока тихо — новых событий нет", "All quiet — no new events")}
-              </div>
+              <EmptyState
+                className="py-10"
+                title={localize(lang, "Пока тихо", "All quiet")}
+                description={localize(lang, "Новых событий нет", "No new events")}
+              />
             ) : (
               grouped.map(([key, dayItems]) => (
                 <section key={key} className="mb-4">

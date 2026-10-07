@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SoftHeader } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
-import { StudioHero, HeroActionButton, HeroStatChip } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioAgents, studioShareUsers, type AgentConfig } from "@/lib/api";
 import { canManageAiRouting as canManageAiRoutingForUser, hasFeatureAccess } from "@/lib/featureAccess";
 import { localize, useI18n } from "@/lib/i18n";
@@ -103,30 +103,23 @@ export default function AgentConfigPage() {
     <div className="flex flex-col h-full">
       <StudioNav />
       <div className="flex-1 overflow-auto flex flex-col">
-      <StudioHero
-        kicker={localize(lang, "Студия / Профили выполнения", "Studio / Execution Profiles")}
-        title={localize(lang, "Профили выполнения", "Execution Profiles")}
-        titleIcon={<Bot className="h-7 w-7 text-primary" />}
-        description={localize(
-          lang,
-          "Готовые наборы инструментов, области серверов и доступа для узлов сценария.",
-          "Reusable tool, scope, and access configs for pipeline nodes.",
-        )}
-        stats={
-          <HeroStatChip
-            icon={<Bot className="h-3.5 w-3.5" />}
-            label={localize(lang, `${agents.length} профилей`, `${agents.length} profiles`)}
-          />
-        }
-        actions={
-          <HeroActionButton
-            onClick={() => setEditAgent({})}
-            icon={<Plus className="h-4 w-4" />}
-            label={localize(lang, "Новый профиль", "New profile")}
-            primary
-          />
-        }
-      />
+      <div className="shrink-0 px-4 pb-2 pt-5 md:px-6">
+        <SoftHeader
+          title={localize(lang, "Профили выполнения", "Execution Profiles")}
+          count={agents.length > 0 ? agents.length : undefined}
+          subtitle={localize(
+            lang,
+            "Готовые наборы инструментов, области серверов и доступа для узлов сценария.",
+            "Reusable tool, scope, and access configs for pipeline nodes.",
+          )}
+          actions={
+            <Button size="sm" onClick={() => setEditAgent({})} className="h-10 gap-2 rounded-sm px-4 font-medium">
+              <Plus className="h-4 w-4" />
+              {localize(lang, "Новый профиль", "New profile")}
+            </Button>
+          }
+        />
+      </div>
       <div className="flex-1 px-6 pb-8 space-y-5">
       {isLoading ? (
         <div className="flex h-40 items-center justify-center text-muted-foreground">

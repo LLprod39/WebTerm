@@ -119,7 +119,7 @@ function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; pe
   const offset = circ * (1 - Math.min(1, Math.max(0, percent / 100)));
   return (
     <div
-      className="flex items-center gap-1 rounded-full bg-muted/70 py-1 pe-2 ps-1.5"
+      className="flex items-center gap-1 rounded-md bg-muted/70 py-1 pe-2 ps-1.5"
       title={`${tokensLabel} tok`}
     >
       <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" className="shrink-0 -rotate-90">
@@ -250,14 +250,14 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
             {attachedFiles.map((file) => (
               <span
                 key={file.id}
-                className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
+                className="inline-flex max-w-[16rem] items-center gap-1 rounded-md border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
               >
                 <FileText className="h-3 w-3 shrink-0 opacity-70" strokeWidth={1.75} />
                 <span className="truncate font-medium tracking-tight">{file.name}</span>
                 <span className="shrink-0 text-muted-foreground/70">{formatBytes(file.size)}</span>
                 <button
                   type="button"
-                  className="rounded-full p-0.5 opacity-70 hover:bg-muted hover:opacity-100"
+                  className="rounded-md p-0.5 opacity-70 hover:bg-muted hover:opacity-100"
                   onClick={() => removeAttachedFile(file.id)}
                   aria-label={localize(lang, "Убрать файл", "Remove file")}
                 >

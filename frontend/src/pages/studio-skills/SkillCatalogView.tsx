@@ -1,8 +1,8 @@
-import { BookOpen, Loader2, Search, Server, Shield, ShieldCheck, Sparkles, WandSparkles } from "lucide-react";
+import { Loader2, Search, Server, Shield, WandSparkles } from "lucide-react";
 
-import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SoftHeader } from "@/components/ui/page-shell";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { StudioSkill } from "@/lib/api";
 
@@ -18,8 +18,6 @@ type SkillCatalogViewProps = {
   services: string[];
   search: string;
   serviceFilter: string;
-  runtimeEnforcedCount: number;
-  serviceCount: number;
   isLoading: boolean;
   isValidating: boolean;
   canOpenMcp: boolean;
@@ -39,8 +37,6 @@ export function SkillCatalogView({
   services,
   search,
   serviceFilter,
-  runtimeEnforcedCount,
-  serviceCount,
   isLoading,
   isValidating,
   canOpenMcp,
@@ -53,34 +49,34 @@ export function SkillCatalogView({
 }: SkillCatalogViewProps) {
   return (
     <div className="flex-1 overflow-auto flex flex-col">
-      <StudioHero
-        kicker={tr("Библиотека Studio", "Studio library")}
-        title={tr("Каталог навыков", "Skill Catalog")}
-        titleIcon={<BookOpen className="h-7 w-7 text-primary" />}
-        description={tr(
-          "Навык хранит инструкции и ограничения для агента. Выберите сервис, проверьте правила и отредактируйте файлы.",
-          "A skill stores instructions and guardrails for an agent. Choose a service, review the rules, and edit its files.",
-        )}
-        stats={
-          <>
-            <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={tr(`${skills.length} навыков`, `${skills.length} skills`)} />
-            <HeroStatChip icon={<ShieldCheck className="h-3.5 w-3.5 text-warning0/80" />} label={tr(`${runtimeEnforcedCount} под контролем`, `${runtimeEnforcedCount} enforced`)} />
-            <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={tr(`${serviceCount} сервисов`, `${serviceCount} services`)} />
-          </>
-        }
-        actions={
-          <>
-            {canOpenMcp ? (
-              <HeroActionButton onClick={onOpenMcp} icon={<Server className="h-4 w-4 text-primary/80" />} label={tr("MCP-серверы", "MCP servers")} />
-            ) : null}
-            <Button variant="outline" size="sm" onClick={onValidate} className="h-10 gap-2 rounded-sm px-4 font-medium border-border hover:bg-secondary">
-              {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}
-              {tr("Проверить", "Validate")}
-            </Button>
-            <HeroActionButton onClick={onCreateSkill} icon={<WandSparkles className="h-4 w-4" />} label={tr("Новый навык", "New Skill")} primary />
-          </>
-        }
-      />
+      <div className="shrink-0 px-4 pb-2 pt-5 md:px-6">
+        <SoftHeader
+          title={tr("Каталог навыков", "Skill Catalog")}
+          count={skills.length > 0 ? skills.length : undefined}
+          subtitle={tr(
+            "Навык хранит инструкции и ограничения для агента. Выберите сервис, проверьте правила и отредактируйте файлы.",
+            "A skill stores instructions and guardrails for an agent. Choose a service, review the rules, and edit its files.",
+          )}
+          actions={
+            <>
+              {canOpenMcp ? (
+                <Button variant="outline" size="sm" onClick={onOpenMcp} className="h-10 gap-2 rounded-sm px-4 font-medium">
+                  <Server className="h-4 w-4 text-primary/80" />
+                  {tr("MCP-серверы", "MCP servers")}
+                </Button>
+              ) : null}
+              <Button variant="outline" size="sm" onClick={onValidate} className="h-10 gap-2 rounded-sm px-4 font-medium border-border hover:bg-secondary">
+                {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}
+                {tr("Проверить", "Validate")}
+              </Button>
+              <Button size="sm" onClick={onCreateSkill} className="h-10 gap-2 rounded-sm px-4 font-medium">
+                <WandSparkles className="h-4 w-4" />
+                {tr("Новый навык", "New Skill")}
+              </Button>
+            </>
+          }
+        />
+      </div>
 
       <div className="px-6 pb-8 flex-1 flex flex-col gap-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center justify-between rounded-sm border border-border bg-card p-2 pl-4 pr-3">

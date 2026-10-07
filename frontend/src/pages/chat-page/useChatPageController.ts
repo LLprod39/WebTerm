@@ -473,7 +473,7 @@ export function useChatPageController() {
       text += `\nКонтекст пользователей: ${pinnedUsers.map((u) => u.username).join(", ")}.`;
     }
     if (pinnedPlaybook) {
-      text += `\n\nКонтекст playbook: ${pinnedPlaybook.name} (playbook_id: ${pinnedPlaybook.id}).`;
+      text += `\n\nКонтекст плейбука: ${pinnedPlaybook.name} (playbook_id: ${pinnedPlaybook.id}).`;
     }
     // Human commands from the live side shell — operator must see them
     const trail = humanTrailRef.current.slice(-10);

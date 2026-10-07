@@ -28,13 +28,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmptyState, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
+import { EmptyState, SoftHeader, StatusBadge, QueryStateBlock } from "@/components/ui/page-shell";
 import { SkeletonCards } from "@/components/ui/list-state";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MCPForm } from "@/components/studio/MCPForm";
 import { useToast } from "@/hooks/use-toast";
-import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { fetchAuthSession, studioMCP, studioShareUsers, type MCPServer, type MCPTemplate } from "@/lib/api";
 import { localize, useI18n } from "@/lib/i18n";
 function previewConnection(server: Pick<MCPServer, "transport" | "command" | "args" | "url">) {
@@ -174,30 +173,23 @@ export default function MCPHubPage() {
     <div className="flex flex-col h-full">
       <StudioNav />
       <div className="flex-1 overflow-auto flex flex-col">
-      <StudioHero
-        kicker="Studio / MCP"
-        title={localize(lang, "MCP-серверы", "MCP Registry")}
-        titleIcon={<Server className="h-7 w-7 text-primary" />}
-        description={localize(
-          lang,
-          "Подключайте внешние инструменты к сценариям Studio.",
-          "Connect external tools to Studio workflows.",
-        )}
-        stats={
-          <>
-            <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={localize(lang, `${mcpList.length} серверов`, `${mcpList.length} servers`)} />
-            <HeroStatChip icon={<Zap className="h-3.5 w-3.5" />} label={localize(lang, `${templates.length} шаблонов`, `${templates.length} templates`)} />
-          </>
-        }
-        actions={
-          <HeroActionButton
-            onClick={openCreateDialog}
-            icon={<Plus className="h-4 w-4" />}
-            label={localize(lang, "Добавить MCP", "Add server")}
-            primary
-          />
-        }
-      />
+      <div className="shrink-0 px-4 pb-2 pt-5 md:px-6">
+        <SoftHeader
+          title={localize(lang, "MCP-серверы", "MCP Registry")}
+          count={mcpList.length > 0 ? mcpList.length : undefined}
+          subtitle={localize(
+            lang,
+            "Подключайте внешние инструменты к сценариям Studio.",
+            "Connect external tools to Studio workflows.",
+          )}
+          actions={
+            <Button size="sm" onClick={openCreateDialog} className="h-10 gap-2 rounded-sm px-4 font-medium">
+              <Plus className="h-4 w-4" />
+              {localize(lang, "Добавить MCP", "Add server")}
+            </Button>
+          }
+        />
+      </div>
       <div className="flex-1 px-6 pb-8 space-y-5">
         <Tabs defaultValue="mine" className="space-y-5">
           <TabsList>

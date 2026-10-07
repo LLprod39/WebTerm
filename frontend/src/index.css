@@ -629,10 +629,6 @@
     @apply border border-border bg-secondary/50;
   }
 
-  .workspace-empty {
-    @apply flex flex-col gap-4 rounded-sm border border-dashed border-border bg-secondary/20 px-6 py-8;
-  }
-
   .enterprise-kicker {
     @apply text-2xs font-medium uppercase tracking-[0.14em] text-primary;
   }
@@ -719,20 +715,6 @@
     height: 2px;
     background: hsl(var(--primary));
     pointer-events: none;
-  }
-
-  html[data-ui-style="signal"] .workspace-empty {
-    border-radius: 0;
-    border-style: solid;
-    border-width: 1px;
-    border-color: hsl(var(--border-strong));
-    background:
-      repeating-linear-gradient(
-        -45deg,
-        hsl(var(--secondary)) 0 6px,
-        hsl(var(--background)) 6px 12px
-      );
-    box-shadow: var(--shadow-1);
   }
 
   html[data-ui-style="signal"] .enterprise-kicker {
@@ -838,15 +820,6 @@
 
   html[data-ui-style="folio"] .enterprise-panel {
     border-top: 3px solid hsl(var(--primary) / 0.85);
-  }
-
-  html[data-ui-style="folio"] .workspace-empty {
-    border-radius: var(--radius);
-    border-style: dashed;
-    border-color: hsl(var(--border-strong));
-    background:
-      linear-gradient(180deg, hsl(30 4% 58% / 0.95), hsl(28 4% 54% / 0.95));
-    color: hsl(var(--muted-foreground));
   }
 
   html[data-ui-style="folio"] .enterprise-kicker {
@@ -1113,14 +1086,6 @@
     border-top: 3px solid hsl(var(--primary) / 0.85);
   }
 
-  html[data-ui-style="folio-dark"] .workspace-empty {
-    border-radius: var(--radius);
-    border-style: dashed;
-    border-color: hsl(var(--border-strong));
-    background: linear-gradient(180deg, hsl(24 12% 12% / 0.9), hsl(24 14% 9% / 0.9));
-    color: hsl(var(--muted-foreground));
-  }
-
   html[data-ui-style="folio-dark"] [data-sidebar="sidebar"],
   html[data-ui-style="folio-dark"] aside {
     border-right: 1px solid hsl(var(--sidebar-border));
@@ -1142,14 +1107,6 @@
     border-color: hsl(var(--border));
     background: hsl(var(--card));
     box-shadow: var(--shadow-1);
-  }
-
-  html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .workspace-empty {
-    border-radius: var(--radius);
-    border-style: dashed;
-    border-color: hsl(var(--border-strong));
-    background: hsl(var(--surface-2));
-    color: hsl(var(--muted-foreground));
   }
 
   html:is([data-ui-style="flow"], [data-ui-style="flow-dark"]) .enterprise-kicker {

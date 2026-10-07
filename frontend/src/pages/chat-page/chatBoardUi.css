@@ -62,13 +62,6 @@
   stroke-linecap: round;
   stroke-dasharray: 28 72;
   animation: wt-chat-composer-dash 4.5s linear infinite;
-  filter: drop-shadow(0 0 4px hsl(var(--ai) / 0.35));
-}
-
-.wt-chat-glass-on .wt-chat-glass-control {
-  background-color: transparent !important;
-  border-color: transparent !important;
-  box-shadow: none !important;
 }
 
 .wt-chat-thinking-label {
