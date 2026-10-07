@@ -62,14 +62,17 @@ export function usePipelineGraphDisplayState({
       nodes,
     ],
   );
+  const isLiveRun = isLivePipelineRunStatus(graphRunLive?.status);
   const displayEdges = useMemo(
     () =>
       edges.map((edge) => {
         const isCurrent = graphState.currentEdgeIds.has(edge.id);
         const isActivePath = graphState.activeEdgeIds.has(edge.id);
+        // Default: quiet edges. Animate only the current/active path while a run is live.
+        const animated = isLiveRun && (isCurrent || isActivePath);
         return {
           ...edge,
-          animated: isCurrent || (isActivePath && isLivePipelineRunStatus(graphRunLive?.status)),
+          animated,
           style: {
             ...(edge.style || {}),
             strokeWidth: isCurrent ? 3.6 : isActivePath ? 2.8 : 2,
@@ -93,7 +96,7 @@ export function usePipelineGraphDisplayState({
           zIndex: isActivePath ? 20 : 1,
         };
       }),
-    [edges, graphRunLive?.status, graphState.activeEdgeIds, graphState.currentEdgeIds],
+    [edges, isLiveRun, graphState.activeEdgeIds, graphState.currentEdgeIds],
   );
 
   return {
