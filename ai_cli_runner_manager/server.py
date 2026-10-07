@@ -37,8 +37,8 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="WebTerm AI CLI Runner Manager", lifespan=_lifespan)
 
 
-@app.get("/health")
-async def health() -> dict[str, Any] | JSONResponse:
+@app.get("/health", response_model=None)
+async def health() -> JSONResponse:
     docker_plane = docker_plane_is_ready(fake_runtime=config.fake_runtime)
     payload = {
         "ok": bool(docker_plane),
@@ -46,9 +46,7 @@ async def health() -> dict[str, Any] | JSONResponse:
         "fake_runtime": config.fake_runtime,
         "docker_plane": bool(docker_plane),
     }
-    if not docker_plane:
-        return JSONResponse(status_code=503, content=payload)
-    return payload
+    return JSONResponse(status_code=200 if docker_plane else 503, content=payload)
 
 
 @app.post("/v1/stream", dependencies=[Depends(_require_token)])
