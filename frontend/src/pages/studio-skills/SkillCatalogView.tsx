@@ -55,15 +55,15 @@ export function SkillCatalogView({
     <div className="flex-1 overflow-auto flex flex-col">
       <StudioHero
         kicker={tr("Библиотека Studio", "Studio library")}
-        title={tr("Каталог скиллов", "Skill Catalog")}
+        title={tr("Каталог навыков", "Skill Catalog")}
         titleIcon={<BookOpen className="h-7 w-7 text-primary" />}
         description={tr(
-          "Скилл хранит инструкции и ограничения для агента. Выберите сервис, проверьте правила и отредактируйте файлы.",
+          "Навык хранит инструкции и ограничения для агента. Выберите сервис, проверьте правила и отредактируйте файлы.",
           "A skill stores instructions and guardrails for an agent. Choose a service, review the rules, and edit its files.",
         )}
         stats={
           <>
-            <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={tr(`${skills.length} скиллов`, `${skills.length} skills`)} />
+            <HeroStatChip icon={<BookOpen className="h-3.5 w-3.5" />} label={tr(`${skills.length} навыков`, `${skills.length} skills`)} />
             <HeroStatChip icon={<ShieldCheck className="h-3.5 w-3.5 text-warning0/80" />} label={tr(`${runtimeEnforcedCount} под контролем`, `${runtimeEnforcedCount} enforced`)} />
             <HeroStatChip icon={<Server className="h-3.5 w-3.5" />} label={tr(`${serviceCount} сервисов`, `${serviceCount} services`)} />
           </>
@@ -77,7 +77,7 @@ export function SkillCatalogView({
               {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4 text-primary/80" />}
               {tr("Проверить", "Validate")}
             </Button>
-            <HeroActionButton onClick={onCreateSkill} icon={<WandSparkles className="h-4 w-4" />} label={tr("Новый скилл", "New Skill")} primary />
+            <HeroActionButton onClick={onCreateSkill} icon={<WandSparkles className="h-4 w-4" />} label={tr("Новый навык", "New Skill")} primary />
           </>
         }
       />
@@ -89,7 +89,7 @@ export function SkillCatalogView({
             <Input
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder={tr("Поиск скиллов по названию, сервису или тегу...", "Search skills by name, service or tag...")}
+              placeholder={tr("Поиск навыков по названию, сервису или тегу...", "Search skills by name, service or tag...")}
               className="h-10 border-0 bg-transparent shadow-none focus-visible:ring-0 text-sm px-0"
             />
           </div>
@@ -119,14 +119,14 @@ export function SkillCatalogView({
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin opacity-50" />
-            {tr("Загрузка скиллов...", "Loading skills...")}
+            {tr("Загрузка навыков...", "Loading skills...")}
           </div>
         ) : filteredSkills.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center rounded-sm border border-dashed border-border bg-muted/5 min-h-[300px]">
             <div className="h-10 w-10 rounded-sm bg-muted/30 flex items-center justify-center mb-3">
               <Search className="h-5 w-5 text-muted-foreground/60" />
             </div>
-            <p className="text-sm font-medium text-foreground">{tr("Скиллы не найдены", "No skills found")}</p>
+            <p className="text-sm font-medium text-foreground">{tr("Навыки не найдены", "No skills found")}</p>
             <p className="text-xs text-muted-foreground mt-1">{tr("Попробуйте изменить параметры поиска", "Try changing your search filters")}</p>
           </div>
         ) : (

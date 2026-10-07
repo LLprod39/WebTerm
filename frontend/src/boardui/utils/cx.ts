@@ -1,7 +1,7 @@
 import { extendTailwindMerge } from "tailwind-merge";
 
 /**
- * Text-style classes from styles/typography.css.
+ * Text-style class names expected by BoardUI components.
  *
  * IMPORTANT: every text-* utility we define via @theme (e.g. `text-body-medium`,
  * `text-title-1-semibold`) must be listed here. Otherwise tailwind-merge — which
@@ -9,7 +9,7 @@ import { extendTailwindMerge } from "tailwind-merge";
  * silently drops them when they appear in the same className as a real color
  * (`text-foreground-full`, `text-text-primary`, etc).
  *
- * If you add or rename a text style in typography.css, mirror the change here.
+ * If you add or rename a text style class, mirror the change here.
  */
 const TEXT_FAMILIES = [
   "large-title",

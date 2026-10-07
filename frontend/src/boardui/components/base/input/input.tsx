@@ -43,7 +43,7 @@ import { cx, sortCx } from "@/boardui/utils/cx";
  *   - Render-prop state surfaces `isFocusWithin`, `isHovered`, `isDisabled`,
  *     `isInvalid`, `isRequired` — no CSS pseudo gymnastics
  *
- * Visuals stay 1:1 with Figma — see `styles/theme.css` for the tokens.
+ * Visuals stay 1:1 with Figma — tokens come from the host theme via boardui-bridge.css.
  */
 
 export type InputSize = "medium" | "small";

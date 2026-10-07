@@ -20,7 +20,7 @@ import { cx } from "@/boardui/utils/cx";
  * *collection* components: React Aria introspects them at build time, so they
  * can't be wrapped in custom components without losing that behaviour. We
  * therefore re-export them as-is and apply BoardUI styling through scoped CSS
- * keyed on `.bui-table` (see styles/globals.css). Only the root `<Table>` is
+ * keyed on `.bui-table` (see styles/boardui-bridge.css). Only the root `<Table>` is
  * wrapped — to add the scroll container and the size flag.
  *
  * Sizes: `md` (h-16 rows) and `sm` (h-12 rows), set once via `data-size`.

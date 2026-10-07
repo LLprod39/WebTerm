@@ -123,12 +123,12 @@ export default function StudioSkillsPage() {
       setCreateOpen(false);
       const description =
         failedFiles > 0
-          ? tr(`Скилл создан, но файлов не создано: ${failedFiles}`, `Skill created, but ${failedFiles} file(s) failed`)
+          ? tr(`Навык создан, но файлов не создано: ${failedFiles}`, `Skill created, but ${failedFiles} file(s) failed`)
           : filesToCreate.length > 0
-            ? tr(`Скилл создан. Добавлено файлов: ${filesToCreate.length}`, `Skill created with ${filesToCreate.length} starter file(s)`)
+            ? tr(`Навык создан. Добавлено файлов: ${filesToCreate.length}`, `Skill created with ${filesToCreate.length} starter file(s)`)
             : response.validation.warnings.length > 0
-              ? tr(`Скилл создан с предупреждениями: ${response.validation.warnings.length}`, `Skill created with ${response.validation.warnings.length} warning(s)`)
-              : tr("Скилл создан", "Skill created");
+              ? tr(`Навык создан с предупреждениями: ${response.validation.warnings.length}`, `Skill created with ${response.validation.warnings.length} warning(s)`)
+              : tr("Навык создан", "Skill created");
       toast({ description });
     },
     onError: (error: Error) => {
@@ -146,7 +146,7 @@ export default function StudioSkillsPage() {
             ? tr(`Валидация нашла ошибок: ${response.summary.errors}`, `Validation found ${response.summary.errors} error(s)`)
             : response.summary.warnings > 0
               ? tr(`Валидация нашла предупреждений: ${response.summary.warnings}`, `Validation found ${response.summary.warnings} warning(s)`)
-              : tr("Библиотека скиллов прошла валидацию", "Skill library passed validation"),
+              : tr("Библиотека навыков прошла валидацию", "Skill library passed validation"),
       });
     },
     onError: (error: Error) => {
@@ -203,7 +203,7 @@ export default function StudioSkillsPage() {
   }, [selectedFileDetail]);
   const createFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
-      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      if (!selectedSlug) throw new Error(tr("Навык не выбран", "Skill is not selected"));
       return studioSkills.createFile(selectedSlug, payload);
     },
     onSuccess: async (response, variables) => {
@@ -220,7 +220,7 @@ export default function StudioSkillsPage() {
   });
   const updateFileMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) => {
-      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      if (!selectedSlug) throw new Error(tr("Навык не выбран", "Skill is not selected"));
       return studioSkills.updateFile(selectedSlug, payload);
     },
     onSuccess: async () => {
@@ -233,7 +233,7 @@ export default function StudioSkillsPage() {
   });
   const deleteFileMutation = useMutation({
     mutationFn: (path: string) => {
-      if (!selectedSlug) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      if (!selectedSlug) throw new Error(tr("Навык не выбран", "Skill is not selected"));
       return studioSkills.deleteFile(selectedSlug, path);
     },
     onSuccess: async () => {
@@ -247,7 +247,7 @@ export default function StudioSkillsPage() {
   });
   const updateSkillAccessMutation = useMutation({
     mutationFn: () => {
-      if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      if (!selectedSkill) throw new Error(tr("Навык не выбран", "Skill is not selected"));
       return studioSkills.update(selectedSkill.slug, {
         is_shared: skillAccessDraft.is_shared,
         shared_user_ids: skillAccessDraft.shared_user_ids,
@@ -255,7 +255,7 @@ export default function StudioSkillsPage() {
     },
     onSuccess: async (response) => {
       await invalidateSkillQueries(response.slug);
-      toast({ description: tr("Доступ к скиллу обновлён", "Skill access updated") });
+      toast({ description: tr("Доступ к навыку обновлён", "Skill access updated") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -263,12 +263,12 @@ export default function StudioSkillsPage() {
   });
   const updateSkillSettingsMutation = useMutation({
     mutationFn: (payload: Partial<StudioSkillDetail>) => {
-      if (!selectedSkill) throw new Error(tr("Скилл не выбран", "Skill is not selected"));
+      if (!selectedSkill) throw new Error(tr("Навык не выбран", "Skill is not selected"));
       return studioSkills.update(selectedSkill.slug, payload);
     },
     onSuccess: async (response) => {
       await invalidateSkillQueries(response.slug);
-      toast({ description: tr("Настройки скилла сохранены", "Skill settings saved") });
+      toast({ description: tr("Настройки навыка сохранены", "Skill settings saved") });
     },
     onError: (error: Error) => {
       toast({ variant: "destructive", description: error.message });
@@ -305,11 +305,11 @@ export default function StudioSkillsPage() {
     const name = skillSettingsDraft.name.trim();
     const description = skillSettingsDraft.description.trim();
     if (!name) {
-      toast({ variant: "destructive", description: tr("Название скилла обязательно.", "Skill name is required.") });
+      toast({ variant: "destructive", description: tr("Название навыка обязательно.", "Skill name is required.") });
       return;
     }
     if (!description) {
-      toast({ variant: "destructive", description: tr("Описание скилла обязательно.", "Skill description is required.") });
+      toast({ variant: "destructive", description: tr("Описание навыка обязательно.", "Skill description is required.") });
       return;
     }
     let payload: Partial<StudioSkillDetail>;
@@ -483,7 +483,7 @@ export default function StudioSkillsPage() {
         }}
         title={deleteFileTarget ? tr(`Удалить файл ${deleteFileTarget}?`, `Delete ${deleteFileTarget}?`) : tr("Удалить файл?", "Delete file?")}
         description={tr(
-          "Файл будет удалён из рабочей области скилла. Это действие нельзя отменить.",
+          "Файл будет удалён из рабочей области навыка. Это действие нельзя отменить.",
           "The file will be removed from the skill workspace. This cannot be undone.",
         )}
         confirmLabel={tr("Удалить", "Delete")}

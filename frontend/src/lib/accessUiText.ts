@@ -100,9 +100,9 @@ export const ACCESS_FEATURE_META: Record<string, AccessFeatureMeta> = {
   },
   studio_skills: {
     labelEn: "Studio: Skills",
-    labelRu: "Студия: Скиллы",
+    labelRu: "Студия: Навыки",
     descriptionEn: "Studio skills catalog.",
-    descriptionRu: "Каталог скиллов Студии.",
+    descriptionRu: "Каталог навыков Студии.",
     group: "studio",
   },
   studio_mcp: {
@@ -135,7 +135,7 @@ export const ACCESS_FEATURE_META: Record<string, AccessFeatureMeta> = {
   },
   kubernetes: {
     labelEn: "Kubernetes",
-    labelRu: "Кубернетес",
+    labelRu: "Kubernetes",
     descriptionEn: "Cluster inventory and request/approval flows.",
     descriptionRu: "Инвентарь кластеров и заявки на изменения.",
     group: "kubernetes",
