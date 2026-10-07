@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -9,6 +10,7 @@ from asgiref.sync import async_to_sync
 from loguru import logger
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
+from app.shell_commands import is_read_only_command
 from app.tools.safety import evaluate_command_safety
 from servers.operator.tools_common import _int_arg, _server_for_user
 from servers.views.server_helpers import (
@@ -17,6 +19,26 @@ from servers.views.server_helpers import (
     _resolve_server_secret,
     _server_has_capability,
 )
+
+# Follow/stream commands hang the operator loop — never auto-run them as read tools.
+_UNBOUNDED_READ_RE = re.compile(
+    r"(?:^|[\s;&|])(?:tail\s+-[fF]\b|journalctl\b[^;&|]*\s-(?:f\b|-follow\b)|"
+    r"docker\s+logs\b[^;&|]*\s-(?:f\b|-follow\b)|kubectl\s+logs\b[^;&|]*\s-(?:f\b|-follow\b)|"
+    r"watch\b|top\b|htop\b|btop\b)",
+    re.IGNORECASE,
+)
+
+
+def is_operator_safe_read_command(command: str) -> bool:
+    """True for bounded, classifiable diagnostic commands (no follow/stream)."""
+    text = (command or "").strip()
+    if not text:
+        return False
+    if evaluate_command_safety(text).is_dangerous:
+        return False
+    if _UNBOUNDED_READ_RE.search(text):
+        return False
+    return is_read_only_command(text)
 
 
 def _resolve_secret(ctx: AssistantActionContext, server) -> str:
@@ -124,6 +146,28 @@ def run_command(ctx: AssistantActionContext) -> dict[str, Any]:
     undo = _guess_undo(command)
     if undo:
         result["undo_payload"] = {"server_id": server.id, "command": undo}
+    return result
+
+
+def read_command(ctx: AssistantActionContext) -> dict[str, Any]:
+    """Execute a bounded read-only diagnostic command without confirmation."""
+    server_id = _int_arg(ctx, "server_id")
+    assert server_id is not None
+    command = str(ctx.input_payload.get("command") or ctx.input_payload.get("cmd") or "").strip()
+    if not command:
+        raise AssistantActionError("command is required")
+    if not is_operator_safe_read_command(command):
+        raise AssistantActionError(
+            "Command is not a bounded read-only diagnostic. "
+            "Use operator.run_command (requires confirmation) for mutating or unbounded commands. "
+            "Prefer journalctl -n/--since, docker logs --tail, cat/grep of log files — not -f/--follow."
+        )
+    server = _server_for_user(ctx.user, server_id)
+    result = _execute_on_server(ctx, server, command, allow_destructive=False)
+    result["target_url"] = f"/servers/{server.id}/terminal"
+    result["blast_radius"] = {"server_ids": [server.id], "server_names": [server.name]}
+    result["dry_run_preview"] = {"command": command, "server": server.name, "read_only": True}
+    result["read_only"] = True
     return result
 
 

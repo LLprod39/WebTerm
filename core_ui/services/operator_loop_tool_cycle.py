@@ -21,11 +21,18 @@ from core_ui.services.operator_loop_prompt import TOOL_RESULT_PREVIEW_CHARS, Eve
 from core_ui.services.operator_tools import (
     execute_tool,
     freeze_mutating_targets,
-    is_read_tool,
+    is_auto_executable_read,
     normalize_tool_arguments,
     resolve_action_type,
     truncate_tool_result,
 )
+
+async def _execute_tool_async(**kwargs):
+    # Tool handlers (and nested LLM e.g. pipeline_draft.create) may call async_to_sync /
+    # asyncio.run which themselves use sync_to_async(thread_sensitive=True). Running
+    # them on asgiref's SingleThreadExecutor would deadlock — always use a worker thread.
+    # Look up execute_tool at call time so tests can patch it.
+    return await sync_to_async(execute_tool, thread_sensitive=False)(**kwargs)
 
 
 async def process_tool_calls(
@@ -100,18 +107,21 @@ async def process_tool_calls(
                 if pinned_ids:
                     arguments["server_ids"] = pinned_ids[:20]
 
-        if not is_read_tool(action_type):
+        auto_read = is_auto_executable_read(action_type, arguments)
+        if not auto_read:
             arguments = await sync_to_async(freeze_mutating_targets)(user, action_type, arguments)
 
         # Notify chat UI that an SSH-ish tool is about to run (opens session dock)
         if (
             action_type
             in {
+                "operator.read_command",
                 "operator.run_command",
                 "operator.run_fanout",
                 "server.diagnostics.overview",
             }
             or "run_command" in action_type
+            or "read_command" in action_type
         ):
             await _emit(
                 on_event,
@@ -125,10 +135,10 @@ async def process_tool_calls(
                 },
             )
 
-        if is_read_tool(action_type):
+        if auto_read:
             from core_ui.services.operator_channel import session_channel
 
-            result = await sync_to_async(execute_tool)(
+            result = await _execute_tool_async(
                 user=user,
                 action_type=action_type,
                 arguments=arguments,
@@ -255,7 +265,9 @@ async def process_tool_calls(
                             "plan": approved,
                         },
                     )
-                action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
+                action = await sync_to_async(execute_action, thread_sensitive=False)(
+                    action, confirmed=True, request=request
+                )
                 await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
                 await _emit(
                     on_event,
@@ -414,7 +426,9 @@ async def process_tool_calls(
                             "status": running_plan.get("status"),
                         },
                     )
-            action = await sync_to_async(execute_action)(action, confirmed=True, request=request)
+            action = await sync_to_async(execute_action, thread_sensitive=False)(
+                action, confirmed=True, request=request
+            )
             ok = action.status == AssistantAction.STATUS_COMPLETED
             await _emit(on_event, {"type": "action_update", "action": serialize_action(action)})
             updated_plan = await sync_to_async(apply_plan_progress)(

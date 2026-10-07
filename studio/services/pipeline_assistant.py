@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Any
 
 from app.agent_kernel.memory.redaction import sanitize_prompt_context_text
@@ -32,6 +33,12 @@ __all__ = [
     "get_pipeline_assistant_context",
 ]
 
+# Nested asyncio.run / new_event_loop on the asgiref SingleThreadExecutor
+# (sync_to_async thread_sensitive=True) deadlocks when the LLM path itself
+# calls sync_to_async(thread_sensitive=True). Always run the LLM call in a
+# fresh worker thread with its own event loop.
+_PIPELINE_ASSISTANT_LLM_TIMEOUT_S = 180
+
 
 class PipelineAssistantError(Exception):
     def __init__(self, message: str, status: int = 400):
@@ -53,6 +60,16 @@ async def _call_llm(*, user_prompt: str, execution_context: LLMExecutionContext 
     ):
         chunks.append(chunk)
     return "".join(chunks)
+
+
+def _run_llm_in_fresh_thread(*, user_prompt: str, execution_context: LLMExecutionContext | None = None) -> str:
+    """Execute the async LLM call off any occupied SingleThreadExecutor."""
+
+    def _run() -> str:
+        return asyncio.run(_call_llm(user_prompt=user_prompt, execution_context=execution_context))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(_run).result(timeout=_PIPELINE_ASSISTANT_LLM_TIMEOUT_S)
 
 
 def get_pipeline_assistant_context(
@@ -123,13 +140,13 @@ def build_pipeline_assistant_response(
 {safe_user_message}
 """
 
-    loop = asyncio.new_event_loop()
     try:
-        raw_response = loop.run_until_complete(_call_llm(user_prompt=user_prompt, execution_context=execution_context))
+        raw_response = _run_llm_in_fresh_thread(
+            user_prompt=user_prompt,
+            execution_context=execution_context,
+        )
     except Exception as exc:
         raise PipelineAssistantError(f"LLM error: {exc}", 500) from exc
-    finally:
-        loop.close()
 
     parsed = _extract_json_object(raw_response)
     fallback_response, fallback_error = handle_unusable_llm_response(

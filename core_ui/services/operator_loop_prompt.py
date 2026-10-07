@@ -7,7 +7,7 @@ from typing import Any
 
 from core_ui.models import ChatSession
 
-MAX_ITERATIONS = 12
+MAX_ITERATIONS = 16
 HISTORY_MESSAGE_LIMIT = 24
 TOOL_RESULT_PREVIEW_CHARS = 4000
 # Small local models occasionally burn a turn on thinking and emit no text and no
@@ -26,6 +26,108 @@ PLAN_CONTINUATION_NUDGE = (
     "(step.tool + step.input). Если шаг нельзя выполнить, кратко объясни блокер и "
     "вызови следующий выполнимый шаг."
 )
+# User asked for SSH/audit/logs but the model stopped after inventory resolve only.
+TASK_CONTINUATION_NUDGES = 2
+TASK_CONTINUATION_NUDGE = (
+    "Задача ещё не выполнена: пользователь просил аудит / логи / подключение по SSH, "
+    "а ты остановился на inventory (resolve/list). Продолжи: вызови operator.read_command "
+    "(или server.diagnostics.overview) на найденном server_id — journalctl -n / docker logs "
+    "/var/log — затем проанализируй вывод и дай итоговый отчёт. Не спрашивай «что дальше?»."
+)
+STEP_LIMIT_FINAL_REPORT_NUDGE = (
+    "Достигнут лимит шагов. Сейчас дай ИТОГОВЫЙ ОТЧЁТ по уже собранным tool_result: "
+    "цель, что проверено, найденные ошибки/риски (с цитатами из логов), пробелы, "
+    "один следующий шаг. Без новых tool calls."
+)
+
+_SSH_AUDIT_USER_MARKERS = (
+    "аудит",
+    "audit",
+    "лог",
+    "log",
+    "journalctl",
+    "подключ",
+    "connect",
+    "ssh",
+    "диагност",
+    "diagnos",
+    "ошибк",
+    "error",
+    "проверь сервер",
+    "проверь хост",
+    "check server",
+    "check host",
+    "docker logs",
+    "kubectl logs",
+)
+
+_INVENTORY_ONLY_TOOLS = {
+    "operator.resolve_server",
+    "operator_resolve_server",
+    "operator.list_servers",
+    "operator_list_servers",
+    "resolve_server",
+    "list_servers",
+}
+
+_SSH_ACTION_TOOLS = {
+    "operator.read_command",
+    "operator_read_command",
+    "operator.run_command",
+    "operator_run_command",
+    "operator.run_fanout",
+    "operator_run_fanout",
+    "server.diagnostics.overview",
+    "server_diagnostics_overview",
+}
+
+
+def user_message_needs_ssh_actions(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return any(marker in lowered for marker in _SSH_AUDIT_USER_MARKERS)
+
+
+def messages_have_ssh_action_results(messages: list[dict[str, Any]]) -> bool:
+    """True if the turn already executed an SSH/diagnostic tool (not just inventory)."""
+    for msg in messages or []:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            btype = str(block.get("type") or "")
+            name = str(block.get("name") or "")
+            if btype == "tool_use" and name:
+                dotted = name.replace("_", ".")
+                if name in _SSH_ACTION_TOOLS or dotted in _SSH_ACTION_TOOLS:
+                    return True
+                if name in _INVENTORY_ONLY_TOOLS or dotted in _INVENTORY_ONLY_TOOLS:
+                    continue
+            if btype == "tool_result":
+                # Heuristic: tool_result after inventory alone is not enough; look for
+                # output/exit_code markers typical of SSH command tools.
+                preview = str(block.get("content") or "")
+                if '"exit_code"' in preview or '"output"' in preview or "read_only" in preview:
+                    return True
+    return False
+
+
+def messages_only_inventory_so_far(messages: list[dict[str, Any]]) -> bool:
+    saw_tool = False
+    for msg in messages or []:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or str(block.get("type") or "") != "tool_use":
+                continue
+            saw_tool = True
+            name = str(block.get("name") or "")
+            dotted = name.replace("_", ".")
+            if name not in _INVENTORY_ONLY_TOOLS and dotted not in _INVENTORY_ONLY_TOOLS:
+                return False
+    return saw_tool
 
 EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
@@ -64,8 +166,16 @@ Rules:
 OPERATOR_SYSTEM_PROMPT = """You are «Оператор» — the WebTerm platform operator assistant.
 You work on behalf of the authenticated user with the platform tools provided.
 
+# Agent loop (multi-step)
+- You are a full multi-step agent: plan → call tools → observe results → continue until the user goal is done or blocked.
+- Do NOT stop after operator.resolve_server / list_servers when the user asked to connect, audit, check logs, diagnose, or run SSH — that is only step 1.
+- Prefer operator.read_command for bounded diagnostics (journalctl -n/--since, docker logs --tail, cat/grep under /var/log, systemctl status, df/free/ps, kubectl get/logs). No confirmation needed.
+- Use operator.run_command only for mutating or unbounded commands (Confirm will pause the turn).
+- Keep calling tools until you can write a clear final report (findings + evidence + next step). If blocked (auth error, missing host), say so and stop.
+- Step budget is limited (~16). When near the limit, prioritize the final report over more discovery.
+
 # Tools & facts
-- Prefer tools over guessing. Use read tools freely to gather facts (operator.fleet_status, forecasts, alerts, agents.list, server_memory, metric_series, …).
+- Prefer tools over guessing. Use read tools freely to gather facts (operator.fleet_status, forecasts, alerts, agents.list, server_memory, metric_series, operator.read_command, …).
 - Never invent server names, metrics, or command output — only report tool results.
 - Never invent failures: if a tool fails, report the error; if it succeeds, do not ask the same question again.
 - After tools return, synthesize a clear answer. Do not dump raw JSON unless asked.
@@ -132,9 +242,12 @@ You work on behalf of the authenticated user with the platform tools provided.
 - Do not promote chit-chat. Only promote when the operator agrees it was useful/important (confirm gate).
 
 # Domain playbook
-- «Подключись к X / диагностика @X / df на X»: call operator.resolve_server(q=X) (or list_servers with q=X). Then SSH/metrics tools with the returned server_id.
-  NEVER call unfiltered list_servers just to find a name. NEVER claim a host is missing after a truncated dump — use resolve_server / name_index.
+- «Подключись к X / диагностика @X / df на X / аудит / проверь логи»: call operator.resolve_server(q=X). Then IMMEDIATELY continue with SSH:
+  1) server.diagnostics.overview(server_id=…) and/or
+  2) operator.read_command with journalctl -n 200 --no-pager -p err..alert (and/or docker logs --tail 200, ls/grep under /var/log).
+  Then analyze errors and write a final report. NEVER stop after resolve_server alone. NEVER call unfiltered list_servers just to find a name.
   Do NOT set show_in_chat for connect/diagnose flows (no inventory card in chat).
+- «Проверь логи на ошибки @X»: resolve_server → read_command (journalctl / docker logs /var/log) → report errors with severity. Do not ask the user to paste logs.
 - «Покажи список серверов» / list inventory: call operator.list_servers once (platform attaches the card on Web). On Web: ONE line count/status only — no host bullets. On Telegram: follow the Telegram reply_hint (counts + key hosts in text).
 - NEVER call list_servers without q when the user named a host (grafana/lunix/…). Use operator.resolve_server(q=…).
 - «Статус флота / check servers / metrics + forecast»: call fleet_status + server_forecasts (+ list_alerts if needed). Answer pattern:

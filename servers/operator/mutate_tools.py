@@ -10,12 +10,13 @@ from __future__ import annotations
 import contextlib
 
 from app.assistant_actions import AssistantActionSpec, register_action
-from servers.operator.mutate_exec import run_command, run_fanout
+from servers.operator.mutate_exec import read_command, run_command, run_fanout
 from servers.operator.mutate_playbooks import create_playbook, resolve_alert, run_playbook, save_runbook
 from servers.operator.mutate_schedule import schedule_agent, undo_last_action
 
 __all__ = [
     "create_playbook",
+    "read_command",
     "register_operator_mutate_tools",
     "resolve_alert",
     "run_command",
@@ -30,9 +31,35 @@ __all__ = [
 def register_operator_mutate_tools() -> None:
     specs = [
         AssistantActionSpec(
+            action_type="operator.read_command",
+            label="Read command",
+            description=(
+                "Execute a bounded read-only diagnostic over SSH without confirmation "
+                "(journalctl -n, docker logs --tail, cat/grep logs, systemctl status, "
+                "df/free/ps, kubectl get/logs). Prefer this for audits and log checks. "
+                "Follow/stream (-f) and mutating commands are rejected — use run_command for those."
+            ),
+            required_feature="servers",
+            risk="read",
+            requires_confirmation=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "server_id": {"type": "integer"},
+                    "command": {"type": "string"},
+                },
+                "required": ["server_id", "command"],
+            },
+            handler=read_command,
+        ),
+        AssistantActionSpec(
             action_type="operator.run_command",
             label="Run command",
-            description="Execute a shell command on one accessible SSH server (confirm required).",
+            description=(
+                "Execute a shell command on one accessible SSH server. "
+                "Mutating/unbounded commands require confirmation. "
+                "For read-only diagnostics prefer operator.read_command."
+            ),
             required_feature="servers",
             risk="mutating",
             requires_confirmation=True,

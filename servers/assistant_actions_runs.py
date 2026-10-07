@@ -18,7 +18,6 @@ from servers.models import AgentRun, ServerAgent
 from servers.views.server_helpers import (
     _accessible_servers_queryset,
     _require_ssh_server,
-    _resolve_server_secret,
     _server_has_capability,
 )
 
@@ -248,10 +247,11 @@ def server_overview(ctx: AssistantActionContext) -> dict:
     if not _server_has_capability(server, ctx.user, "connect_terminal"):
         raise AssistantActionError("Missing server capability: connect_terminal", status=403)
     _require_ssh_server(server)
-    request = ctx.request
-    if request is None:
-        raise AssistantActionError("Request context is required to resolve server credentials")
-    secret = _resolve_server_secret(server, request, ctx.input_payload)
+    # Operator chat / WS has no Django request — reuse the request-less secret path
+    # used by operator.run_command (ManagedSecret + legacy encrypted_password fallback).
+    from servers.operator.mutate_exec import _resolve_secret
+
+    secret = _resolve_secret(ctx, server)
     overview = async_to_sync(get_linux_ui_overview)(server, secret=secret or "")
     return {
         "server": {"id": server.pk, "name": server.name, "host": server.host, "username": server.username},

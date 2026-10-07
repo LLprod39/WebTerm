@@ -39,9 +39,15 @@ from core_ui.services.operator_loop_prompt import (
     OPERATOR_SYSTEM_PROMPT,
     PLAN_CONTINUATION_NUDGE,
     PLAN_CONTINUATION_NUDGES,
+    STEP_LIMIT_FINAL_REPORT_NUDGE,
+    TASK_CONTINUATION_NUDGE,
+    TASK_CONTINUATION_NUDGES,
     TOOL_RESULT_PREVIEW_CHARS,
     EventCallback,
     build_operator_system_prompt,
+    messages_have_ssh_action_results,
+    messages_only_inventory_so_far,
+    user_message_needs_ssh_actions,
 )
 from core_ui.services.operator_loop_tool_cycle import process_tool_calls
 from core_ui.services.operator_provider_context import build_operator_iteration_context
@@ -111,6 +117,10 @@ async def run_operator_loop(
 
     empty_retries = 0
     plan_continuation_nudges = 0
+    task_continuation_nudges = 0
+    user_goal_text = str(getattr(user_message, "content", "") or "")
+    needs_ssh_actions = user_message_needs_ssh_actions(user_goal_text)
+    force_final_report = False
 
     while True:
         turn = await _refresh_turn(turn.pk)
@@ -128,15 +138,24 @@ async def run_operator_loop(
             )
             break
 
-        if turn.iteration >= MAX_ITERATIONS:
-            limit_text = "\n\n_Упёрся в лимит шагов (12). Вот что успел._"
-            if assistant_message:
-                await _append_assistant_text(assistant_message.pk, limit_text)
-            await _save_turn(turn, status=ChatTurnState.STATUS_LIMIT, error="iteration_limit")
-            await _emit(on_event, {"type": "turn_done", "status": "limit", "turn_id": turn.pk})
-            break
+        if turn.iteration >= MAX_ITERATIONS and not force_final_report:
+            if (turn.error or "") == "iteration_limit_report_done":
+                limit_text = (
+                    f"\n\n_Упёрся в лимит шагов ({MAX_ITERATIONS}). "
+                    "Итоговый отчёт выше._"
+                )
+                if assistant_message:
+                    await _append_assistant_text(assistant_message.pk, limit_text)
+                await _save_turn(turn, status=ChatTurnState.STATUS_LIMIT, error="iteration_limit")
+                await _emit(on_event, {"type": "turn_done", "status": "limit", "turn_id": turn.pk})
+                break
+            # One last text-only pass for a final report.
+            messages = _compress_messages(list(turn.llm_messages or messages))
+            messages.append({"role": "user", "content": STEP_LIMIT_FINAL_REPORT_NUDGE})
+            await _save_turn(turn, llm_messages=messages, error="iteration_limit_report")
+            force_final_report = True
 
-        iteration = turn.iteration + 1
+        iteration = turn.iteration if force_final_report else turn.iteration + 1
         await _save_turn(turn, status=ChatTurnState.STATUS_RUNNING, iteration=iteration)
         messages = _compress_messages(list(turn.llm_messages or messages))
 
@@ -247,6 +266,36 @@ async def run_operator_loop(
                 if assistant_message:
                     await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).update)(content=text_acc)
 
+        if force_final_report:
+            # Final-report pass: ignore further tool calls; finish with LIMIT.
+            tool_calls = []
+            await _save_turn(
+                turn,
+                status=ChatTurnState.STATUS_LIMIT,
+                llm_messages=messages,
+                pending_tool_call={},
+                error="iteration_limit",
+            )
+            if assistant_message:
+                await _set_assistant_metadata(
+                    assistant_message.pk,
+                    {
+                        "source": "operator_loop",
+                        "turn_id": turn.pk,
+                        "iterations": iteration,
+                        "final_report": True,
+                        "step_limit": True,
+                    },
+                )
+                fallback_text = await _ensure_visible_answer(assistant_message.pk)
+                if fallback_text:
+                    await _emit(
+                        on_event,
+                        {"type": "token", "text": fallback_text, "turn_id": turn.pk, "synthetic": True},
+                    )
+            await _emit(on_event, {"type": "turn_done", "status": "limit", "turn_id": turn.pk})
+            break
+
         if not tool_calls:
             # Dud generation guard: the model called no tool and produced no visible
             # text/card. Retry once with a nudge; if it stays empty, fail honestly
@@ -336,6 +385,25 @@ async def run_operator_loop(
                         "continue_available": True,
                     },
                 )
+
+            # SSH/audit goal but only inventory so far → keep going.
+            live_messages = list(turn.llm_messages or messages)
+            if (
+                needs_ssh_actions
+                and task_continuation_nudges < TASK_CONTINUATION_NUDGES
+                and messages_only_inventory_so_far(live_messages)
+                and not messages_have_ssh_action_results(live_messages)
+            ):
+                task_continuation_nudges += 1
+                logger.info(
+                    "operator loop: inventory-only stop on SSH/audit task {}, nudge {}/{}",
+                    turn.pk,
+                    task_continuation_nudges,
+                    TASK_CONTINUATION_NUDGES,
+                )
+                messages.append({"role": "user", "content": TASK_CONTINUATION_NUDGE})
+                await _save_turn(turn, llm_messages=messages)
+                continue
 
             # Final text-only response
             await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages, pending_tool_call={})
