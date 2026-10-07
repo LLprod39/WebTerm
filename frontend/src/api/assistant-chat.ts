@@ -53,6 +53,22 @@ export interface AssistantChatMessage {
   created_at: string;
 }
 
+export type OperatorAutonomyMode = "confirm_each" | "plan_once" | "autonomous";
+
+export type OperatorPlanStepPayload = {
+  id?: number;
+  text?: string;
+  status?: string;
+  tool?: string;
+  input?: Record<string, unknown>;
+};
+
+export type OperatorPlanPayload = {
+  title?: string;
+  status?: string;
+  steps?: OperatorPlanStepPayload[];
+};
+
 export interface AssistantActiveTurn {
   turn_id: number;
   status: string;
@@ -61,6 +77,8 @@ export interface AssistantActiveTurn {
   assistant_message_id?: number | null;
   assistant_text?: string;
   pending_action_id?: number | null;
+  /** Current operator checklist for this open/parked turn (W3). */
+  plan?: OperatorPlanPayload | null;
 }
 
 export interface AssistantChatSession {
@@ -96,6 +114,8 @@ export type OperatorWsEvent =
       user_message_id?: number | null;
       user_text?: string;
       pending_action?: AssistantAction | null;
+      /** Hydrate livePlan on reconnect / navigate-back (W3). */
+      plan?: OperatorPlanPayload | null;
       in_process?: boolean;
     }
   | { type: "token"; text: string }

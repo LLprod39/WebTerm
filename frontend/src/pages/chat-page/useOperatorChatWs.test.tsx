@@ -87,6 +87,40 @@ describe("useOperatorChatWs", () => {
     expect(result.current.streamText).toBe("one two three four");
   });
 
+  it("hydrates livePlan from turn_snapshot.plan", () => {
+    const { result } = renderHook(() => useOperatorChatWs({ chatId: 7 }));
+    const socket = MockWebSocket.instances[0];
+
+    expect(result.current.livePlan).toBeNull();
+
+    act(() => {
+      socket.emit({
+        type: "turn_snapshot",
+        status: "awaiting_confirm",
+        busy: false,
+        assistant_text: "Need confirm",
+        plan: {
+          title: "Cleanup disk",
+          status: "approved",
+          steps: [
+            { id: 1, text: "Check usage", status: "done" },
+            { id: 2, text: "Prune images", status: "awaiting_confirm" },
+          ],
+        },
+      });
+    });
+
+    expect(result.current.livePlan).toEqual({
+      title: "Cleanup disk",
+      status: "approved",
+      steps: [
+        { id: 1, text: "Check usage", status: "done" },
+        { id: 2, text: "Prune images", status: "awaiting_confirm" },
+      ],
+    });
+    expect(result.current.busy).toBe(false);
+  });
+
   it("reconciles snapshots without dropping newer buffered tokens", () => {
     const { result } = renderHook(() => useOperatorChatWs({ chatId: 7 }));
     const socket = MockWebSocket.instances[0];

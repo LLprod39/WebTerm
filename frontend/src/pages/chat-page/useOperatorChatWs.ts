@@ -560,6 +560,9 @@ export function useOperatorChatWs({
             status === "resuming" ||
             status === "awaiting_async";
           setStreamFromSnapshot(assistantText);
+          if (data.plan && typeof data.plan === "object") {
+            dispatch({ type: "plan_updated", plan: data.plan as LivePlan });
+          }
           if (isBusy) {
             clearTerminalErrorTimer();
             dispatch({
