@@ -93,7 +93,7 @@ export function PipelineEditorMainArea({
   onDrop: (event: DragEvent) => void;
   onDuplicateNode: (nodeId: string) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
-  onInsertEdge?: (edgeId: string) => void;
+  onInsertEdge?: (edgeId: string, clientPosition: { x: number; y: number }) => void;
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;

@@ -27,6 +27,7 @@ import {
   makeEdgeId,
 } from "./graphEdgeOps";
 import type { QuickPickerPosition } from "./QuickNodePicker";
+import type { PipelineGraphSnapshot } from "./usePipelineGraphHistory";
 
 type FlowPosition = { x: number; y: number };
 
@@ -54,14 +55,30 @@ function clientPointFromEvent(event: MouseEvent | TouchEvent): { x: number; y: n
   return { x: touch?.clientX ?? 0, y: touch?.clientY ?? 0 };
 }
 
+/** Resolve React Flow edge id under a client point (drop-on-edge). */
+export function edgeIdAtClientPoint(clientX: number, clientY: number): string | null {
+  if (typeof document === "undefined" || typeof document.elementsFromPoint !== "function") {
+    return null;
+  }
+  for (const el of document.elementsFromPoint(clientX, clientY)) {
+    const edge = (el as Element).closest?.(".react-flow__edge");
+    if (!edge) continue;
+    const id = edge.getAttribute("data-id");
+    if (id) return id;
+  }
+  return null;
+}
+
 export function usePipelineEditorGraphActions({
   clearGraphOverlay,
+  edges,
   lang,
   nodeIdCounter,
   nodes,
   nodeManifests,
   onRequestPicker,
   pipelineName,
+  pushHistory,
   screenToFlowPosition,
   selectedNode,
   setActiveRunId,
@@ -72,6 +89,7 @@ export function usePipelineEditorGraphActions({
   toast,
 }: {
   clearGraphOverlay: () => void;
+  edges: Edge[];
   lang: "en" | "ru";
   nodeIdCounter: { current: number };
   nodes: PipelineNode[];
@@ -79,6 +97,8 @@ export function usePipelineEditorGraphActions({
   /** Optional external picker opener (integrator can own UI). */
   onRequestPicker?: (request: StudioPickerRequest) => void;
   pipelineName: string;
+  /** Commit after-state snapshot for undo/redo. */
+  pushHistory?: (snapshot: PipelineGraphSnapshot) => void;
   screenToFlowPosition: (position: FlowPosition) => FlowPosition;
   selectedNode: PipelineNode | null;
   setActiveRunId: Dispatch<SetStateAction<number | null>>;
@@ -101,6 +121,16 @@ export function usePipelineEditorGraphActions({
     [manifestByType],
   );
 
+  const applyGraph = useCallback(
+    (nextNodes: Node[], nextEdges: Edge[]) => {
+      setHasLocalChanges(true);
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      pushHistory?.({ nodes: nextNodes, edges: nextEdges });
+    },
+    [pushHistory, setEdges, setHasLocalChanges, setNodes],
+  );
+
   const openPicker = useCallback(
     (request: StudioPickerRequest) => {
       setPendingConnect(request);
@@ -116,41 +146,57 @@ export function usePipelineEditorGraphActions({
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      setHasLocalChanges(true);
-      setEdges((eds) =>
-        addEdge(
-          {
-            ...connection,
-            id: makeEdgeId(connection.source, connection.target, connection.sourceHandle),
-            type: "studio",
-          },
-          eds,
-        ),
+
+      const nextEdges = addEdge(
+        {
+          ...connection,
+          id: makeEdgeId(connection.source, connection.target, connection.sourceHandle),
+          type: "studio",
+        },
+        edges,
       );
 
       const sourceNode = nodes.find((item) => item.id === connection.source);
       const targetNode = nodes.find((item) => item.id === connection.target);
-      if (!targetNode) return;
 
       clearGraphOverlay();
       setActiveRunId(null);
+
+      if (!targetNode) {
+        applyGraph(nodes as unknown as Node[], nextEdges);
+        return;
+      }
+
       if (!sourceNode) {
+        applyGraph(nodes as unknown as Node[], nextEdges);
         setSelectedNode(targetNode);
         return;
       }
 
       const patch = buildConnectionAutofillPatch(targetNode, sourceNode, pipelineName);
       if (!Object.keys(patch).length) {
+        applyGraph(nodes as unknown as Node[], nextEdges);
         setSelectedNode(targetNode);
         return;
       }
 
       const nextTarget = { ...targetNode, data: { ...(targetNode.data || {}), ...patch } } as PipelineNode;
-      setNodes((nds) => nds.map((item) => (item.id === targetNode.id ? (nextTarget as unknown as Node) : item)));
+      const nextNodes = (nodes as unknown as Node[]).map((item) =>
+        item.id === targetNode.id ? (nextTarget as unknown as Node) : item,
+      );
+      applyGraph(nextNodes, nextEdges);
       setSelectedNode(nextTarget);
       // Silent autofill — no toast about starter settings.
     },
-    [clearGraphOverlay, nodes, pipelineName, setActiveRunId, setEdges, setHasLocalChanges, setNodes, setSelectedNode],
+    [
+      applyGraph,
+      clearGraphOverlay,
+      edges,
+      nodes,
+      pipelineName,
+      setActiveRunId,
+      setSelectedNode,
+    ],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -164,24 +210,31 @@ export function usePipelineEditorGraphActions({
     [nodes, setActiveRunId, setSelectedNode],
   );
 
-  const createNodeAt = useCallback(
+  const buildNodeAt = useCallback(
     (type: string, position: FlowPosition) => {
       const id = `node_${nodeIdCounter.current++}`;
       const manifest = manifestByType.get(type);
-      const newNode = {
+      return {
         id,
         type,
         position,
         data: buildDefaultNodeData(type, manifest),
-      };
-      setHasLocalChanges(true);
-      setNodes((nds) => [...nds, newNode as unknown as Node]);
+      } as PipelineNode;
+    },
+    [manifestByType, nodeIdCounter],
+  );
+
+  const createNodeAt = useCallback(
+    (type: string, position: FlowPosition) => {
+      const newNode = buildNodeAt(type, position);
+      const nextNodes = [...(nodes as unknown as Node[]), newNode as unknown as Node];
+      applyGraph(nextNodes, edges);
       clearGraphOverlay();
       setActiveRunId(null);
-      setSelectedNode(newNode as PipelineNode);
-      return newNode as PipelineNode;
+      setSelectedNode(newNode);
+      return newNode;
     },
-    [clearGraphOverlay, manifestByType, nodeIdCounter, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode],
+    [applyGraph, buildNodeAt, clearGraphOverlay, edges, nodes, setActiveRunId, setSelectedNode],
   );
 
   const handleAddNode = useCallback(
@@ -191,75 +244,80 @@ export function usePipelineEditorGraphActions({
         ? { x: selected.position.x + 280, y: selected.position.y }
         : screenToFlowPosition({ x: 300, y: 200 + nodeIdCounter.current * 80 });
 
-      const newNode = createNodeAt(type, position);
+      const newNode = buildNodeAt(type, position);
+      let nextEdges = edges;
 
       if (selected && !type.startsWith("trigger/")) {
         const sourceHandle = resolveSourceHandle(selected.type);
-        setEdges((eds) =>
-          addEdge(
-            {
-              id: makeEdgeId(selected.id, newNode.id, sourceHandle),
-              source: selected.id,
-              target: newNode.id,
-              sourceHandle,
-              type: "studio",
-            },
-            eds,
-          ),
+        nextEdges = addEdge(
+          {
+            id: makeEdgeId(selected.id, newNode.id, sourceHandle),
+            source: selected.id,
+            target: newNode.id,
+            sourceHandle,
+            type: "studio",
+          },
+          edges,
         );
       }
-    },
-    [createNodeAt, nodeIdCounter, nodes, resolveSourceHandle, screenToFlowPosition, selectedNode, setEdges],
-  );
 
-  const insertNodeOnEdge = useCallback(
-    (edgeId: string, type: string) => {
-      setEdges((eds) => {
-        const found = eds.find((item) => item.id === edgeId);
-        if (!found) return eds;
-
-        const sourceNode = nodes.find((item) => item.id === found.source);
-        const targetNode = nodes.find((item) => item.id === found.target);
-        const position =
-          sourceNode && targetNode
-            ? {
-                x: (sourceNode.position.x + targetNode.position.x) / 2,
-                y: (sourceNode.position.y + targetNode.position.y) / 2,
-              }
-            : sourceNode
-              ? { x: sourceNode.position.x + 280, y: sourceNode.position.y }
-              : screenToFlowPosition({ x: 320, y: 200 });
-
-        const newNode = {
-          id: `node_${nodeIdCounter.current++}`,
-          type,
-          position,
-          data: buildDefaultNodeData(type, manifestByType.get(type)),
-        } as PipelineNode;
-
-        setHasLocalChanges(true);
-        setNodes((nds) => [...nds, newNode as unknown as Node]);
-        clearGraphOverlay();
-        setActiveRunId(null);
-        setSelectedNode(newNode);
-
-        return insertBetween(eds, edgeId, newNode.id, {
-          newNodeSourceHandle: resolveSourceHandle(type),
-          edgeType: "studio",
-        });
-      });
+      applyGraph([...(nodes as unknown as Node[]), newNode as unknown as Node], nextEdges);
+      clearGraphOverlay();
+      setActiveRunId(null);
+      setSelectedNode(newNode);
     },
     [
+      applyGraph,
+      buildNodeAt,
       clearGraphOverlay,
-      manifestByType,
+      edges,
       nodeIdCounter,
       nodes,
       resolveSourceHandle,
       screenToFlowPosition,
+      selectedNode,
       setActiveRunId,
-      setEdges,
-      setHasLocalChanges,
-      setNodes,
+      setSelectedNode,
+    ],
+  );
+
+  const insertNodeOnEdge = useCallback(
+    (edgeId: string, type: string) => {
+      const found = edges.find((item) => item.id === edgeId);
+      if (!found) return;
+
+      const sourceNode = nodes.find((item) => item.id === found.source);
+      const targetNode = nodes.find((item) => item.id === found.target);
+      const position =
+        sourceNode && targetNode
+          ? {
+              x: (sourceNode.position.x + targetNode.position.x) / 2,
+              y: (sourceNode.position.y + targetNode.position.y) / 2,
+            }
+          : sourceNode
+            ? { x: sourceNode.position.x + 280, y: sourceNode.position.y }
+            : screenToFlowPosition({ x: 320, y: 200 });
+
+      const newNode = buildNodeAt(type, position);
+      const nextEdges = insertBetween(edges, edgeId, newNode.id, {
+        newNodeSourceHandle: resolveSourceHandle(type),
+        edgeType: "studio",
+      });
+
+      applyGraph([...(nodes as unknown as Node[]), newNode as unknown as Node], nextEdges);
+      clearGraphOverlay();
+      setActiveRunId(null);
+      setSelectedNode(newNode);
+    },
+    [
+      applyGraph,
+      buildNodeAt,
+      clearGraphOverlay,
+      edges,
+      nodes,
+      resolveSourceHandle,
+      screenToFlowPosition,
+      setActiveRunId,
       setSelectedNode,
     ],
   );
@@ -283,31 +341,40 @@ export function usePipelineEditorGraphActions({
           ? { x: pending.position.flowX, y: pending.position.flowY }
           : screenToFlowPosition({ x: pending.position.x, y: pending.position.y });
 
-      const newNode = createNodeAt(type, flowPosition);
+      const newNode = buildNodeAt(type, flowPosition);
+      let nextEdges = edges;
       if (!type.startsWith("trigger/")) {
-        setEdges((eds) =>
-          addEdge(
-            {
-              id: makeEdgeId(pending.sourceNodeId, newNode.id, pending.sourceHandle),
-              source: pending.sourceNodeId,
-              target: newNode.id,
-              sourceHandle: pending.sourceHandle,
-              type: "studio",
-            },
-            eds,
-          ),
+        nextEdges = addEdge(
+          {
+            id: makeEdgeId(pending.sourceNodeId, newNode.id, pending.sourceHandle),
+            source: pending.sourceNodeId,
+            target: newNode.id,
+            sourceHandle: pending.sourceHandle,
+            type: "studio",
+          },
+          edges,
         );
       }
+
+      applyGraph([...(nodes as unknown as Node[]), newNode as unknown as Node], nextEdges);
+      clearGraphOverlay();
+      setActiveRunId(null);
+      setSelectedNode(newNode);
       clearPendingConnect();
     },
     [
+      applyGraph,
+      buildNodeAt,
+      clearGraphOverlay,
       clearPendingConnect,
-      createNodeAt,
+      edges,
       handleAddNode,
       insertNodeOnEdge,
+      nodes,
       pendingConnect,
       screenToFlowPosition,
-      setEdges,
+      setActiveRunId,
+      setSelectedNode,
     ],
   );
 
@@ -348,12 +415,12 @@ export function usePipelineEditorGraphActions({
 
   const handleDeleteEdge = useCallback(
     (edgeId: string) => {
-      setHasLocalChanges(true);
-      setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+      const nextEdges = edges.filter((edge) => edge.id !== edgeId);
+      applyGraph(nodes as unknown as Node[], nextEdges);
       clearGraphOverlay();
       setActiveRunId(null);
     },
-    [clearGraphOverlay, setActiveRunId, setEdges, setHasLocalChanges],
+    [applyGraph, clearGraphOverlay, edges, nodes, setActiveRunId],
   );
 
   const handleDuplicateNode = useCallback(
@@ -371,8 +438,10 @@ export function usePipelineEditorGraphActions({
         data: { ...(sourceNode.data || {}) },
       } satisfies PipelineNode;
 
-      setHasLocalChanges(true);
-      setNodes((nds) => [...nds, duplicatedNode as unknown as Node]);
+      applyGraph(
+        [...(nodes as unknown as Node[]), duplicatedNode as unknown as Node],
+        edges,
+      );
       clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(duplicatedNode);
@@ -384,7 +453,17 @@ export function usePipelineEditorGraphActions({
         ),
       });
     },
-    [clearGraphOverlay, lang, nodeIdCounter, nodes, setActiveRunId, setHasLocalChanges, setNodes, setSelectedNode, toast],
+    [
+      applyGraph,
+      clearGraphOverlay,
+      edges,
+      lang,
+      nodeIdCounter,
+      nodes,
+      setActiveRunId,
+      setSelectedNode,
+      toast,
+    ],
   );
 
   const handleDragOver = useCallback((event: DragEvent) => {
@@ -398,10 +477,17 @@ export function usePipelineEditorGraphActions({
       const type = event.dataTransfer.getData("application/pipeline-node-type");
       const manifest = manifestByType.get(type);
       if (!type || (!isNodeType(type) && !isPluginStudioNode(manifest))) return;
+
+      const hitEdgeId = edgeIdAtClientPoint(event.clientX, event.clientY);
+      if (hitEdgeId && edges.some((edge) => edge.id === hitEdgeId) && !type.startsWith("trigger/")) {
+        insertNodeOnEdge(hitEdgeId, type);
+        return;
+      }
+
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       createNodeAt(type, position);
     },
-    [createNodeAt, manifestByType, screenToFlowPosition],
+    [createNodeAt, edges, insertNodeOnEdge, manifestByType, screenToFlowPosition],
   );
 
   const handleUpdateNodeData = useCallback(
@@ -417,14 +503,14 @@ export function usePipelineEditorGraphActions({
 
   const handleDeleteNode = useCallback(
     (nodeId: string) => {
-      setHasLocalChanges(true);
-      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-      setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
+      const nextNodes = (nodes as unknown as Node[]).filter((node) => node.id !== nodeId);
+      const nextEdges = edges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId);
+      applyGraph(nextNodes, nextEdges);
       clearGraphOverlay();
       setActiveRunId(null);
       setSelectedNode(null);
     },
-    [clearGraphOverlay, setActiveRunId, setEdges, setHasLocalChanges, setNodes, setSelectedNode],
+    [applyGraph, clearGraphOverlay, edges, nodes, setActiveRunId, setSelectedNode],
   );
 
   const onPaneClick = useCallback(() => {

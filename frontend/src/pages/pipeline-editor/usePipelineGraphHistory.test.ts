@@ -94,4 +94,27 @@ describe("usePipelineGraphHistory", () => {
     expect(result.current.present.nodes.map((n) => n.id)).toEqual(["z"]);
     expect(result.current.canUndo()).toBe(false);
   });
+
+  it("undo/redo remain consistent when push/undo run back-to-back (StrictMode-safe refs)", () => {
+    const { result } = renderHook(() =>
+      usePipelineGraphHistory({ nodes: [node("a")], edges: [] }),
+    );
+
+    act(() => {
+      result.current.push({ nodes: [node("a"), node("b")], edges: [] });
+      result.current.push({ nodes: [node("a"), node("b"), node("c")], edges: [] });
+    });
+    expect(result.current.present.nodes.map((n) => n.id)).toEqual(["a", "b", "c"]);
+
+    act(() => {
+      result.current.undo();
+    });
+    expect(result.current.present.nodes.map((n) => n.id)).toEqual(["a", "b"]);
+    expect(result.current.canRedo()).toBe(true);
+
+    act(() => {
+      result.current.redo();
+    });
+    expect(result.current.present.nodes.map((n) => n.id)).toEqual(["a", "b", "c"]);
+  });
 });

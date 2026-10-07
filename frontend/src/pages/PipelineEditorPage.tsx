@@ -224,7 +224,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setSelectedNode,
     toast,
   });
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (pipelineId && !hasHydratedPipeline) {
       toast({
         variant: "destructive",
@@ -247,7 +247,19 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         hasLocalChanges,
       }) as { name: string; nodes: PipelineNode[]; edges: PipelineEdge[]; provider_binding?: ProviderBinding | Record<string, never> },
     );
-  };
+  }, [
+    edges,
+    hasHydratedPipeline,
+    hasLocalChanges,
+    lang,
+    nodes,
+    pipeline,
+    pipelineId,
+    pipelineName,
+    saveMutation,
+    showClientValidationError,
+    toast,
+  ]);
   const handleValidateGraph = () => {
     if (pipelineId && !hasHydratedPipeline) {
       toast({
@@ -352,11 +364,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     requestInsertOnEdge,
   } = usePipelineEditorGraphActions({
     clearGraphOverlay,
+    edges,
     lang,
     nodeIdCounter,
     nodes: pipelineNodes,
     nodeManifests,
     pipelineName,
+    pushHistory: graphHistory.push,
     screenToFlowPosition,
     selectedNode,
     setActiveRunId,
@@ -367,17 +381,10 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     toast,
   });
 
-  const commitHistorySnapshot = useCallback(() => {
-    graphHistory.push({
-      nodes: nodes as unknown as Node[],
-      edges: edges as unknown as Edge[],
-    });
-  }, [edges, graphHistory, nodes]);
-
   const handleOrganizeLayout = useCallback(() => {
-    commitHistorySnapshot();
     const next = layoutPipelineGraph(pipelineNodes, pipelineEdges, "LR");
     setNodes(next as never[]);
+    // Single after-state push — undo restores the pre-layout graph in one step.
     graphHistory.push({
       nodes: next as unknown as Node[],
       edges: edges as unknown as Edge[],
@@ -390,7 +397,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       /* ignore */
     }
     setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 50);
-  }, [commitHistorySnapshot, edges, fitView, graphHistory, migrationDismissKey, pipelineEdges, pipelineNodes, setNodes]);
+  }, [edges, fitView, graphHistory, migrationDismissKey, pipelineEdges, pipelineNodes, setNodes]);
 
   const handleDismissMigration = useCallback(() => {
     setShowMigrationBanner(false);
@@ -533,7 +540,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onDrop={handleDrop}
         onDuplicateNode={handleDuplicateNode}
         onEdgesChange={handleEdgesChange}
-        onInsertEdge={(edgeId) => requestInsertOnEdge(edgeId)}
+        onInsertEdge={(edgeId, clientPosition) => requestInsertOnEdge(edgeId, clientPosition)}
         onNodeClick={onNodeClick}
         onNodesChange={handleNodesChange}
         onPaneClick={onPaneClick}
@@ -547,7 +554,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         lang={lang}
         excludeTriggers={pendingConnect?.kind === "insert" || pendingConnect?.kind === "connect"}
         onPick={(type) => {
-          commitHistorySnapshot();
           handlePickPending(type);
         }}
         onClose={clearPendingConnect}

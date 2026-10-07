@@ -33,47 +33,49 @@ function cloneSnapshot(snapshot: PipelineGraphSnapshot): PipelineGraphSnapshot {
  * // history.undo() / history.redo()
  * // history.canUndo() / history.canRedo()
  * ```
+ *
+ * Stack mutations happen outside `setPresent` updaters so React 18 StrictMode
+ * double-invokes cannot slice past/future twice.
  */
 export function usePipelineGraphHistory(initial: PipelineGraphSnapshot) {
   const [present, setPresent] = useState(() => cloneSnapshot(initial));
+  const presentRef = useRef(present);
   const past = useRef<PipelineGraphSnapshot[]>([]);
   const future = useRef<PipelineGraphSnapshot[]>([]);
 
   const replace = useCallback((next: PipelineGraphSnapshot) => {
-    setPresent(cloneSnapshot(next));
+    const cloned = cloneSnapshot(next);
+    presentRef.current = cloned;
+    setPresent(cloned);
   }, []);
 
   const push = useCallback((next: PipelineGraphSnapshot) => {
-    setPresent((current) => {
-      past.current = [...past.current, cloneSnapshot(current)].slice(-LIMIT);
-      future.current = [];
-      return cloneSnapshot(next);
-    });
+    past.current = [...past.current, cloneSnapshot(presentRef.current)].slice(-LIMIT);
+    future.current = [];
+    const cloned = cloneSnapshot(next);
+    presentRef.current = cloned;
+    setPresent(cloned);
   }, []);
 
   const undo = useCallback((): PipelineGraphSnapshot | null => {
-    let restored: PipelineGraphSnapshot | null = null;
-    setPresent((current) => {
-      const previous = past.current.at(-1);
-      if (!previous) return current;
-      past.current = past.current.slice(0, -1);
-      future.current = [cloneSnapshot(current), ...future.current].slice(0, LIMIT);
-      restored = cloneSnapshot(previous);
-      return restored;
-    });
+    const previous = past.current.at(-1);
+    if (!previous) return null;
+    past.current = past.current.slice(0, -1);
+    future.current = [cloneSnapshot(presentRef.current), ...future.current].slice(0, LIMIT);
+    const restored = cloneSnapshot(previous);
+    presentRef.current = restored;
+    setPresent(restored);
     return restored;
   }, []);
 
   const redo = useCallback((): PipelineGraphSnapshot | null => {
-    let restored: PipelineGraphSnapshot | null = null;
-    setPresent((current) => {
-      const next = future.current[0];
-      if (!next) return current;
-      future.current = future.current.slice(1);
-      past.current = [...past.current, cloneSnapshot(current)].slice(-LIMIT);
-      restored = cloneSnapshot(next);
-      return restored;
-    });
+    const next = future.current[0];
+    if (!next) return null;
+    future.current = future.current.slice(1);
+    past.current = [...past.current, cloneSnapshot(presentRef.current)].slice(-LIMIT);
+    const restored = cloneSnapshot(next);
+    presentRef.current = restored;
+    setPresent(restored);
     return restored;
   }, []);
 

@@ -9,7 +9,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 
 export type StudioEdgeData = {
-  onInsert?: (edgeId: string) => void;
+  onInsert?: (edgeId: string, clientPosition: { x: number; y: number }) => void;
   onDelete?: (edgeId: string) => void;
   readOnly?: boolean;
 };
@@ -75,7 +75,7 @@ export function StudioEdge({
                 className="grid h-6 w-6 place-items-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 onClick={(event) => {
                   event.stopPropagation();
-                  data?.onInsert?.(id);
+                  data?.onInsert?.(id, { x: event.clientX, y: event.clientY });
                 }}
               >
                 <Plus className="h-3 w-3" />

@@ -63,6 +63,7 @@ export function PipelineEditorSidePanel({
       {activeRunId ? (
         <RunMonitorPanel
           runId={activeRunId}
+          lang={lang}
           onClose={onCloseRun}
         />
       ) : assistantOpen ? (

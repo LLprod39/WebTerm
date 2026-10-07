@@ -404,4 +404,41 @@ describe("PipelineEditorPage save hydration", () => {
     expect(errors).toEqual([]);
   });
 
+  it("shows MigrationBanner when hydrated graph looks vertical", async () => {
+    vi.mocked(api.studioPipelines.get).mockResolvedValue({
+      ...freshPipeline,
+      nodes: [
+        {
+          id: "n1",
+          type: "trigger/manual",
+          position: { x: 0, y: 0 },
+          data: { label: "Start" },
+        },
+        {
+          id: "n2",
+          type: "agent/llm",
+          position: { x: 10, y: 200 },
+          data: { label: "Step" },
+        },
+        {
+          id: "n3",
+          type: "output/report",
+          position: { x: 20, y: 400 },
+          data: { label: "End" },
+        },
+      ],
+      edges: [
+        { id: "e1", source: "n1", target: "n2", sourceHandle: "out" },
+        { id: "e2", source: "n2", target: "n3", sourceHandle: "out" },
+      ],
+    } as never);
+
+    window.localStorage.removeItem("studio.lr-migrate.dismissed.45");
+    renderPage(buildQueryClient());
+
+    expect(
+      await screen.findByRole("status", {}, { timeout: 5_000 }),
+    ).toHaveTextContent(/слева направо|left-to-right/i);
+  });
+
 });
