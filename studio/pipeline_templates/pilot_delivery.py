@@ -12,13 +12,13 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/schedule",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Daily Check", "cron_expression": "0 8 * * *"},
             },
             {
                 "id": "n2",
                 "type": "agent/react",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Cert Check Agent",
                     "goal": "Check SSL certificate expiry: For each domain in {domains}: run 'echo | openssl s_client -connect {domain}:443 2>/dev/null | openssl x509 -noout -dates'. Calculate days until expiry. Flag any certificate expiring within 30 days.",
@@ -30,7 +30,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "logic/condition",
-                "position": {"x": 300, "y": 330},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Any Expiring Soon?",
                     "check_type": "contains",
@@ -40,7 +40,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "n4",
                 "type": "output/webhook",
-                "position": {"x": 150, "y": 470},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Alert Team",
                     "url": "",
@@ -49,7 +49,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "n5",
                 "type": "output/report",
-                "position": {"x": 450, "y": 470},
+                "position": {"x": 920, "y": 20},
                 "data": {"label": "All OK Report"},
             },
         ],
@@ -71,13 +71,13 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "manual",
                 "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start Kubernetes workflow"},
             },
             {
                 "id": "inspect",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Inspect workload",
                     "mcp_server_id": "",
@@ -96,7 +96,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "plan",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Assess rollout risk",
                     "provider": "openai",
@@ -113,7 +113,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Approve rollout action",
                     "manual_link_only": True,
@@ -124,7 +124,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "rollout",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Run approved rollout",
                     "mcp_server_id": "",
@@ -143,7 +143,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "verify",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 850},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Verify rollout status",
                     "mcp_server_id": "",
@@ -163,7 +163,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1010},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "Kubernetes rollout report",
                     "template": "# Kubernetes rollout report\n\n## Inspection\n{inspect_output}\n\n## Risk plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Rollout\n{rollout_output}\n\n## Verification\n{verify_output}",
@@ -172,7 +172,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 690},
+                "position": {"x": 1200, "y": 20},
                 "data": {
                     "label": "Rollout rejected",
                     "template": "# Kubernetes rollout rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}",
@@ -181,7 +181,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 850},
+                "position": {"x": 1200, "y": 380},
                 "data": {
                     "label": "Rollout approval timed out",
                     "template": "# Kubernetes rollout timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}",
@@ -252,7 +252,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "webhook",
                 "type": "trigger/webhook",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {
                     "label": "GitLab pipeline webhook",
                     "webhook_payload_map": {
@@ -266,7 +266,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "inspect",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Inspect failed pipeline",
                     "mcp_server_id": "",
@@ -284,7 +284,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "proposal",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Propose fix path",
                     "provider": "openai",
@@ -301,7 +301,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Approve MR creation",
                     "manual_link_only": True,
@@ -312,7 +312,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "create_mr",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Create GitLab MR",
                     "mcp_server_id": "",
@@ -332,7 +332,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "verify",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 850},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Verify MR pipeline",
                     "mcp_server_id": "",
@@ -346,7 +346,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1010},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "CI support report",
                     "template": "# GitLab CI support report\n\n## Failure evidence\n{inspect_output}\n\n## Proposal\n{proposal_output}\n\n## Approval\n{approval_output}\n\n## MR result\n{create_mr_output}\n\n## Verification\n{verify_output}",
@@ -355,7 +355,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 690},
+                "position": {"x": 1200, "y": 20},
                 "data": {
                     "label": "MR rejected",
                     "template": "# GitLab MR rejected\n\n{approval_error}\n\n## Proposal\n{proposal_output}",
@@ -364,7 +364,7 @@ PILOT_DELIVERY_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 850},
+                "position": {"x": 1200, "y": 380},
                 "data": {
                     "label": "MR approval timed out",
                     "template": "# GitLab MR approval timed out\n\nNo approval was received.\n\n## Proposal\n{proposal_output}",

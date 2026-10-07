@@ -21,7 +21,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "trigger_webhook",
             "type": "trigger/webhook",
-            "position": {"x": 80, "y": 40},
+            "position": {"x": 80, "y": 200},
             "data": {
                 "label": "Webhook Trigger",
                 "label_ru": "Webhook запуск",
@@ -37,7 +37,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "trigger_manual",
             "type": "trigger/manual",
-            "position": {"x": 360, "y": 40},
+            "position": {"x": 80, "y": 20},
             "data": {
                 "label": "Manual Demo Run",
                 "label_ru": "Ручной демо-запуск",
@@ -47,13 +47,13 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "trigger_merge",
             "type": "logic/merge",
-            "position": {"x": 220, "y": 170},
+            "position": {"x": 360, "y": 200},
             "data": {"label": "Any Trigger", "label_ru": "Любой триггер", "mode": "any"},
         },
         {
             "id": "payload_echo",
             "type": "output/report",
-            "position": {"x": 220, "y": 290},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "Incoming Payload",
                 "label_ru": "Входящий payload",
@@ -72,7 +72,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "ai_classifier",
             "type": "agent/llm_query",
-            "position": {"x": 220, "y": 430},
+            "position": {"x": 920, "y": 200},
             "data": {
                 "label": "AI Severity Classifier",
                 "label_ru": "AI-классификатор серьёзности",
@@ -101,7 +101,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "severity_gate",
             "type": "logic/condition",
-            "position": {"x": 220, "y": 570},
+            "position": {"x": 1200, "y": 200},
             "data": {
                 "label": "Is P0 Critical?",
                 "label_ru": "Это P0?",
@@ -113,7 +113,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "human_gate",
             "type": "logic/human_approval",
-            "position": {"x": 60, "y": 700},
+            "position": {"x": 1480, "y": 200},
             "data": {
                 "label": "Approve P0 Response",
                 "label_ru": "Подтвердить P0",
@@ -132,7 +132,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "auto_handled_report",
             "type": "output/report",
-            "position": {"x": 380, "y": 700},
+            "position": {"x": 1480, "y": 20},
             "data": {
                 "label": "Auto-Handled (P1/P2)",
                 "label_ru": "Обработано автоматически",
@@ -147,13 +147,13 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "human_failure_merge",
             "type": "logic/merge",
-            "position": {"x": -100, "y": 780},
+            "position": {"x": 1760, "y": 200},
             "data": {"label": "Rejected Or Timed Out", "label_ru": "Отклонено или timeout", "mode": "any"},
         },
         {
             "id": "rejected_report",
             "type": "output/report",
-            "position": {"x": -100, "y": 830},
+            "position": {"x": 2040, "y": 200},
             "data": {
                 "label": "P0 Rejected",
                 "label_ru": "P0 отклонено",
@@ -168,19 +168,19 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "gate_merge",
             "type": "logic/merge",
-            "position": {"x": 220, "y": 840},
+            "position": {"x": 2320, "y": 200},
             "data": {"label": "Continue After Gate", "label_ru": "После решения", "mode": "any"},
         },
         {
             "id": "channels_parallel",
             "type": "logic/parallel",
-            "position": {"x": 220, "y": 970},
+            "position": {"x": 2600, "y": 200},
             "data": {"label": "Prepare Channels", "label_ru": "Подготовка каналов"},
         },
         {
             "id": "channel_slack",
             "type": "output/report",
-            "position": {"x": 20, "y": 1110},
+            "position": {"x": 2880, "y": 200},
             "data": {
                 "label": "Slack Draft",
                 "label_ru": "Черновик Slack",
@@ -191,7 +191,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "channel_status",
             "type": "output/report",
-            "position": {"x": 220, "y": 1110},
+            "position": {"x": 2880, "y": 20},
             "data": {
                 "label": "Statuspage Draft",
                 "label_ru": "Черновик Statuspage",
@@ -204,7 +204,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "channel_runbook",
             "type": "agent/llm_query",
-            "position": {"x": 420, "y": 1110},
+            "position": {"x": 2880, "y": 380},
             "data": {
                 "label": "AI Runbook Hint",
                 "label_ru": "AI-подсказка runbook",
@@ -219,13 +219,13 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "channels_merge",
             "type": "logic/merge",
-            "position": {"x": 220, "y": 1260},
+            "position": {"x": 3160, "y": 200},
             "data": {"label": "Channels Ready", "label_ru": "Каналы готовы", "mode": "all"},
         },
         {
             "id": "final_summary",
             "type": "agent/llm_query",
-            "position": {"x": 220, "y": 1390},
+            "position": {"x": 3440, "y": 200},
             "data": {
                 "label": "AI Executive Summary",
                 "label_ru": "AI executive summary",
@@ -247,7 +247,7 @@ def build_incident_nodes() -> list[dict]:
         {
             "id": "final_report",
             "type": "output/report",
-            "position": {"x": 220, "y": 1530},
+            "position": {"x": 3720, "y": 200},
             "data": {
                 "label": "Final Incident Report",
                 "label_ru": "Финальный отчёт по инциденту",
