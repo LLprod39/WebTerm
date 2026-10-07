@@ -8,9 +8,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import RunnerManagerConfig
+from .docker_plane import docker_plane_is_ready
 from .docker_runtime import DockerCliRuntime
 from .fake_runtime import FakeCliRuntime
 from .protocol import RunnerProtocolError, RunnerRequestV1, error_event
@@ -37,8 +38,17 @@ app = FastAPI(title="WebTerm AI CLI Runner Manager", lifespan=_lifespan)
 
 
 @app.get("/health")
-async def health() -> dict[str, Any]:
-    return {"ok": True, "service": "ai-cli-runner-manager", "fake_runtime": config.fake_runtime}
+async def health() -> dict[str, Any] | JSONResponse:
+    docker_plane = docker_plane_is_ready(fake_runtime=config.fake_runtime)
+    payload = {
+        "ok": bool(docker_plane),
+        "service": "ai-cli-runner-manager",
+        "fake_runtime": config.fake_runtime,
+        "docker_plane": bool(docker_plane),
+    }
+    if not docker_plane:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post("/v1/stream", dependencies=[Depends(_require_token)])

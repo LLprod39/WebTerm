@@ -181,10 +181,11 @@ async def test_stderr_drain_is_bounded_and_consumes_the_pipe() -> None:
 @pytest.mark.asyncio
 async def test_revoke_stops_only_matching_runners_and_removes_exact_volume(monkeypatch) -> None:
     class FakeProcess:
-        def __init__(self, return_code: int | None = None) -> None:
+        def __init__(self, return_code: int | None = None, *, stderr: bytes = b"") -> None:
             self.returncode = return_code
             self.terminated = False
             self.killed = False
+            self._stderr = stderr
 
         def terminate(self) -> None:
             self.terminated = True
@@ -196,6 +197,11 @@ async def test_revoke_stops_only_matching_runners_and_removes_exact_volume(monke
             if self.returncode is None:
                 self.returncode = 0
             return self.returncode
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            if self.returncode is None:
+                self.returncode = 0
+            return b"", self._stderr
 
     volume_process = FakeProcess(0)
     calls: list[tuple[object, ...]] = []
@@ -225,6 +231,45 @@ async def test_revoke_stops_only_matching_runners_and_removes_exact_volume(monke
             f"{_config().credential_volume_prefix}connection_1234",
         )
     ]
+
+
+@pytest.mark.asyncio
+async def test_revoke_treats_missing_volume_as_success(monkeypatch) -> None:
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            self.returncode = 1
+            return (
+                b"",
+                b"Error response from daemon: get webterm-ai-cli-cred-connection_missing: no such volume\n",
+            )
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    runtime = DockerCliRuntime(_config())
+    assert await runtime.revoke_connection("connection_missing") is True
+
+
+@pytest.mark.asyncio
+async def test_revoke_still_fails_on_unexpected_volume_errors(monkeypatch) -> None:
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        async def communicate(self) -> tuple[bytes, bytes]:
+            self.returncode = 1
+            return b"", b"Error response from daemon: volume is in use\n"
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return FakeProcess()
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
+    runtime = DockerCliRuntime(_config())
+    assert await runtime.revoke_connection("connection_busyvol") is False
 
 
 @pytest.mark.asyncio

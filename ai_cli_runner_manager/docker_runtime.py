@@ -237,15 +237,20 @@ class DockerCliRuntime:
             "volume",
             "rm",
             volume_name,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
-            return await asyncio.wait_for(process.wait(), timeout=15) == 0
+            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
         except TimeoutError:
             process.kill()
             await process.wait()
             return False
+        if process.returncode == 0:
+            return True
+        # Already-absent credential volumes are a successful cleanup outcome.
+        err_text = (stderr or b"").decode("utf-8", errors="replace").lower()
+        return "no such volume" in err_text
 
     async def _remove_runner_container(self, runner_name: str) -> bool:
         if _RUNNER_ID.fullmatch(runner_name.removeprefix("webterm-ai-cli-")) is None:
