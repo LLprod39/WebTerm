@@ -109,7 +109,7 @@ export function ListState({
   }
   return (
     <QueryStateBlock error={error} onRetry={onRetry} loadingText={loadingText} errorText={errorText} className={className}>
-      {isEmpty ? (empty ?? <EmptyState title="" description="" />) : children}
+      {isEmpty ? (empty ?? <EmptyState title="" />) : children}
     </QueryStateBlock>
   );
 }

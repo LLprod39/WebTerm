@@ -310,11 +310,14 @@ export function EmptyState({
 }: {
   icon?: ReactNode;
   title: ReactNode;
-  description: ReactNode;
+  description?: ReactNode;
   actions?: ReactNode;
   hint?: ReactNode;
   className?: string;
 }) {
+  const hasDescription =
+    description !== undefined && description !== null && description !== "";
+
   return (
     <div data-ui-slot="empty-state" className={cn("flex flex-col items-center justify-center gap-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-12 text-center", className)}>
       {icon ? (
@@ -324,7 +327,9 @@ export function EmptyState({
       ) : null}
       <div className="space-y-1.5">
         <div className="text-sm font-semibold text-foreground/90">{title}</div>
-        <div className="max-w-sm text-xs leading-5 text-muted-foreground">{description}</div>
+        {hasDescription ? (
+          <div className="max-w-sm text-xs leading-5 text-muted-foreground">{description}</div>
+        ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center justify-center gap-2">{actions}</div> : null}
       {hint ? <div className="max-w-xs text-2xs text-muted-foreground">{hint}</div> : null}

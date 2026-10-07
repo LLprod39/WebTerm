@@ -133,7 +133,7 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
         <EmptyState
           className="m-4"
           title={report.artifact_state?.empty_title || "Артефакты появятся после финального отчёта"}
-          description={report.artifact_state?.empty_description || report.report_state?.next_expected || ""}
+          description={report.artifact_state?.empty_description || report.report_state?.next_expected || undefined}
         />
       </div>
     );
@@ -202,7 +202,7 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
           ))}
         </ul>
       ) : (
-        <EmptyState className="m-4" title="Артефакты не сформированы." description="" />
+        <EmptyState className="m-4" title="Артефакты не сформированы." />
       )}
     </div>
   );

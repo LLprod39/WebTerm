@@ -250,7 +250,7 @@ export function AssistantDrawer() {
           ) : null}
 
           {!chatId && !pendingUser && messages.length === 0 ? (
-            <EmptyState className="py-8" title={emptyHint} description="" />
+            <EmptyState className="py-8" title={emptyHint} />
           ) : null}
 
           {messages

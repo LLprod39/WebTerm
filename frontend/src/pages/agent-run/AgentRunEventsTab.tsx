@@ -217,7 +217,7 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
             description={
               mode === "brief"
                 ? "Переключите на «Все», чтобы увидеть технический журнал."
-                : ""
+                : undefined
             }
           />
         )}

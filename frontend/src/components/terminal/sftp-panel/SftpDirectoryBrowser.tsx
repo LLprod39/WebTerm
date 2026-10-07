@@ -253,7 +253,6 @@ export function SftpDirectoryBrowser({
             <EmptyState
               className="m-4"
               title={entries.length === 0 ? "Папка пустая." : "Поиск ничего не нашел."}
-              description=""
             />
           ) : (
             <div className="divide-y divide-border/60">
