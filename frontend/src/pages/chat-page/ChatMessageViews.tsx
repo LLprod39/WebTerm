@@ -314,18 +314,36 @@ export function ActionCard({
 export { actionCommandLine, actionResultOutput, actionServerLabel };
 
 /** Compact plan summary for the thread — full steps live in the context rail. */
-export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } }) {
+export function PlanChecklist({
+  plan,
+  turnActive = false,
+}: {
+  plan: { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> };
+  /**
+   * When false (history / idle turn), stuck `running` steps render as waiting —
+   * no execution spinner progress.
+   */
+  turnActive?: boolean;
+}) {
   const { lang } = useI18n();
-  const steps = planToAgentProgressSteps(plan);
+  const steps = planToAgentProgressSteps(plan, { turnActive });
   if (!steps.length) return null;
   const done = steps.filter((step) => step.status === "done").length;
-  const running = steps.find((step) => step.status === "running");
+  const running = turnActive ? steps.find((step) => step.status === "running") : undefined;
+  const waiting = steps.find((step) => step.status === "waiting");
   const left = Math.max(0, steps.length - done);
   const progress = steps.length ? (done + (running ? 0.45 : 0)) / steps.length : 0;
+  const subtitle =
+    running?.label ||
+    waiting?.label ||
+    plan.title ||
+    localize(lang, "План задач", "Task plan");
   return (
     <div
       className="flex w-full max-w-[min(48rem,100%)] items-center gap-2.5 rounded-2xl border border-border/60 bg-card/50 px-3 py-2"
       data-testid="plan-checklist-compact"
+      data-turn-active={turnActive ? "true" : "false"}
+      data-plan-executing={running ? "true" : "false"}
     >
       <svg aria-hidden viewBox="0 0 16 16" width="16" height="16" className="-rotate-90 shrink-0">
         <circle cx="8" cy="8" r="6" fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
@@ -347,9 +365,7 @@ export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<
             ? localize(lang, `${left} шаг${left === 1 ? "" : left < 5 ? "а" : "ов"} осталось`, `${left} step${left === 1 ? "" : "s"} left`)
             : localize(lang, "Все шаги выполнены", "All steps complete")}
         </div>
-        <div className="truncate text-[11px] text-muted-foreground">
-          {running?.label || plan.title || localize(lang, "План задач", "Task plan")}
-        </div>
+        <div className="truncate text-[11px] text-muted-foreground">{subtitle}</div>
       </div>
       <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
         {done}/{steps.length}
@@ -644,7 +660,7 @@ function MessageBubbleComponent({
         ) : null}
         {plan ? (
           <div className="max-w-[min(920px,100%)]">
-            <PlanChecklist plan={plan} />
+            <PlanChecklist plan={plan} turnActive={streaming} />
           </div>
         ) : null}
         {actions.length ? (

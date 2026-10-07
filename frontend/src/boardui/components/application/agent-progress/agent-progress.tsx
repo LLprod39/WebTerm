@@ -7,17 +7,24 @@ import { cx } from "@/boardui/utils/cx";
 export type AgentProgressStep = {
   id?: string | number;
   label: string;
-  status?: "pending" | "running" | "done" | "error";
+  status?: "pending" | "waiting" | "running" | "done" | "error";
 };
 
 type Props = {
   steps: Array<string | AgentProgressStep>;
-  /** Auto-advance demo timing (ms). Ignored when steps carry explicit status. */
+  /** Auto-advance demo timing (ms). Ignored when controlled / autoDemo=false / explicit statuses. */
   stepDuration?: number;
   completionDelay?: number;
   onFinished?: () => void;
   className?: string;
   defaultExpanded?: boolean;
+  /**
+   * When true, never auto-advance — always render the provided step statuses.
+   * Chat plan rails must pass controlled so all-pending plans do not demo-animate.
+   */
+  controlled?: boolean;
+  /** When false, disables the BoardUI demo auto-advance. Defaults to true for demos. */
+  autoDemo?: boolean;
 };
 
 function normalize(steps: Array<string | AgentProgressStep>): AgentProgressStep[] {
@@ -68,6 +75,73 @@ function Ring({
   );
 }
 
+function StepGlyph({ status }: { status: AgentProgressStep["status"] }) {
+  if (status === "running") {
+    return <Ring progress={0.55} size={14} stroke={1.5} />;
+  }
+  if (status === "done") {
+    return (
+      <svg aria-hidden viewBox="0 0 14 14" className="size-3.5 text-[var(--color-agent-progress-ring)]">
+        <circle cx="7" cy="7" r="6" fill="currentColor" opacity="0.15" />
+        <path
+          d="M4.2 7.1 L6.1 9 L9.8 5.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  if (status === "error") {
+    return (
+      <svg aria-hidden viewBox="0 0 14 14" className="size-3.5 text-red-500">
+        <circle cx="7" cy="7" r="6" fill="currentColor" opacity="0.12" />
+        <path
+          d="M4.6 4.6 L9.4 9.4 M9.4 4.6 L4.6 9.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  if (status === "waiting") {
+    return (
+      <svg
+        aria-hidden
+        viewBox="0 0 14 14"
+        className="size-3.5 text-text-secondary"
+        data-testid="agent-progress-waiting"
+      >
+        <circle cx="7" cy="7" r="6" fill="none" stroke="currentColor" strokeWidth="1.25" opacity="0.55" />
+        <path
+          d="M7 4.2 V7.2 L9 8.4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg aria-hidden viewBox="0 0 15 15" className="size-[15px]">
+      <circle
+        cx="7.5"
+        cy="7.5"
+        r="7"
+        fill="none"
+        stroke="var(--color-background-quaternary-default)"
+        strokeDasharray="2 2"
+      />
+    </svg>
+  );
+}
+
 /** BoardUI Pro Agent Progress — visual recreate on WebTerm tokens. */
 export function AgentProgress({
   steps: rawSteps,
@@ -76,12 +150,16 @@ export function AgentProgress({
   onFinished,
   className,
   defaultExpanded = true,
+  controlled: controlledProp,
+  autoDemo = true,
 }: Props) {
   const reduceMotion = useReducedMotion();
-  const controlled = useMemo(
-    () => rawSteps.some((step) => typeof step !== "string" && step.status && step.status !== "pending"),
-    [rawSteps],
-  );
+  const controlled = useMemo(() => {
+    if (controlledProp === true || autoDemo === false) return true;
+    return rawSteps.some(
+      (step) => typeof step !== "string" && step.status && step.status !== "pending",
+    );
+  }, [autoDemo, controlledProp, rawSteps]);
   const base = useMemo(() => normalize(rawSteps), [rawSteps]);
   const [autoIndex, setAutoIndex] = useState(0);
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -116,6 +194,7 @@ export function AgentProgress({
       )}
       aria-live="polite"
       data-testid="agent-progress"
+      data-controlled={controlled ? "true" : "false"}
     >
       <span className="pointer-events-none absolute top-[14px] start-[14px] z-20 flex size-4 items-center justify-center">
         <Ring progress={overall} />
@@ -156,8 +235,13 @@ export function AgentProgress({
               {steps.map((step) => {
                 const active = step.status === "running";
                 const done = step.status === "done";
+                const waiting = step.status === "waiting";
                 return (
-                  <div key={String(step.id ?? step.label)} className="h-8 w-full">
+                  <div
+                    key={String(step.id ?? step.label)}
+                    className="h-8 w-full"
+                    data-step-status={step.status || "pending"}
+                  >
                     <div className="relative flex h-full w-full items-center gap-2 rounded-full px-1">
                       {active ? (
                         <span
@@ -166,37 +250,12 @@ export function AgentProgress({
                         />
                       ) : null}
                       <span className="relative z-10 flex size-3.5 shrink-0 items-center justify-center">
-                        {active ? (
-                          <Ring progress={0.55} size={14} stroke={1.5} />
-                        ) : done ? (
-                          <svg aria-hidden viewBox="0 0 14 14" className="size-3.5 text-[var(--color-agent-progress-ring)]">
-                            <circle cx="7" cy="7" r="6" fill="currentColor" opacity="0.15" />
-                            <path
-                              d="M4.2 7.1 L6.1 9 L9.8 5.2"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        ) : (
-                          <svg aria-hidden viewBox="0 0 15 15" className="size-[15px]">
-                            <circle
-                              cx="7.5"
-                              cy="7.5"
-                              r="7"
-                              fill="none"
-                              stroke="var(--color-background-quaternary-default)"
-                              strokeDasharray="2 2"
-                            />
-                          </svg>
-                        )}
+                        <StepGlyph status={step.status} />
                       </span>
                       <span
                         className={cx(
                           "relative z-10 min-w-0 flex-1 truncate text-body-medium leading-5 transition-colors duration-300",
-                          active || done ? "text-text-primary" : "text-text-secondary",
+                          active || done || waiting ? "text-text-primary" : "text-text-secondary",
                           active && "agent-progress-loading-text",
                         )}
                         aria-label={step.label}

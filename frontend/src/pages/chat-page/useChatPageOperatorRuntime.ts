@@ -143,6 +143,91 @@ export function isOperatorTurnOpen(activeTurn: ActiveTurn) {
   );
 }
 
+const TERMINAL_PLAN_STATUSES = new Set([
+  "completed",
+  "cancelled",
+  "paused",
+  "partial",
+  "failed",
+]);
+
+function planHasSteps(plan: PlanData | null | undefined): plan is PlanData {
+  return Boolean(plan && (plan.steps?.length || 0) > 0);
+}
+
+function planLooksTerminal(plan: PlanData): boolean {
+  const status = String(plan.status || "").toLowerCase();
+  if (TERMINAL_PLAN_STATUSES.has(status)) return true;
+  const steps = plan.steps || [];
+  if (!steps.length) return false;
+  return steps.every((step) => {
+    const stepStatus = String(step.status || "").toLowerCase();
+    return (
+      stepStatus === "done" ||
+      stepStatus === "completed" ||
+      stepStatus === "failed" ||
+      stepStatus === "error" ||
+      stepStatus === "cancelled" ||
+      stepStatus === "skipped"
+    );
+  });
+}
+
+/** Remap stuck `running` steps when the turn is idle so the rail is not "executing". */
+export function sanitizePlanForIdleTurn(plan: PlanData, turnActive: boolean): PlanData {
+  if (turnActive) return plan;
+  const steps = plan.steps || [];
+  let changed = false;
+  const nextSteps = steps.map((step) => {
+    if (String(step.status || "").toLowerCase() !== "running") return step;
+    changed = true;
+    return { ...step, status: "awaiting_confirm" };
+  });
+  return changed ? { ...plan, steps: nextSteps } : plan;
+}
+
+/**
+ * Pick the plan shown in the context-rail task tracker.
+ * - Prefer live WebSocket plan while present.
+ * - Do not keep completed/cancelled/paused plans after a newer user message
+ *   that did not introduce a replacement plan.
+ * - When the turn is idle, stuck `running` steps become waiting (awaiting_confirm).
+ */
+export function resolveActivePlan({
+  livePlan,
+  messages,
+  turnActive,
+}: {
+  livePlan: PlanData | null;
+  messages: AssistantChatMessage[];
+  turnActive: boolean;
+}): PlanData | null {
+  if (planHasSteps(livePlan)) {
+    return sanitizePlanForIdleTurn(livePlan, turnActive);
+  }
+
+  let latestPlanIndex = -1;
+  let latestPlan: PlanData | null = null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const plan = (messages[i]?.metadata as { plan?: PlanData } | undefined)?.plan;
+    if (planHasSteps(plan)) {
+      latestPlanIndex = i;
+      latestPlan = plan;
+      break;
+    }
+  }
+  if (!latestPlan || latestPlanIndex < 0) return null;
+
+  for (let i = latestPlanIndex + 1; i < messages.length; i += 1) {
+    if (messages[i]?.role !== "user") continue;
+    // Newer user turn without a new plan — drop terminal plans from the rail.
+    if (planLooksTerminal(latestPlan)) return null;
+    break;
+  }
+
+  return sanitizePlanForIdleTurn(latestPlan, turnActive);
+}
+
 /**
  * Resolve only an assistant row belonging to the current user turn. Falling
  * back to the latest assistant after the latest user avoids accidentally
@@ -1051,16 +1136,14 @@ export function useChatPageOperatorRuntime({
   ]);
 
   // Current plan for the right-side task tracker: prefer the live plan, else the
-  // most recent message that carries one (so it persists after the turn ends).
+  // most recent in-scope message plan (no leak of completed plans past newer user turns).
   const activePlan = useMemo<PlanData | null>(() => {
-    const live = operatorWs.livePlan as PlanData | null;
-    if (live && (live.steps?.length || 0) > 0) return live;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const plan = (messages[i]?.metadata as { plan?: PlanData } | undefined)?.plan;
-      if (plan && (plan.steps?.length || 0) > 0) return plan;
-    }
-    return null;
-  }, [operatorWs.livePlan, messages]);
+    return resolveActivePlan({
+      livePlan: operatorWs.livePlan as PlanData | null,
+      messages,
+      turnActive: isBusy || operatorWs.busy,
+    });
+  }, [operatorWs.livePlan, operatorWs.busy, messages, isBusy]);
 
   // The live WebSocket shell is the single renderer for this assistant turn.
   // Hide its REST counterpart even after progressive content/cards arrive;
