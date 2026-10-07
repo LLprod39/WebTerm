@@ -3,6 +3,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Check, Copy, Server } from "lucide-react";
 import { Children, Fragment, memo, useMemo, useState, type ReactNode } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import oneDark from "react-syntax-highlighter/dist/esm/styles/prism/one-dark";
 
 import { cn } from "@/lib/utils";
 
@@ -230,27 +232,42 @@ function flattenText(node: ReactNode): string {
 function CodeBlock({ className, children }: { className?: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false);
   const code = String(children).replace(/\n$/, "");
-  const lang = /language-(\w+)/.exec(className || "")?.[1] || "";
+  const lang = /language-(\w+)/.exec(className || "")?.[1] || "text";
 
   return (
-    <div className="group relative my-1.5 overflow-hidden rounded-sm border border-border/60 bg-[#0c0f14]">
-      <div className="flex items-center justify-between border-b border-white/5 px-2 py-0.5">
-        <span className="font-mono text-[9px] uppercase tracking-wider text-white/35">{lang || "code"}</span>
+    <div className="group relative my-2 overflow-hidden rounded-xl border border-border/60 bg-card/80">
+      <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-2.5 py-1">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {lang}
+        </span>
         <button
           type="button"
-          className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[9px] text-white/40 opacity-0 transition hover:bg-white/10 hover:text-white/75 group-hover:opacity-100"
+          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover:opacity-100"
           onClick={() => {
             void navigator.clipboard.writeText(code);
             setCopied(true);
             window.setTimeout(() => setCopied(false), 1200);
           }}
         >
-          {copied ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+          <span>{copied ? "OK" : "Copy"}</span>
         </button>
       </div>
-      <pre className="overflow-x-auto p-2 font-mono text-[11px] leading-4 text-success/90">
-        <code>{code}</code>
-      </pre>
+      <SyntaxHighlighter
+        language={lang === "text" ? "bash" : lang}
+        style={oneDark}
+        customStyle={{
+          margin: 0,
+          padding: "0.65rem 0.75rem",
+          background: "transparent",
+          fontSize: "12.5px",
+          lineHeight: 1.5,
+        }}
+        codeTagProps={{ className: "font-mono" }}
+        PreTag="div"
+      >
+        {code}
+      </SyntaxHighlighter>
     </div>
   );
 }

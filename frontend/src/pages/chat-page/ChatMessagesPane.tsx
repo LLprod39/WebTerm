@@ -88,6 +88,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     scrollToEnd,
   } = c;
 
+  // Busy "Thinking…" lives once (composer AgentThinking / in-thread activity) — not in the header.
   const headerStatus = activeChat?.active_turn?.status === "awaiting_async" ||
     (isBusy && operatorWs.statusMessage?.includes("Жду"))
     ? {
@@ -99,27 +100,21 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
         ),
         className: "text-info",
       }
-    : isBusy
-      ? {
-          key: "working",
-          text: "Thinking…",
-          className: "text-muted-foreground",
-        }
-      : {
-          key: "ready",
-          text: pinnedServers.length
-            ? localize(
-                lang,
-                `Выбран через @: ${pinnedServers.map((server) => server.name).join(", ")}`,
-                `Selected via @: ${pinnedServers.map((server) => server.name).join(", ")}`,
-              )
-            : localize(
-                lang,
-                "Плейбуки, запуски, логи и агенты доступны по запросу",
-                "Playbooks, runs, logs, and agents are available on request",
-              ),
-          className: "text-muted-foreground/70",
-        };
+    : {
+        key: "ready",
+        text: pinnedServers.length
+          ? localize(
+              lang,
+              `Выбран через @: ${pinnedServers.map((server) => server.name).join(", ")}`,
+              `Selected via @: ${pinnedServers.map((server) => server.name).join(", ")}`,
+            )
+          : localize(
+              lang,
+              "Плейбуки, запуски, логи и агенты доступны по запросу",
+              "Playbooks, runs, logs, and agents are available on request",
+            ),
+        className: "text-muted-foreground/70",
+      };
 
   const reconciledMessageKeysRef = useRef(new Map<number, string>());
   const optimisticUserSequenceRef = useRef(0);
@@ -318,34 +313,36 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
             </Breadcrumb>
             <div className="relative mt-0.5 min-h-[1rem] overflow-hidden text-[11px]">
               <AnimatePresence mode="wait" initial={false}>
-                <motion.p
-                  key={headerStatus.key}
-                  initial={reduceMotion ? false : { opacity: 0, y: 3 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
-                  className={cn("flex items-center gap-1.5", headerStatus.className)}
-                >
-                  {isBusy && (headerStatus.key === "working" || headerStatus.key === "waiting") ? (
-                    <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
-                      {[0, 1, 2].map((i) => (
-                        <span
-                          key={i}
-                          className={cn(
-                            "h-1 w-1 rounded-full bg-muted-foreground/55",
-                            !reduceMotion && "animate-bounce",
-                          )}
-                          style={
-                            reduceMotion
-                              ? undefined
-                              : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
-                          }
-                        />
-                      ))}
-                    </span>
-                  ) : null}
-                  {headerStatus.text}
-                </motion.p>
+                {isBusy && headerStatus.key !== "waiting" ? null : (
+                  <motion.p
+                    key={headerStatus.key}
+                    initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
+                    className={cn("flex items-center gap-1.5", headerStatus.className)}
+                  >
+                    {headerStatus.key === "waiting" ? (
+                      <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
+                        {[0, 1, 2].map((i) => (
+                          <span
+                            key={i}
+                            className={cn(
+                              "h-1 w-1 rounded-full bg-muted-foreground/55",
+                              !reduceMotion && "animate-bounce",
+                            )}
+                            style={
+                              reduceMotion
+                                ? undefined
+                                : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
+                            }
+                          />
+                        ))}
+                      </span>
+                    ) : null}
+                    {headerStatus.text}
+                  </motion.p>
+                )}
               </AnimatePresence>
             </div>
           </nav>
@@ -629,22 +626,29 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                           ) : undefined
                         ) : (
                         <>
-                          <OperatorThinkingPanel
-                            phase={
-                              (operatorTurn?.phase ?? operatorWs.phase) === "idle" && isBusy
-                                ? "thinking"
-                                : (operatorTurn?.phase ?? operatorWs.phase) === "idle"
-                                  ? "streaming"
-                                  : (operatorTurn?.phase ?? operatorWs.phase)
-                            }
-                            startedAt={operatorTurn?.startedAt ?? operatorWs.thinkingStartedAt}
-                            iteration={operatorTurn?.iteration ?? operatorWs.thinkingIteration}
-                            reasoningText={operatorWs.reasoningText}
-                            hasReasoningStream={operatorWs.hasReasoningStream}
-                            statusMessage={operatorTurn?.statusMessage ?? operatorWs.statusMessage}
-                            toolSteps={operatorTurn?.toolSteps ?? operatorWs.toolSteps}
-                            compact={Boolean(liveText)}
-                          />
+                          {/* Tool/attention activity only — stage label lives on composer AgentThinking. */}
+                          {(operatorTurn?.toolSteps ?? operatorWs.toolSteps)?.length ||
+                          /подтверж|согласован|разрешен|confirm|approval|permission|ошиб|сбой|не удалось|error|failed|failure/i.test(
+                            operatorTurn?.statusMessage ?? operatorWs.statusMessage ?? "",
+                          ) ? (
+                            <OperatorThinkingPanel
+                              phase={
+                                (operatorTurn?.phase ?? operatorWs.phase) === "idle" && isBusy
+                                  ? "thinking"
+                                  : (operatorTurn?.phase ?? operatorWs.phase) === "idle"
+                                    ? "streaming"
+                                    : (operatorTurn?.phase ?? operatorWs.phase)
+                              }
+                              startedAt={operatorTurn?.startedAt ?? operatorWs.thinkingStartedAt}
+                              iteration={operatorTurn?.iteration ?? operatorWs.thinkingIteration}
+                              reasoningText={operatorWs.reasoningText}
+                              hasReasoningStream={operatorWs.hasReasoningStream}
+                              statusMessage={operatorTurn?.statusMessage ?? operatorWs.statusMessage}
+                              toolSteps={operatorTurn?.toolSteps ?? operatorWs.toolSteps}
+                              compact={Boolean(liveText)}
+                              preferExpanded
+                            />
+                          ) : null}
 
                           <AnimatePresence initial={false} mode="popLayout">
                             {operatorWs.asyncTask ? (

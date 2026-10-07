@@ -70,7 +70,8 @@ describe("ActionCard", () => {
     );
 
     expect(screen.getByText(/Затронет|Targets/i)).toBeInTheDocument();
-    expect(screen.getByText(/web-01, web-02/)).toBeInTheDocument();
+    expect(screen.getByText("web-01")).toBeInTheDocument();
+    expect(screen.getByText("web-02")).toBeInTheDocument();
     expect(screen.getByText(/Run uptime on the selected servers/i)).toBeInTheDocument();
     expect(screen.queryByText(/Что произойдёт|What will happen/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Где|Where/i)).not.toBeInTheDocument();
@@ -78,7 +79,7 @@ describe("ActionCard", () => {
     expect(screen.getByText(/\$ uptime/)).toBeInTheDocument();
     expect(screen.queryByRole("presentation")).not.toBeInTheDocument();
 
-    const confirm = screen.getByRole("button", { name: /подтвердить|confirm/i });
+    const confirm = screen.getByRole("button", { name: /Подтвердить|Confirm/i });
     expect(confirm).toBeDisabled();
 
     fireEvent.change(screen.getByRole("textbox", { name: /подтверждение|confirmation/i }), {
@@ -88,7 +89,7 @@ describe("ActionCard", () => {
     fireEvent.click(confirm);
     expect(onConfirm).toHaveBeenCalledWith(42, "FANOUT");
 
-    fireEvent.click(screen.getByRole("button", { name: /детали|details/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Детали|Details/i }));
     expect(onOpenDetails).toHaveBeenCalledWith(expect.objectContaining({ id: 42 }));
   });
 
@@ -128,7 +129,7 @@ describe("MetricSeriesReportCard", () => {
     const report = screen.getByTestId("metric-series-report");
     expect(report).toHaveAttribute("role", "img");
     expect(report).toHaveAttribute("aria-label", expect.stringMatching(/CPU web-01/i));
-    expect(report).toHaveClass("w-full", "max-w-[420px]");
+    expect(report).toHaveClass("w-full", "max-w-[min(48rem,100%)]");
     expect(report).not.toHaveClass("min-h-[190px]");
     expect(screen.getByText("31%")).toBeInTheDocument();
     expect(screen.getByText(/Рост на 13%|Up 13%/i)).toBeInTheDocument();
