@@ -569,8 +569,12 @@ def test_parse_antigravity_oauth_state_from_uri() -> None:
 def test_auth_failure_classifier_ignores_prompt_timeout_hint() -> None:
     from ai_cli_runner_manager.adapters.antigravity import _auth_failure_from_output
 
-    prompt = "Waiting for authentication (timeout 60s)...\nOr, paste the authorization code here and press Enter:\n"
-    assert _auth_failure_from_output(prompt)[0] == "provider_auth_failed"
+    prompt = (
+        "https://accounts.google.com/o/oauth2/auth?redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback&state=x\n"
+        "Waiting for authentication (timeout 60s)...\nOr, paste the authorization code here and press Enter:\n"
+    )
+    # Consent URL contains redirect_uri= but must not be treated as an OAuth error.
+    assert _auth_failure_from_output(prompt)[2] == {}
     assert _auth_failure_from_output(prompt + "Error: authentication timed out.\n")[0] == "provider_auth_timeout"
     invalid = (
         prompt
