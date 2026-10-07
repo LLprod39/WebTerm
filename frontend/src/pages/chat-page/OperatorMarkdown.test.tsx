@@ -24,12 +24,13 @@ describe("OperatorMarkdown", () => {
     expect(screen.getByText(/playbook и runbook/)).toBeInTheDocument();
   });
 
-  it("keeps one cursor for an empty stream and removes it after streaming finishes", () => {
+  it("renders nothing for an empty stream until text arrives", () => {
     const { container, rerender } = render(<OperatorMarkdown content="" streaming />);
-    expect(cursors(container)).toHaveLength(1);
-
-    rerender(<OperatorMarkdown content="" streaming={false} />);
     expect(cursors(container)).toHaveLength(0);
+    expect(container.querySelector(".operator-md")).toBeNull();
+
+    rerender(<OperatorMarkdown content="Первый токен" streaming />);
+    expect(cursors(container)).toHaveLength(1);
   });
 
   it.each([

@@ -267,7 +267,7 @@ function operatorChatWsReducer(
       return {
         ...state,
         busy: true,
-        phase: "tools",
+        phase: "thinking",
         statusMessage: state.statusMessage || "Жду завершения агента…",
       };
     case "turn_parked":

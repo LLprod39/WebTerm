@@ -95,13 +95,24 @@ function ThinkingDots({ reduceMotion }: { reduceMotion: boolean | null }) {
   );
 }
 
-/** English-only stage labels — intentional product choice for the live status chip. */
-const STAGE_LABEL: Record<ActivityKind, string> = {
-  analyzing: "Thinking…",
-  checking: "Thinking…",
-  executing: "Working…",
-  composing: "Writing…",
-};
+function stageLabel(
+  activity: ActivityKind,
+  lang: string,
+  toolSteps: StreamToolStep[],
+): string {
+  const running = toolSteps.find((step) => step.status === "running");
+  if (activity === "executing" && running?.name) {
+    return localize(lang, `Инструмент: ${running.name}`, `Tool: ${running.name}`);
+  }
+  const labels: Record<ActivityKind, [string, string]> = {
+    analyzing: ["Думаю…", "Thinking…"],
+    checking: ["Думаю…", "Thinking…"],
+    executing: ["Работаю…", "Working…"],
+    composing: ["Пишу…", "Writing…"],
+  };
+  const [ru, en] = labels[activity];
+  return localize(lang, ru, en);
+}
 
 /** Quiet activity line. Safe stages + tool summaries only — never raw chain-of-thought. */
 export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
@@ -159,7 +170,7 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
 
   const elapsed = startedAt ? formatElapsed(Math.max(0, now - startedAt)) : "";
   const activity = resolveActivity({ phase, statusMessage, toolSteps });
-  const label = STAGE_LABEL[activity];
+  const label = stageLabel(activity, lang, toolSteps);
   const showBody = expanded && hasDetails;
   const transition = reduceMotion ? { duration: 0 } : { duration: 0.17, ease };
 

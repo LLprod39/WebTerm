@@ -623,7 +623,11 @@ export function ChatMessagesPane({
                     agentPanelActions={agentPanelActions}
                     forecastPanelActions={forecastPanelActions}
                     onSendToTerminal={onSendToTerminal}
-                    streaming={!isReconcilingLiveTurn && (operatorWs.busy || isBusy)}
+                    streaming={
+                      !isReconcilingLiveTurn &&
+                      (operatorWs.busy || isBusy) &&
+                      Boolean((operatorTurn?.text ?? operatorWs.streamText ?? "").trim())
+                    }
                     animateSupportingContent
                     streamStripTables={
                       !isReconcilingLiveTurn &&
@@ -675,19 +679,14 @@ export function ChatMessagesPane({
                           ) : undefined
                         ) : (
                         <>
-                          {/* Tool/attention activity only — stage label lives on composer AgentThinking. */}
-                          {(operatorTurn?.toolSteps ?? operatorWs.toolSteps)?.length ||
-                          /подтверж|согласован|разрешен|confirm|approval|permission|ошиб|сбой|не удалось|error|failed|failure/i.test(
-                            operatorTurn?.statusMessage ?? operatorWs.statusMessage ?? "",
-                          ) ? (
+                          {isBusy || operatorWs.busy ? (
                             <OperatorThinkingPanel
-                              phase={
-                                (operatorTurn?.phase ?? operatorWs.phase) === "idle" && isBusy
+                              phase={(() => {
+                                const raw = operatorTurn?.phase ?? operatorWs.phase;
+                                return raw === "idle" && (isBusy || operatorWs.busy)
                                   ? "thinking"
-                                  : (operatorTurn?.phase ?? operatorWs.phase) === "idle"
-                                    ? "streaming"
-                                    : (operatorTurn?.phase ?? operatorWs.phase)
-                              }
+                                  : raw;
+                              })()}
                               startedAt={operatorTurn?.startedAt ?? operatorWs.thinkingStartedAt}
                               iteration={operatorTurn?.iteration ?? operatorWs.thinkingIteration}
                               reasoningText={operatorWs.reasoningText}

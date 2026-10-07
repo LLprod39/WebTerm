@@ -41,7 +41,7 @@ function composerController(overrides: Partial<ChatPageController> = {}): ChatPa
 describe("chat page chrome", () => {
   it("keeps the composer minimal and opens a real file picker for attachments", () => {
     const openFilePicker = vi.fn();
-    render(
+    const { container } = render(
       <QueryClientProvider client={new QueryClient()}>
         <MemoryRouter>
           <ChatComposerForm c={composerController({ openFilePicker })} />
@@ -49,7 +49,7 @@ describe("chat page chrome", () => {
       </QueryClientProvider>,
     );
 
-    expect(screen.getByPlaceholderText("Что нужно сделать? Для точного сервера введите @")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Сообщение или @сервер")).toBeInTheDocument();
     const attach = screen.getByRole("button", { name: "Файл / проект" });
     expect(attach).not.toHaveAttribute("href");
     fireEvent.click(attach);
@@ -57,8 +57,34 @@ describe("chat page chrome", () => {
     expect(screen.queryByRole("link", { name: "Файл / проект" })).not.toBeInTheDocument();
     expect(screen.queryByText("Без playbook")).not.toBeInTheDocument();
     expect(screen.queryByText("Модель")).not.toBeInTheDocument();
-    expect(screen.getByText(/Подсказки ввода|Input tips/)).toBeInTheDocument();
-    expect(screen.getByTitle(/@ — точный сервер|@ — exact server/)).toBeInTheDocument();
+    expect(screen.queryByText(/Подсказки ввода|Input tips/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("main")).not.toBeInTheDocument();
+    expect(screen.queryByText("Operator")).not.toBeInTheDocument();
+    expect(screen.queryByText("Agent")).not.toBeInTheDocument();
+    expect(container.querySelector('[data-composer-shape="block"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-composer-shape="pill"]')).toBeNull();
+  });
+
+  it("does not render composer AgentThinking status (live status is in the message pane)", () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ChatComposerForm
+            c={composerController({
+              isBusy: true,
+              operatorWs: {
+                busy: true,
+                phase: "streaming",
+                statusMessage: "",
+              },
+            })}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByText(/Writing|Пишу|Thinking|Думаю/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Остановить" })).toBeInTheDocument();
   });
 
   it("exposes autonomy mode switcher defaulting to confirm_each", () => {

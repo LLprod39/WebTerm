@@ -13,6 +13,7 @@ import {
   actionPreviewLine,
   actionResultOutput,
   actionServerLabel,
+  formatActionCardDescription,
 } from "./actionPreview";
 import { actionRiskLabel, actionStatusLabel, formatDateTime, statusTone } from "./chatHelpers";
 import { DataTableCard, type DataTable } from "./DataTableCard";
@@ -145,6 +146,7 @@ export function ActionCard({
       : typedConfirm.trim().toLocaleLowerCase() === typedToken.toLocaleLowerCase()
   );
   const preview = actionPreviewLine(action);
+  const cardDescription = formatActionCardDescription(action, lang);
   const hasUndo =
     action.status === "completed" &&
     Boolean(onUndo) &&
@@ -208,8 +210,8 @@ export function ActionCard({
 
       {canConfirm ? (
         <div className="space-y-2.5 border-t border-border/45 px-3 py-2.5">
-          {action.description ? (
-            <p className="line-clamp-2 text-[12px] leading-5 text-foreground/85">{action.description}</p>
+          {cardDescription ? (
+            <p className="line-clamp-2 text-[12px] leading-5 text-foreground/85">{cardDescription}</p>
           ) : null}
           {targetCount > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -486,6 +488,9 @@ function MessageBubbleComponent({
   const reduceMotion = useReducedMotion();
   const isUser = message.role === "user";
   const actions = message.metadata.actions || [];
+  const markdownContent = message.content ?? "";
+  const hasMarkdownBody = Boolean(markdownContent.trim());
+  const streamMarkdown = streaming && hasMarkdownBody;
   const Icon = isUser ? User : Bot;
   const plan = message.metadata.plan as { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } | undefined;
   const chart = message.metadata.chart as MetricSeriesChart | undefined;
@@ -621,18 +626,18 @@ function MessageBubbleComponent({
           </span>
         </div>
         {turnActivity}
-        {message.content ? (
+        {hasMarkdownBody ? (
           <div
             className={cn(
               "max-w-[min(640px,100%)]",
-              streaming && "text-foreground/80 [&_.operator-md_p]:text-foreground/80",
+              streamMarkdown && "text-foreground/80 [&_.operator-md_p]:text-foreground/80",
             )}
             data-message-markdown
-            data-streaming={streaming ? "true" : undefined}
+            data-streaming={streamMarkdown ? "true" : undefined}
           >
             <OperatorMarkdown
-              content={message.content}
-              streaming={streaming}
+              content={markdownContent}
+              streaming={streamMarkdown}
               stripTables={streamStripTables || hasStructuredTable || Boolean(metrics)}
               onSendToTerminal={onSendToTerminal}
             />

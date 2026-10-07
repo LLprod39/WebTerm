@@ -659,7 +659,10 @@ export function useChatPageOperatorRuntime({
   pendingUserWasPresentRef.current = Boolean(pendingUserText);
   pendingUserEpochRef.current = pendingUserEpoch;
 
-  const turnOpen = isOperatorTurnOpen(activeTurn);
+  const restTurnOpen = isOperatorTurnOpen(activeTurn);
+  const operatorSessionLive =
+    operatorWs.busy || operatorWs.phase !== "idle" || activeTurn?.status === "awaiting_async";
+  const turnOpen = restTurnOpen && operatorSessionLive;
   const isBusy =
     sendMutationPending ||
     operatorWs.busy ||
@@ -683,7 +686,7 @@ export function useChatPageOperatorRuntime({
       operatorWs.livePlan ||
       operatorWs.errorMessage ||
       operatorWs.terminalStatus ||
-      operatorWs.phase !== "idle",
+      (operatorWs.busy && operatorWs.phase !== "idle"),
   );
 
   useEffect(() => {

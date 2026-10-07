@@ -336,11 +336,7 @@ export const OperatorMarkdown = memo(function OperatorMarkdown({
   }, [content, stripTables]);
 
   if (!normalized.trim()) {
-    return streaming && !stripTables ? (
-      <div className={cn("operator-md min-h-6 max-w-[min(920px,100%)]", className)}>
-        <StreamingCursor />
-      </div>
-    ) : null;
+    return null;
   }
 
   return (

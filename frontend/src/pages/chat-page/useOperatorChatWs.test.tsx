@@ -585,4 +585,28 @@ describe("useOperatorChatWs", () => {
     });
     expect(result.current.streamText).toBe("Persistent answer restored");
   });
+
+  it("parks confirm turns and uses a thinking phase for awaiting_async", () => {
+    const { result } = renderHook(() => useOperatorChatWs({ chatId: 7 }));
+    const socket = MockWebSocket.instances[0];
+
+    act(() => {
+      socket.emit({ type: "turn_started" });
+      socket.emit({ type: "turn_done", status: "awaiting_confirm" });
+    });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.phase).toBe("idle");
+
+    act(() => {
+      socket.emit({ type: "turn_started" });
+      socket.emit({ type: "turn_done", status: "awaiting_async" });
+    });
+    expect(result.current.busy).toBe(true);
+    expect(result.current.phase).toBe("thinking");
+    expect(result.current.phase).not.toBe("streaming");
+
+    act(() => socket.emit({ type: "turn_done", status: "completed" }));
+    expect(result.current.busy).toBe(false);
+    expect(result.current.phase).toBe("idle");
+  });
 });

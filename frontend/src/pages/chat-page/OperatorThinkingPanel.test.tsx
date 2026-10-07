@@ -38,7 +38,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    const toggle = screen.getByRole("button", { name: /Thinking/i });
+    const toggle = screen.getByRole("button", { name: /Думаю|Thinking/i });
     expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("inventory.list")).toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE_CHAIN|first secret/)).not.toBeInTheDocument();
@@ -57,11 +57,22 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Думаю|Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
     expect(screen.queryByText(/PRIVATE_CHAIN|next token/)).not.toBeInTheDocument();
+  });
+
+  it("prefers the running tool name in the executing stage label", () => {
+    render(
+      panel({
+        phase: "tools",
+        toolSteps: [{ id: "x", name: "inventory.list", status: "running" }],
+      }),
+    );
+
+    expect(screen.getByRole("button", { name: /Инструмент: inventory\.list/i })).toBeInTheDocument();
   });
 
   it("auto-expands failures and redacts secrets from the brief tool preview", () => {
@@ -79,7 +90,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Working/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Работаю|Working/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -116,7 +127,7 @@ describe("OperatorThinkingPanel", () => {
       }),
     );
 
-    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Думаю|Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
@@ -131,20 +142,20 @@ describe("OperatorThinkingPanel", () => {
     const { rerender } = render(
       panel({ phase: "thinking", toolSteps: steps, preferExpanded: true }),
     );
-    expect(screen.getByRole("button", { name: /Thinking/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Думаю|Thinking/i })).toHaveAttribute(
       "aria-expanded",
       "true",
     );
 
     rerender(panel({ phase: "streaming", toolSteps: steps, preferExpanded: true }));
-    expect(screen.getByRole("button", { name: /Writing/i })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /Пишу|Writing/i })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
     expect(screen.queryByText("health.check")).not.toBeInTheDocument();
   });
 
-  it("shows a quiet English Thinking status with muted dots", () => {
+  it("shows a quiet localized composing status with muted dots", () => {
     render(
       panel({
         phase: "streaming",
@@ -153,8 +164,8 @@ describe("OperatorThinkingPanel", () => {
     );
 
     const status = screen.getByRole("status");
-    expect(status).toHaveAttribute("aria-label", "Writing…");
-    expect(status).toHaveTextContent("Writing…");
+    expect(status).toHaveAttribute("aria-label", "Пишу…");
+    expect(status).toHaveTextContent("Пишу…");
     expect(status).not.toHaveTextContent(/ИИ|работает|Анализирует|Формирует/i);
     expect(screen.queryByText(/private backend streaming detail/)).not.toBeInTheDocument();
     expect(screen.getByTestId("ai-working-dots")).toBeInTheDocument();

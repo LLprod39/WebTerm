@@ -11,6 +11,7 @@ import {
   actionResultOutput,
   actionServerLabel,
   actionTargetLabel,
+  formatActionCardDescription,
 } from "./actionPreview";
 import { actionRiskLabel, actionStatusLabel, statusTone } from "./chatHelpers";
 
@@ -49,6 +50,7 @@ export function ActionDetailsPanel({ action, hasSession, onOpenTerminal }: Props
   const cmd = actionCommandLine(action);
   const output = action.status === "completed" ? actionResultOutput(action) : "";
   const target = actionTargetLabel(action);
+  const description = formatActionCardDescription(action, lang);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -84,12 +86,12 @@ export function ActionDetailsPanel({ action, hasSession, onOpenTerminal }: Props
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-        {action.description ? (
+        {description ? (
           <section>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
               {localize(lang, "Что произойдёт", "What will happen")}
             </div>
-            <p className="mt-1 text-[12px] leading-5 text-foreground/90">{action.description}</p>
+            <p className="mt-1 text-[12px] leading-5 text-foreground/90">{description}</p>
           </section>
         ) : null}
 

@@ -1,5 +1,65 @@
 import type { AssistantAction } from "@/api";
 
+const EN_TOOL_SCHEMA_HINTS = [
+  /^create a custom agent/i,
+  /^launch an existing/i,
+  /^create an? /i,
+  /^run /i,
+];
+
+function looksLikeEnToolSchema(description: string) {
+  const text = description.trim();
+  if (!text) return true;
+  return EN_TOOL_SCHEMA_HINTS.some((pattern) => pattern.test(text));
+}
+
+function hasCyrillic(text: string) {
+  return /[а-яё]/i.test(text);
+}
+
+/** Human-readable action summary for cards and the context rail (RU fallback). */
+export function formatActionCardDescription(
+  action: AssistantAction,
+  lang: "ru" | "en" | string,
+): string {
+  const description = String(action.description || "").trim();
+  const input = (action.input || {}) as Record<string, unknown>;
+  const type = String(action.action_type || "").trim();
+
+  if (
+    description &&
+    !looksLikeEnToolSchema(description) &&
+    (lang !== "ru" || hasCyrillic(description))
+  ) {
+    return description;
+  }
+
+  if (type === "agent.create" || type === "agent_create") {
+    const name = String(input.name || action.title || "").trim();
+    const goal = String(input.goal || input.description || "").trim();
+    const goalShort = goal.length > 60 ? `${goal.slice(0, 57)}…` : goal;
+    if (lang === "ru") {
+      if (name && goalShort) return `Создать агента «${name}» · ${goalShort}`;
+      if (name) return `Создать агента «${name}»`;
+      return "Создать агента";
+    }
+    if (name && goalShort) return `Create agent “${name}” · ${goalShort}`;
+    if (name) return `Create agent “${name}”`;
+    return "Create agent";
+  }
+
+  if (type === "agent.run" || type === "agent_run") {
+    const id = input.run_id ?? input.agent_id ?? input.id;
+    if (lang === "ru") {
+      return id != null && String(id).trim() ? `Запустить агента #${id}` : "Запустить агента";
+    }
+    return id != null && String(id).trim() ? `Run agent #${id}` : "Run agent";
+  }
+
+  if (description && lang !== "ru") return description;
+  return description || action.title || type;
+}
+
 export function actionServerLabel(action: AssistantAction): string {
   const blast = action.blast_radius || {};
   if (Array.isArray(blast.server_names) && blast.server_names.length) {

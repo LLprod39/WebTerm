@@ -1,8 +1,5 @@
 import {
-  Bot,
-  ChevronDown,
   FileText,
-  GitBranch,
   Loader2,
   Plus,
   Send,
@@ -12,7 +9,6 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMemo, useRef } from "react";
 
-import { AgentThinking } from "@/boardui/components/application/agent-thinking/agent-thinking";
 import { ComposerLoader } from "@/boardui/components/application/composer-loader/composer-loader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,22 +59,16 @@ function AutonomyModeSwitcher({
   value,
   onChange,
   disabled,
-  compact,
 }: {
   lang: "ru" | "en" | string;
   value: OperatorAutonomyMode;
   onChange: (mode: OperatorAutonomyMode) => void;
   disabled?: boolean;
-  compact?: boolean;
 }) {
   const current = AUTONOMY_OPTIONS.find((opt) => opt.value === value) || AUTONOMY_OPTIONS[0];
   return (
     <label
-      className={
-        compact
-          ? "inline-flex h-8 max-w-[11rem] items-center gap-1 rounded-xl border border-border/50 bg-background/70 px-2 text-[11px] text-muted-foreground"
-          : "inline-flex h-8 max-w-[12rem] items-center gap-1 rounded-lg border border-border/50 bg-background/70 px-2 text-[11px] text-muted-foreground"
-      }
+      className="inline-flex h-8 max-w-[12rem] items-center gap-1 rounded-lg border border-border/50 bg-background/70 px-2 text-[11px] text-muted-foreground"
       title={localize(lang, current.hintRu, current.hintEn)}
     >
       <span className="sr-only">
@@ -123,13 +113,14 @@ const LOADER_COLORS: [string, string, string, string] = [
 ];
 
 function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; percent: number }) {
+  if (!tokensLabel) return null;
   const r = 6;
   const circ = 2 * Math.PI * r;
   const offset = circ * (1 - Math.min(1, Math.max(0, percent / 100)));
   return (
     <div
       className="flex items-center gap-1 rounded-full bg-muted/70 py-1 pe-2 ps-1.5"
-      title={tokensLabel ? `${tokensLabel} tok` : undefined}
+      title={`${tokensLabel} tok`}
     >
       <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" className="shrink-0 -rotate-90">
         <circle cx="8" cy="8" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
@@ -145,16 +136,9 @@ function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; pe
           strokeDashoffset={offset}
         />
       </svg>
-      <span className="text-[11px] tabular-nums text-muted-foreground">
-        {tokensLabel ? `${percent}%` : "—"}
-      </span>
+      <span className="text-[11px] tabular-nums text-muted-foreground">{percent}%</span>
     </div>
   );
-}
-
-function draftIsMultiline(value: string) {
-  if (value.includes("\n")) return true;
-  return value.length > 96;
 }
 
 export function ChatComposerForm({ c }: ChatComposerFormProps) {
@@ -185,13 +169,11 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
     submitMessage,
     sessionTokens,
     activeChat,
-    operatorWs,
     autonomyMode = DEFAULT_AUTONOMY_MODE,
     setAutonomyMode,
   } = c;
   const reconcilingUserMessage = Boolean(pendingUserText) && !isBusy;
   const canSend = Boolean(draft.trim() || attachedFiles.length) && !reconcilingUserMessage && !attachBusy;
-  const expanded = isBusy || attachedFiles.length > 0 || draftIsMultiline(draft);
 
   const usageTotal = useMemo(() => {
     const usage = activeChat?.total_usage as { input_tokens?: number; output_tokens?: number } | undefined;
@@ -201,18 +183,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
   const contextPercent = usageTotal
     ? Math.min(100, Math.max(1, Math.round((usageTotal / CONTEXT_SOFT_LIMIT) * 100)))
     : 0;
-  const projectLabel = localize(lang, "WebTerm", "WebTerm");
-  const thinkingLabel =
-    operatorWs?.phase === "tools"
-      ? localize(lang, "Working…", "Working…")
-      : operatorWs?.phase === "streaming"
-        ? localize(lang, "Writing…", "Writing…")
-        : "Thinking…";
-  const shortcutHint = localize(
-    lang,
-    "@ — точный сервер · Enter — отправить · Shift+Enter — новая строка",
-    "@ — exact server · Enter to send · Shift+Enter for a new line",
-  );
 
   return (
     <form
@@ -298,59 +268,21 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
           </div>
         ) : null}
 
-        <AnimatePresence initial={false}>
-          {isBusy ? (
-            <motion.div
-              key="agent-thinking"
-              initial={reduceMotion ? false : { opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={reduceMotion ? undefined : { opacity: 0, y: 2 }}
-              transition={{ duration: reduceMotion ? 0 : 0.18, ease: CHAT_EASE }}
-              className="mb-1.5 px-1"
-            >
-              <AgentThinking
-                label={thinkingLabel}
-                variant={operatorWs?.phase === "tools" ? "spin" : "wave"}
-                tone="default"
-                showTimer
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
         <ComposerLoader
           active={isBusy && !reduceMotion}
           colors={LOADER_COLORS}
           surface
-          radius={expanded ? 16 : 999}
+          radius={16}
         >
           <div
             className={cn(
-              "relative flex w-full flex-col border border-border/70 transition-[border-radius,box-shadow,background-color] duration-200",
-              expanded ? "rounded-2xl" : "min-h-[52px] rounded-full",
+              "relative flex w-full flex-col rounded-2xl border border-border/70 transition-[border-radius,box-shadow,background-color] duration-200",
               "bg-transparent shadow-none focus-within:border-primary/35 focus-within:ring-2 focus-within:ring-primary/15",
               !isBusy && "bg-muted/30 shadow-sm",
             )}
-            data-composer-shape={expanded ? "block" : "pill"}
+            data-composer-shape="block"
           >
-            <div
-              className={cn(
-                "flex w-full items-end gap-2",
-                expanded ? "px-2.5 pt-2.5 pb-1.5" : "py-2 pe-2 ps-2",
-              )}
-            >
-              {!expanded ? (
-                <button
-                  type="button"
-                  className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                  onClick={openFilePicker}
-                  disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
-                  aria-label={localize(lang, "Файл / проект", "File / project")}
-                >
-                  {attachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </button>
-              ) : null}
-
+            <div className="flex w-full px-2.5 pt-2.5 pb-1.5">
               <Textarea
                 ref={textareaRef}
                 value={draft}
@@ -387,162 +319,68 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                     ? localize(lang, "Оператор работает… Esc — остановить", "Operator is working… Esc to stop")
                     : reconcilingUserMessage
                       ? localize(lang, "Сохраняю сообщение…", "Saving message…")
-                      : localize(
-                          lang,
-                          "Что нужно сделать? Для точного сервера введите @",
-                          "What should I do? Type @ for an exact server",
-                        )
+                      : localize(lang, "Сообщение или @сервер", "Message or @server")
                 }
                 aria-label={localize(lang, "Сообщение", "Message")}
-                className={cn(
-                  "max-h-36 min-h-[24px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[14px] leading-5 shadow-none focus-visible:ring-0",
-                  expanded && "min-h-[52px]",
-                )}
-                rows={expanded ? 2 : 1}
+                className="max-h-36 min-h-[52px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[14px] leading-5 shadow-none focus-visible:ring-0"
+                rows={2}
               />
-
-              {!expanded ? (
-                <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
-                  <span className="hidden h-8 items-center gap-0.5 rounded-xl border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground sm:inline-flex">
-                    <Bot className="h-3.5 w-3.5" />
-                    <span>Operator</span>
-                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                  </span>
-                  <AutonomyModeSwitcher
-                    lang={lang}
-                    value={autonomyMode}
-                    onChange={(mode) => setAutonomyMode?.(mode)}
-                    disabled={isBusy || !setAutonomyMode}
-                    compact
-                  />
-                  <div className="h-9 w-9 shrink-0">
-                    <AnimatePresence mode="wait" initial={false}>
-                      <motion.div
-                        key={isBusy ? "stop" : "send"}
-                        initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-                        transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                        className="h-9 w-9"
-                      >
-                        {isBusy ? (
-                          <Button
-                            type="button"
-                            size="icon"
-                            variant="secondary"
-                            className="h-9 w-9 rounded-full"
-                            onClick={handleStop}
-                            aria-label={localize(lang, "Остановить", "Stop")}
-                          >
-                            <Square className="h-3.5 w-3.5 fill-current" />
-                          </Button>
-                        ) : (
-                          <Button
-                            type="submit"
-                            size="icon"
-                            className="h-9 w-9 rounded-full"
-                            disabled={!canSend}
-                            aria-label={localize(lang, "Отправить", "Send")}
-                          >
-                            <Send className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                </div>
-              ) : null}
             </div>
 
-            {expanded ? (
-              <div className="flex flex-wrap items-center gap-1.5 border-t border-border/45 px-2.5 py-2">
-                <button
-                  type="button"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/70 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                  onClick={openFilePicker}
-                  disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
-                  aria-label={localize(lang, "Файл / проект", "File / project")}
-                >
-                  {attachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                </button>
-                <span className="inline-flex h-8 items-center gap-0.5 rounded-lg border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground">
-                  <Bot className="h-3.5 w-3.5" />
-                  <span>Agent</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                </span>
-                <span className="hidden h-8 items-center gap-0.5 rounded-lg border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground sm:inline-flex">
-                  <span>Operator</span>
-                  <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-                </span>
-                <AutonomyModeSwitcher
-                  lang={lang}
-                  value={autonomyMode}
-                  onChange={(mode) => setAutonomyMode?.(mode)}
-                  disabled={isBusy || !setAutonomyMode}
-                />
-                <ContextMeter tokensLabel={sessionTokens} percent={contextPercent} />
-                <div className="ms-auto flex items-center gap-1.5">
-                  <AnimatePresence mode="wait" initial={false}>
-                    <motion.div
-                      key={isBusy ? "stop" : "send"}
-                      initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-                      transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                    >
-                      {isBusy ? (
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="secondary"
-                          className="h-9 w-9 rounded-xl"
-                          onClick={handleStop}
-                          aria-label={localize(lang, "Остановить", "Stop")}
-                        >
-                          <Square className="h-3.5 w-3.5 fill-current" />
-                        </Button>
-                      ) : (
-                        <Button
-                          type="submit"
-                          size="icon"
-                          className="h-9 w-9 rounded-xl"
-                          disabled={!canSend}
-                          aria-label={localize(lang, "Отправить", "Send")}
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-border/45 px-2.5 py-2">
+              <button
+                type="button"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-background/70 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                onClick={openFilePicker}
+                disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
+                aria-label={localize(lang, "Файл / проект", "File / project")}
+              >
+                {attachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              </button>
+              <AutonomyModeSwitcher
+                lang={lang}
+                value={autonomyMode}
+                onChange={(mode) => setAutonomyMode?.(mode)}
+                disabled={isBusy || !setAutonomyMode}
+              />
+              <ContextMeter tokensLabel={sessionTokens} percent={contextPercent} />
+              <div className="ms-auto flex items-center gap-1.5">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={isBusy ? "stop" : "send"}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
+                  >
+                    {isBusy ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-9 w-9 rounded-xl"
+                        onClick={handleStop}
+                        aria-label={localize(lang, "Остановить", "Stop")}
+                      >
+                        <Square className="h-3.5 w-3.5 fill-current" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="h-9 w-9 rounded-xl"
+                        disabled={!canSend}
+                        aria-label={localize(lang, "Отправить", "Send")}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
               </div>
-            ) : null}
+            </div>
           </div>
         </ComposerLoader>
-
-        <div className="mt-2 flex min-w-0 items-center justify-between gap-3 px-1 text-[11px] text-muted-foreground">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1">
-              <GitBranch className="h-3.5 w-3.5" />
-              <span className="truncate">main</span>
-            </span>
-            <button
-              type="button"
-              className="inline-flex max-w-[10rem] items-center gap-0.5 truncate rounded-md px-1 py-0.5 hover:bg-muted/50 hover:text-foreground"
-              onClick={() => textareaRef.current?.focus()}
-            >
-              <span className="truncate">{projectLabel}</span>
-              <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
-            </button>
-            {!expanded ? <ContextMeter tokensLabel={sessionTokens} percent={contextPercent} /> : null}
-          </div>
-          <span
-            className="hidden min-w-0 truncate text-right text-[10.5px] text-muted-foreground/65 sm:inline"
-            title={shortcutHint}
-          >
-            {localize(lang, "Подсказки ввода", "Input tips")}
-          </span>
-        </div>
       </div>
     </form>
   );

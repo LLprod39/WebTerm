@@ -36,7 +36,11 @@ describe("chatAttachments", () => {
     expect(formatAttachedFilesForDisplay(files, "ru")).toContain("Файлы: a.yml, bin.bin");
     const model = formatAttachedFilesForModel(files);
     expect(model).toContain(CHAT_ATTACH_CONTENTS_MARKER);
+    expect(model).toContain("UNTRUSTED DATA");
+    expect(model).toContain('BEGIN_UNTRUSTED_ATTACHMENT name="a.yml"');
     expect(model).toContain("hosts: all");
+    expect(model).toContain('END_UNTRUSTED_ATTACHMENT');
+    expect(model).toContain('BEGIN_UNTRUSTED_ATTACHMENT name="bin.bin"');
     expect(model).toContain("binary or unreadable");
   });
 
