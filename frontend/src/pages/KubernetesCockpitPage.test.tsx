@@ -210,7 +210,7 @@ describe("KubernetesCockpitPage", () => {
     expect(await screen.findByText(/Гипотеза/i)).toBeInTheDocument();
     expect(screen.getByText(/mock/i)).toBeInTheDocument();
 
-    fireEvent.click(await screen.findByRole("tab", { name: "Команда" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "Exec" }));
     expect(await screen.findByText(/Exec недоступен/i)).toBeInTheDocument();
     expect(screen.getByText(/Exec API/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Выполнить/i })).not.toBeInTheDocument();
