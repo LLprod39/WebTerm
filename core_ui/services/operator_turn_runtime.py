@@ -24,6 +24,9 @@ from core_ui.services.operator_loop import OperatorTurnResult
 from core_ui.services.operator_session import handle_operator_message, resume_after_action
 
 TERMINAL_DISPATCH_SNAPSHOT_WINDOW = timedelta(minutes=10)
+# Keep Operator UI from sitting on «Думаю…» when a provider stream stalls.
+# Antigravity CLI auth prompts alone take ~60s; 90s leaves a little headroom.
+OPERATOR_TURN_TIMEOUT_SECONDS = 90
 
 
 def operator_group_name(chat_id: int) -> str:
@@ -423,7 +426,7 @@ async def _run_message_turn(
                     return
 
         heartbeat_task = asyncio.create_task(_heartbeat(), name=f"operator-heartbeat-{chat_id}")
-        result = await asyncio.wait_for(work_task, timeout=300)
+        result = await asyncio.wait_for(work_task, timeout=OPERATOR_TURN_TIMEOUT_SECONDS)
         await broadcast_operator_event(
             chat_id,
             {
@@ -435,6 +438,10 @@ async def _run_message_turn(
             },
         )
     except TimeoutError:
+        if work_task is not None and not work_task.done():
+            work_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await work_task
         await sync_to_async(
             lambda: ChatTurnState.objects.filter(
                 session_id=chat_id,
@@ -442,12 +449,20 @@ async def _run_message_turn(
                 status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
             ).update(status=ChatTurnState.STATUS_FAILED, error="turn_timeout")
         )()
+        timeout_message = (
+            f"Оператор завис на ответе модели (таймаут {OPERATOR_TURN_TIMEOUT_SECONDS}с). "
+            "Проверь авторизацию AI-провайдера или повтори короче."
+        )
         await broadcast_operator_event(
             chat_id,
             {
                 "type": "error",
-                "message": "Оператор завис на ответе модели (таймаут 300с). Попробуй ещё раз короче.",
+                "message": timeout_message,
             },
+        )
+        await broadcast_operator_event(
+            chat_id,
+            {"type": "turn_done", "status": "failed", "chat_id": chat_id},
         )
     except ValueError as exc:
         await broadcast_operator_event(chat_id, {"type": "error", "message": str(exc)})

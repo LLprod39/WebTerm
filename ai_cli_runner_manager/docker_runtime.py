@@ -12,7 +12,7 @@ from typing import Any
 from app.ai_runtime import ProviderEventType, ProviderEventV1
 
 from .config import RunnerManagerConfig
-from .protocol import RunnerProtocolError, RunnerRequestV1, _INVOCATION_REF, error_event
+from .protocol import RunnerAction, RunnerProtocolError, RunnerRequestV1, _INVOCATION_REF, error_event
 
 _RUNNER_ID = re.compile(r"^[0-9a-f]{32}$")
 _CONNECTION_REF = re.compile(r"^[a-z0-9][a-z0-9_-]{7,79}$")
@@ -143,6 +143,7 @@ class DockerCliRuntime:
             process.stdin.write(encoded + b"\n")
             await process.stdin.drain()
             # Keep stdin open for follow-up auth-input control lines (Antigravity OAuth paste).
+            terminal_seen = False
             while True:
                 line = await _await_or_stderr_limit(
                     process.stdout.readline(),
@@ -154,7 +155,33 @@ class DockerCliRuntime:
                 total_output += len(line)
                 if total_output > self.config.output_limit_bytes:
                     raise CliRunnerRuntimeError("CLI runner output limit exceeded")
-                yield _parse_event(line)
+                event = _parse_event(line)
+                yield event
+                # Stop after terminal events so a stuck runner (auth stdin wait) cannot
+                # keep the manager HTTP stream open. AUTH_START may emit AUTH_REQUIRED
+                # and then continue waiting for a pasted code.
+                if event.type in {
+                    ProviderEventType.COMPLETED,
+                    ProviderEventType.CANCELLED,
+                    ProviderEventType.ERROR,
+                    ProviderEventType.LIMIT,
+                }:
+                    terminal_seen = True
+                    break
+                if (
+                    event.type is ProviderEventType.AUTH_REQUIRED
+                    and request.action is not RunnerAction.AUTH_START
+                ):
+                    terminal_seen = True
+                    break
+            if terminal_seen:
+                if process.returncode is None:
+                    await _stop_process(process, drain_stderr=stderr_task is None)
+                if stderr_task is not None:
+                    stderr_task.cancel()
+                    await asyncio.gather(stderr_task, return_exceptions=True)
+                    stderr_task = None
+                return
             return_code = await _await_or_stderr_limit(
                 process.wait(),
                 stderr_exceeded=stderr_exceeded,

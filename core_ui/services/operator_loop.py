@@ -230,6 +230,8 @@ async def run_operator_loop(
                     stop_reason = event.get("stop_reason") or stop_reason
                 elif etype == "error":
                     error_message = str(event.get("message") or "LLM error")
+                    # Do not keep waiting on a hung provider stream after the first error.
+                    break
         except Exception as exc:  # noqa: BLE001
             logger.exception("operator loop LLM failed: {}", exc)
             error_message = str(exc)
