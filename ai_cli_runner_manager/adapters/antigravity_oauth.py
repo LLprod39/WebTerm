@@ -32,7 +32,15 @@ _OAUTH_REDIRECT_URI = "https://antigravity.google/oauth-callback"
 _OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/auth"
 _OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _OAUTH_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
-_OAUTH_SCOPES = (
+# Stable link window — independent of the CLI's 60s interactive wait.
+_AUTH_LINK_TTL_SECONDS = 600
+_CLIENT_ID_RE = re.compile(rb"([0-9]{6,}-[a-z0-9]+\.apps\.googleusercontent\.com)")
+# Official Antigravity CLI consent URLs use the desktop client whose id starts with this
+# prefix (the binary also embeds an unrelated earlier client_id that must not be used).
+_CLI_DESKTOP_CLIENT_PREFIX = b"1071006060591-"
+# Canonical fixed OAuth fields copied from a live `antigravity -p ping` consent URL.
+# client_id is filled from oauth_client_credentials(); only code_challenge/state vary.
+_CLI_FIXED_OAUTH_SCOPE = (
     "https://www.googleapis.com/auth/cloud-platform "
     "https://www.googleapis.com/auth/userinfo.email "
     "https://www.googleapis.com/auth/userinfo.profile "
@@ -41,10 +49,7 @@ _OAUTH_SCOPES = (
     "https://www.googleapis.com/auth/aicode "
     "openid"
 )
-# Stable link window — independent of the CLI's 60s interactive wait.
-_AUTH_LINK_TTL_SECONDS = 600
-_CLIENT_ID_RE = re.compile(rb"([0-9]{6,}-[a-z0-9]+\.apps\.googleusercontent\.com)")
-_CLIENT_SECRET_RE = re.compile(rb"(GOCSPX-[A-Za-z0-9_-]{10,})")
+_OAUTH_SCOPES = _CLI_FIXED_OAUTH_SCOPE
 
 
 def auth_link_ttl_seconds() -> int:
@@ -68,6 +73,27 @@ def generate_oauth_state() -> str:
     return secrets.token_urlsafe(24)[:32]
 
 
+def _extract_gocspx_secrets(blob: bytes) -> list[bytes]:
+    """Return discrete GOCSPX secrets (binary may concatenate two without a delimiter)."""
+    found: list[bytes] = []
+    start = 0
+    while True:
+        idx = blob.find(b"GOCSPX-", start)
+        if idx < 0:
+            break
+        end = idx + 7
+        while end < len(blob) and (chr(blob[end]).isalnum() or blob[end] in (ord("-"), ord("_"))):
+            end += 1
+        secret = blob[idx:end]
+        inner = secret.find(b"GOCSPX-", 1)
+        if inner > 0:
+            secret = secret[:inner]
+        if len(secret) >= 20:
+            found.append(secret)
+        start = idx + 7
+    return found
+
+
 @lru_cache(maxsize=1)
 def oauth_client_credentials() -> tuple[str, str]:
     """Return (client_id, client_secret) for the Antigravity desktop OAuth client."""
@@ -85,20 +111,30 @@ def oauth_client_credentials() -> tuple[str, str]:
         raise RuntimeError("oauth_client_unreadable") from exc
 
     ids = _CLIENT_ID_RE.findall(blob)
-    secrets_found = _CLIENT_SECRET_RE.findall(blob)
+    secrets_found = _extract_gocspx_secrets(blob)
     if not ids or not secrets_found:
         raise RuntimeError("oauth_client_not_in_binary")
 
-    client_id = ids[0].decode("ascii")
-    id_idx = blob.find(ids[0])
-    best = secrets_found[0]
-    best_dist = 10**12
-    for secret in secrets_found:
-        dist = abs(blob.find(secret) - id_idx)
-        if dist < best_dist:
-            best = secret
-            best_dist = dist
-    client_secret = best.decode("ascii")
+    # Prefer the desktop client_id used by `antigravity` consent URLs (not ids[0]).
+    preferred_list = [item for item in ids if item.startswith(_CLI_DESKTOP_CLIENT_PREFIX)]
+    client_id_bytes = preferred_list[0] if preferred_list else ids[0]
+    client_id = client_id_bytes.decode("ascii")
+    if preferred_list and client_id_bytes == preferred_list[0]:
+        # Live CLI pairs the desktop client with the first discrete GOCSPX blob in the binary.
+        # Proximity ranking incorrectly prefers the second concatenated secret.
+        client_secret = secrets_found[0].decode("ascii")
+    else:
+        id_idx = blob.find(client_id_bytes)
+        best = secrets_found[0]
+        best_dist = 10**12
+        for secret in secrets_found:
+            dist = abs(blob.find(secret) - id_idx)
+            if dist < best_dist:
+                best = secret
+                best_dist = dist
+        client_secret = best.decode("ascii")
+    if "GOCSPX-" in client_secret[7:]:
+        raise RuntimeError("oauth_client_secret_malformed")
     logger.info(
         "antigravity_oauth_client_loaded source=binary client_id_suffix=%s",
         client_id[-12:],
@@ -106,20 +142,37 @@ def oauth_client_credentials() -> tuple[str, str]:
     return client_id, client_secret
 
 
-def build_authorization_url(*, state: str, code_challenge: str) -> str:
+def cli_fixed_oauth_params() -> dict[str, str]:
+    """Fixed consent-URL fields that must match a live Antigravity CLI URL."""
     client_id, _secret = oauth_client_credentials()
+    return {
+        "access_type": "offline",
+        "client_id": client_id,
+        "code_challenge_method": "S256",
+        "prompt": "consent",
+        "redirect_uri": _OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope": _CLI_FIXED_OAUTH_SCOPE,
+    }
+
+
+def build_authorization_url(*, state: str, code_challenge: str) -> str:
+    """Build a Google consent URL byte-compatible with the official CLI (except PKCE fields)."""
+    fixed = cli_fixed_oauth_params()
+    # Preserve CLI query order: access_type, client_id, code_challenge, method, prompt,
+    # redirect_uri, response_type, scope, state.
     query = urlencode(
-        {
-            "access_type": "offline",
-            "client_id": client_id,
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-            "prompt": "consent",
-            "redirect_uri": _OAUTH_REDIRECT_URI,
-            "response_type": "code",
-            "scope": _OAUTH_SCOPES,
-            "state": state,
-        }
+        [
+            ("access_type", fixed["access_type"]),
+            ("client_id", fixed["client_id"]),
+            ("code_challenge", code_challenge),
+            ("code_challenge_method", fixed["code_challenge_method"]),
+            ("prompt", fixed["prompt"]),
+            ("redirect_uri", fixed["redirect_uri"]),
+            ("response_type", fixed["response_type"]),
+            ("scope", fixed["scope"]),
+            ("state", state),
+        ]
     )
     return f"{_OAUTH_AUTH_URL}?{query}"
 
