@@ -55,11 +55,31 @@ describe("chat page chrome", () => {
     fireEvent.click(attach);
     expect(openFilePicker).toHaveBeenCalledOnce();
     expect(screen.queryByRole("link", { name: "Файл / проект" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText("Без playbook")).not.toBeInTheDocument();
     expect(screen.queryByText("Модель")).not.toBeInTheDocument();
     expect(screen.getByText(/Подсказки ввода|Input tips/)).toBeInTheDocument();
     expect(screen.getByTitle(/@ — точный сервер|@ — exact server/)).toBeInTheDocument();
+  });
+
+  it("exposes autonomy mode switcher defaulting to confirm_each", () => {
+    const setAutonomyMode = vi.fn();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <MemoryRouter>
+          <ChatComposerForm
+            c={composerController({
+              autonomyMode: "confirm_each",
+              setAutonomyMode,
+            })}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+
+    const switcher = screen.getByTestId("autonomy-mode-switcher");
+    expect(switcher).toHaveValue("confirm_each");
+    fireEvent.change(switcher, { target: { value: "plan_once" } });
+    expect(setAutonomyMode).toHaveBeenCalledWith("plan_once");
   });
 
   it("renders chat history as a usable mobile panel and closes it after navigation", () => {
@@ -123,6 +143,6 @@ describe("chat page chrome", () => {
     expect(screen.getByText("prod-api-01")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Открепить" }));
     expect(unpinServer).toHaveBeenCalledWith(17);
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.getByTestId("autonomy-mode-switcher")).toBeInTheDocument();
   });
 });

@@ -19,11 +19,88 @@ import { Textarea } from "@/components/ui/textarea";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
+import type { OperatorAutonomyMode } from "@/api";
+
 import { ComposeCommandPalette } from "./ComposeCommandPalette";
 import { PinnedContextChips } from "./PinnedContextChips";
 import { CHAT_ATTACH_MAX_FILES } from "./chatAttachments";
 import { CHAT_EASE } from "./chatMotion";
 import type { ChatPageController } from "./useChatPageController";
+import { DEFAULT_AUTONOMY_MODE } from "./useChatPagePins";
+
+const AUTONOMY_OPTIONS: Array<{
+  value: OperatorAutonomyMode;
+  labelRu: string;
+  labelEn: string;
+  hintRu: string;
+  hintEn: string;
+}> = [
+  {
+    value: "confirm_each",
+    labelRu: "Каждый шаг",
+    labelEn: "Confirm each",
+    hintRu: "Подтверждать каждое действие",
+    hintEn: "Confirm every mutating action",
+  },
+  {
+    value: "plan_once",
+    labelRu: "План целиком",
+    labelEn: "Plan once",
+    hintRu: "Один раз утвердить план",
+    hintEn: "Approve the plan once, then auto-run steps",
+  },
+  {
+    value: "autonomous",
+    labelRu: "Автономно",
+    labelEn: "Autonomous",
+    hintRu: "Без подтверждений (кроме опасных)",
+    hintEn: "Auto-run except typed-dangerous actions",
+  },
+];
+
+function AutonomyModeSwitcher({
+  lang,
+  value,
+  onChange,
+  disabled,
+  compact,
+}: {
+  lang: "ru" | "en" | string;
+  value: OperatorAutonomyMode;
+  onChange: (mode: OperatorAutonomyMode) => void;
+  disabled?: boolean;
+  compact?: boolean;
+}) {
+  const current = AUTONOMY_OPTIONS.find((opt) => opt.value === value) || AUTONOMY_OPTIONS[0];
+  return (
+    <label
+      className={
+        compact
+          ? "inline-flex h-8 max-w-[11rem] items-center gap-1 rounded-xl border border-border/50 bg-background/70 px-2 text-[11px] text-muted-foreground"
+          : "inline-flex h-8 max-w-[12rem] items-center gap-1 rounded-lg border border-border/50 bg-background/70 px-2 text-[11px] text-muted-foreground"
+      }
+      title={localize(lang, current.hintRu, current.hintEn)}
+    >
+      <span className="sr-only">
+        {localize(lang, "Режим автономии", "Autonomy mode")}
+      </span>
+      <select
+        data-testid="autonomy-mode-switcher"
+        className="max-w-[9.5rem] truncate border-0 bg-transparent py-0 pe-0 text-[11px] text-foreground outline-none disabled:opacity-50"
+        value={value}
+        disabled={disabled}
+        aria-label={localize(lang, "Режим автономии", "Autonomy mode")}
+        onChange={(event) => onChange(event.target.value as OperatorAutonomyMode)}
+      >
+        {AUTONOMY_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {localize(lang, opt.labelRu, opt.labelEn)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 type ChatComposerFormProps = {
   c: ChatPageController;
@@ -109,6 +186,8 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
     sessionTokens,
     activeChat,
     operatorWs,
+    autonomyMode = DEFAULT_AUTONOMY_MODE,
+    setAutonomyMode,
   } = c;
   const reconcilingUserMessage = Boolean(pendingUserText) && !isBusy;
   const canSend = Boolean(draft.trim() || attachedFiles.length) && !reconcilingUserMessage && !attachBusy;
@@ -329,6 +408,13 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                     <span>Operator</span>
                     <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                   </span>
+                  <AutonomyModeSwitcher
+                    lang={lang}
+                    value={autonomyMode}
+                    onChange={(mode) => setAutonomyMode?.(mode)}
+                    disabled={isBusy || !setAutonomyMode}
+                    compact
+                  />
                   <div className="h-9 w-9 shrink-0">
                     <AnimatePresence mode="wait" initial={false}>
                       <motion.div
@@ -388,6 +474,12 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                   <span>Operator</span>
                   <ChevronDown className="h-3.5 w-3.5 opacity-60" />
                 </span>
+                <AutonomyModeSwitcher
+                  lang={lang}
+                  value={autonomyMode}
+                  onChange={(mode) => setAutonomyMode?.(mode)}
+                  disabled={isBusy || !setAutonomyMode}
+                />
                 <ContextMeter tokensLabel={sessionTokens} percent={contextPercent} />
                 <div className="ms-auto flex items-center gap-1.5">
                   <AnimatePresence mode="wait" initial={false}>
