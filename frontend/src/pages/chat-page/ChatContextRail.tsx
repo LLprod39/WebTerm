@@ -17,6 +17,10 @@ type Props = {
   onTabChange: (tab: ContextRailTab) => void;
   onClose: () => void;
   plan: PlanData | null;
+  /** When false, stuck running steps render as waiting in the task list. */
+  turnActive?: boolean;
+  continueAvailable?: boolean;
+  onContinuePlan?: () => void;
   session: OperatorSessionState;
   actionDetails: AssistantAction | null;
   onModeChange: (mode: "agent" | "live") => void;
@@ -36,6 +40,9 @@ export function ChatContextRail({
   onTabChange,
   onClose,
   plan,
+  turnActive = true,
+  continueAvailable = false,
+  onContinuePlan,
   session,
   actionDetails,
   onModeChange,
@@ -129,7 +136,12 @@ export function ChatContextRail({
 
       <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
         {tab === "tasks" ? (
-          <PlanTasksPanel plan={plan} />
+          <PlanTasksPanel
+            plan={plan}
+            turnActive={turnActive}
+            continueAvailable={continueAvailable}
+            onContinue={onContinuePlan}
+          />
         ) : tab === "terminal" ? (
           <OperatorSessionDock
             session={session}

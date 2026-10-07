@@ -82,6 +82,8 @@ type OperatorChatWsState = {
   streamText: string;
   toolSteps: StreamToolStep[];
   livePlan: LivePlan | null;
+  /** True after plan_paused with continue_available — UI shows Continue. */
+  planContinueAvailable: boolean;
   lastUsage: Record<string, number> | null;
   phase: ThinkingPhase;
   thinkingStartedAt: number | null;
@@ -101,6 +103,7 @@ const INITIAL_STATE: OperatorChatWsState = {
   streamText: "",
   toolSteps: [],
   livePlan: null,
+  planContinueAvailable: false,
   lastUsage: null,
   phase: "idle",
   thinkingStartedAt: null,
@@ -126,6 +129,7 @@ type OperatorChatWsAction =
   | { type: "tool_started"; step: StreamToolStep; now: number }
   | { type: "tool_result"; step: StreamToolStep; now: number }
   | { type: "plan_updated"; plan: LivePlan }
+  | { type: "plan_continue_available"; available: boolean; plan?: LivePlan | null }
   | { type: "usage_updated"; usage: Record<string, number> }
   | { type: "async_started"; task: OperatorAsyncTask; step: StreamToolStep; message: string; now: number }
   | { type: "async_done"; task: OperatorAsyncTask; step: StreamToolStep; message: string; now: number }
@@ -223,7 +227,20 @@ function operatorChatWsReducer(
         toolSteps: upsertToolStep(state.toolSteps, action.step),
       };
     case "plan_updated":
-      return { ...state, livePlan: action.plan };
+      return {
+        ...state,
+        livePlan: action.plan,
+        planContinueAvailable:
+          String((action.plan as LivePlan | null)?.status || "") === "paused"
+            ? true
+            : state.planContinueAvailable,
+      };
+    case "plan_continue_available":
+      return {
+        ...state,
+        planContinueAvailable: action.available,
+        livePlan: action.plan !== undefined ? action.plan || state.livePlan : state.livePlan,
+      };
     case "usage_updated":
       return { ...state, lastUsage: action.usage };
     case "async_started":
@@ -282,6 +299,7 @@ function operatorChatWsReducer(
         streamText: "",
         toolSteps: [],
         livePlan: null,
+        planContinueAvailable: false,
         reasoningText: "",
         hasReasoningStream: false,
         statusMessage: "",
@@ -294,6 +312,7 @@ function operatorChatWsReducer(
         streamText: "",
         toolSteps: [],
         livePlan: null,
+        planContinueAvailable: false,
         reasoningText: "",
         hasReasoningStream: false,
         statusMessage: "",
@@ -308,6 +327,7 @@ function operatorChatWsReducer(
         phase: "thinking",
         thinkingStartedAt: action.now,
         thinkingIteration: 1,
+        planContinueAvailable: false,
         asyncTask: null,
         errorMessage: null,
         terminalStatus: null,
@@ -366,6 +386,7 @@ export function useOperatorChatWs({
     streamText,
     toolSteps,
     livePlan,
+    planContinueAvailable,
     lastUsage,
     phase,
     thinkingStartedAt,
@@ -560,6 +581,9 @@ export function useOperatorChatWs({
             status === "resuming" ||
             status === "awaiting_async";
           setStreamFromSnapshot(assistantText);
+          if (data.plan && typeof data.plan === "object") {
+            dispatch({ type: "plan_updated", plan: data.plan as LivePlan });
+          }
           if (isBusy) {
             clearTerminalErrorTimer();
             dispatch({
@@ -681,6 +705,17 @@ export function useOperatorChatWs({
         if (type === "plan_update") {
           if (data.plan && typeof data.plan === "object") {
             dispatch({ type: "plan_updated", plan: data.plan as LivePlan });
+          }
+          return;
+        }
+        if (type === "plan_paused") {
+          const plan =
+            data.plan && typeof data.plan === "object" ? (data.plan as LivePlan) : null;
+          const available =
+            "continue_available" in data ? Boolean(data.continue_available) : true;
+          dispatch({ type: "plan_continue_available", available, plan });
+          if (plan) {
+            dispatch({ type: "plan_updated", plan });
           }
           return;
         }
@@ -912,6 +947,7 @@ export function useOperatorChatWs({
     streamText,
     toolSteps,
     livePlan,
+    planContinueAvailable,
     lastUsage,
     phase,
     thinkingStartedAt,

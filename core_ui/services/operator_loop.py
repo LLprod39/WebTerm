@@ -37,6 +37,8 @@ from core_ui.services.operator_loop_prompt import (
     HISTORY_MESSAGE_LIMIT,
     MAX_ITERATIONS,
     OPERATOR_SYSTEM_PROMPT,
+    PLAN_CONTINUATION_NUDGE,
+    PLAN_CONTINUATION_NUDGES,
     TOOL_RESULT_PREVIEW_CHARS,
     EventCallback,
     build_operator_system_prompt,
@@ -109,6 +111,7 @@ async def run_operator_loop(
 
     empty_retries = 0
     deploy_nudge_retries = 0
+    plan_continuation_nudges = 0
 
     while True:
         turn = await _refresh_turn(turn.pk)
@@ -303,6 +306,55 @@ async def run_operator_loop(
                 messages.append({"role": "user", "content": DEPLOY_ACTION_NUDGE})
                 await _save_turn(turn, llm_messages=messages)
                 continue
+            # Approved/running plan still incomplete → nudge instead of silent done.
+            from core_ui.services.operator_plan import (
+                get_plan_from_message,
+                plan_has_incomplete_steps,
+                save_plan_to_message,
+            )
+
+            live_plan = None
+            if assistant_message:
+                live_plan = await sync_to_async(get_plan_from_message)(assistant_message)
+            if live_plan and plan_has_incomplete_steps(live_plan) and live_plan.get("status") in {
+                "approved",
+                "running",
+            }:
+                if plan_continuation_nudges < PLAN_CONTINUATION_NUDGES:
+                    plan_continuation_nudges += 1
+                    logger.info(
+                        "operator loop: incomplete plan on text-only turn {}, nudge {}/{}",
+                        turn.pk,
+                        plan_continuation_nudges,
+                        PLAN_CONTINUATION_NUDGES,
+                    )
+                    messages.append({"role": "user", "content": PLAN_CONTINUATION_NUDGE})
+                    await _save_turn(turn, llm_messages=messages)
+                    continue
+                # Nudges exhausted → pause plan, finish turn; UI can Continue.
+                live_plan["status"] = "paused"
+                if assistant_message:
+                    await sync_to_async(save_plan_to_message)(assistant_message, live_plan)
+                await _emit(
+                    on_event,
+                    {
+                        "type": "plan_update",
+                        "turn_id": turn.pk,
+                        "plan": live_plan,
+                        "status": "paused",
+                        "reason": "continuation_nudges_exhausted",
+                    },
+                )
+                await _emit(
+                    on_event,
+                    {
+                        "type": "plan_paused",
+                        "turn_id": turn.pk,
+                        "plan": live_plan,
+                        "continue_available": True,
+                    },
+                )
+
             # Final text-only response
             await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages, pending_tool_call={})
             if assistant_message:

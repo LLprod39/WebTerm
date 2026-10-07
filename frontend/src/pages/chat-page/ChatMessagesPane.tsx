@@ -753,7 +753,10 @@ export function ChatMessagesPane({
                                 transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
                                 className={cn("max-w-[min(28rem,100%)]", contextRailOpen && "lg:hidden")}
                               >
-                                <PlanChecklist plan={operatorWs.livePlan} />
+                                <PlanChecklist
+                                  plan={operatorWs.livePlan}
+                                  turnActive={Boolean(operatorWs.busy || isBusy)}
+                                />
                               </motion.div>
                             ) : null}
                           </AnimatePresence>

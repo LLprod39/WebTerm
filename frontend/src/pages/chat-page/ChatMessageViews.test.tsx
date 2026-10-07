@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AssistantAction } from "@/api";
 
-import { ActionCard, MessageBubble, MetricSeriesReportCard } from "./ChatMessageViews";
+import { ActionCard, MessageBubble, MetricSeriesReportCard, PlanChecklist } from "./ChatMessageViews";
 
 
 function dangerousAction(): AssistantAction {
@@ -222,6 +222,31 @@ describe("MessageBubble evidence fold", () => {
     expect(screen.getByText(/Данные ответа|Reply data/i)).toBeInTheDocument();
     expect(screen.queryByText("2.7%")).not.toBeInTheDocument();
     expect(screen.getByText("Run command")).toBeInTheDocument();
+  });
+});
+
+describe("PlanChecklist", () => {
+  const stuckPlan = {
+    title: "Deploy",
+    steps: [
+      { id: 1, text: "Build", status: "done" },
+      { id: 2, text: "Restart", status: "running" },
+    ],
+  };
+
+  it("treats stuck running as static waiting when turn is idle", () => {
+    render(<PlanChecklist plan={stuckPlan} turnActive={false} />);
+    const root = screen.getByTestId("plan-checklist-compact");
+    expect(root).toHaveAttribute("data-turn-active", "false");
+    expect(root).toHaveAttribute("data-plan-executing", "false");
+    expect(screen.getByText("Restart")).toBeInTheDocument();
+  });
+
+  it("keeps execution progress when turn is active", () => {
+    render(<PlanChecklist plan={stuckPlan} turnActive />);
+    const root = screen.getByTestId("plan-checklist-compact");
+    expect(root).toHaveAttribute("data-turn-active", "true");
+    expect(root).toHaveAttribute("data-plan-executing", "true");
   });
 });
 

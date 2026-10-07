@@ -119,14 +119,21 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
 
     def _load() -> dict[str, Any] | None:
         from core_ui.services.operator_dispatch import release_expired_operator_dispatches
+        from core_ui.services.operator_plan import get_plan_from_message, reconcile_plan_state
 
         stale_before = timezone.now() - timedelta(seconds=90)
-        ChatTurnState.objects.filter(
+        stale_qs = ChatTurnState.objects.filter(
             session_id=chat_id,
             session__user_id=user_id,
             status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
             updated_at__lt=stale_before,
-        ).update(status=ChatTurnState.STATUS_FAILED, error="worker_heartbeat_lost")
+        ).select_related("assistant_message")
+        stale_turns = list(stale_qs)
+        for stale in stale_turns:
+            stale.status = ChatTurnState.STATUS_FAILED
+            stale.error = "worker_heartbeat_lost"
+            stale.save(update_fields=["status", "error", "updated_at"])
+            reconcile_plan_state(stale.assistant_message, stale, reason="worker_heartbeat_lost")
         release_expired_operator_dispatches(session_id=chat_id)
         now = timezone.now()
         dispatch = (
@@ -226,6 +233,7 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
         action_payload = None
         if turn.pending_action_id and turn.pending_action:
             action_payload = serialize_action(turn.pending_action)
+        plan_payload = get_plan_from_message(assistant)
         return {
             "type": "turn_snapshot",
             "chat_id": chat_id,
@@ -244,6 +252,7 @@ async def get_active_turn_snapshot(chat_id: int, user_id: int) -> dict[str, Any]
             "user_message_id": user_msg.pk if user_msg else None,
             "user_text": (user_msg.content or "") if user_msg else "",
             "pending_action": action_payload,
+            "plan": plan_payload,
             "in_process": bool(dispatch and dispatch.status == OperatorTurnDispatch.STATUS_CLAIMED),
         }
 
@@ -266,6 +275,8 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
     canceled_dispatches = await sync_to_async(cancel_operator_dispatches)(chat_id)
 
     def _close_open_turns() -> list[int]:
+        from core_ui.services.operator_plan import reconcile_plan_state
+
         qs = ChatTurnState.objects.filter(
             session_id=chat_id,
             status__in={ChatTurnState.STATUS_RUNNING, ChatTurnState.STATUS_RESUMING},
@@ -282,6 +293,7 @@ async def stop_active_turn(chat_id: int, user_id: int | None = None) -> bool:
                 msg.content = (msg.content or "") + STOP_NOTE
                 msg.metadata = {**(msg.metadata or {}), "stopped_by_user": True}
                 msg.save(update_fields=["content", "metadata"])
+            reconcile_plan_state(msg, turn, reason="stopped_by_user")
             closed.append(turn.pk)
         return closed
 
@@ -468,7 +480,45 @@ async def _run_action_turn(
             await broadcast_operator_event(chat_id, event)
 
         if confirm:
-            action = await sync_to_async(execute_action)(action, confirmed=True, typed_confirm=typed_confirm)
+
+            def _validate_mark_then_execute():
+                from core_ui.services.operator_plan import (
+                    mark_executing_after_typed_confirm_ok,
+                    revert_plan_executing_to_awaiting_confirm,
+                )
+
+                # Typed-confirm must succeed BEFORE flipping the plan step to running.
+                action_local, typed_error = mark_executing_after_typed_confirm_ok(
+                    action, typed_confirm=typed_confirm
+                )
+                if typed_error:
+                    return action_local
+                action_local = execute_action(
+                    action_local, confirmed=True, typed_confirm=typed_confirm
+                )
+                # Safety net: if execute still bounced to confirm (race), undo running.
+                if (
+                    action_local.status == action_local.STATUS_REQUIRES_CONFIRMATION
+                    and action_local.error
+                ):
+                    turn = (
+                        ChatTurnState.objects.filter(
+                            pending_action=action_local,
+                            status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+                        )
+                        .select_related("assistant_message")
+                        .first()
+                    )
+                    if turn is not None and turn.assistant_message is not None:
+                        revert_plan_executing_to_awaiting_confirm(
+                            message=turn.assistant_message,
+                            action_type=action_local.action_type,
+                            title=action_local.title or "",
+                            turn=turn,
+                        )
+                return action_local
+
+            action = await sync_to_async(_validate_mark_then_execute)()
         else:
             action = await sync_to_async(cancel_action)(action)
 

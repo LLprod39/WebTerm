@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useState } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
-import { updateAssistantChat, type AssistantChatSession } from "@/api";
+import {
+  updateAssistantChat,
+  type AssistantChatSession,
+  type OperatorAutonomyMode,
+} from "@/api";
 
 import type { PinnedServer, PinnedUser } from "./ComposeCommandPalette";
 
 export type PinnedPlaybook = { id: number; name: string; kind?: string };
+
+export const DEFAULT_AUTONOMY_MODE: OperatorAutonomyMode = "confirm_each";
+
+const AUTONOMY_MODES: OperatorAutonomyMode[] = ["confirm_each", "plan_once", "autonomous"];
+
+export function parseAutonomyMode(value: unknown): OperatorAutonomyMode {
+  if (typeof value === "string" && (AUTONOMY_MODES as string[]).includes(value)) {
+    return value as OperatorAutonomyMode;
+  }
+  return DEFAULT_AUTONOMY_MODE;
+}
 
 export function useChatPagePins({
   activeChatId,
@@ -19,6 +34,7 @@ export function useChatPagePins({
   const [pinnedServers, setPinnedServers] = useState<PinnedServer[]>([]);
   const [pinnedUsers, setPinnedUsers] = useState<PinnedUser[]>([]);
   const [pinnedPlaybook, setPinnedPlaybookState] = useState<PinnedPlaybook | null>(null);
+  const [autonomyMode, setAutonomyModeState] = useState<OperatorAutonomyMode>(DEFAULT_AUTONOMY_MODE);
 
   // Hydrate pins from session.pinned_context
   useEffect(() => {
@@ -45,16 +61,23 @@ export function useChatPagePins({
         ? { id: Number(playbookRaw.id), name: String(playbookRaw.name), kind: playbookRaw.kind ? String(playbookRaw.kind) : undefined }
         : null,
     );
+    setAutonomyModeState(parseAutonomyMode(pinned.autonomy_mode));
   }, [activeChatId, activeChat?.pinned_context]);
 
   const persistPins = useCallback(
-    async (servers: PinnedServer[], users: PinnedUser[], playbook: PinnedPlaybook | null) => {
+    async (
+      servers: PinnedServer[],
+      users: PinnedUser[],
+      playbook: PinnedPlaybook | null,
+      mode: OperatorAutonomyMode = autonomyMode,
+    ) => {
       if (!activeChatId) return;
       const pinned_context = {
         ...(activeChat?.pinned_context || {}),
         servers: servers.map((s) => ({ id: s.id, name: s.name, host: s.host || "" })),
         users: users.map((u) => ({ id: u.id, username: u.username })),
         playbook: playbook ? { id: playbook.id, name: playbook.name, kind: playbook.kind || "" } : null,
+        autonomy_mode: mode,
       };
       try {
         const updated = await updateAssistantChat(activeChatId, { pinned_context });
@@ -65,7 +88,7 @@ export function useChatPagePins({
         // best-effort — local chips still work for the message text
       }
     },
-    [activeChatId, activeChat?.pinned_context, queryClient],
+    [activeChatId, activeChat?.pinned_context, autonomyMode, queryClient],
   );
 
   const pinServer = useCallback(
@@ -105,9 +128,17 @@ export function useChatPagePins({
   const setPinnedPlaybook = useCallback(
     (playbook: PinnedPlaybook | null) => {
       setPinnedPlaybookState(playbook);
-      void persistPins(pinnedServers, pinnedUsers, playbook);
+      void persistPins(pinnedServers, pinnedUsers, playbook, autonomyMode);
     },
-    [persistPins, pinnedServers, pinnedUsers],
+    [autonomyMode, persistPins, pinnedServers, pinnedUsers],
+  );
+
+  const setAutonomyMode = useCallback(
+    (mode: OperatorAutonomyMode) => {
+      setAutonomyModeState(mode);
+      void persistPins(pinnedServers, pinnedUsers, pinnedPlaybook, mode);
+    },
+    [persistPins, pinnedPlaybook, pinnedServers, pinnedUsers],
   );
 
   return {
@@ -118,5 +149,7 @@ export function useChatPagePins({
     unpinUser,
     pinnedPlaybook,
     setPinnedPlaybook,
+    autonomyMode,
+    setAutonomyMode,
   };
 }

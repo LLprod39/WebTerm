@@ -104,7 +104,14 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
             .first()
         )
         if active:
+            from core_ui.services.operator_plan import get_plan_from_message, reconcile_plan_state
+
             assistant = active.assistant_message
+            # Soft reconcile legacy stuck running when turn is only parked for confirm
+            # or when status already looks idle-ish — never weakens hard floors.
+            if assistant is not None:
+                reconcile_plan_state(assistant, active, reason="serialize")
+            plan_payload = get_plan_from_message(assistant)
             payload["active_turn"] = {
                 "turn_id": active.pk,
                 "status": active.status,
@@ -118,6 +125,7 @@ def serialize_chat_session(session: ChatSession, *, include_messages: bool = Fal
                 "assistant_message_id": assistant.pk if assistant else None,
                 "assistant_text": (assistant.content or "") if assistant else "",
                 "pending_action_id": active.pending_action_id,
+                "plan": plan_payload,
             }
         else:
             payload["active_turn"] = None

@@ -328,6 +328,8 @@ export function useChatPageController() {
     unpinServer,
     unpinUser,
     pinnedPlaybook,
+    autonomyMode,
+    setAutonomyMode,
   } = useChatPagePins({
     activeChatId,
     activeChat,
@@ -698,6 +700,8 @@ export function useChatPageController() {
     pinnedServers,
     pinnedUsers,
     pinnedPlaybook,
+    autonomyMode,
+    setAutonomyMode,
     pendingUserText,
     pendingUserEpoch,
     pendingUserBaselineIds,

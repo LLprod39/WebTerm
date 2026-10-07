@@ -64,7 +64,7 @@ async def resume_after_action(
     tool_id = str(tool_call.get("id") or (action.async_run_ref or {}).get("tool_call_id") or "")
 
     # Live plan progress after confirm/cancel
-    async def _plan_progress(*, ok: bool, approved: bool = False):
+    async def _plan_progress(*, ok: bool, approved: bool = False, outcome: str | None = None):
         from core_ui.services.operator_plan import apply_plan_progress
 
         action_type = action.action_type
@@ -81,6 +81,7 @@ async def resume_after_action(
                 ok=ok,
                 title=title,
                 approved=approved_flag,
+                outcome=outcome,  # type: ignore[arg-type]
             )
 
         plan = await sync_to_async(_run)()
@@ -100,7 +101,7 @@ async def resume_after_action(
             {"ok": False, "error": "User cancelled the action", "cancelled": True},
             ensure_ascii=False,
         )
-        await _plan_progress(ok=False)
+        await _plan_progress(ok=False, outcome="cancelled")
     else:
         from core_ui.services.assistant_chat import serialize_action
         from core_ui.services.operator_async import (
@@ -172,7 +173,10 @@ async def resume_after_action(
                 "action": serialize_action(action),
             },
         )
-        await _plan_progress(ok=bool(result_payload["ok"]))
+        await _plan_progress(
+            ok=bool(result_payload["ok"]),
+            outcome="done" if result_payload["ok"] else "failed",
+        )
         # Artifacts from completed mutates
         if action.status == AssistantAction.STATUS_COMPLETED and turn.assistant_message_id:
             try:

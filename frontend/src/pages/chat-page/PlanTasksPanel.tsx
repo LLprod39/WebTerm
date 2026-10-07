@@ -23,25 +23,50 @@ export function cleanStepTitle(text?: string): string {
   return t || raw;
 }
 
-function mapStepStatus(status?: string): AgentProgressStep["status"] {
+/** Map backend step status → AgentProgress glyph. awaiting_confirm is waiting, not running. */
+export function mapStepStatus(status?: string): AgentProgressStep["status"] {
   if (status === "done" || status === "completed") return "done";
   if (status === "failed" || status === "error") return "error";
   if (status === "running") return "running";
+  if (status === "awaiting_confirm" || status === "waiting") return "waiting";
   return "pending";
 }
 
-export function planToAgentProgressSteps(plan: PlanData | null | undefined): AgentProgressStep[] {
-  return (plan?.steps || []).map((step, index) => ({
-    id: step.id ?? index,
-    label: cleanStepTitle(step.text),
-    status: mapStepStatus(step.status),
-  }));
+export function planToAgentProgressSteps(
+  plan: PlanData | null | undefined,
+  { turnActive = true }: { turnActive?: boolean } = {},
+): AgentProgressStep[] {
+  return (plan?.steps || []).map((step, index) => {
+    let status = mapStepStatus(step.status);
+    // Stuck running with no busy turn must not look like execution.
+    if (!turnActive && status === "running") status = "waiting";
+    return {
+      id: step.id ?? index,
+      label: cleanStepTitle(step.text),
+      status,
+    };
+  });
 }
 
 /** Plan steps content for the shared context rail — BoardUI Agent Progress. */
-export function PlanTasksPanel({ plan }: { plan: PlanData | null }) {
+export function PlanTasksPanel({
+  plan,
+  turnActive = true,
+  continueAvailable = false,
+  onContinue,
+}: {
+  plan: PlanData | null;
+  /** When false, stuck `running` steps render as waiting (static). */
+  turnActive?: boolean;
+  /** Shown after plan_paused / continue_available from the operator loop. */
+  continueAvailable?: boolean;
+  onContinue?: () => void;
+}) {
   const { lang } = useI18n();
-  const steps = planToAgentProgressSteps(plan);
+  const steps = planToAgentProgressSteps(plan, { turnActive });
+  const showContinue =
+    Boolean(onContinue) &&
+    (continueAvailable || plan?.status === "paused");
 
   if (!plan || !steps.length) {
     return (
@@ -65,7 +90,17 @@ export function PlanTasksPanel({ plan }: { plan: PlanData | null }) {
           {plan.title}
         </div>
       ) : null}
-      <AgentProgress steps={steps} defaultExpanded className="max-w-none" />
+      <AgentProgress steps={steps} controlled defaultExpanded className="max-w-none" />
+      {showContinue ? (
+        <button
+          type="button"
+          data-testid="plan-continue-button"
+          className="mx-1 mt-1 rounded-lg border border-border/70 bg-background px-3 py-2 text-left text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted/40"
+          onClick={onContinue}
+        >
+          {localize(lang, "Продолжить план", "Continue plan")}
+        </button>
+      ) : null}
     </div>
   );
 }
