@@ -1,6 +1,6 @@
-import { Suspense, useEffect, useLayoutEffect } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { FlowChrome } from "./FlowChrome";
 import { FlowTopbar } from "./FlowTopbar";
@@ -23,6 +23,17 @@ import { writeMonitoringDashboardCache } from "@/lib/monitoring-cache";
 import { AshitaAtmosphere } from "@/components/AshitaAtmosphere";
 import { OperatorBackgroundNotifier } from "@/pages/chat-page/OperatorBackgroundNotifier";
 import { cn } from "@/lib/utils";
+
+/** On /chat, prefer AppSidebar icon-rail without fighting a later user expand. */
+function ChatIconRailPreference({ enabled }: { enabled: boolean }) {
+  const { setOpen } = useSidebar();
+  const wasChat = useRef(false);
+  useLayoutEffect(() => {
+    if (enabled && !wasChat.current) setOpen(false);
+    wasChat.current = enabled;
+  }, [enabled, setOpen]);
+  return null;
+}
 
 const immersiveMeta: Array<{ match: RegExp; titleRu: string; titleEn: string; backTo: string; hideHeader?: boolean }> = [
   { match: /^\/servers\/hub$/, titleRu: "Терминалы", titleEn: "Terminal Hub", backTo: "/servers", hideHeader: true },
@@ -147,17 +158,27 @@ export default function AppLayout() {
   }
 
   return (
-    <SidebarProvider data-ui-shell={isEnterprise ? "enterprise" : isFlow ? "flow" : "legacy"}>
+    <SidebarProvider
+      defaultOpen={!isChatRoute}
+      data-ui-shell={isEnterprise ? "enterprise" : isFlow ? "flow" : "legacy"}
+    >
       <FlowChrome>
+        <ChatIconRailPreference enabled={isChatRoute} />
         <a href="#main-content" className="sr-only fixed left-3 top-3 z-[100] rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only">
           {localize(lang, "Перейти к содержимому", "Skip to content")}
         </a>
         {isAshita ? <AshitaAtmosphere /> : null}
-        {mobileSidebarTrigger}
+        {/* Chat has its own history trigger; keep the floating nav FAB off /chat. */}
+        {isChatRoute ? null : mobileSidebarTrigger}
         <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden" data-ui-slot="app-shell">
           <AppSidebar />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {isEnterprise ? <EnterpriseTopbar /> : isFlow ? <FlowTopbar effectiveStyle={effectiveStyle} /> : null}
+            {/* Chat owns its breadcrumb; keep global Flow topbar off /chat. Enterprise non-chat unchanged. */}
+            {isEnterprise ? (
+              <EnterpriseTopbar />
+            ) : isFlow && !isChatRoute ? (
+              <FlowTopbar effectiveStyle={effectiveStyle} />
+            ) : null}
             <main
               id="main-content"
               tabIndex={-1}
@@ -172,11 +193,13 @@ export default function AppLayout() {
                     )
                   : isFlow
                   ? cn(
-                      "flow-sheet min-h-0 flex-1 pt-16 md:pt-0",
+                      "flow-sheet min-h-0 flex-1",
+                      isChatRoute ? "pt-0" : "pt-16 md:pt-0",
                       locksMainScroll ? "flex flex-col overflow-hidden" : "overflow-auto",
                     )
                   : cn(
-                      "min-h-0 flex-1 pt-16 md:pt-0",
+                      "min-h-0 flex-1",
+                      isChatRoute ? "pt-0" : "pt-16 md:pt-0",
                       locksMainScroll ? "flex flex-col overflow-hidden" : "overflow-auto",
                     )
               }

@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Check, CheckCircle2, ChevronDown, Circle, Copy, Loader2, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
+import { Bot, Check, ChevronDown, Copy, Loader2, RotateCcw, ShieldCheck, User } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -34,7 +34,7 @@ import {
 } from "./InteractiveServersPanel";
 import { MetricsSnapshotCard, type MetricsSnapshot } from "./MetricsSnapshotCard";
 import { OperatorMarkdown } from "./OperatorMarkdown";
-import { cleanStepTitle } from "./PlanTasksPanel";
+import { planToAgentProgressSteps } from "./PlanTasksPanel";
 import { WebSourcesCard, type WebSource } from "./WebSourcesCard";
 import { CHAT_MOTION } from "./chatMotion";
 import { visibleOperatorUserText } from "./operatorUserText";
@@ -78,7 +78,7 @@ export function MetricSeriesReportCard({ chart }: { chart: MetricSeriesChart }) 
       role="img"
       aria-label={localize(lang, `График метрики ${title}`, `${title} metric chart`)}
       data-testid="metric-series-report"
-      className="w-full max-w-[420px] overflow-hidden rounded-sm border border-border/50 bg-card/40"
+      className="w-full max-w-[min(48rem,100%)] overflow-hidden rounded-2xl border border-border/50 bg-card/40"
     >
       <figcaption className="flex items-center justify-between gap-3 px-3 py-2">
         <div className="min-w-0">
@@ -200,62 +200,73 @@ export function ActionCard({
               className="rounded-sm border border-border/70 px-2 py-1 text-[10.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => onOpenDetails(action)}
             >
-              {localize(lang, "детали", "details")}
+              {localize(lang, "Детали", "Details")}
             </button>
           ) : null}
         </div>
       </div>
 
       {canConfirm ? (
-        <div className="space-y-2 border-t border-border/45 px-3 py-2">
+        <div className="space-y-2.5 border-t border-border/45 px-3 py-2.5">
           {action.description ? (
-            <p className="line-clamp-2 text-[11.5px] leading-4 text-foreground/85">{action.description}</p>
+            <p className="line-clamp-2 text-[12px] leading-5 text-foreground/85">{action.description}</p>
           ) : null}
           {targetCount > 0 ? (
-            <div className="text-[10.5px] leading-4 text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="font-medium text-foreground">
                 {localize(lang, "Затронет", "Targets")}: {targetCount}
               </span>
-              {serverNames.length ? ` · ${serverNames.slice(0, 8).join(", ")}` : null}
-              {serverNames.length > 8 ? ` +${serverNames.length - 8}` : null}
+              {serverNames.slice(0, 6).map((name) => (
+                <span
+                  key={name}
+                  className="rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground/90"
+                >
+                  {name}
+                </span>
+              ))}
+              {serverNames.length > 6 ? (
+                <span className="text-[10.5px]">+{serverNames.length - 6}</span>
+              ) : null}
             </div>
           ) : null}
           {typedRequired ? (
-            <label className="block space-y-1 text-[10.5px] text-warning">
-              <span>{typedHint || localize(lang, `Введите ${typedToken}`, `Type ${typedToken}`)}</span>
+            <label className="block space-y-1.5 rounded-lg border border-warning/45 bg-warning/10 px-2.5 py-2 text-[11px] text-warning">
+              <span className="font-medium">
+                {typedHint || localize(lang, `Введите ${typedToken}`, `Type ${typedToken}`)}
+              </span>
               <input
                 value={typedConfirm}
                 onChange={(event) => setTypedConfirm(event.target.value)}
                 placeholder={typedToken}
                 autoComplete="off"
                 spellCheck={false}
-                className="h-8 w-full rounded-sm border border-warning/40 bg-background px-2 font-mono text-[12px] text-foreground outline-none focus:border-warning"
+                className="h-9 w-full rounded-md border border-warning/50 bg-background px-2.5 font-mono text-[13px] text-foreground outline-none ring-warning/30 focus:ring-2"
                 aria-label={localize(lang, "Текстовое подтверждение", "Typed confirmation")}
               />
             </label>
           ) : null}
-          {action.error ? <p className="text-[11px] text-destructive/90">{action.error}</p> : null}
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+          {action.error ? <p className="text-[12px] text-destructive">{action.error}</p> : null}
+          <div className="flex flex-wrap items-center gap-2 text-[12px]">
             <button
               type="button"
-              className="rounded-sm bg-primary px-3 py-1.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+              className="rounded-md bg-primary px-3.5 py-1.5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
               disabled={isWorking || !typedMatches}
               onClick={() => onConfirm(action.id, typedRequired ? typedConfirm.trim() : undefined)}
             >
               {isWorking ? (
-                <Loader2 className="inline h-3 w-3 animate-spin motion-reduce:animate-none" />
+                <Loader2 className="inline h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
               ) : (
-                localize(lang, "подтвердить", "confirm")
+                localize(lang, "Подтвердить", "Confirm")
               )}
             </button>
             {canCancel ? (
               <button
                 type="button"
-                className="rounded-sm border border-border/70 px-3 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+                className="rounded-md border border-border/70 px-3.5 py-1.5 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
                 disabled={isWorking}
                 onClick={() => onCancel(action.id)}
               >
-                {localize(lang, "отмена", "cancel")}
+                {localize(lang, "Отмена", "Cancel")}
               </button>
             ) : null}
           </div>
@@ -263,34 +274,34 @@ export function ActionCard({
       ) : null}
 
       {!canConfirm && (hasUndo || (action.target_url && action.status === "completed") || canCancel || action.error) ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-border/45 px-3 py-1.5 text-[11px]">
-          {action.error ? <p className="w-full text-[11px] text-destructive/90">{action.error}</p> : null}
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/45 px-3 py-2 text-[12px]">
+          {action.error ? <p className="w-full text-[12px] text-destructive">{action.error}</p> : null}
           {canCancel ? (
             <button
               type="button"
-              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+              className="rounded-md border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
               disabled={isWorking}
               onClick={() => onCancel(action.id)}
             >
-              {localize(lang, "отмена", "cancel")}
+              {localize(lang, "Отмена", "Cancel")}
             </button>
           ) : null}
           {hasUndo && onUndo ? (
             <button
               type="button"
-              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-md border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               disabled={isWorking}
               onClick={() => onUndo(action.id)}
             >
-              {localize(lang, "откат", "undo")}
+              {localize(lang, "Откат", "Undo")}
             </button>
           ) : null}
           {action.target_url && action.status === "completed" ? (
             <Link
               to={action.target_url}
-              className="rounded-sm border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="rounded-md border border-border/70 px-2.5 py-1 font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              {localize(lang, "открыть", "open")}
+              {localize(lang, "Открыть", "Open")}
             </Link>
           ) : null}
         </div>
@@ -302,40 +313,47 @@ export function ActionCard({
 // Re-export helpers for tests / panels that previously imported from this module.
 export { actionCommandLine, actionResultOutput, actionServerLabel };
 
+/** Compact plan summary for the thread — full steps live in the context rail. */
 export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } }) {
   const { lang } = useI18n();
-  const steps = plan.steps || [];
+  const steps = planToAgentProgressSteps(plan);
   if (!steps.length) return null;
+  const done = steps.filter((step) => step.status === "done").length;
+  const running = steps.find((step) => step.status === "running");
+  const left = Math.max(0, steps.length - done);
+  const progress = steps.length ? (done + (running ? 0.45 : 0)) / steps.length : 0;
   return (
-    <div className="rounded-sm border border-primary/20 bg-primary/[0.04] px-2 py-1.5">
-      <div className="mb-1 text-[11px] font-semibold text-foreground">
-        {plan.title || localize(lang, "План", "Plan")}
+    <div
+      className="flex w-full max-w-[min(48rem,100%)] items-center gap-2.5 rounded-2xl border border-border/60 bg-card/50 px-3 py-2"
+      data-testid="plan-checklist-compact"
+    >
+      <svg aria-hidden viewBox="0 0 16 16" width="16" height="16" className="-rotate-90 shrink-0">
+        <circle cx="8" cy="8" r="6" fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
+        <circle
+          cx="8"
+          cy="8"
+          r="6"
+          fill="none"
+          stroke="hsl(var(--ai))"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray={`${Math.PI * 12}`}
+          strokeDashoffset={`${Math.PI * 12 * (1 - Math.min(1, Math.max(0, progress)))}`}
+        />
+      </svg>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] font-medium text-foreground">
+          {left > 0
+            ? localize(lang, `${left} шаг${left === 1 ? "" : left < 5 ? "а" : "ов"} осталось`, `${left} step${left === 1 ? "" : "s"} left`)
+            : localize(lang, "Все шаги выполнены", "All steps complete")}
+        </div>
+        <div className="truncate text-[11px] text-muted-foreground">
+          {running?.label || plan.title || localize(lang, "План задач", "Task plan")}
+        </div>
       </div>
-      <ul className="space-y-0.5">
-        {steps.map((step, idx) => {
-          const done = step.status === "done" || step.status === "completed";
-          const failed = step.status === "failed" || step.status === "error";
-          return (
-            <li key={step.id ?? idx} className="flex items-start gap-1.5 text-[12px] leading-4">
-              {done ? (
-                <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-success" />
-              ) : failed ? (
-                <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
-              ) : step.status === "running" ? (
-                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
-              ) : (
-                <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-              )}
-              <span
-                title={step.text}
-                className={cn("line-clamp-2", done && "text-muted-foreground line-through")}
-              >
-                {cleanStepTitle(step.text)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
+      <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+        {done}/{steps.length}
+      </span>
     </div>
   );
 }
@@ -387,6 +405,7 @@ type MessageBubbleProps = {
   streaming?: boolean;
   streamStripTables?: boolean;
   animateSupportingContent?: boolean;
+  onSendToTerminal?: (code: string) => void;
 };
 
 /** Collapses stacked metrics/tables/charts so one reply does not eat the viewport. */
@@ -406,11 +425,11 @@ function MessageEvidenceFold({
   if (count <= 1 && !forceFold) return <>{children}</>;
 
   return (
-    <div className="max-w-[min(420px,100%)] overflow-hidden rounded-sm border border-border/40 bg-card/20">
+    <div className="max-w-[min(48rem,100%)] overflow-hidden rounded-2xl border border-border/40 bg-card/20">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] transition-colors hover:bg-foreground/[0.03]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-foreground/[0.03]"
         aria-expanded={open}
       >
         <ChevronDown
@@ -445,6 +464,7 @@ function MessageBubbleComponent({
   streaming = false,
   streamStripTables = false,
   animateSupportingContent = false,
+  onSendToTerminal,
 }: MessageBubbleProps) {
   const { lang } = useI18n();
   const reduceMotion = useReducedMotion();
@@ -465,7 +485,7 @@ function MessageBubbleComponent({
     return (
       <div className="group flex justify-end gap-3">
         <div className="min-w-0 max-w-[min(560px,85%)]">
-          <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm">
+          <div className="rounded-2xl rounded-br-md border border-border/70 bg-muted/55 px-3.5 py-2.5 text-[14px] font-medium leading-[1.55] tracking-tight text-foreground shadow-sm">
             <div className="whitespace-pre-wrap break-words">{displayContent || message.content}</div>
           </div>
           <div className="mt-1 pr-0.5 text-right text-[10px] tabular-nums text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100">
@@ -551,7 +571,7 @@ function MessageBubbleComponent({
       transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.layout}
       className="group grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5"
     >
-      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-sm border border-primary/20 bg-primary/10 text-primary">
+      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-muted/50 text-muted-foreground">
         <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 space-y-2 pt-0.5">
@@ -565,17 +585,17 @@ function MessageBubbleComponent({
             </span>
           ) : null}
           {actions.length ? (
-            <span className="rounded-sm border border-border/50 bg-muted/20 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+            <span className="rounded-full border border-border/50 bg-muted/20 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
               {actions.length} {localize(lang, "действ.", "actions")}
             </span>
           ) : null}
-          <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {message.content ? <CopyMessageButton content={message.content} lang={lang} /> : null}
             {onRetry ? (
               <button
                 type="button"
                 onClick={onRetry}
-                className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+                className="rounded-full p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={localize(lang, "Повторить", "Retry")}
                 title={localize(lang, "Повторить последний запрос", "Retry last request")}
               >
@@ -598,6 +618,7 @@ function MessageBubbleComponent({
               content={message.content}
               streaming={streaming}
               stripTables={streamStripTables || hasStructuredTable || Boolean(metrics)}
+              onSendToTerminal={onSendToTerminal}
             />
           </div>
         ) : null}

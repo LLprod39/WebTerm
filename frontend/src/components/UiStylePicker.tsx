@@ -1,7 +1,17 @@
+import { Switch } from "@/boardui/components/base/switch/switch";
 import { AppearanceIcons } from "@/lib/app-icons";
 import { localize, useI18n } from "@/lib/i18n";
-import { UI_STYLE_OPTIONS, useUiStyle, type UiStyleId } from "@/lib/ui-style";
+import { LIGHT_UI_STYLES, UI_STYLE_OPTIONS, useUiStyle, type UiStyleId } from "@/lib/ui-style";
 import { cn } from "@/lib/utils";
+
+const STYLE_DARK_PAIR: Partial<Record<UiStyleId, UiStyleId>> = {
+  flow: "flow-dark",
+  "flow-dark": "flow",
+  folio: "folio-dark",
+  "folio-dark": "folio",
+  "enterprise-light": "enterprise-dark",
+  "enterprise-dark": "enterprise-light",
+};
 
 function ThemeChromePreview({ swatches }: { swatches: string[] }) {
   const canvas = swatches[0] ?? "#111111";
@@ -146,6 +156,8 @@ export function UiStylePicker({
   const { lang } = useI18n();
   const { style, setStyle } = useUiStyle();
   const activeLabel = localize(lang, "Активна", "Active");
+  const pairedStyle = STYLE_DARK_PAIR[style];
+  const isDark = !LIGHT_UI_STYLES.has(style);
 
   return (
     <section
@@ -171,6 +183,33 @@ export function UiStylePicker({
               {localize(lang, "Чат сохраняет текущее оформление.", "Chat keeps its current design.")}
             </p>
           </div>
+        </div>
+      ) : null}
+
+      {pairedStyle ? (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-background-secondary-default px-3 py-2.5">
+          <div className="min-w-0">
+            <div className="text-body-medium text-text-primary">
+              {localize(lang, "Тёмная тема", "Dark mode")}
+            </div>
+            <p className="text-caption-1-regular text-text-tertiary">
+              {localize(
+                lang,
+                "Переключает светлый/тёмный вариант текущего стиля.",
+                "Toggles the light/dark variant of the current style.",
+              )}
+            </p>
+          </div>
+          <Switch
+            size="md"
+            shape="pill"
+            isSelected={isDark}
+            onChange={(next) => {
+              if (next === isDark) return;
+              setStyle(pairedStyle);
+            }}
+            aria-label={localize(lang, "Тёмная тема", "Dark mode")}
+          />
         </div>
       ) : null}
 

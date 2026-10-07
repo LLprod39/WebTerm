@@ -35,7 +35,7 @@ describe("OperatorMarkdown", () => {
   it.each([
     ["GFM list", "- health check\n- nginx reload", "ul"],
     ["GFM table", "| host | ok |\n| --- | --- |\n| web-01 | true |", "table"],
-    ["fenced code", "```bash\nsystemctl status nginx\n```", "pre"],
+    ["fenced code", "```bash\nsystemctl status nginx\n```", "[data-operator-codeblock]"],
     ["external link", "[Документация](https://example.com/runbook)", "a"],
   ])("preserves %s while attaching a single cursor", (_name, content, semanticSelector) => {
     const { container } = render(<OperatorMarkdown content={content} streaming />);

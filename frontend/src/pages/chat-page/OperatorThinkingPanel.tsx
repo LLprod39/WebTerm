@@ -280,7 +280,10 @@ export const OperatorThinkingPanel = memo(function OperatorThinkingPanel({
                       <span className="mt-0.5 flex h-4 w-4 items-center justify-center" aria-hidden="true">
                         {step.status === "running" ? (
                           <Loader2
-                            className={cn("h-3 w-3 opacity-55", !reduceMotion && "animate-spin")}
+                            className={cn(
+                              "h-3 w-3 opacity-55",
+                              !reduceMotion && "animate-spin wt-chat-tool-running",
+                            )}
                           />
                         ) : step.status === "done" ? (
                           <Check className="h-3 w-3 text-success/70" />

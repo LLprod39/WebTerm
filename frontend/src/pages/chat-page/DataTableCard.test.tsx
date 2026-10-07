@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { DataTableCard } from "./DataTableCard";
 
 describe("DataTableCard", () => {
-  it("wraps a two-column prose table without a mobile horizontal scroller", () => {
+  it("renders BoardUI table with headers and cells", () => {
     const { container } = render(
       <DataTableCard
         table={{
@@ -19,31 +19,28 @@ describe("DataTableCard", () => {
       />,
     );
 
-    const wrapper = container.querySelector("table")?.parentElement;
-    const table = container.querySelector("table");
-    const firstHeader = screen.getByText("Область").closest("th");
-    const description = screen.getByText(/Проверить конкретный хост/).closest("span");
-
-    expect(wrapper).toHaveClass("min-w-0", "overflow-hidden");
-    expect(wrapper).not.toHaveClass("overflow-x-auto");
-    expect(table).toHaveClass("table-fixed", "min-w-0");
-    expect(table).not.toHaveClass("min-w-[420px]");
-    expect(firstHeader).toHaveClass("first:w-[40%]", "sm:first:w-[32%]", "whitespace-normal");
-    expect(description).toHaveClass("break-words", "[overflow-wrap:anywhere]");
-    expect(description).not.toHaveClass("truncate");
+    const table = container.querySelector("table.bui-table");
+    expect(table).toBeTruthy();
+    expect(table).toHaveClass("bui-table-sm");
+    expect(screen.getByText("Область")).toBeInTheDocument();
+    expect(screen.getByText(/Проверить конкретный хост/)).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass("rounded-2xl");
   });
 
-  it("keeps dense horizontal mode for multi-column inventory", () => {
+  it("keeps dense inventory columns in BoardUI table", () => {
     const { container } = render(
       <DataTableCard
         table={{
+          title: "Servers",
           headers: ["ID", "Name", "Host", "Port"],
           rows: [[1, "api-prod", "10.0.0.1", 22]],
         }}
       />,
     );
 
+    expect(screen.getByText("Servers")).toBeInTheDocument();
+    expect(screen.getByText("api-prod")).toBeInTheDocument();
+    expect(container.querySelector("table")).toHaveClass("bui-table", "bui-table-sm");
     expect(container.querySelector("table")?.parentElement).toHaveClass("overflow-x-auto");
-    expect(container.querySelector("table")).toHaveClass("min-w-[420px]");
   });
 });

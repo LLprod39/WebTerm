@@ -85,6 +85,22 @@ export function formatDateTime(value: string, lang: "ru" | "en") {
   });
 }
 
+/** Compact relative age for BoardUI-style history chips (now / 34m / 1d / 1w). */
+export function formatRelativeChatAge(value: string, nowMs = Date.now()) {
+  const t = new Date(value).getTime();
+  if (Number.isNaN(t)) return "";
+  const delta = Math.max(0, nowMs - t);
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const week = 7 * day;
+  if (delta < minute) return "now";
+  if (delta < hour) return `${Math.floor(delta / minute)}m`;
+  if (delta < day) return `${Math.floor(delta / hour)}h`;
+  if (delta < week) return `${Math.floor(delta / day)}d`;
+  return `${Math.floor(delta / week)}w`;
+}
+
 export function actionStatusLabel(status: AssistantAction["status"], lang: "ru" | "en") {
   switch (status) {
     case "completed":

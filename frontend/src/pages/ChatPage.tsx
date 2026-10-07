@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
@@ -8,6 +13,7 @@ import { ChatComposerForm } from "./chat-page/ChatComposerForm";
 import { ChatMessagesPane } from "./chat-page/ChatMessagesPane";
 import { ChatThreadSidebar } from "./chat-page/ChatThreadSidebar";
 import { useChatPageController } from "./chat-page/useChatPageController";
+import "./chat-page/chatBoardUi.css";
 
 /** Matches Tailwind `lg` — desktop split vs mobile sheet for the context rail. */
 function useIsLg() {
@@ -24,10 +30,45 @@ function useIsLg() {
   return isLg;
 }
 
+const HISTORY_COLLAPSED_KEY = "wt.chat.historyCollapsed";
+
 export default function ChatPage() {
   const c = useChatPageController();
   const isLg = useIsLg();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(HISTORY_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HISTORY_COLLAPSED_KEY, historyCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [historyCollapsed]);
+
+  // On /chat, Ctrl/Cmd+B toggles chat history (capture steals AppSidebar shortcut).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "b" || !(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (window.matchMedia("(min-width: 1024px)").matches) {
+        setHistoryCollapsed((value) => !value);
+      } else {
+        setHistoryOpen((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   const railOpen = c.contextRail.open;
   const railTab = c.contextRail.tab;
@@ -40,8 +81,13 @@ export default function ChatPage() {
   };
 
   const conversation = (
-    <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <ChatMessagesPane c={c} onOpenHistory={() => setHistoryOpen(true)} />
+    <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl wt-chat-panel">
+      <ChatMessagesPane
+        c={c}
+        onOpenHistory={() => setHistoryOpen(true)}
+        historyCollapsed={historyCollapsed}
+        onToggleHistoryCollapsed={() => setHistoryCollapsed((value) => !value)}
+      />
       <ChatComposerForm c={c} />
     </section>
   );
@@ -61,10 +107,13 @@ export default function ChatPage() {
   };
 
   return (
-    // Row layout: chat list | conversation | optional single context rail.
-    // Must NOT be flex-col — the sidebar with h-full would eat the full height.
-    <div className="flex h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)] w-full overflow-hidden bg-card text-foreground">
-      <ChatThreadSidebar c={c} />
+    // BoardUI-style floating shell: history | conversation | optional context rail.
+    <div className="wt-chat-shell flex h-full max-h-full min-h-0 w-full gap-3 overflow-hidden p-2 text-foreground sm:p-3">
+      <ChatThreadSidebar
+        c={c}
+        collapsed={historyCollapsed}
+        onExpand={() => setHistoryCollapsed(false)}
+      />
 
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent side="left" className="w-[min(22rem,88vw)] p-0 lg:hidden">
@@ -75,23 +124,31 @@ export default function ChatPage() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={showMobileRail} onOpenChange={(open) => { if (!open) closeRail(); }}>
-        <SheetContent side="right" className="w-[min(26rem,92vw)] p-0">
-          <SheetTitle className="sr-only">
+      <Drawer
+        open={showMobileRail}
+        onOpenChange={(open) => {
+          if (!open) closeRail();
+        }}
+        shouldScaleBackground={false}
+      >
+        <DrawerContent className="h-[min(85dvh,40rem)] p-0">
+          <DrawerTitle className="sr-only">
             {c.lang === "ru" ? "Контекст" : "Context"}
-          </SheetTitle>
-          <ChatContextRail {...railProps} embedded />
-        </SheetContent>
-      </Sheet>
+          </DrawerTitle>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ChatContextRail {...railProps} embedded />
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         {showDesktopRail ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            <ResizablePanel defaultSize={72} minSize={45} className="min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="h-full w-full gap-3">
+            <ResizablePanel defaultSize={70} minSize={45} className="min-w-0">
               {conversation}
             </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={28} minSize={18} maxSize={42} className="min-w-[18rem]">
+            <ResizableHandle withHandle className="opacity-60" />
+            <ResizablePanel defaultSize={30} minSize={18} maxSize={42} className="min-w-[18rem]">
               <ChatContextRail {...railProps} />
             </ResizablePanel>
           </ResizablePanelGroup>

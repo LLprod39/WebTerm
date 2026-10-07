@@ -1,0 +1,16 @@
+{
+  "paths": {
+    "components": "src/boardui/components",
+    "utils": "src/boardui/utils",
+    "hooks": "src/boardui/hooks",
+    "styles": "src/boardui/styles",
+    "lib": "src/boardui/lib"
+  },
+  "aliases": {
+    "components": "@/boardui/components",
+    "utils": "@/boardui/utils",
+    "hooks": "@/boardui/hooks",
+    "styles": "@/boardui/styles",
+    "lib": "@/boardui/lib"
+  }
+}
