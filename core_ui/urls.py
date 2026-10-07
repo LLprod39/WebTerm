@@ -62,6 +62,11 @@ urlpatterns = [
     # Models/settings API
     path("api/settings/", settings_config_views.api_settings, name="api_settings"),
     path("api/settings/check/", settings_config_views.api_settings_check, name="api_settings_check"),
+    path(
+        "api/settings/aux-model/test/",
+        settings_config_views.api_settings_aux_model_test,
+        name="api_settings_aux_model_test",
+    ),
     path("api/models/", model_views.api_models_list, name="api_models"),
     path("api/models/refresh/", model_views.api_models_refresh, name="api_models_refresh"),
     path("api/ai/providers/catalog/", ai_provider_views.api_ai_provider_catalog, name="api_ai_provider_catalog"),

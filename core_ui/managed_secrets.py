@@ -46,6 +46,8 @@ LLM_API_KEY_PROVIDERS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "ollama": "OLLAMA_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
+    # Custom OpenAI-compatible hosts (LM Studio / vLLM / local gateways) for aux roles.
+    "openai_compatible": "OPENAI_COMPATIBLE_API_KEY",
 }
 
 

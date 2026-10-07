@@ -21,6 +21,7 @@ from core_ui.services.operator_loop_helpers import (
     _append_assistant_text,
     _assistant_is_empty,
     _compress_messages,
+    _compress_messages_async,
     _create_pending_action,
     _emit,
     _ensure_visible_answer,
@@ -129,6 +130,24 @@ async def run_operator_loop(
     host_mention = messages_have_host_mention(user_goal_text)
     force_final_report = False
 
+    # Aux intent classifier augments keyword heuristics (never drops host-ops signal).
+    try:
+        from app.core.aux_model_roles import classify_intent
+
+        intent = await classify_intent(user_goal_text)
+        if intent.needs_ssh:
+            needs_ssh_actions = True
+        if intent.kind == "host_task":
+            host_mention = True
+        logger.info(
+            "operator intent kind={} needs_ssh={} source={}",
+            intent.kind,
+            intent.needs_ssh,
+            intent.source,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("operator intent classifier skipped: {}", exc)
+
     while True:
         turn = await _refresh_turn(turn.pk)
         if turn.status in {ChatTurnState.STATUS_DONE, ChatTurnState.STATUS_FAILED, ChatTurnState.STATUS_LIMIT}:
@@ -147,14 +166,14 @@ async def run_operator_loop(
 
         if turn.iteration >= MAX_ITERATIONS and not force_final_report:
             # One last text-only pass for a final report, then LIMIT.
-            messages = _compress_messages(list(turn.llm_messages or messages))
+            messages = await _compress_messages_async(list(turn.llm_messages or messages))
             messages.append({"role": "user", "content": STEP_LIMIT_FINAL_REPORT_NUDGE})
             await _save_turn(turn, llm_messages=messages, error="iteration_limit_report")
             force_final_report = True
 
         iteration = turn.iteration if force_final_report else turn.iteration + 1
         await _save_turn(turn, status=ChatTurnState.STATUS_RUNNING, iteration=iteration)
-        messages = _compress_messages(list(turn.llm_messages or messages))
+        messages = await _compress_messages_async(list(turn.llm_messages or messages))
 
         text_acc = ""
         tool_calls: list[dict[str, Any]] = []
@@ -386,7 +405,7 @@ async def run_operator_loop(
                 )
 
             # Model-driven early-stop guard (primary): intermediate text after tools
-            # is progress, not final — one self-check before keyword fallback.
+            # is progress, not final — aux verifier (or self-check nudge) before KW fallback.
             live_messages = list(turn.llm_messages or messages)
             has_ssh_evidence = messages_have_ssh_action_results(live_messages)
             inventory_only = messages_only_inventory_so_far(live_messages)
@@ -400,24 +419,58 @@ async def run_operator_loop(
                 max_self_checks=MAX_GOAL_SELF_CHECKS,
             ):
                 goal_self_checks += 1
-                logger.info(
-                    "operator loop: goal self-check on early text-only stop {}, check {}/{}",
-                    turn.pk,
-                    goal_self_checks,
-                    MAX_GOAL_SELF_CHECKS,
-                )
-                await _emit(
-                    on_event,
-                    {
-                        "type": "thinking",
-                        "iteration": iteration,
-                        "phase": "continue",
-                        "message": "Проверяю, достигнута ли цель…",
-                    },
-                )
-                messages.append({"role": "user", "content": GOAL_SELF_CHECK_NUDGE})
-                await _save_turn(turn, llm_messages=messages)
-                continue
+                assistant_so_far = ""
+                if assistant_message:
+                    try:
+                        row = await sync_to_async(ChatMessage.objects.filter(pk=assistant_message.pk).values("content").first)()
+                        assistant_so_far = str((row or {}).get("content") or "")
+                    except Exception:  # noqa: BLE001
+                        assistant_so_far = text_acc
+                verify_decision = "continue"
+                verify_source = "fallback"
+                try:
+                    from app.core.aux_model_roles import verify_goal
+
+                    verified = await verify_goal(
+                        goal=user_goal_text,
+                        assistant_so_far=assistant_so_far or text_acc,
+                        tools_executed=tools_executed_this_turn,
+                        has_task_evidence=has_ssh_evidence,
+                        inventory_only=inventory_only,
+                    )
+                    verify_decision = verified.decision
+                    verify_source = verified.source
+                    logger.info(
+                        "operator loop: aux verifier decision={} source={} turn={}",
+                        verified.decision,
+                        verified.source,
+                        turn.pk,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("operator aux verifier skipped: {}", exc)
+
+                if verify_decision == "finish" and verify_source == "aux":
+                    # Aux model says the goal is done — accept final text-only answer.
+                    pass
+                else:
+                    logger.info(
+                        "operator loop: goal self-check on early text-only stop {}, check {}/{}",
+                        turn.pk,
+                        goal_self_checks,
+                        MAX_GOAL_SELF_CHECKS,
+                    )
+                    await _emit(
+                        on_event,
+                        {
+                            "type": "thinking",
+                            "iteration": iteration,
+                            "phase": "continue",
+                            "message": "Проверяю, достигнута ли цель…",
+                        },
+                    )
+                    messages.append({"role": "user", "content": GOAL_SELF_CHECK_NUDGE})
+                    await _save_turn(turn, llm_messages=messages)
+                    continue
 
             # Keyword FALLBACK: host-ops + inventory-only (after self-check exhausted).
             if (

@@ -115,6 +115,22 @@ async def process_tool_calls(
         finish_norm = normalise_tool_name(action_type or tool_name)
         is_finish = finish_norm in {"operator_finish_report", "finish_report"}
         auto_read = is_finish or is_auto_executable_read(action_type, arguments)
+        # Optional aux safety hint — NEVER overrides Confirm / deterministic rules.
+        if not auto_read and action_type in {"operator.run_command", "run_command", "operator.run_fanout"}:
+            try:
+                from app.core.aux_model_roles import classify_command_safety
+
+                cmd = str(arguments.get("command") or arguments.get("cmd") or "")
+                if cmd:
+                    hint = await classify_command_safety(cmd)
+                    logger.info(
+                        "operator safety_hint kind={} source={} action={}",
+                        hint.kind,
+                        hint.source,
+                        action_type,
+                    )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("operator safety hint skipped: {}", exc)
         if not auto_read:
             arguments = await sync_to_async(freeze_mutating_targets)(user, action_type, arguments)
 

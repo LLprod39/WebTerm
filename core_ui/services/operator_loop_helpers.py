@@ -53,7 +53,7 @@ def _history_messages(session: ChatSession, *, exclude_ids: set[int] | None = No
 
 
 def _compress_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Trim older tool results to keep context bounded."""
+    """Trim older tool results to keep context bounded (deterministic truncate)."""
     if len(messages) <= 20:
         return messages
     keep_tail = messages[-16:]
@@ -69,6 +69,38 @@ def _compress_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 if isinstance(block, dict) and block.get("type") == "text":
                     summary_bits.append(f"{role}: {str(block.get('text') or '')[:200]}")
     summary = "Earlier conversation summary:\n" + "\n".join(summary_bits[:40])
+    return [{"role": "user", "content": summary}, *keep_tail]
+
+
+async def _compress_messages_async(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Compress with aux summarizer when configured; else deterministic truncate."""
+    if len(messages) <= 20:
+        return messages
+    keep_tail = messages[-16:]
+    head = messages[:-16]
+    summary_bits: list[str] = []
+    for msg in head:
+        role = msg.get("role")
+        content = msg.get("content")
+        if isinstance(content, str):
+            summary_bits.append(f"{role}: {content[:400]}")
+        elif isinstance(content, list):
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "text":
+                    summary_bits.append(f"{role}: {str(block.get('text') or '')[:400]}")
+                elif block.get("type") == "tool_result":
+                    summary_bits.append(f"tool_result: {str(block.get('content') or '')[:400]}")
+    raw = "\n".join(summary_bits[:60])
+    try:
+        from app.core.aux_model_roles import summarize
+
+        summary_body = await summarize(raw, max_chars=1600)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("aux summarizer skipped: {}", exc)
+        summary_body = raw[:1600]
+    summary = "Earlier conversation summary:\n" + summary_body
     return [{"role": "user", "content": summary}, *keep_tail]
 
 

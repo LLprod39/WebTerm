@@ -100,6 +100,18 @@ class ModelConfig(BaseModel):
     orchestrator_llm_provider: str = ""
     orchestrator_llm_model: str = ""
 
+    # Auxiliary / utility model for service roles (intent, verifier, summarizer, safety hint).
+    # Falls back to heuristics / main-loop behaviour when disabled or on timeout/error.
+    aux_llm_enabled: bool = False
+    aux_llm_provider: str = ""
+    aux_llm_model: str = ""
+    aux_llm_base_url: str = ""
+    aux_llm_timeout_seconds: int = 8
+    aux_role_verifier_enabled: bool = True
+    aux_role_intent_enabled: bool = True
+    aux_role_summarizer_enabled: bool = True
+    aux_role_safety_enabled: bool = False
+
     # Domain SSO settings (None => use Django settings/.env fallback)
     domain_auth_enabled: bool | None = None
     domain_auth_header: str | None = None
@@ -356,8 +368,25 @@ class ModelManager:
             "terminal_report": "chat",  # short run summary
             "terminal_answer": "chat",  # pure knowledge answer
             "terminal_explain": "chat",  # A6: explain command output
+            # Auxiliary service roles — dedicated aux_* fields when enabled.
+            "aux": "aux",
+            "aux_verifier": "aux",
+            "aux_intent": "aux",
+            "aux_summarizer": "aux",
+            "aux_safety": "aux",
         }
         normalized_purpose = purpose_aliases.get(purpose, purpose)
+
+        if normalized_purpose == "aux":
+            aux_provider = (getattr(c, "aux_llm_provider", "") or "").strip()
+            aux_model = (getattr(c, "aux_llm_model", "") or "").strip()
+            if aux_provider and aux_model and bool(getattr(c, "aux_llm_enabled", False)):
+                # openai_compatible is transported by aux_model_roles, not stream path
+                if aux_provider == "openai_compatible":
+                    return (c.internal_llm_provider or "grok").strip(), aux_model
+                return aux_provider, aux_model
+            # Fall through to chat bucket when aux is unset.
+            normalized_purpose = "chat"
 
         provider_field = f"{normalized_purpose}_llm_provider"
         model_field = f"{normalized_purpose}_llm_model"
