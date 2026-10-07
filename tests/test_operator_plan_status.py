@@ -708,3 +708,113 @@ def test_mutate_park_sets_awaiting_confirm_not_running():
     assert step_status == "awaiting_confirm"
     assert step_status != "running"
     assert assistant_msg.metadata["plan"]["status"] in {"approved", "proposed"}
+
+
+def test_canonical_command_tool_requires_nonempty_planned_cmd():
+    """Command tools must not soft-match on server_id alone when planned_cmd is empty."""
+    plan = {
+        "title": "T",
+        "status": "approved",
+        "steps": [
+            {
+                "id": 1,
+                "tool": "operator.run_command",
+                "input": {"server_id": 7},
+                "status": "pending",
+            }
+        ],
+    }
+    assert not canonical_plan_step_matches(
+        plan,
+        action_type="operator.run_command",
+        input_payload={"server_id": 7, "command": "df -h"},
+    )
+    plan["steps"][0]["input"] = {"server_id": 7, "command": "df -h"}
+    assert canonical_plan_step_matches(
+        plan,
+        action_type="operator.run_command",
+        input_payload={"server_id": 7, "command": "df -h"},
+    )
+
+
+@pytest.mark.django_db
+def test_typed_confirm_failure_does_not_leave_step_running():
+    """Wrong typed phrase must not flip awaiting_confirm → running."""
+    from core_ui.services.operator_plan import mark_executing_after_typed_confirm_ok
+
+    user = _operator_user("plan-typed-fail")
+    session = ChatSession.objects.create(user=user, title="typed")
+    msg = ChatMessage.objects.create(
+        session=session,
+        role=ChatMessage.ROLE_ASSISTANT,
+        content="confirm",
+        metadata={
+            "plan": {
+                "title": "Danger",
+                "status": "approved",
+                "steps": [
+                    {
+                        "id": 1,
+                        "text": "rm",
+                        "tool": "operator.run_command",
+                        "input": {"server_id": 1, "command": "rm -rf /tmp/x"},
+                        "status": "awaiting_confirm",
+                    }
+                ],
+            }
+        },
+    )
+    action = AssistantAction.objects.create(
+        user=user,
+        session=session,
+        message=msg,
+        action_type="operator.run_command",
+        title="rm",
+        status=AssistantAction.STATUS_REQUIRES_CONFIRMATION,
+        risk=AssistantAction.RISK_DANGEROUS,
+        requires_confirmation=True,
+        input_payload={"server_id": 1, "command": "rm -rf /tmp/x"},
+        blast_radius={
+            "typed_confirm_required": True,
+            "typed_confirm_token": "web-01",
+            "server_names": ["web-01"],
+        },
+    )
+    ChatTurnState.objects.create(
+        session=session,
+        assistant_message=msg,
+        pending_action=action,
+        status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+    )
+    action, err = mark_executing_after_typed_confirm_ok(action, typed_confirm="wrong-token")
+    assert err
+    assert "mismatch" in err.lower() or "required" in err.lower() or "confirm" in err.lower()
+    assert action.status == AssistantAction.STATUS_REQUIRES_CONFIRMATION
+    msg.refresh_from_db()
+    assert msg.metadata["plan"]["steps"][0]["status"] == "awaiting_confirm"
+
+
+@pytest.mark.django_db
+def test_autonomous_ai_read_only_still_denies_mutation():
+    """Hard floor: ai_read_only blocks writes even when autonomy_mode=autonomous."""
+    from servers.models import Server
+    from servers.services.server_mutation_policy import decide_server_mutation
+
+    user = _operator_user("plan-ro-auto")
+    session = ChatSession.objects.create(
+        user=user,
+        title="ro",
+        pinned_context={"autonomy_mode": AUTONOMY_AUTONOMOUS},
+    )
+    assert get_autonomy_mode(session) == AUTONOMY_AUTONOMOUS
+    server = Server.objects.create(
+        user=user,
+        name="ro-host",
+        host="10.20.0.99",
+        port=22,
+        username="pilot",
+        ai_read_only=True,
+    )
+    decision = decide_server_mutation(user, server)
+    assert decision.allowed is False
+    assert decision.code == "server_ai_read_only"

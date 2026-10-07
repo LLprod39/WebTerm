@@ -97,6 +97,14 @@ export default function ChatPage() {
     onTabChange: (tab: "tasks" | "terminal" | "details") => c.openContextRail(tab),
     onClose: closeRail,
     plan: c.activePlan,
+    turnActive: c.isBusy,
+    continueAvailable: Boolean(c.operatorWs.planContinueAvailable),
+    onContinuePlan: () => {
+      c.dispatchMessage(
+        c.lang === "ru" ? "Продолжи план" : "Continue the plan",
+        { skipPins: true },
+      );
+    },
     session: c.sessionDock,
     actionDetails: c.actionDetails,
     onModeChange: (mode: "agent" | "live") => c.setSessionDock((s) => ({ ...s, mode })),

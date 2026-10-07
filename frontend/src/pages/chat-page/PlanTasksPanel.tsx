@@ -52,13 +52,21 @@ export function planToAgentProgressSteps(
 export function PlanTasksPanel({
   plan,
   turnActive = true,
+  continueAvailable = false,
+  onContinue,
 }: {
   plan: PlanData | null;
   /** When false, stuck `running` steps render as waiting (static). */
   turnActive?: boolean;
+  /** Shown after plan_paused / continue_available from the operator loop. */
+  continueAvailable?: boolean;
+  onContinue?: () => void;
 }) {
   const { lang } = useI18n();
   const steps = planToAgentProgressSteps(plan, { turnActive });
+  const showContinue =
+    Boolean(onContinue) &&
+    (continueAvailable || plan?.status === "paused");
 
   if (!plan || !steps.length) {
     return (
@@ -83,6 +91,16 @@ export function PlanTasksPanel({
         </div>
       ) : null}
       <AgentProgress steps={steps} controlled defaultExpanded className="max-w-none" />
+      {showContinue ? (
+        <button
+          type="button"
+          data-testid="plan-continue-button"
+          className="mx-1 mt-1 rounded-lg border border-border/70 bg-background px-3 py-2 text-left text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted/40"
+          onClick={onContinue}
+        >
+          {localize(lang, "Продолжить план", "Continue plan")}
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -167,6 +167,13 @@ def approved_plan_step_matches(
     return False
 
 
+def _is_command_tool(action_type: str) -> bool:
+    """True for shell/fanout-style tools that must carry a non-empty planned command."""
+    # Markers use dotted form because _norm_tool_key replaces underscores with dots.
+    key = _norm_tool_key(action_type)
+    return any(marker in key for marker in ("run.command", "run.fanout", "fanout"))
+
+
 def canonical_plan_step_matches(
     plan: dict[str, Any] | None,
     *,
@@ -176,6 +183,7 @@ def canonical_plan_step_matches(
     """Soft match for plan_once fallback: tool + server_id(s) + normalized command.
 
     Empty planned input fails closed (caller must confirm). Only pending steps.
+    For command tools, planned_cmd must be non-empty — server-only soft match is not enough.
     """
     normalized = normalize_plan(plan)
     if not normalized or normalized.get("status") not in {"approved", "running"}:
@@ -184,6 +192,7 @@ def canonical_plan_step_matches(
     actual = input_payload if isinstance(input_payload, dict) else {}
     actual_servers = _server_ids_from_payload(actual)
     actual_cmd = _normalize_command(actual.get("command") or actual.get("cmd"))
+    action_is_command = _is_command_tool(action_type)
 
     for step in normalized.get("steps") or []:
         if step.get("status") != "pending":
@@ -191,10 +200,15 @@ def canonical_plan_step_matches(
         planned_input = step.get("input") if isinstance(step.get("input"), dict) else {}
         if not planned_input:
             continue
-        if not _tool_matches(str(step.get("tool") or ""), action_type):
+        step_tool = str(step.get("tool") or "")
+        if not _tool_matches(step_tool, action_type):
             continue
         planned_servers = _server_ids_from_payload(planned_input)
         planned_cmd = _normalize_command(planned_input.get("command") or planned_input.get("cmd"))
+        step_is_command = action_is_command or _is_command_tool(step_tool)
+        # Command tools: empty planned command must not soft-match (fail closed).
+        if step_is_command and not planned_cmd:
+            continue
         if planned_servers and planned_servers != actual_servers:
             continue
         if planned_cmd and planned_cmd != actual_cmd:
@@ -546,3 +560,74 @@ def mark_plan_executing_for_action(
         turn.pending_tool_call = pending
         turn.save(update_fields=["pending_tool_call", "updated_at"])
     return updated
+
+
+def revert_plan_executing_to_awaiting_confirm(
+    *,
+    message: ChatMessage | None,
+    action_type: str = "",
+    title: str = "",
+    turn: ChatTurnState | None = None,
+) -> dict[str, Any] | None:
+    """Undo premature ``running`` after a failed typed-confirm (back to awaiting_confirm)."""
+    plan = get_plan_from_message(message) if message is not None else None
+    if plan is None and turn is not None:
+        plan = get_plan_from_turn(turn)
+    if plan is None:
+        return None
+    target = _find_closable_step(
+        plan.get("steps") or [],
+        action_type=action_type,
+        title=title,
+        statuses=frozenset({"running"}),
+    )
+    if target is None:
+        return plan
+    target["status"] = "awaiting_confirm"
+    # Keep plan approved/running/paused as-is; confirm card is still pending.
+    if message is not None:
+        save_plan_to_message(message, plan)
+    if turn is not None:
+        pending = dict(turn.pending_tool_call or {})
+        pending["plan"] = plan
+        turn.pending_tool_call = pending
+        turn.save(update_fields=["pending_tool_call", "updated_at"])
+    return plan
+
+
+def mark_executing_after_typed_confirm_ok(
+    action: Any,
+    *,
+    typed_confirm: str | None = None,
+) -> tuple[Any, str | None]:
+    """Validate typed confirm first; only then mark the plan step ``running``.
+
+    Returns ``(action, typed_error_or_None)``. On typed failure the action is left
+    in ``requires_confirmation`` with ``error`` set and the plan is untouched.
+    """
+    from core_ui.models import AssistantAction
+    from core_ui.services.operator_security import validate_typed_confirm
+
+    typed_error = validate_typed_confirm(action, typed_confirm)
+    if typed_error:
+        action.status = AssistantAction.STATUS_REQUIRES_CONFIRMATION
+        action.error = typed_error
+        action.save(update_fields=["status", "error", "updated_at"])
+        return action, typed_error
+
+    turn = (
+        ChatTurnState.objects.filter(
+            pending_action=action,
+            status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+        )
+        .select_related("assistant_message")
+        .first()
+    )
+    if turn is not None and turn.assistant_message is not None:
+        mark_plan_executing_for_action(
+            message=turn.assistant_message,
+            action_type=action.action_type,
+            title=action.title or "",
+            turn=turn,
+        )
+    return action, None

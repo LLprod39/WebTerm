@@ -106,31 +106,43 @@ def confirm_action_and_resume_detailed(
     request=None,
     typed_confirm: str | None = None,
 ) -> ConfirmAndResumeOutcome:
-    # Mark matching plan step running only when execution actually starts.
+    # Typed-confirm must succeed BEFORE flipping the plan step to running.
     try:
-        from core_ui.services.operator_plan import mark_plan_executing_for_action
-
-        turn = (
-            ChatTurnState.objects.filter(
-                pending_action=action,
-                status=ChatTurnState.STATUS_AWAITING_CONFIRM,
-            )
-            .select_related("assistant_message")
-            .first()
+        from core_ui.services.operator_plan import (
+            mark_executing_after_typed_confirm_ok,
+            revert_plan_executing_to_awaiting_confirm,
         )
-        if turn is not None and turn.assistant_message is not None:
-            mark_plan_executing_for_action(
-                message=turn.assistant_message,
-                action_type=action.action_type,
-                title=action.title or "",
-                turn=turn,
-            )
+
+        action, typed_error = mark_executing_after_typed_confirm_ok(action, typed_confirm=typed_confirm)
+        if typed_error:
+            return ConfirmAndResumeOutcome(action=action)
     except Exception:  # noqa: BLE001
         logger.debug("plan executing mark skipped for action_id={}", action.pk)
     action = execute_action(action, request=request, confirmed=True, typed_confirm=typed_confirm)
     if action.status == AssistantAction.STATUS_RUNNING:
         return ConfirmAndResumeOutcome(action=action)
     if action.status == AssistantAction.STATUS_REQUIRES_CONFIRMATION and action.error:
+        # Safety net: undo running if execute bounced after we marked.
+        try:
+            from core_ui.services.operator_plan import revert_plan_executing_to_awaiting_confirm
+
+            turn = (
+                ChatTurnState.objects.filter(
+                    pending_action=action,
+                    status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+                )
+                .select_related("assistant_message")
+                .first()
+            )
+            if turn is not None and turn.assistant_message is not None:
+                revert_plan_executing_to_awaiting_confirm(
+                    message=turn.assistant_message,
+                    action_type=action.action_type,
+                    title=action.title or "",
+                    turn=turn,
+                )
+        except Exception:  # noqa: BLE001
+            logger.debug("plan executing revert skipped for action_id={}", action.pk)
         return ConfirmAndResumeOutcome(action=action)
 
     resume, resume_error = resume_operator_if_parked(action, request=request, cancelled=False)

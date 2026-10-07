@@ -481,27 +481,44 @@ async def _run_action_turn(
 
         if confirm:
 
-            def _mark_running_then_execute():
-                from core_ui.services.operator_plan import mark_plan_executing_for_action
-
-                turn = (
-                    ChatTurnState.objects.filter(
-                        pending_action=action,
-                        status=ChatTurnState.STATUS_AWAITING_CONFIRM,
-                    )
-                    .select_related("assistant_message")
-                    .first()
+            def _validate_mark_then_execute():
+                from core_ui.services.operator_plan import (
+                    mark_executing_after_typed_confirm_ok,
+                    revert_plan_executing_to_awaiting_confirm,
                 )
-                if turn is not None and turn.assistant_message is not None:
-                    mark_plan_executing_for_action(
-                        message=turn.assistant_message,
-                        action_type=action.action_type,
-                        title=action.title or "",
-                        turn=turn,
-                    )
-                return execute_action(action, confirmed=True, typed_confirm=typed_confirm)
 
-            action = await sync_to_async(_mark_running_then_execute)()
+                # Typed-confirm must succeed BEFORE flipping the plan step to running.
+                action_local, typed_error = mark_executing_after_typed_confirm_ok(
+                    action, typed_confirm=typed_confirm
+                )
+                if typed_error:
+                    return action_local
+                action_local = execute_action(
+                    action_local, confirmed=True, typed_confirm=typed_confirm
+                )
+                # Safety net: if execute still bounced to confirm (race), undo running.
+                if (
+                    action_local.status == action_local.STATUS_REQUIRES_CONFIRMATION
+                    and action_local.error
+                ):
+                    turn = (
+                        ChatTurnState.objects.filter(
+                            pending_action=action_local,
+                            status=ChatTurnState.STATUS_AWAITING_CONFIRM,
+                        )
+                        .select_related("assistant_message")
+                        .first()
+                    )
+                    if turn is not None and turn.assistant_message is not None:
+                        revert_plan_executing_to_awaiting_confirm(
+                            message=turn.assistant_message,
+                            action_type=action_local.action_type,
+                            title=action_local.title or "",
+                            turn=turn,
+                        )
+                return action_local
+
+            action = await sync_to_async(_validate_mark_then_execute)()
         else:
             action = await sync_to_async(cancel_action)(action)
 

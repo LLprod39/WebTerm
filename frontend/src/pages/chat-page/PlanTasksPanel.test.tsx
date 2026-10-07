@@ -52,4 +52,31 @@ describe("PlanTasksPanel status mapping", () => {
     expect(document.querySelector('[data-step-status="waiting"]')).not.toBeNull();
     expect(document.querySelector(".agent-progress-loading-text")).toBeNull();
   });
+
+  it("shows Continue plan when continueAvailable or plan is paused", () => {
+    const { rerender } = render(
+      <PlanTasksPanel
+        plan={{
+          title: "Paused",
+          status: "paused",
+          steps: [{ id: 1, text: "Next", status: "pending" }],
+        }}
+        onContinue={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId("plan-continue-button")).toBeInTheDocument();
+
+    rerender(
+      <PlanTasksPanel
+        plan={{
+          title: "Running",
+          status: "running",
+          steps: [{ id: 1, text: "Next", status: "pending" }],
+        }}
+        continueAvailable
+        onContinue={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId("plan-continue-button")).toBeInTheDocument();
+  });
 });
