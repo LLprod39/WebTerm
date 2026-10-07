@@ -245,7 +245,7 @@ async def _run_auth_flow(flow_id: int, *, worker_name: str, fencing_token: int) 
     try:
         async for event in client.stream(request):
             if lease_lost.is_set():
-                return
+                break
             if event.type is ProviderEventType.AUTH_REQUIRED:
                 if flow.flow_kind == "verification":
                     terminal_type = event.type
@@ -265,6 +265,13 @@ async def _run_auth_flow(flow_id: int, *, worker_name: str, fencing_token: int) 
             }:
                 terminal_type = event.type
                 error_code = str(event.payload.get("code") or "")
+                oauth_error = str(event.payload.get("oauth_error") or "").strip()
+                if oauth_error and error_code:
+                    # Persist Google's non-secret OAuth error code for the UI (never tokens).
+                    error_code = f"{error_code}:{oauth_error}"[:80]
+                # Do not wait for runner EOF: auth runners historically hung on stdin
+                # after ERROR, which left the flow pending in the UI forever.
+                break
     except ProviderRuntimeError as exc:
         terminal_type = ProviderEventType.ERROR
         error_code = exc.code
@@ -274,7 +281,11 @@ async def _run_auth_flow(flow_id: int, *, worker_name: str, fencing_token: int) 
     finally:
         heartbeat_task.cancel()
         await asyncio.gather(heartbeat_task, return_exceptions=True)
-    if not lease_lost.is_set():
+        try:
+            await client.cancel(request.invocation_id)
+        except Exception:  # noqa: BLE001 - best-effort stop of a hung runner stream
+            pass
+    if terminal_type is not None or not lease_lost.is_set():
         await _complete_auth_flow(
             flow_id,
             terminal_type,

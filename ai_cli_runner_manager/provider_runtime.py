@@ -56,8 +56,16 @@ async def _main() -> int:
             _write(event.to_dict())
         return 0
     finally:
+        # Manager keeps stdin open for auth-input; a cancelled to_thread(readline)
+        # will not finish until EOF. Closing stdin unblocks the control loop so the
+        # runner can exit after AUTH COMPLETED/ERROR (otherwise the stream hangs and
+        # Django never marks the auth flow failed).
+        _close_stdin()
         control_task.cancel()
-        await asyncio.gather(control_task, return_exceptions=True)
+        try:
+            await asyncio.wait_for(asyncio.gather(control_task, return_exceptions=True), timeout=2)
+        except TimeoutError:
+            pass
         unregister_auth_input_queue(request.invocation_id)
 
 
@@ -85,6 +93,19 @@ async def _stdin_control_loop(invocation_id: str) -> None:
         except ValueError:
             continue
         await publish_auth_input(invocation_id, code, oauth_state=oauth_state)
+
+
+def _close_stdin() -> None:
+    for closer in (
+        lambda: sys.stdin.buffer.close(),
+        lambda: sys.stdin.close(),
+        lambda: os.close(0),
+    ):
+        try:
+            closer()
+            return
+        except Exception:  # noqa: BLE001 - best-effort unblock of control-loop readline
+            continue
 
 
 def _write(payload: dict[str, object]) -> None:

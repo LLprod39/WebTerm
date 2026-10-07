@@ -572,12 +572,20 @@ def test_auth_failure_classifier_ignores_prompt_timeout_hint() -> None:
     prompt = "Waiting for authentication (timeout 60s)...\nOr, paste the authorization code here and press Enter:\n"
     assert _auth_failure_from_output(prompt)[0] == "provider_auth_failed"
     assert _auth_failure_from_output(prompt + "Error: authentication timed out.\n")[0] == "provider_auth_timeout"
-    exchange = (
+    invalid = (
         prompt
-        + 'Error: authentication failed: token exchange failed: Post "https://oauth2.googleapis.com/token"\n'
+        + 'Error: authentication failed: token exchange failed: oauth2: "invalid_grant" "Bad Request"\n'
         + "error: authentication failed or timed out\n"
     )
-    assert _auth_failure_from_output(exchange)[0] == "provider_auth_transport_failed"
+    code, _message, detail = _auth_failure_from_output(invalid)
+    assert code == "provider_auth_failed"
+    assert detail.get("oauth_error") == "invalid_grant"
+    dial = prompt + 'Error: authentication failed: token exchange failed: Post "https://oauth2.googleapis.com/token": dial tcp: lookup\n'
+    assert _auth_failure_from_output(dial)[0] == "provider_auth_transport_failed"
+
+
+def test_normalize_authorization_code_decodes_url_encoding() -> None:
+    assert normalize_authorization_code("4%2F0AXlqoi5-TESTCODEVALUE") == "4/0AXlqoi5-TESTCODEVALUE"
 
 
 @pytest.mark.asyncio

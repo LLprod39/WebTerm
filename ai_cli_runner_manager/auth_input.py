@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from dataclasses import dataclass
+from urllib.parse import unquote, unquote_plus
 
 _AUTH_CODE = re.compile(r"^[A-Za-z0-9_./+=-]{8,2048}$")
 _OAUTH_STATE = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")
@@ -28,7 +29,8 @@ def unregister_auth_input_queue(invocation_id: str) -> None:
 
 
 def normalize_authorization_code(value: str) -> str:
-    code = (value or "").strip()
+    # Google sometimes shows/copy codes URL-encoded (%2F); decode before PTY write.
+    code = unquote_plus(unquote((value or "").strip())).strip()
     if not _AUTH_CODE.fullmatch(code):
         raise ValueError("authorization_code has an invalid format")
     return code

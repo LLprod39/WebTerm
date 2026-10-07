@@ -86,11 +86,19 @@ function targetLabel(target: string): string {
 }
 
 function authFailureMessage(errorCode: string | undefined, text: (ru: string, en: string) => string): string {
-  switch (errorCode) {
+  const raw = (errorCode || "").trim();
+  const base = raw.split(":")[0] || raw;
+  if (raw.includes("invalid_grant")) {
+    return text(
+      "Google вернул invalid_grant: код не подходит к текущей PKCE-сессии (просрочен, уже использован или от старой ссылки). Откройте свежую ссылку и вставьте новый код за ~55 с.",
+      "Google returned invalid_grant: the code does not match the current PKCE session (expired, reused, or from an old link). Open a fresh link and paste a new code within ~55s.",
+    );
+  }
+  switch (base) {
     case "provider_auth_failed":
       return text(
-        "Google отклонил код. Откройте актуальную ссылку и вставьте свежий код один раз.",
-        "Google rejected the code. Open the latest link and paste a fresh code once.",
+        "Google отклонил код. Откройте актуальную ссылку и вставьте свежий код один раз за ~55 с.",
+        "Google rejected the code. Open the current link and paste a fresh code once within ~55s.",
       );
     case "provider_auth_session_mismatch":
       return text(
@@ -108,8 +116,8 @@ function authFailureMessage(errorCode: string | undefined, text: (ru: string, en
         "Google token exchange failed (network/egress). Try sign-in again.",
       );
     default:
-      return errorCode
-        ? errorCode
+      return raw
+        ? raw
         : text("Авторизация не завершена. Запустите вход повторно.", "Authorization did not complete. Start sign-in again.");
   }
 }
@@ -629,6 +637,21 @@ export default function SettingsAIConnectionsPage() {
                           ? <Badge variant="secondary">{text("Ожидаем код…", "Waiting for code…")}</Badge>
                           : null}
                   {activeFlow.verification_uri && activeFlow.status === "pending" ? <Button asChild><a href={activeFlow.verification_uri} target="_blank" rel="noreferrer"><Link2 className="mr-2 h-4 w-4" aria-hidden />{text("Открыть вход", "Open sign-in")}</a></Button> : null}
+                  {activeFlow.status === "failed" || activeFlow.status === "expired" || activeFlow.status === "cancelled" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setAuthFlowId("");
+                        setAuthAuthorizationCode("");
+                        setAuthCodeSubmitted(false);
+                        setAuthLinkSecondsLeft(null);
+                        lastAuthLinkRef.current = "";
+                        handledFlowState.current = "";
+                      }}
+                    >
+                      {text("Начать заново", "Start over")}
+                    </Button>
+                  ) : null}
                 </div>
               </div>
               {activeFlow.status === "pending" && activeFlow.accepts_authorization_code ? (
@@ -636,8 +659,8 @@ export default function SettingsAIConnectionsPage() {
                   <Label htmlFor="antigravity-auth-code">{text("Вставьте код из Google", "Paste the code from Google")}</Label>
                   <p className="text-sm text-muted-foreground">
                     {text(
-                      "CLI держит одну PKCE-сессию около 60 секунд. Успейте открыть текущую ссылку и вставить код один раз. После обновления ссылки нужен новый код.",
-                      "The CLI keeps one PKCE session for about 60 seconds. Open the current link and paste the code once. After the link refreshes, use a new code.",
+                      "CLI держит одну PKCE-сессию около 60 секунд. Успейте открыть текущую ссылку и вставить код один раз до обнуления таймера. После обновления ссылки нужен новый код.",
+                      "The CLI keeps one PKCE session for about 60 seconds. Open the current link and paste the code once before the timer hits zero. After the link refreshes, use a new code.",
                     )}
                   </p>
                   {authCodeSubmitted ? (
@@ -654,13 +677,18 @@ export default function SettingsAIConnectionsPage() {
                         spellCheck={false}
                         placeholder="4/0A…"
                         className="font-mono"
-                        disabled={mutation.isPending}
+                        disabled={mutation.isPending || authLinkSecondsLeft === 0}
                       />
                       <Button
-                        disabled={!authAuthorizationCode.trim() || mutation.isPending || authCodeSubmitted}
+                        disabled={
+                          !authAuthorizationCode.trim()
+                          || mutation.isPending
+                          || authCodeSubmitted
+                          || authLinkSecondsLeft === 0
+                        }
                         onClick={() => {
                           const code = authAuthorizationCode.trim();
-                          if (!code || authCodeSubmitted) return;
+                          if (!code || authCodeSubmitted || authLinkSecondsLeft === 0) return;
                           setAuthCodeSubmitted(true);
                           mutation.mutate(async () => {
                             try {
@@ -686,6 +714,14 @@ export default function SettingsAIConnectionsPage() {
                       </Button>
                     </div>
                   )}
+                  {authLinkSecondsLeft === 0 ? (
+                    <p className="text-sm text-destructive" role="status">
+                      {text(
+                        "Время текущей ссылки истекло. Дождитесь новой ссылки или нажмите вход заново на подключении.",
+                        "This link has expired. Wait for a refreshed link or start sign-in again on the connection.",
+                      )}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </section>

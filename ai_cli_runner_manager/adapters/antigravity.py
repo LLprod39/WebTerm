@@ -37,6 +37,7 @@ _AUTH_TOTAL_WAIT_SECONDS = 600.0
 _AUTH_LINK_TTL_SECONDS = 55
 _AUTH_CODE_DRAIN_SECONDS = 45.0
 _PTY_READ_CHUNK = 8192
+_OAUTH2_ERROR_RE = re.compile(r'oauth2:\s*"([a-z0-9_/-]+)"\s*"([^"]*)"', re.IGNORECASE)
 
 
 class AntigravitySubscriptionAdapter:
@@ -383,10 +384,15 @@ async def _oauth_session_attempt(
                         await asyncio.wait_for(process.wait(), timeout=30)
                     except TimeoutError:
                         await _stop_process(process)
+                scan_buffer = await _drain_pty_tail(master_fd, scan_buffer)
                 if process.returncode == 0:
                     yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
                 else:
-                    yield error_event(*_auth_failure_from_output(scan_buffer))
+                    code, message_text, detail = _auth_failure_from_output(scan_buffer)
+                    event = error_event(code, message_text)
+                    if detail:
+                        event = ProviderEventV1(event.type, {**event.payload, **detail})
+                    yield event
                 return
 
             try:
@@ -411,7 +417,12 @@ async def _oauth_session_attempt(
         if process.returncode == 0:
             yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
         else:
-            yield error_event(*_auth_failure_from_output(scan_buffer))
+            scan_buffer = await _drain_pty_tail(master_fd, scan_buffer)
+            code, message_text, detail = _auth_failure_from_output(scan_buffer)
+            event = error_event(code, message_text)
+            if detail:
+                event = ProviderEventV1(event.type, {**event.payload, **detail})
+            yield event
     except Exception:  # noqa: BLE001 - never crash the runner process for auth failures
         await _stop_process(process)
         yield error_event("provider_auth_failed", "Google Antigravity authentication failed")
@@ -449,28 +460,69 @@ def parse_antigravity_oauth_state(verification_uri: str) -> str:
     return state[:64]
 
 
-def _auth_failure_from_output(output: str) -> tuple[str, str]:
-    plain = _ANSI_RE.sub("", output or "").lower()
-    # Token-exchange failures also print a generic "...failed or timed out" trailer — check them first.
-    if "token exchange failed" in plain or "oauth2.googleapis.com" in plain:
+async def _drain_pty_tail(master_fd: int, scan_buffer: str) -> str:
+    """Read any final CLI bytes after process exit (error lines often arrive here)."""
+    buffer = scan_buffer
+    for _ in range(32):
+        try:
+            chunk = await asyncio.wait_for(
+                asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
+                timeout=0.05,
+            )
+        except (TimeoutError, OSError):
+            break
+        if not chunk:
+            break
+        buffer = (buffer + chunk.decode("utf-8", errors="replace"))[-16384:]
+    return buffer
+
+
+def _auth_failure_from_output(output: str) -> tuple[str, str, dict[str, str]]:
+    plain = _ANSI_RE.sub("", output or "")
+    lowered = plain.lower()
+    detail: dict[str, str] = {}
+    match = _OAUTH2_ERROR_RE.search(plain)
+    if match:
+        detail["oauth_error"] = match.group(1)[:80]
+        description = (match.group(2) or "").strip()
+        if description:
+            detail["oauth_error_description"] = description[:160]
+    # Prefer concrete OAuth error codes from the token endpoint over generic transport text.
+    if "invalid_grant" in lowered:
+        return (
+            "provider_auth_failed",
+            "Google rejected the authorization code (invalid_grant). Open the current link and paste a fresh code once within ~55s",
+            detail,
+        )
+    if "invalid_request" in lowered or "redirect_uri" in lowered:
+        return (
+            "provider_auth_failed",
+            "Google rejected the authorization request; open the current sign-in link and try again",
+            detail,
+        )
+    if "token exchange failed" in lowered and "dial tcp" in lowered:
         return (
             "provider_auth_transport_failed",
             "Google token exchange failed; check AI CLI egress and try sign-in again",
+            detail,
+        )
+    if "token exchange failed" in lowered:
+        return (
+            "provider_auth_failed",
+            "Google token exchange rejected the authorization code; open the current link and paste a fresh code once",
+            detail,
         )
     # Match the CLI hard timeout, not the prompt "Waiting for authentication (timeout 60s)..."
-    if "authentication timed out" in plain:
+    if "authentication timed out" in lowered:
         return (
             "provider_auth_timeout",
             "Google Antigravity sign-in link expired; open the new link and paste a fresh code",
-        )
-    if "invalid_grant" in plain or "invalid_request" in plain:
-        return (
-            "provider_auth_failed",
-            "Google Antigravity rejected the authorization code; open the latest link and paste a fresh code once",
+            detail,
         )
     return (
         "provider_auth_failed",
         "Google Antigravity rejected the authorization code; open the latest link and paste a fresh code once",
+        detail,
     )
 
 
