@@ -1,0 +1,113 @@
+/* BoardUI-inspired chat chrome — uses project semantic tokens only. */
+
+@keyframes wt-chat-composer-dash {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes wt-chat-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes wt-chat-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes wt-chat-tool-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.wt-chat-shell {
+  background:
+    radial-gradient(120% 80% at 10% -10%, hsl(var(--ai) / 0.06), transparent 55%),
+    radial-gradient(90% 70% at 100% 0%, hsl(var(--primary) / 0.05), transparent 50%),
+    hsl(var(--background));
+}
+
+.wt-chat-panel {
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card) / 0.92);
+  box-shadow: 0 1px 0 hsl(var(--foreground) / 0.03), 0 12px 40px hsl(var(--background) / 0.35);
+}
+
+.wt-chat-composer-loader {
+  pointer-events: none;
+  position: absolute;
+  inset: -1.5px;
+  overflow: visible;
+}
+
+.wt-chat-composer-loader rect {
+  fill: none;
+  stroke: url(#wt-chat-composer-grad);
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-dasharray: 28 72;
+  animation: wt-chat-composer-dash 4.5s linear infinite;
+  filter: drop-shadow(0 0 4px hsl(var(--ai) / 0.35));
+}
+
+.wt-chat-glass-on .wt-chat-glass-control {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.wt-chat-thinking-label {
+  background-image: linear-gradient(
+    90deg,
+    hsl(var(--muted-foreground) / 0.55) 0%,
+    hsl(var(--foreground) / 0.95) 45%,
+    hsl(var(--muted-foreground) / 0.55) 90%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: wt-chat-shimmer 2.4s linear infinite;
+}
+
+.wt-chat-thinking-star {
+  animation: wt-chat-star-twinkle 1.4s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.wt-chat-tool-running {
+  animation: wt-chat-tool-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wt-chat-composer-loader rect,
+  .wt-chat-thinking-label,
+  .wt-chat-thinking-star,
+  .wt-chat-tool-running {
+    animation: none !important;
+  }
+
+  .wt-chat-thinking-label {
+    color: hsl(var(--muted-foreground));
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+}

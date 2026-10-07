@@ -1,11 +1,23 @@
-import { Bot, FileText, Loader2, Paperclip, Send, Square, X } from "lucide-react";
+import {
+  Bot,
+  ChevronDown,
+  FileText,
+  GitBranch,
+  Loader2,
+  Plus,
+  Send,
+  Square,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { localize } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
+import { AgentThinkingIndicator } from "./AgentThinkingIndicator";
 import { ComposeCommandPalette } from "./ComposeCommandPalette";
 import { PinnedContextChips } from "./PinnedContextChips";
 import { CHAT_ATTACH_MAX_FILES } from "./chatAttachments";
@@ -20,6 +32,38 @@ function formatBytes(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10_240 ? 1 : 0)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const CONTEXT_SOFT_LIMIT = 128_000;
+
+function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; percent: number }) {
+  const r = 6;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.min(1, Math.max(0, percent / 100)));
+  return (
+    <div
+      className="flex items-center gap-1 rounded-full bg-muted/70 py-1 pe-2 ps-1.5"
+      title={tokensLabel ? `${tokensLabel} tok` : undefined}
+    >
+      <svg aria-hidden width="16" height="16" viewBox="0 0 16 16" className="shrink-0 -rotate-90">
+        <circle cx="8" cy="8" r={r} fill="none" stroke="hsl(var(--border))" strokeWidth="2.5" />
+        <circle
+          cx="8"
+          cy="8"
+          r={r}
+          fill="none"
+          stroke="hsl(var(--muted-foreground))"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeDasharray={`${c}`}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="text-[11px] tabular-nums text-muted-foreground">
+        {tokensLabel ? `${percent}%` : "—"}
+      </span>
+    </div>
+  );
 }
 
 export function ChatComposerForm({ c }: ChatComposerFormProps) {
@@ -48,13 +92,32 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
     pendingUserText,
     handleStop,
     submitMessage,
+    sessionTokens,
+    activeChat,
+    operatorWs,
   } = c;
   const reconcilingUserMessage = Boolean(pendingUserText) && !isBusy;
   const canSend = Boolean(draft.trim() || attachedFiles.length) && !reconcilingUserMessage && !attachBusy;
 
+  const usageTotal = useMemo(() => {
+    const usage = activeChat?.total_usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    if (!usage) return 0;
+    return Number(usage.input_tokens || 0) + Number(usage.output_tokens || 0);
+  }, [activeChat?.total_usage]);
+  const contextPercent = usageTotal
+    ? Math.min(100, Math.max(1, Math.round((usageTotal / CONTEXT_SOFT_LIMIT) * 100)))
+    : 0;
+  const projectLabel = localize(lang, "WebTerm", "WebTerm");
+  const thinkingLabel =
+    operatorWs?.phase === "tools"
+      ? localize(lang, "Работаю…", "Working…")
+      : operatorWs?.phase === "streaming"
+        ? localize(lang, "Пишу…", "Writing…")
+        : "Thinking…";
+
   return (
     <form
-      className="shrink-0 border-t border-border/50 bg-card/95 px-3 pb-3 pt-2 sm:px-6 sm:pb-4"
+      className="shrink-0 px-3 pb-3 pt-1 sm:px-5 sm:pb-4"
       onSubmit={(event) => {
         event.preventDefault();
         submitMessage();
@@ -121,7 +184,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
             {attachedFiles.map((file) => (
               <span
                 key={file.id}
-                className="inline-flex max-w-[16rem] items-center gap-1 rounded-sm border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
+                className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
                 title={
                   file.kind === "text"
                     ? file.truncated
@@ -139,7 +202,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                 <span className="shrink-0 text-muted-foreground/70">{formatBytes(file.size)}</span>
                 <button
                   type="button"
-                  className="rounded-sm p-0.5 opacity-70 hover:bg-muted hover:opacity-100"
+                  className="rounded-full p-0.5 opacity-70 hover:bg-muted hover:opacity-100"
                   onClick={() => removeAttachedFile(file.id)}
                   aria-label={localize(lang, "Убрать файл", "Remove file")}
                 >
@@ -149,8 +212,66 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
             ))}
           </div>
         ) : null}
-        <div className="rounded-sm border border-border/70 bg-muted/25 p-1.5 transition-[border-color,background-color] duration-200 ease-out focus-within:border-primary/40 focus-within:bg-muted/35 focus-within:ring-2 focus-within:ring-primary/20 motion-reduce:transition-none">
-          <div className="flex items-end gap-1">
+
+        <AnimatePresence initial={false}>
+          {isBusy ? (
+            <motion.div
+              key="agent-thinking"
+              initial={reduceMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: 2 }}
+              transition={{ duration: reduceMotion ? 0 : 0.18, ease: CHAT_EASE }}
+              className="mb-1.5 px-1"
+            >
+              <AgentThinkingIndicator
+                label={thinkingLabel}
+                startedAt={operatorWs?.thinkingStartedAt ?? null}
+                variant={operatorWs?.phase === "tools" ? "spin" : "wave"}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+
+        <div className={cn("relative", isBusy && "wt-chat-glass-on")}>
+          {isBusy && !reduceMotion ? (
+            <svg className="wt-chat-composer-loader" viewBox="0 0 100 52" preserveAspectRatio="none" aria-hidden>
+              <defs>
+                <linearGradient id="wt-chat-composer-grad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stopColor="hsl(var(--ai))" />
+                  <stop offset="45%" stopColor="hsl(var(--primary))" />
+                  <stop offset="100%" stopColor="hsl(var(--ai))" />
+                </linearGradient>
+              </defs>
+              <rect x="1" y="1" width="98" height="50" rx="26" ry="26" pathLength="100" />
+            </svg>
+          ) : null}
+
+          <div
+            className={cn(
+              "relative flex min-h-[52px] w-full items-end gap-2 rounded-full border border-border/70 bg-muted/30 py-2 pe-2 ps-2 shadow-sm transition-[border-color,background-color,box-shadow] duration-200",
+              "focus-within:border-primary/35 focus-within:bg-muted/40 focus-within:ring-2 focus-within:ring-primary/15",
+              isBusy && "border-transparent bg-transparent shadow-none",
+            )}
+          >
+            <button
+              type="button"
+              className="wt-chat-glass-control flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              onClick={openFilePicker}
+              disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
+              aria-label={localize(lang, "Файл / проект", "File / project")}
+              title={localize(
+                lang,
+                "Прикрепить файлы к сообщению — текст попадёт в контекст модели",
+                "Attach files to the message — text is added to model context",
+              )}
+            >
+              {attachBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+            </button>
+
             <Textarea
               ref={textareaRef}
               value={draft}
@@ -195,66 +316,85 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                     ? localize(lang, "Сохраняю сообщение…", "Saving message…")
                   : localize(lang, "Что нужно сделать? Для точного сервера введите @", "What should I do? Type @ for an exact server")
               }
-              className="max-h-40 min-h-12 flex-1 resize-none border-0 bg-transparent px-3.5 py-2.5 text-[15px] leading-6 shadow-none focus-visible:ring-0"
+              aria-label={localize(lang, "Сообщение", "Message")}
+              className="max-h-36 min-h-[24px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[14px] leading-5 shadow-none focus-visible:ring-0"
               rows={1}
             />
-            <div className="mb-1 mr-1 h-9 w-9 shrink-0">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={isBusy ? "stop" : "send"}
-                  initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-                  whileTap={reduceMotion ? undefined : { scale: 0.98 }}
-                  transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                  className="h-9 w-9"
-                >
-                  {isBusy ? (
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="secondary"
-                      className="h-9 w-9 rounded-sm"
-                      onClick={handleStop}
-                      aria-label={localize(lang, "Остановить", "Stop")}
-                      title={localize(lang, "Остановить · Esc", "Stop · Esc")}
-                    >
-                      <Square className="h-3.5 w-3.5 fill-current" />
-                    </Button>
-                  ) : (
-                    <Button
-                      type="submit"
-                      size="icon"
-                      className="h-9 w-9 rounded-sm"
-                      disabled={!canSend}
-                      aria-label={localize(lang, "Отправить", "Send")}
-                      title={localize(lang, "Отправить · Enter", "Send · Enter")}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+
+            <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
+              <span
+                className="wt-chat-glass-control hidden h-8 items-center gap-0.5 rounded-xl border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground sm:inline-flex"
+                title={localize(lang, "Режим оператора", "Operator mode")}
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span>Operator</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+              </span>
+
+              <div className="h-9 w-9 shrink-0">
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={isBusy ? "stop" : "send"}
+                    initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+                    transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
+                    className="h-9 w-9"
+                  >
+                    {isBusy ? (
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="secondary"
+                        className="h-9 w-9 rounded-full"
+                        onClick={handleStop}
+                        aria-label={localize(lang, "Остановить", "Stop")}
+                        title={localize(lang, "Остановить · Esc", "Stop · Esc")}
+                      >
+                        <Square className="h-3.5 w-3.5 fill-current" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        size="icon"
+                        className="h-9 w-9 rounded-full"
+                        disabled={!canSend}
+                        aria-label={localize(lang, "Отправить", "Send")}
+                        title={localize(lang, "Отправить · Enter", "Send · Enter")}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
-        <div className="mt-2 flex min-w-0 items-center justify-between gap-3 px-1 text-[10.5px] text-muted-foreground/65">
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 font-medium transition-colors hover:bg-muted/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
-            onClick={openFilePicker}
-            disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
-            title={localize(
-              lang,
-              "Прикрепить файлы к сообщению — текст попадёт в контекст модели",
-              "Attach files to the message — text is added to model context",
-            )}
-          >
-            {attachBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
-            {localize(lang, "Файл / проект", "File / project")}
-          </button>
-          <span className="hidden min-w-0 truncate text-right sm:inline">
-            <Bot className="mr-1 inline h-3 w-3" />
+
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-3 px-1 text-[11px] text-muted-foreground">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1">
+              <GitBranch className="h-3.5 w-3.5" />
+              <span className="truncate">main</span>
+            </span>
+            <button
+              type="button"
+              className="inline-flex max-w-[10rem] items-center gap-0.5 truncate rounded-md px-1 py-0.5 hover:bg-muted/50 hover:text-foreground"
+              title={localize(lang, "Контекст через @", "Context via @")}
+              onClick={() => textareaRef.current?.focus()}
+            >
+              <span className="truncate">{projectLabel}</span>
+              <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            </button>
+            <span className="inline-flex items-center gap-0.5">
+              <span>Agent</span>
+              <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            </span>
+            <ContextMeter tokensLabel={sessionTokens} percent={contextPercent} />
+          </div>
+          <span className="hidden min-w-0 truncate text-right text-[10.5px] text-muted-foreground/65 sm:inline">
             {localize(
               lang,
               "@ — точный сервер · Enter — отправить · Shift+Enter — новая строка",

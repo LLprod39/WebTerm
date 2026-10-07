@@ -3,10 +3,13 @@ import {
   ArrowDown,
   Bot,
   Check,
+  ChevronRight,
   ListChecks,
   Loader2,
   Menu,
+  MoreHorizontal,
   Plus,
+  Share2,
   Terminal,
   X,
 } from "lucide-react";
@@ -288,79 +291,104 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
     settledLiveMessage,
   ]);
 
+  const shareChat = () => {
+    const url = window.location.href;
+    void navigator.clipboard?.writeText(url).catch(() => undefined);
+  };
+
   return (
     <>
-      <header className="flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border/50 bg-card/95 px-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
+      <header className="flex min-h-12 shrink-0 items-center justify-between gap-2 px-3 pt-3 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2">
           <Button
             size="icon"
             variant="ghost"
-            className="h-9 w-9 shrink-0 rounded-sm lg:hidden"
+            className="h-9 w-9 shrink-0 rounded-full lg:hidden"
             onClick={onOpenHistory}
             aria-label={localize(lang, "Открыть историю чатов", "Open chat history")}
           >
             <Menu className="h-4 w-4" />
           </Button>
-          <div className="min-w-0">
-          <h2 className="truncate text-[14px] font-medium tracking-tight text-foreground">
-            {selectedTitle}
-          </h2>
-          <div className="relative min-h-[1rem] overflow-hidden text-[11px]">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.p
-                key={headerStatus.key}
-                initial={reduceMotion ? false : { opacity: 0, y: 3 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
-                transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
-                className={cn(
-                  "flex items-center gap-1.5",
-                  headerStatus.className,
-                )}
+          <nav aria-label={localize(lang, "Местоположение чата", "Chat location")} className="min-w-0 flex-1">
+            <ol className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
+              <li className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                <span className="truncate max-w-[8rem]">
+                  {localize(lang, "Оператор", "Operator")}
+                </span>
+                <ChevronRight className="h-3 w-3 opacity-50" />
+              </li>
+              <li
+                aria-current="page"
+                className="truncate text-[12px] font-medium text-foreground"
+                title={selectedTitle}
               >
-                {isBusy && (headerStatus.key === "working" || headerStatus.key === "waiting") ? (
-                  <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
-                    {[0, 1, 2].map((i) => (
-                      <span
-                        key={i}
-                        className={cn(
-                          "h-1 w-1 rounded-full bg-muted-foreground/55",
-                          !reduceMotion && "animate-bounce",
-                        )}
-                        style={
-                          reduceMotion
-                            ? undefined
-                            : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
-                        }
-                      />
-                    ))}
-                  </span>
-                ) : null}
-                {headerStatus.text}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-          </div>
+                {selectedTitle}
+              </li>
+            </ol>
+            <div className="relative mt-0.5 min-h-[1rem] overflow-hidden text-[11px]">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={headerStatus.key}
+                  initial={reduceMotion ? false : { opacity: 0, y: 3 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -3 }}
+                  transition={{ duration: reduceMotion ? 0 : 0.17, ease: CHAT_EASE }}
+                  className={cn("flex items-center gap-1.5", headerStatus.className)}
+                >
+                  {isBusy && (headerStatus.key === "working" || headerStatus.key === "waiting") ? (
+                    <span className="inline-flex items-center gap-[3px]" aria-hidden="true">
+                      {[0, 1, 2].map((i) => (
+                        <span
+                          key={i}
+                          className={cn(
+                            "h-1 w-1 rounded-full bg-muted-foreground/55",
+                            !reduceMotion && "animate-bounce",
+                          )}
+                          style={
+                            reduceMotion
+                              ? undefined
+                              : { animationDelay: `${i * 0.16}s`, animationDuration: "1.05s" }
+                          }
+                        />
+                      ))}
+                    </span>
+                  ) : null}
+                  {headerStatus.text}
+                </motion.p>
+              </AnimatePresence>
+            </div>
+          </nav>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-0.5">
           {sessionTokens ? (
             <span
-              className="mr-1 hidden rounded-sm border border-border/50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground/70 sm:inline"
+              className="mr-1 hidden rounded-full border border-border/50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground/70 sm:inline"
               title={localize(lang, "Токены за сессию (вход + выход)", "Session tokens (in + out)")}
             >
               {sessionTokens} tok
             </span>
           ) : null}
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 rounded-full"
+            onClick={shareChat}
+            aria-label={localize(lang, "Поделиться чатом", "Share chat")}
+            title={localize(lang, "Скопировать ссылку", "Copy link")}
+          >
+            <Share2 className="h-3.5 w-3.5" />
+          </Button>
           {activePlan ? (
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
               className={cn(
-                "h-8 gap-1.5 rounded-sm px-2.5 text-xs",
+                "h-8 w-8 rounded-full",
                 contextRail.open && contextRail.tab === "tasks" && "text-primary",
               )}
               onClick={() => toggleContextRailTab("tasks")}
               title={localize(lang, "Панель задач", "Tasks panel")}
+              aria-label={localize(lang, "Панель задач", "Tasks panel")}
               aria-pressed={contextRail.open && contextRail.tab === "tasks"}
             >
               <ListChecks className="h-3.5 w-3.5" />
@@ -368,24 +396,37 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
           ) : null}
           {sessionDock.open && sessionDock.serverId ? (
             <Button
-              size="sm"
+              size="icon"
               variant="ghost"
               className={cn(
-                "h-8 gap-1.5 rounded-sm px-2.5 text-xs",
+                "h-8 w-8 rounded-full",
                 contextRail.open && contextRail.tab === "terminal" && "text-primary",
               )}
               onClick={() => toggleContextRailTab("terminal")}
               title={localize(lang, "Терминал", "Terminal")}
+              aria-label={localize(lang, "Терминал", "Terminal")}
               aria-pressed={contextRail.open && contextRail.tab === "terminal"}
             >
               <Terminal className="h-3.5 w-3.5" />
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 rounded-full"
+              onClick={() => toggleContextRailTab("details")}
+              aria-label={localize(lang, "Ещё", "More options")}
+              title={localize(lang, "Контекст", "Context")}
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </Button>
+          )}
           <Button
-            size="sm"
+            size="icon"
             variant="ghost"
-            className="h-8 gap-1.5 rounded-sm px-2.5 text-xs lg:hidden"
+            className="h-8 w-8 rounded-full lg:hidden"
             onClick={clearLastChatAndNew}
+            aria-label={localize(lang, "Новый чат", "New chat")}
           >
             <Plus className="h-3.5 w-3.5" />
           </Button>
@@ -401,20 +442,20 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
         {showEmptyStarter ? (
           <div className="flex min-h-[min(100%,32rem)] flex-col items-center justify-center px-4 py-10">
             <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
-              <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-sm bg-muted text-muted-foreground">
-                <Bot className="h-4 w-4" strokeWidth={1.75} />
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 text-muted-foreground">
+                <Bot className="h-5 w-5" strokeWidth={1.75} />
               </div>
-              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">
                 {localize(lang, "Чем помочь?", "How can I help?")}
               </h2>
-              <p className="mt-1.5 max-w-sm text-[13px] leading-5 text-muted-foreground">
+              <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted-foreground">
                 {localize(
                   lang,
                   "Серверы, метрики, агенты, диагностика. Напишите @ — выбрать сервер.",
                   "Servers, metrics, agents, diagnostics. Type @ to pick a server.",
                 )}
               </p>
-              <div className="mt-6 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="mt-7 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
                 {QUICK_PROMPT_CARDS.map((card) => (
                   <motion.button
                     key={card.id}
@@ -423,7 +464,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                     whileHover={reduceMotion ? undefined : { y: -1 }}
                     whileTap={reduceMotion ? undefined : { scale: 0.99 }}
                     transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                    className="rounded-sm border border-border/70 bg-transparent px-3.5 py-3 text-left transition-colors hover:bg-muted/40"
+                    className="rounded-2xl border border-border/60 bg-transparent px-3.5 py-3 text-left transition-colors hover:bg-muted/40"
                   >
                     <div className="text-[13px] font-medium text-foreground">
                       {lang === "ru" ? card.labelRu : card.labelEn}
@@ -510,7 +551,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                 className="group flex justify-end gap-3"
               >
                 <div className="min-w-0 max-w-[min(560px,85%)]">
-                  <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm opacity-90">
+                  <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm opacity-90">
                     <div className="whitespace-pre-wrap break-words">{pendingUserText}</div>
                   </div>
                   <div className="mt-1 pr-0.5 text-right text-[10px] text-muted-foreground/70">
@@ -717,7 +758,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                 setAtBottom(true);
                 scrollToEnd(true);
               }}
-              className="pointer-events-auto absolute -top-12 left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-sm border border-border bg-card px-3 text-[11px] font-medium text-muted-foreground shadow-elev-1 transition-colors hover:text-foreground"
+              className="pointer-events-auto absolute -top-12 left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-3 text-[11px] font-medium text-muted-foreground shadow-elev-1 transition-colors hover:text-foreground"
               aria-label={localize(lang, "К новому сообщению", "Jump to new message")}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />

@@ -99,6 +99,9 @@ export async function fetchKubernetesClusterNamespaces(clusterId: string) {
   );
 }
 
+/** Alias used by cluster access admin UI. */
+export const fetchKubernetesNamespaces = fetchKubernetesClusterNamespaces;
+
 export async function fetchKubernetesClusterWorkloads(clusterId: string) {
   return apiFetch<{ success: boolean; cluster: KubernetesCluster; workloads: KubernetesWorkloadRef[] }>(
     `/api/kubernetes/clusters/${clusterId}/workloads/`,

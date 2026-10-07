@@ -8,6 +8,7 @@ import { ChatComposerForm } from "./chat-page/ChatComposerForm";
 import { ChatMessagesPane } from "./chat-page/ChatMessagesPane";
 import { ChatThreadSidebar } from "./chat-page/ChatThreadSidebar";
 import { useChatPageController } from "./chat-page/useChatPageController";
+import "./chat-page/chatBoardUi.css";
 
 /** Matches Tailwind `lg` — desktop split vs mobile sheet for the context rail. */
 function useIsLg() {
@@ -40,7 +41,7 @@ export default function ChatPage() {
   };
 
   const conversation = (
-    <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl wt-chat-panel">
       <ChatMessagesPane c={c} onOpenHistory={() => setHistoryOpen(true)} />
       <ChatComposerForm c={c} />
     </section>
@@ -61,9 +62,8 @@ export default function ChatPage() {
   };
 
   return (
-    // Row layout: chat list | conversation | optional single context rail.
-    // Must NOT be flex-col — the sidebar with h-full would eat the full height.
-    <div className="flex h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)] w-full overflow-hidden bg-card text-foreground">
+    // BoardUI-style floating shell: history | conversation | optional context rail.
+    <div className="wt-chat-shell flex h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)] w-full gap-3 overflow-hidden p-2 text-foreground sm:p-3">
       <ChatThreadSidebar c={c} />
 
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
@@ -86,12 +86,12 @@ export default function ChatPage() {
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         {showDesktopRail ? (
-          <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            <ResizablePanel defaultSize={72} minSize={45} className="min-w-0">
+          <ResizablePanelGroup direction="horizontal" className="h-full w-full gap-3">
+            <ResizablePanel defaultSize={70} minSize={45} className="min-w-0">
               {conversation}
             </ResizablePanel>
-            <ResizableHandle withHandle />
-            <ResizablePanel defaultSize={28} minSize={18} maxSize={42} className="min-w-[18rem]">
+            <ResizableHandle withHandle className="opacity-60" />
+            <ResizablePanel defaultSize={30} minSize={18} maxSize={42} className="min-w-[18rem]">
               <ChatContextRail {...railProps} />
             </ResizablePanel>
           </ResizablePanelGroup>

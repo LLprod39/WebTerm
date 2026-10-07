@@ -1,4 +1,4 @@
-import { FileSearch, ListChecks, Terminal, X } from "lucide-react";
+import { FileSearch, ListChecks, Maximize2, PanelRightClose, Terminal, X } from "lucide-react";
 
 import type { AssistantAction } from "@/api";
 import { Button } from "@/components/ui/button";
@@ -22,13 +22,14 @@ type Props = {
   onModeChange: (mode: "agent" | "live") => void;
   onHumanCommand: (cmd: string) => void;
   onOpenTerminalFromDetails?: () => void;
-  /** When true, omit outer border (used inside Sheet). */
+  /** When true, omit outer chrome (used inside Sheet). */
   embedded?: boolean;
   className?: string;
 };
 
 /**
- * Single right context rail: Tasks | Terminal | Details tabs (mutually exclusive content).
+ * Right context rail mapped to BoardUI Changes/Browser panel pattern:
+ * pill tabs + terminal affordance, fixed secondary inspector.
  */
 export function ChatContextRail({
   tab,
@@ -48,78 +49,85 @@ export function ChatContextRail({
   const hasSession = session.open && Boolean(session.serverId);
   const hasDetails = Boolean(actionDetails);
 
+  const tabs: Array<{ id: ContextRailTab; labelRu: string; labelEn: string; icon: typeof ListChecks; live: boolean }> = [
+    { id: "tasks", labelRu: "Задачи", labelEn: "Tasks", icon: ListChecks, live: hasPlan },
+    { id: "terminal", labelRu: "Терминал", labelEn: "Terminal", icon: Terminal, live: hasSession },
+    { id: "details", labelRu: "Детали", labelEn: "Details", icon: FileSearch, live: hasDetails },
+  ];
+
   return (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-full flex-col overflow-hidden bg-card",
-        !embedded && "border-l border-border",
+        "flex h-full min-h-0 w-full flex-col gap-2.5 overflow-hidden rounded-2xl wt-chat-panel",
+        embedded && "rounded-none border-0 shadow-none",
         className,
       )}
       aria-label={localize(lang, "Контекст", "Context")}
     >
-      <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border px-2">
-        <div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-sm bg-secondary/60 p-0.5">
-          <button
-            type="button"
-            onClick={() => onTabChange("tasks")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors",
-              tab === "tasks"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-            {localize(lang, "Задачи", "Tasks")}
-            {hasPlan ? (
-              <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
-            ) : null}
-          </button>
-          <button
-            type="button"
-            onClick={() => onTabChange("terminal")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors",
-              tab === "terminal"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Terminal className="h-3.5 w-3.5" />
-            {localize(lang, "Терминал", "Terminal")}
-            {hasSession ? (
-              <span className="h-1.5 w-1.5 rounded-full bg-ai" aria-hidden />
-            ) : null}
-          </button>
-          <button
-            type="button"
-            onClick={() => onTabChange("details")}
-            className={cn(
-              "flex flex-1 items-center justify-center gap-1.5 rounded-sm px-2 py-1.5 text-[11px] font-medium transition-colors",
-              tab === "details"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <FileSearch className="h-3.5 w-3.5" />
-            {localize(lang, "Детали", "Details")}
-            {hasDetails ? (
-              <span className="h-1.5 w-1.5 rounded-full bg-info" aria-hidden />
-            ) : null}
-          </button>
+      <header className="flex h-[30px] shrink-0 items-center justify-between px-2.5 pt-2">
+        <div role="group" className="relative inline-flex items-center gap-0.5" aria-label={localize(lang, "Вид панели", "Panel view")}>
+          {tabs.map((item) => {
+            const Icon = item.icon;
+            const selected = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => onTabChange(item.id)}
+                className={cn(
+                  "relative z-10 flex shrink-0 items-center gap-1 rounded-full px-2 py-[5px] text-[12px] transition-colors",
+                  selected ? "text-ai" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {selected ? (
+                  <span className="pointer-events-none absolute inset-0 rounded-full bg-ai/10" aria-hidden />
+                ) : null}
+                <Icon className="relative z-10 h-4 w-4 shrink-0" />
+                <span className="relative z-10 whitespace-nowrap">
+                  {lang === "ru" ? item.labelRu : item.labelEn}
+                </span>
+                {item.live ? (
+                  <span className="relative z-10 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+                ) : null}
+              </button>
+            );
+          })}
         </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="h-7 w-7 shrink-0 p-0"
-          onClick={onClose}
-          aria-label={localize(lang, "Закрыть", "Close")}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
+        <div className="flex items-center gap-1 pe-0.5">
+          {hasSession ? (
+            <button
+              type="button"
+              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => onTabChange("terminal")}
+              aria-label={localize(lang, "Открыть терминал", "Open terminal")}
+              title={localize(lang, "Терминал", "Terminal")}
+            >
+              <Maximize2 className="h-3.5 w-3.5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            onClick={onClose}
+            aria-label={localize(lang, "Свернуть панель", "Toggle panel")}
+            title={localize(lang, "Свернуть", "Collapse")}
+          >
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 shrink-0 rounded-full p-0"
+            onClick={onClose}
+            aria-label={localize(lang, "Закрыть", "Close")}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-hidden px-1 pb-1">
         {tab === "tasks" ? (
           <PlanTasksPanel plan={plan} />
         ) : tab === "terminal" ? (

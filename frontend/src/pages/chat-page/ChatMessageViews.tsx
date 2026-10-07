@@ -465,7 +465,7 @@ function MessageBubbleComponent({
     return (
       <div className="group flex justify-end gap-3">
         <div className="min-w-0 max-w-[min(560px,85%)]">
-          <div className="rounded-sm rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm">
+          <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm">
             <div className="whitespace-pre-wrap break-words">{displayContent || message.content}</div>
           </div>
           <div className="mt-1 pr-0.5 text-right text-[10px] tabular-nums text-muted-foreground/70 opacity-0 transition-opacity group-hover:opacity-100">
@@ -551,7 +551,7 @@ function MessageBubbleComponent({
       transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.layout}
       className="group grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5"
     >
-      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-sm border border-primary/20 bg-primary/10 text-primary">
+      <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full border border-border/60 bg-muted/50 text-muted-foreground">
         <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 space-y-2 pt-0.5">
@@ -565,17 +565,17 @@ function MessageBubbleComponent({
             </span>
           ) : null}
           {actions.length ? (
-            <span className="rounded-sm border border-border/50 bg-muted/20 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
+            <span className="rounded-full border border-border/50 bg-muted/20 px-1.5 py-px font-mono text-[10px] text-muted-foreground">
               {actions.length} {localize(lang, "действ.", "actions")}
             </span>
           ) : null}
-          <span className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <span className="ml-auto flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {message.content ? <CopyMessageButton content={message.content} lang={lang} /> : null}
             {onRetry ? (
               <button
                 type="button"
                 onClick={onRetry}
-                className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground"
+                className="rounded-full p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
                 aria-label={localize(lang, "Повторить", "Retry")}
                 title={localize(lang, "Повторить последний запрос", "Retry last request")}
               >
