@@ -149,7 +149,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
           void attachFilesFromList(event.target.files);
         }}
       />
-      <div className="relative mx-auto max-w-[42rem]">
+      <div className="relative mx-auto max-w-[768px]">
         <PinnedContextChips servers={pinnedServers} onUnpinServer={unpinServer} />
         <ComposeCommandPalette
           ref={paletteRef}

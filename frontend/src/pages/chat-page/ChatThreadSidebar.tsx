@@ -3,6 +3,7 @@ import {
   Folder,
   Loader2,
   MoreHorizontal,
+  PanelLeft,
   Pencil,
   Plus,
   Search,
@@ -29,6 +30,8 @@ type ChatThreadSidebarProps = {
   c: ChatPageController;
   mobile?: boolean;
   onNavigate?: () => void;
+  collapsed?: boolean;
+  onExpand?: () => void;
 };
 
 function TreeConnector({ count }: { count: number }) {
@@ -53,7 +56,13 @@ function TreeConnector({ count }: { count: number }) {
   );
 }
 
-export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadSidebarProps) {
+export function ChatThreadSidebar({
+  c,
+  mobile = false,
+  onNavigate,
+  collapsed = false,
+  onExpand,
+}: ChatThreadSidebarProps) {
   const reduceMotion = useReducedMotion();
   const {
     lang,
@@ -75,6 +84,32 @@ export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadS
     clearLastChatAndNew,
     activeChat,
   } = c;
+
+  if (!mobile && collapsed) {
+    return (
+      <aside className="relative z-[1] hidden h-full w-11 shrink-0 flex-col items-center gap-2 overflow-hidden rounded-2xl p-1.5 wt-chat-panel lg:flex">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full"
+          onClick={onExpand}
+          aria-label={localize(lang, "Показать историю чатов", "Show chat history")}
+          title={localize(lang, "История · Ctrl/⌘B", "History · Ctrl/⌘B")}
+        >
+          <PanelLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full"
+          onClick={clearLastChatAndNew}
+          aria-label={localize(lang, "Новый агент", "New agent")}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </aside>
+    );
+  }
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const openGroups = useMemo(() => {

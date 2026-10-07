@@ -25,10 +25,45 @@ function useIsLg() {
   return isLg;
 }
 
+const HISTORY_COLLAPSED_KEY = "wt.chat.historyCollapsed";
+
 export default function ChatPage() {
   const c = useChatPageController();
   const isLg = useIsLg();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(() => {
+    try {
+      return window.localStorage.getItem(HISTORY_COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HISTORY_COLLAPSED_KEY, historyCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }, [historyCollapsed]);
+
+  // On /chat, Ctrl/Cmd+B toggles chat history (capture steals AppSidebar shortcut).
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() !== "b" || !(event.metaKey || event.ctrlKey) || event.altKey) {
+        return;
+      }
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (window.matchMedia("(min-width: 1024px)").matches) {
+        setHistoryCollapsed((value) => !value);
+      } else {
+        setHistoryOpen((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   const railOpen = c.contextRail.open;
   const railTab = c.contextRail.tab;
@@ -42,7 +77,12 @@ export default function ChatPage() {
 
   const conversation = (
     <section className="relative z-[1] flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl wt-chat-panel">
-      <ChatMessagesPane c={c} onOpenHistory={() => setHistoryOpen(true)} />
+      <ChatMessagesPane
+        c={c}
+        onOpenHistory={() => setHistoryOpen(true)}
+        historyCollapsed={historyCollapsed}
+        onToggleHistoryCollapsed={() => setHistoryCollapsed((value) => !value)}
+      />
       <ChatComposerForm c={c} />
     </section>
   );
@@ -63,8 +103,12 @@ export default function ChatPage() {
 
   return (
     // BoardUI-style floating shell: history | conversation | optional context rail.
-    <div className="wt-chat-shell flex h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)] w-full gap-3 overflow-hidden p-2 text-foreground sm:p-3">
-      <ChatThreadSidebar c={c} />
+    <div className="wt-chat-shell flex h-full max-h-full min-h-0 w-full gap-3 overflow-hidden p-2 text-foreground sm:p-3">
+      <ChatThreadSidebar
+        c={c}
+        collapsed={historyCollapsed}
+        onExpand={() => setHistoryCollapsed(false)}
+      />
 
       <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
         <SheetContent side="left" className="w-[min(22rem,88vw)] p-0 lg:hidden">

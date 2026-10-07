@@ -7,6 +7,8 @@ import {
   Loader2,
   Menu,
   MoreHorizontal,
+  PanelLeft,
+  PanelLeftClose,
   Plus,
   Share2,
   Terminal,
@@ -39,9 +41,16 @@ import type { ChatPageController } from "./useChatPageController";
 type ChatMessagesPaneProps = {
   c: ChatPageController;
   onOpenHistory?: () => void;
+  historyCollapsed?: boolean;
+  onToggleHistoryCollapsed?: () => void;
 };
 
-export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
+export function ChatMessagesPane({
+  c,
+  onOpenHistory,
+  historyCollapsed = false,
+  onToggleHistoryCollapsed,
+}: ChatMessagesPaneProps) {
   const reduceMotion = useReducedMotion();
   const {
     lang,
@@ -293,7 +302,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
 
   return (
     <>
-      <header className="flex min-h-12 shrink-0 items-center justify-between gap-2 px-3 pt-3 sm:px-5">
+      <header className="flex min-h-11 shrink-0 items-center justify-between gap-2 px-3 pt-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-2">
           <Button
             size="icon"
@@ -304,6 +313,22 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
           >
             <Menu className="h-4 w-4" />
           </Button>
+          {onToggleHistoryCollapsed ? (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="hidden h-8 w-8 shrink-0 rounded-full lg:inline-flex"
+              onClick={onToggleHistoryCollapsed}
+              aria-label={
+                historyCollapsed
+                  ? localize(lang, "Показать историю чатов", "Show chat history")
+                  : localize(lang, "Скрыть историю чатов", "Hide chat history")
+              }
+              title={localize(lang, "История · Ctrl/⌘B", "History · Ctrl/⌘B")}
+            >
+              {historyCollapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </Button>
+          ) : null}
           <nav className="min-w-0 flex-1">
             <Breadcrumb aria-label={localize(lang, "Местоположение чата", "Chat location")}>
               <BreadcrumbItem href="/chat">
@@ -429,44 +454,39 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
         {/* Always render a real content tree so the pane never paints blank. */}
         {showEmptyStarter ? (
           <div className="flex min-h-[min(100%,32rem)] flex-col items-center justify-center px-4 py-10">
-            <div className="mx-auto flex w-full max-w-md flex-col items-center text-center">
-              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border border-border/60 bg-muted/40 text-muted-foreground">
-                <Bot className="h-5 w-5" strokeWidth={1.75} />
-              </div>
-              <h2 className="text-xl font-semibold tracking-tight text-foreground">
+            <div className="mx-auto flex w-full max-w-[768px] flex-col items-center text-center">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                WebTerm
+              </p>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground">
                 {localize(lang, "Чем помочь?", "How can I help?")}
               </h2>
-              <p className="mt-2 max-w-sm text-[13px] leading-5 text-muted-foreground">
+              <p className="mt-2 max-w-md text-[13px] leading-5 text-muted-foreground">
                 {localize(
                   lang,
                   "Серверы, метрики, агенты, диагностика. Напишите @ — выбрать сервер.",
                   "Servers, metrics, agents, diagnostics. Type @ to pick a server.",
                 )}
               </p>
-              <div className="mt-7 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-                {QUICK_PROMPT_CARDS.map((card) => (
+              <div className="mt-7 flex w-full max-w-lg flex-wrap justify-center gap-2">
+                {QUICK_PROMPT_CARDS.slice(0, 4).map((card) => (
                   <motion.button
                     key={card.id}
                     type="button"
                     onClick={() => dispatchMessage(lang === "ru" ? card.promptRu : card.promptEn)}
                     whileHover={reduceMotion ? undefined : { y: -1 }}
-                    whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                    whileTap={reduceMotion ? undefined : { scale: 0.985 }}
                     transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                    className="rounded-2xl border border-border/60 bg-transparent px-3.5 py-3 text-left transition-colors hover:bg-muted/40"
+                    className="rounded-full border border-border/65 bg-muted/25 px-3.5 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/50"
                   >
-                    <div className="text-[13px] font-medium text-foreground">
-                      {lang === "ru" ? card.labelRu : card.labelEn}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-muted-foreground/75">
-                      {lang === "ru" ? card.hintRu : card.hintEn}
-                    </div>
+                    {lang === "ru" ? card.labelRu : card.labelEn}
                   </motion.button>
                 ))}
               </div>
             </div>
           </div>
         ) : (
-          <div className="mx-auto flex w-full max-w-[42rem] flex-col gap-5 px-4 py-6 sm:px-6">
+          <div className="mx-auto flex w-full max-w-[768px] flex-col gap-5 px-4 py-6 sm:px-6">
             {operatorWs.health && !operatorWs.health.ok ? (
               <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] text-warning-foreground">
                 <div className="font-medium">
