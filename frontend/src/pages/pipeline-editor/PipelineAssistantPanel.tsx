@@ -90,22 +90,22 @@ export function PipelineAssistantPanel({
     {
       intent: "create" as const,
       label: localize(lang, "Собрать", "Build"),
-      prompt: localize(lang, "Собери рабочий пайплайн по моему описанию. Если схема пустая, создай все необходимые шаги.", "Build a working pipeline from my request. If the graph is empty, add every required step."),
+      prompt: localize(lang, "Собрать", "Build"),
     },
     {
       intent: "edit" as const,
       label: localize(lang, "Улучшить", "Improve"),
-      prompt: localize(lang, "Улучши текущий граф: убери лишнее, добавь недостающие шаги и понятные названия.", "Improve the current graph: remove unnecessary parts, add missing steps, and make labels clear."),
+      prompt: localize(lang, "Улучшить", "Improve"),
     },
     {
       intent: "validate" as const,
       label: localize(lang, "Проверить", "Validate"),
-      prompt: localize(lang, "Проверь текущий пайплайн и предложи минимальные исправления для сохранения и запуска.", "Validate the current pipeline and propose the smallest fixes needed to save and run it."),
+      prompt: localize(lang, "Проверить", "Validate"),
     },
     {
       intent: "fix_run" as const,
-      label: localize(lang, "Исправить", "Fix errors"),
-      prompt: localize(lang, "Исправь ошибки последней проверки или запуска и предложи безопасную правку.", "Fix the latest validation or run errors and propose a safe patch."),
+      label: localize(lang, "Починить", "Fix"),
+      prompt: localize(lang, "Починить", "Fix"),
     },
   ];
 
@@ -168,11 +168,7 @@ export function PipelineAssistantPanel({
             </div>
           ) : (
             <div className="rounded-sm border border-dashed border-border px-3 py-4 text-xs leading-5 text-muted-foreground">
-              {localize(
-                lang,
-                "Опишите процесс: что запускает пайплайн, какие серверы и инструменты использовать, где нужно подтверждение и куда отправить результат.",
-                "Describe the workflow: what should trigger it, which servers or MCPs it should use, where approval is required, and where to send the result.",
-              )}
+              {localize(lang, "Кратко опишите задачу или выберите действие выше.", "Describe the task briefly, or pick an action above.")}
             </div>
           )}
 

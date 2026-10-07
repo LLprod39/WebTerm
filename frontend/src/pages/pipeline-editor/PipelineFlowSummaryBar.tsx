@@ -52,6 +52,10 @@ function buildVisibleFlowChain(nodes: PipelineNode[], edges: PipelineEdge[]) {
   return chain;
 }
 
+/**
+ * @deprecated Studio L→R chrome no longer mounts this bar (TB-era flow strip).
+ * Kept for one release for git-bisect / stream I unwiring. Do not add new call sites.
+ */
 export function PipelineFlowSummaryBar({
   nodes,
   edges,

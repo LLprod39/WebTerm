@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Copy, Info, Puzzle, Trash2, X } from "lucide-react";
+import { CheckCircle2, Copy, Puzzle, Trash2, X } from "lucide-react";
 
 import { AgentNodePanel } from "@/components/pipeline/node-panel/AgentNodePanel";
 import { type NodeType } from "@/components/pipeline/nodes";
 import { getNodeTypeGuidance, getNodeTypeInfo } from "@/components/pipeline/nodes/nodeMeta";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -270,28 +271,29 @@ export function NodeConfigPanel({
       </div>
 
       <div className="flex-1 overflow-auto p-4 space-y-4">
-        <section className="rounded-sm border border-primary/15 bg-primary/5 px-3 py-3">
-          <div className="flex items-start gap-2">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-foreground">{localize(uiLang, "Что делает эта нода", "What this node does")}</p>
-              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{nodeGuidance.summary}</p>
-            </div>
-          </div>
-          {nodeGuidance.checklist.length ? (
-            <div className="mt-3 space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                {localize(uiLang, "Нужно настроить", "Required setup")}
-              </p>
-              {nodeGuidance.checklist.map((item) => (
-                <div key={item} className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
-                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                  <span>{item}</span>
+        <Accordion type="single" collapsible className="rounded-sm border border-border/70 px-3">
+          <AccordionItem value="guidance" className="border-none">
+            <AccordionTrigger className="py-2.5 text-xs font-semibold text-muted-foreground hover:no-underline hover:text-foreground">
+              {localize(uiLang, "Справка", "Help")}
+            </AccordionTrigger>
+            <AccordionContent className="pb-3">
+              <p className="text-xs leading-relaxed text-muted-foreground">{nodeGuidance.summary}</p>
+              {nodeGuidance.checklist.length ? (
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                    {localize(uiLang, "Нужно настроить", "Required setup")}
+                  </p>
+                  {nodeGuidance.checklist.map((item) => (
+                    <div key={item} className="flex items-start gap-2 text-xs leading-5 text-muted-foreground">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
+              ) : null}
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
 
         <NodeFormSection
           title={localize(uiLang, "Основное", "Basic")}
