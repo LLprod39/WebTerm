@@ -1,5 +1,13 @@
 import { Server } from "lucide-react";
 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+} from "@/boardui/components/base/table/table";
 import { cn } from "@/lib/utils";
 
 export type DataTable = {
@@ -23,7 +31,7 @@ function cellTone(value: string, header: string): string {
   if (h === "id" || h.includes("порт") || h.includes("port") || h.includes("exit")) {
     return "font-mono tabular-nums text-muted-foreground";
   }
-  return "text-foreground/90";
+  return "";
 }
 
 function looksLikeServerName(value: string, header: string): boolean {
@@ -34,90 +42,52 @@ function looksLikeServerName(value: string, header: string): boolean {
   return false;
 }
 
-/** Compact dense inventory/data table — minimal padding, no bulky chrome. */
+/** Inventory/data table using official BoardUI Table primitive. */
 export function DataTableCard({ table }: { table: DataTable }) {
   const headers = table.headers || [];
   const rows = table.rows || [];
   if (!rows.length) return null;
   const columnCount = Math.max(headers.length, ...rows.map((row) => row.length));
-  const proseTable = columnCount <= 2;
+  const cols = headers.length
+    ? headers
+    : Array.from({ length: columnCount }, (_, i) => `col-${i + 1}`);
 
   return (
-    <div className="max-w-[min(960px,100%)] overflow-hidden rounded-sm border border-border/60 bg-card/50">
+    <div className="max-w-[min(960px,100%)] overflow-hidden rounded-2xl border border-border-button-default bg-background-primary-default shadow-xs">
       {table.title ? (
-        <div className="flex items-center justify-between gap-2 border-b border-border/50 px-2 py-1">
-          <div className="truncate text-[11px] font-medium text-foreground/90">{table.title}</div>
-          <div className="shrink-0 font-mono text-[10px] text-muted-foreground">{rows.length}</div>
+        <div className="flex items-center justify-between gap-2 border-b border-border-button-default px-3 py-2">
+          <div className="truncate text-body-medium text-text-primary">{table.title}</div>
+          <div className="shrink-0 font-mono text-caption-1-medium text-text-tertiary">{rows.length}</div>
         </div>
       ) : null}
-      <div className={cn(proseTable ? "min-w-0 overflow-hidden" : "overflow-x-auto")}>
-        <table
-          className={cn(
-            "w-full border-collapse text-left",
-            proseTable
-              ? "min-w-0 table-fixed text-[13px] leading-5"
-              : "min-w-[420px] text-[11.5px] leading-4",
-          )}
-        >
-          {headers.length ? (
-            <thead>
-              <tr className="border-b border-border/50 bg-muted/20 text-[10px] text-muted-foreground">
-                {headers.map((h) => (
-                  <th
-                    key={h}
-                    className={cn(
-                      "px-2 py-1 font-medium first:pl-2.5 last:pr-2.5",
-                      proseTable
-                        ? "whitespace-normal break-words align-top [overflow-wrap:anywhere] first:w-[40%] sm:first:w-[32%]"
-                        : "whitespace-nowrap",
-                    )}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-          ) : null}
-          <tbody>
-            {rows.map((row, ri) => (
-              <tr
-                key={ri}
-                className="border-b border-border/30 last:border-0 odd:bg-transparent even:bg-muted/10 hover:bg-primary/[0.04]"
-              >
-                {row.map((cell, ci) => {
-                  const header = headers[ci] || "";
-                  const value = cell == null || cell === "" ? "—" : String(cell);
-                  const serverish = looksLikeServerName(value, header);
-                  return (
-                    <td
-                      key={ci}
-                      className={cn(
-                        "px-2 first:pl-2.5 last:pr-2.5",
-                        proseTable
-                          ? "whitespace-normal break-words py-1.5 align-top [overflow-wrap:anywhere] first:w-[40%] sm:first:w-[32%]"
-                          : "whitespace-nowrap py-0.5 align-middle",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1",
-                          proseTable
-                            ? "max-w-full min-w-0 items-start whitespace-normal break-words [overflow-wrap:anywhere]"
-                            : "max-w-[14rem] truncate",
-                          cellTone(value, header),
-                        )}
-                      >
-                        {serverish ? <Server className="h-2.5 w-2.5 shrink-0 opacity-70" /> : null}
-                        {value}
-                      </span>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <Table aria-label={table.title || "Data table"} size="sm" containerClassName="min-w-0">
+        <TableHeader>
+          {cols.map((h) => (
+            <TableColumn key={h} isRowHeader={h === cols[0]}>
+              {headers.length ? h : ""}
+            </TableColumn>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {rows.map((row, ri) => (
+            <TableRow key={ri}>
+              {cols.map((header, ci) => {
+                const cell = row[ci];
+                const value = cell == null || cell === "" ? "—" : String(cell);
+                const serverish = looksLikeServerName(value, headers[ci] || header);
+                return (
+                  <TableCell key={`${ri}-${ci}`}>
+                    <span className={cn("inline-flex max-w-[14rem] items-center gap-1 truncate", cellTone(value, headers[ci] || ""))}>
+                      {serverish ? <Server className="h-2.5 w-2.5 shrink-0 opacity-70" /> : null}
+                      {value}
+                    </span>
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

@@ -4,13 +4,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bot, Cable, Clock, Gauge, RotateCcw, Save } from "lucide-react";
 
 import { fetchAuthSession, fetchSettings, saveSettings, type SettingsConfig } from "@/api";
+import { AgentLimitsCard } from "@/boardui/components/application/agent-limits/agent-limits-card";
+import { DataGrid, type DataGridColumn } from "@/boardui/components/application/data-grid/data-grid";
+import { DirectionProvider } from "@/boardui/components/foundations/direction/direction";
 import { SettingsPageHeader } from "@/components/settings/SettingsPageHeader";
 import { SettingsPageShell } from "@/components/settings/SettingsPageShell";
 import { SettingsSectionCard as SectionCard } from "@/components/settings/SettingsSectionCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { QueryStateBlock } from "@/components/ui/page-shell";
+import { localize, useI18n } from "@/lib/i18n";
 
 type LimitKey =
   | "agent_active_runs_per_user_limit"
@@ -40,13 +42,22 @@ type LimitField = {
   max?: number;
 };
 
+type LimitRow = {
+  key: LimitKey;
+  label: string;
+  description: string;
+  value: number;
+  min: number;
+  max: number;
+};
+
 const RUN_LIMITS: LimitField[] = [
   { key: "agent_active_runs_per_user_limit", label: "Агенты на пользователя", description: "Одновременные запуски одного пользователя", max: 100 },
   { key: "agent_active_runs_global_limit", label: "Агенты на платформу", description: "Общее число одновременных запусков", max: 500 },
   { key: "agent_run_stale_seconds", label: "Зависание агента, сек.", description: "Когда запуск считать зависшим", max: 604800 },
   { key: "pipeline_active_runs_per_user_limit", label: "Сценарии на пользователя", description: "Одновременные сценарии одного пользователя", max: 100 },
   { key: "pipeline_active_runs_global_limit", label: "Сценарии на платформу", description: "Общее число одновременных сценариев", max: 500 },
-  { key: "pipeline_run_stale_seconds", label: "Зависание сценария, сек.", description: "Когда выполнение считать зависшим", max: 604800 },
+  { key: "pipeline_run_stale_seconds", label: "Зависание сценария, сек.", description: "Когда сценарий считать зависшим", max: 604800 },
 ];
 
 const SESSION_LIMITS: LimitField[] = [
@@ -74,36 +85,65 @@ function valueFromConfig(config: SettingsConfig | undefined, key: LimitKey, fall
   return typeof raw === "number" && Number.isFinite(raw) ? raw : fallback;
 }
 
-function LimitInput({
-  field,
-  value,
-  onChange,
+function fieldsToRows(fields: LimitField[], draft: Record<LimitKey, number>): LimitRow[] {
+  return fields.map((field) => ({
+    key: field.key,
+    label: field.label,
+    description: field.description,
+    value: draft[field.key] ?? 0,
+    min: field.min ?? 0,
+    max: field.max ?? 1_000_000_000,
+  }));
+}
+
+const LIMIT_COLUMNS: readonly DataGridColumn<LimitRow>[] = [
+  { key: "label", header: "Параметр", width: 240, editable: false },
+  { key: "description", header: "Описание", width: 320, editable: false },
+  {
+    key: "value",
+    header: "Значение",
+    width: 140,
+    type: "number",
+    editable: true,
+    align: "end",
+    min: 0,
+    validate: (value, row) => {
+      const num = typeof value === "number" ? value : Number(value);
+      if (!Number.isFinite(num)) return "Число";
+      if (num < row.min) return `≥ ${row.min}`;
+      if (num > row.max) return `≤ ${row.max}`;
+      return undefined;
+    },
+  },
+];
+
+function LimitsDataGrid({
+  fields,
+  draft,
+  onRowsChange,
+  label,
 }: {
-  field: LimitField;
-  value: number;
-  onChange: (key: LimitKey, value: number) => void;
+  fields: LimitField[];
+  draft: Record<LimitKey, number>;
+  onRowsChange: (rows: LimitRow[]) => void;
+  label: string;
 }) {
+  const rows = useMemo(() => fieldsToRows(fields, draft), [draft, fields]);
   return (
-    <div className="min-w-0 space-y-2 rounded-sm border border-border bg-surface-0/50 p-3.5">
-      <div className="min-w-0">
-        <Label htmlFor={field.key} className="text-xs font-semibold text-foreground">
-          {field.label}
-        </Label>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">{field.description}</p>
-      </div>
-      <Input
-        id={field.key}
-        type="number"
-        min={field.min ?? 0}
-        max={field.max}
-        value={value}
-        onChange={(event) => onChange(field.key, Number(event.target.value || 0))}
-      />
-    </div>
+    <DataGrid
+      aria-label={label}
+      data={rows}
+      columns={LIMIT_COLUMNS}
+      getRowId={(row) => row.key}
+      onDataChange={onRowsChange}
+      height={Math.min(396, 56 + rows.length * 40)}
+      exportFileName={`${label}.csv`}
+    />
   );
 }
 
 export default function SettingsLimitsPage() {
+  const { lang } = useI18n();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -135,8 +175,14 @@ export default function SettingsLimitsPage() {
     setSaved(false);
   }, [config, initialDraft]);
 
-  const updateField = (key: LimitKey, value: number) => {
-    setDraft((prev) => ({ ...prev, [key]: Math.max(0, value) }));
+  const applyRows = (rows: LimitRow[]) => {
+    setDraft((prev) => {
+      const next = { ...prev };
+      for (const row of rows) {
+        next[row.key] = Math.max(row.min, Math.min(row.max, Number(row.value) || 0));
+      }
+      return next;
+    });
     setSaved(false);
   };
 
@@ -156,6 +202,11 @@ export default function SettingsLimitsPage() {
       setSaving(false);
     }
   };
+
+  const dailyTokens = draft.llm_daily_token_limit_per_user ?? 0;
+  const agentUser = draft.agent_active_runs_per_user_limit ?? 0;
+  const agentGlobal = draft.agent_active_runs_global_limit ?? 0;
+  const sshUser = draft.ssh_terminal_sessions_per_user_limit ?? 0;
 
   if (authLoading) {
     return <QueryStateBlock loading>{null}</QueryStateBlock>;
@@ -191,31 +242,63 @@ export default function SettingsLimitsPage() {
         errorText="Не удалось загрузить лимиты"
         onRetry={() => queryClient.invalidateQueries({ queryKey: ["settings", "config"] })}
       >
-        <div className="space-y-5">
-          <SectionCard title="Запуски" icon={Bot} description="Агенты и сценарии">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {RUN_LIMITS.map((field) => (
-                <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />
-              ))}
-            </div>
-          </SectionCard>
+        <DirectionProvider locale={lang === "ru" ? "ru-RU" : "en-US"}>
+          <div className="space-y-5">
+            <AgentLimitsCard
+              plan={localize(lang, "Платформа", "Platform")}
+              planHref="/settings/ai"
+              defaultExpanded
+              context={{
+                max: Math.max(dailyTokens || 250_000, 1),
+                segments: [
+                  {
+                    label: localize(lang, "Дневной бюджет токенов", "Daily token budget"),
+                    tokens: dailyTokens || 250_000,
+                  },
+                ],
+              }}
+              limits={[
+                {
+                  label: localize(lang, "Агенты / пользователь", "Agents / user"),
+                  used: agentGlobal > 0 ? Math.min(1, agentUser / agentGlobal) : 0,
+                  resets: localize(lang, "конфиг", "config"),
+                },
+                {
+                  label: localize(lang, "SSH / пользователь", "SSH / user"),
+                  used: Math.min(1, sshUser / Math.max(draft.ssh_terminal_sessions_global_limit || 1, 1)),
+                  resets: localize(lang, "конфиг", "config"),
+                },
+              ]}
+            />
 
-          <SectionCard title="Сессии и модели" icon={Clock} description="SSH-терминалы и дневной бюджет токенов">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {SESSION_LIMITS.map((field) => (
-                <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />
-              ))}
-            </div>
-          </SectionCard>
+            <SectionCard title="Запуски" icon={Bot} description="Агенты и сценарии">
+              <LimitsDataGrid
+                fields={RUN_LIMITS}
+                draft={draft}
+                onRowsChange={applyRows}
+                label={localize(lang, "Лимиты запусков", "Run limits")}
+              />
+            </SectionCard>
 
-          <SectionCard title="MCP" icon={Cable} description="Ожидание и повторы серверов инструментов">
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {MCP_LIMITS.map((field) => (
-                <LimitInput key={field.key} field={field} value={draft[field.key] ?? 0} onChange={updateField} />
-              ))}
-            </div>
-          </SectionCard>
-        </div>
+            <SectionCard title="Сессии и модели" icon={Clock} description="SSH-терминалы и дневной бюджет токенов">
+              <LimitsDataGrid
+                fields={SESSION_LIMITS}
+                draft={draft}
+                onRowsChange={applyRows}
+                label={localize(lang, "Лимиты сессий", "Session limits")}
+              />
+            </SectionCard>
+
+            <SectionCard title="MCP" icon={Cable} description="Ожидание и повторы серверов инструментов">
+              <LimitsDataGrid
+                fields={MCP_LIMITS}
+                draft={draft}
+                onRowsChange={applyRows}
+                label={localize(lang, "Лимиты MCP", "MCP limits")}
+              />
+            </SectionCard>
+          </div>
+        </DirectionProvider>
       </QueryStateBlock>
     </SettingsPageShell>
   );

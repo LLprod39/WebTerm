@@ -256,6 +256,7 @@ describe("MessageBubble structured evidence", () => {
     expect(screen.getAllByText("Playbook / runbook · 2")).toHaveLength(1);
     expect(screen.getByText("Base Linux hardening")).toBeInTheDocument();
     expect(screen.getByText(/Базовая защита Linux/)).toBeInTheDocument();
-    expect(screen.getAllByRole("table")).toHaveLength(1);
+    // BoardUI Table (react-aria) exposes role="grid".
+    expect(screen.getAllByRole("grid")).toHaveLength(1);
   });
 });

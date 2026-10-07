@@ -1,9 +1,10 @@
 import { memo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Check, CheckCircle2, ChevronDown, Circle, Copy, Loader2, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
+import { Bot, Check, CheckCircle2, ChevronDown, Copy, Loader2, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
+import { AgentProgress } from "@/boardui/components/application/agent-progress/agent-progress";
 import { Button } from "@/components/ui/button";
 import { Sparkline } from "@/components/dashboard/Sparkline";
 import { localize, useI18n } from "@/lib/i18n";
@@ -34,7 +35,7 @@ import {
 } from "./InteractiveServersPanel";
 import { MetricsSnapshotCard, type MetricsSnapshot } from "./MetricsSnapshotCard";
 import { OperatorMarkdown } from "./OperatorMarkdown";
-import { cleanStepTitle } from "./PlanTasksPanel";
+import { planToAgentProgressSteps } from "./PlanTasksPanel";
 import { WebSourcesCard, type WebSource } from "./WebSourcesCard";
 import { CHAT_MOTION } from "./chatMotion";
 import { visibleOperatorUserText } from "./operatorUserText";
@@ -303,41 +304,9 @@ export function ActionCard({
 export { actionCommandLine, actionResultOutput, actionServerLabel };
 
 export function PlanChecklist({ plan }: { plan: { title?: string; steps?: Array<{ id?: number; text?: string; status?: string }> } }) {
-  const { lang } = useI18n();
-  const steps = plan.steps || [];
+  const steps = planToAgentProgressSteps(plan);
   if (!steps.length) return null;
-  return (
-    <div className="rounded-sm border border-primary/20 bg-primary/[0.04] px-2 py-1.5">
-      <div className="mb-1 text-[11px] font-semibold text-foreground">
-        {plan.title || localize(lang, "План", "Plan")}
-      </div>
-      <ul className="space-y-0.5">
-        {steps.map((step, idx) => {
-          const done = step.status === "done" || step.status === "completed";
-          const failed = step.status === "failed" || step.status === "error";
-          return (
-            <li key={step.id ?? idx} className="flex items-start gap-1.5 text-[12px] leading-4">
-              {done ? (
-                <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-success" />
-              ) : failed ? (
-                <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-destructive" />
-              ) : step.status === "running" ? (
-                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-primary motion-reduce:animate-none" />
-              ) : (
-                <Circle className="mt-0.5 h-3 w-3 shrink-0 text-muted-foreground" />
-              )}
-              <span
-                title={step.text}
-                className={cn("line-clamp-2", done && "text-muted-foreground line-through")}
-              >
-                {cleanStepTitle(step.text)}
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
+  return <AgentProgress steps={steps} defaultExpanded className="max-w-[min(28rem,100%)]" />;
 }
 
 /** Copy message markdown to clipboard with a brief confirmation state. */

@@ -12,12 +12,13 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMemo, useRef } from "react";
 
+import { AgentThinking } from "@/boardui/components/application/agent-thinking/agent-thinking";
+import { ComposerLoader } from "@/boardui/components/application/composer-loader/composer-loader";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-import { AgentThinkingIndicator } from "./AgentThinkingIndicator";
 import { ComposeCommandPalette } from "./ComposeCommandPalette";
 import { PinnedContextChips } from "./PinnedContextChips";
 import { CHAT_ATTACH_MAX_FILES } from "./chatAttachments";
@@ -38,8 +39,8 @@ const CONTEXT_SOFT_LIMIT = 128_000;
 
 function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; percent: number }) {
   const r = 6;
-  const c = 2 * Math.PI * r;
-  const offset = c * (1 - Math.min(1, Math.max(0, percent / 100)));
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - Math.min(1, Math.max(0, percent / 100)));
   return (
     <div
       className="flex items-center gap-1 rounded-full bg-muted/70 py-1 pe-2 ps-1.5"
@@ -55,7 +56,7 @@ function ContextMeter({ tokensLabel, percent }: { tokensLabel: string | null; pe
           stroke="hsl(var(--muted-foreground))"
           strokeWidth="2.5"
           strokeLinecap="round"
-          strokeDasharray={`${c}`}
+          strokeDasharray={`${circ}`}
           strokeDashoffset={offset}
         />
       </svg>
@@ -110,9 +111,9 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
   const projectLabel = localize(lang, "WebTerm", "WebTerm");
   const thinkingLabel =
     operatorWs?.phase === "tools"
-      ? localize(lang, "Работаю…", "Working…")
+      ? localize(lang, "Working…", "Working…")
       : operatorWs?.phase === "streaming"
-        ? localize(lang, "Пишу…", "Writing…")
+        ? localize(lang, "Writing…", "Writing…")
         : "Thinking…";
 
   return (
@@ -149,10 +150,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
         }}
       />
       <div className="relative mx-auto max-w-[42rem]">
-        <PinnedContextChips
-          servers={pinnedServers}
-          onUnpinServer={unpinServer}
-        />
+        <PinnedContextChips servers={pinnedServers} onUnpinServer={unpinServer} />
         <ComposeCommandPalette
           ref={paletteRef}
           draft={draft}
@@ -185,17 +183,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
               <span
                 key={file.id}
                 className="inline-flex max-w-[16rem] items-center gap-1 rounded-full border border-border/70 bg-muted/40 px-2 py-0.5 text-[11px] text-foreground"
-                title={
-                  file.kind === "text"
-                    ? file.truncated
-                      ? localize(lang, "Текст усечён для лимита сообщения", "Text truncated for message limit")
-                      : localize(lang, "Текст будет отправлен в контекст", "Text will be sent in context")
-                    : localize(
-                        lang,
-                        "Бинарный файл — в контекст попадёт только имя",
-                        "Binary file — only the name is sent in context",
-                      )
-                }
               >
                 <FileText className="h-3 w-3 shrink-0 opacity-70" strokeWidth={1.75} />
                 <span className="truncate font-medium tracking-tight">{file.name}</span>
@@ -223,53 +210,36 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
               transition={{ duration: reduceMotion ? 0 : 0.18, ease: CHAT_EASE }}
               className="mb-1.5 px-1"
             >
-              <AgentThinkingIndicator
+              <AgentThinking
                 label={thinkingLabel}
-                startedAt={operatorWs?.thinkingStartedAt ?? null}
                 variant={operatorWs?.phase === "tools" ? "spin" : "wave"}
+                tone="default"
+                showTimer
               />
             </motion.div>
           ) : null}
         </AnimatePresence>
 
-        <div className={cn("relative", isBusy && "wt-chat-glass-on")}>
-          {isBusy && !reduceMotion ? (
-            <svg className="wt-chat-composer-loader" viewBox="0 0 100 52" preserveAspectRatio="none" aria-hidden>
-              <defs>
-                <linearGradient id="wt-chat-composer-grad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="hsl(var(--ai))" />
-                  <stop offset="45%" stopColor="hsl(var(--primary))" />
-                  <stop offset="100%" stopColor="hsl(var(--ai))" />
-                </linearGradient>
-              </defs>
-              <rect x="1" y="1" width="98" height="50" rx="26" ry="26" pathLength="100" />
-            </svg>
-          ) : null}
-
+        <ComposerLoader
+          active={isBusy && !reduceMotion}
+          colors={["#5eead4", "#46baec", "#c8f542", "#49d4d1"]}
+          surface
+        >
           <div
             className={cn(
-              "relative flex min-h-[52px] w-full items-end gap-2 rounded-full border border-border/70 bg-muted/30 py-2 pe-2 ps-2 shadow-sm transition-[border-color,background-color,box-shadow] duration-200",
-              "focus-within:border-primary/35 focus-within:bg-muted/40 focus-within:ring-2 focus-within:ring-primary/15",
-              isBusy && "border-transparent bg-transparent shadow-none",
+              "relative flex min-h-[52px] w-full items-end gap-2 rounded-full border border-border/70 py-2 pe-2 ps-2 transition-[border-color] duration-200",
+              "bg-transparent shadow-none focus-within:border-primary/35 focus-within:ring-2 focus-within:ring-primary/15",
+              !isBusy && "bg-muted/30 shadow-sm",
             )}
           >
             <button
               type="button"
-              className="wt-chat-glass-control flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-background/80 text-foreground transition-colors hover:bg-muted disabled:opacity-50"
               onClick={openFilePicker}
               disabled={isBusy || attachBusy || attachedFiles.length >= CHAT_ATTACH_MAX_FILES}
               aria-label={localize(lang, "Файл / проект", "File / project")}
-              title={localize(
-                lang,
-                "Прикрепить файлы к сообщению — текст попадёт в контекст модели",
-                "Attach files to the message — text is added to model context",
-              )}
             >
-              {attachBusy ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="h-4 w-4" />
-              )}
+              {attachBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             </button>
 
             <Textarea
@@ -279,12 +249,8 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                 setDraft(event.target.value);
                 setCaret(event.target.selectionStart || 0);
               }}
-              onSelect={(event) => {
-                setCaret(event.currentTarget.selectionStart || 0);
-              }}
-              onClick={(event) => {
-                setCaret(event.currentTarget.selectionStart || 0);
-              }}
+              onSelect={(event) => setCaret(event.currentTarget.selectionStart || 0)}
+              onClick={(event) => setCaret(event.currentTarget.selectionStart || 0)}
               onPaste={(event) => {
                 const files = event.clipboardData?.files;
                 if (files?.length) {
@@ -304,9 +270,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                 }
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  if (canSend) {
-                    event.currentTarget.form?.requestSubmit();
-                  }
+                  if (canSend) event.currentTarget.form?.requestSubmit();
                 }
               }}
               placeholder={
@@ -314,7 +278,11 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                   ? localize(lang, "Оператор работает… Esc — остановить", "Operator is working… Esc to stop")
                   : reconcilingUserMessage
                     ? localize(lang, "Сохраняю сообщение…", "Saving message…")
-                  : localize(lang, "Что нужно сделать? Для точного сервера введите @", "What should I do? Type @ for an exact server")
+                    : localize(
+                        lang,
+                        "Что нужно сделать? Для точного сервера введите @",
+                        "What should I do? Type @ for an exact server",
+                      )
               }
               aria-label={localize(lang, "Сообщение", "Message")}
               className="max-h-36 min-h-[24px] flex-1 resize-none border-0 bg-transparent px-1 py-2 text-[14px] leading-5 shadow-none focus-visible:ring-0"
@@ -322,15 +290,11 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
             />
 
             <div className="flex shrink-0 items-center gap-1.5 pb-0.5">
-              <span
-                className="wt-chat-glass-control hidden h-8 items-center gap-0.5 rounded-xl border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground sm:inline-flex"
-                title={localize(lang, "Режим оператора", "Operator mode")}
-              >
+              <span className="hidden h-8 items-center gap-0.5 rounded-xl border border-border/50 bg-background/70 px-2 text-[12px] text-muted-foreground sm:inline-flex">
                 <Bot className="h-3.5 w-3.5" />
                 <span>Operator</span>
                 <ChevronDown className="h-3.5 w-3.5 opacity-60" />
               </span>
-
               <div className="h-9 w-9 shrink-0">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
@@ -338,7 +302,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                     initial={reduceMotion ? false : { opacity: 0, scale: 0.96 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={reduceMotion ? undefined : { opacity: 0, scale: 0.96 }}
-                    whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                     transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
                     className="h-9 w-9"
                   >
@@ -350,7 +313,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                         className="h-9 w-9 rounded-full"
                         onClick={handleStop}
                         aria-label={localize(lang, "Остановить", "Stop")}
-                        title={localize(lang, "Остановить · Esc", "Stop · Esc")}
                       >
                         <Square className="h-3.5 w-3.5 fill-current" />
                       </Button>
@@ -361,7 +323,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
                         className="h-9 w-9 rounded-full"
                         disabled={!canSend}
                         aria-label={localize(lang, "Отправить", "Send")}
-                        title={localize(lang, "Отправить · Enter", "Send · Enter")}
                       >
                         <Send className="h-4 w-4" />
                       </Button>
@@ -371,7 +332,7 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
               </div>
             </div>
           </div>
-        </div>
+        </ComposerLoader>
 
         <div className="mt-2 flex min-w-0 items-center justify-between gap-3 px-1 text-[11px] text-muted-foreground">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -382,7 +343,6 @@ export function ChatComposerForm({ c }: ChatComposerFormProps) {
             <button
               type="button"
               className="inline-flex max-w-[10rem] items-center gap-0.5 truncate rounded-md px-1 py-0.5 hover:bg-muted/50 hover:text-foreground"
-              title={localize(lang, "Контекст через @", "Context via @")}
               onClick={() => textareaRef.current?.focus()}
             >
               <span className="truncate">{projectLabel}</span>

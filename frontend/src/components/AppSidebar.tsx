@@ -139,39 +139,41 @@ export function AppSidebar() {
                         onMouseEnter={() => prefetchRouteForPath(item.path)}
                         onFocus={() => prefetchRouteForPath(item.path)}
                         className={cn(
-                          "group flex items-center rounded-sm border border-transparent text-[13px] transition-colors",
+                          // BoardUI sidebar NavItem chrome: rounded-2lg, gradient selected
+                          "group flex items-center overflow-hidden rounded-2lg border border-transparent text-[13px] transition-[width,background-color,color] duration-300 ease-in-out",
                           "text-sidebar-foreground/85",
-                          // quiet hover — text only, no fill/border flash
-                          "hover:text-sidebar-foreground",
-                          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring",
+                          "hover:bg-sidebar-accent/55 hover:text-sidebar-foreground",
+                          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
                           collapsed
-                            ? "h-9 w-9 justify-center p-0"
-                            : "min-h-10 gap-2.5 px-2 py-1.5",
+                            ? "h-9 w-9 justify-center p-2"
+                            : "min-h-9 w-full justify-between gap-2 p-2",
                         )}
                         activeClassName={cn(
-                          "border-primary/40 bg-primary/12 text-sidebar-foreground shadow-elev-1",
-                          "[&_.nav-icon-tile]:border-primary/35 [&_.nav-icon-tile]:bg-primary/15 [&_.nav-icon-tile]:text-primary",
+                          "border-transparent bg-gradient-to-b from-primary to-primary/90 text-primary-foreground shadow-nav-selected",
+                          "hover:from-primary hover:to-primary/90 hover:text-primary-foreground",
+                          "[&_.nav-icon-tile]:border-transparent [&_.nav-icon-tile]:bg-transparent [&_.nav-icon-tile]:text-primary-foreground",
                         )}
                         title={collapsed ? t(item.titleKey) : undefined}
                       >
-                        <span
-                          className={cn(
-                            "nav-icon-tile flex shrink-0 items-center justify-center rounded-sm border",
-                            "border-sidebar-border/80 bg-sidebar-accent/30 text-sidebar-foreground/80",
-                            collapsed ? "h-8 w-8" : "h-7 w-7",
-                          )}
-                        >
-                          <item.icon
-                            className={collapsed ? "h-5 w-5" : "h-3.5 w-3.5"}
-                            strokeWidth={1.5}
-                            aria-hidden
-                          />
-                        </span>
-                        {!collapsed && (
-                          <span className="min-w-0 truncate font-medium leading-5 tracking-tight">
-                            {t(item.titleKey)}
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={cn(
+                              "nav-icon-tile flex shrink-0 items-center justify-center rounded-md",
+                              collapsed ? "h-5 w-5" : "h-5 w-5",
+                            )}
+                          >
+                            <item.icon
+                              className="h-4 w-4"
+                              strokeWidth={1.5}
+                              aria-hidden
+                            />
                           </span>
-                        )}
+                          {!collapsed && (
+                            <span className="min-w-0 truncate font-medium leading-5 tracking-tight">
+                              {t(item.titleKey)}
+                            </span>
+                          )}
+                        </span>
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

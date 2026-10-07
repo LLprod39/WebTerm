@@ -3,7 +3,6 @@ import {
   ArrowDown,
   Bot,
   Check,
-  ChevronRight,
   ListChecks,
   Loader2,
   Menu,
@@ -17,6 +16,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMemo, useRef } from "react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
+import { Breadcrumb, BreadcrumbItem } from "@/boardui/components/base/breadcrumb/breadcrumb";
 import { Button } from "@/components/ui/button";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -309,22 +309,13 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
           >
             <Menu className="h-4 w-4" />
           </Button>
-          <nav aria-label={localize(lang, "Местоположение чата", "Chat location")} className="min-w-0 flex-1">
-            <ol className="flex min-w-0 items-center gap-1.5 overflow-x-auto [scrollbar-width:none]">
-              <li className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground/70">
-                <span className="truncate max-w-[8rem]">
-                  {localize(lang, "Оператор", "Operator")}
-                </span>
-                <ChevronRight className="h-3 w-3 opacity-50" />
-              </li>
-              <li
-                aria-current="page"
-                className="truncate text-[12px] font-medium text-foreground"
-                title={selectedTitle}
-              >
-                {selectedTitle}
-              </li>
-            </ol>
+          <nav className="min-w-0 flex-1">
+            <Breadcrumb aria-label={localize(lang, "Местоположение чата", "Chat location")}>
+              <BreadcrumbItem href="/chat">
+                {localize(lang, "Оператор", "Operator")}
+              </BreadcrumbItem>
+              <BreadcrumbItem current>{selectedTitle}</BreadcrumbItem>
+            </Breadcrumb>
             <div className="relative mt-0.5 min-h-[1rem] overflow-hidden text-[11px]">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.p
@@ -707,7 +698,7 @@ export function ChatMessagesPane({ c, onOpenHistory }: ChatMessagesPaneProps) {
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={reduceMotion ? undefined : { opacity: 0 }}
                                 transition={reduceMotion ? { duration: 0 } : CHAT_MOTION.status}
-                                className={cn(contextRailOpen && "lg:hidden")}
+                                className={cn("max-w-[min(28rem,100%)]", contextRailOpen && "lg:hidden")}
                               >
                                 <PlanChecklist plan={operatorWs.livePlan} />
                               </motion.div>

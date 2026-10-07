@@ -14,6 +14,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { AgentLimitsCard } from "@/boardui/components/application/agent-limits/agent-limits-card";
 import { Button } from "@/components/ui/button";
 import { localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,8 @@ import { cn } from "@/lib/utils";
 import { formatRelativeChatAge } from "./chatHelpers";
 import { CHAT_MOTION } from "./chatMotion";
 import type { ChatPageController } from "./useChatPageController";
+
+const CONTEXT_SOFT_LIMIT = 128_000;
 
 type ChatThreadSidebarProps = {
   c: ChatPageController;
@@ -70,6 +73,7 @@ export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadS
     startRename,
     deleteChatMutation,
     clearLastChatAndNew,
+    activeChat,
   } = c;
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
@@ -80,6 +84,40 @@ export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadS
     }
     return map;
   }, [chatGroups, collapsed]);
+
+  const usageLimits = useMemo(() => {
+    const usage = (activeChat?.total_usage || {}) as {
+      input_tokens?: number;
+      output_tokens?: number;
+      cache_read_tokens?: number;
+      reasoning_tokens?: number;
+    };
+    const input = Number(usage.input_tokens || 0);
+    const output = Number(usage.output_tokens || 0);
+    const cache = Number(usage.cache_read_tokens || 0);
+    const reasoning = Number(usage.reasoning_tokens || 0);
+    const total = input + output + cache + reasoning;
+    if (!total) return null;
+    const segments = [
+      { label: localize(lang, "Вход", "Input"), tokens: input },
+      { label: localize(lang, "Выход", "Output"), tokens: output },
+    ];
+    if (cache > 0) segments.push({ label: localize(lang, "Кэш", "Cache"), tokens: cache });
+    if (reasoning > 0) {
+      segments.push({ label: localize(lang, "Рассуждение", "Reasoning"), tokens: reasoning });
+    }
+    const pct = Math.min(1, total / CONTEXT_SOFT_LIMIT);
+    return {
+      context: { max: CONTEXT_SOFT_LIMIT, segments },
+      limits: [
+        {
+          label: localize(lang, "Контекст сессии", "Session context"),
+          used: pct,
+          resets: localize(lang, "за чат", "per chat"),
+        },
+      ],
+    };
+  }, [activeChat?.total_usage, lang]);
 
   return (
     <aside
@@ -319,6 +357,19 @@ export function ChatThreadSidebar({ c, mobile = false, onNavigate }: ChatThreadS
             })}
           </div>
         </div>
+
+        {usageLimits ? (
+          <div className="shrink-0 pt-1">
+            <AgentLimitsCard
+              context={usageLimits.context}
+              limits={usageLimits.limits}
+              plan={localize(lang, "Оператор", "Operator")}
+              planHref="/settings/limits"
+              defaultExpanded={false}
+              className="!rounded-xl !px-3 !pb-3 !pt-2"
+            />
+          </div>
+        ) : null}
       </div>
     </aside>
   );
