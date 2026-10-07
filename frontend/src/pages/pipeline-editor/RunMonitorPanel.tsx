@@ -16,6 +16,8 @@ import {
 
 import { studioRuns, type PipelineNode } from "@/lib/api";
 
+import { localize } from "./presentation";
+
 const NODE_STATUS_ICON: Record<string, ReactNode> = {
   running: <Loader2 className="h-3 w-3 animate-spin text-info" />,
   awaiting_approval: <Clock className="h-3 w-3 text-warning animate-pulse" />,
@@ -26,13 +28,27 @@ const NODE_STATUS_ICON: Record<string, ReactNode> = {
   skipped: <ChevronRight className="h-3 w-3 text-muted-foreground" />,
 };
 
+function resolveLang(lang?: "en" | "ru"): "en" | "ru" {
+  if (lang === "ru" || lang === "en") return lang;
+  if (
+    typeof document !== "undefined" &&
+    document.documentElement.lang.toLowerCase().startsWith("ru")
+  ) {
+    return "ru";
+  }
+  return "en";
+}
+
 export function RunMonitorPanel({
   runId,
   onClose,
+  lang: langProp,
 }: {
   runId: number;
   onClose: () => void;
+  lang?: "en" | "ru";
 }) {
+  const lang = resolveLang(langProp);
   const navigate = useNavigate();
   const [expandedNode, setExpandedNode] = useState<string | null>(null);
 
@@ -74,9 +90,11 @@ export function RunMonitorPanel({
                 ? <XCircle className="h-4 w-4 text-destructive" />
                 : <Clock className="h-4 w-4 text-muted-foreground" />
           }
-          <span className="text-sm font-semibold">Run #{runId}</span>
+          <span className="text-sm font-semibold">
+            {localize(lang, "Запуск", "Run")} #{runId}
+          </span>
           <span className={`text-xs font-medium ${statusColor[run?.status || ""] || ""}`}>
-            {run?.status || "loading..."}
+            {run?.status || localize(lang, "загрузка…", "loading...")}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -86,17 +104,21 @@ export function RunMonitorPanel({
               onClick={() => stopMutation.mutate()}
               disabled={stopMutation.isPending}
             >
-              <Square className="h-3 w-3" /> Stop
+              <Square className="h-3 w-3" /> {localize(lang, "Остановить", "Stop")}
             </button>
           )}
           <button
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted/40"
             onClick={() => navigate("/studio/runs")}
-            title="Все логи"
+            title={localize(lang, "Все логи", "All logs")}
           >
-            <ChevronRight className="h-3 w-3" /> Логи
+            <ChevronRight className="h-3 w-3" /> {localize(lang, "Логи", "Logs")}
           </button>
-          <button className="p-1 rounded hover:bg-muted/40 text-muted-foreground hover:text-foreground" onClick={onClose}>
+          <button
+            className="p-1 rounded hover:bg-muted/40 text-muted-foreground hover:text-foreground"
+            onClick={onClose}
+            aria-label={localize(lang, "Закрыть", "Close")}
+          >
             <X className="h-3.5 w-3.5" />
           </button>
         </div>
@@ -105,7 +127,7 @@ export function RunMonitorPanel({
       <div className="flex-1 overflow-auto p-3 space-y-2 text-xs">
         {run?.error && (
           <div className="rounded bg-red-900/20 border border-red-500/30 px-3 py-2 text-red-300">
-            <strong>Error:</strong> {run.error}
+            <strong>{localize(lang, "Ошибка", "Error")}:</strong> {run.error}
           </div>
         )}
 
@@ -142,7 +164,9 @@ export function RunMonitorPanel({
 
               {status === "awaiting_approval" && (
                 <div className="border-t border-border px-3 py-2 space-y-2">
-                  <p className="text-yellow-400 text-xs font-medium">Waiting for your decision...</p>
+                  <p className="text-yellow-400 text-xs font-medium">
+                    {localize(lang, "Ждёт решение", "Waiting for decision")}
+                  </p>
                   {typeof stateExtra.approve_url === "string" && (
                     <div className="flex gap-2">
                       <a
@@ -151,7 +175,7 @@ export function RunMonitorPanel({
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-green-800/40 border border-green-600/40 text-green-300 hover:bg-green-700/50 transition-colors"
                       >
-                        Approve
+                        {localize(lang, "Одобрить", "Approve")}
                       </a>
                       <a
                         href={typeof stateExtra.reject_url === "string" ? stateExtra.reject_url : "#"}
@@ -159,7 +183,7 @@ export function RunMonitorPanel({
                         rel="noopener noreferrer"
                         className="flex-1 text-center text-xs py-1.5 rounded bg-red-900/30 border border-red-600/40 text-red-300 hover:bg-red-800/40 transition-colors"
                       >
-                        Reject
+                        {localize(lang, "Отклонить", "Reject")}
                       </a>
                     </div>
                   )}
@@ -184,7 +208,7 @@ export function RunMonitorPanel({
 
         {!run && (
           <div className="flex items-center justify-center py-8 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading…
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> {localize(lang, "Загрузка…", "Loading…")}
           </div>
         )}
       </div>
