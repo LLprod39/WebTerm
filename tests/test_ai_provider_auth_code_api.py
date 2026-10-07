@@ -91,3 +91,30 @@ def test_authorization_code_rejected_without_verification_uri(client) -> None:
     )
     assert response.status_code == 409
     assert response.json()["code"] == "provider_auth_not_ready"
+
+
+def test_authorization_code_session_not_ready_is_actionable(client, monkeypatch) -> None:
+    owner = User.objects.create_user("anti-owner-3", password="pw")
+    connection = _personal_antigravity(owner)
+    flow = AIConnectionAuthFlow.objects.create(
+        connection=connection,
+        verification_uri="https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid",
+    )
+
+    async def fake_submit(self, invocation_id: str, authorization_code: str) -> bool:
+        return False
+
+    monkeypatch.setattr(
+        "app.core.ai_cli_runner_client.AiCliRunnerClient.submit_auth_input",
+        fake_submit,
+    )
+    client.force_login(owner)
+    response = client.post(
+        f"/api/ai/providers/auth-flows/{flow.public_id}/authorization-code/",
+        data='{"authorization_code":"4/0AXlqoi5-TESTCODEVALUE"}',
+        content_type="application/json",
+    )
+    assert response.status_code == 409
+    body = response.json()
+    assert body["code"] == "provider_auth_session_not_ready"
+    assert "expired" in body["error"].lower()

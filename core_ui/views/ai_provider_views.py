@@ -630,26 +630,34 @@ def api_ai_provider_auth_flow_authorization_code(request, flow_id):
     try:
         accepted = submit_authorization_code(flow, raw_code)
     except ProviderRuntimeError as exc:
-        status = 409 if exc.code in {
+        if exc.code in {
             "provider_auth_not_pending",
             "provider_auth_code_unsupported",
             "provider_auth_not_ready",
             "provider_request_invalid",
-        } else 503
-        return _error(str(exc), status, code=exc.code)
+            "provider_auth_session_not_ready",
+        }:
+            return _error(str(exc), 409, code=exc.code)
+        if exc.code in {"provider_runner_unavailable", "provider_transport_unavailable"}:
+            return _error(
+                "Sign-in session expired or the CLI runner is unavailable; open a new sign-in link and paste a fresh code",
+                503,
+                code=exc.code,
+            )
+        return _error(str(exc), 503, code=exc.code)
     except Exception:
-        logger.warning(
+        logger.exception(
             "AI provider auth code submit failed flow_id=%s error_type=unexpected",
             flow.pk,
         )
         return _error(
-            "Authorization code could not be delivered",
+            "Sign-in session expired or the CLI runner is unavailable; open a new sign-in link and paste a fresh code",
             503,
             code="provider_transport_unavailable",
         )
     if not accepted:
         return _error(
-            "No live sign-in session is ready for the code; open the latest link and try again",
+            "Sign-in session expired; open the latest link and paste a fresh code",
             409,
             code="provider_auth_session_not_ready",
         )

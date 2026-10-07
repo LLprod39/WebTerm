@@ -123,10 +123,15 @@ class AiCliRunnerClient:
                 )
             if response.status_code == 409:
                 return False
+            if response.status_code == 404:
+                raise ProviderRuntimeError(
+                    "provider_auth_session_not_ready",
+                    "Sign-in session expired; open the latest link and paste a fresh code",
+                )
             if response.status_code != 200:
                 raise ProviderRuntimeError(
                     "provider_runner_unavailable",
-                    "CLI runner-manager rejected authorization code delivery",
+                    "Sign-in session expired or the CLI runner is unavailable; open a new sign-in link and paste a fresh code",
                     retryable=response.status_code >= 500,
                 )
             payload = response.json()
@@ -136,7 +141,7 @@ class AiCliRunnerClient:
         except (httpx.HTTPError, ValueError) as exc:
             raise ProviderRuntimeError(
                 "provider_runner_unavailable",
-                "CLI runner-manager is unavailable",
+                "Sign-in session expired or the CLI runner is unavailable; open a new sign-in link and paste a fresh code",
                 retryable=True,
             ) from exc
 

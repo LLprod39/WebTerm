@@ -306,3 +306,37 @@ async def test_oversized_non_newline_stdout_is_killed_and_translated(monkeypatch
     assert events[-1].type is ProviderEventType.ERROR
     assert events[-1].payload["code"] == "provider_protocol_error"
     assert runtime._processes == {}
+
+
+@pytest.mark.asyncio
+async def test_submit_auth_input_writes_ndjson_to_live_stdin() -> None:
+    class FakeStdin:
+        def __init__(self) -> None:
+            self.chunks: list[bytes] = []
+            self._closing = False
+
+        def is_closing(self) -> bool:
+            return self._closing
+
+        def write(self, data: bytes) -> None:
+            self.chunks.append(data)
+
+        async def drain(self) -> None:
+            return None
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+            self.stdin = FakeStdin()
+
+    runtime = DockerCliRuntime(_config())
+    process = FakeProcess()
+    invocation_id = "auth_599ca5b3ef3f4e0b89886638dc660e7e"
+    runtime._processes = {invocation_id: process}
+
+    assert await runtime.submit_auth_input(invocation_id, "4/0AXlqoi5-TESTCODEVALUE") is True
+    assert process.stdin.chunks == [
+        b'{"type":"auth_input","authorization_code":"4/0AXlqoi5-TESTCODEVALUE"}\n'
+    ]
+    assert await runtime.submit_auth_input("bad", "4/0AXlqoi5-TESTCODEVALUE") is False
+    assert await runtime.submit_auth_input("missing_invocation_xx", "4/0AXlqoi5-TESTCODEVALUE") is False

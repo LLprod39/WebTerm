@@ -12,7 +12,7 @@ from typing import Any
 from app.ai_runtime import ProviderEventType, ProviderEventV1
 
 from .config import RunnerManagerConfig
-from .protocol import RunnerProtocolError, RunnerRequestV1, error_event
+from .protocol import RunnerProtocolError, RunnerRequestV1, _INVOCATION_REF, error_event
 
 _RUNNER_ID = re.compile(r"^[0-9a-f]{32}$")
 _CONNECTION_REF = re.compile(r"^[a-z0-9][a-z0-9_-]{7,79}$")
