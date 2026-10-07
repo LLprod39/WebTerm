@@ -14,6 +14,7 @@ from django.db import close_old_connections, transaction
 from django.db.models import F, Q
 from django.utils import timezone
 
+from ai_cli_runner_manager.auth_input import extract_authorization_payload
 from ai_cli_runner_manager.protocol import RunnerAction, RunnerRequestV1
 from app.ai_runtime import ProviderEventType, ProviderRuntimeError
 from app.core.ai_cli_runner_client import AiCliRunnerClient
@@ -26,14 +27,18 @@ from core_ui.models.ai_providers import (
 
 AUTH_FLOW_LEASE_SECONDS = 90
 AUTH_FLOW_HEARTBEAT_SECONDS = 30
-_AUTH_CODE_MAX_LEN = 2048
+_AUTH_CODE_MAX_LEN = 4096
 
 
 def submit_authorization_code(flow: AIConnectionAuthFlow, authorization_code: str) -> bool:
     """Deliver a short-lived OAuth code to the live AUTH_START runner. Never persist the code."""
-    code = (authorization_code or "").strip()
-    if not code or len(code) > _AUTH_CODE_MAX_LEN:
+    raw = (authorization_code or "").strip()
+    if not raw or len(raw) > _AUTH_CODE_MAX_LEN:
         raise ProviderRuntimeError("provider_request_invalid", "Authorization code is invalid")
+    try:
+        code, pasted_state = extract_authorization_payload(raw)
+    except ValueError as exc:
+        raise ProviderRuntimeError("provider_request_invalid", "Authorization code is invalid") from exc
     if flow.status != AIConnectionAuthFlow.STATUS_PENDING:
         raise ProviderRuntimeError("provider_auth_not_pending", "Auth flow is not waiting for a code")
     if flow.connection.target_id != "antigravity_subscription":
@@ -47,7 +52,7 @@ def submit_authorization_code(flow: AIConnectionAuthFlow, authorization_code: st
             "Sign-in link is not ready yet; wait and try again",
         )
     invocation_id = f"auth_{flow.public_id.hex}"
-    oauth_state = (flow.user_code or "").strip()
+    oauth_state = (pasted_state or flow.user_code or "").strip()
     return async_to_sync(AiCliRunnerClient().submit_auth_input)(
         invocation_id,
         code,
