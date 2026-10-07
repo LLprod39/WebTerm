@@ -103,6 +103,18 @@ def test_agent_engine_accepts_final_after_tool_call():
     )
 
 
+def test_agent_engine_reprompts_premature_done_claiming_host_work_without_tools():
+    engine = AgentEngine.__new__(AgentEngine)
+    engine.enabled_tools = ["ssh_execute", "read_console"]
+    engine.mcp_tools = {}
+    engine._missing_action_reprompts = 0
+
+    assert engine._should_reprompt_missing_action(
+        "THOUGHT: Итог: проверил journalctl, ошибок нет. Задача завершена.",
+        [],
+    )
+
+
 def test_agent_engine_reprompts_intent_text_early_but_not_after_many_tool_calls():
     engine = AgentEngine.__new__(AgentEngine)
     engine.enabled_tools = ["ssh_execute"]

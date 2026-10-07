@@ -161,6 +161,7 @@ graphify-out/
 docs/
 !docs/
 docs/*
+!docs/ai-loops-audit-plan.md
 !docs/PIPELINE_NODES_SPEC.md
 !docs/PROJECT_STRUCTURE.md
 !docs/frontend-next/

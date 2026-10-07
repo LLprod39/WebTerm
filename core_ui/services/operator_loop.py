@@ -29,12 +29,13 @@ from core_ui.services.operator_loop_helpers import (
     _save_turn,
     _set_assistant_metadata,
     _touch_session_usage,
-
 )
 from core_ui.services.operator_loop_prompt import (
     EMPTY_RESPONSE_NUDGE,
     EMPTY_RESPONSE_RETRIES,
+    GOAL_SELF_CHECK_NUDGE,
     HISTORY_MESSAGE_LIMIT,
+    MAX_GOAL_SELF_CHECKS,
     MAX_ITERATIONS,
     OPERATOR_SYSTEM_PROMPT,
     PLAN_CONTINUATION_NUDGE,
@@ -45,7 +46,11 @@ from core_ui.services.operator_loop_prompt import (
     TOOL_RESULT_PREVIEW_CHARS,
     EventCallback,
     build_operator_system_prompt,
+    messages_have_host_mention,
+    messages_have_ssh_action_results,
+    messages_only_inventory_so_far,
     should_continue_after_inventory_only,
+    should_goal_self_check,
     user_message_needs_ssh_actions,
 )
 from core_ui.services.operator_loop_tool_cycle import process_tool_calls
@@ -117,8 +122,11 @@ async def run_operator_loop(
     empty_retries = 0
     plan_continuation_nudges = 0
     task_continuation_nudges = 0
+    goal_self_checks = 0
+    tools_executed_this_turn = False
     user_goal_text = str(getattr(user_message, "content", "") or "")
     needs_ssh_actions = user_message_needs_ssh_actions(user_goal_text)
+    host_mention = messages_have_host_mention(user_goal_text)
     force_final_report = False
 
     while True:
@@ -138,17 +146,7 @@ async def run_operator_loop(
             break
 
         if turn.iteration >= MAX_ITERATIONS and not force_final_report:
-            if (turn.error or "") == "iteration_limit_report_done":
-                limit_text = (
-                    f"\n\n_Упёрся в лимит шагов ({MAX_ITERATIONS}). "
-                    "Итоговый отчёт выше._"
-                )
-                if assistant_message:
-                    await _append_assistant_text(assistant_message.pk, limit_text)
-                await _save_turn(turn, status=ChatTurnState.STATUS_LIMIT, error="iteration_limit")
-                await _emit(on_event, {"type": "turn_done", "status": "limit", "turn_id": turn.pk})
-                break
-            # One last text-only pass for a final report.
+            # One last text-only pass for a final report, then LIMIT.
             messages = _compress_messages(list(turn.llm_messages or messages))
             messages.append({"role": "user", "content": STEP_LIMIT_FINAL_REPORT_NUDGE})
             await _save_turn(turn, llm_messages=messages, error="iteration_limit_report")
@@ -387,8 +385,41 @@ async def run_operator_loop(
                     },
                 )
 
-            # Host-ops goal but only inventory so far → keep going (never end on resolve alone).
+            # Model-driven early-stop guard (primary): intermediate text after tools
+            # is progress, not final — one self-check before keyword fallback.
             live_messages = list(turn.llm_messages or messages)
+            has_ssh_evidence = messages_have_ssh_action_results(live_messages)
+            inventory_only = messages_only_inventory_so_far(live_messages)
+            if should_goal_self_check(
+                tools_executed=tools_executed_this_turn,
+                self_checks_used=goal_self_checks,
+                has_task_evidence=has_ssh_evidence,
+                inventory_only=inventory_only,
+                host_ops_goal=needs_ssh_actions,
+                host_mention=host_mention,
+                max_self_checks=MAX_GOAL_SELF_CHECKS,
+            ):
+                goal_self_checks += 1
+                logger.info(
+                    "operator loop: goal self-check on early text-only stop {}, check {}/{}",
+                    turn.pk,
+                    goal_self_checks,
+                    MAX_GOAL_SELF_CHECKS,
+                )
+                await _emit(
+                    on_event,
+                    {
+                        "type": "thinking",
+                        "iteration": iteration,
+                        "phase": "continue",
+                        "message": "Проверяю, достигнута ли цель…",
+                    },
+                )
+                messages.append({"role": "user", "content": GOAL_SELF_CHECK_NUDGE})
+                await _save_turn(turn, llm_messages=messages)
+                continue
+
+            # Keyword FALLBACK: host-ops + inventory-only (after self-check exhausted).
             if (
                 needs_ssh_actions
                 and task_continuation_nudges < TASK_CONTINUATION_NUDGES
@@ -396,7 +427,7 @@ async def run_operator_loop(
             ):
                 task_continuation_nudges += 1
                 logger.info(
-                    "operator loop: inventory-only stop on SSH/host-ops task {}, nudge {}/{}",
+                    "operator loop: inventory-only keyword fallback {}, nudge {}/{}",
                     turn.pk,
                     task_continuation_nudges,
                     TASK_CONTINUATION_NUDGES,
@@ -433,6 +464,7 @@ async def run_operator_loop(
         # Append assistant content (text + tool_use blocks)
         assistant_blocks: list[dict[str, Any]] = []
         if text_acc.strip():
+            # Intermediate prose alongside tools is progress, not a final answer.
             assistant_blocks.append({"type": "text", "text": text_acc})
         for call in tool_calls:
             assistant_blocks.append(
@@ -445,7 +477,7 @@ async def run_operator_loop(
             )
         messages.append({"role": "assistant", "content": assistant_blocks})
 
-        tool_result_blocks, parked, actions, turn, messages = await process_tool_calls(
+        tool_result_blocks, parked, finished, actions, turn, messages = await process_tool_calls(
             tool_calls=tool_calls,
             messages=messages,
             tools=tools,
@@ -463,23 +495,83 @@ async def run_operator_loop(
             break
 
         if tool_result_blocks:
+            tools_executed_this_turn = True
             messages.append({"role": "user", "content": tool_result_blocks})
             await _save_turn(turn, llm_messages=messages)
+
+        if finished:
+            # Explicit operator.finish_report — model-driven end of turn.
+            await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages, pending_tool_call={})
+            if assistant_message:
+                await _set_assistant_metadata(
+                    assistant_message.pk,
+                    {
+                        "source": "operator_loop",
+                        "turn_id": turn.pk,
+                        "iterations": iteration,
+                        "finish_report": True,
+                    },
+                )
+                fallback_text = await _ensure_visible_answer(assistant_message.pk)
+                if fallback_text:
+                    await _emit(
+                        on_event,
+                        {"type": "token", "text": fallback_text, "turn_id": turn.pk, "synthetic": True},
+                    )
+            await _emit(on_event, {"type": "turn_done", "status": "done", "turn_id": turn.pk})
+            break
+
+        if tool_result_blocks:
             # Model-driven continue: stream short progress while more work may remain.
-            # Inventory alone must not look like a finished turn for host-ops goals.
-            if needs_ssh_actions and should_continue_after_inventory_only(user_goal_text, messages):
+            if (
+                needs_ssh_actions or host_mention
+            ) and should_continue_after_inventory_only(user_goal_text, messages):
                 await _emit(
                     on_event,
                     {
                         "type": "thinking",
                         "iteration": iteration,
                         "phase": "progress",
-                        "message": "Хост найден — собираю процессы/сервисы по SSH…",
+                        "message": "Хост найден — собираю факты по SSH…",
+                    },
+                )
+            elif tools_executed_this_turn and not messages_have_ssh_action_results(messages):
+                await _emit(
+                    on_event,
+                    {
+                        "type": "thinking",
+                        "iteration": iteration,
+                        "phase": "progress",
+                        "message": "Продолжаю по цели…",
                     },
                 )
             continue
 
-        # No tool results and not parked — finish only if host-ops work is not stuck on inventory.
+        # No tool results and not parked — self-check / keyword fallback, then DONE.
+        live_messages = list(turn.llm_messages or messages)
+        if should_goal_self_check(
+            tools_executed=tools_executed_this_turn,
+            self_checks_used=goal_self_checks,
+            has_task_evidence=messages_have_ssh_action_results(live_messages),
+            inventory_only=messages_only_inventory_so_far(live_messages),
+            host_ops_goal=needs_ssh_actions,
+            host_mention=host_mention,
+            max_self_checks=MAX_GOAL_SELF_CHECKS,
+        ):
+            goal_self_checks += 1
+            await _emit(
+                on_event,
+                {
+                    "type": "thinking",
+                    "iteration": iteration,
+                    "phase": "continue",
+                    "message": "Проверяю, достигнута ли цель…",
+                },
+            )
+            messages.append({"role": "user", "content": GOAL_SELF_CHECK_NUDGE})
+            await _save_turn(turn, llm_messages=messages)
+            continue
+
         if (
             needs_ssh_actions
             and task_continuation_nudges < TASK_CONTINUATION_NUDGES

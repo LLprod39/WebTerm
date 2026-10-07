@@ -8,8 +8,10 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from loguru import logger
 
+from app.core.llm_tools import normalise_tool_name
 from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState
 from core_ui.services.operator_loop_helpers import (
+    _append_assistant_text,
     _create_pending_action,
     _emit,
     _enrich_agent_create_arguments,
@@ -26,6 +28,7 @@ from core_ui.services.operator_tools import (
     resolve_action_type,
     truncate_tool_result,
 )
+
 
 async def _execute_tool_async(**kwargs):
     # Tool handlers (and nested LLM e.g. pipeline_draft.create) may call async_to_sync /
@@ -48,13 +51,15 @@ async def process_tool_calls(
     request: Any,
     on_event: EventCallback | None,
     actions: list[AssistantAction],
-) -> tuple[list[dict[str, Any]], bool, list[AssistantAction], ChatTurnState, list[dict[str, Any]]]:
+) -> tuple[list[dict[str, Any]], bool, bool, list[AssistantAction], ChatTurnState, list[dict[str, Any]]]:
     """Execute/park one model step of tool calls.
 
-    Returns ``(tool_result_blocks, parked, actions, turn, messages)``.
+    Returns ``(tool_result_blocks, parked, finished, actions, turn, messages)``.
+    ``finished`` is True when the model called ``operator.finish_report``.
     """
     tool_result_blocks: list[dict[str, Any]] = []
     parked = False
+    finished = False
 
     for call in tool_calls:
         tool_name = str(call.get("name") or "")
@@ -107,7 +112,9 @@ async def process_tool_calls(
                 if pinned_ids:
                     arguments["server_ids"] = pinned_ids[:20]
 
-        auto_read = is_auto_executable_read(action_type, arguments)
+        finish_norm = normalise_tool_name(action_type or tool_name)
+        is_finish = finish_norm in {"operator_finish_report", "finish_report"}
+        auto_read = is_finish or is_auto_executable_read(action_type, arguments)
         if not auto_read:
             arguments = await sync_to_async(freeze_mutating_targets)(user, action_type, arguments)
 
@@ -138,15 +145,28 @@ async def process_tool_calls(
         if auto_read:
             from core_ui.services.operator_channel import session_channel
 
-            result = await _execute_tool_async(
-                user=user,
-                action_type=action_type,
-                arguments=arguments,
-                request=request,
-                channel=session_channel(session),
-            )
+            if is_finish:
+                # Avoid a full tool dispatch for the explicit end-of-turn signal.
+                summary = str(arguments.get("summary") or "").strip()
+                result = {"ok": True, "finished": True, "summary": summary[:4000]}
+                if summary and assistant_message:
+                    # Prefer a clean final bubble: replace empty/progress with summary.
+                    existing = str(getattr(assistant_message, "content", "") or "")
+                    if not existing.strip():
+                        await _append_assistant_text(assistant_message.pk, summary)
+                    elif summary not in existing:
+                        await _append_assistant_text(assistant_message.pk, f"\n\n{summary}")
+                finished = True
+            else:
+                result = await _execute_tool_async(
+                    user=user,
+                    action_type=action_type,
+                    arguments=arguments,
+                    request=request,
+                    channel=session_channel(session),
+                )
             # Persist charts / artifacts from read tools when applicable
-            if assistant_message:
+            if assistant_message and not is_finish:
                 try:
                     from core_ui.services.operator_artifacts import (
                         extract_artifacts_from_tool_result,
@@ -201,6 +221,8 @@ async def process_tool_calls(
             if arguments.get("command") or arguments.get("cmd"):
                 ssh_event.setdefault("command", arguments.get("command") or arguments.get("cmd"))
             await _emit(on_event, ssh_event)
+            if finished:
+                break
             continue
 
         # Plan proposal: confirm once (or auto-approve in autonomous mode)
@@ -547,4 +569,4 @@ async def process_tool_calls(
         # Remaining tool calls from this model step are deferred until after confirm
         break
 
-    return tool_result_blocks, parked, actions, turn, messages
+    return tool_result_blocks, parked, finished, actions, turn, messages
