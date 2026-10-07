@@ -30,7 +30,7 @@ import {
 } from "@/api/server-snapshots";
 import { FleetHealthIndicator } from "@/components/StatusIndicator";
 import { Button } from "@/components/ui/button";
-import { EmptyState, PageShell, QueryStateBlock, SoftHeader } from "@/components/ui/page-shell";
+import { EmptyState, MetricCard, PageShell, QueryStateBlock, SoftHeader } from "@/components/ui/page-shell";
 import { useToast } from "@/hooks/use-toast";
 import { localize, useI18n } from "@/lib/i18n";
 import { formatRelativeTime } from "@/components/studio/StudioActivityText";
@@ -56,16 +56,6 @@ function asFleetStatus(status: string | undefined): FleetHealthStatus {
     return status as FleetHealthStatus;
   }
   return "unknown";
-}
-
-function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="rounded-sm border border-border bg-card px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 font-mono text-xl tabular-nums text-foreground">{value}</div>
-      {hint ? <div className="mt-1 text-xs text-muted-foreground">{hint}</div> : null}
-    </div>
-  );
 }
 
 function Section({

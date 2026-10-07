@@ -1,4 +1,4 @@
-import { Switch } from "@/boardui/components/base/switch/switch";
+import { Switch } from "@/components/ui/switch";
 import { AppearanceIcons } from "@/lib/app-icons";
 import { localize, useI18n } from "@/lib/i18n";
 import { LIGHT_UI_STYLES, UI_STYLE_OPTIONS, useUiStyle, type UiStyleId } from "@/lib/ui-style";
@@ -187,12 +187,12 @@ export function UiStylePicker({
       ) : null}
 
       {pairedStyle ? (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-2xl bg-background-secondary-default px-3 py-2.5">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-sm border border-border bg-surface-1 px-3 py-2.5">
           <div className="min-w-0">
-            <div className="text-body-medium text-text-primary">
+            <div className="text-sm font-medium text-foreground">
               {localize(lang, "Тёмная тема", "Dark mode")}
             </div>
-            <p className="text-caption-1-regular text-text-tertiary">
+            <p className="text-xs leading-5 text-muted-foreground">
               {localize(
                 lang,
                 "Переключает светлый/тёмный вариант текущего стиля.",
@@ -201,10 +201,8 @@ export function UiStylePicker({
             </p>
           </div>
           <Switch
-            size="md"
-            shape="pill"
-            isSelected={isDark}
-            onChange={(next) => {
+            checked={isDark}
+            onCheckedChange={(next) => {
               if (next === isDark) return;
               setStyle(pairedStyle);
             }}

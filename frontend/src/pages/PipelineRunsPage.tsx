@@ -3,20 +3,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
-  CheckCircle2,
-  XCircle,
   Loader2,
   RotateCcw,
   Search,
-  Workflow,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { studioRuns } from "@/lib/api";
-import { StudioHero, HeroStatChip, HeroActionButton } from "@/components/studio/StudioHero";
 import { PipelineRunDetail, StatusBadge } from "@/components/studio/PipelineRunDetail";
 import { formatRunDate, formatRunDuration } from "@/components/studio/pipelineRunFormatters";
-import { EmptyState } from "@/components/ui/page-shell";
+import { EmptyState, SoftHeader } from "@/components/ui/page-shell";
 import { SkeletonList } from "@/components/ui/list-state";
 import { localize, useI18n } from "@/lib/i18n";
 
@@ -95,8 +91,6 @@ export default function PipelineRunsPage() {
     });
   }, [runs, searchQuery, statusFilter, timeFilter]);
 
-  const statusCount = (s: string) => runs.filter((r) => r.status === s).length;
-
   useEffect(() => {
     if (!filtered.length) {
       setSelectedRunId(null);
@@ -120,22 +114,18 @@ export default function PipelineRunsPage() {
   return (
     <div className="flex flex-col h-full">
       <StudioNav />
-      <StudioHero
-        kicker={localize(lang, "Пайплайны", "Pipelines")}
-        title={localize(lang, "История запусков", "Run history")}
-        titleIcon={<Workflow className="h-7 w-7 text-primary" />}
-        description={localize(lang, "Статусы, ошибки и вывод каждого шага.", "Statuses, errors, and output for every step.")}
-        stats={
-          <>
-            <HeroStatChip icon={<CheckCircle2 className="h-3.5 w-3.5" />} label={`${statusCount("completed")} ${localize(lang, "выполнено", "completed")}`} />
-            {statusCount("failed") > 0 && <HeroStatChip icon={<XCircle className="h-3.5 w-3.5" />} label={`${statusCount("failed")} ${localize(lang, "с ошибкой", "failed")}`} />}
-            {statusCount("running") > 0 && <HeroStatChip icon={<Loader2 className="h-3.5 w-3.5" />} label={`${statusCount("running")} ${localize(lang, "в работе", "running")}`} />}
-          </>
-        }
-        actions={
-          <HeroActionButton onClick={() => refetch()} icon={<RotateCcw className="h-4 w-4" />} label={localize(lang, "Обновить", "Refresh")} />
-        }
-      />
+      <div className="shrink-0 px-4 pb-2 pt-5 md:px-6">
+        <SoftHeader
+          title={localize(lang, "История запусков", "Run history")}
+          subtitle={localize(lang, "Статусы, ошибки и вывод каждого шага.", "Statuses, errors, and output for every step.")}
+          actions={
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="h-10 gap-2 rounded-sm px-4 font-medium">
+              <RotateCcw className="h-4 w-4" />
+              {localize(lang, "Обновить", "Refresh")}
+            </Button>
+          }
+        />
+      </div>
       <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       {/* Left: runs list */}
       <div className={`min-w-0 flex-col border-r border-border ${selectedRunId ? "hidden lg:flex lg:w-80 lg:shrink-0" : "flex w-full flex-1"}`}>

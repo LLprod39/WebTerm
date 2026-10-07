@@ -97,13 +97,13 @@ export function getPipelineActivityCopy(
   if (state.label === "No active trigger") {
     return {
       label: "Нет активного триггера",
-      detail: "Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить pipeline к запуску.",
+      detail: "Добавьте ручной запуск, webhook, расписание или мониторинг, чтобы подготовить пайплайн к запуску.",
     };
   }
   if (state.label === "Legacy graph") {
     return {
       label: "Старый граф",
-      detail: "Пересохраните pipeline как V2, прежде чем запускать его снова.",
+      detail: "Пересохраните пайплайн как V2, прежде чем запускать его снова.",
     };
   }
   if (state.label === "Running") {

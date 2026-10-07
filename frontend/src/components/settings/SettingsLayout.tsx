@@ -88,7 +88,7 @@ function SettingsSideNav({
                     <span
                       aria-hidden
                       className={cn(
-                        "absolute inset-y-1.5 left-0 w-0.5 rounded-full transition-opacity",
+                        "absolute inset-y-1.5 left-0 w-0.5 rounded-sm transition-opacity",
                         active ? "bg-primary opacity-100" : "opacity-0 group-hover:bg-border group-hover:opacity-100",
                       )}
                     />

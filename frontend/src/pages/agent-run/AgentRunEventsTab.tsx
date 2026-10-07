@@ -5,6 +5,7 @@ import type { AgentRunReportEvent, AgentRunReportResponse, AgentRunReportSeverit
 import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 import { formatCompactDateTime } from "./formatters";
@@ -211,9 +212,14 @@ export function EventsTab({ report }: { report: AgentRunReportResponse }) {
             ))}
           </div>
         ) : (
-          <div className="workspace-empty text-sm text-muted-foreground">
-            {mode === "brief" ? "Важных событий пока нет. Переключите на «Все», чтобы увидеть технический журнал." : "События не найдены."}
-          </div>
+          <EmptyState
+            title={mode === "brief" ? "Важных событий пока нет" : "События не найдены"}
+            description={
+              mode === "brief"
+                ? "Переключите на «Все», чтобы увидеть технический журнал."
+                : ""
+            }
+          />
         )}
         {hasMore ? (
           <div className="mt-4 flex justify-center">

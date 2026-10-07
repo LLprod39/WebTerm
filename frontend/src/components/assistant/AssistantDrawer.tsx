@@ -11,6 +11,7 @@ import {
   type AssistantChatMessage,
 } from "@/api";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/page-shell";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { localize, useI18n } from "@/lib/i18n";
@@ -249,9 +250,7 @@ export function AssistantDrawer() {
           ) : null}
 
           {!chatId && !pendingUser && messages.length === 0 ? (
-            <div className="workspace-empty rounded-lg border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
-              {emptyHint}
-            </div>
+            <EmptyState className="py-8" title={emptyHint} description="" />
           ) : null}
 
           {messages

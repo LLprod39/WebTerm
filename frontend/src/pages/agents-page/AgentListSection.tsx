@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, MoreHorizontal, ShieldCheck, Workflow } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { ActionIcons, AgentIcons, NavIcons } from "@/lib/app-icons";
 
 import type { AgentItem, AgentRuntimeRunItem } from "@/lib/api";
@@ -144,62 +144,21 @@ export function AgentListSection({
 
   if (totalCount === 0) {
     return (
-      <div className="workspace-empty space-y-4 rounded-sm border border-dashed border-border bg-card/50 px-6 py-10">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-sm border border-border bg-surface-2 text-muted-foreground">
-            <NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />
-          </div>
-          <h3 className="font-display text-lg font-bold tracking-tight text-foreground">{localize(lang, "Агентов пока нет", "No agents yet")}</h3>
-          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-            {localize(
-              lang,
-              "Создайте агента, задайте задачу, доступы и ожидаемый результат.",
-              "Create an agent, then define its task, access, and expected result.",
-            )}
-          </p>
-        </div>
-        <div className="mx-auto grid max-w-2xl gap-2 sm:grid-cols-3">
-          <button
-            type="button"
-            onClick={() => onCreate()}
-            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
-          >
-            <ActionIcons.add className="mb-2 h-4 w-4 text-primary" strokeWidth={1.5} />
-            <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Создать агента", "Create an agent")}
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Задача, инструкции и результат", "Task, instructions, and result")}
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => onCreate()}
-            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
-          >
-            <ShieldCheck className="mb-2 h-4 w-4 text-info" strokeWidth={1.5} />
-            <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Настроить доступы", "Configure access")}
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Системы, права и подтверждения", "Systems, permissions, approvals")}
-            </div>
-          </button>
-          <button
-            type="button"
-            onClick={() => onCreate()}
-            className="rounded-lg border border-border bg-card px-3 py-3 text-left transition-colors hover:border-border-strong hover:bg-surface-1"
-          >
-            <Workflow className="mb-2 h-4 w-4 text-ai" strokeWidth={1.5} />
-            <div className="text-sm font-medium text-foreground">
-              {localize(lang, "Добавить материалы", "Add materials")}
-            </div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">
-              {localize(lang, "Навыки, инструкции и интеграции", "Skills, instructions, and integrations")}
-            </div>
-          </button>
-        </div>
-      </div>
+      <EmptyState
+        icon={<NavIcons.agents className="h-5 w-5" strokeWidth={1.5} />}
+        title={localize(lang, "Агентов пока нет", "No agents yet")}
+        description={localize(
+          lang,
+          "Создайте агента, задайте задачу, доступы и ожидаемый результат.",
+          "Create an agent, then define its task, access, and expected result.",
+        )}
+        actions={
+          <Button size="sm" onClick={() => onCreate()} className="gap-2">
+            <ActionIcons.add className="h-4 w-4" strokeWidth={1.5} />
+            {localize(lang, "Создать агента", "Create an agent")}
+          </Button>
+        }
+      />
     );
   }
 

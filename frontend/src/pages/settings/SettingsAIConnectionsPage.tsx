@@ -604,7 +604,7 @@ export default function SettingsAIConnectionsPage() {
             </div>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
               {text(
-                "Параллельные запросы — сколько LLM-вызовов одновременно может держать это подключение (чат, Telegram, агенты). При нехватке слотов будет «no free execution slot».",
+                "Параллельные запросы — сколько LLM-вызовов одновременно может держать это подключение (чат, Telegram, агенты). При нехватке слотов будет ошибка «нет свободного слота».",
                 "Concurrent requests — how many LLM calls this connection can hold at once (chat, Telegram, agents). When full you get “no free execution slot”.",
               )}
             </p>

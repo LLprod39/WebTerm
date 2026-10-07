@@ -96,8 +96,6 @@ export default function StudioSkillsPage() {
     [templates, selectedTemplateSlug],
   );
   const skillsSignature = skills.map((skill) => skill.slug).join("|");
-  const runtimeEnforcedCount = skills.filter((skill) => skill.runtime_enforced).length;
-  const serviceCount = services.length;
   const starterFiles = starterFilesFromWizard(wizard);
   const canSubmitWizard = Boolean(wizard.name.trim()) && Boolean(wizard.description.trim());
   const invalidateSkillQueries = async (slug?: string) => {
@@ -367,8 +365,6 @@ export default function StudioSkillsPage() {
           services={services}
           search={search}
           serviceFilter={serviceFilter}
-          runtimeEnforcedCount={runtimeEnforcedCount}
-          serviceCount={serviceCount}
           isLoading={isLoading}
           isValidating={validateMutation.isPending}
           canOpenMcp={canOpenMcp}

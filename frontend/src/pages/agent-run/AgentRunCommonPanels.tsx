@@ -1,16 +1,21 @@
 import type { ReactNode } from "react";
-import type { LucideIcon } from "lucide-react";
 import { Activity, AlertTriangle, Clipboard, Clock3, FolderArchive, List, MessageSquare, RefreshCw, Send, Server, Shield, Terminal } from "lucide-react";
 
 import type { AgentRunReportResponse } from "@/lib/api";
 import type { StatusTone } from "@/design/status";
 import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
+import { MetricCard } from "@/components/ui/page-shell";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 import { formatDuration } from "./formatters";
 import { _severityRank, reportSignalCount, riskLabel, severityTone, toneBoxFromStatusTone } from "./reportShared";
+
+function metricTone(tone: StatusTone): "default" | "success" | "warning" | "danger" | "info" {
+  if (tone === "success" || tone === "warning" || tone === "danger" || tone === "info") return tone;
+  return "default";
+}
 
 
 export function StateBlock({ title, description, icon, danger = false }: { title: string; description?: string; icon?: ReactNode; danger?: boolean }) {
@@ -109,67 +114,40 @@ export function ReportMetricCards({ report }: { report: AgentRunReportResponse }
       label: "Риск",
       value: riskLabel(report),
       hint: report.report.severity === "success" ? "Норма" : "Критический",
-      icon: Shield,
-      tone: severityTone[report.report.severity] || "neutral",
+      icon: <Shield className="h-5 w-5" />,
+      tone: metricTone(severityTone[report.report.severity] || "neutral"),
     },
     {
       id: "signals",
       label: "Сигналы",
       value: String(reportSignalCount(report)),
       hint: "Всего сигналов",
-      icon: Activity,
-      tone: "info" as StatusTone,
+      icon: <Activity className="h-5 w-5" />,
+      tone: "info" as const,
     },
     {
       id: "duration",
       label: "Длительность",
       value: report.run.duration_ms > 0 ? formatDuration(report.run.duration_ms) : "—",
       hint: "Время выполнения",
-      icon: Clock3,
-      tone: "info" as StatusTone,
+      icon: <Clock3 className="h-5 w-5" />,
+      tone: "info" as const,
     },
     {
       id: "server",
       label: "Сервер",
       value: report.report.meta.server || report.run.server_name || "—",
       hint: "UNIX",
-      icon: Server,
-      tone: "neutral" as StatusTone,
+      icon: <Server className="h-5 w-5" />,
+      tone: "default" as const,
     },
   ];
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => (
-        <MetricCard key={card.id} {...card} />
+        <MetricCard key={card.id} label={card.label} value={card.value} hint={card.hint} icon={card.icon} tone={card.tone} />
       ))}
-    </div>
-  );
-}
-
-export function MetricCard({
-  label,
-  value,
-  hint,
-  icon: Icon,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  icon: LucideIcon;
-  tone: StatusTone;
-}) {
-  return (
-    <div className="enterprise-panel flex min-h-[118px] items-center gap-4 p-5">
-      <div className={cn("flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border", toneBoxFromStatusTone(tone))}>
-        <Icon className="h-7 w-7" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-sm leading-5 text-muted-foreground">{label}</p>
-        <p className="mt-1 truncate text-2xl font-semibold tracking-[-0.01em] text-foreground">{value || "—"}</p>
-        <p className="mt-1 truncate text-sm text-muted-foreground">{hint}</p>
-      </div>
     </div>
   );
 }

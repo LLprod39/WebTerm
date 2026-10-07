@@ -338,7 +338,7 @@ export function ChatMessagesPane({
           <Button
             size="icon"
             variant="ghost"
-            className="h-9 w-9 shrink-0 rounded-full lg:hidden"
+            className="h-9 w-9 shrink-0 rounded-md lg:hidden"
             onClick={onOpenHistory}
             aria-label={localize(lang, "Открыть историю чатов", "Open chat history")}
           >
@@ -348,7 +348,7 @@ export function ChatMessagesPane({
             <Button
               size="icon"
               variant="ghost"
-              className="hidden h-8 w-8 shrink-0 rounded-full lg:inline-flex"
+              className="hidden h-8 w-8 shrink-0 rounded-md lg:inline-flex"
               onClick={onToggleHistoryCollapsed}
               aria-label={
                 historyCollapsed
@@ -410,7 +410,7 @@ export function ChatMessagesPane({
         <div className="flex shrink-0 items-center gap-0.5">
           {sessionTokens ? (
             <span
-              className="mr-1 hidden rounded-full border border-border/50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground/70 sm:inline"
+              className="mr-1 hidden rounded-md border border-border/50 px-2 py-0.5 font-mono text-[10px] tabular-nums text-muted-foreground/70 sm:inline"
               title={localize(lang, "Токены за сессию (вход + выход)", "Session tokens (in + out)")}
             >
               {sessionTokens} tok
@@ -419,7 +419,7 @@ export function ChatMessagesPane({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 rounded-full"
+            className="h-8 w-8 rounded-md"
             onClick={shareChat}
             aria-label={localize(lang, "Поделиться чатом", "Share chat")}
             title={localize(lang, "Скопировать ссылку", "Copy link")}
@@ -431,7 +431,7 @@ export function ChatMessagesPane({
               size="icon"
               variant="ghost"
               className={cn(
-                "h-8 w-8 rounded-full",
+                "h-8 w-8 rounded-md",
                 contextRail.open && contextRail.tab === "tasks" && "text-primary",
               )}
               onClick={() => toggleContextRailTab("tasks")}
@@ -447,7 +447,7 @@ export function ChatMessagesPane({
               size="icon"
               variant="ghost"
               className={cn(
-                "h-8 w-8 rounded-full",
+                "h-8 w-8 rounded-md",
                 contextRail.open && contextRail.tab === "terminal" && "text-primary",
               )}
               onClick={() => toggleContextRailTab("terminal")}
@@ -461,7 +461,7 @@ export function ChatMessagesPane({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 rounded-full"
+              className="h-8 w-8 rounded-md"
               onClick={() => toggleContextRailTab("details")}
               aria-label={localize(lang, "Ещё", "More options")}
               title={localize(lang, "Контекст", "Context")}
@@ -472,7 +472,7 @@ export function ChatMessagesPane({
           <Button
             size="icon"
             variant="ghost"
-            className="h-8 w-8 rounded-full lg:hidden"
+            className="h-8 w-8 rounded-md lg:hidden"
             onClick={clearLastChatAndNew}
             aria-label={localize(lang, "Новый чат", "New chat")}
           >
@@ -512,7 +512,7 @@ export function ChatMessagesPane({
                     whileHover={reduceMotion ? undefined : { y: -1 }}
                     whileTap={reduceMotion ? undefined : { scale: 0.985 }}
                     transition={{ duration: reduceMotion ? 0 : 0.16, ease: CHAT_EASE }}
-                    className="rounded-full border border-border/65 bg-muted/25 px-3.5 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/50"
+                    className="rounded-md border border-border/65 bg-muted/25 px-3.5 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted/50"
                   >
                     {lang === "ru" ? card.labelRu : card.labelEn}
                   </motion.button>
@@ -812,7 +812,7 @@ export function ChatMessagesPane({
                 setAtBottom(true);
                 scrollToEnd(true);
               }}
-              className="pointer-events-auto absolute -top-12 left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-full border border-border bg-card px-3 text-[11px] font-medium text-muted-foreground shadow-elev-1 transition-colors hover:text-foreground"
+              className="pointer-events-auto absolute -top-12 left-1/2 flex h-9 -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-card px-3 text-[11px] font-medium text-muted-foreground shadow-elev-1 transition-colors hover:text-foreground"
               aria-label={localize(lang, "К новому сообщению", "Jump to new message")}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />

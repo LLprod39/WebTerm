@@ -16,6 +16,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/page-shell";
 import type { FrontendServer, SftpEntry } from "@/lib/api";
 import { useI18n, localize } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -249,11 +250,11 @@ export function SftpDirectoryBrowser({
           {error ? (
             <div className="px-4 py-6 text-sm text-destructive">{error}</div>
           ) : visibleEntries.length === 0 && !isLoading ? (
-            <div className="workspace-empty m-4">
-              <div className="text-sm font-medium text-foreground">
-                {entries.length === 0 ? "Папка пустая." : "Поиск ничего не нашел."}
-              </div>
-            </div>
+            <EmptyState
+              className="m-4"
+              title={entries.length === 0 ? "Папка пустая." : "Поиск ничего не нашел."}
+              description=""
+            />
           ) : (
             <div className="divide-y divide-border/60">
               {visibleEntries.map((entry) => {

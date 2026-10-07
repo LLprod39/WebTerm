@@ -83,12 +83,12 @@ export function ChatContextRail({
                 aria-pressed={selected}
                 onClick={() => onTabChange(item.id)}
                 className={cn(
-                  "relative z-10 flex shrink-0 items-center gap-1 rounded-full px-2 py-[5px] text-[12px] transition-colors",
-                  selected ? "text-ai" : "text-muted-foreground hover:text-foreground",
+                  "relative z-10 flex shrink-0 items-center gap-1 rounded-md px-2 py-[5px] text-[12px] transition-colors",
+                  selected ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )}
               >
                 {selected ? (
-                  <span className="pointer-events-none absolute inset-0 rounded-full bg-ai/10" aria-hidden />
+                  <span className="pointer-events-none absolute inset-0 rounded-md bg-primary/10" aria-hidden />
                 ) : null}
                 <Icon className="relative z-10 h-4 w-4 shrink-0" />
                 <span className="relative z-10 whitespace-nowrap">
@@ -105,7 +105,7 @@ export function ChatContextRail({
           {hasSession ? (
             <button
               type="button"
-              className="rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
               onClick={() => onTabChange("terminal")}
               aria-label={localize(lang, "Открыть терминал", "Open terminal")}
               title={localize(lang, "Терминал", "Terminal")}
@@ -115,7 +115,7 @@ export function ChatContextRail({
           ) : null}
           <button
             type="button"
-            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
             onClick={onClose}
             aria-label={localize(lang, "Свернуть панель", "Toggle panel")}
             title={localize(lang, "Свернуть", "Collapse")}
@@ -125,7 +125,7 @@ export function ChatContextRail({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 w-7 shrink-0 rounded-full p-0"
+            className="h-7 w-7 shrink-0 rounded-md p-0"
             onClick={onClose}
             aria-label={localize(lang, "Закрыть", "Close")}
           >

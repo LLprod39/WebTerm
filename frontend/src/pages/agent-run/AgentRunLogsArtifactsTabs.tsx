@@ -5,6 +5,7 @@ import type { AgentRunReportArtifact, AgentRunReportLog, AgentRunReportResponse 
 import { StatusBadge } from "@/components/system/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/page-shell";
 import { cn } from "@/lib/utils";
 
 import { formatDuration } from "./formatters";
@@ -129,10 +130,11 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
             {report.artifact_state?.description || "Артефакты появятся после финального отчёта."}
           </p>
         </div>
-        <div className="workspace-empty m-4 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">{report.artifact_state?.empty_title || "Артефакты появятся после финального отчёта"}</p>
-          <p className="mt-1">{report.artifact_state?.empty_description || report.report_state?.next_expected}</p>
-        </div>
+        <EmptyState
+          className="m-4"
+          title={report.artifact_state?.empty_title || "Артефакты появятся после финального отчёта"}
+          description={report.artifact_state?.empty_description || report.report_state?.next_expected || ""}
+        />
       </div>
     );
   }
@@ -200,7 +202,7 @@ export function ArtifactsTab({ report }: { report: AgentRunReportResponse }) {
           ))}
         </ul>
       ) : (
-        <div className="workspace-empty m-4 text-sm text-muted-foreground">Артефакты не сформированы.</div>
+        <EmptyState className="m-4" title="Артефакты не сформированы." description="" />
       )}
     </div>
   );
@@ -215,10 +217,10 @@ function EmptyRunDataPanel({ report, kind }: { report: AgentRunReportResponse; k
     : "В этом запуске сервер не сохранил данные для этой вкладки.";
 
   return (
-    <div className="workspace-empty text-sm text-muted-foreground">
-      <p className="font-medium text-foreground">{active ? title : terminalTitle}</p>
-      <p className="mt-1 max-w-2xl leading-6">{description}</p>
-    </div>
+    <EmptyState
+      title={active ? title : terminalTitle}
+      description={description}
+    />
   );
 }
 
