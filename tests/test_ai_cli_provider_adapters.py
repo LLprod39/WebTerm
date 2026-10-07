@@ -566,6 +566,20 @@ def test_parse_antigravity_oauth_state_from_uri() -> None:
     assert parse_antigravity_oauth_state(uri) == "gyyPza09qA1vUfmcr7rr6w"
 
 
+def test_auth_failure_classifier_ignores_prompt_timeout_hint() -> None:
+    from ai_cli_runner_manager.adapters.antigravity import _auth_failure_from_output
+
+    prompt = "Waiting for authentication (timeout 60s)...\nOr, paste the authorization code here and press Enter:\n"
+    assert _auth_failure_from_output(prompt)[0] == "provider_auth_failed"
+    assert _auth_failure_from_output(prompt + "Error: authentication timed out.\n")[0] == "provider_auth_timeout"
+    exchange = (
+        prompt
+        + 'Error: authentication failed: token exchange failed: Post "https://oauth2.googleapis.com/token"\n'
+        + "error: authentication failed or timed out\n"
+    )
+    assert _auth_failure_from_output(exchange)[0] == "provider_auth_transport_failed"
+
+
 @pytest.mark.asyncio
 async def test_antigravity_device_auth_handles_process_lookup_error(monkeypatch) -> None:
     monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_TOTAL_WAIT_SECONDS", 1.5)
