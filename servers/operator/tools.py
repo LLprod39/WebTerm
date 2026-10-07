@@ -77,6 +77,13 @@ __all__ = [
 ]
 
 
+def _finish_report(ctx) -> dict:
+    """Signal an explicit end-of-turn; loop treats this as a final answer."""
+    payload = getattr(ctx, "input_payload", None) or {}
+    summary = str(payload.get("summary") or "").strip()
+    return {"ok": True, "finished": True, "summary": summary[:4000]}
+
+
 def register_operator_tools() -> None:
     specs = [
         AssistantActionSpec(
@@ -389,6 +396,28 @@ def register_operator_tools() -> None:
                 "required": ["title", "steps"],
             },
             handler=propose_plan,
+        ),
+        AssistantActionSpec(
+            action_type="operator.finish_report",
+            label="Finish report",
+            description=(
+                "End the operator turn with a final summary after enough tool evidence. "
+                "Call only when the user goal is fully answered (or explicitly blocked). "
+                "Do not call after resolve_server/list_servers alone for host checks."
+            ),
+            required_feature="orchestrator",
+            risk="read",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "summary": {
+                        "type": "string",
+                        "description": "Final answer for the operator (findings + next step)",
+                    },
+                },
+                "required": ["summary"],
+            },
+            handler=_finish_report,
         ),
     ]
     for spec in specs:

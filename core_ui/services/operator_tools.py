@@ -127,7 +127,7 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
         prefixes.update({"operator.", "server."})
     if not prefixes:
         return tools
-    always = {"operator.propose_plan", "operator.resolve_server"}
+    always = {"operator.propose_plan", "operator.resolve_server", "operator.finish_report"}
     selected = [
         tool
         for tool in tools

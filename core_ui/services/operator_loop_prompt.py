@@ -6,6 +6,12 @@ import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from app.core.agentic_loop_policy import (  # noqa: F401 — re-exported for operator_loop
+    GOAL_SELF_CHECK_NUDGE,
+    MAX_GOAL_SELF_CHECKS,
+    messages_have_host_mention,
+    should_goal_self_check,
+)
 from core_ui.models import ChatSession
 
 MAX_ITERATIONS = 16
@@ -27,7 +33,7 @@ PLAN_CONTINUATION_NUDGE = (
     "(step.tool + step.input). Если шаг нельзя выполнить, кратко объясни блокер и "
     "вызови следующий выполнимый шаг."
 )
-# User asked for SSH/audit/logs/what's-running but the model stopped after inventory only.
+# Keyword FALLBACK only (after model-driven goal self-check from agentic_loop_policy).
 TASK_CONTINUATION_NUDGES = 2
 TASK_CONTINUATION_NUDGE = (
     "Задача ещё не выполнена: пользователь просил проверить хост по SSH "
@@ -35,8 +41,10 @@ TASK_CONTINUATION_NUDGE = (
     "(resolve/list). Продолжи: вызови operator.read_command (или server.diagnostics.overview) "
     "на найденном server_id — например systemctl list-units --type=service --state=running, "
     "docker ps, ss -tlnp, ps aux --sort=-%cpu | head -n 20, journalctl -n / docker logs — "
-    "затем проанализируй вывод и дай итоговый отчёт. Не спрашивай «что дальше?»."
+    "затем проанализируй вывод и дай итоговый отчёт (или operator.finish_report). "
+    "Не спрашивай «что дальше?»."
 )
+
 STEP_LIMIT_FINAL_REPORT_NUDGE = (
     "Достигнут лимит шагов. Сейчас дай ИТОГОВЫЙ ОТЧЁТ по уже собранным tool_result: "
     "цель, что проверено, найденные ошибки/риски (с цитатами из логов), пробелы, "
@@ -77,9 +85,11 @@ _SSH_OP_VERB_RE = re.compile(
     r"(?:"
     r"проверь|проверить|проверьте|"
     r"посмотри|посмотреть|посмотрите|"
+    r"глянь|глянуть|взгляни|"
     r"подключ(?:ись|иться|ение)?|"
     r"что\s+запущен[оаы]?|"
     r"что\s+крутится|"
+    r"что\s+с\b|"
     r"крутится|"
     r"запущен[оаы]?|"
     r"what'?s\s+running|"
@@ -141,9 +151,7 @@ def user_message_needs_ssh_actions(text: str) -> bool:
     if any(marker in lowered for marker in _SSH_AUDIT_USER_MARKERS):
         return True
     # Host-ops phrasing without @mention («что на сервере крутится»).
-    if _SSH_OP_VERB_RE.search(lowered) and re.search(r"сервер|хост|server|host", lowered):
-        return True
-    return False
+    return bool(_SSH_OP_VERB_RE.search(lowered) and re.search(r"сервер|хост|server|host", lowered))
 
 
 def messages_have_ssh_action_results(messages: list[dict[str, Any]]) -> bool:
@@ -240,11 +248,12 @@ You work on behalf of the authenticated user with the platform tools provided.
 
 # Agent loop (multi-step) — Claude Code / Codex style
 - You are a full multi-step agent: plan → call tools → observe results → continue until the user goal is done or blocked.
-- Keep emitting tool calls while work remains. End the turn ONLY with a final answer (or an explicit blocker). Never end just because resolve_server / list_servers succeeded.
-- Do NOT stop after operator.resolve_server / list_servers when the user asked to connect, audit, check logs, diagnose, see what's running, or run SSH — that is only step 1.
+- While work remains, keep emitting tool calls. Intermediate prose between tool rounds is progress, NOT the final answer.
+- End the turn only when: (a) you call operator.finish_report({summary}), or (b) you give a final answer after enough tool evidence, or (c) you hit an explicit blocker (auth/missing host).
+- Never end just because resolve_server / list_servers succeeded — that is only step 1 for host checks («глянь / проверь / что крутится / аудит / логи»).
 - Prefer operator.read_command for bounded diagnostics (journalctl -n/--since, docker logs --tail, cat/grep under /var/log, systemctl status/list-units, ss -tlnp, df/free/ps, kubectl get/logs). No confirmation needed.
 - Use operator.run_command only for mutating or unbounded commands (Confirm will pause the turn).
-- Keep calling tools until you can write a clear final report (findings + evidence + next step). If blocked (auth error, missing host), say so and stop.
+- Keep calling tools until you can write a clear final report (findings + evidence + next step). Prefer operator.finish_report for the closing summary after SSH/diagnostics.
 - Step budget is limited (~16). When near the limit, prioritize the final report over more discovery.
 
 # Tools & facts
