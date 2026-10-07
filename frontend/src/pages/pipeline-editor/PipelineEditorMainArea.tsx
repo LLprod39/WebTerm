@@ -1,4 +1,4 @@
-import type { ComponentType, Dispatch, DragEvent, SetStateAction } from "react";
+import type { ComponentType, Dispatch, DragEvent, ReactNode, SetStateAction } from "react";
 import type { Connection, EdgeChange, NodeChange, NodeMouseHandler, NodeTypes } from "@xyflow/react";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 import { localize } from "./presentation";
 import { NodePalette } from "./NodePalette";
-import { PipelineEditorCanvas } from "./PipelineEditorCanvas";
+import { PipelineEditorCanvas, type CanvasConnectEndEmpty } from "./PipelineEditorCanvas";
 import { PipelineEditorSidePanel } from "./PipelineEditorSidePanel";
 
 export function PipelineEditorMainArea({
@@ -20,6 +20,7 @@ export function PipelineEditorMainArea({
   assistantProposal,
   displayEdges,
   displayNodes,
+  emptySlot,
   lang,
   nodeManifests,
   paletteOpen,
@@ -39,12 +40,15 @@ export function PipelineEditorMainArea({
   onCloseNode,
   onCloseRun,
   onConnect,
+  onConnectEndEmpty,
+  onDeleteEdge,
   onDeleteNode,
   onDiscardAssistantProposal,
   onDragOver,
   onDrop,
   onDuplicateNode,
   onEdgesChange,
+  onInsertEdge,
   onNodeClick,
   onNodesChange,
   onPaneClick,
@@ -60,6 +64,7 @@ export function PipelineEditorMainArea({
   assistantProposal: StudioPipelineAssistantResponse | null;
   displayEdges: PipelineEdge[];
   displayNodes: PipelineNode[];
+  emptySlot?: ReactNode;
   lang: "en" | "ru";
   nodeManifests: StudioCapabilityNode[];
   paletteOpen: boolean;
@@ -80,12 +85,15 @@ export function PipelineEditorMainArea({
   onCloseNode: () => void;
   onCloseRun: () => void;
   onConnect: (connection: Connection) => void;
+  onConnectEndEmpty?: CanvasConnectEndEmpty;
+  onDeleteEdge?: (edgeId: string) => void;
   onDeleteNode: (nodeId: string) => void;
   onDiscardAssistantProposal: () => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
   onDuplicateNode: (nodeId: string) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
+  onInsertEdge?: (edgeId: string) => void;
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;
@@ -136,11 +144,15 @@ export function PipelineEditorMainArea({
           <PipelineEditorCanvas
             displayNodes={displayNodes}
             displayEdges={displayEdges}
+            emptySlot={emptySlot}
             lang={lang}
             onConnect={onConnect}
+            onConnectEndEmpty={onConnectEndEmpty}
+            onDeleteEdge={onDeleteEdge}
             onDragOver={onDragOver}
             onDrop={onDrop}
             onEdgesChange={onEdgesChange}
+            onInsertEdge={onInsertEdge}
             onNodeClick={onNodeClick}
             onNodesChange={onNodesChange}
             onPaneClick={onPaneClick}

@@ -71,6 +71,12 @@ vi.mock("@xyflow/react", async () => {
       fitView: () => undefined,
     }),
     BackgroundVariant: { Dots: "dots" },
+    MarkerType: { ArrowClosed: "arrowclosed", Arrow: "arrow" },
+    BaseEdge: () => null,
+    EdgeLabelRenderer: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    getBezierPath: () => ["M0 0", 0, 0],
+    ConnectionMode: { Strict: "strict", Loose: "loose" },
+    ConnectionLineType: { Bezier: "default" },
   };
 });
 

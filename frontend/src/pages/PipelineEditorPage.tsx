@@ -19,7 +19,6 @@ import { getPipelineActivityState } from "@/components/pipeline/pipelineActivity
 import { PipelineEditorMainArea } from "./pipeline-editor/PipelineEditorMainArea";
 import { PipelineRunDialogHost } from "./pipeline-editor/PipelineRunDialogHost";
 import { PipelineActivityBar, PipelineEditorToolbar } from "./pipeline-editor/PipelineEditorToolbar";
-import { PipelineFlowSummaryBar } from "./pipeline-editor/PipelineFlowSummaryBar";
 import { usePipelineRunGraphOverlay } from "./pipeline-editor/usePipelineRunGraphOverlay";
 import { usePipelineRunDialogState } from "./pipeline-editor/usePipelineRunDialogState";
 import { localize } from "./pipeline-editor/presentation";
@@ -30,6 +29,12 @@ import { usePipelineEditorGraphActions } from "./pipeline-editor/usePipelineEdit
 import { usePipelineEditorMutations } from "./pipeline-editor/usePipelineEditorMutations";
 import { usePipelineEditorTriggers } from "./pipeline-editor/usePipelineEditorTriggers";
 import { usePipelineGraphDisplayState } from "./pipeline-editor/usePipelineGraphDisplayState";
+import { EmptyCanvasPrompt } from "./pipeline-editor/EmptyCanvasPrompt";
+import { MigrationBanner } from "./pipeline-editor/MigrationBanner";
+import { QuickNodePicker } from "./pipeline-editor/QuickNodePicker";
+import { layoutPipelineGraph, looksVertical } from "./pipeline-editor/pipelineLayout";
+import { usePipelineGraphHistory } from "./pipeline-editor/usePipelineGraphHistory";
+import { usePipelineEditorHotkeys } from "./pipeline-editor/usePipelineEditorHotkeys";
 function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -58,10 +63,13 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
   const [graphRunId, setGraphRunId] = useState<number | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteCollapsed, setPaletteCollapsed] = useState(false);
   const [hasHydratedPipeline, setHasHydratedPipeline] = useState(!pipelineId);
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
-  const [flowSummaryCollapsed, setFlowSummaryCollapsed] = useState(false);
+  const [showMigrationBanner, setShowMigrationBanner] = useState(false);
   const nodeIdCounter = useRef(1);
+  const graphHistory = usePipelineGraphHistory({ nodes: [], edges: [] });
+  const migrationDismissKey = pipelineId ? `studio.lr-migrate.dismissed.${pipelineId}` : "studio.lr-migrate.dismissed.new";
   const pipelineNodes = nodes as unknown as PipelineNode[];
   const pipelineEdges = edges as unknown as PipelineEdge[];
   const {
@@ -138,7 +146,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       nodeIdCounter.current = maxId + 1;
       setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 100);
     }
-  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView]);
+    graphHistory.setPresent({
+      nodes: normalisedGraph.nodes as never[],
+      edges: normalisedGraph.edges as never[],
+    });
+    const dismissed =
+      typeof window !== "undefined" && window.localStorage.getItem(migrationDismissKey) === "1";
+    setShowMigrationBanner(!dismissed && looksVertical(normalisedGraph.nodes as PipelineNode[]));
+  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView, migrationDismissKey, graphHistory.setPresent]);
   const showClientValidationError = useCallback(() => {
     const pipelineNodes = nodes as unknown as PipelineNode[];
     const validationErrors = getPipelineClientValidationErrors(pipelineNodes, nodeManifests);
@@ -247,11 +262,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     }
     if (showClientValidationError()) return;
     toast({
-      description: localize(
-        lang,
-        "Граф прошёл локальную проверку. Для проверки runtime context используйте dry-run в диалоге запуска.",
-        "Graph passed local validation. Use dry-run in the run dialog to validate runtime context.",
-      ),
+      description: localize(lang, "Локально ок. Для runtime — dry-run в Запуске.", "Locally OK. Use dry-run in Run for runtime."),
     });
   };
   const handleNodesChange = useCallback(
@@ -324,15 +335,21 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     }
   };
   const {
+    clearPendingConnect,
     handleAddNode,
+    handleDeleteEdge,
     handleDeleteNode,
     handleDragOver,
     handleDrop,
     handleDuplicateNode,
+    handlePickPending,
     handleUpdateNodeData,
     onConnect,
+    onConnectEndEmpty,
     onNodeClick,
     onPaneClick,
+    pendingConnect,
+    requestInsertOnEdge,
   } = usePipelineEditorGraphActions({
     clearGraphOverlay,
     lang,
@@ -349,10 +366,65 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     setSelectedNode,
     toast,
   });
+
+  const commitHistorySnapshot = useCallback(() => {
+    graphHistory.push({
+      nodes: nodes as unknown as Node[],
+      edges: edges as unknown as Edge[],
+    });
+  }, [edges, graphHistory, nodes]);
+
+  const handleOrganizeLayout = useCallback(() => {
+    commitHistorySnapshot();
+    const next = layoutPipelineGraph(pipelineNodes, pipelineEdges, "LR");
+    setNodes(next as never[]);
+    graphHistory.push({
+      nodes: next as unknown as Node[],
+      edges: edges as unknown as Edge[],
+    });
+    setHasLocalChanges(true);
+    setShowMigrationBanner(false);
+    try {
+      window.localStorage.setItem(migrationDismissKey, "1");
+    } catch {
+      /* ignore */
+    }
+    setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 50);
+  }, [commitHistorySnapshot, edges, fitView, graphHistory, migrationDismissKey, pipelineEdges, pipelineNodes, setNodes]);
+
+  const handleDismissMigration = useCallback(() => {
+    setShowMigrationBanner(false);
+    try {
+      window.localStorage.setItem(migrationDismissKey, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [migrationDismissKey]);
+
+  const handleUndo = useCallback(() => {
+    const snap = graphHistory.undo();
+    if (!snap) return;
+    setNodes(snap.nodes as never[]);
+    setEdges(snap.edges as never[]);
+    setHasLocalChanges(true);
+  }, [graphHistory, setEdges, setNodes]);
+
+  const handleRedo = useCallback(() => {
+    const snap = graphHistory.redo();
+    if (!snap) return;
+    setNodes(snap.nodes as never[]);
+    setEdges(snap.edges as never[]);
+    setHasLocalChanges(true);
+  }, [graphHistory, setEdges, setNodes]);
+
+  usePipelineEditorHotkeys({
+    undo: handleUndo,
+    redo: handleRedo,
+    onSave: handleSave,
+  });
   const {
     displayEdges,
     displayNodes,
-    graphState,
     highlightedNode,
     highlightedNodeLabel,
   } = usePipelineGraphDisplayState({
@@ -401,6 +473,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         }}
         onOpenPalette={() => setPaletteOpen(true)}
         onOpenRunDialog={runDialog.handleOpenRunDialog}
+        onOrganizeLayout={handleOrganizeLayout}
         onPipelineNameChange={(value) => {
           setPipelineName(value);
           setHasLocalChanges(true);
@@ -408,6 +481,9 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onSave={handleSave}
         onValidateGraph={handleValidateGraph}
       />
+      {showMigrationBanner ? (
+        <MigrationBanner lang={lang} onOrganize={handleOrganizeLayout} onDismiss={handleDismissMigration} />
+      ) : null}
       {showPipelineActivityBar ? (
         <PipelineActivityBar
           activityState={pipelineActivityState}
@@ -420,19 +496,6 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
           pipelineId={pipelineId}
         />
       ) : null}
-      <PipelineFlowSummaryBar
-        nodes={pipelineNodes}
-        edges={pipelineEdges}
-        graphState={graphState}
-        selectedNodeId={selectedNode?.id || null}
-        collapsed={flowSummaryCollapsed}
-        lang={lang}
-        onCollapsedChange={setFlowSummaryCollapsed}
-        onSelectNode={(node) => {
-          setSelectedNode(node);
-          setActiveRunId(null);
-        }}
-      />
       <PipelineEditorMainArea
         activeRunId={activeRunId}
         assistantHistory={assistantHistory}
@@ -442,9 +505,11 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         assistantProposal={assistantProposal}
         displayEdges={displayEdges}
         displayNodes={displayNodes}
+        emptySlot={<EmptyCanvasPrompt lang={lang} onAddTrigger={(type) => handleAddNode(type)} />}
         lang={lang}
         nodeManifests={nodeManifests}
         paletteOpen={paletteOpen}
+        paletteCollapsed={paletteCollapsed}
         pluginPalette={pluginPalette}
         pluginNodeTypes={pluginNodeTypes}
         pipelineId={pipelineId}
@@ -460,17 +525,32 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
         onCloseNode={() => setSelectedNode(null)}
         onCloseRun={() => setActiveRunId(null)}
         onConnect={onConnect}
+        onConnectEndEmpty={onConnectEndEmpty}
+        onDeleteEdge={handleDeleteEdge}
         onDeleteNode={handleDeleteNode}
         onDiscardAssistantProposal={() => setAssistantProposal(null)}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onDuplicateNode={handleDuplicateNode}
         onEdgesChange={handleEdgesChange}
+        onInsertEdge={(edgeId) => requestInsertOnEdge(edgeId)}
         onNodeClick={onNodeClick}
         onNodesChange={handleNodesChange}
         onPaneClick={onPaneClick}
+        onTogglePalette={() => setPaletteCollapsed((value) => !value)}
         onUpdateNodeData={handleUpdateNodeData}
         setPaletteOpen={setPaletteOpen}
+      />
+      <QuickNodePicker
+        open={Boolean(pendingConnect)}
+        position={pendingConnect?.position || { x: 0, y: 0 }}
+        lang={lang}
+        excludeTriggers={pendingConnect?.kind === "insert" || pendingConnect?.kind === "connect"}
+        onPick={(type) => {
+          commitHistorySnapshot();
+          handlePickPending(type);
+        }}
+        onClose={clearPendingConnect}
       />
       <PipelineRunDialogHost
         controller={runDialog}

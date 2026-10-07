@@ -51,24 +51,30 @@ export function usePipelineGraphHistory(initial: PipelineGraphSnapshot) {
     });
   }, []);
 
-  const undo = useCallback(() => {
+  const undo = useCallback((): PipelineGraphSnapshot | null => {
+    let restored: PipelineGraphSnapshot | null = null;
     setPresent((current) => {
       const previous = past.current.at(-1);
       if (!previous) return current;
       past.current = past.current.slice(0, -1);
       future.current = [cloneSnapshot(current), ...future.current].slice(0, LIMIT);
-      return cloneSnapshot(previous);
+      restored = cloneSnapshot(previous);
+      return restored;
     });
+    return restored;
   }, []);
 
-  const redo = useCallback(() => {
+  const redo = useCallback((): PipelineGraphSnapshot | null => {
+    let restored: PipelineGraphSnapshot | null = null;
     setPresent((current) => {
       const next = future.current[0];
       if (!next) return current;
       future.current = future.current.slice(1);
       past.current = [...past.current, cloneSnapshot(current)].slice(-LIMIT);
-      return cloneSnapshot(next);
+      restored = cloneSnapshot(next);
+      return restored;
     });
+    return restored;
   }, []);
 
   return {
