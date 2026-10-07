@@ -1,7 +1,6 @@
 import {
   AlertCircle,
   ArrowDown,
-  Bot,
   Check,
   ListChecks,
   Loader2,
