@@ -539,6 +539,8 @@ def test_parse_antigravity_oauth_url_strips_ansi_and_trailing_noise() -> None:
 
 def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     assert not _is_authenticated()
 
     (tmp_path / "api_key.txt").write_text("test-gemini-key", encoding="utf-8")
