@@ -92,6 +92,16 @@ _FALSE_TOOLS_UNAVAILABLE_RE = re.compile(
     r")",
     re.IGNORECASE | re.DOTALL,
 )
+# Final prose that claims host/SSH work was done — invalid with zero tool evidence.
+_CLAIMED_HOST_WORK_RE = re.compile(
+    r"("
+    r"journalctl|systemctl|docker\s+ps|kubectl|"
+    r"ssh_execute|read_console|"
+    r"проверил\w*|подключил\w*|собрал\w*\s+лог|"
+    r"checked\s+logs?|ran\s+ssh|connected\s+via\s+ssh"
+    r")",
+    re.IGNORECASE,
+)
 
 
 class AgentEngine(AgentEngineOpsMixin):
@@ -394,6 +404,13 @@ class AgentEngine(AgentEngineOpsMixin):
         if "ACTION:" in text.upper():
             return False
         if _FALSE_TOOLS_UNAVAILABLE_RE.search(text):
+            return True
+        # Premature "готово" that claims host/SSH work with zero tool evidence.
+        if (
+            len(tool_calls_log) == 0
+            and _FINAL_COMPLETION_RE.search(text)
+            and _CLAIMED_HOST_WORK_RE.search(text)
+        ):
             return True
         if _FINAL_COMPLETION_RE.search(text):
             return False
