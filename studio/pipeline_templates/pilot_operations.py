@@ -14,13 +14,13 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "manual",
                 "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start DB diagnostics"},
             },
             {
                 "id": "diagnose",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Run read-only DB diagnostics",
                     "mcp_server_id": "",
@@ -38,7 +38,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "plan",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Prepare maintenance plan",
                     "provider": "openai",
@@ -55,7 +55,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Approve DB maintenance",
                     "manual_link_only": True,
@@ -66,7 +66,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "maintenance",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Apply guarded maintenance",
                     "mcp_server_id": "",
@@ -80,7 +80,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "verify",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 850},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Verify database health",
                     "mcp_server_id": "",
@@ -94,7 +94,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1010},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "DB maintenance report",
                     "template": "# Database maintenance report\n\n## Diagnostics\n{diagnose_output}\n\n## Plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Maintenance\n{maintenance_output}\n\n## Verification\n{verify_output}",
@@ -103,7 +103,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 690},
+                "position": {"x": 1200, "y": 20},
                 "data": {
                     "label": "DB maintenance rejected",
                     "template": "# Database maintenance rejected\n\n{approval_error}\n\n## Plan\n{plan_output}",
@@ -112,7 +112,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 850},
+                "position": {"x": 1200, "y": 380},
                 "data": {
                     "label": "DB approval timed out",
                     "template": "# Database maintenance timed out\n\nNo approval was received.\n\n## Plan\n{plan_output}",
@@ -183,7 +183,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "monitoring",
                 "type": "trigger/monitoring",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {
                     "label": "Monitoring alert trigger",
                     "is_active": True,
@@ -196,7 +196,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "alert_context",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Read alert context",
                     "mcp_server_id": "",
@@ -216,7 +216,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "evidence",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Query metrics and logs",
                     "mcp_server_id": "",
@@ -234,7 +234,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "plan",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Summarize incident risk",
                     "provider": "openai",
@@ -252,7 +252,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Approve incident update",
                     "manual_link_only": True,
@@ -263,7 +263,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "ticket",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 860},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Create or update incident ticket",
                     "mcp_server_id": "",
@@ -282,7 +282,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "verify",
                 "type": "agent/mcp_call",
-                "position": {"x": 120, "y": 1020},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "Verify incident acknowledgement",
                     "mcp_server_id": "",
@@ -296,7 +296,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1180},
+                "position": {"x": 2040, "y": 200},
                 "data": {
                     "label": "Incident response report",
                     "template": "# Incident response report\n\n## Alert context\n{alert_context_output}\n\n## Evidence\n{evidence_output}\n\n## Plan\n{plan_output}\n\n## Approval\n{approval_output}\n\n## Ticket/update\n{ticket_output}\n\n## Verification\n{verify_output}",
@@ -305,7 +305,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 860},
+                "position": {"x": 1480, "y": 20},
                 "data": {
                     "label": "Incident update rejected",
                     "template": "# Incident update rejected\n\n{approval_error}\n\n## Proposed plan\n{plan_output}",
@@ -314,7 +314,7 @@ PILOT_OPERATIONS_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 1020},
+                "position": {"x": 1480, "y": 380},
                 "data": {
                     "label": "Incident approval timed out",
                     "template": "# Incident approval timed out\n\nNo approval was received.\n\n## Proposed plan\n{plan_output}",

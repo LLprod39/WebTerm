@@ -17,7 +17,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n1",
             "type": "trigger/manual",
-            "position": {"x": 400, "y": 40},
+            "position": {"x": 80, "y": 200},
             "data": {
                 "label": "Start Update Pipeline",
                 "description": "Can also be set to trigger/webhook for Telegram bot integration",
@@ -27,7 +27,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n2",
             "type": "agent/react",
-            "position": {"x": 400, "y": 160},
+            "position": {"x": 360, "y": 200},
             "data": {
                 "label": "🔍 Discover System State (backup-01)",
                 "goal": (
@@ -54,7 +54,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n3",
             "type": "agent/llm_query",
-            "position": {"x": 400, "y": 300},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "🧠 Analyse & Build Update Plan",
                 "system_prompt": (
@@ -101,7 +101,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n4",
             "type": "logic/human_approval",
-            "position": {"x": 400, "y": 460},
+            "position": {"x": 920, "y": 200},
             "data": {
                 "label": "👤 Ожидание вашего решения",
                 "to_email": "",
@@ -136,7 +136,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n4_check",
             "type": "output/report",
-            "position": {"x": 400, "y": 620},
+            "position": {"x": 1200, "y": 20},
             "data": {
                 "label": "⏳ Approval Timed Out",
                 "template": (
@@ -151,7 +151,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n4_rejected",
             "type": "output/report",
-            "position": {"x": 750, "y": 760},
+            "position": {"x": 1200, "y": 380},
             "data": {
                 "label": "❌ Update Rejected",
                 "template": (
@@ -166,7 +166,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n5",
             "type": "agent/llm_query",
-            "position": {"x": 150, "y": 760},
+            "position": {"x": 1200, "y": 200},
             "data": {
                 "label": "📝 Finalise Update Plan",
                 "provider": "openai",
@@ -200,7 +200,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n6a",
             "type": "output/email",
-            "position": {"x": 0, "y": 920},
+            "position": {"x": 1480, "y": 200},
             "data": {
                 "label": "📧 Письмо: обновление через 1 мин",
                 "to_email": "",
@@ -219,7 +219,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n6b",
             "type": "output/telegram",
-            "position": {"x": 300, "y": 920},
+            "position": {"x": 1480, "y": 20},
             "data": {
                 "label": "📱 TG: обновление через 1 мин",
                 "bot_token": "",
@@ -231,7 +231,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n7",
             "type": "logic/wait",
-            "position": {"x": 150, "y": 1080},
+            "position": {"x": 2040, "y": 200},
             "data": {
                 "label": "⏱️ Wait 1 Minute",
                 "wait_minutes": 1,
@@ -240,7 +240,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n6_merge",
             "type": "logic/merge",
-            "position": {"x": 150, "y": 980},
+            "position": {"x": 1760, "y": 200},
             "data": {
                 "label": "📎 Notification Join",
                 "mode": "all",
@@ -250,7 +250,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n8",
             "type": "agent/react",
-            "position": {"x": 150, "y": 1220},
+            "position": {"x": 2320, "y": 200},
             "data": {
                 "label": "🚀 Apply Updates (backup-01)",
                 "goal": (
@@ -282,7 +282,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n9a",
             "type": "output/email",
-            "position": {"x": 0, "y": 1380},
+            "position": {"x": 2600, "y": 200},
             "data": {
                 "label": "📧 Письмо: обновление выполнено",
                 "to_email": "",
@@ -301,7 +301,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n9b",
             "type": "output/telegram",
-            "position": {"x": 300, "y": 1380},
+            "position": {"x": 2600, "y": 20},
             "data": {
                 "label": "📱 TG: обновление выполнено",
                 "bot_token": "",
@@ -313,7 +313,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n10",
             "type": "agent/react",
-            "position": {"x": 150, "y": 1540},
+            "position": {"x": 3160, "y": 200},
             "data": {
                 "label": "🧪 Verify Services (backup-01)",
                 "goal": (
@@ -342,7 +342,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n9_merge",
             "type": "logic/merge",
-            "position": {"x": 150, "y": 1460},
+            "position": {"x": 2880, "y": 200},
             "data": {
                 "label": "📎 Verification Join",
                 "mode": "all",
@@ -352,7 +352,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n11",
             "type": "output/report",
-            "position": {"x": 150, "y": 1700},
+            "position": {"x": 3440, "y": 200},
             "data": {
                 "label": "📋 Итоговый отчёт",
                 "template": (
@@ -370,7 +370,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n12a",
             "type": "output/email",
-            "position": {"x": 0, "y": 1860},
+            "position": {"x": 3720, "y": 200},
             "data": {
                 "label": "📧 Итоговый отчёт (email)",
                 "to_email": "",
@@ -389,7 +389,7 @@ SERVER_UPDATE_APPROVAL_TEMPLATE = {
         {
             "id": "n12b",
             "type": "output/telegram",
-            "position": {"x": 300, "y": 1860},
+            "position": {"x": 3720, "y": 20},
             "data": {
                 "label": "📱 Итоговый отчёт (TG)",
                 "bot_token": "",

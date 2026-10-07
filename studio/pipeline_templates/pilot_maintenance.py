@@ -12,13 +12,13 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "manual",
                 "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start disk cleanup"},
             },
             {
                 "id": "inspect_disk",
                 "type": "ops/disk_cleanup",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Inspect disk usage",
                     "server_id": "",
@@ -30,7 +30,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "review",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Review cleanup risk",
                     "provider": "openai",
@@ -47,7 +47,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Approve disk cleanup",
                     "manual_link_only": True,
@@ -58,7 +58,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "cleanup",
                 "type": "ops/disk_cleanup",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Cleanup old tmp files",
                     "server_id": "",
@@ -73,7 +73,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "verify_disk",
                 "type": "ops/disk_cleanup",
-                "position": {"x": 120, "y": 850},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Verify disk state",
                     "server_id": "",
@@ -85,7 +85,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1010},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "Disk cleanup report",
                     "template": "# Linux disk cleanup report\n\n## Before\n{inspect_disk_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Cleanup\n{cleanup_output}\n\n## Verification\n{verify_disk_output}",
@@ -94,7 +94,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 690},
+                "position": {"x": 1200, "y": 20},
                 "data": {
                     "label": "Disk cleanup rejected",
                     "template": "# Disk cleanup rejected\n\n{approval_error}\n\n## Review\n{review_output}",
@@ -103,7 +103,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 850},
+                "position": {"x": 1200, "y": 380},
                 "data": {
                     "label": "Disk cleanup timed out",
                     "template": "# Disk cleanup timed out\n\nNo approval was received.\n\n## Review\n{review_output}",
@@ -180,13 +180,13 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "manual",
                 "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start backup check"},
             },
             {
                 "id": "inspect_backup",
                 "type": "ops/backup_restore_check",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Inspect backup directory",
                     "server_id": "",
@@ -201,7 +201,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "verify_latest",
                 "type": "ops/backup_restore_check",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Verify latest backup archive",
                     "server_id": "",
@@ -216,7 +216,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "review",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Review backup readiness",
                     "provider": "openai",
@@ -236,7 +236,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Backup check report",
                     "template": "# Backup restore check report\n\n## Inspection\n{inspect_backup_output}\n\n## Archive verification\n{verify_latest_output}\n\n## Review\n{review_output}",
@@ -285,13 +285,13 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "manual",
                 "type": "trigger/manual",
-                "position": {"x": 120, "y": 80},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start service maintenance"},
             },
             {
                 "id": "snapshot",
                 "type": "ops/server_snapshot",
-                "position": {"x": 120, "y": 220},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Collect service snapshot",
                     "server_id": "",
@@ -302,7 +302,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "review",
                 "type": "agent/llm_query",
-                "position": {"x": 120, "y": 370},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Review restart risk",
                     "provider": "openai",
@@ -319,7 +319,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "approval",
                 "type": "logic/human_approval",
-                "position": {"x": 120, "y": 520},
+                "position": {"x": 920, "y": 200},
                 "data": {
                     "label": "Approve service restart",
                     "manual_link_only": True,
@@ -330,7 +330,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "restart",
                 "type": "ops/service_action",
-                "position": {"x": 120, "y": 690},
+                "position": {"x": 1200, "y": 200},
                 "data": {
                     "label": "Restart service",
                     "server_id": "",
@@ -344,7 +344,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "http_check",
                 "type": "ops/http_check",
-                "position": {"x": 120, "y": 850},
+                "position": {"x": 1480, "y": 200},
                 "data": {
                     "label": "Verify HTTP health",
                     "url": "{healthcheck_url}",
@@ -359,7 +359,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "report",
                 "type": "output/report",
-                "position": {"x": 120, "y": 1010},
+                "position": {"x": 1760, "y": 200},
                 "data": {
                     "label": "Service maintenance report",
                     "template": "# Service maintenance report\n\n## Snapshot\n{snapshot_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Restart\n{restart_output}\n\n## HTTP check\n{http_check_output}",
@@ -368,7 +368,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "rejected",
                 "type": "output/report",
-                "position": {"x": 520, "y": 690},
+                "position": {"x": 1200, "y": 20},
                 "data": {
                     "label": "Service restart rejected",
                     "template": "# Service restart rejected\n\n{approval_error}\n\n## Review\n{review_output}",
@@ -377,7 +377,7 @@ PILOT_MAINTENANCE_TEMPLATES = [
             {
                 "id": "timed_out",
                 "type": "output/report",
-                "position": {"x": 520, "y": 850},
+                "position": {"x": 1200, "y": 380},
                 "data": {
                     "label": "Service restart timed out",
                     "template": "# Service restart timed out\n\nNo approval was received.\n\n## Review\n{review_output}",
