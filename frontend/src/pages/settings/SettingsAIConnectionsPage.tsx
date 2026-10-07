@@ -544,8 +544,16 @@ export default function SettingsAIConnectionsPage() {
                   {activeFlow.error_code ? <p className="mt-1 text-sm text-destructive">{activeFlow.error_code}</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  {activeFlow.user_code ? <Badge variant="outline" className="font-mono text-base">{activeFlow.user_code}</Badge> : <Badge variant="secondary">{text("Ожидаем код…", "Waiting for code…")}</Badge>}
-                  {activeFlow.verification_uri ? <Button asChild><a href={activeFlow.verification_uri} target="_blank" rel="noreferrer"><Link2 className="mr-2 h-4 w-4" aria-hidden />{text("Открыть вход", "Open sign-in")}</a></Button> : null}
+                  {activeFlow.status === "failed" || activeFlow.status === "expired" || activeFlow.status === "cancelled"
+                    ? (activeFlow.error_code ? <Badge variant="destructive">{activeFlow.error_code}</Badge> : null)
+                    : activeFlow.user_code
+                      ? <Badge variant="outline" className="font-mono text-base">{activeFlow.user_code}</Badge>
+                      : activeFlow.verification_uri
+                        ? <Badge variant="secondary">{text("Откройте ссылку входа", "Open the sign-in link")}</Badge>
+                        : activeFlow.status === "pending"
+                          ? <Badge variant="secondary">{text("Ожидаем код…", "Waiting for code…")}</Badge>
+                          : null}
+                  {activeFlow.verification_uri && activeFlow.status === "pending" ? <Button asChild><a href={activeFlow.verification_uri} target="_blank" rel="noreferrer"><Link2 className="mr-2 h-4 w-4" aria-hidden />{text("Открыть вход", "Open sign-in")}</a></Button> : null}
                 </div>
               </div>
             </section>

@@ -113,7 +113,8 @@ class AIConnectionAuthFlow(models.Model):
     connection = models.ForeignKey(AIProviderConnection, on_delete=models.CASCADE, related_name="auth_flows")
     flow_kind = models.CharField(max_length=40, default="device_code")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
-    verification_uri = models.URLField(max_length=500, blank=True, default="")
+    # Google Antigravity OAuth consent URLs routinely exceed 500 chars (scopes + PKCE).
+    verification_uri = models.URLField(max_length=2048, blank=True, default="")
     user_code = models.CharField(max_length=64, blank=True, default="")
     error_code = models.CharField(max_length=80, blank=True, default="")
     expires_at = models.DateTimeField(null=True, blank=True)

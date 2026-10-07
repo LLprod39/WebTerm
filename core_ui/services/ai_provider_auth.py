@@ -451,7 +451,7 @@ def _record_device_code(
     )
     if target_id is None:
         return
-    verification_uri = str(payload.get("verification_uri") or "")[:500]
+    verification_uri = str(payload.get("verification_uri") or "")[:2048]
     if not _allowed_verification_uri(target_id, verification_uri):
         raise ProviderRuntimeError(
             "provider_auth_uri_invalid",
