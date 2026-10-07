@@ -168,8 +168,9 @@ export function applyAssistantGraphPatch({
       data.label = item.label;
     }
     const normalizedData = normalizeNodeData ? normalizeNodeData(data, type) : data;
-    const xOffset = typeof item.x_offset === "number" ? item.x_offset : anchor ? 260 * (index + 1) : 260 * index;
-    const yOffset = typeof item.y_offset === "number" ? item.y_offset : 90 * index;
+    // L→R defaults: place new nodes to the right of the anchor, same row.
+    const xOffset = typeof item.x_offset === "number" ? item.x_offset : 280 * (index + 1);
+    const yOffset = typeof item.y_offset === "number" ? item.y_offset : 0;
     nextNodes.push({
       id,
       type,

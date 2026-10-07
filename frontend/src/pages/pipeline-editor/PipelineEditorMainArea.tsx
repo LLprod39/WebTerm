@@ -4,6 +4,7 @@ import type { Connection, EdgeChange, NodeChange, NodeMouseHandler, NodeTypes } 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PipelineEdge, PipelineNode, PipelineTrigger, StudioCapabilityNode } from "@/lib/api";
 import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
+import { cn } from "@/lib/utils";
 
 import { localize } from "./presentation";
 import { NodePalette } from "./NodePalette";
@@ -22,6 +23,7 @@ export function PipelineEditorMainArea({
   lang,
   nodeManifests,
   paletteOpen,
+  paletteCollapsed = false,
   pluginPalette,
   pluginNodeTypes,
   pipelineId,
@@ -46,6 +48,7 @@ export function PipelineEditorMainArea({
   onNodeClick,
   onNodesChange,
   onPaneClick,
+  onTogglePalette,
   onUpdateNodeData,
   setPaletteOpen,
 }: {
@@ -60,6 +63,8 @@ export function PipelineEditorMainArea({
   lang: "en" | "ru";
   nodeManifests: StudioCapabilityNode[];
   paletteOpen: boolean;
+  /** Desktop left palette collapsed to ~48px icon rail. Wired by stream I. */
+  paletteCollapsed?: boolean;
   pluginPalette: Array<{ category: string; nodes: Array<{ type: string; label: string; icon: ComponentType<{ className?: string }>; iconClassName?: string; description: string }> }>;
   pluginNodeTypes: NodeTypes;
   pipelineId: number | null;
@@ -84,13 +89,26 @@ export function PipelineEditorMainArea({
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;
+  /** Toggle desktop palette collapse (expanded ↔ icon rail). */
+  onTogglePalette?: () => void;
   onUpdateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
   setPaletteOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="hidden h-full min-h-0 w-64 shrink-0 lg:block">
-        <NodePalette onAddNode={onAddNode} lang={lang} pluginPalette={pluginPalette} />
+      <div
+        className={cn(
+          "hidden h-full min-h-0 shrink-0 lg:block",
+          paletteCollapsed ? "w-12" : "w-64",
+        )}
+      >
+        <NodePalette
+          onAddNode={onAddNode}
+          lang={lang}
+          pluginPalette={pluginPalette}
+          collapsed={paletteCollapsed}
+          onToggleCollapsed={onTogglePalette}
+        />
       </div>
       <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
         <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col overflow-hidden border-border bg-card p-0 lg:hidden">
