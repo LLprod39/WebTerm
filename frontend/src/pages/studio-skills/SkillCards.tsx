@@ -153,11 +153,11 @@ export function ValidationSummaryCard({ report }: { report: StudioSkillValidatio
           <div>
             <p className="text-sm font-medium">
               {ok
-                ? tr("Библиотека скиллов прошла валидацию", "Skill library passed validation")
-                : tr("Библиотека скиллов требует проверки", "Skill library needs review")}
+                ? tr("Библиотека навыков прошла валидацию", "Skill library passed validation")
+                : tr("Библиотека навыков требует проверки", "Skill library needs review")}
             </p>
             <p className="text-xs text-muted-foreground">
-              {report.summary.skills} {tr("скиллов", "skill(s)")}, {report.summary.errors} {tr("ошибок", "error(s)")},{" "}
+              {report.summary.skills} {tr("навыков", "skill(s)")}, {report.summary.errors} {tr("ошибок", "error(s)")},{" "}
               {report.summary.warnings} {tr("предупреждений", "warning(s)")}
             </p>
           </div>

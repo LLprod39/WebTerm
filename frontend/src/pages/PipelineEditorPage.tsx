@@ -69,6 +69,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
   const [showMigrationBanner, setShowMigrationBanner] = useState(false);
   const nodeIdCounter = useRef(1);
   const graphHistory = usePipelineGraphHistory({ nodes: [], edges: [] });
+  const setGraphHistoryPresent = graphHistory.setPresent;
   const migrationDismissKey = pipelineId ? `studio.lr-migrate.dismissed.${pipelineId}` : "studio.lr-migrate.dismissed.new";
   const pipelineNodes = nodes as unknown as PipelineNode[];
   const pipelineEdges = edges as unknown as PipelineEdge[];
@@ -146,14 +147,14 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
       nodeIdCounter.current = maxId + 1;
       setTimeout(() => fitView({ padding: 0.22, duration: 300 }), 100);
     }
-    graphHistory.setPresent({
+    setGraphHistoryPresent({
       nodes: normalisedGraph.nodes as never[],
       edges: normalisedGraph.edges as never[],
     });
     const dismissed =
       typeof window !== "undefined" && window.localStorage.getItem(migrationDismissKey) === "1";
     setShowMigrationBanner(!dismissed && looksVertical(normalisedGraph.nodes as PipelineNode[]));
-  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView, migrationDismissKey, graphHistory.setPresent]);
+  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView, migrationDismissKey, setGraphHistoryPresent]);
   const showClientValidationError = useCallback(() => {
     const pipelineNodes = nodes as unknown as PipelineNode[];
     const validationErrors = getPipelineClientValidationErrors(pipelineNodes, nodeManifests);

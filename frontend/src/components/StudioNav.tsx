@@ -8,7 +8,7 @@ import { StudioNavIcons } from "@/lib/app-icons";
 
 const NAV_ITEMS = [
   { path: "/studio", labelRu: "Обзор", labelEn: "Overview", icon: StudioNavIcons.overview, exact: true },
-  { path: "/studio/skills", labelRu: "Скиллы", labelEn: "OPS Skills", icon: StudioNavIcons.skills, feature: "studio_skills" },
+  { path: "/studio/skills", labelRu: "Навыки", labelEn: "OPS Skills", icon: StudioNavIcons.skills, feature: "studio_skills" },
   { path: "/studio/mcp", labelRu: "MCP", labelEn: "MCP Tools", icon: StudioNavIcons.mcp, feature: "studio_mcp" },
   { path: "/studio/runs", labelRu: "Запуски", labelEn: "Runs", icon: StudioNavIcons.runs, feature: "studio_runs" },
   { path: "/studio/notifications", labelRu: "Оповещения", labelEn: "Alerts", icon: StudioNavIcons.notifications, feature: "studio_notifications" },

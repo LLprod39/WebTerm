@@ -12,7 +12,7 @@ import {
  */
 export async function ensurePlaybookPublishedForRun(playbookId: number): Promise<number> {
   const listed = await listPlaybookRevisions(playbookId);
-  let publishedId = listed.published_revision_id;
+  const publishedId = listed.published_revision_id;
 
   let draft: Awaited<ReturnType<typeof getPlaybookDraft>>["draft"] | null = null;
   try {

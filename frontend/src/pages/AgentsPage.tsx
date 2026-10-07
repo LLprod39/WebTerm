@@ -7,13 +7,11 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
-import { useMemo } from "react";
 
-import { ActivityRingsCard } from "@/boardui/components/application/medical/activity-rings-card";
 import { AgentReportModal } from "@/components/studio/AgentReportModal";
 import { Button } from "@/components/ui/button";
 import { DeleteDialog } from "@/components/system/ConfirmDialog";
-import { PageShell } from "@/components/ui/page-shell";
+import { PageShell, StatStrip, StatStripItem } from "@/components/ui/page-shell";
 import { SkeletonList } from "@/components/ui/list-state";
 import { localize } from "@/lib/i18n";
 import { CreateAgentDialog } from "./agents-page/CreateAgentDialog";
@@ -74,33 +72,6 @@ export default function AgentsPage() {
     onCreateSaved,
     onEditSaved,
   } = useAgentsPageController();
-
-  const activityRings = useMemo(() => {
-    const total = Math.max(1, allAgents.length);
-    return [
-      {
-        id: "running",
-        label: localize(lang, "Выполняется", "Running"),
-        valueLabel: String(activeAgents),
-        progress: Math.min(1, activeAgents / total),
-        color: "var(--color-chart-3)",
-      },
-      {
-        id: "scheduled",
-        label: localize(lang, "Расписание", "Scheduled"),
-        valueLabel: String(scheduledAgents),
-        progress: Math.min(1, scheduledAgents / total),
-        color: "var(--color-chart-5)",
-      },
-      {
-        id: "failed",
-        label: localize(lang, "С ошибкой", "Failed"),
-        valueLabel: String(failedAgents),
-        progress: Math.min(1, failedAgents / total),
-        color: "var(--color-chart-4)",
-      },
-    ];
-  }, [activeAgents, allAgents.length, failedAgents, lang, scheduledAgents]);
 
   if (isLoading) {
     return (
@@ -163,31 +134,33 @@ export default function AgentsPage() {
       </header>
 
       {allAgents.length > 0 ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,18rem)_1fr]">
-          <ActivityRingsCard
-            title={localize(lang, "Активность агентов", "Agent activity")}
-            rings={activityRings}
+        <StatStrip className={pausedAgents > 0 ? "sm:grid-cols-5" : undefined}>
+          <StatStripItem
+            label={localize(lang, "Всего", "Total")}
+            value={allAgents.length}
           />
-          <div className="flex flex-col justify-center gap-2 rounded-2xl border border-border-button-default bg-background-primary-default p-4 text-sm text-muted-foreground shadow-xs">
-            <p>
-              {localize(lang, "Всего агентов", "Total agents")}:{" "}
-              <span className="font-medium tabular-nums text-foreground">{allAgents.length}</span>
-            </p>
-            {pausedAgents > 0 ? (
-              <p>
-                {localize(lang, "На паузе", "Paused")}:{" "}
-                <span className="font-medium tabular-nums text-foreground">{pausedAgents}</span>
-              </p>
-            ) : null}
-            <p className="text-xs leading-5">
-              {localize(
-                lang,
-                "Кольца отражают долю активных, по расписанию и с ошибкой относительно парка агентов.",
-                "Rings show running, scheduled, and failed agents as a share of the fleet.",
-              )}
-            </p>
-          </div>
-        </div>
+          <StatStripItem
+            label={localize(lang, "Выполняется", "Running")}
+            value={activeAgents}
+            tone={activeAgents > 0 ? "info" : "default"}
+          />
+          <StatStripItem
+            label={localize(lang, "Расписание", "Scheduled")}
+            value={scheduledAgents}
+          />
+          <StatStripItem
+            label={localize(lang, "С ошибкой", "Failed")}
+            value={failedAgents}
+            tone={failedAgents > 0 ? "danger" : "default"}
+          />
+          {pausedAgents > 0 ? (
+            <StatStripItem
+              label={localize(lang, "На паузе", "Paused")}
+              value={pausedAgents}
+              tone="warning"
+            />
+          ) : null}
+        </StatStrip>
       ) : null}
 
       {/* Admin-only: only when workers/runtime have problems (no healthy strip). */}

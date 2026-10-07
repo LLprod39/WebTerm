@@ -15,7 +15,7 @@ import type { ReportDocumentViewModel } from "./reportViewModel";
 /** Drop legacy standalone «Доказательства» dumps — facts belong in narrative sections. */
 function stripEvidenceDumpSection(markdown: string) {
   return markdown
-    .replace(/^##\s*Доказательства\s*\r?\n[\s\S]*?(?=^##\s|\Z)/gim, "")
+    .replace(/^##\s*Доказательства\s*\r?\n[\s\S]*?(?=^##\s|$)/gim, "")
     .replace(/\n{3,}/g, "\n\n");
 }
 

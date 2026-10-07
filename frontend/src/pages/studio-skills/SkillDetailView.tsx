@@ -140,7 +140,7 @@ export function SkillDetailView({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {selectedSkill.is_owner ? <Badge variant="secondary" className="shadow-sm">{tr("Мой скилл", "My skill")}</Badge> : null}
+                  {selectedSkill.is_owner ? <Badge variant="secondary" className="shadow-sm">{tr("Мой навык", "My skill")}</Badge> : null}
                   {!selectedSkill.is_owner && selectedSkill.owner_username ? <Badge variant="outline" className="shadow-sm">{tr(`Владелец: ${selectedSkill.owner_username}`, `Owner: ${selectedSkill.owner_username}`)}</Badge> : null}
                   {selectedSkill.is_shared ? <Badge variant="outline" className="shadow-sm">{tr("Общий", "Shared")}</Badge> : null}
                   {selectedSkill.can_edit === false ? <Badge variant="outline" className="shadow-sm opacity-70">{tr("Только чтение", "Read only")}</Badge> : null}
@@ -226,7 +226,7 @@ export function SkillDetailView({
                     <BookMarked className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-foreground">{tr("Плейбук скилла (SKILL.md)", "Skill Playbook (SKILL.md)")}</h3>
+                    <h3 className="text-lg font-semibold text-foreground">{tr("Плейбук навыка (SKILL.md)", "Skill Playbook (SKILL.md)")}</h3>
                     <p className="text-sm text-muted-foreground">{tr("Полная инструкция, которую читают агенты.", "The full instructions read by agents.")}</p>
                   </div>
                 </div>
@@ -282,7 +282,7 @@ export function SkillDetailView({
           </Tabs>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-red-500/80">
-            {tr("Ошибка загрузки скилла.", "Error loading skill.")}
+            {tr("Ошибка загрузки навыка.", "Error loading skill.")}
           </div>
         )}
       </div>

@@ -1,0 +1,10 @@
+{
+  "_comment": "RU product glossary — prefer these spellings in locales and RU UI copy. Do not invent alternate transliterations.",
+  "kubernetes": "Kubernetes",
+  "skill": "навык",
+  "skills": "навыки",
+  "playbook": "плейбук",
+  "playbooks": "плейбуки",
+  "pipeline": "пайплайн",
+  "pipelines": "пайплайны"
+}

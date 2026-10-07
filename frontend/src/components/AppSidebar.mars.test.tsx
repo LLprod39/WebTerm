@@ -116,7 +116,7 @@ describe("AppSidebar preview-gated nav", () => {
     expect(await screen.findByText("MARS")).toBeInTheDocument();
     expect(screen.getByText("Чат")).toBeInTheDocument();
     // Staff mock always has is_staff=true → Kubernetes is open when feature is on.
-    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
+    expect(await screen.findByText("Kubernetes")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
   });
 
@@ -140,7 +140,7 @@ describe("AppSidebar preview-gated nav", () => {
     // Section label omitted when it duplicates the sole item title.
     expect(within(dashboard).getAllByText("Панель")).toHaveLength(1);
     expect(within(infrastructure).getByText("Серверы")).toBeInTheDocument();
-    expect(within(infrastructure).getByText("Кубернетес")).toBeInTheDocument();
+    expect(within(infrastructure).getByText("Kubernetes")).toBeInTheDocument();
     expect(within(automation).getByText("Агенты")).toBeInTheDocument();
     expect(within(automation).getByText("Ansible")).toBeInTheDocument();
     expect(within(automation).getByText("Студия")).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("AppSidebar preview-gated nav", () => {
       { kubernetesReady: false },
     );
 
-    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
+    expect(await screen.findByText("Kubernetes")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).not.toHaveBeenCalled();
   });
 
@@ -197,7 +197,7 @@ describe("AppSidebar preview-gated nav", () => {
     );
 
     await screen.findByText("Серверы");
-    expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
+    expect(screen.queryByText("Kubernetes")).not.toBeInTheDocument();
     expect(fetchKubernetesReadiness).toHaveBeenCalled();
   });
 
@@ -227,7 +227,7 @@ describe("AppSidebar preview-gated nav", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByText("Кубернетес")).toBeInTheDocument();
+    expect(await screen.findByText("Kubernetes")).toBeInTheDocument();
     expect(fetchKubernetesReadiness).toHaveBeenCalled();
   });
 
@@ -236,7 +236,7 @@ describe("AppSidebar preview-gated nav", () => {
 
     await screen.findByText("Серверы");
     expect(screen.queryByText("Чат")).not.toBeInTheDocument();
-    expect(screen.queryByText("Кубернетес")).not.toBeInTheDocument();
+    expect(screen.queryByText("Kubernetes")).not.toBeInTheDocument();
     expect(screen.queryByText("MARS")).not.toBeInTheDocument();
   });
 

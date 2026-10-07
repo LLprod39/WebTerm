@@ -178,49 +178,6 @@ html[data-ui-style] {
   will-change: background-position;
 }
 
-.bui-agent-thinking-label {
-  color: transparent;
-  background-image: linear-gradient(
-    100deg,
-    color-mix(in oklab, var(--bui-agent-thinking-tone) 55%, transparent) 30%,
-    var(--bui-agent-thinking-tone) 50%,
-    color-mix(in oklab, var(--bui-agent-thinking-tone) 55%, transparent) 70%
-  );
-  background-position: 200% center;
-  background-size: 300% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  animation: ai-chat-text-shimmer 2.6s linear infinite;
-  will-change: background-position;
-}
-
-@keyframes bui-agent-thinking-star {
-  0%, 100% { transform: scale(0); opacity: 0; }
-  40% { transform: scale(1); opacity: 1; }
-  60% { transform: scale(0.8); opacity: 0.9; }
-}
-
-.bui-agent-thinking-star {
-  transform: scale(0);
-  animation-name: bui-agent-thinking-star;
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-}
-
-@keyframes bui-agent-thinking-dash {
-  to { stroke-dashoffset: -100; }
-}
-
-.bui-agent-thinking-comet {
-  animation-name: bui-agent-thinking-dash;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-
-.bui-agent-thinking-stars {
-  color: color-mix(in oklab, currentColor 75%, transparent);
-}
-
 @keyframes bui-composer-loader-dash {
   from { stroke-dashoffset: 0; }
   to { stroke-dashoffset: -100; }
@@ -232,17 +189,6 @@ html[data-ui-style] {
     background-image: none;
     animation: none;
   }
-  .bui-agent-thinking-label {
-    color: var(--bui-agent-thinking-tone);
-    background-image: none;
-    animation: none;
-  }
-  .bui-agent-thinking-star {
-    animation: none;
-    transform: none;
-    opacity: 0.7;
-  }
-  .bui-agent-thinking-comet { animation: none; }
   .bui-composer-loader-rect { animation: none !important; }
 }
 

@@ -71,10 +71,10 @@ export function CreateSkillDialog({
               <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/20 bg-primary/10">
                 <StudioNavIcons.skills className="h-4 w-4 text-primary" strokeWidth={1.5} />
               </span>
-              {tr("Создать скилл", "Create skill")}
+              {tr("Создать навык", "Create skill")}
             </DialogTitle>
             <DialogDescription className="mt-2 max-w-2xl text-[13px] leading-5">
-              {tr("Заполните только то, что агенту нужно понять: как называется скилл и когда его применять. Инструкции и скрипты можно добавить сейчас или позже во вкладке файлов.", "Fill only what the agent needs to understand: the skill name and when to use it. Instructions and scripts can be added now or later in the file workspace.")}
+              {tr("Заполните только то, что агенту нужно понять: как называется навык и когда его применять. Инструкции и скрипты можно добавить сейчас или позже во вкладке файлов.", "Fill only what the agent needs to understand: the skill name and when to use it. Instructions and scripts can be added now or later in the file workspace.")}
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -86,7 +86,7 @@ export function CreateSkillDialog({
                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-xs font-semibold text-primary">1</span>
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">{tr("Назначение", "Purpose")}</h3>
-                  <p className="mt-0.5 text-xs text-muted-foreground">{tr("Это попадёт в SKILL.md и поможет агенту выбрать скилл в нужный момент.", "This goes into SKILL.md and helps the agent choose the skill at the right time.")}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{tr("Это попадёт в SKILL.md и поможет агенту выбрать навык в нужный момент.", "This goes into SKILL.md and helps the agent choose the skill at the right time.")}</p>
                 </div>
               </div>
 
@@ -115,7 +115,7 @@ export function CreateSkillDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{tr("Название скилла", "Skill name")}</Label>
+                <Label className="text-xs text-muted-foreground">{tr("Название навыка", "Skill name")}</Label>
                 <Input
                   className="h-10"
                   value={wizard.name}
@@ -128,7 +128,7 @@ export function CreateSkillDialog({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">{tr("Когда применять этот скилл", "When to use this skill")}</Label>
+                <Label className="text-xs text-muted-foreground">{tr("Когда применять этот навык", "When to use this skill")}</Label>
                 <Textarea
                   rows={4}
                   className="resize-none text-sm leading-6"
@@ -143,7 +143,7 @@ export function CreateSkillDialog({
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-xs font-semibold text-primary">2</span>
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">{tr("Материалы к скиллу", "Skill materials")}</h3>
+                  <h3 className="text-sm font-semibold text-foreground">{tr("Материалы к навыку", "Skill materials")}</h3>
                   <p className="mt-0.5 text-xs text-muted-foreground">{tr("Необязательно. Добавьте инструкцию или готовый скрипт, если они уже есть.", "Optional. Attach a runbook or ready automation script if you already have them.")}</p>
                 </div>
               </div>
@@ -282,7 +282,7 @@ export function CreateSkillDialog({
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
                       <div>
                         <span className="text-xs font-medium text-destructive">{tr("Перезаписать существующий идентификатор", "Overwrite existing identifier")}</span>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{tr("Только если обновляете свой скилл.", "Only when updating your own skill.")}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{tr("Только если обновляете свой навык.", "Only when updating your own skill.")}</p>
                       </div>
                       <Switch checked={wizard.force} onCheckedChange={(checked) => setWizard((prev) => ({ ...prev, force: Boolean(checked) }))} />
                     </div>
@@ -302,7 +302,7 @@ export function CreateSkillDialog({
           <p className="text-xs leading-5 text-muted-foreground">
             {canSubmitWizard
               ? tr(`Будет создан SKILL.md${starterFilesCount ? ` и файлов: ${starterFilesCount}` : ""}.`, `Will create SKILL.md${starterFilesCount ? ` and ${starterFilesCount} file(s)` : ""}.`)
-              : tr("Для создания заполните название и когда применять скилл.", "Add a name and when to use the skill to continue.")}
+              : tr("Для создания заполните название и когда применять навык.", "Add a name and when to use the skill to continue.")}
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" className="text-muted-foreground" onClick={() => onOpenChange(false)}>{tr("Отмена", "Cancel")}</Button>
@@ -361,7 +361,7 @@ export function CreateFileDialog({
             <Textarea rows={16} value={content} onChange={(event) => onContentChange(event.target.value)} className="font-mono text-[12px] leading-5" />
           </div>
           <div className="rounded-sm border border-border/70 bg-background/24 px-4 py-4 text-xs leading-5 text-muted-foreground">
-            {tr("Разрешены только относительные пути и текстовые файлы. WebTerm отклонит скрытые файлы, абсолютные пути и выход за папку скилла.", "Only relative paths and text files are allowed. WebTerm rejects hidden files, absolute paths, and paths outside the skill folder.")}
+            {tr("Разрешены только относительные пути и текстовые файлы. WebTerm отклонит скрытые файлы, абсолютные пути и выход за папку навыка.", "Only relative paths and text files are allowed. WebTerm rejects hidden files, absolute paths, and paths outside the skill folder.")}
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
@@ -401,8 +401,8 @@ export function SkillValidationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent closeLabel={tr("Закрыть", "Close")} className="max-h-[85vh] max-w-4xl overflow-auto rounded-md border-border bg-background/95">
         <DialogHeader>
-          <DialogTitle>{tr("Валидация библиотеки скиллов", "Skill Library Validation")}</DialogTitle>
-          <DialogDescription>{tr("Проверьте структуру и правила скиллов Studio.", "Review the structure and rules of Studio skills.")}</DialogDescription>
+          <DialogTitle>{tr("Валидация библиотеки навыков", "Skill Library Validation")}</DialogTitle>
+          <DialogDescription>{tr("Проверьте структуру и правила навыков Studio.", "Review the structure and rules of Studio skills.")}</DialogDescription>
         </DialogHeader>
 
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/20 p-4">

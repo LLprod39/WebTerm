@@ -77,7 +77,7 @@ export function SkillSettingsTab({
                 <div>
                   <h3 className="text-base font-semibold text-foreground">{tr("Основные настройки", "General settings")}</h3>
                   <p className="text-[12px] text-muted-foreground">
-                    {tr("Эти поля сохраняются в описании скилла и видны в каталоге.", "These fields are saved to the skill definition and shown in the catalog.")}
+                    {tr("Эти поля сохраняются в описании навыка и видны в каталоге.", "These fields are saved to the skill definition and shown in the catalog.")}
                   </p>
                 </div>
               </div>
@@ -272,8 +272,8 @@ export function SkillSettingsTab({
           {canShareSkill ? (
             <section className="space-y-3">
               <ShareAccessEditor
-                title={tr("Доступ к скиллу", "Skill access")}
-                description={tr("Откройте скилл всем пользователям Studio или только выбранным людям.", "Expose this skill to all Studio users or only selected people.")}
+                title={tr("Доступ к навыку", "Skill access")}
+                description={tr("Откройте навык всем пользователям Studio или только выбранным людям.", "Expose this skill to all Studio users or only selected people.")}
                 isShared={skillAccessDraft.is_shared}
                 sharedUserIds={skillAccessDraft.shared_user_ids}
                 users={shareUsers}
