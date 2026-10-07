@@ -47,7 +47,12 @@ def submit_authorization_code(flow: AIConnectionAuthFlow, authorization_code: st
             "Sign-in link is not ready yet; wait and try again",
         )
     invocation_id = f"auth_{flow.public_id.hex}"
-    return async_to_sync(AiCliRunnerClient().submit_auth_input)(invocation_id, code)
+    oauth_state = (flow.user_code or "").strip()
+    return async_to_sync(AiCliRunnerClient().submit_auth_input)(
+        invocation_id,
+        code,
+        oauth_state=oauth_state,
+    )
 
 
 def start_connection_auth(connection: AIProviderConnection) -> AIConnectionAuthFlow:

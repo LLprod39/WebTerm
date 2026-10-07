@@ -13,6 +13,7 @@ from ai_cli_runner_manager.adapters.antigravity import (
     _oauth_session_attempt,
     _safe_antigravity_error,
     _start_device_auth,
+    parse_antigravity_oauth_state,
     parse_antigravity_oauth_url,
 )
 from ai_cli_runner_manager.auth_input import (
@@ -421,7 +422,7 @@ async def test_antigravity_device_auth_pty_emits_oauth_url(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_antigravity_auth_input_written_to_pty(monkeypatch) -> None:
-    oauth_url = "https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid&state=x"
+    oauth_url = "https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid&state=sessionState01"
     written: list[bytes] = []
     invocation_id = "auth_pastecodeflow0001"
     register_auth_input_queue(invocation_id)
@@ -476,13 +477,78 @@ async def test_antigravity_auth_input_written_to_pty(monkeypatch) -> None:
 
     consumer = asyncio.create_task(_consume())
     await asyncio.sleep(0.1)
-    assert await publish_auth_input(invocation_id, "4/0AXlqoi5-TEST_CODE-value")
+    assert await publish_auth_input(
+        invocation_id,
+        "4/0AXlqoi5-TEST_CODE-value",
+        oauth_state="sessionState01",
+    )
     events = await asyncio.wait_for(consumer, timeout=5)
     unregister_auth_input_queue(invocation_id)
 
     assert any(event.type is ProviderEventType.AUTH_REQUIRED for event in events)
     assert events[-1].type is ProviderEventType.COMPLETED
     assert written and written[0].startswith(b"4/0AXlqoi5-TEST_CODE-value")
+
+
+@pytest.mark.asyncio
+async def test_antigravity_rejects_code_for_previous_oauth_state(monkeypatch) -> None:
+    oauth_url = "https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid&state=currentState99"
+    invocation_id = "auth_stateMismatch0001"
+    register_auth_input_queue(invocation_id)
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        def terminate(self) -> None:
+            if self.returncode is None:
+                self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        async def wait(self) -> int:
+            if self.returncode is None:
+                self.returncode = 1
+            return self.returncode
+
+    process = FakeProcess()
+    reads = [f"Authentication required\n  {oauth_url}\n".encode("utf-8")]
+
+    def fake_read(_fd: int, _size: int) -> bytes:
+        if reads:
+            return reads.pop(0)
+        import time as _time
+        _time.sleep(0.05)
+        return b""
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return process
+
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.shutil.which", lambda _name: "/usr/local/bin/antigravity")
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.path.exists", lambda _path: True)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.pty.openpty", lambda: (41, 42))
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.close", lambda _fd: None)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.read", fake_read)
+    monkeypatch.setattr(
+        "ai_cli_runner_manager.adapters.antigravity.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    async def _consume():
+        return [event async for event in _start_device_auth(invocation_id=invocation_id)]
+
+    consumer = asyncio.create_task(_consume())
+    await asyncio.sleep(0.1)
+    assert await publish_auth_input(
+        invocation_id,
+        "4/0AXlqoi5-OLD_SESSION_CODE",
+        oauth_state="previousState01",
+    )
+    events = await asyncio.wait_for(consumer, timeout=5)
+    unregister_auth_input_queue(invocation_id)
+    assert events[-1].type is ProviderEventType.ERROR
+    assert events[-1].payload["code"] == "provider_auth_session_mismatch"
 
 
 def test_normalize_authorization_code_accepts_google_style() -> None:
@@ -495,10 +561,14 @@ def test_normalize_authorization_code_accepts_google_style() -> None:
         pass
 
 
+def test_parse_antigravity_oauth_state_from_uri() -> None:
+    uri = "https://accounts.google.com/o/oauth2/auth?state=gyyPza09qA1vUfmcr7rr6w&scope=openid"
+    assert parse_antigravity_oauth_state(uri) == "gyyPza09qA1vUfmcr7rr6w"
+
+
 @pytest.mark.asyncio
 async def test_antigravity_device_auth_handles_process_lookup_error(monkeypatch) -> None:
     monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_TOTAL_WAIT_SECONDS", 1.5)
-    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_SESSION_WAIT_SECONDS", 0.8)
     monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_URL_WAIT_SECONDS", 0.5)
 
     class DeadProcess:

@@ -334,9 +334,13 @@ async def test_submit_auth_input_writes_ndjson_to_live_stdin() -> None:
     invocation_id = "auth_599ca5b3ef3f4e0b89886638dc660e7e"
     runtime._processes = {invocation_id: process}
 
-    assert await runtime.submit_auth_input(invocation_id, "4/0AXlqoi5-TESTCODEVALUE") is True
+    assert await runtime.submit_auth_input(
+        invocation_id,
+        "4/0AXlqoi5-TESTCODEVALUE",
+        oauth_state="stateToken01",
+    ) is True
     assert process.stdin.chunks == [
-        b'{"type":"auth_input","authorization_code":"4/0AXlqoi5-TESTCODEVALUE"}\n'
+        b'{"type":"auth_input","authorization_code":"4/0AXlqoi5-TESTCODEVALUE","oauth_state":"stateToken01"}\n'
     ]
     assert await runtime.submit_auth_input("bad", "4/0AXlqoi5-TESTCODEVALUE") is False
     assert await runtime.submit_auth_input("missing_invocation_xx", "4/0AXlqoi5-TESTCODEVALUE") is False

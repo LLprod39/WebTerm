@@ -15,6 +15,7 @@ from ai_cli_runner_manager.adapters import (
 )
 from ai_cli_runner_manager.auth_input import (
     normalize_authorization_code,
+    normalize_oauth_state,
     publish_auth_input,
     register_auth_input_queue,
     unregister_auth_input_queue,
@@ -77,11 +78,13 @@ async def _stdin_control_loop(invocation_id: str) -> None:
         raw = payload.get("authorization_code")
         if not isinstance(raw, str):
             continue
+        raw_state = payload.get("oauth_state")
         try:
             code = normalize_authorization_code(raw)
+            oauth_state = normalize_oauth_state(raw_state if isinstance(raw_state, str) else "")
         except ValueError:
             continue
-        await publish_auth_input(invocation_id, code)
+        await publish_auth_input(invocation_id, code, oauth_state=oauth_state)
 
 
 def _write(payload: dict[str, object]) -> None:

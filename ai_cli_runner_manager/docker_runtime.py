@@ -196,14 +196,21 @@ class DockerCliRuntime:
                 self._process_connections.pop(request.invocation_id, None)
                 self._runner_names.pop(request.invocation_id, None)
 
-    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+    async def submit_auth_input(
+        self,
+        invocation_id: str,
+        authorization_code: str,
+        *,
+        oauth_state: str = "",
+    ) -> bool:
         """Deliver an authorization code to a live runner via stdin control line."""
-        from .auth_input import normalize_authorization_code
+        from .auth_input import normalize_authorization_code, normalize_oauth_state
 
         if not _INVOCATION_REF.fullmatch(invocation_id):
             return False
         try:
             code = normalize_authorization_code(authorization_code)
+            state = normalize_oauth_state(oauth_state)
         except ValueError:
             return False
         async with self._lock:
@@ -212,11 +219,10 @@ class DockerCliRuntime:
             return False
         if process.stdin.is_closing():
             return False
-        payload = json.dumps(
-            {"type": "auth_input", "authorization_code": code},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
+        body: dict[str, str] = {"type": "auth_input", "authorization_code": code}
+        if state:
+            body["oauth_state"] = state
+        payload = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
         if len(payload) > 8192:
             return False
         try:

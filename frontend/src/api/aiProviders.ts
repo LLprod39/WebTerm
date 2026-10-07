@@ -91,12 +91,14 @@ export interface AiProviderAuthFlow {
   status: string;
   verification_uri: string;
   user_code: string;
+  oauth_state?: string;
   error_code: string;
   expires_at: string | null;
   created_at?: string;
   completed_at?: string | null;
   target_id?: AiSubscriptionTarget | string;
   accepts_authorization_code?: boolean;
+  link_expires_in?: number | null;
 }
 
 export const fetchAiProviderCatalog = () => apiFetch<{
@@ -148,10 +150,20 @@ export const fetchAiProviderAuthFlow = (flowId: string) => apiFetch<{ success: b
   `/api/ai/providers/auth-flows/${flowId}/`,
 );
 
-export const submitAiProviderAuthAuthorizationCode = (flowId: string, authorizationCode: string) =>
+export const submitAiProviderAuthAuthorizationCode = (
+  flowId: string,
+  authorizationCode: string,
+  oauthState?: string,
+) =>
   apiFetch<{ success: boolean; accepted: boolean }>(
     `/api/ai/providers/auth-flows/${flowId}/authorization-code/`,
-    { method: "POST", body: JSON.stringify({ authorization_code: authorizationCode }) },
+    {
+      method: "POST",
+      body: JSON.stringify({
+        authorization_code: authorizationCode,
+        ...(oauthState ? { oauth_state: oauthState } : {}),
+      }),
+    },
   );
 
 export const verifyAiProviderConnection = (connectionId: number) => apiFetch<{

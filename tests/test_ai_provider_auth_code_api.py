@@ -51,9 +51,16 @@ def test_authorization_code_requires_owner_and_pending_antigravity(client, monke
 
     captured: dict[str, str] = {}
 
-    async def fake_submit(self, invocation_id: str, authorization_code: str) -> bool:
+    async def fake_submit(
+        self,
+        invocation_id: str,
+        authorization_code: str,
+        *,
+        oauth_state: str = "",
+    ) -> bool:
         captured["invocation_id"] = invocation_id
         captured["code"] = authorization_code
+        captured["oauth_state"] = oauth_state
         return True
 
     monkeypatch.setattr(
@@ -101,7 +108,13 @@ def test_authorization_code_session_not_ready_is_actionable(client, monkeypatch)
         verification_uri="https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid",
     )
 
-    async def fake_submit(self, invocation_id: str, authorization_code: str) -> bool:
+    async def fake_submit(
+        self,
+        invocation_id: str,
+        authorization_code: str,
+        *,
+        oauth_state: str = "",
+    ) -> bool:
         return False
 
     monkeypatch.setattr(

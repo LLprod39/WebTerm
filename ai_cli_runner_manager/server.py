@@ -84,10 +84,12 @@ async def submit_auth_input(invocation_id: str, request: Request) -> dict[str, b
     raw_code = body.get("authorization_code")
     if not isinstance(raw_code, str):
         raise HTTPException(status_code=400, detail="authorization_code is required")
+    raw_state = body.get("oauth_state")
+    oauth_state = raw_state.strip() if isinstance(raw_state, str) else ""
     submit = getattr(runtime, "submit_auth_input", None)
     if submit is None:
         raise HTTPException(status_code=503, detail="Auth input is not supported")
-    accepted = await submit(invocation_id, raw_code)
+    accepted = await submit(invocation_id, raw_code, oauth_state=oauth_state)
     if not accepted:
         raise HTTPException(status_code=409, detail="No live auth session accepts input")
     return {"accepted": True}

@@ -584,18 +584,21 @@ def _serialize_auth_flow(flow: AIConnectionAuthFlow) -> dict[str, Any]:
         and target_id == "antigravity_subscription"
         and bool(flow.verification_uri)
     )
+    link_ttl_seconds = 55 if accepts_authorization_code else None
     return {
         "id": str(flow.public_id),
         "connection_id": flow.connection_id,
         "status": flow.status,
         "verification_uri": flow.verification_uri,
         "user_code": flow.user_code,
+        "oauth_state": flow.user_code if accepts_authorization_code else "",
         "error_code": flow.error_code,
         "expires_at": flow.expires_at.isoformat() if flow.expires_at else None,
         "created_at": flow.created_at.isoformat(),
         "completed_at": flow.completed_at.isoformat() if flow.completed_at else None,
         "target_id": target_id,
         "accepts_authorization_code": accepts_authorization_code,
+        "link_expires_in": link_ttl_seconds,
     }
 
 
@@ -636,6 +639,8 @@ def api_ai_provider_auth_flow_authorization_code(request, flow_id):
             "provider_auth_not_ready",
             "provider_request_invalid",
             "provider_auth_session_not_ready",
+            "provider_auth_session_mismatch",
+            "provider_auth_failed",
         }:
             return _error(str(exc), 409, code=exc.code)
         if exc.code in {"provider_runner_unavailable", "provider_transport_unavailable"}:

@@ -13,7 +13,13 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from ai_cli_runner_manager.auth_input import wait_auth_input
+from urllib.parse import parse_qs, urlparse
+
+from ai_cli_runner_manager.auth_input import (
+    AuthInputMessage,
+    clear_auth_input_queue,
+    wait_auth_input,
+)
 from ai_cli_runner_manager.protocol import RunnerAction, RunnerRequestV1, error_event
 from app.ai_runtime import ProviderEventType, ProviderEventV1
 
@@ -25,10 +31,11 @@ _CREDENTIALS_DIR = Path("/credentials/antigravity")
 _GOOGLE_OAUTH_URL = re.compile(r"https://accounts\.google\.com/o/oauth2/auth\?[^\s\x1b\"'<>]+", re.IGNORECASE)
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b.")
 _AUTH_URL_WAIT_SECONDS = 45.0
-# Official CLI print-mode OAuth itself expires in ~60s; we refresh sessions within this window.
+# Official CLI OAuth waits ~60s for a pasted code (hard limit). We keep that single
+# PKCE process alive until it exits, then rotate the link inside this envelope.
 _AUTH_TOTAL_WAIT_SECONDS = 600.0
-_AUTH_SESSION_WAIT_SECONDS = 70.0
-_AUTH_CODE_DRAIN_SECONDS = 5.0
+_AUTH_LINK_TTL_SECONDS = 55
+_AUTH_CODE_DRAIN_SECONDS = 45.0
 _PTY_READ_CHUNK = 8192
 
 
@@ -238,8 +245,8 @@ async def _start_device_auth(
         )
         return
 
-    # CLI print-mode OAuth waits ~60s for a pasted code. Refresh sessions inside a
-    # 10-minute envelope so the operator can complete Google login and paste via UI.
+    # Keep each CLI/PKCE process until it exits (~60s). Rotate only after that so a
+    # code from the currently shown link is never pasted into a newer process.
     loop = asyncio.get_running_loop()
     overall_deadline = loop.time() + _AUTH_TOTAL_WAIT_SECONDS
     last_uri = ""
@@ -247,10 +254,12 @@ async def _start_device_auth(
         remaining = overall_deadline - loop.time()
         if remaining < 5:
             break
+        if invocation_id:
+            clear_auth_input_queue(invocation_id)
         async for event in _oauth_session_attempt(
             cli_path,
             invocation_id=invocation_id,
-            session_budget=min(_AUTH_SESSION_WAIT_SECONDS, remaining),
+            session_budget=remaining,
         ):
             if event.type is ProviderEventType.AUTH_REQUIRED:
                 uri = str(event.payload.get("verification_uri") or "")
@@ -298,8 +307,10 @@ async def _oauth_session_attempt(
     verification_uri = ""
     scan_buffer = ""
     loop = asyncio.get_running_loop()
+    # Do not self-timeout before the CLI does — killing early orphans the PKCE verifier.
     session_deadline = loop.time() + max(5.0, session_budget)
     url_deadline = loop.time() + min(_AUTH_URL_WAIT_SECONDS, session_budget)
+    code_written = False
     try:
         while not verification_uri and loop.time() < url_deadline:
             if process.returncode is not None:
@@ -322,37 +333,51 @@ async def _oauth_session_attempt(
             await _stop_process(process)
             return
 
+        oauth_state = parse_antigravity_oauth_state(verification_uri)
         yield ProviderEventV1(
             ProviderEventType.AUTH_REQUIRED,
             {
                 "verification_uri": verification_uri,
-                "user_code": "",
+                "user_code": oauth_state,
+                "oauth_state": oauth_state,
+                "expires_in": _AUTH_LINK_TTL_SECONDS,
                 "accepts_authorization_code": True,
             },
         )
 
-        code_task: asyncio.Task[str | None] | None = None
+        code_task: asyncio.Task[AuthInputMessage | None] | None = None
         if invocation_id:
             code_task = asyncio.create_task(
                 wait_auth_input(invocation_id, timeout=max(1.0, session_deadline - loop.time()))
             )
 
         while process.returncode is None and loop.time() < session_deadline:
-            if code_task is not None and code_task.done():
-                authorization_code = code_task.result()
+            if code_task is not None and code_task.done() and not code_written:
+                message = code_task.result()
                 code_task = None
-                if not authorization_code:
+                if message is None:
                     break
-                await _write_auth_code_to_pty(master_fd, authorization_code)
+                if oauth_state and message.oauth_state and message.oauth_state != oauth_state:
+                    yield error_event(
+                        "provider_auth_session_mismatch",
+                        "Authorization code belongs to a previous sign-in link; open the latest link and paste a fresh code",
+                    )
+                    return
+                await _write_auth_code_to_pty(master_fd, message.authorization_code)
+                code_written = True
                 drain_deadline = loop.time() + _AUTH_CODE_DRAIN_SECONDS
                 while process.returncode is None and loop.time() < drain_deadline:
                     try:
-                        await asyncio.wait_for(
+                        chunk = await asyncio.wait_for(
                             asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
                             timeout=0.5,
                         )
-                    except (TimeoutError, OSError):
+                    except TimeoutError:
+                        continue
+                    except OSError:
                         break
+                    if chunk:
+                        scan_buffer = (scan_buffer + chunk.decode("utf-8", errors="replace"))[-16384:]
                 if process.returncode is None:
                     try:
                         await asyncio.wait_for(process.wait(), timeout=30)
@@ -361,14 +386,11 @@ async def _oauth_session_attempt(
                 if process.returncode == 0:
                     yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
                 else:
-                    yield error_event(
-                        "provider_auth_failed",
-                        "Google Antigravity rejected the authorization code",
-                    )
+                    yield error_event(*_auth_failure_from_output(scan_buffer))
                 return
 
             try:
-                await asyncio.wait_for(
+                chunk = await asyncio.wait_for(
                     asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
                     timeout=0.5,
                 )
@@ -376,13 +398,20 @@ async def _oauth_session_attempt(
                 continue
             except OSError:
                 break
+            if chunk:
+                scan_buffer = (scan_buffer + chunk.decode("utf-8", errors="replace"))[-16384:]
 
         if code_task is not None and not code_task.done():
             code_task.cancel()
             await asyncio.gather(code_task, return_exceptions=True)
-        await _stop_process(process)
-        # Session expired without a usable code; caller may refresh OAuth URL.
-        return
+        # CLI exited or envelope ended without a code — rotate to a fresh PKCE URL.
+        if not code_written:
+            await _stop_process(process)
+            return
+        if process.returncode == 0:
+            yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
+        else:
+            yield error_event(*_auth_failure_from_output(scan_buffer))
     except Exception:  # noqa: BLE001 - never crash the runner process for auth failures
         await _stop_process(process)
         yield error_event("provider_auth_failed", "Google Antigravity authentication failed")
@@ -392,6 +421,7 @@ async def _oauth_session_attempt(
 
 
 async def _write_auth_code_to_pty(master_fd: int, authorization_code: str) -> None:
+    # CLI prompt uses CRLF; send LF (accepted) without bracketed-paste wrappers.
     payload = (authorization_code.strip() + "\n").encode("utf-8")
     try:
         await asyncio.to_thread(os.write, master_fd, payload)
@@ -405,6 +435,41 @@ def parse_antigravity_oauth_url(text: str, *, verification_uri: str = "") -> str
     if not match:
         return verification_uri
     return match.group(0).rstrip(".,);]'\"")
+
+
+def parse_antigravity_oauth_state(verification_uri: str) -> str:
+    try:
+        query = parse_qs(urlparse(verification_uri).query)
+    except ValueError:
+        return ""
+    values = query.get("state") or []
+    if not values:
+        return ""
+    state = str(values[0]).strip()
+    return state[:64]
+
+
+def _auth_failure_from_output(output: str) -> tuple[str, str]:
+    plain = _ANSI_RE.sub("", output or "").lower()
+    if "timed out" in plain or "timeout" in plain:
+        return (
+            "provider_auth_timeout",
+            "Google Antigravity sign-in link expired; open the new link and paste a fresh code",
+        )
+    if "token exchange failed" in plain or "oauth2.googleapis.com" in plain:
+        return (
+            "provider_auth_transport_failed",
+            "Google token exchange failed; check AI CLI egress and try sign-in again",
+        )
+    if "invalid_grant" in plain or "invalid_request" in plain or "rejected" in plain:
+        return (
+            "provider_auth_failed",
+            "Google Antigravity rejected the authorization code; open the latest link and paste a fresh code once",
+        )
+    return (
+        "provider_auth_failed",
+        "Google Antigravity rejected the authorization code; open the latest link and paste a fresh code once",
+    )
 
 
 def _cli_env() -> dict[str, str]:

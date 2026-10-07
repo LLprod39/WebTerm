@@ -33,12 +33,20 @@ class FakeCliRuntime:
         yield ProviderEventV1(ProviderEventType.USAGE, {"input_tokens": 3, "output_tokens": 3})
         yield ProviderEventV1(ProviderEventType.COMPLETED, {"provider_session_id": "fake-session"})
 
-    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+    async def submit_auth_input(
+        self,
+        invocation_id: str,
+        authorization_code: str,
+        *,
+        oauth_state: str = "",
+    ) -> bool:
         try:
             code = normalize_authorization_code(authorization_code)
         except ValueError:
             return False
         self._auth_inputs[invocation_id] = code
+        if oauth_state:
+            self._auth_inputs[f"{invocation_id}:state"] = oauth_state
         return True
 
     async def cancel(self, invocation_id: str) -> bool:

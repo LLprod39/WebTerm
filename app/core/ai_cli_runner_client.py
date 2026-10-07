@@ -105,7 +105,13 @@ class AiCliRunnerClient:
         except (httpx.HTTPError, ValueError):
             return False
 
-    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+    async def submit_auth_input(
+        self,
+        invocation_id: str,
+        authorization_code: str,
+        *,
+        oauth_state: str = "",
+    ) -> bool:
         """Deliver a short-lived OAuth authorization code to a live AUTH_START runner."""
         self.config.validate()
         if not _INVOCATION_REF.fullmatch(invocation_id):
@@ -113,13 +119,17 @@ class AiCliRunnerClient:
         code = (authorization_code or "").strip()
         if not code or len(code) > 2048:
             raise ProviderRuntimeError("provider_request_invalid", "Authorization code is invalid")
+        state = (oauth_state or "").strip()
         headers = {"Authorization": f"Bearer {self.config.token}"}
+        body: dict[str, str] = {"authorization_code": code}
+        if state:
+            body["oauth_state"] = state
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 response = await client.post(
                     f"{self.config.base_url}/v1/invocations/{invocation_id}/auth-input",
                     headers=headers,
-                    json={"authorization_code": code},
+                    json=body,
                 )
             if response.status_code == 409:
                 return False

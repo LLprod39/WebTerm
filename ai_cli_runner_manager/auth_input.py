@@ -4,13 +4,21 @@ from __future__ import annotations
 
 import asyncio
 import re
+from dataclasses import dataclass
 
 _AUTH_CODE = re.compile(r"^[A-Za-z0-9_./+=-]{8,2048}$")
-_queues: dict[str, asyncio.Queue[str]] = {}
+_OAUTH_STATE = re.compile(r"^[A-Za-z0-9._~-]{1,128}$")
+_queues: dict[str, asyncio.Queue[AuthInputMessage]] = {}
 
 
-def register_auth_input_queue(invocation_id: str) -> asyncio.Queue[str]:
-    queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+@dataclass(frozen=True, slots=True)
+class AuthInputMessage:
+    authorization_code: str
+    oauth_state: str = ""
+
+
+def register_auth_input_queue(invocation_id: str) -> asyncio.Queue[AuthInputMessage]:
+    queue: asyncio.Queue[AuthInputMessage] = asyncio.Queue(maxsize=1)
     _queues[invocation_id] = queue
     return queue
 
@@ -26,21 +34,36 @@ def normalize_authorization_code(value: str) -> str:
     return code
 
 
-async def publish_auth_input(invocation_id: str, authorization_code: str) -> bool:
+def normalize_oauth_state(value: str) -> str:
+    state = (value or "").strip()
+    if not state:
+        return ""
+    if not _OAUTH_STATE.fullmatch(state):
+        raise ValueError("oauth_state has an invalid format")
+    return state
+
+
+async def publish_auth_input(
+    invocation_id: str,
+    authorization_code: str,
+    *,
+    oauth_state: str = "",
+) -> bool:
     queue = _queues.get(invocation_id)
     if queue is None:
         return False
     code = normalize_authorization_code(authorization_code)
+    state = normalize_oauth_state(oauth_state)
     if queue.full():
         try:
             queue.get_nowait()
         except asyncio.QueueEmpty:
             pass
-    queue.put_nowait(code)
+    queue.put_nowait(AuthInputMessage(authorization_code=code, oauth_state=state))
     return True
 
 
-async def wait_auth_input(invocation_id: str, *, timeout: float) -> str | None:
+async def wait_auth_input(invocation_id: str, *, timeout: float) -> AuthInputMessage | None:
     queue = _queues.get(invocation_id)
     if queue is None:
         return None
@@ -48,3 +71,14 @@ async def wait_auth_input(invocation_id: str, *, timeout: float) -> str | None:
         return await asyncio.wait_for(queue.get(), timeout=timeout)
     except TimeoutError:
         return None
+
+
+def clear_auth_input_queue(invocation_id: str) -> None:
+    queue = _queues.get(invocation_id)
+    if queue is None:
+        return
+    while True:
+        try:
+            queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return

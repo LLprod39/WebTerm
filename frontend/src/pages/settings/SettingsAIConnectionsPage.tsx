@@ -85,6 +85,35 @@ function targetLabel(target: string): string {
   return target;
 }
 
+function authFailureMessage(errorCode: string | undefined, text: (ru: string, en: string) => string): string {
+  switch (errorCode) {
+    case "provider_auth_failed":
+      return text(
+        "Google отклонил код. Откройте актуальную ссылку и вставьте свежий код один раз.",
+        "Google rejected the code. Open the latest link and paste a fresh code once.",
+      );
+    case "provider_auth_session_mismatch":
+      return text(
+        "Код относится к предыдущей ссылке. Откройте новую ссылку и получите свежий код.",
+        "That code belongs to a previous link. Open the new link and get a fresh code.",
+      );
+    case "provider_auth_timeout":
+      return text(
+        "Ссылка входа истекла (~60 с). Откройте новую ссылку и вставьте свежий код.",
+        "The sign-in link expired (~60s). Open the new link and paste a fresh code.",
+      );
+    case "provider_auth_transport_failed":
+      return text(
+        "Не удалось обменять код у Google (сеть/egress). Повторите вход.",
+        "Google token exchange failed (network/egress). Try sign-in again.",
+      );
+    default:
+      return errorCode
+        ? errorCode
+        : text("Авторизация не завершена. Запустите вход повторно.", "Authorization did not complete. Start sign-in again.");
+  }
+}
+
 type ConfirmationTarget =
   | { kind: "connection"; id: number; label: string }
   | { kind: "grant"; id: number; label: string };
@@ -140,6 +169,9 @@ export default function SettingsAIConnectionsPage() {
   const [concurrencyLimit, setConcurrencyLimit] = useState(1);
   const [authFlowId, setAuthFlowId] = useState("");
   const [authAuthorizationCode, setAuthAuthorizationCode] = useState("");
+  const [authCodeSubmitted, setAuthCodeSubmitted] = useState(false);
+  const [authLinkIssuedAtMs, setAuthLinkIssuedAtMs] = useState(0);
+  const [authLinkSecondsLeft, setAuthLinkSecondsLeft] = useState<number | null>(null);
   const [draftPreferences, setDraftPreferences] = useState<Partial<Record<AiPurpose, string>>>({});
   const [draftModels, setDraftModels] = useState<Partial<Record<AiPurpose, string>>>({});
   const [draftReasoning, setDraftReasoning] = useState<Partial<Record<AiPurpose, AiReasoningEffort>>>({});
@@ -159,6 +191,7 @@ export default function SettingsAIConnectionsPage() {
   const [showRevoked, setShowRevoked] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmationTarget | null>(null);
   const handledFlowState = useRef("");
+  const lastAuthLinkRef = useRef("");
 
   const authFlowQuery = useQuery({
     queryKey: aiProviderQueryKeys.authFlow(authFlowId),
@@ -191,15 +224,52 @@ export default function SettingsAIConnectionsPage() {
 
   const activeFlow = authFlowQuery.data?.auth_flow;
   useEffect(() => {
+    if (!activeFlow) return;
+    const link = activeFlow.verification_uri || "";
+    if (link && link !== lastAuthLinkRef.current) {
+      lastAuthLinkRef.current = link;
+      setAuthAuthorizationCode("");
+      setAuthCodeSubmitted(false);
+      setAuthLinkIssuedAtMs(Date.now());
+    }
+    if (!link || activeFlow.status !== "pending" || !activeFlow.accepts_authorization_code) {
+      setAuthLinkSecondsLeft(null);
+    }
+  }, [activeFlow]);
+
+  useEffect(() => {
+    if (!activeFlow?.accepts_authorization_code || activeFlow.status !== "pending" || !authLinkIssuedAtMs) {
+      return;
+    }
+    const ttlMs = Math.max(5, Number(activeFlow.link_expires_in) || 55) * 1000;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((authLinkIssuedAtMs + ttlMs - Date.now()) / 1000));
+      setAuthLinkSecondsLeft(left);
+    };
+    tick();
+    const timer = window.setInterval(tick, 500);
+    return () => window.clearInterval(timer);
+  }, [activeFlow, authLinkIssuedAtMs]);
+
+  useEffect(() => {
     if (!activeFlow || !terminalAuthStatuses.has(activeFlow.status)) return;
-    const stateKey = `${activeFlow.id}:${activeFlow.status}`;
+    const stateKey = `${activeFlow.id}:${activeFlow.status}:${activeFlow.error_code || ""}`;
     if (handledFlowState.current === stateKey) return;
     handledFlowState.current = stateKey;
     setAuthAuthorizationCode("");
+    setAuthCodeSubmitted(false);
+    setAuthLinkSecondsLeft(null);
     void refresh();
     if (activeFlow.status === "completed") {
       toast({ title: text("Подключение готово", "Connection ready") });
+      return;
     }
+    const failureMessage = authFailureMessage(activeFlow.error_code, text);
+    toast({
+      title: text("Вход не завершён", "Sign-in did not finish"),
+      description: failureMessage,
+      variant: "destructive",
+    });
   }, [activeFlow, refresh, text, toast]);
 
   const revokedConnections = connections.filter((item) => item.status === "revoked");
@@ -541,16 +611,18 @@ export default function SettingsAIConnectionsPage() {
                     {activeFlow.status === "completed"
                       ? text("Авторизация завершена. Список подключений обновлён.", "Authorization completed. Connections were refreshed.")
                       : activeFlow.status === "failed" || activeFlow.status === "expired"
-                        ? text("Авторизация не завершена. Запустите вход повторно.", "Authorization did not complete. Start sign-in again.")
-                        : text("Откройте страницу входа и введите показанный код.", "Open the sign-in page and enter the displayed code.")}
+                        ? authFailureMessage(activeFlow.error_code, text)
+                        : text("Откройте актуальную ссылку входа и вставьте код из Google.", "Open the current sign-in link and paste the Google code.")}
                   </p>
-                  {activeFlow.error_code ? <p className="mt-1 text-sm text-destructive">{activeFlow.error_code}</p> : null}
+                  {activeFlow.error_code ? <p className="mt-1 text-sm text-destructive">{authFailureMessage(activeFlow.error_code, text)}</p> : null}
                 </div>
                 <div className="flex items-center gap-2">
                   {activeFlow.status === "failed" || activeFlow.status === "expired" || activeFlow.status === "cancelled"
-                    ? (activeFlow.error_code ? <Badge variant="destructive">{activeFlow.error_code}</Badge> : null)
-                    : activeFlow.user_code
-                      ? <Badge variant="outline" className="font-mono text-base">{activeFlow.user_code}</Badge>
+                    ? <Badge variant="destructive">{activeFlow.error_code || text("Ошибка входа", "Sign-in failed")}</Badge>
+                    : activeFlow.accepts_authorization_code && authLinkSecondsLeft !== null
+                      ? <Badge variant={authLinkSecondsLeft <= 15 ? "destructive" : "secondary"}>
+                          {text(`Ссылка ~${authLinkSecondsLeft} с`, `Link ~${authLinkSecondsLeft}s`)}
+                        </Badge>
                       : activeFlow.verification_uri
                         ? <Badge variant="secondary">{text("Откройте ссылку входа", "Open the sign-in link")}</Badge>
                         : activeFlow.status === "pending"
@@ -564,35 +636,56 @@ export default function SettingsAIConnectionsPage() {
                   <Label htmlFor="antigravity-auth-code">{text("Вставьте код из Google", "Paste the code from Google")}</Label>
                   <p className="text-sm text-muted-foreground">
                     {text(
-                      "После входа Google покажет длинный код (4/0A…). Вставьте его сюда. Если ссылка обновилась — откройте новую и получите свежий код.",
-                      "After Google sign-in you get a long code (4/0A…). Paste it here. If the link refreshed, open the new one and use a fresh code.",
+                      "CLI держит одну PKCE-сессию около 60 секунд. Успейте открыть текущую ссылку и вставить код один раз. После обновления ссылки нужен новый код.",
+                      "The CLI keeps one PKCE session for about 60 seconds. Open the current link and paste the code once. After the link refreshes, use a new code.",
                     )}
                   </p>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="antigravity-auth-code"
-                      value={authAuthorizationCode}
-                      onChange={(event) => setAuthAuthorizationCode(event.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="4/0A…"
-                      className="font-mono"
-                    />
-                    <Button
-                      disabled={!authAuthorizationCode.trim() || mutation.isPending}
-                      onClick={() => mutation.mutate(async () => {
-                        await submitAiProviderAuthAuthorizationCode(activeFlow.id, authAuthorizationCode.trim());
-                        setAuthAuthorizationCode("");
-                        toast({
-                          title: text("Код отправлен", "Code submitted"),
-                          description: text("Ожидаем завершение входа…", "Waiting for sign-in to finish…"),
-                        });
-                        await queryClient.invalidateQueries({ queryKey: aiProviderQueryKeys.authFlow(activeFlow.id) });
-                      })}
-                    >
-                      {text("Отправить код", "Submit code")}
-                    </Button>
-                  </div>
+                  {authCodeSubmitted ? (
+                    <p className="text-sm text-muted-foreground" role="status">
+                      {text("Код отправлен — повторная отправка отключена до результата.", "Code submitted — resubmit disabled until the result.")}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        id="antigravity-auth-code"
+                        value={authAuthorizationCode}
+                        onChange={(event) => setAuthAuthorizationCode(event.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="4/0A…"
+                        className="font-mono"
+                        disabled={mutation.isPending}
+                      />
+                      <Button
+                        disabled={!authAuthorizationCode.trim() || mutation.isPending || authCodeSubmitted}
+                        onClick={() => {
+                          const code = authAuthorizationCode.trim();
+                          if (!code || authCodeSubmitted) return;
+                          setAuthCodeSubmitted(true);
+                          mutation.mutate(async () => {
+                            try {
+                              await submitAiProviderAuthAuthorizationCode(
+                                activeFlow.id,
+                                code,
+                                activeFlow.oauth_state || activeFlow.user_code || undefined,
+                              );
+                              setAuthAuthorizationCode("");
+                              toast({
+                                title: text("Код отправлен", "Code submitted"),
+                                description: text("Ожидаем завершение входа…", "Waiting for sign-in to finish…"),
+                              });
+                              await queryClient.invalidateQueries({ queryKey: aiProviderQueryKeys.authFlow(activeFlow.id) });
+                            } catch (error) {
+                              setAuthCodeSubmitted(false);
+                              throw error;
+                            }
+                          });
+                        }}
+                      >
+                        {text("Отправить код", "Submit code")}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </section>
