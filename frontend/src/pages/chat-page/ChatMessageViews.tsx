@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Check, CheckCircle2, ChevronDown, Copy, Loader2, RotateCcw, ShieldCheck, User, XCircle } from "lucide-react";
+import { Bot, Check, ChevronDown, Copy, Loader2, RotateCcw, ShieldCheck, User } from "lucide-react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Button } from "@/components/ui/button";

@@ -58,7 +58,8 @@ describe("chat page chrome", () => {
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByText("Без playbook")).not.toBeInTheDocument();
     expect(screen.queryByText("Модель")).not.toBeInTheDocument();
-    expect(screen.getByText(/@ — точный сервер/)).toBeInTheDocument();
+    expect(screen.getByText(/Подсказки ввода|Input tips/)).toBeInTheDocument();
+    expect(screen.getByTitle(/@ — точный сервер|@ — exact server/)).toBeInTheDocument();
   });
 
   it("renders chat history as a usable mobile panel and closes it after navigation", () => {
