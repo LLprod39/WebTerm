@@ -349,7 +349,7 @@ async def test_antigravity_device_auth_emits_stable_pkce_uri(monkeypatch) -> Non
     monkeypatch.setattr(
         antigravity_oauth,
         "oauth_client_credentials",
-        lambda: ("1071006060591-testclient.apps.googleusercontent.com", "GOCSPX-test-secret"),
+        lambda: ("1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com", "GOCSPX-test-secret"),
     )
     events = [event async for event in _start_device_auth()]
     assert len(events) == 1
@@ -357,7 +357,7 @@ async def test_antigravity_device_auth_emits_stable_pkce_uri(monkeypatch) -> Non
     uri = events[0].payload["verification_uri"]
     assert uri.startswith("https://accounts.google.com/o/oauth2/auth?")
     assert "code_challenge_method=S256" in uri
-    assert "1071006060591-testclient.apps.googleusercontent.com" in uri
+    assert "1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com" in uri
     assert events[0].payload.get("accepts_authorization_code") is True
     assert events[0].payload.get("expires_in") == 600
     assert events[0].payload.get("oauth_state")
@@ -372,7 +372,7 @@ async def test_antigravity_own_pkce_exchanges_and_persists(monkeypatch, tmp_path
     monkeypatch.setattr(
         antigravity_oauth,
         "oauth_client_credentials",
-        lambda: ("1071006060591-testclient.apps.googleusercontent.com", "GOCSPX-test-secret"),
+        lambda: ("1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com", "GOCSPX-test-secret"),
     )
     invocation_id = "auth_ownpkcepersist0002"
     register_auth_input_queue(invocation_id)
@@ -428,7 +428,7 @@ async def test_antigravity_rejects_code_for_previous_oauth_state(monkeypatch) ->
     monkeypatch.setattr(
         antigravity_oauth,
         "oauth_client_credentials",
-        lambda: ("1071006060591-testclient.apps.googleusercontent.com", "GOCSPX-test-secret"),
+        lambda: ("1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com", "GOCSPX-test-secret"),
     )
     invocation_id = "auth_stateMismatch0001"
     register_auth_input_queue(invocation_id)
@@ -458,7 +458,7 @@ async def test_antigravity_accepts_callback_url_paste(monkeypatch, tmp_path) -> 
     monkeypatch.setattr(
         antigravity_oauth,
         "oauth_client_credentials",
-        lambda: ("1071006060591-testclient.apps.googleusercontent.com", "GOCSPX-test-secret"),
+        lambda: ("1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com", "GOCSPX-test-secret"),
     )
     invocation_id = "auth_callbackurlpaste01"
     register_auth_input_queue(invocation_id)
@@ -504,6 +504,75 @@ def test_extract_authorization_payload_from_callback_url() -> None:
     code2, state2 = extract_authorization_payload("code=4/0AXlqoi5-TEST&state=abc")
     assert code2 == "4/0AXlqoi5-TEST"
     assert state2 == "abc"
+
+
+
+def test_antigravity_auth_url_matches_cli_param_set_and_encoding(monkeypatch) -> None:
+    """Consent URL must use CLI field set/order/encoding; only challenge/state vary."""
+    desktop_client = "1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com"
+    antigravity_oauth.oauth_client_credentials.cache_clear()
+    monkeypatch.setattr(
+        antigravity_oauth,
+        "oauth_client_credentials",
+        lambda: (desktop_client, "GOCSPX-test-secret"),
+    )
+    state = "D1b8UGYd3mf_2V5wwrL-5A"
+    challenge = "NqRRo5pwC_2q4axyTiIJt-5xdZ3PCTn7c3bw1Vw_tJM"
+    built = antigravity_oauth.build_authorization_url(state=state, code_challenge=challenge)
+    # Reference shape captured from live CLI (client_id swapped for the test double).
+    expected = (
+        "https://accounts.google.com/o/oauth2/auth?access_type=offline"
+        f"&client_id={desktop_client}"
+        f"&code_challenge={challenge}&code_challenge_method=S256"
+        "&prompt=consent&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback"
+        "&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcclog"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fexperimentsandconfigs"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Faicode+openid"
+        f"&state={state}"
+    )
+    assert built == expected
+
+    from urllib.parse import parse_qs, urlparse
+
+    q = {k: v[0] for k, v in parse_qs(urlparse(built).query).items()}
+    assert q["access_type"] == "offline"
+    assert q["client_id"] == desktop_client
+    assert q["code_challenge_method"] == "S256"
+    assert q["prompt"] == "consent"
+    assert q["redirect_uri"] == "https://antigravity.google/oauth-callback"
+    assert q["response_type"] == "code"
+    assert q["scope"] == (
+        "https://www.googleapis.com/auth/cloud-platform "
+        "https://www.googleapis.com/auth/userinfo.email "
+        "https://www.googleapis.com/auth/userinfo.profile "
+        "https://www.googleapis.com/auth/cclog "
+        "https://www.googleapis.com/auth/experimentsandconfigs "
+        "https://www.googleapis.com/auth/aicode "
+        "openid"
+    )
+
+
+def test_oauth_client_credentials_prefers_cli_desktop_client_id(tmp_path, monkeypatch) -> None:
+    # Fake binary: wrong client first, CLI-prefix desktop client second, concatenated secrets.
+    desktop = b"1071006060591-testonlyfakeclientidxxxx.apps.googleusercontent.com"
+    other = b"884354919052-otherfakeclientidyyyyyy.apps.googleusercontent.com"
+    secret_a = b"GOCSPX-AAAATESTSECRETVALUE000001"
+    secret_b = b"GOCSPX-BBBBTESTSECRETVALUE000002"
+    blob = b"xxxx" + other + b"xxxx" + desktop + b"yyyy" + secret_a + secret_b
+    fake = tmp_path / "antigravity"
+    fake.write_bytes(blob)
+    fake.chmod(0o755)
+    monkeypatch.delenv("ANTIGRAVITY_OAUTH_CLIENT_ID", raising=False)
+    monkeypatch.delenv("ANTIGRAVITY_OAUTH_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(antigravity_oauth.shutil, "which", lambda _name: str(fake))
+    antigravity_oauth.oauth_client_credentials.cache_clear()
+    client_id, client_secret = antigravity_oauth.oauth_client_credentials()
+    assert client_id == desktop.decode("ascii")
+    assert client_secret == secret_a.decode("ascii")
+    assert "GOCSPX-" not in client_secret[7:]
 
 
 def test_parse_antigravity_oauth_state_from_uri() -> None:
