@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -26,13 +27,15 @@ PLAN_CONTINUATION_NUDGE = (
     "(step.tool + step.input). Если шаг нельзя выполнить, кратко объясни блокер и "
     "вызови следующий выполнимый шаг."
 )
-# User asked for SSH/audit/logs but the model stopped after inventory resolve only.
+# User asked for SSH/audit/logs/what's-running but the model stopped after inventory only.
 TASK_CONTINUATION_NUDGES = 2
 TASK_CONTINUATION_NUDGE = (
-    "Задача ещё не выполнена: пользователь просил аудит / логи / подключение по SSH, "
-    "а ты остановился на inventory (resolve/list). Продолжи: вызови operator.read_command "
-    "(или server.diagnostics.overview) на найденном server_id — journalctl -n / docker logs "
-    "/var/log — затем проанализируй вывод и дай итоговый отчёт. Не спрашивай «что дальше?»."
+    "Задача ещё не выполнена: пользователь просил проверить хост по SSH "
+    "(аудит / логи / что запущено / что крутится), а ты остановился на inventory "
+    "(resolve/list). Продолжи: вызови operator.read_command (или server.diagnostics.overview) "
+    "на найденном server_id — например systemctl list-units --type=service --state=running, "
+    "docker ps, ss -tlnp, ps aux --sort=-%cpu | head -n 20, journalctl -n / docker logs — "
+    "затем проанализируй вывод и дай итоговый отчёт. Не спрашивай «что дальше?»."
 )
 STEP_LIMIT_FINAL_REPORT_NUDGE = (
     "Достигнут лимит шагов. Сейчас дай ИТОГОВЫЙ ОТЧЁТ по уже собранным tool_result: "
@@ -40,6 +43,7 @@ STEP_LIMIT_FINAL_REPORT_NUDGE = (
     "один следующий шаг. Без новых tool calls."
 )
 
+# Substring fallback for classic audit/log phrasing (no @mention required).
 _SSH_AUDIT_USER_MARKERS = (
     "аудит",
     "audit",
@@ -59,6 +63,47 @@ _SSH_AUDIT_USER_MARKERS = (
     "check host",
     "docker logs",
     "kubectl logs",
+    "что крутится",
+    "что запущено",
+    "what's running",
+    "whats running",
+    "what is running",
+)
+
+# @host + operational verb/phrase (words between allowed), either order.
+# Catches: «@grafana-01 проверь что на этом сервере крутится».
+_HOST_MENTION_RE = re.compile(r"@[\w.\-]+", re.UNICODE)
+_SSH_OP_VERB_RE = re.compile(
+    r"(?:"
+    r"проверь|проверить|проверьте|"
+    r"посмотри|посмотреть|посмотрите|"
+    r"подключ(?:ись|иться|ение)?|"
+    r"что\s+запущен[оаы]?|"
+    r"что\s+крутится|"
+    r"крутится|"
+    r"запущен[оаы]?|"
+    r"what'?s\s+running|"
+    r"whats\s+running|"
+    r"what\s+is\s+running|"
+    r"аудит|audit|"
+    r"диагност\w*|"
+    r"diagnos\w*|"
+    r"journalctl|docker\s+logs|kubectl\s+logs|"
+    r"systemctl|ss\s+-tlnp|"
+    r"проверь\s+лог|"
+    r"check\s+(?:logs?|server|host|what)"
+    r")",
+    re.IGNORECASE,
+)
+# Pure metrics/forecast asks should not force SSH follow-through.
+_METRICS_ONLY_RE = re.compile(r"(?:метрик|metrics|forecast|прогноз)", re.IGNORECASE)
+_SSH_OVERRIDE_IN_METRICS_RE = re.compile(
+    r"(?:"
+    r"лог|log|journalctl|ssh|docker|kubectl|"
+    r"крутится|запущен|running|аудит|audit|диагност|diagnos|подключ|"
+    r"systemctl|ss\s+-tlnp"
+    r")",
+    re.IGNORECASE,
 )
 
 _INVENTORY_ONLY_TOOLS = {
@@ -83,8 +128,22 @@ _SSH_ACTION_TOOLS = {
 
 
 def user_message_needs_ssh_actions(text: str) -> bool:
+    """True when the user goal implies SSH/host inspection beyond inventory lookup."""
     lowered = str(text or "").lower()
-    return any(marker in lowered for marker in _SSH_AUDIT_USER_MARKERS)
+    if not lowered.strip():
+        return False
+    # Metrics-only on a named host → server_metrics path, not SSH.
+    if _METRICS_ONLY_RE.search(lowered) and not _SSH_OVERRIDE_IN_METRICS_RE.search(lowered):
+        return False
+    # @mention + operational verb/phrase (gap allowed either side).
+    if _HOST_MENTION_RE.search(lowered) and _SSH_OP_VERB_RE.search(lowered):
+        return True
+    if any(marker in lowered for marker in _SSH_AUDIT_USER_MARKERS):
+        return True
+    # Host-ops phrasing without @mention («что на сервере крутится»).
+    if _SSH_OP_VERB_RE.search(lowered) and re.search(r"сервер|хост|server|host", lowered):
+        return True
+    return False
 
 
 def messages_have_ssh_action_results(messages: list[dict[str, Any]]) -> bool:
@@ -129,6 +188,19 @@ def messages_only_inventory_so_far(messages: list[dict[str, Any]]) -> bool:
                 return False
     return saw_tool
 
+
+def should_continue_after_inventory_only(user_goal: str, messages: list[dict[str, Any]]) -> bool:
+    """Safety net: host-ops goal + only resolve/list so far → keep the agent loop going.
+
+    Inventory/resolve_server must never end the turn by themselves when the user
+    asked to inspect the host (logs, what's running, audit, SSH).
+    """
+    if not user_message_needs_ssh_actions(user_goal):
+        return False
+    if messages_have_ssh_action_results(messages):
+        return False
+    return messages_only_inventory_so_far(messages)
+
 EventCallback = Callable[[dict[str, Any]], Awaitable[None] | None]
 
 # Shared product intro for «что умеешь» (web + Telegram). Keep in sync with planner heuristic.
@@ -166,10 +238,11 @@ Rules:
 OPERATOR_SYSTEM_PROMPT = """You are «Оператор» — the WebTerm platform operator assistant.
 You work on behalf of the authenticated user with the platform tools provided.
 
-# Agent loop (multi-step)
+# Agent loop (multi-step) — Claude Code / Codex style
 - You are a full multi-step agent: plan → call tools → observe results → continue until the user goal is done or blocked.
-- Do NOT stop after operator.resolve_server / list_servers when the user asked to connect, audit, check logs, diagnose, or run SSH — that is only step 1.
-- Prefer operator.read_command for bounded diagnostics (journalctl -n/--since, docker logs --tail, cat/grep under /var/log, systemctl status, df/free/ps, kubectl get/logs). No confirmation needed.
+- Keep emitting tool calls while work remains. End the turn ONLY with a final answer (or an explicit blocker). Never end just because resolve_server / list_servers succeeded.
+- Do NOT stop after operator.resolve_server / list_servers when the user asked to connect, audit, check logs, diagnose, see what's running, or run SSH — that is only step 1.
+- Prefer operator.read_command for bounded diagnostics (journalctl -n/--since, docker logs --tail, cat/grep under /var/log, systemctl status/list-units, ss -tlnp, df/free/ps, kubectl get/logs). No confirmation needed.
 - Use operator.run_command only for mutating or unbounded commands (Confirm will pause the turn).
 - Keep calling tools until you can write a clear final report (findings + evidence + next step). If blocked (auth error, missing host), say so and stop.
 - Step budget is limited (~16). When near the limit, prioritize the final report over more discovery.
@@ -247,6 +320,9 @@ You work on behalf of the authenticated user with the platform tools provided.
   2) operator.read_command with journalctl -n 200 --no-pager -p err..alert (and/or docker logs --tail 200, ls/grep under /var/log).
   Then analyze errors and write a final report. NEVER stop after resolve_server alone. NEVER call unfiltered list_servers just to find a name.
   Do NOT set show_in_chat for connect/diagnose flows (no inventory card in chat).
+- «Что крутится / что запущено / what's running @X / проверь что на сервере крутится»: resolve_server(q=X) → IMMEDIATELY operator.read_command on that server_id with read-only probes, e.g.:
+  systemctl list-units --type=service --state=running; docker ps; ss -tlnp; ps aux --sort=-%cpu | head -n 20.
+  Then write a final summary of services/containers/listeners/top processes. NEVER stop after resolve_server with only a terminal link. Do NOT ask the user to open the terminal themselves.
 - «Проверь логи на ошибки @X»: resolve_server → read_command (journalctl / docker logs /var/log) → report errors with severity. Do not ask the user to paste logs.
 - «Покажи список серверов» / list inventory: call operator.list_servers once (platform attaches the card on Web). On Web: ONE line count/status only — no host bullets. On Telegram: follow the Telegram reply_hint (counts + key hosts in text).
 - NEVER call list_servers without q when the user named a host (grafana/lunix/…). Use operator.resolve_server(q=…).

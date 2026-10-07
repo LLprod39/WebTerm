@@ -45,8 +45,7 @@ from core_ui.services.operator_loop_prompt import (
     TOOL_RESULT_PREVIEW_CHARS,
     EventCallback,
     build_operator_system_prompt,
-    messages_have_ssh_action_results,
-    messages_only_inventory_so_far,
+    should_continue_after_inventory_only,
     user_message_needs_ssh_actions,
 )
 from core_ui.services.operator_loop_tool_cycle import process_tool_calls
@@ -388,20 +387,28 @@ async def run_operator_loop(
                     },
                 )
 
-            # SSH/audit goal but only inventory so far → keep going.
+            # Host-ops goal but only inventory so far → keep going (never end on resolve alone).
             live_messages = list(turn.llm_messages or messages)
             if (
                 needs_ssh_actions
                 and task_continuation_nudges < TASK_CONTINUATION_NUDGES
-                and messages_only_inventory_so_far(live_messages)
-                and not messages_have_ssh_action_results(live_messages)
+                and should_continue_after_inventory_only(user_goal_text, live_messages)
             ):
                 task_continuation_nudges += 1
                 logger.info(
-                    "operator loop: inventory-only stop on SSH/audit task {}, nudge {}/{}",
+                    "operator loop: inventory-only stop on SSH/host-ops task {}, nudge {}/{}",
                     turn.pk,
                     task_continuation_nudges,
                     TASK_CONTINUATION_NUDGES,
+                )
+                await _emit(
+                    on_event,
+                    {
+                        "type": "thinking",
+                        "iteration": iteration,
+                        "phase": "continue",
+                        "message": "Продолжаю: SSH-диагностика на хосте…",
+                    },
                 )
                 messages.append({"role": "user", "content": TASK_CONTINUATION_NUDGE})
                 await _save_turn(turn, llm_messages=messages)
@@ -458,9 +465,40 @@ async def run_operator_loop(
         if tool_result_blocks:
             messages.append({"role": "user", "content": tool_result_blocks})
             await _save_turn(turn, llm_messages=messages)
+            # Model-driven continue: stream short progress while more work may remain.
+            # Inventory alone must not look like a finished turn for host-ops goals.
+            if needs_ssh_actions and should_continue_after_inventory_only(user_goal_text, messages):
+                await _emit(
+                    on_event,
+                    {
+                        "type": "thinking",
+                        "iteration": iteration,
+                        "phase": "progress",
+                        "message": "Хост найден — собираю процессы/сервисы по SSH…",
+                    },
+                )
             continue
 
-        # No tool results and not parked — finish
+        # No tool results and not parked — finish only if host-ops work is not stuck on inventory.
+        if (
+            needs_ssh_actions
+            and task_continuation_nudges < TASK_CONTINUATION_NUDGES
+            and should_continue_after_inventory_only(user_goal_text, messages)
+        ):
+            task_continuation_nudges += 1
+            await _emit(
+                on_event,
+                {
+                    "type": "thinking",
+                    "iteration": iteration,
+                    "phase": "continue",
+                    "message": "Продолжаю: SSH-диагностика на хосте…",
+                },
+            )
+            messages.append({"role": "user", "content": TASK_CONTINUATION_NUDGE})
+            await _save_turn(turn, llm_messages=messages)
+            continue
+
         if assistant_message:
             try:
                 from core_ui.services.operator_artifacts import compress_inventory_assistant_content

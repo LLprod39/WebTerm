@@ -1,4 +1,4 @@
-"""Operator multi-step continuation for SSH/log audit goals."""
+"""Operator multi-step continuation for SSH/log audit and what's-running goals."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from core_ui.models import ChatSession, ChatTurnState
 from core_ui.services.operator_loop import handle_operator_message
 from core_ui.services.operator_loop_prompt import (
     messages_only_inventory_so_far,
+    should_continue_after_inventory_only,
     user_message_needs_ssh_actions,
 )
 
@@ -61,12 +62,42 @@ def _ensure_tools() -> None:
                 handler=lambda ctx: {"ok": True, "found": True, "server_id": 7, "name": "prom-01"},
             )
         )
+    if get_action_spec("operator.read_command") is None:
+        register_action(
+            AssistantActionSpec(
+                action_type="operator.read_command",
+                label="Read command",
+                description="Bounded read-only SSH",
+                required_feature="servers",
+                risk="read",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "server_id": {"type": "integer"},
+                        "command": {"type": "string"},
+                    },
+                },
+                handler=lambda ctx: {
+                    "ok": True,
+                    "exit_code": 0,
+                    "output": "nginx.service running\ngrafana running",
+                    "read_only": True,
+                },
+            )
+        )
 
 
 def test_user_message_needs_ssh_actions_detects_audit_prompts():
     assert user_message_needs_ssh_actions("Проведи аудит сервера, проверь логи на ошибки @prom-01")
     assert user_message_needs_ssh_actions("Подключись и проверь логи")
+    assert user_message_needs_ssh_actions("@grafana-01 проверь что на этом сервере крутится")
+    assert user_message_needs_ssh_actions("проверь что на сервере крутится")
+    assert user_message_needs_ssh_actions("@host-1 what's running")
     assert not user_message_needs_ssh_actions("Список серверов")
+    assert not user_message_needs_ssh_actions("Привет")
+    assert not user_message_needs_ssh_actions("Что умеешь?")
+    # Metrics-only must not force SSH follow-through.
+    assert not user_message_needs_ssh_actions("@grafana-01 проверь метрики")
 
 
 def test_messages_only_inventory_so_far():
@@ -78,10 +109,16 @@ def test_messages_only_inventory_so_far():
         {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "1", "content": "{}"}]},
     ]
     assert messages_only_inventory_so_far(messages) is True
+    assert should_continue_after_inventory_only(
+        "@grafana-01 проверь что на этом сервере крутится", messages
+    )
     messages[0]["content"].append(
         {"type": "tool_use", "id": "2", "name": "operator_read_command", "input": {"command": "df"}}
     )
     assert messages_only_inventory_so_far(messages) is False
+    assert not should_continue_after_inventory_only(
+        "@grafana-01 проверь что на этом сервере крутится", messages
+    )
 
 
 @pytest.mark.django_db(transaction=True)
@@ -145,3 +182,131 @@ def test_operator_nudges_after_inventory_only_stop_on_log_audit():
     assert llm.call_count >= 3
     assert "Итоговый отчёт" in (result.assistant_message.content or "")
     assert any("operator.read_command" in str(batch) for batch in llm.seen_messages)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_operator_continues_whats_running_after_resolve_to_ssh_summary():
+    """@mention + «что крутится» must reach SSH read commands and a final summary."""
+    _ensure_tools()
+    user = User.objects.create_user(username="op-running-user", password="x")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
+    session = ChatSession.objects.create(user=user, title="whats-running")
+    events: list[dict[str, Any]] = []
+
+    async def on_event(event):
+        events.append(event)
+
+    llm = ScriptedToolsLLM(
+        [
+            [
+                {
+                    "type": "tool_call",
+                    "id": "r1",
+                    "name": "operator_resolve_server",
+                    "arguments": {"q": "grafana-01"},
+                },
+                {"type": "done", "usage": {}, "stop_reason": "tool_use"},
+            ],
+            [
+                {
+                    "type": "text_delta",
+                    "text": "Сервер grafana-01 найден (id=18), статус healthy. Терминал: /servers/18/terminal",
+                },
+                {"type": "done", "usage": {}, "stop_reason": "end_turn"},
+            ],
+            [
+                {
+                    "type": "tool_call",
+                    "id": "r2",
+                    "name": "operator_read_command",
+                    "arguments": {
+                        "server_id": 18,
+                        "command": "systemctl list-units --type=service --state=running",
+                    },
+                },
+                {"type": "done", "usage": {}, "stop_reason": "tool_use"},
+            ],
+            [
+                {
+                    "type": "text_delta",
+                    "text": "Итог: на grafana-01 крутятся nginx и grafana; слушатели и top-процессы собраны.",
+                },
+                {"type": "done", "usage": {}, "stop_reason": "end_turn"},
+            ],
+        ]
+    )
+
+    def fake_execute_tool(**kwargs):
+        action = kwargs.get("action_type") or ""
+        if "resolve" in action:
+            return {
+                "ok": True,
+                "result": {"found": True, "server_id": 18, "name": "grafana-01", "status": "healthy"},
+            }
+        return {
+            "ok": True,
+            "result": {
+                "ok": True,
+                "exit_code": 0,
+                "output": "nginx.service loaded active running\ngrafana-server.service loaded active running",
+                "read_only": True,
+            },
+        }
+
+    with patch("core_ui.services.operator_loop_tool_cycle.execute_tool", side_effect=fake_execute_tool):
+        result = asyncio.run(
+            handle_operator_message(
+                session,
+                user,
+                "@grafana-01 проверь что на этом сервере крутится",
+                provider=llm,
+                on_event=on_event,
+            )
+        )
+
+    assert result.status == ChatTurnState.STATUS_DONE
+    assert llm.call_count >= 3
+    assert "Итог" in (result.assistant_message.content or "")
+    # Nudge / progress path must mention read_command follow-through.
+    assert any("operator.read_command" in str(batch) or "systemctl" in str(batch) for batch in llm.seen_messages)
+    progress_msgs = [
+        e.get("message")
+        for e in events
+        if e.get("type") == "thinking" and e.get("phase") in {"progress", "continue"}
+    ]
+    assert progress_msgs, "expected streamed progress/continue events for UI"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_operator_greeting_stays_single_step():
+    """Chit-chat must not enter the SSH continuation loop."""
+    _ensure_tools()
+    user = User.objects.create_user(username="op-hi-user", password="x")
+    from core_ui.views.access_views import _apply_access_profile
+
+    _apply_access_profile(user, "pilot_operator")
+    session = ChatSession.objects.create(user=user, title="hi")
+
+    llm = ScriptedToolsLLM(
+        [
+            [
+                {"type": "text_delta", "text": "Привет! Чем помочь по флоту?"},
+                {"type": "done", "usage": {}, "stop_reason": "end_turn"},
+            ],
+        ]
+    )
+
+    result = asyncio.run(
+        handle_operator_message(
+            session,
+            user,
+            "Привет",
+            provider=llm,
+        )
+    )
+
+    assert result.status == ChatTurnState.STATUS_DONE
+    assert llm.call_count == 1
+    assert "Привет" in (result.assistant_message.content or "")
