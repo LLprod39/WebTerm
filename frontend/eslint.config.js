@@ -83,7 +83,12 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/components/ui/**/*.{ts,tsx}", "src/lib/i18n.tsx"],
+    files: [
+      "src/components/ui/**/*.{ts,tsx}",
+      "src/lib/i18n.tsx",
+      // BoardUI kits export shared styles/hooks beside components (data-grid deps).
+      "src/boardui/**/*.{ts,tsx}",
+    ],
     rules: {
       "react-refresh/only-export-components": "off",
     },
