@@ -168,7 +168,8 @@ export default function AppLayout() {
           {localize(lang, "Перейти к содержимому", "Skip to content")}
         </a>
         {isAshita ? <AshitaAtmosphere /> : null}
-        {mobileSidebarTrigger}
+        {/* Chat has its own history trigger; keep the floating nav FAB off /chat. */}
+        {isChatRoute ? null : mobileSidebarTrigger}
         <div className="app-shell-bg flex h-screen min-h-0 w-full overflow-hidden" data-ui-slot="app-shell">
           <AppSidebar />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
