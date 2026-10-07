@@ -76,6 +76,21 @@ export default tseslint.config(
             "useK8sDensity",
             "useOptionalAssistantShell",
             "useUiStyle",
+            "actionCommandLine",
+            "actionResultOutput",
+            "actionServerLabel",
+            "mapStepStatus",
+            "planToAgentProgressSteps",
+            "formatRelativeChatAge",
+            "addEdge",
+            "PALETTE_MIME",
+            "pipelineEdgeTypes",
+            "DEFAULT_EDGE_OPTIONS",
+            "pipelineNodeTypes",
+            "studioEdgeTypes",
+            "STUDIO_DEFAULT_EDGE_OPTIONS",
+            "resolveLlmQueryModelLabel",
+            "splitQuestionContent",
           ],
         },
       ],
@@ -103,6 +118,13 @@ export default tseslint.config(
     files: ["src/pages/AgentsPage.tsx", "src/pages/MCPHubPage.tsx", "src/pages/PipelineEditorPage.tsx"],
     rules: {
       "@typescript-eslint/ban-ts-comment": "off",
+    },
+  },
+  {
+    // React Flow node-type maps are intentionally co-located with the node component.
+    files: ["src/features/automation/editor/nodes/StepNode.tsx"],
+    rules: {
+      "react-refresh/only-export-components": "off",
     },
   },
 );

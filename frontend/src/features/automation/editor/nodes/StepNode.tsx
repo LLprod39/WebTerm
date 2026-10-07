@@ -4,7 +4,7 @@ import { StatusBadge } from "@/components/ui";
 import type { CanvasNode } from "../../graph";
 import { resolveCatalog } from "../catalog";
 
-function StepNode({ data, selected, id }: NodeProps<CanvasNode>) {
+export function StepNode({ data, selected, id }: NodeProps<CanvasNode>) {
   const trigger = data.backend.type.startsWith("trigger/");
   const catalog = resolveCatalog(data.backend.type);
   const Icon = catalog.icon;

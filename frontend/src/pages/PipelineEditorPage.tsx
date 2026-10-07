@@ -153,7 +153,7 @@ function PipelineEditorInner({ pipelineId }: { pipelineId: number | null }) {
     const dismissed =
       typeof window !== "undefined" && window.localStorage.getItem(migrationDismissKey) === "1";
     setShowMigrationBanner(!dismissed && looksVertical(normalisedGraph.nodes as PipelineNode[]));
-  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView, migrationDismissKey, graphHistory.setPresent]);
+  }, [pipeline, pipelineId, isFetchedAfterMount, setNodes, setEdges, fitView, migrationDismissKey, graphHistory]);
   const showClientValidationError = useCallback(() => {
     const pipelineNodes = nodes as unknown as PipelineNode[];
     const validationErrors = getPipelineClientValidationErrors(pipelineNodes, nodeManifests);

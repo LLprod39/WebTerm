@@ -49,11 +49,15 @@ export function useCockpitQueries(clusterId: string, namespace: string, podId: s
 
   const clusters = clustersQuery.data?.clusters ?? [];
   const namespaces = namespacesQuery.data?.namespaces ?? [];
-  const allPods = podsQuery.data?.pods ?? [];
-  const allEvents = eventsQuery.data?.events ?? [];
 
-  const pods = useMemo(() => filterPodsByNamespace(allPods, namespace), [allPods, namespace]);
-  const events = useMemo(() => filterEventsByNamespace(allEvents, namespace), [allEvents, namespace]);
+  const pods = useMemo(
+    () => filterPodsByNamespace(podsQuery.data?.pods ?? [], namespace),
+    [podsQuery.data?.pods, namespace],
+  );
+  const events = useMemo(
+    () => filterEventsByNamespace(eventsQuery.data?.events ?? [], namespace),
+    [eventsQuery.data?.events, namespace],
+  );
   const selectedPod = useMemo(() => pods.find((pod) => pod.id === podId) ?? null, [pods, podId]);
 
   const refresh = () => {
