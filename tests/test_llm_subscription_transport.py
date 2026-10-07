@@ -85,9 +85,38 @@ async def test_subscription_tool_request_uses_existing_operator_event_shape(monk
 async def test_subscription_auth_error_does_not_fall_back(monkeypatch) -> None:
     async def fake_provider(**_kwargs) -> AsyncIterator[ProviderEventV1]:
         yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
+        yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": "should-not-appear"})
 
     monkeypatch.setattr(ai_subscription_gateway, "_provider", fake_provider)
     with pytest.raises(ProviderRuntimeError) as exc_info:
         async for _ in stream_provider_chat(_Provider(), "prompt", execution_context=_context()):
             pass
     assert exc_info.value.code == "provider_auth_required"
+
+
+@pytest.mark.asyncio
+async def test_subscription_tools_auth_error_stops_stream(monkeypatch) -> None:
+    async def fake_provider(**_kwargs) -> AsyncIterator[ProviderEventV1]:
+        yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
+        raise AssertionError("consumer continued after AUTH_REQUIRED")
+
+    monkeypatch.setattr(ai_subscription_gateway, "_provider", fake_provider)
+    events = [
+        event
+        async for event in stream_provider_chat_tools(
+            _Provider(),
+            messages=[{"role": "user", "content": "hi"}],
+            tools=[{"name": "server.list"}],
+            execution_context=_context(),
+        )
+    ]
+    assert events == [
+        {
+            "type": "error",
+            "code": "provider_auth_required",
+            "message": (
+                "Нужна повторная авторизация AI-провайдера. "
+                "Открой Настройки → AI и подключи аккаунт заново."
+            ),
+        }
+    ]

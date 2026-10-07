@@ -204,11 +204,25 @@ async def stream_persisted_subscription_events(
                     if error_code:
                         provider_span.set_attribute("ai.provider.error_code", error_code)
                 yield event
+                # Stop reading the HTTP stream after a terminal event. Antigravity runners
+                # historically kept the connection open after AUTH_REQUIRED (stdin control
+                # loop), which left Operator chat stuck on «Думаю…» until turn timeout.
+                if terminal_recorded:
+                    with suppress(Exception):
+                        await client.cancel(invocation_ref)
+                    break
             if terminal_event is None:
                 await _fail_invocation(invocation.pk, "provider_stream_incomplete", **fence)
                 provider_span.set_attribute("ai.provider.status", AIProviderInvocation.STATUS_FAILED)
                 provider_span.set_attribute("ai.provider.error_code", "provider_stream_incomplete")
                 terminal_recorded = True
+                yield ProviderEventV1(
+                    ProviderEventType.ERROR,
+                    {
+                        "code": "provider_stream_incomplete",
+                        "message": "Provider stream ended without a terminal event",
+                    },
+                )
     except ProviderRuntimeError as exc:
         with suppress(Exception):
             await client.cancel(invocation_ref)

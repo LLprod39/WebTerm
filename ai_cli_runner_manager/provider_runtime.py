@@ -20,7 +20,19 @@ from ai_cli_runner_manager.auth_input import (
     register_auth_input_queue,
     unregister_auth_input_queue,
 )
-from ai_cli_runner_manager.protocol import RunnerProtocolError, RunnerRequestV1, error_event
+from ai_cli_runner_manager.protocol import RunnerAction, RunnerProtocolError, RunnerRequestV1, error_event
+from app.ai_runtime import ProviderEventType
+
+# Terminal events end the adapter stream. AUTH_START may emit AUTH_REQUIRED and then
+# wait for a pasted code — that path must keep running until COMPLETED/ERROR/timeout.
+_STOP_AFTER_EVENT_TYPES = frozenset(
+    {
+        ProviderEventType.COMPLETED,
+        ProviderEventType.CANCELLED,
+        ProviderEventType.ERROR,
+        ProviderEventType.LIMIT,
+    }
+)
 
 
 async def _main() -> int:
@@ -50,11 +62,20 @@ async def _main() -> int:
 
     register_auth_input_queue(request.invocation_id)
     control_task = asyncio.create_task(_stdin_control_loop(request.invocation_id))
+    exit_code = 0
     try:
         adapter = adapter_cls()
         async for event in adapter.stream(request):
             _write(event.to_dict())
-        return 0
+            # RUN/VERIFY: auth_required is terminal (no paste follow-up on this stream).
+            # AUTH_START: keep waiting for auth-input after the initial auth_required link.
+            if event.type in _STOP_AFTER_EVENT_TYPES:
+                break
+            if (
+                event.type is ProviderEventType.AUTH_REQUIRED
+                and request.action is not RunnerAction.AUTH_START
+            ):
+                break
     finally:
         # Manager keeps stdin open for auth-input; a cancelled to_thread(readline)
         # will not finish until EOF. Closing stdin unblocks the control loop so the
@@ -67,6 +88,7 @@ async def _main() -> int:
         except TimeoutError:
             pass
         unregister_auth_input_queue(request.invocation_id)
+    return exit_code
 
 
 async def _stdin_control_loop(invocation_id: str) -> None:
@@ -96,6 +118,9 @@ async def _stdin_control_loop(invocation_id: str) -> None:
 
 
 def _close_stdin() -> None:
+    # Try every layer. Returning after the first success left fd 0 open and the
+    # control-loop to_thread(readline) blocked forever while the manager still
+    # held the write end — runner container never exited after AUTH_REQUIRED.
     for closer in (
         lambda: sys.stdin.buffer.close(),
         lambda: sys.stdin.close(),
@@ -103,7 +128,6 @@ def _close_stdin() -> None:
     ):
         try:
             closer()
-            return
         except Exception:  # noqa: BLE001 - best-effort unblock of control-loop readline
             continue
 
@@ -114,4 +138,6 @@ def _write(payload: dict[str, object]) -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(_main()))
+    # Hard-exit: a stuck stdin readline thread must not keep the ephemeral runner
+    # alive after the manager already received the terminal NDJSON event.
+    os._exit(asyncio.run(_main()))

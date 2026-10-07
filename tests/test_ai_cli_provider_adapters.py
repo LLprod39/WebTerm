@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -11,8 +12,10 @@ from ai_cli_runner_manager.adapters.antigravity import (
     AntigravitySubscriptionAdapter,
     _auth_failure_from_output,
     _is_authenticated,
+    _run_antigravity_cli,
     _safe_antigravity_error,
     _start_device_auth,
+    _stderr_requests_auth,
     parse_antigravity_oauth_state,
     parse_antigravity_oauth_url,
 )
@@ -604,7 +607,6 @@ def test_normalize_authorization_code_decodes_url_encoding() -> None:
     assert normalize_authorization_code("4%2F0AXlqoi5-TESTCODEVALUE") == "4/0AXlqoi5-TESTCODEVALUE"
 
 
-@pytest.mark.asyncio
 def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("GEMINI_HOME", str(tmp_path))
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
@@ -627,4 +629,56 @@ def test_safe_antigravity_error_sanitization() -> None:
     generic_err = _safe_antigravity_error(RuntimeError("network connection reset"))
     assert generic_err.type is ProviderEventType.ERROR
     assert generic_err.payload["code"] == "provider_runtime_error"
+
+
+def test_stderr_requests_auth_markers() -> None:
+    assert _stderr_requests_auth("Authentication required. Please visit the URL to log in:")
+    assert _stderr_requests_auth("Waiting for authentication (timeout 60s)...")
+    assert _stderr_requests_auth("Or, paste the authorization code here and press Enter:")
+    assert not _stderr_requests_auth("Generated 3 tokens successfully")
+
+
+@pytest.mark.asyncio
+async def test_run_antigravity_cli_kills_auth_prompt_without_waiting_full_timeout(monkeypatch, tmp_path) -> None:
+    """CLI auth prompts used to block on stdout.read for the full 60s paste wait."""
+    script = tmp_path / "fake_agy.py"
+    script.write_text(
+        "import sys, time\n"
+        "sys.stderr.write('Authentication required. Please visit the URL to log in:\\n')\n"
+        "sys.stderr.write('Waiting for authentication (timeout 60s)...\\n')\n"
+        "sys.stderr.flush()\n"
+        "time.sleep(60)\n"
+        "sys.exit(1)\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "ai_cli_runner_manager.adapters.antigravity.shutil.which",
+        lambda _name: sys.executable,
+    )
+
+    real_exec = asyncio.create_subprocess_exec
+
+    async def fake_exec(*_args, **_kwargs):
+        return await real_exec(
+            sys.executable,
+            str(script),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", fake_exec)
+    request = RunnerRequestV1(
+        action=RunnerAction.RUN,
+        connection_ref="connection_testhang01",
+        target_id="antigravity_subscription",
+        invocation_id="invocation_testhang01",
+        messages=[{"role": "user", "content": "hi"}],
+        tools=[],
+    )
+    started = asyncio.get_running_loop().time()
+    events = [event async for event in _run_antigravity_cli(request)]
+    elapsed = asyncio.get_running_loop().time() - started
+    assert elapsed < 15
+    assert events[-1].type is ProviderEventType.AUTH_REQUIRED
 

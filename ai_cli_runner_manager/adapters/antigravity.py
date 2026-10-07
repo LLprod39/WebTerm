@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import json
 import os
@@ -153,6 +154,22 @@ class AntigravitySubscriptionAdapter:
             yield _safe_antigravity_error(exc)
 
 
+_CLI_RUN_TIMEOUT_SECONDS = 90.0
+_AUTH_PROMPT_MARKERS = (
+    "authentication required",
+    "please sign in",
+    "please visit the url to log in",
+    "waiting for authentication",
+    "paste the authorization code",
+    "not logged into antigravity",
+)
+
+
+def _stderr_requests_auth(text: str) -> bool:
+    lowered = (text or "").lower()
+    return any(marker in lowered for marker in _AUTH_PROMPT_MARKERS)
+
+
 async def _run_antigravity_cli(request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
     cli_path = shutil.which("antigravity") or shutil.which("agy")
     if not cli_path:
@@ -182,20 +199,102 @@ async def _run_antigravity_cli(request: RunnerRequestV1) -> AsyncGenerator[Provi
     assert process.stdout is not None and process.stderr is not None
 
     buffered_text: list[str] = []
-    while chunk := await process.stdout.read(4096):
-        text_chunk = chunk.decode("utf-8", errors="replace")
-        if request.tools:
-            buffered_text.append(text_chunk)
-        else:
-            yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": text_chunk})
+    stderr_chunks: list[str] = []
+    auth_detected = asyncio.Event()
+    text_queue: asyncio.Queue[str | None] = asyncio.Queue()
 
-    return_code = await process.wait()
+    async def _pump_stdout() -> None:
+        assert process.stdout is not None
+        try:
+            while chunk := await process.stdout.read(4096):
+                text_chunk = chunk.decode("utf-8", errors="replace")
+                if request.tools:
+                    buffered_text.append(text_chunk)
+                else:
+                    await text_queue.put(text_chunk)
+        finally:
+            await text_queue.put(None)
+
+    async def _pump_stderr() -> None:
+        assert process.stderr is not None
+        while chunk := await process.stderr.read(4096):
+            text_chunk = chunk.decode("utf-8", errors="replace")
+            stderr_chunks.append(text_chunk)
+            if _stderr_requests_auth("".join(stderr_chunks)):
+                auth_detected.set()
+                return
+
+    stdout_task = asyncio.create_task(_pump_stdout())
+    stderr_task = asyncio.create_task(_pump_stderr())
+    wait_task = asyncio.create_task(process.wait())
+    auth_wait_task = asyncio.create_task(auth_detected.wait())
+    timed_out = False
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _CLI_RUN_TIMEOUT_SECONDS
+    try:
+        # Stream plain-text tokens while waiting; tools path buffers until exit.
+        while not request.tools:
+            if auth_detected.is_set() or wait_task.done() or loop.time() >= deadline:
+                break
+            try:
+                item = await asyncio.wait_for(text_queue.get(), timeout=0.2)
+            except TimeoutError:
+                continue
+            if item is None:
+                break
+            if item:
+                yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": item})
+
+        remaining = max(0.0, deadline - loop.time())
+        done, not_done = await asyncio.wait(
+            {wait_task, auth_wait_task},
+            timeout=remaining,
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if not done:
+            timed_out = True
+        # Never cancel wait_task here — we still need process.wait() after kill.
+        if auth_wait_task in not_done:
+            auth_wait_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await auth_wait_task
+        if (auth_detected.is_set() or timed_out) and process.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                process.kill()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(wait_task, timeout=5)
+    finally:
+        for task in (stdout_task, stderr_task, wait_task, auth_wait_task):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(stdout_task, stderr_task, wait_task, auth_wait_task, return_exceptions=True)
+
+    # Drain any remaining plaintext tokens after process exit.
+    if not request.tools:
+        while True:
+            try:
+                item = text_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                break
+            if item is None:
+                break
+            if item:
+                yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": item})
+
+    err_msg = "".join(stderr_chunks).strip()
+    if auth_detected.is_set() or _stderr_requests_auth(err_msg):
+        yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
+        return
+    if timed_out:
+        yield error_event(
+            "provider_timeout",
+            f"Antigravity CLI timed out after {int(_CLI_RUN_TIMEOUT_SECONDS)}s",
+            retryable=True,
+        )
+        return
+
+    return_code = process.returncode if process.returncode is not None else 1
     if return_code != 0:
-        err_bytes = await process.stderr.read()
-        err_msg = err_bytes.decode("utf-8", errors="replace").strip()
-        if "authentication required" in err_msg.lower() or "please sign in" in err_msg.lower():
-            yield ProviderEventV1(ProviderEventType.AUTH_REQUIRED, {"authenticated": False})
-            return
         yield error_event(
             "provider_runtime_error",
             f"Antigravity CLI exited with code {return_code}: {err_msg[:200]}",

@@ -15,7 +15,10 @@ def is_subscription_execution(context: LLMExecutionContext | None) -> bool:
 
 def _runtime_error(event_type: ProviderEventType, payload: dict[str, Any]) -> ProviderRuntimeError | None:
     if event_type is ProviderEventType.AUTH_REQUIRED:
-        return ProviderRuntimeError("provider_auth_required", "Provider authentication is required")
+        return ProviderRuntimeError(
+            "provider_auth_required",
+            "Нужна повторная авторизация AI-провайдера. Открой Настройки → AI и подключи аккаунт заново.",
+        )
     if event_type is ProviderEventType.LIMIT:
         return ProviderRuntimeError("provider_limit_reached", "Provider subscription limit is reached")
     if event_type is ProviderEventType.CANCELLED:
@@ -54,7 +57,10 @@ async def stream_subscription_text(
 def _tool_error(event_type: ProviderEventType, payload: dict[str, Any]) -> dict[str, Any] | None:
     codes = {
         ProviderEventType.CANCELLED: ("provider_cancelled", "Provider invocation cancelled"),
-        ProviderEventType.AUTH_REQUIRED: ("provider_auth_required", "Provider authentication required"),
+        ProviderEventType.AUTH_REQUIRED: (
+            "provider_auth_required",
+            "Нужна повторная авторизация AI-провайдера. Открой Настройки → AI и подключи аккаунт заново.",
+        ),
         ProviderEventType.LIMIT: ("provider_limit_reached", "Provider limit reached"),
     }
     if event_type in codes:
@@ -85,6 +91,10 @@ async def stream_subscription_tools(
     ):
         if event.type is ProviderEventType.TEXT_DELTA:
             yield {"type": "text_delta", "text": str(event.payload.get("text") or "")}
+        elif event.type is ProviderEventType.REASONING_DELTA:
+            text = str(event.payload.get("text") or "")
+            if text:
+                yield {"type": "thinking_delta", "text": text}
         elif event.type is ProviderEventType.TOOL_REQUEST:
             yield {
                 "type": "tool_call",
@@ -102,7 +112,9 @@ async def stream_subscription_tools(
                 "provider_session_id": str(event.payload.get("provider_session_id") or ""),
                 "binding_snapshot": event.payload.get("binding_snapshot") or {},
             }
+            return
         else:
             error = _tool_error(event.type, event.payload)
             if error is not None:
                 yield error
+                return
