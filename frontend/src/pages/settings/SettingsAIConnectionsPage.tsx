@@ -90,15 +90,15 @@ function authFailureMessage(errorCode: string | undefined, text: (ru: string, en
   const base = raw.split(":")[0] || raw;
   if (raw.includes("invalid_grant")) {
     return text(
-      "Google вернул invalid_grant: код не подходит к текущей PKCE-сессии (просрочен, уже использован или от старой ссылки). Откройте свежую ссылку и вставьте новый код за ~55 с.",
-      "Google returned invalid_grant: the code does not match the current PKCE session (expired, reused, or from an old link). Open a fresh link and paste a new code within ~55s.",
+      "Google вернул invalid_grant: код не подходит к текущей PKCE-сессии (просрочен, уже использован или от старой ссылки). Откройте текущую ссылку и вставьте новый код один раз.",
+      "Google returned invalid_grant: the code does not match the current PKCE session (expired, reused, or from an old link). Open the current link and paste a new code once.",
     );
   }
   switch (base) {
     case "provider_auth_failed":
       return text(
-        "Google отклонил код. Откройте актуальную ссылку и вставьте свежий код один раз за ~55 с.",
-        "Google rejected the code. Open the current link and paste a fresh code once within ~55s.",
+        "Google отклонил код. Откройте актуальную ссылку и вставьте свежий код один раз.",
+        "Google rejected the code. Open the current link and paste a fresh code once.",
       );
     case "provider_auth_session_mismatch":
       return text(
@@ -107,8 +107,8 @@ function authFailureMessage(errorCode: string | undefined, text: (ru: string, en
       );
     case "provider_auth_timeout":
       return text(
-        "Ссылка входа истекла (~60 с). Откройте новую ссылку и вставьте свежий код.",
-        "The sign-in link expired (~60s). Open the new link and paste a fresh code.",
+        "Ссылка входа истекла (~10 мин). Начните вход заново и вставьте свежий код.",
+        "The sign-in link expired (~10 min). Start sign-in again and paste a fresh code.",
       );
     case "provider_auth_transport_failed":
       return text(
@@ -249,7 +249,7 @@ export default function SettingsAIConnectionsPage() {
     if (!activeFlow?.accepts_authorization_code || activeFlow.status !== "pending" || !authLinkIssuedAtMs) {
       return;
     }
-    const ttlMs = Math.max(5, Number(activeFlow.link_expires_in) || 55) * 1000;
+    const ttlMs = Math.max(5, Number(activeFlow.link_expires_in) || 600) * 1000;
     const tick = () => {
       const left = Math.max(0, Math.ceil((authLinkIssuedAtMs + ttlMs - Date.now()) / 1000));
       setAuthLinkSecondsLeft(left);
@@ -659,8 +659,8 @@ export default function SettingsAIConnectionsPage() {
                   <Label htmlFor="antigravity-auth-code">{text("Вставьте код из Google", "Paste the code from Google")}</Label>
                   <p className="text-sm text-muted-foreground">
                     {text(
-                      "CLI держит одну PKCE-сессию около 60 секунд. Успейте открыть текущую ссылку и вставить код один раз до обнуления таймера. После обновления ссылки нужен новый код.",
-                      "The CLI keeps one PKCE session for about 60 seconds. Open the current link and paste the code once before the timer hits zero. After the link refreshes, use a new code.",
+                      "Одна стабильная ссылка действует около 10 минут. Откройте её, войдите в Google и вставьте код (или весь URL колбэка) один раз. Ссылку не нужно обновлять, пока таймер не обнулится.",
+                      "One stable link stays valid for about 10 minutes. Open it, sign in with Google, and paste the code (or the full callback URL) once. You do not need a new link until the timer hits zero.",
                     )}
                   </p>
                   {authCodeSubmitted ? (

@@ -584,7 +584,7 @@ def _serialize_auth_flow(flow: AIConnectionAuthFlow) -> dict[str, Any]:
         and target_id == "antigravity_subscription"
         and bool(flow.verification_uri)
     )
-    link_ttl_seconds = 55 if accepts_authorization_code else None
+    link_ttl_seconds = 600 if accepts_authorization_code else None
     return {
         "id": str(flow.public_id),
         "connection_id": flow.connection_id,
