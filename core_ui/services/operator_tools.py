@@ -109,6 +109,19 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
             "асмбл",
             "ансмбл",
             "запуст",
+            "лог",
+            "log",
+            "journalctl",
+            "аудит",
+            "audit",
+            "подключ",
+            "connect",
+            "диагност",
+            "diagnos",
+            "ошибк",
+            "error",
+            "kubectl",
+            "k8s",
         )
     ):
         prefixes.update({"operator.", "server."})
@@ -144,6 +157,26 @@ def is_read_tool(action_type: str) -> bool:
     if spec is None:
         return False
     return spec.risk == "read" and not spec.requires_confirmation
+
+
+def is_auto_executable_read(action_type: str, arguments: dict[str, Any] | None = None) -> bool:
+    """True when the tool can run immediately without a confirm park.
+
+    Includes declared read tools and mutating SSH ``run_command`` calls whose
+    command is a bounded read-only diagnostic (so audits do not stall on Confirm).
+    """
+    if is_read_tool(action_type):
+        return True
+    if action_type in {"operator.run_command", "run_command"}:
+        payload = arguments if isinstance(arguments, dict) else {}
+        command = str(payload.get("command") or payload.get("cmd") or "")
+        try:
+            from servers.operator.mutate_exec import is_operator_safe_read_command
+
+            return is_operator_safe_read_command(command)
+        except Exception:  # noqa: BLE001
+            return False
+    return False
 
 
 # Keys models commonly emit that should map onto the canonical schema key.
