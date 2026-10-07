@@ -90,9 +90,8 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
     rows = [_catalog_row(playbook) for playbook in queryset[:show_limit]]
     if total == 0:
         hint = (
-            "Catalog empty (0 playbooks). If the user asked to update/deploy/install on a server, "
-            "do NOT stop and do NOT only list agents — call agent.create (mode=full, goal+system_prompt "
-            "with URL/branch from the user message, server_ids) then agent.run. Confirm buttons follow."
+            "Catalog empty (0 playbooks). Say so briefly. "
+            "Do not call agent.create or agent.run unless the operator explicitly asked to deploy or run an agent."
         )
     else:
         hint = (

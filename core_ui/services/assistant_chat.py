@@ -11,6 +11,7 @@ from loguru import logger
 from app.assistant_actions import (
     AssistantActionContext,
     AssistantActionError,
+    action_card_description,
     build_runtime_context,
     get_action_spec,
     list_action_specs,
@@ -183,6 +184,11 @@ def _create_action(
     spec = get_action_spec(proposal["action_type"])
     if spec is None:
         return None
+    card_description = (
+        proposal.get("description")
+        or action_card_description(spec, proposal.get("input") or {})
+        or spec.description
+    )
     if not feature_allowed_for_user(user, spec.required_feature):
         return AssistantAction.objects.create(
             user=user,
@@ -190,7 +196,7 @@ def _create_action(
             message=message,
             action_type=spec.action_type,
             title=proposal.get("title") or spec.label,
-            description=proposal.get("description") or spec.description,
+            description=card_description,
             status=AssistantAction.STATUS_FAILED,
             risk=spec.risk,
             required_feature=spec.required_feature,
@@ -210,7 +216,7 @@ def _create_action(
         message=message,
         action_type=spec.action_type,
         title=proposal.get("title") or spec.label,
-        description=proposal.get("description") or spec.description,
+        description=card_description,
         status=status,
         risk=spec.risk,
         required_feature=spec.required_feature,

@@ -53,7 +53,20 @@ _HOST_ACTION_RE = re.compile(
     re.I,
 )
 
-# Update / deploy / checkout a Git branch on a host — prefer agent.create+run over catalog browsing.
+ATTACHED_FILE_CONTENTS_MARKER = "[Attached file contents]"
+
+
+def strip_attachment_contents(user_message: str | None) -> str:
+    """User message text before attached file bodies (untrusted); used for intent heuristics."""
+    text = str(user_message or "")
+    marker = ATTACHED_FILE_CONTENTS_MARKER
+    idx = text.find(marker)
+    if idx >= 0:
+        text = text[:idx]
+    return text.strip()
+
+
+# Explicit deploy/update/checkout intent in the operator's own words (not attachment bodies).
 _DEPLOY_OR_UPDATE_RE = re.compile(
     r"(?:"
     r"обнов|"
@@ -80,13 +93,8 @@ _DEPLOY_OR_UPDATE_RE = re.compile(
     re.I,
 )
 
-DEPLOY_ACTION_NUDGE = (
-    "Пользователь просит обновить/задеплоить на сервер. "
-    "Пустой или нерелевантный каталог playbook/агентов — НЕ финальный ответ. "
-    "Сейчас вызови agent.create (mode=full; name на русском; goal и system_prompt с URL/веткой "
-    "из запроса; server_ids с уже найденного хоста), затем сразу agent.run. "
-    "Confirm-кнопки появятся сами. Не спрашивай URL повторно, если он уже в сообщении."
-)
+# Legacy export — deploy auto-nudge removed; kept for imports/tests that reference the symbol.
+DEPLOY_ACTION_NUDGE = ""
 
 _HOST_HINT_RE = re.compile(
     r"(?:"
@@ -200,11 +208,33 @@ def user_wants_named_host_action(user_message: str | None) -> bool:
 
 
 def user_wants_deploy_or_update(user_message: str | None) -> bool:
-    """True when the operator asked to update/deploy/checkout a version or Git branch."""
-    text = str(user_message or "").strip()
+    """True when the operator explicitly asked to update/deploy/checkout (user text only)."""
+    text = strip_attachment_contents(user_message)
     if not text:
         return False
     return bool(_DEPLOY_OR_UPDATE_RE.search(text))
+
+
+def user_explicitly_requests_agent_tools(user_message: str | None) -> bool:
+    """True when the operator named agents or asked to create/run one."""
+    text = strip_attachment_contents(user_message).casefold()
+    if not text:
+        return False
+    if re.search(r"\b(?:agent|agents)\b", text):
+        return True
+    return any(
+        word in text
+        for word in (
+            "агент",
+            "агента",
+            "агентов",
+            "создай агента",
+            "создать агента",
+            "новый агент",
+            "запусти агента",
+            "запустить агента",
+        )
+    )
 
 
 def normalize_host_hint(token: str | None) -> str:

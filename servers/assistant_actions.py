@@ -105,6 +105,7 @@ def register_assistant_actions() -> None:
                 "system_prompt (detailed), ai_prompt, optional server_ids. Backend scaffolds missing "
                 "text and auto-picks servers when omitted."
             ),
+            ui_description="Создать агента «{name}»",
             required_feature="agents",
             risk="internal_write",
             requires_confirmation=True,
@@ -150,6 +151,7 @@ def register_assistant_actions() -> None:
             action_type="agent.run",
             label="Run agent",
             description="Launch an existing agent.",
+            ui_description="Запустить агента №{agent_id}",
             required_feature="agents",
             risk="mutating",
             requires_confirmation=True,

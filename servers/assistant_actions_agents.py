@@ -31,8 +31,7 @@ def list_agents(ctx: AssistantActionContext) -> dict:
     hint = (
         "Summarize agents with «показаны N из M». Max ~8 names. "
         "Do not dump full configs or say the answer was truncated. "
-        "If the user asked to update/deploy and none of these agents match that task, "
-        "call agent.create then agent.run — do not stop at this list."
+        "Do not call agent.create or agent.run unless the operator explicitly asked to create or run an agent."
     )
     if getattr(ctx, "channel", "") == "telegram":
         from core_ui.services.operator_channel import telegram_reply_hint
@@ -330,7 +329,6 @@ def create_agent(ctx: AssistantActionContext) -> dict:
         "ready": bool(agent.goal and agent.system_prompt and accessible),
         "target_url": "/agents",
         "run_hint": (
-            f"Immediately call agent.run with agent_id={agent.id}. "
-            "If goal/system_prompt already contain the Git URL or branch, do not ask the user again."
+            f"Agent id={agent.id} is ready. Call agent.run only if the operator explicitly asked to launch or deploy."
         ),
     }

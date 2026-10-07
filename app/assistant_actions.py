@@ -39,6 +39,7 @@ class AssistantActionSpec:
     requires_confirmation: bool = False
     input_schema: dict[str, Any] = field(default_factory=dict)
     handler: AssistantActionHandler | None = None
+    ui_description: str | None = None
 
     def to_prompt_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +51,38 @@ class AssistantActionSpec:
             "requires_confirmation": self.requires_confirmation,
             "input_schema": self.input_schema,
         }
+
+
+def action_card_description(
+    spec: AssistantActionSpec | None,
+    input_payload: dict[str, Any] | None,
+) -> str:
+    """Human-facing action card text (RU); model-facing text stays in spec.description."""
+    if spec is None:
+        return ""
+    payload = dict(input_payload or {})
+    if spec.action_type == "agent.create":
+        name = str(payload.get("name") or "").strip()
+        goal = str(payload.get("goal") or payload.get("description") or "").strip()
+        if name:
+            return f"Создать агента «{name}»"[:2000]
+        if goal:
+            preview = goal if len(goal) <= 120 else goal[:117] + "…"
+            return f"Создать агента для задачи: {preview}"[:2000]
+        return "Создать нового агента по вашему запросу"
+    if spec.action_type == "agent.run":
+        agent_id = payload.get("agent_id")
+        if agent_id is not None and str(agent_id).strip():
+            return f"Запустить агента №{agent_id}"[:2000]
+        return "Запустить агента"
+    if spec.ui_description:
+        try:
+            rendered = spec.ui_description.format(**payload).strip()
+        except (KeyError, IndexError, ValueError):
+            rendered = spec.ui_description.strip()
+        if rendered:
+            return rendered[:2000]
+    return (spec.description or "")[:2000]
 
 
 _registry: dict[str, AssistantActionSpec] = {}

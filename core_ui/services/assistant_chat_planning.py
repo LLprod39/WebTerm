@@ -306,9 +306,9 @@ def _heuristic_plan(message: str) -> dict[str, Any]:
             reply = "Подготовил запуск агента. Перед стартом нужно подтверждение."
 
     if not actions:
-        from servers.operator.tools_hints import user_wants_deploy_or_update
+        from servers.operator.tools_hints import strip_attachment_contents, user_wants_deploy_or_update
 
-        if user_wants_deploy_or_update(lower):
+        if user_wants_deploy_or_update(strip_attachment_contents(text)):
             actions.append(
                 {
                     "action_type": "agent.create",

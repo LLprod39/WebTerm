@@ -29,7 +29,7 @@ from core_ui.services.operator_loop_helpers import (
     _save_turn,
     _set_assistant_metadata,
     _touch_session_usage,
-    messages_have_deploy_mutating_tool,
+
 )
 from core_ui.services.operator_loop_prompt import (
     EMPTY_RESPONSE_NUDGE,
@@ -110,7 +110,6 @@ async def run_operator_loop(
     await _emit(on_event, {"type": "turn_started", "turn_id": turn.pk, "chat_id": session.pk})
 
     empty_retries = 0
-    deploy_nudge_retries = 0
     plan_continuation_nudges = 0
 
     while True:
@@ -289,23 +288,6 @@ async def run_operator_loop(
                 )
                 await _emit(on_event, {"type": "turn_done", "status": "failed", "turn_id": turn.pk})
                 break
-            # Deploy death-spiral: user asked to update/deploy, model only browsed catalogs.
-            user_text = (user_message.content if user_message else "") or ""
-            from servers.operator.tools_hints import DEPLOY_ACTION_NUDGE, user_wants_deploy_or_update
-
-            if (
-                deploy_nudge_retries < 1
-                and user_wants_deploy_or_update(user_text)
-                and not messages_have_deploy_mutating_tool(messages)
-            ):
-                deploy_nudge_retries += 1
-                logger.warning(
-                    "operator loop: deploy intent without mutate tools on turn {}, nudging",
-                    turn.pk,
-                )
-                messages.append({"role": "user", "content": DEPLOY_ACTION_NUDGE})
-                await _save_turn(turn, llm_messages=messages)
-                continue
             # Approved/running plan still incomplete → nudge instead of silent done.
             from core_ui.services.operator_plan import (
                 get_plan_from_message,

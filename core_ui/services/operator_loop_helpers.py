@@ -10,7 +10,7 @@ from typing import Any
 from asgiref.sync import sync_to_async
 from loguru import logger
 
-from app.assistant_actions import get_action_spec
+from app.assistant_actions import action_card_description, get_action_spec
 from app.egress_redaction import redact_egress_payload
 from core_ui.models import AssistantAction, ChatMessage, ChatSession, ChatTurnState
 from core_ui.services.operator_loop_prompt import (
@@ -253,7 +253,7 @@ def _create_pending_action(
 ) -> AssistantAction:
     spec = get_action_spec(action_type)
     title = (spec.label if spec else action_type)[:200]
-    description = (spec.description if spec else "")[:2000]
+    description = action_card_description(spec, arguments if isinstance(arguments, dict) else {})
     risk = spec.risk if spec else AssistantAction.RISK_MUTATING
     requires_confirmation = True if spec is None else bool(spec.requires_confirmation or spec.risk != "read")
     required_feature = spec.required_feature if spec else ""

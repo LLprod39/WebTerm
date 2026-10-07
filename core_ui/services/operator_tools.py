@@ -67,7 +67,14 @@ def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
 
 def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[dict[str, Any]]:
     """Keep the full catalog for ambiguous asks, narrow it for clear domains."""
-    text = str(message or "").strip().lower()
+    from servers.operator.tools_hints import (
+        strip_attachment_contents,
+        user_explicitly_requests_agent_tools,
+        user_wants_deploy_or_update,
+    )
+
+    intent_text = strip_attachment_contents(message)
+    text = intent_text.lower()
     if not text:
         return tools
     prefixes: set[str] = set()
@@ -75,12 +82,9 @@ def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[
         prefixes.add("web.")
     if any(word in text for word in ("pipeline", "пайплайн", "studio", "скилл", "skill", "mcp")):
         prefixes.add("studio.")
-    if any(word in text for word in ("агент", "agent", "run #", "отчёт рана", "отчет рана")):
+    if user_explicitly_requests_agent_tools(intent_text):
         prefixes.update({"agent.", "agents."})
-    # Deploy/update without the word «агент» must still see agent.create + agent.run.
-    from servers.operator.tools_hints import user_wants_deploy_or_update
-
-    if user_wants_deploy_or_update(text):
+    if user_wants_deploy_or_update(intent_text):
         prefixes.update({"agent.", "agents.", "operator.", "server."})
     if any(
         word in text

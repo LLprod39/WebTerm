@@ -1,17 +1,22 @@
-"""Deploy/update intent must route to agent.create+run, not catalog-only."""
+"""Deploy/update intent routing and attachment-safe deploy heuristics."""
 
 from __future__ import annotations
 
 import pytest
 from django.contrib.auth.models import User
 
-from app.assistant_actions import AssistantActionContext
+from app.assistant_actions import AssistantActionContext, action_card_description, get_action_spec
 from core_ui.services.assistant_chat_planning import _heuristic_plan
 from core_ui.services.operator_loop_helpers import messages_have_deploy_mutating_tool
 from core_ui.services.operator_loop_prompt import OPERATOR_SYSTEM_PROMPT, build_operator_system_prompt
+from core_ui.services.operator_plan import approved_plan_step_matches
 from core_ui.services.operator_tools import _route_tools_for_message
 from servers.assistant_actions_agents import list_agents
-from servers.operator.tools_hints import user_wants_deploy_or_update
+from servers.operator.tools_hints import (
+    ATTACHED_FILE_CONTENTS_MARKER,
+    strip_attachment_contents,
+    user_wants_deploy_or_update,
+)
 from servers.operator.tools_playbooks import list_playbooks
 
 
@@ -20,6 +25,24 @@ DEPLOY_MSG = (
     "https://github.com/LLprod39/WebTerm/tree/frontend-v3"
 )
 
+CONTRIBUTING_ATTACHMENT = f"""Посмотри этот файл
+
+{ATTACHED_FILE_CONTENTS_MARKER}
+# Contributing
+
+## Branch workflow
+Always create a feature branch from main.
+Branch naming: frontend-v3
+"""
+
+
+def test_strip_attachment_contents():
+    assert strip_attachment_contents(CONTRIBUTING_ATTACHMENT) == "Посмотри этот файл"
+    assert user_wants_deploy_or_update(CONTRIBUTING_ATTACHMENT) is False
+    assert user_wants_deploy_or_update(DEPLOY_MSG) is True
+    assert user_wants_deploy_or_update("покажи список серверов") is False
+    assert user_wants_deploy_or_update("задеплой frontend-v3 на nikitavm") is True
+
 
 def test_user_wants_deploy_or_update_detects_russian_git_branch():
     assert user_wants_deploy_or_update(DEPLOY_MSG) is True
@@ -27,7 +50,7 @@ def test_user_wants_deploy_or_update_detects_russian_git_branch():
     assert user_wants_deploy_or_update("задеплой frontend-v3 на nikitavm") is True
 
 
-def test_route_tools_keeps_agent_create_for_deploy_without_word_agent():
+def test_route_tools_keeps_agent_create_for_explicit_deploy():
     tools = [
         {"action_type": "agent.create", "name": "agent_create"},
         {"action_type": "agent.run", "name": "agent_run"},
@@ -44,11 +67,22 @@ def test_route_tools_keeps_agent_create_for_deploy_without_word_agent():
     assert "web.search" not in types
 
 
-def test_operator_prompt_has_deploy_domain_rule():
+def test_route_tools_ignores_deploy_keywords_in_attachment_only():
+    tools = [
+        {"action_type": "agent.create", "name": "agent_create"},
+        {"action_type": "operator.list_servers", "name": "operator_list_servers"},
+        {"action_type": "web.search", "name": "web_search"},
+    ]
+    selected = _route_tools_for_message(tools, CONTRIBUTING_ATTACHMENT)
+    types = {str(t.get("action_type")) for t in selected}
+    assert "agent.create" not in types
+
+
+def test_operator_prompt_mentions_explicit_deploy_not_attachment_triggers():
     prompt = build_operator_system_prompt(None)
     assert "Обнови / задеплой" in prompt or "Обнови / задеплой" in OPERATOR_SYSTEM_PROMPT
+    assert "Attached file contents" in prompt or "[Attached file contents]" in prompt
     assert "agent.create" in prompt
-    assert "НЕ останавливайся на «playbook не найден" in prompt or "playbook не найден" in prompt
 
 
 def test_heuristic_plan_proposes_agent_create_for_platform_update():
@@ -56,6 +90,12 @@ def test_heuristic_plan_proposes_agent_create_for_platform_update():
     types = [a.get("action_type") for a in plan.get("actions") or []]
     assert "agent.create" in types
     assert "agents.list" not in types
+
+
+def test_heuristic_plan_skips_agent_create_for_attachment_only_branch_text():
+    plan = _heuristic_plan(CONTRIBUTING_ATTACHMENT)
+    types = [a.get("action_type") for a in plan.get("actions") or []]
+    assert "agent.create" not in types
 
 
 def test_messages_have_deploy_mutating_tool_detects_create():
@@ -81,21 +121,53 @@ def test_messages_have_deploy_mutating_tool_detects_create():
     )
 
 
+def test_confirm_each_does_not_auto_run_agent_create_without_plan_step():
+    plan = {
+        "status": "approved",
+        "steps": [
+            {
+                "id": 1,
+                "text": "list",
+                "tool": "agents.list",
+                "input": {},
+                "status": "pending",
+            }
+        ],
+    }
+    assert not approved_plan_step_matches(
+        plan,
+        action_type="agent.create",
+        input_payload={"mode": "full", "goal": "x", "system_prompt": "y"},
+    )
+
+
+def test_action_card_description_agent_create_ru():
+    spec = get_action_spec("agent.create")
+    assert spec is not None
+    assert "Создать агента" in action_card_description(spec, {"name": "Деплой WebTerm"})
+    assert "задачи" in action_card_description(spec, {"goal": "Обновить платформу на сервере"})
+
+
+def test_action_card_description_agent_run_ru():
+    spec = get_action_spec("agent.run")
+    assert spec is not None
+    assert action_card_description(spec, {"agent_id": 42}) == "Запустить агента №42"
+
+
 @pytest.mark.django_db
-def test_list_playbooks_empty_hint_pushes_agent_create():
+def test_list_playbooks_empty_hint_does_not_push_agent_create():
     user = User.objects.create_user("pb-empty-deploy", password="x", is_staff=True)
     result = list_playbooks(
         AssistantActionContext(user=user, input_payload={"q": "WebTerm"}, channel="web")
     )
     assert result["total"] == 0
-    hint = str(result.get("reply_hint") or "")
-    assert "agent.create" in hint
-    assert "agent.run" in hint
+    hint = str(result.get("reply_hint") or "").lower()
+    assert "agent.create" not in hint
 
 
 @pytest.mark.django_db
-def test_list_agents_hint_mentions_create_when_deploy_mismatch():
+def test_list_agents_hint_does_not_push_agent_create():
     user = User.objects.create_user("ag-hint-deploy", password="x")
     result = list_agents(AssistantActionContext(user=user, input_payload={}, channel="web"))
-    hint = str(result.get("reply_hint") or "")
-    assert "agent.create" in hint
+    hint = str(result.get("reply_hint") or "").lower()
+    assert "agent.create" not in hint
