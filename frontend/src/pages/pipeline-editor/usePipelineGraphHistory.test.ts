@@ -65,19 +65,20 @@ describe("usePipelineGraphHistory", () => {
       usePipelineGraphHistory({ nodes: [node("0")], edges: [] }),
     );
 
-    act(() => {
-      for (let i = 1; i <= 55; i += 1) {
+    for (let i = 1; i <= 55; i += 1) {
+      act(() => {
         result.current.push({ nodes: [node(String(i))], edges: [] });
-      }
-    });
+      });
+    }
 
     let undoCount = 0;
-    act(() => {
-      while (result.current.canUndo()) {
+    while (result.current.canUndo()) {
+      act(() => {
         result.current.undo();
-        undoCount += 1;
-      }
-    });
+      });
+      undoCount += 1;
+      if (undoCount > 60) break;
+    }
     expect(undoCount).toBe(50);
     expect(result.current.present.nodes[0]?.id).toBe("5");
   });
