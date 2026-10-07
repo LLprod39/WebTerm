@@ -18,13 +18,13 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "dt_manual",
             "type": "trigger/manual",
-            "position": {"x": 220, "y": 40},
+            "position": {"x": 80, "y": 200},
             "data": {"label": "Start Analysis", "label_ru": "Запустить анализ", "is_active": True},
         },
         {
             "id": "dt_webhook",
             "type": "trigger/webhook",
-            "position": {"x": 460, "y": 40},
+            "position": {"x": 80, "y": 20},
             "data": {
                 "label": "Webhook (optional)",
                 "label_ru": "Webhook (опционально)",
@@ -35,13 +35,13 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "dt_merge_in",
             "type": "logic/merge",
-            "position": {"x": 340, "y": 170},
+            "position": {"x": 360, "y": 200},
             "data": {"label": "Any Trigger", "label_ru": "Любой триггер", "mode": "any"},
         },
         {
             "id": "dt_intake",
             "type": "output/report",
-            "position": {"x": 340, "y": 290},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "Case Intake",
                 "label_ru": "Входящий кейс",
@@ -57,13 +57,13 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "dt_parallel",
             "type": "logic/parallel",
-            "position": {"x": 340, "y": 430},
+            "position": {"x": 920, "y": 200},
             "data": {"label": "Parallel Experts", "label_ru": "Параллельные эксперты"},
         },
         {
             "id": "expert_risk",
             "type": "agent/llm_query",
-            "position": {"x": 80, "y": 570},
+            "position": {"x": 1200, "y": 200},
             "data": {
                 "label": "Risk Analyst",
                 "label_ru": "Risk-аналитик",
@@ -83,7 +83,7 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "expert_opt",
             "type": "agent/llm_query",
-            "position": {"x": 340, "y": 570},
+            "position": {"x": 1200, "y": 20},
             "data": {
                 "label": "Optimization Expert",
                 "label_ru": "Эксперт по оптимизации",
@@ -103,7 +103,7 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "expert_ux",
             "type": "agent/llm_query",
-            "position": {"x": 600, "y": 570},
+            "position": {"x": 1200, "y": 380},
             "data": {
                 "label": "UX Auditor",
                 "label_ru": "UX-аудитор",
@@ -122,13 +122,13 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "dt_merge_out",
             "type": "logic/merge",
-            "position": {"x": 340, "y": 720},
+            "position": {"x": 1480, "y": 200},
             "data": {"label": "Experts Done", "label_ru": "Эксперты готовы", "mode": "all"},
         },
         {
             "id": "dt_synth",
             "type": "agent/llm_query",
-            "position": {"x": 340, "y": 850},
+            "position": {"x": 1760, "y": 200},
             "data": {
                 "label": "AI Synthesizer",
                 "label_ru": "AI-синтезатор",
@@ -153,7 +153,7 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "confidence_gate",
             "type": "logic/condition",
-            "position": {"x": 340, "y": 1000},
+            "position": {"x": 2040, "y": 200},
             "data": {
                 "label": "Confidence HIGH?",
                 "label_ru": "Высокая уверенность?",
@@ -165,7 +165,7 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "green_light_report",
             "type": "output/report",
-            "position": {"x": 140, "y": 1140},
+            "position": {"x": 2320, "y": 200},
             "data": {
                 "label": "Green-Light Brief",
                 "label_ru": "Green-light бриф",
@@ -184,7 +184,7 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "needs_more_report",
             "type": "output/report",
-            "position": {"x": 540, "y": 1140},
+            "position": {"x": 2320, "y": 20},
             "data": {
                 "label": "Needs-More-Data Brief",
                 "label_ru": "Нужно больше данных",
@@ -203,13 +203,13 @@ def build_detective_nodes() -> list[dict]:
         {
             "id": "dt_final_merge",
             "type": "logic/merge",
-            "position": {"x": 340, "y": 1290},
+            "position": {"x": 2600, "y": 200},
             "data": {"label": "Brief Ready", "label_ru": "Бриф готов", "mode": "any"},
         },
         {
             "id": "dt_final",
             "type": "output/report",
-            "position": {"x": 340, "y": 1410},
+            "position": {"x": 2880, "y": 200},
             "data": {
                 "label": "Final Detective Report",
                 "label_ru": "Финальный отчёт детектива",

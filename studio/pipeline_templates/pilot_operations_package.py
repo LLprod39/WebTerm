@@ -11,13 +11,13 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "manual",
             "type": "trigger/manual",
-            "position": {"x": 120, "y": 80},
+            "position": {"x": 80, "y": 200},
             "data": {"label": "Start package maintenance"},
         },
         {
             "id": "package_snapshot",
             "type": "ops/server_snapshot",
-            "position": {"x": 120, "y": 220},
+            "position": {"x": 360, "y": 200},
             "data": {
                 "label": "Read package state",
                 "server_id": "",
@@ -28,7 +28,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "review",
             "type": "agent/llm_query",
-            "position": {"x": 120, "y": 370},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "Review package update risk",
                 "provider": "openai",
@@ -46,7 +46,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "approval",
             "type": "logic/human_approval",
-            "position": {"x": 120, "y": 520},
+            "position": {"x": 920, "y": 200},
             "data": {
                 "label": "Approve package update",
                 "manual_link_only": True,
@@ -57,7 +57,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "apply_updates",
             "type": "ops/package_action",
-            "position": {"x": 120, "y": 690},
+            "position": {"x": 1200, "y": 200},
             "data": {
                 "label": "Update explicit packages",
                 "server_id": "",
@@ -70,7 +70,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "verify_packages",
             "type": "ops/package_action",
-            "position": {"x": 120, "y": 850},
+            "position": {"x": 1480, "y": 200},
             "data": {
                 "label": "Verify package state",
                 "server_id": "",
@@ -82,7 +82,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "report",
             "type": "output/report",
-            "position": {"x": 120, "y": 1010},
+            "position": {"x": 1760, "y": 200},
             "data": {
                 "label": "Package maintenance report",
                 "template": "# Linux package maintenance report\n\n## Package state\n{package_snapshot_output}\n\n## Review\n{review_output}\n\n## Approval\n{approval_output}\n\n## Update\n{apply_updates_output}\n\n## Verification\n{verify_packages_output}",
@@ -91,7 +91,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "rejected",
             "type": "output/report",
-            "position": {"x": 520, "y": 690},
+            "position": {"x": 1200, "y": 20},
             "data": {
                 "label": "Package update rejected",
                 "template": "# Package update rejected\n\n{approval_error}\n\n## Review\n{review_output}",
@@ -100,7 +100,7 @@ PILOT_LINUX_PACKAGE_MAINTENANCE_TEMPLATE = {
         {
             "id": "timed_out",
             "type": "output/report",
-            "position": {"x": 520, "y": 850},
+            "position": {"x": 1200, "y": 380},
             "data": {
                 "label": "Package update timed out",
                 "template": "# Package update timed out\n\nNo approval was received.\n\n## Review\n{review_output}",

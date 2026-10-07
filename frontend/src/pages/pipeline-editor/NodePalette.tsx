@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type ComponentType } from "react";
-import { ChevronDown, ChevronUp, FileText, Plus } from "lucide-react";
+import { ChevronDown, ChevronUp, FileText, PanelLeftClose, PanelLeftOpen, Plus } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { NODE_PALETTE } from "@/components/pipeline/nodes";
 import { getNodeCategoryLabel, getNodePaletteText, getNodeTypeGuidance } from "@/components/pipeline/nodes/nodeMeta";
+import { cn } from "@/lib/utils";
 
 import { CATEGORY_ICONS, localize } from "./presentation";
 
@@ -34,10 +36,14 @@ export function NodePalette({
   onAddNode,
   lang,
   pluginPalette = [],
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   onAddNode: (type: string) => void;
   lang: "en" | "ru";
   pluginPalette?: PaletteCategory[];
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const [search, setSearch] = useState("");
   const palette = useMemo(
@@ -72,12 +78,90 @@ export function NodePalette({
     }),
   })).filter((cat) => cat.nodes.length > 0);
 
+  const railNodes = useMemo(
+    () => palette.flatMap((cat) => cat.nodes),
+    [palette],
+  );
+
+  if (collapsed) {
+    return (
+      <div className="flex h-full w-12 flex-col items-center border-r border-border/80 bg-card/95 py-2">
+        {onToggleCollapsed ? (
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="mb-2 h-8 w-8"
+                  onClick={onToggleCollapsed}
+                  aria-label={localize(lang, "Развернуть палитру", "Expand palette")}
+                >
+                  <PanelLeftOpen className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {localize(lang, "Развернуть палитру", "Expand palette")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+        <TooltipProvider delayDuration={300}>
+          <div className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-auto px-1 pb-2">
+            {railNodes.map((node) => {
+              const Icon = node.icon;
+              const nodeText = paletteText(node, lang);
+              return (
+                <Tooltip key={node.type}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => onAddNode(node.type)}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("application/pipeline-node-type", node.type);
+                        e.dataTransfer.effectAllowed = "copy";
+                      }}
+                      className="flex h-8 w-8 items-center justify-center rounded-sm border border-transparent text-muted-foreground transition-colors hover:border-border/70 hover:bg-primary/10 hover:text-foreground cursor-grab active:cursor-grabbing"
+                      aria-label={nodeText.label}
+                    >
+                      <Icon className={cn("h-4 w-4", node.iconClassName || "text-foreground")} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="max-w-[240px]">
+                    <p className="text-xs font-semibold">{nodeText.label}</p>
+                    <p className="text-xs text-muted-foreground">{nodeText.description}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        </TooltipProvider>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full flex-col border-r border-border/80 bg-card/95">
       <div className="space-y-2 border-b border-border/80 px-3 py-3">
-        <h3 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          <Plus className="h-3 w-3" /> {localize(lang, "Добавить ноду", "Add node")}
-        </h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="flex flex-1 items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Plus className="h-3 w-3" /> {localize(lang, "Добавить ноду", "Add node")}
+          </h3>
+          {onToggleCollapsed ? (
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              onClick={onToggleCollapsed}
+              aria-label={localize(lang, "Свернуть палитру", "Collapse palette")}
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+        </div>
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}

@@ -31,7 +31,7 @@ def build_webhook_smoke_nodes() -> list[dict]:
         {
             "id": "webhook_start",
             "type": "trigger/webhook",
-            "position": {"x": 320, "y": 60},
+            "position": {"x": 80, "y": 200},
             "data": {
                 "label": "Webhook Trigger",
                 "is_active": True,
@@ -47,7 +47,7 @@ def build_webhook_smoke_nodes() -> list[dict]:
         {
             "id": "payload_report",
             "type": "output/report",
-            "position": {"x": 320, "y": 220},
+            "position": {"x": 360, "y": 200},
             "data": {
                 "label": "Payload Snapshot",
                 "template": (
@@ -65,7 +65,7 @@ def build_webhook_smoke_nodes() -> list[dict]:
         {
             "id": "severity_check",
             "type": "logic/condition",
-            "position": {"x": 320, "y": 390},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "Critical Severity?",
                 "source_node_id": "payload_report",
@@ -76,7 +76,7 @@ def build_webhook_smoke_nodes() -> list[dict]:
         {
             "id": "critical_report",
             "type": "output/report",
-            "position": {"x": 120, "y": 560},
+            "position": {"x": 920, "y": 200},
             "data": {
                 "label": "Critical Branch Report",
                 "template": (
@@ -93,7 +93,7 @@ def build_webhook_smoke_nodes() -> list[dict]:
         {
             "id": "normal_report",
             "type": "output/report",
-            "position": {"x": 520, "y": 560},
+            "position": {"x": 920, "y": 20},
             "data": {
                 "label": "Normal Branch Report",
                 "template": (

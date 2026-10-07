@@ -308,10 +308,9 @@ export function buildDefaultNodeData(type: string, manifest?: StudioCapabilityNo
   }
 }
 
-export function buildConnectionAutofillPatch(target: PipelineNode, source: PipelineNode, pipelineName: string) {
+export function buildConnectionAutofillPatch(target: PipelineNode, source: PipelineNode, _pipelineName: string) {
   const data = (target.data || {}) as Record<string, unknown>;
   const outputToken = `{${source.id}_output}`;
-  const sourceLabel = getNodeDisplayLabel(source);
   const patch: Record<string, unknown> = {};
 
   if (target.type === "logic/condition") {
@@ -320,35 +319,33 @@ export function buildConnectionAutofillPatch(target: PipelineNode, source: Pipel
   }
 
   if (target.type === "agent/llm_query" && !String(data.prompt || "").trim()) {
-    patch.prompt = `Review ${outputToken} from ${sourceLabel} and explain the key result, risks, and recommended next action.`;
+    patch.prompt = outputToken;
   }
 
   if (target.type === "output/report" && !String(data.template || "").trim()) {
-    patch.template = `# ${pipelineName || "Pipeline"} report\n\n## ${sourceLabel}\n\n${outputToken}`;
+    patch.template = outputToken;
   }
 
   if (target.type === "output/email") {
     if (!String(data.subject || "").trim()) patch.subject = "Pipeline Report: {pipeline_name}";
-    if (!String(data.body || "").trim()) {
-      patch.body = `# ${pipelineName || "Pipeline"}\n\n## ${sourceLabel}\n\n${outputToken}`;
-    }
+    if (!String(data.body || "").trim()) patch.body = outputToken;
   }
 
   if (target.type === "output/telegram" && !String(data.message || "").trim()) {
-    patch.message = `*{pipeline_name}*\n\n## ${sourceLabel}\n\n${outputToken}`;
+    patch.message = outputToken;
   }
 
   if (target.type === "logic/human_approval") {
     if (!String(data.message || "").trim()) {
-      patch.message = `Approval required for ${sourceLabel}\n\n${outputToken}\n\nApprove: {approve_url}\nReject: {reject_url}`;
+      patch.message = `${outputToken}\n\nApprove: {approve_url}\nReject: {reject_url}`;
     }
     if (!String(data.email_body || "").trim()) {
-      patch.email_body = `Approval required for ${sourceLabel}\n\n${outputToken}\n\nApprove: {approve_url}\nReject: {reject_url}`;
+      patch.email_body = `${outputToken}\n\nApprove: {approve_url}\nReject: {reject_url}`;
     }
   }
 
   if (target.type === "logic/telegram_input" && !String(data.message || "").trim()) {
-    patch.message = `Operator input required after ${sourceLabel}\n\n${outputToken}\n\nReply to this Telegram message with the next instruction for the agent.`;
+    patch.message = outputToken;
   }
 
   return patch;

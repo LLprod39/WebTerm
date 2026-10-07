@@ -1,13 +1,14 @@
-import type { ComponentType, Dispatch, DragEvent, SetStateAction } from "react";
+import type { ComponentType, Dispatch, DragEvent, ReactNode, SetStateAction } from "react";
 import type { Connection, EdgeChange, NodeChange, NodeMouseHandler, NodeTypes } from "@xyflow/react";
 
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import type { PipelineEdge, PipelineNode, PipelineTrigger, StudioCapabilityNode } from "@/lib/api";
 import type { StudioPipelineAssistantResponse } from "@/lib/studioPipelineDraftsApi";
+import { cn } from "@/lib/utils";
 
 import { localize } from "./presentation";
 import { NodePalette } from "./NodePalette";
-import { PipelineEditorCanvas } from "./PipelineEditorCanvas";
+import { PipelineEditorCanvas, type CanvasConnectEndEmpty } from "./PipelineEditorCanvas";
 import { PipelineEditorSidePanel } from "./PipelineEditorSidePanel";
 
 export function PipelineEditorMainArea({
@@ -19,9 +20,11 @@ export function PipelineEditorMainArea({
   assistantProposal,
   displayEdges,
   displayNodes,
+  emptySlot,
   lang,
   nodeManifests,
   paletteOpen,
+  paletteCollapsed = false,
   pluginPalette,
   pluginNodeTypes,
   pipelineId,
@@ -37,15 +40,19 @@ export function PipelineEditorMainArea({
   onCloseNode,
   onCloseRun,
   onConnect,
+  onConnectEndEmpty,
+  onDeleteEdge,
   onDeleteNode,
   onDiscardAssistantProposal,
   onDragOver,
   onDrop,
   onDuplicateNode,
   onEdgesChange,
+  onInsertEdge,
   onNodeClick,
   onNodesChange,
   onPaneClick,
+  onTogglePalette,
   onUpdateNodeData,
   setPaletteOpen,
 }: {
@@ -57,9 +64,12 @@ export function PipelineEditorMainArea({
   assistantProposal: StudioPipelineAssistantResponse | null;
   displayEdges: PipelineEdge[];
   displayNodes: PipelineNode[];
+  emptySlot?: ReactNode;
   lang: "en" | "ru";
   nodeManifests: StudioCapabilityNode[];
   paletteOpen: boolean;
+  /** Desktop left palette collapsed to ~48px icon rail. Wired by stream I. */
+  paletteCollapsed?: boolean;
   pluginPalette: Array<{ category: string; nodes: Array<{ type: string; label: string; icon: ComponentType<{ className?: string }>; iconClassName?: string; description: string }> }>;
   pluginNodeTypes: NodeTypes;
   pipelineId: number | null;
@@ -75,22 +85,38 @@ export function PipelineEditorMainArea({
   onCloseNode: () => void;
   onCloseRun: () => void;
   onConnect: (connection: Connection) => void;
+  onConnectEndEmpty?: CanvasConnectEndEmpty;
+  onDeleteEdge?: (edgeId: string) => void;
   onDeleteNode: (nodeId: string) => void;
   onDiscardAssistantProposal: () => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
   onDuplicateNode: (nodeId: string) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
+  onInsertEdge?: (edgeId: string, clientPosition: { x: number; y: number }) => void;
   onNodeClick: NodeMouseHandler;
   onNodesChange: (changes: NodeChange[]) => void;
   onPaneClick: () => void;
+  /** Toggle desktop palette collapse (expanded ↔ icon rail). */
+  onTogglePalette?: () => void;
   onUpdateNodeData: (nodeId: string, data: Record<string, unknown>) => void;
   setPaletteOpen: Dispatch<SetStateAction<boolean>>;
 }) {
   return (
     <div className="flex min-h-0 flex-1 overflow-hidden">
-      <div className="hidden h-full min-h-0 w-64 shrink-0 lg:block">
-        <NodePalette onAddNode={onAddNode} lang={lang} pluginPalette={pluginPalette} />
+      <div
+        className={cn(
+          "hidden h-full min-h-0 shrink-0 lg:block",
+          paletteCollapsed ? "w-12" : "w-64",
+        )}
+      >
+        <NodePalette
+          onAddNode={onAddNode}
+          lang={lang}
+          pluginPalette={pluginPalette}
+          collapsed={paletteCollapsed}
+          onToggleCollapsed={onTogglePalette}
+        />
       </div>
       <Sheet open={paletteOpen} onOpenChange={setPaletteOpen}>
         <SheetContent side="left" className="flex w-[88vw] max-w-sm flex-col overflow-hidden border-border bg-card p-0 lg:hidden">
@@ -118,11 +144,15 @@ export function PipelineEditorMainArea({
           <PipelineEditorCanvas
             displayNodes={displayNodes}
             displayEdges={displayEdges}
+            emptySlot={emptySlot}
             lang={lang}
             onConnect={onConnect}
+            onConnectEndEmpty={onConnectEndEmpty}
+            onDeleteEdge={onDeleteEdge}
             onDragOver={onDragOver}
             onDrop={onDrop}
             onEdgesChange={onEdgesChange}
+            onInsertEdge={onInsertEdge}
             onNodeClick={onNodeClick}
             onNodesChange={onNodesChange}
             onPaneClick={onPaneClick}

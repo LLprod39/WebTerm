@@ -15,7 +15,7 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_manual",
             "type": "trigger/manual",
-            "position": {"x": 200, "y": 40},
+            "position": {"x": 80, "y": 200},
             "data": {
                 "label": "Start Content Run",
                 "label_ru": "Запустить контент-прогон",
@@ -25,7 +25,7 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_webhook",
             "type": "trigger/webhook",
-            "position": {"x": 440, "y": 40},
+            "position": {"x": 80, "y": 20},
             "data": {
                 "label": "Webhook (optional)",
                 "label_ru": "Webhook (опционально)",
@@ -36,13 +36,13 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_merge_in",
             "type": "logic/merge",
-            "position": {"x": 320, "y": 170},
+            "position": {"x": 360, "y": 200},
             "data": {"label": "Any Trigger", "label_ru": "Любой триггер", "mode": "any"},
         },
         {
             "id": "brief",
             "type": "agent/llm_query",
-            "position": {"x": 320, "y": 300},
+            "position": {"x": 640, "y": 200},
             "data": {
                 "label": "AI Creative Brief",
                 "label_ru": "AI creative brief",
@@ -67,13 +67,13 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_parallel",
             "type": "logic/parallel",
-            "position": {"x": 320, "y": 450},
+            "position": {"x": 920, "y": 200},
             "data": {"label": "Parallel Writers", "label_ru": "Параллельные писатели"},
         },
         {
             "id": "writer_twitter",
             "type": "agent/llm_query",
-            "position": {"x": 80, "y": 590},
+            "position": {"x": 1200, "y": 200},
             "data": {
                 "label": "Twitter/X Writer",
                 "label_ru": "Twitter/X писатель",
@@ -89,7 +89,7 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "writer_linkedin",
             "type": "agent/llm_query",
-            "position": {"x": 320, "y": 590},
+            "position": {"x": 1200, "y": 20},
             "data": {
                 "label": "LinkedIn Writer",
                 "label_ru": "LinkedIn писатель",
@@ -105,7 +105,7 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "writer_blog",
             "type": "agent/llm_query",
-            "position": {"x": 560, "y": 590},
+            "position": {"x": 1200, "y": 380},
             "data": {
                 "label": "Blog Intro Writer",
                 "label_ru": "Blog intro писатель",
@@ -121,13 +121,13 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_merge_out",
             "type": "logic/merge",
-            "position": {"x": 320, "y": 740},
+            "position": {"x": 1480, "y": 200},
             "data": {"label": "Writers Done", "label_ru": "Писатели готовы", "mode": "all"},
         },
         {
             "id": "editor",
             "type": "agent/llm_query",
-            "position": {"x": 320, "y": 870},
+            "position": {"x": 1760, "y": 200},
             "data": {
                 "label": "AI Senior Editor",
                 "label_ru": "AI senior editor",
@@ -150,7 +150,7 @@ def build_content_nodes() -> list[dict]:
         {
             "id": "content_report",
             "type": "output/report",
-            "position": {"x": 320, "y": 1020},
+            "position": {"x": 2040, "y": 200},
             "data": {
                 "label": "Content Pack Report",
                 "label_ru": "Отчёт контент-пака",

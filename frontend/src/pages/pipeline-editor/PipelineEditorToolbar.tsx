@@ -1,4 +1,4 @@
-import { ArrowLeft, Bell, CheckCircle2, Clock, Info, Link2, Loader2, MoreHorizontal, Play, Plus, Save, ShieldCheck, Wand2, XCircle, Zap } from "lucide-react";
+import { ArrowLeft, Bell, CheckCircle2, Clock, Info, LayoutGrid, Link2, Loader2, MoreHorizontal, Play, Plus, Save, ShieldCheck, Wand2, XCircle, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,7 @@ export function PipelineEditorToolbar({
   onOpenLastRun,
   onOpenPalette,
   onOpenRunDialog,
+  onOrganizeLayout,
   onPipelineNameChange,
   onSave,
   onValidateGraph,
@@ -51,6 +52,7 @@ export function PipelineEditorToolbar({
   onOpenLastRun: (runId: number) => void;
   onOpenPalette: () => void;
   onOpenRunDialog: () => void;
+  onOrganizeLayout?: () => void;
   onPipelineNameChange: (value: string) => void;
   onSave: () => void;
   onValidateGraph: () => void;
@@ -98,6 +100,17 @@ export function PipelineEditorToolbar({
         >
           <ShieldCheck className="h-3.5 w-3.5" />
           {localize(lang, "Проверить", "Validate")}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onOrganizeLayout?.()}
+          disabled={!onOrganizeLayout}
+          className="h-9 gap-1.5"
+          title={localize(lang, "Выровнять граф слева направо", "Organize graph left to right")}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          {localize(lang, "Сетка", "Layout")}
         </Button>
         <Button
           size="sm"

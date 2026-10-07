@@ -15,13 +15,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/manual",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start Health Check"},
             },
             {
                 "id": "n2",
                 "type": "agent/multi",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Multi-Server Health Agent",
                     "goal": "Check the health of all connected servers. For each server: 1) Check CPU usage (top -bn1), 2) Check RAM (free -h), 3) Check disk space (df -h), 4) Check system load (uptime). Report any anomalies (CPU>80%, RAM>90%, disk>85%).",
@@ -33,7 +33,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "output/report",
-                "position": {"x": 300, "y": 320},
+                "position": {"x": 640, "y": 200},
                 "data": {"label": "Health Report"},
             },
         ],
@@ -53,13 +53,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/manual",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start Deploy"},
             },
             {
                 "id": "n2",
                 "type": "agent/react",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Deploy Agent",
                     "goal": "Deploy the application using Docker: 1) Pull latest image: docker pull {image_name}, 2) Stop old container: docker stop {container_name} || true, 3) Remove old container: docker rm {container_name} || true, 4) Start new container: docker run -d --name {container_name} --restart unless-stopped {image_name}, 5) Verify container is running: docker ps | grep {container_name}",
@@ -71,7 +71,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "logic/condition",
-                "position": {"x": 300, "y": 330},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Deploy OK?",
                     "check_type": "status_ok",
@@ -80,13 +80,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n4",
                 "type": "output/report",
-                "position": {"x": 150, "y": 470},
+                "position": {"x": 920, "y": 200},
                 "data": {"label": "Deploy Success Report"},
             },
             {
                 "id": "n5",
                 "type": "output/report",
-                "position": {"x": 450, "y": 470},
+                "position": {"x": 920, "y": 20},
                 "data": {"label": "Deploy Failure Report"},
             },
         ],
@@ -108,13 +108,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/schedule",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Weekly Cleanup", "cron_expression": "0 2 * * 0"},
             },
             {
                 "id": "n2",
                 "type": "agent/ssh_cmd",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Check Disk Before",
                     "command": "df -h / && echo '---' && du -sh /var/log/* 2>/dev/null | sort -rh | head -20",
@@ -123,7 +123,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "agent/react",
-                "position": {"x": 300, "y": 330},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Cleanup Agent",
                     "goal": "Clean up old logs and temporary files to free disk space: 1) Find log files older than 30 days in /var/log and remove or compress them, 2) Clean /tmp of files older than 7 days, 3) Clean apt/yum cache if on Linux, 4) Report total space freed.",
@@ -135,7 +135,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n4",
                 "type": "output/report",
-                "position": {"x": 300, "y": 490},
+                "position": {"x": 920, "y": 200},
                 "data": {"label": "Cleanup Report"},
             },
         ],
@@ -156,13 +156,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/webhook",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Alert Received"},
             },
             {
                 "id": "n2",
                 "type": "agent/multi",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Incident Investigation Agent",
                     "goal": "Incident triggered: {alert_name} on {server_name}. Investigate: 1) Check system resources (CPU, RAM, disk), 2) Check relevant services status (systemctl status or docker ps), 3) Examine recent logs (journalctl -n 100 or app logs), 4) Check network connectivity, 5) Identify root cause, 6) Suggest remediation steps.",
@@ -174,13 +174,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "output/report",
-                "position": {"x": 200, "y": 350},
+                "position": {"x": 640, "y": 200},
                 "data": {"label": "Incident Report"},
             },
             {
                 "id": "n4",
                 "type": "output/webhook",
-                "position": {"x": 420, "y": 350},
+                "position": {"x": 640, "y": 20},
                 "data": {
                     "label": "Notify Slack",
                     "url": "https://hooks.slack.com/services/YOUR/WEBHOOK/HERE",
@@ -204,13 +204,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/manual",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Start Security Audit"},
             },
             {
                 "id": "n2",
                 "type": "agent/react",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Security Audit Agent",
                     "goal": "Perform a security audit: 1) Check listening ports (ss -tlnp or netstat -tlnp), 2) Check for outdated packages with known CVEs (apt list --upgradable or yum check-update), 3) Check SSH config (/etc/ssh/sshd_config) for password auth and root login, 4) Check sudoers for overly broad permissions (cat /etc/sudoers), 5) Check for world-writable files in sensitive locations, 6) Report all findings with severity.",
@@ -222,7 +222,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "output/report",
-                "position": {"x": 300, "y": 340},
+                "position": {"x": 640, "y": 200},
                 "data": {"label": "Security Report"},
             },
         ],
@@ -242,13 +242,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n1",
                 "type": "trigger/webhook",
-                "position": {"x": 300, "y": 50},
+                "position": {"x": 80, "y": 200},
                 "data": {"label": "Restart Triggered"},
             },
             {
                 "id": "n2",
                 "type": "agent/react",
-                "position": {"x": 300, "y": 180},
+                "position": {"x": 360, "y": 200},
                 "data": {
                     "label": "Service Restart Agent",
                     "goal": "Restart service {service_name}: 1) Check current status: systemctl status {service_name}, 2) Restart: systemctl restart {service_name}, 3) Wait 10 seconds, 4) Check status again, 5) If using HTTP: curl -sf http://localhost:{port}/health, 6) Report result.",
@@ -260,7 +260,7 @@ CORE_TEMPLATES = [
             {
                 "id": "n3",
                 "type": "logic/condition",
-                "position": {"x": 300, "y": 330},
+                "position": {"x": 640, "y": 200},
                 "data": {
                     "label": "Service Up?",
                     "check_type": "status_ok",
@@ -269,13 +269,13 @@ CORE_TEMPLATES = [
             {
                 "id": "n4",
                 "type": "output/report",
-                "position": {"x": 150, "y": 470},
+                "position": {"x": 920, "y": 200},
                 "data": {"label": "Success"},
             },
             {
                 "id": "n5",
                 "type": "output/webhook",
-                "position": {"x": 450, "y": 470},
+                "position": {"x": 920, "y": 20},
                 "data": {
                     "label": "Alert: Service Down",
                     "url": "",

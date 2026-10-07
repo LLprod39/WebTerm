@@ -72,6 +72,7 @@ export function NodeBase({
       : hasSource
         ? [{ id: "out" }]
         : [];
+  const hasPortLabels = resolvedSourcePorts.some((port) => Boolean(port.label));
   return (
     <div
       className={cn(
@@ -89,16 +90,16 @@ export function NodeBase({
       )}
     >
       {categoryColor && <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: categoryColor }} />}
-      
+
       {hasTarget && (
         <Handle
           type="target"
-          position={Position.Top}
+          position={Position.Left}
           className="!w-3.5 !h-3.5 !bg-muted-foreground/50 !border-2 !border-background hover:!bg-primary hover:!scale-125 transition-all"
         />
       )}
 
-      <div className="px-3 py-3">
+      <div className={cn("px-3 py-3", hasPortLabels && "pr-12")}>
         <div className="flex items-start gap-2.5">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-border/80 bg-background text-base">
             {icon}
@@ -124,15 +125,14 @@ export function NodeBase({
       </div>
 
       {resolvedSourcePorts.map((port, index) => {
-        const spacing = 100 / (resolvedSourcePorts.length + 1);
-        const left = `${spacing * (index + 1)}%`;
+        const top = `${((index + 1) / (resolvedSourcePorts.length + 1)) * 100}%`;
         return (
           <div key={`${port.id || "out"}-${index}`}>
             <Handle
               type="source"
-              position={Position.Bottom}
+              position={Position.Right}
               id={port.id}
-              style={{ left, ...(port.style || {}) }}
+              style={{ top, ...(port.style || {}) }}
               className={cn(
                 "!w-3.5 !h-3.5 !bg-muted-foreground/50 !border-2 !border-background transition-all hover:!bg-primary hover:!scale-125",
                 port.className,
@@ -141,10 +141,10 @@ export function NodeBase({
             {port.label ? (
               <span
                 className={cn(
-                  "pointer-events-none absolute -bottom-5 text-xs font-medium text-muted-foreground",
+                  "pointer-events-none absolute right-3 -translate-y-1/2 text-right text-xs font-medium text-muted-foreground",
                   port.labelClassName,
                 )}
-                style={{ left, transform: "translateX(-50%)" }}
+                style={{ top }}
               >
                 {port.label}
               </span>
