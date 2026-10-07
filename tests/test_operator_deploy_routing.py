@@ -67,15 +67,18 @@ def test_route_tools_keeps_agent_create_for_explicit_deploy():
     assert "web.search" not in types
 
 
-def test_route_tools_ignores_deploy_keywords_in_attachment_only():
+def test_route_tools_does_not_apply_deploy_routing_for_attachment_only():
     tools = [
         {"action_type": "agent.create", "name": "agent_create"},
+        {"action_type": "operator.resolve_server", "name": "operator_resolve_server"},
         {"action_type": "operator.list_servers", "name": "operator_list_servers"},
         {"action_type": "web.search", "name": "web_search"},
     ]
-    selected = _route_tools_for_message(tools, CONTRIBUTING_ATTACHMENT)
-    types = {str(t.get("action_type")) for t in selected}
-    assert "agent.create" not in types
+    deploy_types = {str(t.get("action_type")) for t in _route_tools_for_message(tools, DEPLOY_MSG)}
+    attach_types = {str(t.get("action_type")) for t in _route_tools_for_message(tools, CONTRIBUTING_ATTACHMENT)}
+    assert "agent.create" in deploy_types
+    assert "web.search" not in deploy_types
+    assert "web.search" in attach_types
 
 
 def test_operator_prompt_mentions_explicit_deploy_not_attachment_triggers():
@@ -162,7 +165,8 @@ def test_list_playbooks_empty_hint_does_not_push_agent_create():
     )
     assert result["total"] == 0
     hint = str(result.get("reply_hint") or "").lower()
-    assert "agent.create" not in hint
+    assert "call agent.create" not in hint
+    assert "then agent.run" not in hint
 
 
 @pytest.mark.django_db
@@ -170,4 +174,5 @@ def test_list_agents_hint_does_not_push_agent_create():
     user = User.objects.create_user("ag-hint-deploy", password="x")
     result = list_agents(AssistantActionContext(user=user, input_payload={}, channel="web"))
     hint = str(result.get("reply_hint") or "").lower()
-    assert "agent.create" not in hint
+    assert "call agent.create" not in hint
+    assert "then agent.run" not in hint

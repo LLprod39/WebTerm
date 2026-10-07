@@ -91,7 +91,7 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
     if total == 0:
         hint = (
             "Catalog empty (0 playbooks). Say so briefly. "
-            "Do not call agent.create or agent.run unless the operator explicitly asked to deploy or run an agent."
+            "Do not create or launch agents unless the operator explicitly asked to deploy or run one."
         )
     else:
         hint = (

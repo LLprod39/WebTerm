@@ -31,7 +31,7 @@ def list_agents(ctx: AssistantActionContext) -> dict:
     hint = (
         "Summarize agents with «показаны N из M». Max ~8 names. "
         "Do not dump full configs or say the answer was truncated. "
-        "Do not call agent.create or agent.run unless the operator explicitly asked to create or run an agent."
+        "Do not create or launch agents unless the operator explicitly asked to create or run one."
     )
     if getattr(ctx, "channel", "") == "telegram":
         from core_ui.services.operator_channel import telegram_reply_hint
