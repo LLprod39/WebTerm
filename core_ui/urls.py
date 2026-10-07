@@ -90,6 +90,11 @@ urlpatterns = [
         ai_provider_views.api_ai_provider_auth_flow,
         name="api_ai_provider_auth_flow",
     ),
+    path(
+        "api/ai/providers/auth-flows/<uuid:flow_id>/authorization-code/",
+        ai_provider_views.api_ai_provider_auth_flow_authorization_code,
+        name="api_ai_provider_auth_flow_authorization_code",
+    ),
     path("api/ai/providers/pools/", ai_provider_views.api_ai_provider_pools, name="api_ai_provider_pools"),
     path(
         "api/ai/providers/pools/<int:pool_id>/",

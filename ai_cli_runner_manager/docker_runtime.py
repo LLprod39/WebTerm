@@ -142,7 +142,7 @@ class DockerCliRuntime:
             )
             process.stdin.write(encoded + b"\n")
             await process.stdin.drain()
-            process.stdin.close()
+            # Keep stdin open for follow-up auth-input control lines (Antigravity OAuth paste).
             while True:
                 line = await _await_or_stderr_limit(
                     process.stdout.readline(),
@@ -186,6 +186,8 @@ class DockerCliRuntime:
             if stderr_task is not None:
                 stderr_task.cancel()
                 await asyncio.gather(stderr_task, return_exceptions=True)
+            if process.stdin is not None and not process.stdin.is_closing():
+                process.stdin.close()
             if process.returncode is None:
                 await _stop_process(process, drain_stderr=True)
             await self._remove_runner_container(runner_name)
@@ -193,6 +195,36 @@ class DockerCliRuntime:
                 self._processes.pop(request.invocation_id, None)
                 self._process_connections.pop(request.invocation_id, None)
                 self._runner_names.pop(request.invocation_id, None)
+
+    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+        """Deliver an authorization code to a live runner via stdin control line."""
+        from .auth_input import normalize_authorization_code
+
+        if not _INVOCATION_REF.fullmatch(invocation_id):
+            return False
+        try:
+            code = normalize_authorization_code(authorization_code)
+        except ValueError:
+            return False
+        async with self._lock:
+            process = self._processes.get(invocation_id)
+        if process is None or process.returncode is not None or process.stdin is None:
+            return False
+        if process.stdin.is_closing():
+            return False
+        payload = json.dumps(
+            {"type": "auth_input", "authorization_code": code},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        if len(payload) > 8192:
+            return False
+        try:
+            process.stdin.write(payload + b"\n")
+            await process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError, RuntimeError):
+            return False
+        return True
 
     async def cancel(self, invocation_id: str) -> bool:
         async with self._lock:
@@ -237,15 +269,20 @@ class DockerCliRuntime:
             "volume",
             "rm",
             volume_name,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
         try:
-            return await asyncio.wait_for(process.wait(), timeout=15) == 0
+            _stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=15)
         except TimeoutError:
             process.kill()
             await process.wait()
             return False
+        if process.returncode == 0:
+            return True
+        # Already-absent credential volumes are a successful cleanup outcome.
+        err_text = (stderr or b"").decode("utf-8", errors="replace").lower()
+        return "no such volume" in err_text
 
     async def _remove_runner_container(self, runner_name: str) -> bool:
         if _RUNNER_ID.fullmatch(runner_name.removeprefix("webterm-ai-cli-")) is None:

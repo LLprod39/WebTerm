@@ -10,8 +10,16 @@ import pytest
 from ai_cli_runner_manager.adapters.antigravity import (
     AntigravitySubscriptionAdapter,
     _is_authenticated,
+    _oauth_session_attempt,
     _safe_antigravity_error,
     _start_device_auth,
+    parse_antigravity_oauth_url,
+)
+from ai_cli_runner_manager.auth_input import (
+    normalize_authorization_code,
+    publish_auth_input,
+    register_auth_input_queue,
+    unregister_auth_input_queue,
 )
 from ai_cli_runner_manager.adapters.codex import codex_account_is_chatgpt, codex_notification_events
 from ai_cli_runner_manager.adapters.common import prompt_from_request, tool_output_schema, tool_response_events
@@ -333,12 +341,200 @@ async def test_grok_device_auth_stderr_flood_is_bounded_and_process_is_stopped(m
 
 
 @pytest.mark.asyncio
-async def test_antigravity_device_auth_emits_verification_uri() -> None:
+async def test_antigravity_device_auth_emits_verification_uri(monkeypatch) -> None:
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.shutil.which", lambda _name: None)
     events = [event async for event in _start_device_auth()]
     assert len(events) == 1
     assert events[0].type is ProviderEventType.AUTH_REQUIRED
     assert "https://accounts.google.com" in events[0].payload["verification_uri"]
     assert events[0].payload["user_code"].startswith("GEMI-")
+
+
+@pytest.mark.asyncio
+async def test_antigravity_device_auth_pty_emits_oauth_url(monkeypatch) -> None:
+    oauth_url = (
+        "https://accounts.google.com/o/oauth2/auth?access_type=offline"
+        "&client_id=1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+        "&code_challenge=veiuqdNks76bvWzfF1pBxQV1RwfJnPOHomt_zMcKmRI&code_challenge_method=S256"
+        "&prompt=consent&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback"
+        "&response_type=code&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcclog"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fexperimentsandconfigs"
+        "+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Faicode+openid&state=3sL8QOWRz3YykmKgmzCi5g"
+    )
+    assert len(oauth_url) > 500
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+            self._reads = [f"Authentication required\n  {oauth_url}\nWaiting...\n".encode("utf-8")]
+
+        def terminate(self) -> None:
+            self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        async def wait(self) -> int:
+            self.returncode = 1
+            return 1
+
+    process = FakeProcess()
+
+    async def fake_to_thread(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    def fake_read(_fd: int, _size: int) -> bytes:
+        if process._reads:
+            return process._reads.pop(0)
+        process.returncode = 1
+        raise OSError("eof")
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return process
+
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.shutil.which", lambda _name: "/usr/local/bin/antigravity")
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.path.exists", lambda _path: True)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.pty.openpty", lambda: (11, 12))
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.close", lambda _fd: None)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.read", fake_read)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.asyncio.to_thread", fake_to_thread)
+    monkeypatch.setattr(
+        "ai_cli_runner_manager.adapters.antigravity.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    events = [
+        event
+        async for event in _oauth_session_attempt(
+            "/usr/local/bin/antigravity",
+            invocation_id="",
+            session_budget=2.0,
+        )
+    ]
+    assert events[0].type is ProviderEventType.AUTH_REQUIRED
+    assert events[0].payload["verification_uri"] == oauth_url
+    assert events[0].payload.get("accepts_authorization_code") is True
+
+
+@pytest.mark.asyncio
+async def test_antigravity_auth_input_written_to_pty(monkeypatch) -> None:
+    oauth_url = "https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid&state=x"
+    written: list[bytes] = []
+    invocation_id = "auth_pastecodeflow0001"
+    register_auth_input_queue(invocation_id)
+
+    class FakeProcess:
+        def __init__(self) -> None:
+            self.returncode: int | None = None
+
+        def terminate(self) -> None:
+            if self.returncode is None:
+                self.returncode = 1
+
+        def kill(self) -> None:
+            self.returncode = 1
+
+        async def wait(self) -> int:
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+    process = FakeProcess()
+    reads = [f"Authentication required\n  {oauth_url}\n".encode("utf-8")]
+
+    def fake_read(_fd: int, _size: int) -> bytes:
+        if reads:
+            return reads.pop(0)
+        import time as _time
+        _time.sleep(0.05)
+        return b""
+
+    def fake_write(_fd: int, data: bytes) -> int:
+        written.append(data)
+        process.returncode = 0
+        return len(data)
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return process
+
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.shutil.which", lambda _name: "/usr/local/bin/antigravity")
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.path.exists", lambda _path: True)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.pty.openpty", lambda: (31, 32))
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.close", lambda _fd: None)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.read", fake_read)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.write", fake_write)
+    monkeypatch.setattr(
+        "ai_cli_runner_manager.adapters.antigravity.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    async def _consume():
+        return [event async for event in _start_device_auth(invocation_id=invocation_id)]
+
+    consumer = asyncio.create_task(_consume())
+    await asyncio.sleep(0.1)
+    assert await publish_auth_input(invocation_id, "4/0AXlqoi5-TEST_CODE-value")
+    events = await asyncio.wait_for(consumer, timeout=5)
+    unregister_auth_input_queue(invocation_id)
+
+    assert any(event.type is ProviderEventType.AUTH_REQUIRED for event in events)
+    assert events[-1].type is ProviderEventType.COMPLETED
+    assert written and written[0].startswith(b"4/0AXlqoi5-TEST_CODE-value")
+
+
+def test_normalize_authorization_code_accepts_google_style() -> None:
+    code = normalize_authorization_code("  4/0AXlqoi5.abc-DEF_ghi=  ")
+    assert code.startswith("4/0AXlqoi5")
+    try:
+        normalize_authorization_code("short")
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_antigravity_device_auth_handles_process_lookup_error(monkeypatch) -> None:
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_TOTAL_WAIT_SECONDS", 1.5)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_SESSION_WAIT_SECONDS", 0.8)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity._AUTH_URL_WAIT_SECONDS", 0.5)
+
+    class DeadProcess:
+        returncode = None
+
+        def terminate(self) -> None:
+            raise ProcessLookupError()
+
+        def kill(self) -> None:
+            raise ProcessLookupError()
+
+        async def wait(self) -> int:
+            raise ProcessLookupError()
+
+    async def fake_create_subprocess_exec(*_args, **_kwargs):
+        return DeadProcess()
+
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.shutil.which", lambda _name: "/usr/local/bin/antigravity")
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.path.exists", lambda _path: True)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.pty.openpty", lambda: (21, 22))
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.close", lambda _fd: None)
+    monkeypatch.setattr("ai_cli_runner_manager.adapters.antigravity.os.read", lambda *_a, **_k: b"")
+    monkeypatch.setattr(
+        "ai_cli_runner_manager.adapters.antigravity.asyncio.create_subprocess_exec",
+        fake_create_subprocess_exec,
+    )
+
+    events = [event async for event in _start_device_auth(invocation_id="auth_deadprocess0001")]
+    assert events[-1].type is ProviderEventType.ERROR
+    assert events[-1].payload["code"] == "provider_auth_timeout"
+
+
+def test_parse_antigravity_oauth_url_strips_ansi_and_trailing_noise() -> None:
+    url = "https://accounts.google.com/o/oauth2/auth?client_id=1&scope=openid"
+    text = f"\x1b[0mAuthentication required\n  {url}.\n"
+    assert parse_antigravity_oauth_url(text) == url
 
 
 def test_antigravity_is_authenticated(monkeypatch, tmp_path) -> None:

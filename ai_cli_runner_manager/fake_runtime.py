@@ -6,10 +6,14 @@ from collections.abc import AsyncGenerator
 
 from app.ai_runtime import ProviderEventType, ProviderEventV1
 
+from .auth_input import normalize_authorization_code
 from .protocol import RunnerAction, RunnerRequestV1
 
 
 class FakeCliRuntime:
+    def __init__(self) -> None:
+        self._auth_inputs: dict[str, str] = {}
+
     async def stream(self, request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
         if request.action is RunnerAction.AUTH_START:
             yield ProviderEventV1(
@@ -18,6 +22,7 @@ class FakeCliRuntime:
                     "verification_uri": "https://example.invalid/device",
                     "user_code": "TEST-CODE",
                     "expires_in": 600,
+                    "accepts_authorization_code": True,
                 },
             )
             return
@@ -27,6 +32,14 @@ class FakeCliRuntime:
         yield ProviderEventV1(ProviderEventType.TEXT_DELTA, {"text": "fake provider response"})
         yield ProviderEventV1(ProviderEventType.USAGE, {"input_tokens": 3, "output_tokens": 3})
         yield ProviderEventV1(ProviderEventType.COMPLETED, {"provider_session_id": "fake-session"})
+
+    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+        try:
+            code = normalize_authorization_code(authorization_code)
+        except ValueError:
+            return False
+        self._auth_inputs[invocation_id] = code
+        return True
 
     async def cancel(self, invocation_id: str) -> bool:
         return False

@@ -26,6 +26,28 @@ from core_ui.models.ai_providers import (
 
 AUTH_FLOW_LEASE_SECONDS = 90
 AUTH_FLOW_HEARTBEAT_SECONDS = 30
+_AUTH_CODE_MAX_LEN = 2048
+
+
+def submit_authorization_code(flow: AIConnectionAuthFlow, authorization_code: str) -> bool:
+    """Deliver a short-lived OAuth code to the live AUTH_START runner. Never persist the code."""
+    code = (authorization_code or "").strip()
+    if not code or len(code) > _AUTH_CODE_MAX_LEN:
+        raise ProviderRuntimeError("provider_request_invalid", "Authorization code is invalid")
+    if flow.status != AIConnectionAuthFlow.STATUS_PENDING:
+        raise ProviderRuntimeError("provider_auth_not_pending", "Auth flow is not waiting for a code")
+    if flow.connection.target_id != "antigravity_subscription":
+        raise ProviderRuntimeError(
+            "provider_auth_code_unsupported",
+            "This provider does not accept pasted authorization codes",
+        )
+    if not flow.verification_uri:
+        raise ProviderRuntimeError(
+            "provider_auth_not_ready",
+            "Sign-in link is not ready yet; wait and try again",
+        )
+    invocation_id = f"auth_{flow.public_id.hex}"
+    return async_to_sync(AiCliRunnerClient().submit_auth_input)(invocation_id, code)
 
 
 def start_connection_auth(connection: AIProviderConnection) -> AIConnectionAuthFlow:
@@ -451,7 +473,7 @@ def _record_device_code(
     )
     if target_id is None:
         return
-    verification_uri = str(payload.get("verification_uri") or "")[:500]
+    verification_uri = str(payload.get("verification_uri") or "")[:2048]
     if not _allowed_verification_uri(target_id, verification_uri):
         raise ProviderRuntimeError(
             "provider_auth_uri_invalid",

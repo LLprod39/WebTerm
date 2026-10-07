@@ -334,6 +334,13 @@ def test_device_verification_url_is_restricted_to_provider_hosts() -> None:
     assert _allowed_verification_uri("grok_subscription", "https://accounts.x.ai/device")
     assert _allowed_verification_uri("cursor_subscription", "https://authenticator.cursor.sh/login")
     assert _allowed_verification_uri("cursor_subscription", "https://www.cursor.com/loginDeepControl")
+    long_google = (
+        "https://accounts.google.com/o/oauth2/auth?access_type=offline&client_id=example"
+        "&code_challenge=abc&redirect_uri=https%3A%2F%2Fantigravity.google%2Foauth-callback"
+        "&scope=openid+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcloud-platform&state=x"
+    )
+    assert len(long_google) > 200
+    assert _allowed_verification_uri("antigravity_subscription", long_google)
     assert not _allowed_verification_uri("codex_subscription", "https://openai.com.evil.example/device")
     assert not _allowed_verification_uri("grok_subscription", "http://accounts.x.ai/device")
     assert not _allowed_verification_uri("grok_subscription", "https://user:pass@x.ai/device")

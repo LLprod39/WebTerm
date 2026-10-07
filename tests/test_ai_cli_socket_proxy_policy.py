@@ -88,6 +88,41 @@ def test_antigravity_container_is_allowed() -> None:
     assert _authorize(payload).allowed
 
 
+def test_antigravity_denied_when_runner_image_not_wired() -> None:
+    """Mirrors the playbook_socket_proxy bug: antigravity_runner_image left at default ""."""
+    payload = _payload()
+    payload["Image"] = ANTIGRAVITY_IMAGE
+    payload["Env"] = [
+        "GEMINI_HOME=/credentials/antigravity",
+        "WEBTERM_AI_CLI_TARGET=antigravity_subscription",
+        "HTTP_PROXY=http://ai-cli-egress-proxy:3128",
+        "HTTPS_PROXY=http://ai-cli-egress-proxy:3128",
+    ]
+    config = AiCliProxyPolicyConfig(
+        codex_runner_image=CODEX_IMAGE,
+        grok_runner_image=GROK_IMAGE,
+        cursor_runner_image=CURSOR_IMAGE,
+        egress_network="webterm-ai-cli-egress",
+    )
+    decision = authorize_ai_cli_docker_request(
+        "POST",
+        "/containers/create?name=webterm-ai-cli-" + "1" * 32,
+        json.dumps(payload).encode(),
+        config=config,
+        inspect_container=lambda _: None,
+    )
+    assert not decision.allowed
+    assert "provider image" in decision.reason
+
+
+def test_playbook_socket_proxy_wires_antigravity_runner_image() -> None:
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "docker" / "playbook_socket_proxy.py"
+    text = source.read_text(encoding="utf-8")
+    assert "antigravity_runner_image=os.getenv(\"AI_CLI_ANTIGRAVITY_RUNNER_IMAGE\"" in text
+
+
 def test_missing_provider_specific_digest_is_denied() -> None:
     payload = _payload()
     config = AiCliProxyPolicyConfig(

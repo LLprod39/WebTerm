@@ -8,9 +8,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from .config import RunnerManagerConfig
+from .docker_plane import docker_plane_is_ready
 from .docker_runtime import DockerCliRuntime
 from .fake_runtime import FakeCliRuntime
 from .protocol import RunnerProtocolError, RunnerRequestV1, error_event
@@ -36,9 +37,16 @@ async def _lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="WebTerm AI CLI Runner Manager", lifespan=_lifespan)
 
 
-@app.get("/health")
-async def health() -> dict[str, Any]:
-    return {"ok": True, "service": "ai-cli-runner-manager", "fake_runtime": config.fake_runtime}
+@app.get("/health", response_model=None)
+async def health() -> JSONResponse:
+    docker_plane = docker_plane_is_ready(fake_runtime=config.fake_runtime)
+    payload = {
+        "ok": bool(docker_plane),
+        "service": "ai-cli-runner-manager",
+        "fake_runtime": config.fake_runtime,
+        "docker_plane": bool(docker_plane),
+    }
+    return JSONResponse(status_code=200 if docker_plane else 503, content=payload)
 
 
 @app.post("/v1/stream", dependencies=[Depends(_require_token)])
@@ -63,6 +71,26 @@ async def stream(request: Request) -> StreamingResponse:
 @app.delete("/v1/invocations/{invocation_id}", dependencies=[Depends(_require_token)])
 async def cancel(invocation_id: str) -> dict[str, bool]:
     return {"cancelled": await runtime.cancel(invocation_id)}
+
+
+@app.post("/v1/invocations/{invocation_id}/auth-input", dependencies=[Depends(_require_token)])
+async def submit_auth_input(invocation_id: str, request: Request) -> dict[str, bool]:
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    raw_code = body.get("authorization_code")
+    if not isinstance(raw_code, str):
+        raise HTTPException(status_code=400, detail="authorization_code is required")
+    submit = getattr(runtime, "submit_auth_input", None)
+    if submit is None:
+        raise HTTPException(status_code=503, detail="Auth input is not supported")
+    accepted = await submit(invocation_id, raw_code)
+    if not accepted:
+        raise HTTPException(status_code=409, detail="No live auth session accepts input")
+    return {"accepted": True}
 
 
 @app.delete("/v1/connections/{connection_ref}", dependencies=[Depends(_require_token)])
