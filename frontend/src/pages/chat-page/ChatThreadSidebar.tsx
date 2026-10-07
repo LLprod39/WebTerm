@@ -85,40 +85,17 @@ export function ChatThreadSidebar({
     activeChat,
   } = c;
 
-  if (!mobile && collapsed) {
-    return (
-      <aside className="relative z-[1] hidden h-full w-11 shrink-0 flex-col items-center gap-2 overflow-hidden rounded-2xl p-1.5 wt-chat-panel lg:flex">
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full"
-          onClick={onExpand}
-          aria-label={localize(lang, "Показать историю чатов", "Show chat history")}
-          title={localize(lang, "История · Ctrl/⌘B", "History · Ctrl/⌘B")}
-        >
-          <PanelLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="h-8 w-8 rounded-full"
-          onClick={clearLastChatAndNew}
-          aria-label={localize(lang, "Новый агент", "New agent")}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </aside>
-    );
-  }
-
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const openGroups = useMemo(() => {
     const map: Record<string, boolean> = {};
     for (const group of chatGroups) {
-      map[group.id] = collapsed[group.id] === undefined ? group.id === chatGroups[0]?.id : !collapsed[group.id];
+      map[group.id] =
+        collapsedGroups[group.id] === undefined
+          ? group.id === chatGroups[0]?.id
+          : !collapsedGroups[group.id];
     }
     return map;
-  }, [chatGroups, collapsed]);
+  }, [chatGroups, collapsedGroups]);
 
   const usageLimits = useMemo(() => {
     const usage = (activeChat?.total_usage || {}) as {
@@ -153,6 +130,32 @@ export function ChatThreadSidebar({
       ],
     };
   }, [activeChat?.total_usage, lang]);
+
+  if (!mobile && collapsed) {
+    return (
+      <aside className="relative z-[1] hidden h-full w-11 shrink-0 flex-col items-center gap-2 overflow-hidden rounded-2xl p-1.5 wt-chat-panel lg:flex">
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full"
+          onClick={onExpand}
+          aria-label={localize(lang, "Показать историю чатов", "Show chat history")}
+          title={localize(lang, "История · Ctrl/⌘B", "History · Ctrl/⌘B")}
+        >
+          <PanelLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 rounded-full"
+          onClick={clearLastChatAndNew}
+          aria-label={localize(lang, "Новый агент", "New agent")}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </aside>
+    );
+  }
 
   return (
     <aside
@@ -249,7 +252,7 @@ export function ChatThreadSidebar({
                     type="button"
                     aria-expanded={expanded}
                     onClick={() =>
-                      setCollapsed((prev) => ({
+                      setCollapsedGroups((prev) => ({
                         ...prev,
                         [group.id]: expanded,
                       }))
