@@ -73,6 +73,26 @@ async def cancel(invocation_id: str) -> dict[str, bool]:
     return {"cancelled": await runtime.cancel(invocation_id)}
 
 
+@app.post("/v1/invocations/{invocation_id}/auth-input", dependencies=[Depends(_require_token)])
+async def submit_auth_input(invocation_id: str, request: Request) -> dict[str, bool]:
+    try:
+        body = await request.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON body") from exc
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    raw_code = body.get("authorization_code")
+    if not isinstance(raw_code, str):
+        raise HTTPException(status_code=400, detail="authorization_code is required")
+    submit = getattr(runtime, "submit_auth_input", None)
+    if submit is None:
+        raise HTTPException(status_code=503, detail="Auth input is not supported")
+    accepted = await submit(invocation_id, raw_code)
+    if not accepted:
+        raise HTTPException(status_code=409, detail="No live auth session accepts input")
+    return {"accepted": True}
+
+
 @app.delete("/v1/connections/{connection_ref}", dependencies=[Depends(_require_token)])
 async def revoke_connection(connection_ref: str) -> dict[str, bool]:
     try:

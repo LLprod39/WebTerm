@@ -15,7 +15,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_http_methods
 
-from app.ai_runtime import ExecutionMode, ProviderBinding, ProviderTarget, canonicalize_target_id
+from app.ai_runtime import ExecutionMode, ProviderBinding, ProviderRuntimeError, ProviderTarget, canonicalize_target_id
 from core_ui.activity import log_user_activity
 from core_ui.ai_model_policy import user_can_manage_ai_routing
 from core_ui.context_processors import user_can_feature
@@ -32,6 +32,7 @@ from core_ui.schemas.openapi_metadata import openapi_responses
 from core_ui.services.ai_provider_access import can_use_binding, can_use_connection
 from core_ui.services.ai_provider_auth import (
     cancel_pending_auth_flows,
+    submit_authorization_code,
     fence_connection_invocations,
     queue_connection_verification,
     revoke_connection_credentials,
@@ -577,6 +578,12 @@ def api_ai_provider_connection_auth(request, connection_id: int):
 
 
 def _serialize_auth_flow(flow: AIConnectionAuthFlow) -> dict[str, Any]:
+    target_id = getattr(flow.connection, "target_id", "") if getattr(flow, "connection", None) else ""
+    accepts_authorization_code = (
+        flow.status == AIConnectionAuthFlow.STATUS_PENDING
+        and target_id == "antigravity_subscription"
+        and bool(flow.verification_uri)
+    )
     return {
         "id": str(flow.public_id),
         "connection_id": flow.connection_id,
@@ -587,6 +594,8 @@ def _serialize_auth_flow(flow: AIConnectionAuthFlow) -> dict[str, Any]:
         "expires_at": flow.expires_at.isoformat() if flow.expires_at else None,
         "created_at": flow.created_at.isoformat(),
         "completed_at": flow.completed_at.isoformat() if flow.completed_at else None,
+        "target_id": target_id,
+        "accepts_authorization_code": accepts_authorization_code,
     }
 
 
@@ -599,6 +608,52 @@ def api_ai_provider_auth_flow(request, flow_id):
     if not _can_manage_connection_grants(request.user, flow.connection, request=request):
         return _error("Auth flow is not accessible", 403, code="permission_denied")
     return JsonResponse({"success": True, "auth_flow": _serialize_auth_flow(flow)})
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_ai_provider_auth_flow_authorization_code(request, flow_id):
+    if denied := _provider_surface_guard(request):
+        return denied
+    flow = get_object_or_404(AIConnectionAuthFlow.objects.select_related("connection"), public_id=flow_id)
+    if not _can_manage_connection_grants(request.user, flow.connection, request=request):
+        return _error("Auth flow is not accessible", 403, code="permission_denied")
+    try:
+        payload = json.loads(request.body.decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return _error("Invalid JSON body", 400, code="invalid_json")
+    if not isinstance(payload, dict):
+        return _error("Invalid JSON body", 400, code="invalid_json")
+    raw_code = payload.get("authorization_code")
+    if not isinstance(raw_code, str):
+        return _error("authorization_code is required", 400, code="provider_request_invalid")
+    try:
+        accepted = submit_authorization_code(flow, raw_code)
+    except ProviderRuntimeError as exc:
+        status = 409 if exc.code in {
+            "provider_auth_not_pending",
+            "provider_auth_code_unsupported",
+            "provider_auth_not_ready",
+            "provider_request_invalid",
+        } else 503
+        return _error(str(exc), status, code=exc.code)
+    except Exception:
+        logger.warning(
+            "AI provider auth code submit failed flow_id=%s error_type=unexpected",
+            flow.pk,
+        )
+        return _error(
+            "Authorization code could not be delivered",
+            503,
+            code="provider_transport_unavailable",
+        )
+    if not accepted:
+        return _error(
+            "No live sign-in session is ready for the code; open the latest link and try again",
+            409,
+            code="provider_auth_session_not_ready",
+        )
+    return JsonResponse({"success": True, "accepted": True}, status=202)
 
 
 @login_required

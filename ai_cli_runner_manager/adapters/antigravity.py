@@ -13,6 +13,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
+from ai_cli_runner_manager.auth_input import wait_auth_input
 from ai_cli_runner_manager.protocol import RunnerAction, RunnerRequestV1, error_event
 from app.ai_runtime import ProviderEventType, ProviderEventV1
 
@@ -24,14 +25,20 @@ _CREDENTIALS_DIR = Path("/credentials/antigravity")
 _GOOGLE_OAUTH_URL = re.compile(r"https://accounts\.google\.com/o/oauth2/auth\?[^\s\x1b\"'<>]+", re.IGNORECASE)
 _ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b.")
 _AUTH_URL_WAIT_SECONDS = 45.0
-_AUTH_COMPLETE_TIMEOUT_SECONDS = 900.0
+# Official CLI print-mode OAuth itself expires in ~60s; we refresh sessions within this window.
+_AUTH_TOTAL_WAIT_SECONDS = 600.0
+_AUTH_SESSION_WAIT_SECONDS = 70.0
+_AUTH_CODE_DRAIN_SECONDS = 5.0
 _PTY_READ_CHUNK = 8192
 
 
 class AntigravitySubscriptionAdapter:
     async def stream(self, request: RunnerRequestV1) -> AsyncGenerator[ProviderEventV1, None]:
         if request.action is RunnerAction.AUTH_START:
-            async for event in _start_device_auth(api_key=getattr(request, "api_key", None)):
+            async for event in _start_device_auth(
+                api_key=getattr(request, "api_key", None),
+                invocation_id=request.invocation_id,
+            ):
                 yield event
             return
 
@@ -206,7 +213,11 @@ async def _run_antigravity_cli(request: RunnerRequestV1) -> AsyncGenerator[Provi
     )
 
 
-async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[ProviderEventV1, None]:
+async def _start_device_auth(
+    api_key: str | None = None,
+    *,
+    invocation_id: str = "",
+) -> AsyncGenerator[ProviderEventV1, None]:
     """Start Google Antigravity OAuth via CLI (pseudo-TTY); no dedicated login subcommand exists."""
     if api_key:
         _persist_api_key(api_key)
@@ -227,8 +238,42 @@ async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[Provi
         )
         return
 
-    # CLI help has no login/auth subcommand. Print mode with a controlling TTY
-    # triggers interactive OAuth and prints the Google consent URL.
+    # CLI print-mode OAuth waits ~60s for a pasted code. Refresh sessions inside a
+    # 10-minute envelope so the operator can complete Google login and paste via UI.
+    loop = asyncio.get_running_loop()
+    overall_deadline = loop.time() + _AUTH_TOTAL_WAIT_SECONDS
+    last_uri = ""
+    while loop.time() < overall_deadline:
+        remaining = overall_deadline - loop.time()
+        if remaining < 5:
+            break
+        async for event in _oauth_session_attempt(
+            cli_path,
+            invocation_id=invocation_id,
+            session_budget=min(_AUTH_SESSION_WAIT_SECONDS, remaining),
+        ):
+            if event.type is ProviderEventType.AUTH_REQUIRED:
+                uri = str(event.payload.get("verification_uri") or "")
+                if uri and uri != last_uri:
+                    last_uri = uri
+                    yield event
+                continue
+            yield event
+            return
+
+    yield error_event(
+        "provider_auth_timeout",
+        "Google Antigravity sign-in timed out waiting for authorization code",
+        retryable=True,
+    )
+
+
+async def _oauth_session_attempt(
+    cli_path: str,
+    *,
+    invocation_id: str,
+    session_budget: float,
+) -> AsyncGenerator[ProviderEventV1, None]:
     master_fd, slave_fd = pty.openpty()
     process: asyncio.subprocess.Process | None = None
     try:
@@ -253,15 +298,16 @@ async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[Provi
     verification_uri = ""
     scan_buffer = ""
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + _AUTH_URL_WAIT_SECONDS
+    session_deadline = loop.time() + max(5.0, session_budget)
+    url_deadline = loop.time() + min(_AUTH_URL_WAIT_SECONDS, session_budget)
     try:
-        while not verification_uri and loop.time() < deadline:
+        while not verification_uri and loop.time() < url_deadline:
             if process.returncode is not None:
                 break
             try:
                 chunk = await asyncio.wait_for(
                     asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
-                    timeout=max(0.1, min(1.0, deadline - loop.time())),
+                    timeout=max(0.1, min(1.0, url_deadline - loop.time())),
                 )
             except TimeoutError:
                 continue
@@ -274,10 +320,6 @@ async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[Provi
 
         if not verification_uri:
             await _stop_process(process)
-            yield error_event(
-                "provider_auth_failed",
-                "Failed to retrieve Google OAuth consent URL from Antigravity CLI",
-            )
             return
 
         yield ProviderEventV1(
@@ -285,46 +327,76 @@ async def _start_device_auth(api_key: str | None = None) -> AsyncGenerator[Provi
             {
                 "verification_uri": verification_uri,
                 "user_code": "",
+                "accepts_authorization_code": True,
             },
         )
 
-        # Keep the CLI alive so browser OAuth / paste-code can complete (Cursor-style).
-        complete_deadline = loop.time() + _AUTH_COMPLETE_TIMEOUT_SECONDS
-        while process.returncode is None and loop.time() < complete_deadline:
+        code_task: asyncio.Task[str | None] | None = None
+        if invocation_id:
+            code_task = asyncio.create_task(
+                wait_auth_input(invocation_id, timeout=max(1.0, session_deadline - loop.time()))
+            )
+
+        while process.returncode is None and loop.time() < session_deadline:
+            if code_task is not None and code_task.done():
+                authorization_code = code_task.result()
+                code_task = None
+                if not authorization_code:
+                    break
+                await _write_auth_code_to_pty(master_fd, authorization_code)
+                drain_deadline = loop.time() + _AUTH_CODE_DRAIN_SECONDS
+                while process.returncode is None and loop.time() < drain_deadline:
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
+                            timeout=0.5,
+                        )
+                    except (TimeoutError, OSError):
+                        break
+                if process.returncode is None:
+                    try:
+                        await asyncio.wait_for(process.wait(), timeout=30)
+                    except TimeoutError:
+                        await _stop_process(process)
+                if process.returncode == 0:
+                    yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
+                else:
+                    yield error_event(
+                        "provider_auth_failed",
+                        "Google Antigravity rejected the authorization code",
+                    )
+                return
+
             try:
-                chunk = await asyncio.wait_for(
+                await asyncio.wait_for(
                     asyncio.to_thread(os.read, master_fd, _PTY_READ_CHUNK),
-                    timeout=1.0,
+                    timeout=0.5,
                 )
             except TimeoutError:
                 continue
             except OSError:
                 break
-            if not chunk:
-                break
 
-        if process.returncode is None:
-            await _stop_process(process)
-            yield error_event(
-                "provider_auth_timeout",
-                "Google Antigravity sign-in timed out",
-                retryable=True,
-            )
-            return
-
-        if process.returncode == 0:
-            yield ProviderEventV1(ProviderEventType.COMPLETED, {"authenticated": True})
-        else:
-            yield error_event(
-                "provider_auth_failed",
-                "Google Antigravity authentication failed or was cancelled",
-            )
+        if code_task is not None and not code_task.done():
+            code_task.cancel()
+            await asyncio.gather(code_task, return_exceptions=True)
+        await _stop_process(process)
+        # Session expired without a usable code; caller may refresh OAuth URL.
+        return
     except Exception:  # noqa: BLE001 - never crash the runner process for auth failures
         await _stop_process(process)
         yield error_event("provider_auth_failed", "Google Antigravity authentication failed")
     finally:
         await _stop_process(process)
         _close_fd(master_fd)
+
+
+async def _write_auth_code_to_pty(master_fd: int, authorization_code: str) -> None:
+    payload = (authorization_code.strip() + "\n").encode("utf-8")
+    try:
+        await asyncio.to_thread(os.write, master_fd, payload)
+    except OSError:
+        return
 
 
 def parse_antigravity_oauth_url(text: str, *, verification_uri: str = "") -> str:

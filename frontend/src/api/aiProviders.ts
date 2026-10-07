@@ -93,6 +93,10 @@ export interface AiProviderAuthFlow {
   user_code: string;
   error_code: string;
   expires_at: string | null;
+  created_at?: string;
+  completed_at?: string | null;
+  target_id?: AiSubscriptionTarget | string;
+  accepts_authorization_code?: boolean;
 }
 
 export const fetchAiProviderCatalog = () => apiFetch<{
@@ -143,6 +147,12 @@ export const startAiProviderAuth = (connectionId: number) => apiFetch<{ success:
 export const fetchAiProviderAuthFlow = (flowId: string) => apiFetch<{ success: boolean; auth_flow: AiProviderAuthFlow }>(
   `/api/ai/providers/auth-flows/${flowId}/`,
 );
+
+export const submitAiProviderAuthAuthorizationCode = (flowId: string, authorizationCode: string) =>
+  apiFetch<{ success: boolean; accepted: boolean }>(
+    `/api/ai/providers/auth-flows/${flowId}/authorization-code/`,
+    { method: "POST", body: JSON.stringify({ authorization_code: authorizationCode }) },
+  );
 
 export const verifyAiProviderConnection = (connectionId: number) => apiFetch<{
   success: boolean;

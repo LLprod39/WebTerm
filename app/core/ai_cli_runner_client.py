@@ -105,6 +105,41 @@ class AiCliRunnerClient:
         except (httpx.HTTPError, ValueError):
             return False
 
+    async def submit_auth_input(self, invocation_id: str, authorization_code: str) -> bool:
+        """Deliver a short-lived OAuth authorization code to a live AUTH_START runner."""
+        self.config.validate()
+        if not _INVOCATION_REF.fullmatch(invocation_id):
+            raise ProviderRuntimeError("provider_request_invalid", "Invocation reference is invalid")
+        code = (authorization_code or "").strip()
+        if not code or len(code) > 2048:
+            raise ProviderRuntimeError("provider_request_invalid", "Authorization code is invalid")
+        headers = {"Authorization": f"Bearer {self.config.token}"}
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                response = await client.post(
+                    f"{self.config.base_url}/v1/invocations/{invocation_id}/auth-input",
+                    headers=headers,
+                    json={"authorization_code": code},
+                )
+            if response.status_code == 409:
+                return False
+            if response.status_code != 200:
+                raise ProviderRuntimeError(
+                    "provider_runner_unavailable",
+                    "CLI runner-manager rejected authorization code delivery",
+                    retryable=response.status_code >= 500,
+                )
+            payload = response.json()
+            return bool(payload.get("accepted")) if isinstance(payload, dict) else False
+        except ProviderRuntimeError:
+            raise
+        except (httpx.HTTPError, ValueError) as exc:
+            raise ProviderRuntimeError(
+                "provider_runner_unavailable",
+                "CLI runner-manager is unavailable",
+                retryable=True,
+            ) from exc
+
     async def revoke_connection(self, connection_ref: str) -> bool:
         self.config.validate()
         normalized = connection_ref.strip().lower()

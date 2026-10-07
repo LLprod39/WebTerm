@@ -13,6 +13,12 @@ from ai_cli_runner_manager.adapters import (
     CursorSubscriptionAdapter,
     GrokSubscriptionAdapter,
 )
+from ai_cli_runner_manager.auth_input import (
+    normalize_authorization_code,
+    publish_auth_input,
+    register_auth_input_queue,
+    unregister_auth_input_queue,
+)
 from ai_cli_runner_manager.protocol import RunnerProtocolError, RunnerRequestV1, error_event
 
 
@@ -40,10 +46,42 @@ async def _main() -> int:
     if adapter_cls is None:
         _write(error_event("provider_target_unsupported", "Runner target is not supported").to_dict())
         return 2
-    adapter = adapter_cls()
-    async for event in adapter.stream(request):
-        _write(event.to_dict())
-    return 0
+
+    register_auth_input_queue(request.invocation_id)
+    control_task = asyncio.create_task(_stdin_control_loop(request.invocation_id))
+    try:
+        adapter = adapter_cls()
+        async for event in adapter.stream(request):
+            _write(event.to_dict())
+        return 0
+    finally:
+        control_task.cancel()
+        await asyncio.gather(control_task, return_exceptions=True)
+        unregister_auth_input_queue(request.invocation_id)
+
+
+async def _stdin_control_loop(invocation_id: str) -> None:
+    """Accept follow-up NDJSON control lines on stdin (auth codes). Never log secrets."""
+    while True:
+        line = await asyncio.to_thread(sys.stdin.buffer.readline, 8192)
+        if not line:
+            return
+        if len(line) > 8192:
+            continue
+        try:
+            payload = json.loads(line.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict) or payload.get("type") != "auth_input":
+            continue
+        raw = payload.get("authorization_code")
+        if not isinstance(raw, str):
+            continue
+        try:
+            code = normalize_authorization_code(raw)
+        except ValueError:
+            continue
+        await publish_auth_input(invocation_id, code)
 
 
 def _write(payload: dict[str, object]) -> None:

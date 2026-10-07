@@ -40,6 +40,7 @@ import {
   revokeAiProviderConnection,
   saveAiProviderPreference,
   startAiProviderAuth,
+  submitAiProviderAuthAuthorizationCode,
   updateAiProviderConnection,
   updateAiProviderGrant,
   verifyAiProviderConnection,
@@ -138,6 +139,7 @@ export default function SettingsAIConnectionsPage() {
   const [scope, setScope] = useState<"personal" | "workspace">("personal");
   const [concurrencyLimit, setConcurrencyLimit] = useState(1);
   const [authFlowId, setAuthFlowId] = useState("");
+  const [authAuthorizationCode, setAuthAuthorizationCode] = useState("");
   const [draftPreferences, setDraftPreferences] = useState<Partial<Record<AiPurpose, string>>>({});
   const [draftModels, setDraftModels] = useState<Partial<Record<AiPurpose, string>>>({});
   const [draftReasoning, setDraftReasoning] = useState<Partial<Record<AiPurpose, AiReasoningEffort>>>({});
@@ -193,6 +195,7 @@ export default function SettingsAIConnectionsPage() {
     const stateKey = `${activeFlow.id}:${activeFlow.status}`;
     if (handledFlowState.current === stateKey) return;
     handledFlowState.current = stateKey;
+    setAuthAuthorizationCode("");
     void refresh();
     if (activeFlow.status === "completed") {
       toast({ title: text("Подключение готово", "Connection ready") });
@@ -556,6 +559,42 @@ export default function SettingsAIConnectionsPage() {
                   {activeFlow.verification_uri && activeFlow.status === "pending" ? <Button asChild><a href={activeFlow.verification_uri} target="_blank" rel="noreferrer"><Link2 className="mr-2 h-4 w-4" aria-hidden />{text("Открыть вход", "Open sign-in")}</a></Button> : null}
                 </div>
               </div>
+              {activeFlow.status === "pending" && activeFlow.accepts_authorization_code ? (
+                <div className="mt-4 space-y-2 border-t border-primary/20 pt-4">
+                  <Label htmlFor="antigravity-auth-code">{text("Вставьте код из Google", "Paste the code from Google")}</Label>
+                  <p className="text-sm text-muted-foreground">
+                    {text(
+                      "После входа Google покажет длинный код (4/0A…). Вставьте его сюда. Если ссылка обновилась — откройте новую и получите свежий код.",
+                      "After Google sign-in you get a long code (4/0A…). Paste it here. If the link refreshed, open the new one and use a fresh code.",
+                    )}
+                  </p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      id="antigravity-auth-code"
+                      value={authAuthorizationCode}
+                      onChange={(event) => setAuthAuthorizationCode(event.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="4/0A…"
+                      className="font-mono"
+                    />
+                    <Button
+                      disabled={!authAuthorizationCode.trim() || mutation.isPending}
+                      onClick={() => mutation.mutate(async () => {
+                        await submitAiProviderAuthAuthorizationCode(activeFlow.id, authAuthorizationCode.trim());
+                        setAuthAuthorizationCode("");
+                        toast({
+                          title: text("Код отправлен", "Code submitted"),
+                          description: text("Ожидаем завершение входа…", "Waiting for sign-in to finish…"),
+                        });
+                        await queryClient.invalidateQueries({ queryKey: aiProviderQueryKeys.authFlow(activeFlow.id) });
+                      })}
+                    >
+                      {text("Отправить код", "Submit code")}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </section>
           ) : null}
 
