@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import type { AssistantAction, AssistantChatMessage } from "@/api";
 import { Breadcrumb, BreadcrumbItem } from "@/boardui/components/base/breadcrumb/breadcrumb";
@@ -80,6 +80,7 @@ export function ChatMessagesPane({
     pinServer,
     unpinServer,
     openSessionDock,
+    handleHumanCommand,
     openActionDetails,
     pendingUserText,
     pendingUserEpoch,
@@ -240,6 +241,33 @@ export function ChatMessagesPane({
   const forecastPanelActions = useMemo<ForecastPanelActions>(
     () => ({ onAsk: stableMessageHandlers.onAsk }),
     [stableMessageHandlers.onAsk],
+  );
+  const onSendToTerminal = useCallback(
+    (code: string) => {
+      const command = code.trim();
+      if (!command) return;
+      const pinned = pinnedServers[0];
+      const serverId = sessionDock.serverId || pinned?.id;
+      if (!serverId) return;
+      if (!sessionDock.open || sessionDock.serverId !== serverId) {
+        openSessionDock({
+          serverId,
+          serverName: pinned?.name || sessionDock.serverName,
+          host: pinned?.host || sessionDock.host,
+          mode: "live",
+        });
+      }
+      handleHumanCommand(command);
+    },
+    [
+      handleHumanCommand,
+      openSessionDock,
+      pinnedServers,
+      sessionDock.host,
+      sessionDock.open,
+      sessionDock.serverId,
+      sessionDock.serverName,
+    ],
   );
   const isReconcilingLiveTurn = Boolean(operatorTurn?.reconciling && settledLiveMessage);
   const liveTurnError = operatorTurn?.error ?? operatorWs.errorMessage;
@@ -543,6 +571,7 @@ export function ChatMessagesPane({
                     serverPanelActions={serverPanelActions}
                     agentPanelActions={agentPanelActions}
                     forecastPanelActions={forecastPanelActions}
+                    onSendToTerminal={onSendToTerminal}
                   />
                 </motion.div>
                 )),
@@ -558,7 +587,7 @@ export function ChatMessagesPane({
                 className="group flex justify-end gap-3"
               >
                 <div className="min-w-0 max-w-[min(560px,85%)]">
-                  <div className="rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-[13px] font-medium leading-5 tracking-tight text-primary-foreground shadow-sm opacity-90">
+                  <div className="rounded-2xl rounded-br-md border border-border/70 bg-muted/55 px-3.5 py-2.5 text-[14px] font-medium leading-[1.55] tracking-tight text-foreground shadow-sm opacity-90">
                     <div className="whitespace-pre-wrap break-words">{pendingUserText}</div>
                   </div>
                   <div className="mt-1 pr-0.5 text-right text-[10px] text-muted-foreground/70">
@@ -593,6 +622,7 @@ export function ChatMessagesPane({
                     serverPanelActions={serverPanelActions}
                     agentPanelActions={agentPanelActions}
                     forecastPanelActions={forecastPanelActions}
+                    onSendToTerminal={onSendToTerminal}
                     streaming={!isReconcilingLiveTurn && (operatorWs.busy || isBusy)}
                     animateSupportingContent
                     streamStripTables={

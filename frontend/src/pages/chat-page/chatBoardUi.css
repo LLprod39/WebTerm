@@ -96,6 +96,14 @@
   animation: wt-chat-tool-pulse 1.2s ease-in-out infinite;
 }
 
+.wt-chat-sticky-table .bui-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: hsl(var(--card));
+  box-shadow: 0 1px 0 hsl(var(--border) / 0.7);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wt-chat-composer-loader rect,
   .wt-chat-thinking-label,

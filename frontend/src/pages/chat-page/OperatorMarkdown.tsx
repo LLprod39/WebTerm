@@ -1,14 +1,38 @@
 import type { Components, Options } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Check, Copy, Server } from "lucide-react";
-import { Children, Fragment, memo, useMemo, useState, type ReactNode } from "react";
+import { Check, Copy, Server, Terminal } from "lucide-react";
+import {
+  Children,
+  Fragment,
+  createContext,
+  memo,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import oneDark from "react-syntax-highlighter/dist/esm/styles/prism/one-dark";
 
 import { cn } from "@/lib/utils";
 
 import { normalizeOperatorMarkdown, stripMarkdownTables } from "./markdownNormalize";
+
+const SendToTerminalContext = createContext<((code: string) => void) | undefined>(undefined);
+
+const SHELL_LANGS = new Set([
+  "bash",
+  "sh",
+  "shell",
+  "zsh",
+  "fish",
+  "powershell",
+  "pwsh",
+  "cmd",
+  "console",
+  "text",
+]);
 
 const STREAM_CURSOR_MARKER = "\uE000";
 
@@ -231,27 +255,44 @@ function flattenText(node: ReactNode): string {
 
 function CodeBlock({ className, children }: { className?: string; children: ReactNode }) {
   const [copied, setCopied] = useState(false);
+  const onSendToTerminal = useContext(SendToTerminalContext);
   const code = String(children).replace(/\n$/, "");
   const lang = /language-(\w+)/.exec(className || "")?.[1] || "text";
+  const canSend = Boolean(onSendToTerminal) && SHELL_LANGS.has(lang) && code.trim().length > 0;
 
   return (
-    <div className="group relative my-2 overflow-hidden rounded-xl border border-border/60 bg-card/80">
+    <div
+      className="group relative my-2 overflow-hidden rounded-xl border border-border/60 bg-card/80"
+      data-operator-codeblock
+    >
       <div className="flex items-center justify-between border-b border-border/50 bg-muted/30 px-2.5 py-1">
         <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           {lang}
         </span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground opacity-0 transition hover:bg-muted hover:text-foreground group-hover:opacity-100"
-          onClick={() => {
-            void navigator.clipboard.writeText(code);
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1200);
-          }}
-        >
-          {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-          <span>{copied ? "OK" : "Copy"}</span>
-        </button>
+        <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          {canSend ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              onClick={() => onSendToTerminal?.(code)}
+            >
+              <Terminal className="h-3 w-3" />
+              <span>Terminal</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition hover:bg-muted hover:text-foreground"
+            onClick={() => {
+              void navigator.clipboard.writeText(code);
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1200);
+            }}
+          >
+            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+            <span>{copied ? "OK" : "Copy"}</span>
+          </button>
+        </div>
       </div>
       <SyntaxHighlighter
         language={lang === "text" ? "bash" : lang}
@@ -278,6 +319,8 @@ type OperatorMarkdownProps = {
   streaming?: boolean;
   /** When true, remove markdown tables (structured DataTableCard already shown). */
   stripTables?: boolean;
+  /** Send shell-like fences into the operator session dock. */
+  onSendToTerminal?: (code: string) => void;
 };
 
 export const OperatorMarkdown = memo(function OperatorMarkdown({
@@ -285,6 +328,7 @@ export const OperatorMarkdown = memo(function OperatorMarkdown({
   className,
   streaming = false,
   stripTables = false,
+  onSendToTerminal,
 }: OperatorMarkdownProps) {
   const normalized = useMemo(() => {
     const markdown = normalizeOperatorMarkdown(content);
@@ -300,13 +344,15 @@ export const OperatorMarkdown = memo(function OperatorMarkdown({
   }
 
   return (
-    <div className={cn("operator-md max-w-[min(920px,100%)]", className)}>
-      <ReactMarkdown
-        remarkPlugins={streaming ? streamingRemarkPlugins : staticRemarkPlugins}
-        components={components}
-      >
-        {normalized}
-      </ReactMarkdown>
-    </div>
+    <SendToTerminalContext.Provider value={onSendToTerminal}>
+      <div className={cn("operator-md max-w-[min(920px,100%)]", className)}>
+        <ReactMarkdown
+          remarkPlugins={streaming ? streamingRemarkPlugins : staticRemarkPlugins}
+          components={components}
+        >
+          {normalized}
+        </ReactMarkdown>
+      </div>
+    </SendToTerminalContext.Provider>
   );
 });

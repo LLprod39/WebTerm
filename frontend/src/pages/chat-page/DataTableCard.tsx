@@ -60,34 +60,36 @@ export function DataTableCard({ table }: { table: DataTable }) {
           <div className="shrink-0 font-mono text-caption-1-medium text-text-tertiary">{rows.length}</div>
         </div>
       ) : null}
-      <Table aria-label={table.title || "Data table"} size="sm" containerClassName="min-w-0">
-        <TableHeader>
-          {cols.map((h) => (
-            <TableColumn key={h} isRowHeader={h === cols[0]}>
-              {headers.length ? h : ""}
-            </TableColumn>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, ri) => (
-            <TableRow key={ri}>
-              {cols.map((header, ci) => {
-                const cell = row[ci];
-                const value = cell == null || cell === "" ? "—" : String(cell);
-                const serverish = looksLikeServerName(value, headers[ci] || header);
-                return (
-                  <TableCell key={`${ri}-${ci}`}>
-                    <span className={cn("inline-flex max-w-[14rem] items-center gap-1 truncate", cellTone(value, headers[ci] || ""))}>
-                      {serverish ? <Server className="h-2.5 w-2.5 shrink-0 opacity-70" /> : null}
-                      {value}
-                    </span>
-                  </TableCell>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="wt-chat-sticky-table max-h-[min(22rem,50vh)] overflow-auto">
+        <Table aria-label={table.title || "Data table"} size="sm" containerClassName="min-w-0">
+          <TableHeader>
+            {cols.map((h) => (
+              <TableColumn key={h} isRowHeader={h === cols[0]}>
+                {headers.length ? h : ""}
+              </TableColumn>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, ri) => (
+              <TableRow key={ri}>
+                {cols.map((header, ci) => {
+                  const cell = row[ci];
+                  const value = cell == null || cell === "" ? "—" : String(cell);
+                  const serverish = looksLikeServerName(value, headers[ci] || header);
+                  return (
+                    <TableCell key={`${ri}-${ci}`}>
+                      <span className={cn("inline-flex max-w-[14rem] items-center gap-1 truncate", cellTone(value, headers[ci] || ""))}>
+                        {serverish ? <Server className="h-2.5 w-2.5 shrink-0 opacity-70" /> : null}
+                        {value}
+                      </span>
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

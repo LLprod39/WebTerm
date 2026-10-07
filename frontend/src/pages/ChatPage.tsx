@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTitle,
+} from "@/components/ui/drawer";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 
@@ -119,14 +124,22 @@ export default function ChatPage() {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={showMobileRail} onOpenChange={(open) => { if (!open) closeRail(); }}>
-        <SheetContent side="right" className="w-[min(26rem,92vw)] p-0">
-          <SheetTitle className="sr-only">
+      <Drawer
+        open={showMobileRail}
+        onOpenChange={(open) => {
+          if (!open) closeRail();
+        }}
+        shouldScaleBackground={false}
+      >
+        <DrawerContent className="h-[min(85dvh,40rem)] p-0">
+          <DrawerTitle className="sr-only">
             {c.lang === "ru" ? "Контекст" : "Context"}
-          </SheetTitle>
-          <ChatContextRail {...railProps} embedded />
-        </SheetContent>
-      </Sheet>
+          </DrawerTitle>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ChatContextRail {...railProps} embedded />
+          </div>
+        </DrawerContent>
+      </Drawer>
 
       <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         {showDesktopRail ? (

@@ -405,6 +405,7 @@ type MessageBubbleProps = {
   streaming?: boolean;
   streamStripTables?: boolean;
   animateSupportingContent?: boolean;
+  onSendToTerminal?: (code: string) => void;
 };
 
 /** Collapses stacked metrics/tables/charts so one reply does not eat the viewport. */
@@ -463,6 +464,7 @@ function MessageBubbleComponent({
   streaming = false,
   streamStripTables = false,
   animateSupportingContent = false,
+  onSendToTerminal,
 }: MessageBubbleProps) {
   const { lang } = useI18n();
   const reduceMotion = useReducedMotion();
@@ -616,6 +618,7 @@ function MessageBubbleComponent({
               content={message.content}
               streaming={streaming}
               stripTables={streamStripTables || hasStructuredTable || Boolean(metrics)}
+              onSendToTerminal={onSendToTerminal}
             />
           </div>
         ) : null}
