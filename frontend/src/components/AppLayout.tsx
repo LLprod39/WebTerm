@@ -27,10 +27,10 @@ import { cn } from "@/lib/utils";
 /** On /chat, prefer AppSidebar icon-rail without fighting a later user expand. */
 function ChatIconRailPreference({ enabled }: { enabled: boolean }) {
   const { setOpen } = useSidebar();
-  const wasEnabled = useRef(enabled);
+  const wasChat = useRef(false);
   useLayoutEffect(() => {
-    if (enabled && !wasEnabled.current) setOpen(false);
-    wasEnabled.current = enabled;
+    if (enabled && !wasChat.current) setOpen(false);
+    wasChat.current = enabled;
   }, [enabled, setOpen]);
   return null;
 }
