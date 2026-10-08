@@ -76,8 +76,7 @@ async def stream_ollama_tools(
     """
     import aiohttp
 
-    # Bound catalog + history so small local models stay accurate
-    # (see select_tools_for_request / bound_messages_for_local).
+    # Bound history length for local models; tool catalog stays complete.
     bounded = bound_messages_for_local(messages)
     ollama_tools = tools_to_openai(select_tools_for_request(tools, bounded))
     chat_messages: list[dict[str, Any]] = []
@@ -85,19 +84,33 @@ async def stream_ollama_tools(
         chat_messages.append({"role": "system", "content": system_prompt})
     chat_messages.extend(_messages_to_ollama(bounded))
 
+    num_ctx = 32768
+    try:
+        from app.core.model_config import model_manager
+
+        model_manager.load_config()
+        raw_ctx = int(getattr(model_manager.config, "ollama_num_ctx", 0) or 0)
+        if raw_ctx >= 8192:
+            num_ctx = raw_ctx
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import os
+
+        env_ctx = int(os.environ.get("OLLAMA_NUM_CTX") or 0)
+        if env_ctx >= 8192:
+            num_ctx = env_ctx
+    except (TypeError, ValueError):
+        pass
+
     payload: dict[str, Any] = {
         "messages": chat_messages,
         "stream": True,
         "tools": ollama_tools,
-        # num_ctx MUST be large: the operator system prompt + tool schemas alone run
-        # ~4000 tokens, filling Ollama's default 4096 context. Once any history is
-        # added the prompt overflows, output truncates (done_reason=length) and the
-        # model "thinks" then emits nothing — the classic empty-second-message bug.
-        # num_predict=-1 removes the output cap entirely: thinking tokens no longer
-        # eat the answer budget, so long tool-calling turns and multi-step tasks are
-        # never truncated to empty. The model stops naturally; the request timeout is
-        # the real upper bound.
-        "options": {"temperature": 0.3, "num_ctx": 16384, "num_predict": -1},
+        # Full tool catalog + system prompt need a large window; default 32k
+        # (override via ModelConfig.ollama_num_ctx or OLLAMA_NUM_CTX).
+        # num_predict=-1: thinking tokens must not eat the answer budget.
+        "options": {"temperature": 0.3, "num_ctx": num_ctx, "num_predict": -1},
     }
     # NB: Ollama's qwen3 tool grammar 500s ("XML syntax error … <function> closed by
     # </parameter>") when thinking is explicitly disabled. Never send think:false with

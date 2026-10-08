@@ -151,106 +151,22 @@ def _looks_like_tool_json_leak(text: str) -> bool:
 # Bounded tool selection for small local models
 # ---------------------------------------------------------------------------
 
-# Small local models (≤~9B) reliably tool-call only with a bounded catalog.
-# Measured on qwen3.5:9b via Ollama native tools: ≤16 tools = 4/4 correct calls,
-# 18 = 0/4, 22+ = empty. Keep a relevant subset per request, not the whole registry.
-NATIVE_TOOLS_SOFT_LIMIT = 16
-
-_CORE_TOOL_NAMES = {
-    "operator_list_servers",
-    "operator_resolve_server",
-    "operator_fleet_status",
-    "operator_server_forecasts",
-    "operator_list_alerts",
-    "operator_server_metrics",
-    "operator_run_command",
-    "operator_run_fanout",
-    "operator_propose_plan",
-}
-
-# Russian request terms → English tokens present in tool names/descriptions.
-_RU_EN_TOOL_HINTS = {
-    "сервер": "server",
-    "серв": "server",
-    "хост": "server host",
-    "диск": "disk",
-    "агент": "agent",
-    "плейбук": "playbook",
-    "ansible": "playbook",
-    "ансибл": "playbook",
-    "асмбл": "playbook",
-    "ансмбл": "playbook",
-    "запуст": "playbook run",
-    "runbook": "playbook runbook",
-    "ранбук": "playbook runbook",
-    "метрик": "metric",
-    "алерт": "alert",
-    "прогноз": "forecast",
-    "команд": "command run",
-    "пайплайн": "pipeline",
-    "навык": "skill",
-    "память": "memory",
-    "докер": "docker",
-    "контейнер": "container docker",
-    "план": "plan",
-    "расписан": "schedule",
-    "перезапус": "restart",
-    "рестарт": "restart",
-    "лог": "log",
-    "монитор": "monitor",
-    "студи": "studio pipeline",
-    "инцидент": "incident alert",
-}
-
-
-def _all_user_text(messages: list[dict[str, Any]]) -> str:
-    """Concatenate visible user/assistant text across the turn for relevance scoring."""
-    bits: list[str] = []
-    for msg in messages:
-        content = msg.get("content")
-        if isinstance(content, str):
-            bits.append(content)
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
-                    bits.append(str(block.get("text") or ""))
-    return " ".join(bits)
+# Legacy constant kept for imports/tests; catalog is no longer truncated by keywords.
+NATIVE_TOOLS_SOFT_LIMIT = 0
 
 
 def select_tools_for_request(
     tools: list[dict[str, Any]],
-    messages: list[dict[str, Any]],
+    messages: list[dict[str, Any]] | None = None,  # noqa: ARG001
     *,
-    limit: int = NATIVE_TOOLS_SOFT_LIMIT,
+    limit: int | None = None,  # noqa: ARG001
 ) -> list[dict[str, Any]]:
-    """Pick a bounded, relevant tool subset so small local models stay accurate.
+    """Return the full tool list (no keyword / score-based subsetting).
 
-    Always keeps a core operational set; fills the rest by keyword overlap with
-    the conversation text (with RU→EN hints). The loop still resolves tool names
-    against the full registry, so subsetting only limits what the model *sees*.
+    Compact descriptions are applied in ``specs_to_tools``. History may still be
+    bounded separately via ``bound_messages_for_local``.
     """
-    if len(tools) <= limit:
-        return tools
-    text = _all_user_text(messages).lower()
-    tokens: set[str] = set(re.findall(r"[a-zA-Zа-яё0-9]{3,}", text))
-    for ru, en in _RU_EN_TOOL_HINTS.items():
-        if ru in text:
-            tokens.update(en.split())
-
-    core: list[dict[str, Any]] = []
-    rest: list[dict[str, Any]] = []
-    for tool in tools:
-        name = normalise_tool_name(tool.get("name") or tool.get("action_type") or "")
-        (core if name in _CORE_TOOL_NAMES else rest).append(tool)
-
-    def score(tool: dict[str, Any]) -> int:
-        name = normalise_tool_name(tool.get("name") or tool.get("action_type") or "").replace("_", " ")
-        desc = str(tool.get("description") or tool.get("label") or "").lower()
-        haystack = f"{name} {desc}"
-        return sum(1 for tok in tokens if tok in haystack)
-
-    rest.sort(key=score, reverse=True)
-    return core + rest[: max(0, limit - len(core))]
+    return list(tools or [])
 
 
 def _is_tool_result_only(msg: dict[str, Any]) -> bool:

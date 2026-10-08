@@ -22,7 +22,6 @@ from app.core.llm_stream_openai import stream_openai_tools
 from app.core.llm_tool_helpers import (
     MAX_TOOL_NAME_LEN,
     NATIVE_TOOLS_SOFT_LIMIT,
-    _all_user_text,
     _extract_tool_calls_loose,
     _is_tool_result_only,
     _looks_like_tool_json_leak,
@@ -39,7 +38,6 @@ from app.core.llm_tool_helpers import (
 __all__ = [
     "MAX_TOOL_NAME_LEN",
     "NATIVE_TOOLS_SOFT_LIMIT",
-    "_all_user_text",
     "_extract_tool_calls_loose",
     "_is_tool_result_only",
     "_looks_like_tool_json_leak",
