@@ -37,7 +37,7 @@ def test_resolve_playbook_reads_selected_accessible_playbook_without_copying_yam
     assert result["playbook"]["id"] == playbook.id
     assert result["playbook"]["description"] == "Secure a Linux baseline"
     assert "Harden SSH" in result["playbook"]["source_yaml"]
-    assert "Do not ask for its ID or YAML" in result["reply_hint"]
+    assert "reply_hint" not in result
 
 
 @pytest.mark.django_db
