@@ -137,7 +137,7 @@ def test_list_servers_lookup_mode_no_ui_table_and_resolve_registered():
     listed = list_servers(AssistantActionContext(user=user, input_payload={"show_in_chat": True}))
     assert listed.get("ui_table") is True
     assert len(listed.get("servers") or []) >= 2
-    assert listed.get("reply_hint")
+    assert listed.get("ui_table") is True
 
     # Filtered lookup → no card
     filtered = list_servers(AssistantActionContext(user=user, input_payload={"q": "lunix"}))

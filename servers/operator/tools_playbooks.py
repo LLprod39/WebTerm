@@ -88,22 +88,6 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
     total = queryset.count()
     show_limit = min(limit, 12)
     rows = [_catalog_row(playbook) for playbook in queryset[:show_limit]]
-    if total == 0:
-        hint = (
-            "Catalog empty (0 playbooks). Say so briefly. "
-            "Do not create or launch agents unless the operator explicitly asked to deploy or run one."
-        )
-    else:
-        hint = (
-            "Summarize the catalog with «показаны N из M». "
-            "List up to 8 names (id · name). Use operator.resolve_playbook for details; "
-            "operator.run_playbook when the user asked to launch."
-        )
-    if getattr(ctx, "channel", "") == "telegram":
-        from core_ui.services.operator_channel import telegram_reply_hint
-
-        tg_hint = telegram_reply_hint(show_in_chat=True)
-        hint = f"{hint} {tg_hint}" if total == 0 else tg_hint
     return {
         "ok": True,
         "ui_table": False,
@@ -117,7 +101,6 @@ def list_playbooks(ctx: AssistantActionContext) -> dict[str, Any]:
             "names": [f"{row['id']} · {row['name']}" for row in rows[:8]],
         },
         "playbooks": rows,
-        "reply_hint": hint,
         "target_url": "/automation/playbooks",
     }
 
@@ -170,7 +153,6 @@ def playbook_runs(ctx: AssistantActionContext) -> dict[str, Any]:
         return {
             "found": True,
             "run": _run_row(run, include_detail=True, log_tail_chars=tail_chars),
-            "reply_hint": "Report status, key summary/error, affected hosts, and the important end of the log. Do not dump the full raw log.",
         }
 
     raw_playbook_id = payload.get("playbook_id")
@@ -202,7 +184,6 @@ def playbook_runs(ctx: AssistantActionContext) -> dict[str, Any]:
         "query": query,
         "status": status,
         "runs": rows,
-        "reply_hint": "Summarize recent run statuses. For logs or a full report, call this tool again with run_id.",
     }
 
 
@@ -229,7 +210,6 @@ def resolve_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
             "ambiguous": False,
             "query": str(playbook_id),
             "playbook": _playbook_summary(playbook),
-            "reply_hint": "Summarize what this playbook does, important effects/risks, and prerequisites. Do not ask for its ID or YAML.",
         }
 
     if not query:
@@ -243,7 +223,6 @@ def resolve_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
             "ambiguous": False,
             "query": query,
             "playbook": _playbook_summary(matches[0]),
-            "reply_hint": "Summarize what this playbook does, important effects/risks, and prerequisites. Do not ask for its ID or YAML.",
         }
 
     safe_matches = [
@@ -262,16 +241,8 @@ def resolve_playbook(ctx: AssistantActionContext) -> dict[str, Any]:
         "count": len(safe_matches),
         "matches": safe_matches,
         "error": (
-            "Multiple accessible playbooks match. If the user asked to RUN one and a single "
-            "name is an obvious best match, call operator.run_playbook with that playbook_id. "
-            "Otherwise ask the user to choose one of these names (numbered list)."
+            "Multiple accessible playbooks match."
             if len(safe_matches) > 1
             else "No accessible playbook matches this name."
-        ),
-        "reply_hint": (
-            "Ambiguous playbook matches. Prefer an obvious unique name when the user said «запусти»; "
-            "else numbered choices id · name."
-            if len(safe_matches) > 1
-            else "No match — ask for a clearer playbook name."
         ),
     }

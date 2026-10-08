@@ -18,6 +18,7 @@ from servers.operator.tools_actions import (
     save_memory_lesson,
     server_memory,
     server_metrics,
+    todo_write,
 )
 from servers.operator.tools_hints import (
     DEPLOY_ACTION_NUDGE,
@@ -71,6 +72,7 @@ __all__ = [
     "server_matches_query",
     "server_memory",
     "server_metrics",
+    "todo_write",
     "user_wants_deploy_or_update",
     "user_wants_inventory_card",
     "user_wants_named_host_action",
@@ -361,11 +363,47 @@ def register_operator_tools() -> None:
             handler=metric_series,
         ),
         AssistantActionSpec(
+            action_type="operator.todo_write",
+            label="Update task checklist",
+            description=(
+                "Update the live task checklist in chat. Pass the full todos list "
+                "(id, content, status: pending|in_progress|completed|cancelled). "
+                "Keep one item in_progress. Prefer this over propose_plan for progress."
+            ),
+            required_feature="orchestrator",
+            risk="read",
+            requires_confirmation=False,
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "todos": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "content": {"type": "string"},
+                                "status": {
+                                    "type": "string",
+                                    "enum": ["pending", "in_progress", "completed", "cancelled"],
+                                },
+                            },
+                            "required": ["content", "status"],
+                        },
+                    },
+                },
+                "required": ["todos"],
+            },
+            handler=todo_write,
+        ),
+        AssistantActionSpec(
             action_type="operator.propose_plan",
             label="Propose plan",
             description=(
-                "Propose a multi-step plan checklist for complex tasks (>2 mutations). "
-                "Operator approves once; then execute steps with tools."
+                "Optional formal multi-step plan for a single Confirm gate. "
+                "Prefer operator.todo_write for live checklists. Steps need text; "
+                "tool/input are optional hints."
             ),
             required_feature="orchestrator",
             risk="internal_write",
@@ -381,15 +419,9 @@ def register_operator_tools() -> None:
                             "properties": {
                                 "text": {"type": "string"},
                                 "tool": {"type": "string"},
-                                "input": {
-                                    "type": "object",
-                                    "description": (
-                                        "Exact arguments that will be executed after approval. "
-                                        "The platform rejects plan auto-run when they differ."
-                                    ),
-                                },
+                                "input": {"type": "object"},
                             },
-                            "required": ["text", "tool", "input"],
+                            "required": ["text"],
                         },
                     },
                 },
@@ -400,11 +432,7 @@ def register_operator_tools() -> None:
         AssistantActionSpec(
             action_type="operator.finish_report",
             label="Finish report",
-            description=(
-                "End the operator turn with a final summary after enough tool evidence. "
-                "Call only when the user goal is fully answered (or explicitly blocked). "
-                "Do not call after resolve_server/list_servers alone for host checks."
-            ),
+            description="End the turn with a final summary after enough tool evidence.",
             required_feature="orchestrator",
             risk="read",
             input_schema={

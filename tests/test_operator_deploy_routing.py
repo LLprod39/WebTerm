@@ -1,4 +1,4 @@
-"""Deploy/update intent routing and attachment-safe deploy heuristics."""
+"""Deploy/update helpers and full tool catalog (no keyword tool routing)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from core_ui.services.assistant_chat_planning import _heuristic_plan
 from core_ui.services.operator_loop_helpers import messages_have_deploy_mutating_tool
 from core_ui.services.operator_loop_prompt import OPERATOR_SYSTEM_PROMPT, build_operator_system_prompt
 from core_ui.services.operator_plan import approved_plan_step_matches
-from core_ui.services.operator_tools import _route_tools_for_message
+from core_ui.services.operator_tools import specs_to_tools
 from servers.assistant_actions_agents import list_agents
 from servers.operator.tools_hints import (
     ATTACHED_FILE_CONTENTS_MARKER,
@@ -50,42 +50,30 @@ def test_user_wants_deploy_or_update_detects_russian_git_branch():
     assert user_wants_deploy_or_update("задеплой frontend-v3 на nikitavm") is True
 
 
-def test_route_tools_keeps_agent_create_for_explicit_deploy():
-    tools = [
-        {"action_type": "agent.create", "name": "agent_create"},
-        {"action_type": "agent.run", "name": "agent_run"},
-        {"action_type": "agents.list", "name": "agents_list"},
-        {"action_type": "operator.resolve_server", "name": "operator_resolve_server"},
-        {"action_type": "operator.list_playbooks", "name": "operator_list_playbooks"},
-        {"action_type": "web.search", "name": "web_search"},
-    ]
-    selected = _route_tools_for_message(tools, DEPLOY_MSG)
-    types = {str(t.get("action_type")) for t in selected}
-    assert "agent.create" in types
-    assert "agent.run" in types
-    assert "operator.resolve_server" in types
-    assert "web.search" not in types
-
-
-def test_route_tools_does_not_apply_deploy_routing_for_attachment_only():
-    tools = [
-        {"action_type": "agent.create", "name": "agent_create"},
-        {"action_type": "operator.resolve_server", "name": "operator_resolve_server"},
-        {"action_type": "operator.list_servers", "name": "operator_list_servers"},
-        {"action_type": "web.search", "name": "web_search"},
-    ]
-    deploy_types = {str(t.get("action_type")) for t in _route_tools_for_message(tools, DEPLOY_MSG)}
-    attach_types = {str(t.get("action_type")) for t in _route_tools_for_message(tools, CONTRIBUTING_ATTACHMENT)}
+@pytest.mark.django_db
+def test_specs_to_tools_returns_full_catalog_ignoring_message_keywords():
+    user = User.objects.create_user("full-tools", password="x", is_staff=True)
+    deploy_tools = specs_to_tools(user, message=DEPLOY_MSG)
+    attach_tools = specs_to_tools(user, message=CONTRIBUTING_ATTACHMENT)
+    empty_tools = specs_to_tools(user, message="")
+    deploy_types = {str(t.get("action_type")) for t in deploy_tools}
+    attach_types = {str(t.get("action_type")) for t in attach_tools}
+    empty_types = {str(t.get("action_type")) for t in empty_tools}
+    assert deploy_types == attach_types == empty_types
     assert "agent.create" in deploy_types
-    assert "web.search" not in deploy_types
-    assert "web.search" in attach_types
+    assert "operator.create_playbook" in deploy_types
+    assert "operator.todo_write" in deploy_types
+    assert "operator.schedule_agent" in deploy_types
 
 
-def test_operator_prompt_mentions_explicit_deploy_not_attachment_triggers():
+def test_operator_prompt_is_capability_map_not_keyword_scripts():
     prompt = build_operator_system_prompt(None)
-    assert "Обнови / задеплой" in prompt or "Обнови / задеплой" in OPERATOR_SYSTEM_PROMPT
+    assert "operator.todo_write" in prompt
+    assert "Capabilities map" in prompt or "Capabilities map" in OPERATOR_SYSTEM_PROMPT
     assert "Attached file contents" in prompt or "[Attached file contents]" in prompt
     assert "agent.create" in prompt
+    # No hard "only when explicitly asked" gate that blocked typo'd create requests.
+    assert "only when the operator explicitly asked" not in prompt.lower()
 
 
 def test_heuristic_plan_proposes_agent_create_for_platform_update():
@@ -158,21 +146,18 @@ def test_action_card_description_agent_run_ru():
 
 
 @pytest.mark.django_db
-def test_list_playbooks_empty_hint_does_not_push_agent_create():
-    user = User.objects.create_user("pb-empty-deploy", password="x", is_staff=True)
+def test_list_playbooks_has_no_directive_reply_hint():
+    user = User.objects.create_user("pb-hint", password="x", is_staff=True)
     result = list_playbooks(
         AssistantActionContext(user=user, input_payload={"q": "WebTerm"}, channel="web")
     )
-    assert result["total"] == 0
-    hint = str(result.get("reply_hint") or "").lower()
-    assert "call agent.create" not in hint
-    assert "then agent.run" not in hint
+    assert "reply_hint" not in result
+    assert "summary" in result
 
 
 @pytest.mark.django_db
-def test_list_agents_hint_does_not_push_agent_create():
-    user = User.objects.create_user("ag-hint-deploy", password="x")
+def test_list_agents_has_no_directive_reply_hint():
+    user = User.objects.create_user("ag-hint", password="x")
     result = list_agents(AssistantActionContext(user=user, input_payload={}, channel="web"))
-    hint = str(result.get("reply_hint") or "").lower()
-    assert "call agent.create" not in hint
-    assert "then agent.run" not in hint
+    assert "reply_hint" not in result
+    assert "summary" in result

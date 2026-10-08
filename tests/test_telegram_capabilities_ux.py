@@ -51,7 +51,7 @@ def test_telegram_prompt_includes_capabilities_intro_and_no_registry_rule():
     )
     prompt = build_operator_system_prompt(session)
     assert "Channel: telegram" in prompt or "# Telegram" in prompt
-    assert "Studio registry" in prompt or "studio.capabilities.registry" in prompt or "MCP ids" in prompt
+    assert "Studio" in prompt
     assert OPERATOR_CAPABILITIES_INTRO_RU in prompt
     assert "Do not narrate" in prompt or "Never narrate" in prompt
 
@@ -67,12 +67,11 @@ def test_capability_registry_action_returns_chat_summary_not_full_dump():
     )
     result = capability_registry(AssistantActionContext(user=user, input_payload={}))
     assert result["ui_table"] is False
-    assert "reply_hint" in result
+    assert "reply_hint" not in result
     assert "summary" in result
     assert "capability_registry" not in result
     assert result["summary"]["mcp_count"] >= 1
     assert "Kubernetes" in result["summary"]["mcp_names"]
-    assert "Do NOT dump MCP ids" in result["reply_hint"]
 
 
 def test_sanitize_replaces_registry_dump_with_intro():

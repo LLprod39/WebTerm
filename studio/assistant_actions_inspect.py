@@ -55,11 +55,6 @@ def capability_registry(ctx: AssistantActionContext) -> dict[str, Any]:
     return {
         "ok": True,
         "ui_table": False,
-        "reply_hint": (
-            "Summarize Studio capabilities in 2–4 short human lines. "
-            "Mention counts and a few names only. "
-            "Do NOT dump MCP ids, skill slugs, truncated JSON, or narrate «registry получен»."
-        ),
         "summary": {
             "mcp_count": len(mcp_servers),
             "mcp_names": [str(item.get("name") or "") for item in mcp_servers[:8] if item.get("name")],
@@ -94,10 +89,6 @@ def list_mcp_servers(ctx: AssistantActionContext) -> dict[str, Any]:
         "ui_table": False,
         "count": len(slim),
         "query": query or None,
-        "reply_hint": (
-            "Summarize MCP servers in 2–4 short lines (names + transport/test status). "
-            "Do NOT dump ids, URLs, commands, or truncated JSON."
-        ),
         "summary": {
             "mcp_count": len(slim),
             "mcp_names": [str(item.get("name") or "") for item in slim[:12] if item.get("name")],
@@ -141,10 +132,6 @@ def list_studio_skills(ctx: AssistantActionContext) -> dict[str, Any]:
         "ui_table": False,
         "count": len(slim),
         "query": query or None,
-        "reply_hint": (
-            "Summarize Studio skills in 2–4 short lines (names + safety). "
-            "Do NOT dump full slugs lists or truncated JSON unless the user asked for a specific skill."
-        ),
         "summary": {
             "skill_count": len(slim),
             "skill_names": [

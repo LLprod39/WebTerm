@@ -175,17 +175,13 @@ def test_attach_web_sources_reads_wrapped_tool_result_and_deduplicates():
 
 
 @pytest.mark.django_db
-def test_web_intent_routes_to_opt_in_web_tools():
+def test_web_tools_available_in_full_catalog_when_feature_allowed():
     user = User.objects.create_user(username="web-routing", password="x")
     UserAppPermission.objects.create(user=user, feature="web_research", allowed=True)
 
     tools = specs_to_tools(user, message="Найди в интернете свежий CVE")
-
     action_types = {tool["action_type"] for tool in tools}
     assert {"web.search", "web.open_result"}.issubset(action_types)
-    assert action_types <= {
-        "web.search",
-        "web.open_result",
-        "operator.propose_plan",
-        "operator.resolve_server",
-    }
+    # Full catalog for allowed features — not keyword-narrowed to web-only.
+    assert "operator.resolve_server" in action_types
+    assert len(action_types) > 4

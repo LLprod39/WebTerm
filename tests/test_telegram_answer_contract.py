@@ -13,7 +13,7 @@ from core_ui.services.operator_channel import (
     wrap_telegram_answer_contract,
 )
 from core_ui.services.operator_loop_prompt import TELEGRAM_ANSWER_CONTRACT, build_operator_system_prompt
-from core_ui.services.operator_tools import _route_tools_for_message
+from core_ui.services.operator_tools import specs_to_tools
 from servers.assistant_actions_agents import list_agents
 from servers.operator.tools_playbooks import list_playbooks
 
@@ -73,18 +73,14 @@ def test_present_awaiting_confirm_sets_status():
     assert "Подтвердить" in text
 
 
-def test_route_tools_includes_operator_for_ansible_launch():
-    tools = [
-        {"action_type": "operator.list_playbooks", "name": "operator_list_playbooks"},
-        {"action_type": "operator.run_playbook", "name": "operator_run_playbook"},
-        {"action_type": "agents.list", "name": "agents_list"},
-        {"action_type": "web.search", "name": "web_search"},
-    ]
-    selected = _route_tools_for_message(tools, "запусти ansible healthcheck на никитавм")
-    types = {str(t.get("action_type")) for t in selected}
+@pytest.mark.django_db
+def test_specs_to_tools_keeps_full_catalog_for_ansible_launch():
+    user = User.objects.create_user("tg-full-tools", password="x", is_staff=True)
+    tools = specs_to_tools(user, message="запусти ansible healthcheck на никитавм")
+    types = {str(t.get("action_type")) for t in tools}
     assert "operator.list_playbooks" in types
     assert "operator.run_playbook" in types
-    assert "web.search" not in types
+    assert "web.search" in types or "agents.list" in types
 
 
 def test_list_playbooks_returns_summary_n_of_m():
@@ -94,7 +90,7 @@ def test_list_playbooks_returns_summary_n_of_m():
     assert "total" in result["summary"]
     assert "shown" in result["summary"]
     assert result["shown"] == len(result["playbooks"])
-    assert "Цель" in result["reply_hint"] or "Telegram" in result["reply_hint"]
+    assert "reply_hint" not in result
 
 
 def test_list_agents_returns_summary_cap():
@@ -102,4 +98,4 @@ def test_list_agents_returns_summary_cap():
     result = list_agents(AssistantActionContext(user=user, input_payload={}, channel="telegram"))
     assert "summary" in result
     assert result["shown"] <= 12
-    assert "reply_hint" in result
+    assert "reply_hint" not in result

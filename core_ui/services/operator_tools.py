@@ -22,8 +22,35 @@ def _redacted_result(payload: Any) -> Any:
     return redacted
 
 
-def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
-    """Build LLM tool list from registered action specs the user may access."""
+_TOOL_DESC_MAX = 220
+
+
+def _compact_tool_description(text: str, *, risk: str = "", requires_confirmation: bool = False) -> str:
+    """Keep tool schemas small for local models — first sentence, hard cap."""
+    raw = " ".join(str(text or "").split()).strip()
+    if not raw:
+        raw = "Operator tool"
+    # Prefer first sentence if it already fits.
+    for sep in (". ", "; ", " — ", " - "):
+        if sep in raw:
+            head = raw.split(sep, 1)[0].strip()
+            if 24 <= len(head) <= _TOOL_DESC_MAX:
+                raw = head
+                break
+    if len(raw) > _TOOL_DESC_MAX:
+        raw = raw[: _TOOL_DESC_MAX - 1].rstrip() + "…"
+    risk_note = f" [risk={risk}]" if risk else ""
+    if requires_confirmation:
+        risk_note += " [requires_confirmation]"
+    return f"{raw}{risk_note}"
+
+
+def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:  # noqa: ARG001
+    """Build the full LLM tool list the user may access (feature + policy only).
+
+    ``message`` is accepted for call-site compatibility and ignored — tools are
+    never filtered by chat keywords.
+    """
     tools: list[dict[str, Any]] = []
     seen_names: set[str] = set()
     for spec in list_action_specs():
@@ -44,14 +71,15 @@ def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
             if "properties" not in schema:
                 schema["properties"] = {}
             schema.setdefault("type", "object")
-        risk_note = f" [risk={spec.risk}]"
-        if spec.requires_confirmation:
-            risk_note += " [requires_confirmation]"
         tools.append(
             {
                 "name": name,
                 "action_type": spec.action_type,
-                "description": f"{spec.description}{risk_note}",
+                "description": _compact_tool_description(
+                    spec.description or spec.label or spec.action_type,
+                    risk=str(spec.risk or ""),
+                    requires_confirmation=bool(spec.requires_confirmation),
+                ),
                 "label": spec.label,
                 "risk": spec.risk,
                 "requires_confirmation": spec.requires_confirmation,
@@ -61,80 +89,7 @@ def specs_to_tools(user, *, message: str = "") -> list[dict[str, Any]]:
         )
     from core_ui.services.operator_policy import filter_tools_for_policy
 
-    tools = filter_tools_for_policy(user, tools)
-    return _route_tools_for_message(tools, message)
-
-
-def _route_tools_for_message(tools: list[dict[str, Any]], message: str) -> list[dict[str, Any]]:
-    """Keep the full catalog for ambiguous asks, narrow it for clear domains."""
-    from servers.operator.tools_hints import (
-        strip_attachment_contents,
-        user_explicitly_requests_agent_tools,
-        user_wants_deploy_or_update,
-    )
-
-    intent_text = strip_attachment_contents(message)
-    text = intent_text.lower()
-    if not text:
-        return tools
-    prefixes: set[str] = set()
-    if any(word in text for word in ("интернет", "веб", "web ", "cve", "документац", "release note", "найди онлайн")):
-        prefixes.add("web.")
-    if any(word in text for word in ("pipeline", "пайплайн", "studio", "скилл", "skill", "mcp")):
-        prefixes.add("studio.")
-    if user_explicitly_requests_agent_tools(intent_text):
-        prefixes.update({"agent.", "agents."})
-    if user_wants_deploy_or_update(intent_text):
-        prefixes.update({"agent.", "agents.", "operator.", "server."})
-    if any(
-        word in text
-        for word in (
-            "сервер",
-            "server",
-            "флот",
-            "метрик",
-            "алерт",
-            "диск",
-            "ssh",
-            "команд",
-            "nginx",
-            "docker",
-            "прогноз",
-            "сертификат",
-            "playbook",
-            "плейбук",
-            "runbook",
-            "ansible",
-            "ансибл",
-            "асмбл",
-            "ансмбл",
-            "запуст",
-            "лог",
-            "log",
-            "journalctl",
-            "аудит",
-            "audit",
-            "подключ",
-            "connect",
-            "диагност",
-            "diagnos",
-            "ошибк",
-            "error",
-            "kubectl",
-            "k8s",
-        )
-    ):
-        prefixes.update({"operator.", "server."})
-    if not prefixes:
-        return tools
-    always = {"operator.propose_plan", "operator.resolve_server", "operator.finish_report"}
-    selected = [
-        tool
-        for tool in tools
-        if str(tool.get("action_type") or "") in always
-        or any(str(tool.get("action_type") or "").startswith(prefix) for prefix in prefixes)
-    ]
-    return selected or tools
+    return filter_tools_for_policy(user, tools)
 
 
 def resolve_action_type(tool_name: str, tools: list[dict[str, Any]] | None = None) -> str | None:
@@ -350,9 +305,7 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
     if isinstance(result, dict):
         payload = result.get("result") if isinstance(result.get("result"), dict) else result
         prefer_summary = isinstance(payload, dict) and (
-            "name_index" in payload
-            or payload.get("ui_table") is False
-            or ("summary" in payload and "reply_hint" in payload)
+            "name_index" in payload or payload.get("ui_table") is False or "summary" in payload
         )
         if prefer_summary and isinstance(payload, dict):
             preferred_keys = (
@@ -362,10 +315,11 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                 "server_id",
                 "server_name",
                 "match",
-                "reply_hint",
                 "summary",
                 "name_index",
                 "count",
+                "total",
+                "shown",
                 "status_counts",
                 "note",
                 "error",
@@ -373,13 +327,15 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                 "match_count",
                 "matches",
                 "servers",
+                "todos",
+                "plan",
             )
             ordered: dict[str, Any] = {}
             for key in preferred_keys:
                 if key in payload:
                     ordered[key] = payload[key]
-            # When summary+reply_hint exist, drop bulky arrays from the model view first.
-            if "summary" in ordered and "reply_hint" in ordered:
+            # When summary exists, drop bulky arrays from the model view first.
+            if "summary" in ordered:
                 for key, value in payload.items():
                     if key in ordered:
                         continue
@@ -396,6 +352,7 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                         "capability_packs",
                         "task_families",
                         "resources",
+                        "playbooks",
                     }:
                         continue
                     ordered[key] = value
@@ -423,15 +380,15 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
                     "agents",
                     "mcp_servers",
                     "skills",
+                    "playbooks",
                 }
             }
-            # Prefer summary-only envelope when still too large
-            if "summary" in slim and "reply_hint" in slim and len(json.dumps(slim, ensure_ascii=False, default=str)) > max_chars:
+            if "summary" in slim and len(json.dumps(slim, ensure_ascii=False, default=str)) > max_chars:
                 slim = {
                     "ok": slim.get("ok", True),
-                    "reply_hint": slim.get("reply_hint"),
                     "summary": slim.get("summary"),
                     "count": slim.get("count"),
+                    "total": slim.get("total"),
                     "ui_table": slim.get("ui_table"),
                     "target_url": slim.get("target_url"),
                 }
@@ -442,10 +399,8 @@ def truncate_tool_result(result: dict[str, Any], *, max_chars: int = 6000) -> st
             )
             if len(slim_text) <= max_chars:
                 return slim_text + ("…[rows omitted]" if slim is not ordered else "")
-            # Last resort: summary-only, never mid-JSON cut of a huge blob
             summary_only = {
                 "ok": True,
-                "reply_hint": ordered.get("reply_hint") or "Summarize the tool summary fields only.",
                 "summary": ordered.get("summary") or {"note": "result truncated"},
             }
             return json.dumps(summary_only, ensure_ascii=False, default=str)[:max_chars]

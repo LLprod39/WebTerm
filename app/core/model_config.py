@@ -125,6 +125,10 @@ class ModelConfig(BaseModel):
     ollama_cloud_enabled: bool = False
     ollama_cloud_base_url: str = "https://ollama.com"
     ollama_think_mode: str = ""
+    # Context window for Ollama chat/tools (system + full tool schemas + history).
+    ollama_num_ctx: int = 32768
+    # Operator turn wall-clock timeout override (seconds). 0 = provider defaults.
+    operator_turn_timeout_seconds: int = 0
 
     # Audit logging configuration
     log_terminal_commands: bool = True

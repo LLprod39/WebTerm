@@ -83,6 +83,29 @@ def build_ollama_request_targets(target_model: str, *, model_manager: Any) -> li
     ]
 
 
+def _ollama_num_ctx(default: int = 32768) -> int:
+    """Resolve Ollama context window from config / env (min 8192)."""
+    import os
+
+    value = default
+    try:
+        from app.core.model_config import model_manager
+
+        model_manager.load_config()
+        raw = int(getattr(model_manager.config, "ollama_num_ctx", 0) or 0)
+        if raw >= 8192:
+            value = raw
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        env_raw = int(os.environ.get("OLLAMA_NUM_CTX") or 0)
+        if env_raw >= 8192:
+            value = env_raw
+    except (TypeError, ValueError):
+        pass
+    return value
+
+
 def build_ollama_payload(request: OllamaStreamRequest) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "model": request.request_targets[0]["model"],
@@ -98,9 +121,8 @@ def build_ollama_payload(request: OllamaStreamRequest) -> dict[str, Any]:
             # object closes long before the cap.
             "num_predict": 4096 if request.json_mode else -1,
             "temperature": 0.2 if request.json_mode else 0.5,
-            # Large context: operator/agent system prompts run several thousand tokens
-            # and overflow Ollama's default 4096 window, truncating the reply to empty.
-            "num_ctx": 16384,
+            # Large context: full tool schemas + system prompt need headroom.
+            "num_ctx": _ollama_num_ctx(),
         },
     }
     if request.json_mode:

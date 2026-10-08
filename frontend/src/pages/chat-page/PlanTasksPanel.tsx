@@ -26,8 +26,8 @@ export function cleanStepTitle(text?: string): string {
 /** Map backend step status → AgentProgress glyph. awaiting_confirm is waiting, not running. */
 export function mapStepStatus(status?: string): AgentProgressStep["status"] {
   if (status === "done" || status === "completed") return "done";
-  if (status === "failed" || status === "error") return "error";
-  if (status === "running") return "running";
+  if (status === "failed" || status === "error" || status === "cancelled") return "error";
+  if (status === "running" || status === "in_progress") return "running";
   if (status === "awaiting_confirm" || status === "waiting") return "waiting";
   return "pending";
 }
@@ -75,8 +75,8 @@ export function PlanTasksPanel({
         <p className="max-w-[14rem] text-[12px] leading-relaxed text-muted-foreground">
           {localize(
             lang,
-            "План задач появится здесь, когда агент начнёт работу.",
-            "A task plan will appear here when the agent starts working.",
+            "Чек-лист задач появится здесь, когда Оператор начнёт составную работу.",
+            "A live task checklist will appear here when the Operator starts multi-step work.",
           )}
         </p>
       </div>

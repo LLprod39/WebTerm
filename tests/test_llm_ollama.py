@@ -154,7 +154,7 @@ def test_build_ollama_payload_includes_json_mode_and_thinking_flag():
         "options": {
             "num_predict": 4096,
             "temperature": 0.2,
-            "num_ctx": 16384,
+            "num_ctx": 32768,
         },
         "format": "json",
         "think": False,
@@ -183,7 +183,7 @@ def test_build_ollama_payload_free_text_defaults_take_precedence():
     assert payload["options"] == {
         "num_predict": -1,
         "temperature": 0.5,
-        "num_ctx": 16384,
+        "num_ctx": 32768,
     }
     assert payload["think"] is True
     assert "format" not in payload

@@ -196,8 +196,86 @@ def metric_series(ctx: AssistantActionContext) -> dict[str, Any]:
     }
 
 
+_TODO_STATUSES = frozenset({"pending", "in_progress", "completed", "cancelled", "done", "running"})
+
+
+def _normalize_todo_status(raw: str) -> str:
+    value = str(raw or "pending").strip().lower()
+    if value in {"done", "completed"}:
+        return "completed"
+    if value in {"running", "in_progress"}:
+        return "in_progress"
+    if value == "cancelled":
+        return "cancelled"
+    return "pending"
+
+
+def todo_write(ctx: AssistantActionContext) -> dict[str, Any]:
+    """Replace the live checklist shown in Operator chat (no confirmation)."""
+    payload = ctx.input_payload if isinstance(ctx.input_payload, dict) else {}
+    title = str(payload.get("title") or "Задачи").strip()[:200] or "Задачи"
+    raw_todos = payload.get("todos") if isinstance(payload.get("todos"), list) else []
+    if not raw_todos:
+        raise AssistantActionError("todos is required")
+    todos: list[dict[str, Any]] = []
+    for i, item in enumerate(raw_todos[:30]):
+        if isinstance(item, dict):
+            content = str(item.get("content") or item.get("text") or item.get("description") or "").strip()
+            status = _normalize_todo_status(str(item.get("status") or "pending"))
+            todo_id = str(item.get("id") or i + 1)[:64]
+        else:
+            content = str(item).strip()
+            status = "pending"
+            todo_id = str(i + 1)
+        if not content:
+            continue
+        todos.append({"id": todo_id, "content": content[:400], "status": status})
+    if not todos:
+        raise AssistantActionError("todos must contain at least one item with content")
+    # At most one in_progress — keep the first, demote the rest.
+    seen_progress = False
+    for todo in todos:
+        if todo["status"] == "in_progress":
+            if seen_progress:
+                todo["status"] = "pending"
+            else:
+                seen_progress = True
+    plan_steps = []
+    for i, todo in enumerate(todos):
+        ui_status = {
+            "pending": "pending",
+            "in_progress": "running",
+            "completed": "done",
+            "cancelled": "cancelled",
+        }.get(todo["status"], "pending")
+        plan_steps.append(
+            {
+                "id": i + 1,
+                "text": todo["content"],
+                "status": ui_status,
+                "tool": "",
+                "input": {},
+            }
+        )
+    all_done = todos and all(t["status"] in {"completed", "cancelled"} for t in todos)
+    plan = {
+        "title": title,
+        "status": "completed" if all_done else "running",
+        "steps": plan_steps,
+        "source": "todo_write",
+    }
+    return {
+        "ok": True,
+        "todos": todos,
+        "plan": plan,
+        "count": len(todos),
+        "in_progress": sum(1 for t in todos if t["status"] == "in_progress"),
+        "completed": sum(1 for t in todos if t["status"] == "completed"),
+    }
+
+
 def propose_plan(ctx: AssistantActionContext) -> dict[str, Any]:
-    """Approve a multi-step plan (executed as a single confirm gate)."""
+    """Optional single-approval gate for a formal multi-step mutating plan."""
     title = str(ctx.input_payload.get("title") or "Plan").strip()[:200]
     steps = ctx.input_payload.get("steps") if isinstance(ctx.input_payload.get("steps"), list) else []
     if not steps:
@@ -205,19 +283,21 @@ def propose_plan(ctx: AssistantActionContext) -> dict[str, Any]:
     normalized = []
     for i, step in enumerate(steps[:20]):
         if isinstance(step, dict):
+            step_input = step.get("input") if isinstance(step.get("input"), dict) else {}
             normalized.append(
                 {
                     "id": i + 1,
                     "text": str(step.get("text") or step.get("description") or "")[:400],
                     "tool": str(step.get("tool") or "")[:80],
+                    "input": step_input,
                 }
             )
         else:
-            normalized.append({"id": i + 1, "text": str(step)[:400], "tool": ""})
+            normalized.append({"id": i + 1, "text": str(step)[:400], "tool": "", "input": {}})
     return {
         "ok": True,
         "approved": True,
         "title": title,
         "steps": normalized,
-        "message": "Plan approved by operator. Execute steps in order using tools.",
+        "message": "Plan recorded. Prefer operator.todo_write for live checklists; execute mutating tools with Confirm.",
     }

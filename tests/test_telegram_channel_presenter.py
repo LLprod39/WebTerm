@@ -163,7 +163,7 @@ def test_telegram_prompt_split_has_channel_rules_not_web_only_inventory():
     assert "Channel: telegram" in prompt
     assert "# Telegram" in prompt
     assert "no Web UI cards" in prompt or "Telegram messenger" in prompt
-    assert "# Web UI" in prompt
+    assert "On Web," in prompt or "Web," in prompt
     assert OPERATOR_CAPABILITIES_INTRO_RU in prompt
 
 
@@ -230,12 +230,12 @@ def test_mcp_and_skills_list_return_summary_not_raw_ids():
     assert mcp["ui_table"] is False
     assert "summary" in mcp
     assert "Kubernetes" in mcp["summary"]["mcp_names"]
-    assert "reply_hint" in mcp
+    assert "reply_hint" not in mcp
 
     skills = list_studio_skills(AssistantActionContext(user=user, input_payload={}))
     assert skills["ui_table"] is False
     assert "summary" in skills
-    assert "reply_hint" in skills
+    assert "reply_hint" not in skills
 
 
 def test_truncate_prefers_summary_envelope():
@@ -243,13 +243,11 @@ def test_truncate_prefers_summary_envelope():
         "ok": True,
         "result": {
             "ui_table": False,
-            "reply_hint": "Summarize briefly.",
             "summary": {"mcp_count": 2, "mcp_names": ["A", "B"]},
             "mcp_servers": [{"id": i, "name": f"s{i}", "blob": "x" * 500} for i in range(40)],
         },
     }
     text = truncate_tool_result(huge, max_chars=800)
-    assert "reply_hint" in text
     assert "summary" in text
     assert "…[truncated]" not in text or "mcp_count" in text
     payload = json.loads(text.split("…")[0] if text.endswith("…[rows omitted]") else text)
