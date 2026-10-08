@@ -60,6 +60,15 @@ export interface SettingsConfig {
   agent_llm_model: string;
   orchestrator_llm_provider: string;
   orchestrator_llm_model: string;
+  aux_llm_enabled?: boolean;
+  aux_llm_provider?: string;
+  aux_llm_model?: string;
+  aux_llm_base_url?: string;
+  aux_llm_timeout_seconds?: number;
+  aux_role_verifier_enabled?: boolean;
+  aux_role_intent_enabled?: boolean;
+  aux_role_summarizer_enabled?: boolean;
+  aux_role_safety_enabled?: boolean;
   claude_enabled: boolean;
   chat_model_gemini: string;
   chat_model_grok: string;
@@ -224,6 +233,19 @@ export async function saveSettings(config: Record<string, unknown>) {
   return apiFetch<{ success: boolean; message?: string }>("/api/settings/", {
     method: "POST",
     body: JSON.stringify(config),
+  });
+}
+
+export async function testAuxModelConnection() {
+  return apiFetch<{
+    ok: boolean;
+    provider?: string;
+    model?: string;
+    preview?: string;
+    error?: string;
+  }>("/api/settings/aux-model/test/", {
+    method: "POST",
+    body: JSON.stringify({}),
   });
 }
 

@@ -17,7 +17,15 @@ from core_ui.managed_secrets import delete_llm_api_key, has_llm_api_key, set_llm
 from core_ui.models import UserActivityLog
 from core_ui.services.settings_status import ldap_status_payload, selected_provider_readiness
 
-LLM_API_KEY_PROVIDERS = {"gemini", "grok", "openai", "claude", "ollama", "openrouter"}
+LLM_API_KEY_PROVIDERS = {
+    "gemini",
+    "grok",
+    "openai",
+    "claude",
+    "ollama",
+    "openrouter",
+    "openai_compatible",
+}
 DOMAIN_AUTH_SETTINGS_KEYS = {
     "domain_auth_enabled",
     "domain_auth_header",
@@ -142,6 +150,7 @@ def _api_key_status(config) -> dict:
             getattr(config, "ollama_base_url", "") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434"
         )
         or _has_api_key("ollama", "OLLAMA_API_KEY"),
+        "openai_compatible_set": _has_api_key("openai_compatible", "OPENAI_COMPATIBLE_API_KEY"),
         "cursor_set": bool(os.getenv("CURSOR_API_KEY")),
         "codex_set": bool(os.getenv("CODEX_API_KEY") or os.getenv("OPENAI_API_KEY")),
     }
@@ -216,6 +225,15 @@ def _settings_config_payload(config, delegate_ui: str) -> dict:
         "agent_llm_model": getattr(config, "agent_llm_model", "") or "",
         "orchestrator_llm_provider": getattr(config, "orchestrator_llm_provider", "") or "",
         "orchestrator_llm_model": getattr(config, "orchestrator_llm_model", "") or "",
+        "aux_llm_enabled": bool(getattr(config, "aux_llm_enabled", False)),
+        "aux_llm_provider": getattr(config, "aux_llm_provider", "") or "",
+        "aux_llm_model": getattr(config, "aux_llm_model", "") or "",
+        "aux_llm_base_url": getattr(config, "aux_llm_base_url", "") or "",
+        "aux_llm_timeout_seconds": int(getattr(config, "aux_llm_timeout_seconds", 8) or 8),
+        "aux_role_verifier_enabled": bool(getattr(config, "aux_role_verifier_enabled", True)),
+        "aux_role_intent_enabled": bool(getattr(config, "aux_role_intent_enabled", True)),
+        "aux_role_summarizer_enabled": bool(getattr(config, "aux_role_summarizer_enabled", True)),
+        "aux_role_safety_enabled": bool(getattr(config, "aux_role_safety_enabled", False)),
         "log_terminal_commands": getattr(config, "log_terminal_commands", True),
         "log_ai_assistant": getattr(config, "log_ai_assistant", True),
         "log_agent_runs": getattr(config, "log_agent_runs", True),
@@ -272,6 +290,15 @@ def _allowed_settings_keys() -> set[str]:
         "agent_llm_model",
         "orchestrator_llm_provider",
         "orchestrator_llm_model",
+        "aux_llm_enabled",
+        "aux_llm_provider",
+        "aux_llm_model",
+        "aux_llm_base_url",
+        "aux_llm_timeout_seconds",
+        "aux_role_verifier_enabled",
+        "aux_role_intent_enabled",
+        "aux_role_summarizer_enabled",
+        "aux_role_safety_enabled",
         "agent_model_ollama",
         "agent_model_openrouter",
         "openai_reasoning_effort",
@@ -360,6 +387,37 @@ def _normalize_settings_update(data: dict) -> JsonResponse | None:
         if think_mode not in {"", "off", "on", "low", "medium", "high"}:
             return JsonResponse({"success": False, "error": "Invalid ollama_think_mode"}, status=400)
         data["ollama_think_mode"] = think_mode
+    if "aux_llm_provider" in data and data["aux_llm_provider"] is not None:
+        provider = str(data["aux_llm_provider"]).strip().lower()
+        if provider and provider not in {
+            "ollama",
+            "openai",
+            "openai_compatible",
+            "claude",
+            "gemini",
+            "grok",
+            "openrouter",
+        }:
+            return JsonResponse({"success": False, "error": "Invalid aux_llm_provider"}, status=400)
+        data["aux_llm_provider"] = provider
+    if "aux_llm_base_url" in data and data["aux_llm_base_url"] is not None:
+        data["aux_llm_base_url"] = str(data["aux_llm_base_url"]).strip().rstrip("/")
+    if "aux_llm_timeout_seconds" in data and data["aux_llm_timeout_seconds"] is not None:
+        try:
+            data["aux_llm_timeout_seconds"] = max(2, min(int(data["aux_llm_timeout_seconds"]), 30))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "error": "Invalid aux_llm_timeout_seconds"}, status=400)
+    for bool_key in (
+        "aux_llm_enabled",
+        "aux_role_verifier_enabled",
+        "aux_role_intent_enabled",
+        "aux_role_summarizer_enabled",
+        "aux_role_safety_enabled",
+    ):
+        if bool_key in data and data[bool_key] is not None:
+            data[bool_key] = bool(data[bool_key])
+    if "aux_llm_model" in data and data["aux_llm_model"] is not None:
+        data["aux_llm_model"] = str(data["aux_llm_model"]).strip()
     return None
 
 
@@ -505,4 +563,27 @@ def api_settings_check(request):
         )
     except Exception as exc:
         logger.exception("api_settings_check error: %s", exc)
+        return internal_error_response(request, exc)
+
+
+@login_required
+@require_http_methods(["POST"])
+def api_settings_aux_model_test(request):
+    """Ping the configured auxiliary/utility model (admin AI routing only)."""
+    if not user_can_feature(request.user, "settings"):
+        return JsonResponse({"ok": False, "error": "Forbidden"}, status=403)
+    from asgiref.sync import async_to_sync
+
+    from core_ui.ai_model_policy import user_can_manage_ai_routing
+
+    if not user_can_manage_ai_routing(request.user):
+        return JsonResponse({"ok": False, "error": "Only admins can test the auxiliary model"}, status=403)
+    try:
+        from app.core.aux_model_roles import test_aux_connection
+
+        result = async_to_sync(test_aux_connection)()
+        status = 200 if result.get("ok") else 400
+        return JsonResponse(result, status=status)
+    except Exception as exc:
+        logger.exception("api_settings_aux_model_test error: %s", exc)
         return internal_error_response(request, exc)

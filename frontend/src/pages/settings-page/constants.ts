@@ -23,6 +23,16 @@ export const LLM_PROVIDERS = [
   { value: "ollama", label: "Ollama" },
 ];
 
+export const AUX_LLM_PROVIDERS = [
+  { value: "ollama", label: "Ollama (local)" },
+  { value: "openai_compatible", label: "OpenAI-compatible (LM Studio / vLLM)" },
+  { value: "openai", label: "OpenAI" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "grok", label: "Grok (xAI)" },
+  { value: "gemini", label: "Gemini (Google)" },
+  { value: "claude", label: "Claude (Anthropic)" },
+];
+
 export const AUTO_REASONING_VALUE = "__auto__";
 export const AUTO_OLLAMA_THINKING_VALUE = "__auto__";
 export const LLM_PROVIDER_VALUES = LLM_PROVIDERS.map((provider) => provider.value);
@@ -64,6 +74,7 @@ export const PROVIDER_API_STATUS_KEY: Record<string, string> = {
   claude: "claude_set",
   openrouter: "openrouter_set",
   ollama: "ollama_set",
+  openai_compatible: "openai_compatible_set",
 };
 
 export const API_KEY_PROVIDERS = [
@@ -73,6 +84,13 @@ export const API_KEY_PROVIDERS = [
   { value: "claude", name: "Claude", statusKey: "claude_set", envName: "ANTHROPIC_API_KEY", placeholder: "sk-ant-..." },
   { value: "openrouter", name: "OpenRouter", statusKey: "openrouter_set", envName: "OPENROUTER_API_KEY", placeholder: "sk-or-..." },
   { value: "ollama", name: "Ollama Cloud", statusKey: "ollama_cloud_set", envName: "OLLAMA_API_KEY", placeholder: "ollama key" },
+  {
+    value: "openai_compatible",
+    name: "OpenAI-compatible",
+    statusKey: "openai_compatible_set",
+    envName: "OPENAI_COMPATIBLE_API_KEY",
+    placeholder: "optional key",
+  },
 ];
 
 export const PROVIDER_METADATA: Record<

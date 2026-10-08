@@ -218,6 +218,12 @@ def get_ollama_base_urls(primary: str) -> list[str]:
     ordered: list[str] = []
     if sticky:
         ordered.append(normalize_ollama_base_url(sticky))
+    # Inside a Docker worker loopback is the container; try the Docker host first.
+    from app.core.docker_host_routing import route_loopback_url
+
+    routed_primary = route_loopback_url(primary, purpose="Ollama")
+    if routed_primary != primary:
+        ordered.append(routed_primary)
     ordered.append(primary)
     # Always keep localhost attempts (native Windows backend, or Ollama-in-WSL)
     for local in ("127.0.0.1", "localhost"):

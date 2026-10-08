@@ -13,6 +13,7 @@ from asgiref.sync import sync_to_async
 from django.conf import settings
 from loguru import logger
 
+from app.core.docker_host_routing import route_loopback_host
 from app.execution_policy import build_execution_policy_audit_metadata
 from app.sudo_policy import SUDO_POLICY_APPROVED, prepare_sudo_command
 from app.tools.activity_provider import get_tool_audit_context, log_tool_user_activity
@@ -159,8 +160,13 @@ class SSHConnectionManager:
                 elif not key_path:
                     options["password"] = password
 
+            connect_host = normalized_host
+            if not options.get("tunnel"):
+                connect_host = route_loopback_host(normalized_host, purpose="SSH")
+                if connect_host != normalized_host:
+                    options["host_key_alias"] = normalized_host
             conn = await asyncssh.connect(
-                host=normalized_host,
+                host=connect_host,
                 port=normalized_port,
                 username=username,
                 **options,

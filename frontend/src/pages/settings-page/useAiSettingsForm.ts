@@ -5,6 +5,7 @@ import { Bot, MessageSquare, Workflow } from "lucide-react";
 import {
   refreshModels,
   saveSettings,
+  testAuxModelConnection,
   type ModelsResponse,
   type SettingsConfig,
 } from "@/lib/api";
@@ -57,6 +58,18 @@ export function useAiSettingsForm({
   const [refreshing, setRefreshing] = useState(false);
   const [apiKeyDrafts, setApiKeyDrafts] = useState<Record<string, string>>({});
   const [savingApiKey, setSavingApiKey] = useState<string | null>(null);
+  const [auxEnabled, setAuxEnabled] = useState(false);
+  const [auxProvider, setAuxProvider] = useState("ollama");
+  const [auxModel, setAuxModel] = useState("");
+  const [auxBaseUrl, setAuxBaseUrl] = useState("http://127.0.0.1:11434");
+  const [auxTimeoutSeconds, setAuxTimeoutSeconds] = useState(8);
+  const [auxRoleVerifier, setAuxRoleVerifier] = useState(true);
+  const [auxRoleIntent, setAuxRoleIntent] = useState(true);
+  const [auxRoleSummarizer, setAuxRoleSummarizer] = useState(true);
+  const [auxRoleSafety, setAuxRoleSafety] = useState(false);
+  const [auxApiKeyDraft, setAuxApiKeyDraft] = useState("");
+  const [auxTesting, setAuxTesting] = useState(false);
+  const [auxTestMessage, setAuxTestMessage] = useState<string | null>(null);
 
   const hydrateAiForm = useCallback((config: SettingsConfig) => {
     const activeProvider = LLM_PROVIDER_VALUES.includes(config.internal_llm_provider || "")
@@ -78,6 +91,17 @@ export function useAiSettingsForm({
     setOllamaCloudBaseUrl(config.ollama_cloud_base_url || "https://ollama.com");
     setOllamaThinkMode(config.ollama_think_mode || AUTO_OLLAMA_THINKING_VALUE);
     setReasoningEffort(config.openai_reasoning_effort || AUTO_REASONING_VALUE);
+    setAuxEnabled(Boolean(config.aux_llm_enabled));
+    setAuxProvider(config.aux_llm_provider || "ollama");
+    setAuxModel(config.aux_llm_model || "");
+    setAuxBaseUrl(config.aux_llm_base_url || config.ollama_base_url || "http://127.0.0.1:11434");
+    setAuxTimeoutSeconds(Number(config.aux_llm_timeout_seconds) || 8);
+    setAuxRoleVerifier(config.aux_role_verifier_enabled !== false);
+    setAuxRoleIntent(config.aux_role_intent_enabled !== false);
+    setAuxRoleSummarizer(config.aux_role_summarizer_enabled !== false);
+    setAuxRoleSafety(Boolean(config.aux_role_safety_enabled));
+    setAuxApiKeyDraft("");
+    setAuxTestMessage(null);
   }, []);
 
   useEffect(() => {
@@ -202,6 +226,70 @@ export function useAiSettingsForm({
     reasoningEffort,
     setSaving,
   ]);
+
+  const onSaveAux = useCallback(async () => {
+    setSaving(true);
+    setAuxTestMessage(null);
+    try {
+      const keyProvider =
+        auxProvider === "openai_compatible"
+          ? "openai_compatible"
+          : auxProvider === "claude"
+            ? "claude"
+            : auxProvider;
+      const payload: Record<string, unknown> = {
+        aux_llm_enabled: auxEnabled,
+        aux_llm_provider: auxProvider,
+        aux_llm_model: auxModel,
+        aux_llm_base_url: auxBaseUrl,
+        aux_llm_timeout_seconds: auxTimeoutSeconds,
+        aux_role_verifier_enabled: auxRoleVerifier,
+        aux_role_intent_enabled: auxRoleIntent,
+        aux_role_summarizer_enabled: auxRoleSummarizer,
+        aux_role_safety_enabled: auxRoleSafety,
+      };
+      if (auxApiKeyDraft.trim()) {
+        payload.api_keys = { [keyProvider]: auxApiKeyDraft.trim() };
+      }
+      await saveSettings(payload);
+      setAuxApiKeyDraft("");
+      await queryClient.invalidateQueries({ queryKey: ["settings", "config"] });
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    auxApiKeyDraft,
+    auxBaseUrl,
+    auxEnabled,
+    auxModel,
+    auxProvider,
+    auxRoleIntent,
+    auxRoleSafety,
+    auxRoleSummarizer,
+    auxRoleVerifier,
+    auxTimeoutSeconds,
+    queryClient,
+    setSaving,
+  ]);
+
+  const onTestAux = useCallback(async () => {
+    setAuxTesting(true);
+    setAuxTestMessage(null);
+    try {
+      // Persist draft first so the test hits the intended endpoint.
+      await onSaveAux();
+      const result = await testAuxModelConnection();
+      setAuxTestMessage(
+        result.ok
+          ? `OK · ${result.provider || auxProvider} / ${result.model || auxModel}`
+          : result.error || "Connection failed",
+      );
+    } catch (error) {
+      setAuxTestMessage(error instanceof Error ? error.message : "Connection failed");
+    } finally {
+      setAuxTesting(false);
+    }
+  }, [auxModel, auxProvider, onSaveAux]);
 
   const onSave = useCallback(async () => {
     setSaving(true);
@@ -467,5 +555,29 @@ export function useAiSettingsForm({
     setApiKeyDraft,
     onSaveApiKey,
     onClearApiKey,
+    auxEnabled,
+    auxProvider,
+    auxModel,
+    auxBaseUrl,
+    auxTimeoutSeconds,
+    auxRoleVerifier,
+    auxRoleIntent,
+    auxRoleSummarizer,
+    auxRoleSafety,
+    auxApiKeyDraft,
+    auxTesting,
+    auxTestMessage,
+    setAuxEnabled,
+    setAuxProvider,
+    setAuxModel,
+    setAuxBaseUrl,
+    setAuxTimeoutSeconds,
+    setAuxRoleVerifier,
+    setAuxRoleIntent,
+    setAuxRoleSummarizer,
+    setAuxRoleSafety,
+    setAuxApiKeyDraft,
+    onSaveAux,
+    onTestAux,
   };
 }

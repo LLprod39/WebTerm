@@ -7,6 +7,7 @@ import { SettingsField, SettingsSectionActions } from "@/components/settings/Set
 import { cn } from "@/lib/utils";
 import type { SettingsConfig } from "@/lib/api";
 import { API_KEY_PROVIDERS, getProviderLabel, LLM_PROVIDERS } from "./constants";
+import { AuxModelSettings } from "./AuxModelSettings";
 import { OllamaRuntimeSettings } from "./OllamaRuntimeSettings";
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { PurposeModelSelector } from "./PurposeModelSelector";
@@ -201,6 +202,52 @@ export function AiSettingsPanel({ config, apiKeys, isAdmin, form }: AiSettingsPa
           />
         </div>
       </SectionCard>
+
+      <AuxModelSettings
+        disabled={modelControlsDisabled}
+        enabled={form.auxEnabled}
+        provider={form.auxProvider}
+        model={form.auxModel}
+        baseUrl={form.auxBaseUrl}
+        timeoutSeconds={form.auxTimeoutSeconds}
+        roleVerifier={form.auxRoleVerifier}
+        roleIntent={form.auxRoleIntent}
+        roleSummarizer={form.auxRoleSummarizer}
+        roleSafety={form.auxRoleSafety}
+        apiKeyDraft={form.auxApiKeyDraft}
+        apiKeySet={Boolean(
+          apiKeys?.[
+            form.auxProvider === "openai_compatible"
+              ? "openai_compatible_set"
+              : form.auxProvider === "claude"
+                ? "claude_set"
+                : form.auxProvider === "gemini"
+                  ? "gemini_set"
+                  : form.auxProvider === "grok"
+                    ? "grok_set"
+                    : form.auxProvider === "openai"
+                      ? "openai_set"
+                      : form.auxProvider === "openrouter"
+                        ? "openrouter_set"
+                        : "ollama_set"
+          ],
+        )}
+        saving={form.saving}
+        testing={form.auxTesting}
+        testMessage={form.auxTestMessage}
+        onEnabledChange={form.setAuxEnabled}
+        onProviderChange={form.setAuxProvider}
+        onModelChange={form.setAuxModel}
+        onBaseUrlChange={form.setAuxBaseUrl}
+        onTimeoutChange={form.setAuxTimeoutSeconds}
+        onRoleVerifierChange={form.setAuxRoleVerifier}
+        onRoleIntentChange={form.setAuxRoleIntent}
+        onRoleSummarizerChange={form.setAuxRoleSummarizer}
+        onRoleSafetyChange={form.setAuxRoleSafety}
+        onApiKeyDraftChange={form.setAuxApiKeyDraft}
+        onSave={form.onSaveAux}
+        onTest={form.onTestAux}
+      />
 
       <OllamaRuntimeSettings
         ollamaRoutingActive={form.ollamaRoutingActive}
