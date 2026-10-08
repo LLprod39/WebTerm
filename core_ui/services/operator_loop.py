@@ -42,15 +42,12 @@ from core_ui.services.operator_loop_prompt import (
     PLAN_CONTINUATION_NUDGE,
     PLAN_CONTINUATION_NUDGES,
     STEP_LIMIT_FINAL_REPORT_NUDGE,
-    TASK_CONTINUATION_NUDGE,
-    TASK_CONTINUATION_NUDGES,
     TOOL_RESULT_PREVIEW_CHARS,
     EventCallback,
     build_operator_system_prompt,
     messages_have_host_mention,
     messages_have_ssh_action_results,
     messages_only_inventory_so_far,
-    should_continue_after_inventory_only,
     should_goal_self_check,
     user_message_needs_ssh_actions,
 )
@@ -122,7 +119,6 @@ async def run_operator_loop(
 
     empty_retries = 0
     plan_continuation_nudges = 0
-    task_continuation_nudges = 0
     goal_self_checks = 0
     tools_executed_this_turn = False
     user_goal_text = str(getattr(user_message, "content", "") or "")
@@ -130,7 +126,7 @@ async def run_operator_loop(
     host_mention = messages_have_host_mention(user_goal_text)
     force_final_report = False
 
-    # Aux intent classifier augments keyword heuristics (never drops host-ops signal).
+    # Aux intent is advisory (logging / self-check flags only) — never gates tools.
     try:
         from app.core.aux_model_roles import classify_intent
 
@@ -472,32 +468,6 @@ async def run_operator_loop(
                     await _save_turn(turn, llm_messages=messages)
                     continue
 
-            # Keyword FALLBACK: host-ops + inventory-only (after self-check exhausted).
-            if (
-                needs_ssh_actions
-                and task_continuation_nudges < TASK_CONTINUATION_NUDGES
-                and should_continue_after_inventory_only(user_goal_text, live_messages)
-            ):
-                task_continuation_nudges += 1
-                logger.info(
-                    "operator loop: inventory-only keyword fallback {}, nudge {}/{}",
-                    turn.pk,
-                    task_continuation_nudges,
-                    TASK_CONTINUATION_NUDGES,
-                )
-                await _emit(
-                    on_event,
-                    {
-                        "type": "thinking",
-                        "iteration": iteration,
-                        "phase": "continue",
-                        "message": "Продолжаю: SSH-диагностика на хосте…",
-                    },
-                )
-                messages.append({"role": "user", "content": TASK_CONTINUATION_NUDGE})
-                await _save_turn(turn, llm_messages=messages)
-                continue
-
             # Final text-only response
             await _save_turn(turn, status=ChatTurnState.STATUS_DONE, llm_messages=messages, pending_tool_call={})
             if assistant_message:
@@ -575,20 +545,7 @@ async def run_operator_loop(
             break
 
         if tool_result_blocks:
-            # Model-driven continue: stream short progress while more work may remain.
-            if (
-                needs_ssh_actions or host_mention
-            ) and should_continue_after_inventory_only(user_goal_text, messages):
-                await _emit(
-                    on_event,
-                    {
-                        "type": "thinking",
-                        "iteration": iteration,
-                        "phase": "progress",
-                        "message": "Хост найден — собираю факты по SSH…",
-                    },
-                )
-            elif tools_executed_this_turn and not messages_have_ssh_action_results(messages):
+            if tools_executed_this_turn:
                 await _emit(
                     on_event,
                     {
@@ -600,7 +557,7 @@ async def run_operator_loop(
                 )
             continue
 
-        # No tool results and not parked — self-check / keyword fallback, then DONE.
+        # No tool results and not parked — aux/goal self-check, then DONE.
         live_messages = list(turn.llm_messages or messages)
         if should_goal_self_check(
             tools_executed=tools_executed_this_turn,
@@ -622,25 +579,6 @@ async def run_operator_loop(
                 },
             )
             messages.append({"role": "user", "content": GOAL_SELF_CHECK_NUDGE})
-            await _save_turn(turn, llm_messages=messages)
-            continue
-
-        if (
-            needs_ssh_actions
-            and task_continuation_nudges < TASK_CONTINUATION_NUDGES
-            and should_continue_after_inventory_only(user_goal_text, messages)
-        ):
-            task_continuation_nudges += 1
-            await _emit(
-                on_event,
-                {
-                    "type": "thinking",
-                    "iteration": iteration,
-                    "phase": "continue",
-                    "message": "Продолжаю: SSH-диагностика на хосте…",
-                },
-            )
-            messages.append({"role": "user", "content": TASK_CONTINUATION_NUDGE})
             await _save_turn(turn, llm_messages=messages)
             continue
 

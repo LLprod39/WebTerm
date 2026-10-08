@@ -28,15 +28,6 @@ def list_agents(ctx: AssistantActionContext) -> dict:
     total = len(agents)
     show_limit = 12
     slim = agents[:show_limit]
-    hint = (
-        "Summarize agents with «показаны N из M». Max ~8 names. "
-        "Do not dump full configs or say the answer was truncated. "
-        "Do not create or launch agents unless the operator explicitly asked to create or run one."
-    )
-    if getattr(ctx, "channel", "") == "telegram":
-        from core_ui.services.operator_channel import telegram_reply_hint
-
-        hint = telegram_reply_hint(show_in_chat=True)
     return {
         "ok": True,
         "ui_table": False,
@@ -53,7 +44,6 @@ def list_agents(ctx: AssistantActionContext) -> dict:
                 if isinstance(item, dict)
             ],
         },
-        "reply_hint": hint,
         "target_url": "/agents",
     }
 

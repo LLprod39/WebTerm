@@ -6,7 +6,6 @@ from typing import Any
 
 from app.assistant_actions import AssistantActionContext, AssistantActionError
 from core_ui.access import feature_allowed_for_user
-from core_ui.services.operator_channel import telegram_reply_hint
 from servers.operator.tools_common import _int_arg, _server_for_user
 from servers.operator.tools_hints import normalize_host_hint, server_matches_query
 from servers.views.server_helpers import _accessible_servers_queryset
@@ -149,19 +148,6 @@ def list_servers(ctx: AssistantActionContext) -> dict[str, Any]:
         "status_counts": status_counts,
         "note": " ".join(model_notes) if model_notes else None,
         "ui_note": " ".join(ui_notes) if ui_notes else None,
-        "reply_hint": (
-            telegram_reply_hint(show_in_chat=True)
-            if getattr(ctx, "channel", "") == "telegram" and show_in_chat
-            else (
-                "UI card attached. Answer ≤1 sentence with counts only. Zero host-name bullets."
-                if show_in_chat
-                else (
-                    telegram_reply_hint(show_in_chat=False)
-                    if getattr(ctx, "channel", "") == "telegram"
-                    else None
-                )
-            )
-        ),
         "ui_table": show_in_chat,
         "default_expanded": False,
         "target_url": "/servers",
