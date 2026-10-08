@@ -215,6 +215,34 @@ async def process_tool_calls(
                     from core_ui.services.operator_web_tools import attach_web_sources
 
                     await sync_to_async(attach_web_sources)(assistant_message.pk, result)
+                if action_type in {"operator.todo_write", "todo_write"}:
+                    from core_ui.services.operator_plan import normalize_plan, save_plan_to_message
+
+                    body = result.get("result") if isinstance(result.get("result"), dict) else result
+                    raw_plan = body.get("plan") if isinstance(body, dict) else None
+                    plan = normalize_plan(raw_plan if isinstance(raw_plan, dict) else None)
+                    if plan is None and isinstance(raw_plan, dict):
+                        plan = raw_plan
+                    if plan:
+                        await sync_to_async(save_plan_to_message)(assistant_message, plan)
+                        await _set_assistant_metadata(
+                            assistant_message.pk,
+                            {
+                                "source": "operator_loop",
+                                "turn_id": turn.pk,
+                                "plan": plan,
+                                "todos": body.get("todos") if isinstance(body, dict) else [],
+                            },
+                        )
+                        await _emit(
+                            on_event,
+                            {
+                                "type": "plan_update",
+                                "turn_id": turn.pk,
+                                "plan": plan,
+                                "status": plan.get("status"),
+                            },
+                        )
             content = truncate_tool_result(result, max_chars=TOOL_RESULT_PREVIEW_CHARS)
             tool_result_blocks.append({"type": "tool_result", "tool_use_id": tool_id, "content": content})
             # Side-console payload for chat UI (SSH dock)
