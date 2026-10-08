@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from asgiref.sync import sync_to_async
 from loguru import logger
 
 IntentKind = Literal["chitchat", "host_task", "metrics", "inventory", "unknown"]
@@ -159,6 +160,7 @@ async def _complete_openai_compatible_json(
     system_prompt: str,
     user_prompt: str,
     timeout: float,
+    disable_reasoning: bool = False,
 ) -> str:
     import aiohttp
 
@@ -175,6 +177,9 @@ async def _complete_openai_compatible_json(
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }
+    if disable_reasoning:
+        # Ollama thinking models (qwen3.x etc.) otherwise reason for 15-20s per call.
+        payload["reasoning_effort"] = "none"
     timeout_cfg = aiohttp.ClientTimeout(total=timeout)
     async with (
         aiohttp.ClientSession(timeout=timeout_cfg) as session,
@@ -234,7 +239,7 @@ async def _call_aux_json(
         return None, "fallback"
     timeout = aux_timeout_seconds(cfg)
     try:
-        provider, model, api_url, api_key = _resolve_aux_endpoint(cfg)
+        provider, model, api_url, api_key = await sync_to_async(_resolve_aux_endpoint, thread_sensitive=True)(cfg)
     except Exception as exc:  # noqa: BLE001
         logger.info("aux_role role={} source=fallback reason=resolve_error err={}", role, exc)
         return None, "fallback"
@@ -244,6 +249,7 @@ async def _call_aux_json(
             text = await asyncio.wait_for(
                 _complete_openai_compatible_json(
                     api_url=api_url,
+                    disable_reasoning=provider == "ollama",
                     api_key=api_key,
                     model=model,
                     system_prompt=system_prompt,
@@ -436,12 +442,13 @@ async def test_aux_connection() -> dict[str, Any]:
     if not aux_is_ready(cfg):
         return {"ok": False, "error": "aux_llm_not_configured"}
     timeout = aux_timeout_seconds(cfg)
-    provider, model, api_url, api_key = _resolve_aux_endpoint(cfg)
+    provider, model, api_url, api_key = await sync_to_async(_resolve_aux_endpoint, thread_sensitive=True)(cfg)
     try:
         if api_url:
             text = await asyncio.wait_for(
                 _complete_openai_compatible_json(
                     api_url=api_url,
+                    disable_reasoning=provider == "ollama",
                     api_key=api_key,
                     model=model,
                     system_prompt='Reply JSON only: {"ok":true}',
