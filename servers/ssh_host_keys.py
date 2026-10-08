@@ -8,6 +8,7 @@ import asyncssh
 from asgiref.sync import sync_to_async
 from django.utils import timezone
 
+from app.core.docker_host_routing import route_loopback_host
 from servers.models import Server
 from servers.services.pilot_destination_policy import (
     validate_pilot_ssh_destination,
@@ -153,21 +154,28 @@ def build_server_connect_kwargs(
 ) -> dict[str, Any]:
     host, port = parse_server_host_port(server)
     validate_pilot_ssh_destination(host, port)
+    tunnel = validated_pilot_network_tunnel(getattr(server, "network_config", None))
+    # Inside a Docker worker, loopback means the container itself; reach the
+    # host's sshd via the Docker host alias.  Not applied through a bastion
+    # (loopback is then relative to the bastion).
+    connect_host = host if tunnel else route_loopback_host(host, purpose=f"SSH (server {server.pk})")
     kwargs: dict[str, Any] = {
-        "host": host,
+        "host": connect_host,
         "port": port,
         "username": server.username,
         "known_hosts": known_hosts,
         "connect_timeout": connect_timeout,
         "login_timeout": login_timeout,
     }
+    if connect_host != host:
+        # Trusted host keys are recorded for the configured host name.
+        kwargs["host_key_alias"] = host
 
     if keepalive_interval is not None:
         kwargs["keepalive_interval"] = keepalive_interval
     if keepalive_count_max is not None:
         kwargs["keepalive_count_max"] = keepalive_count_max
 
-    tunnel = validated_pilot_network_tunnel(getattr(server, "network_config", None))
     if tunnel:
         kwargs["tunnel"] = tunnel
 
@@ -225,11 +233,11 @@ async def fetch_server_host_key(
     connect_timeout: int = 10,
 ) -> dict[str, str]:
     validate_pilot_ssh_destination(host, port)
+    tunnel = validated_pilot_network_tunnel(network_config)
     kwargs: dict[str, Any] = {
-        "host": host,
+        "host": host if tunnel else route_loopback_host(host, purpose="SSH host-key probe"),
         "port": port,
     }
-    tunnel = validated_pilot_network_tunnel(network_config)
     if tunnel:
         kwargs["tunnel"] = tunnel
 

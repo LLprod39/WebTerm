@@ -6,9 +6,15 @@ import time
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from app.agent_kernel.sandbox.ephemeral_runner import AgentCommandResult, execute_ephemeral_ssh_command
+from app.agent_kernel.sandbox.ephemeral_runner import (
+    AgentCommandResult,
+    agent_command_uses_docker,
+    execute_ephemeral_ssh_command,
+)
+from app.core.docker_host_routing import route_loopback_host
 from app.observability import record_ssh_command, start_span
 from servers.services.ssh_connection import get_server_connect_kwargs
 from servers.ssh_host_keys import get_server_trusted_host_keys
@@ -29,6 +35,26 @@ def _known_hosts_text(server: Any, connect_kwargs: dict[str, Any]) -> str:
     )
 
 
+def _route_for_runner_container(connect_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """The runner is its own bridge-network container: loopback is never the target host."""
+    if connect_kwargs.get("tunnel"):
+        return connect_kwargs
+    network = str(getattr(settings, "AGENT_COMMAND_DOCKER_NETWORK", "bridge") or "bridge").strip().lower()
+    if network in {"host", "none"}:
+        return connect_kwargs
+    try:
+        uses_docker = agent_command_uses_docker()
+    except Exception:  # noqa: BLE001 - runtime errors surface later in execute
+        return connect_kwargs
+    if not uses_docker:
+        return connect_kwargs
+    host = str(connect_kwargs.get("host") or "")
+    routed = route_loopback_host(host, force=True, purpose="agent-runner SSH")
+    if routed == host:
+        return connect_kwargs
+    return {**connect_kwargs, "host": routed}
+
+
 async def run_agent_command(
     server: Any,
     command: str,
@@ -37,7 +63,7 @@ async def run_agent_command(
     input_text: str | None = None,
     timeout_seconds: int | None = None,
 ) -> AgentCommandResult:
-    resolved_connect_kwargs = connect_kwargs or await get_server_connect_kwargs(server)
+    resolved_connect_kwargs = _route_for_runner_container(connect_kwargs or await get_server_connect_kwargs(server))
     private_key = ""
     if str(getattr(server, "auth_method", "") or "") in {"key", "key_password"}:
         private_key = await sync_to_async(get_server_private_key_text, thread_sensitive=True)(server)

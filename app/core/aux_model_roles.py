@@ -99,11 +99,13 @@ def _resolve_aux_endpoint(config) -> tuple[str, str, str, str]:
     model = str(getattr(config, "aux_llm_model", "") or "").strip()
     base = str(getattr(config, "aux_llm_base_url", "") or "").strip().rstrip("/")
 
+    from app.core.docker_host_routing import route_loopback_url
     from app.core.llm_secrets import get_managed_llm_api_key
 
     if provider == "ollama":
         if not base:
             base = str(getattr(config, "ollama_base_url", "") or "http://127.0.0.1:11434").rstrip("/")
+        base = route_loopback_url(base, purpose="aux model")
         api_url = f"{base}/v1/chat/completions"
         api_key = (get_managed_llm_api_key("ollama") or "").strip()
         return provider, model, api_url, api_key
@@ -111,6 +113,7 @@ def _resolve_aux_endpoint(config) -> tuple[str, str, str, str]:
     if provider == "openai_compatible":
         if not base:
             raise ValueError("aux_llm_base_url required for openai_compatible")
+        base = route_loopback_url(base, purpose="aux model")
         api_url = f"{base}/v1/chat/completions" if not base.endswith("/chat/completions") else base
         if not api_url.endswith("/chat/completions"):
             api_url = f"{base}/v1/chat/completions"
