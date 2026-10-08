@@ -90,6 +90,7 @@
     section[data-document-role="page"] {
       width: 1440px;
       height: 900px;
+      max-height: 900px;
       position: relative;
       background: hsl(var(--background));
       overflow: hidden;
@@ -1694,200 +1695,272 @@
 </section>
 
 <!-- ═══════════════════════════════════════════════════════════════════
-     СТРАНИЦА 6: ДИЗАЙН-КИТ (палитра, типографика, компоненты)
+     СТРАНИЦА 6: КИТ – ПАЛИТРА И ТИПОГРАФИКА
      ═══════════════════════════════════════════════════════════════════ -->
-<section data-document-role="page" data-label="Дизайн-кит WebTerm">
-  <div style="padding: 40px; background: hsl(var(--background)); height: 100%; overflow-y: auto;">
-    <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 12px; color: hsl(var(--foreground));">
+<section data-document-role="page" data-label="Кит: палитра и типографика">
+  <div style="padding: 32px 40px; background: hsl(var(--background));">
+    <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 6px; color: hsl(var(--foreground));">
       Дизайн-кит WebTerm
     </h1>
-    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 40px; font-size: 14px;">
-      Цвета, типографика и компоненты интерфейса
+    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 24px; font-size: 12px;">
+      Часть 1: Цвета и типографика
     </p>
 
     <!-- Цветовая палитра -->
-    <div style="margin-bottom: 48px;">
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Цветовая палитра
       </h2>
       
-      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--primary)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Primary</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(20 78% 56%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--primary)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Primary</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(20 78% 56%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--ai)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">AI Accent</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(175 50% 48%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--ai)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">AI Accent</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(175 50% 48%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--success)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Success</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(152 42% 46%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--success)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Success</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(152 42% 46%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--warning)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Warning</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(32 90% 52%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--warning)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Warning</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(32 90% 52%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--destructive)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Destructive</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(0 72% 52%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--destructive)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Destructive</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(0 72% 52%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Background</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 14% 8%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Background</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 14% 8%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Card</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 12% 11%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Card</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 12% 11%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--muted)); border: 1px solid hsl(var(--border)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Muted</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 10% 14%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--muted)); border: 1px solid hsl(var(--border)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Muted</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 10% 14%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--foreground)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Foreground</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(36 28% 92%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--foreground)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Foreground</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(36 28% 92%)</div>
         </div>
 
         <div>
-          <div style="width: 100%; height: 80px; background: hsl(var(--border)); border: 1px solid hsl(var(--border-strong)); border-radius: 8px; margin-bottom: 8px;"></div>
-          <div style="font-size: 11px; font-weight: 600; margin-bottom: 2px;">Border</div>
-          <div style="font-size: 10px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 12% 20%)</div>
+          <div style="width: 100%; height: 56px; background: hsl(var(--border)); border: 1px solid hsl(var(--border-strong)); border-radius: 6px; margin-bottom: 5px;"></div>
+          <div style="font-size: 9px; font-weight: 600; margin-bottom: 1px;">Border</div>
+          <div style="font-size: 8px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">hsl(24 12% 20%)</div>
         </div>
       </div>
     </div>
 
     <!-- Типографика -->
-    <div style="margin-bottom: 48px;">
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+    <div>
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Типографика
       </h2>
 
-      <div style="display: grid; gap: 16px;">
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px;">
+      <div style="display: grid; gap: 10px;">
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 5px;">
             Display · Inter 700
           </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
-            28px / 700 / -0.02em tracking
-          </div>
-        </div>
-
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px;">
-            H1 Heading · Inter 700
-          </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
             22px / 700 / -0.02em tracking
           </div>
         </div>
 
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 8px;">
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 5px;">
+            H1 Heading · Inter 700
+          </div>
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+            18px / 700 / -0.02em tracking
+          </div>
+        </div>
+
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-family: var(--font-display); font-size: 15px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 5px;">
             H2 Heading · Inter 600
           </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
-            18px / 600 / -0.02em tracking
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+            15px / 600 / -0.02em tracking
           </div>
         </div>
 
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-size: 13px; font-weight: 400; line-height: 1.6; margin-bottom: 8px;">
-            Body Text · Inter 400 – Основной текст интерфейса для описаний, параграфов и длинного контента.
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-size: 13px; font-weight: 400; line-height: 1.4; margin-bottom: 5px;">
+            Body Text · Inter 400 – Основной текст интерфейса
           </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
-            13px / 400 / line-height 1.6
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+            13px / 400 / line-height 1.4
           </div>
         </div>
 
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 8px;">
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px;">
             LABEL · INTER 600
           </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
-            11px / 600 / uppercase / 0.12em tracking
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+            11px / 600 / uppercase / 0.12em
           </div>
         </div>
 
-        <div style="padding: 16px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px;">
-          <div style="font-family: var(--font-mono); font-size: 13px; margin-bottom: 8px;">
+        <div style="padding: 12px; background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 6px;">
+          <div style="font-family: var(--font-mono); font-size: 12px; margin-bottom: 5px;">
             Monospace · IBM Plex Mono 400
           </div>
-          <div style="font-size: 11px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
-            13px / 400 / used in terminal & code
+          <div style="font-size: 9px; font-family: var(--font-mono); color: hsl(var(--muted-foreground));">
+            12px / 400 / terminal & code
           </div>
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     СТРАНИЦА 7: КИТ – КНОПКИ И ФОРМЫ
+     ═══════════════════════════════════════════════════════════════════ -->
+<section data-document-role="page" data-label="Кит: кнопки и формы">
+  <div style="padding: 32px 40px; background: hsl(var(--background));">
+    <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 6px; color: hsl(var(--foreground));">
+      Дизайн-кит WebTerm
+    </h1>
+    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 24px; font-size: 12px;">
+      Часть 2: Кнопки, инпуты и формы
+    </p>
 
     <!-- Кнопки -->
-    <div style="margin-bottom: 48px;">
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+    <div style="margin-bottom: 28px;">
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Кнопки
       </h2>
       
-      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center;">
-        <button class="btn btn-primary">Primary Button</button>
-        <button class="btn btn-secondary">Secondary Button</button>
-        <button class="btn btn-outline">Outline Button</button>
-        <button class="btn btn-ghost">Ghost Button</button>
-        <button class="btn btn-primary btn-small">Small Button</button>
-        <button class="btn btn-primary btn-icon">
-          <svg class="icon" viewBox="0 0 24 24">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 10px;">
+          Варианты
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button class="btn btn-primary">Primary</button>
+          <button class="btn btn-secondary">Secondary</button>
+          <button class="btn btn-outline">Outline</button>
+          <button class="btn btn-ghost">Ghost</button>
+          <button class="btn btn-primary" style="opacity: 0.5; cursor: not-allowed;">Disabled</button>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 10px;">
+          Размеры
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button class="btn btn-primary" style="height: 40px; padding: 0 18px; font-size: 13px;">Large</button>
+          <button class="btn btn-primary">Default</button>
+          <button class="btn btn-primary btn-small">Small</button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 10px;">
+          С иконками
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">
+          <button class="btn btn-primary">
+            <svg class="icon" viewBox="0 0 24 24">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Добавить
+          </button>
+          <button class="btn btn-outline">
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            Поиск
+          </button>
+          <button class="btn btn-primary btn-icon">
+            <svg class="icon" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/>
+            </svg>
+          </button>
+          <button class="btn btn-secondary btn-icon">
+            <svg class="icon" viewBox="0 0 24 24">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
-    <!-- Инпуты и формы -->
-    <div style="margin-bottom: 48px;">
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+    <!-- Инпуты -->
+    <div>
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Инпуты и формы
       </h2>
       
-      <div style="display: grid; gap: 16px; max-width: 400px;">
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
         <div>
-          <label style="display: block; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 6px;">
-            TEXT INPUT
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Text Input
           </label>
           <input class="input" type="text" placeholder="Введите текст..." />
         </div>
 
         <div>
-          <label style="display: block; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 6px;">
-            PASSWORD INPUT
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Password
           </label>
           <input class="input" type="password" placeholder="••••••••" />
         </div>
 
         <div>
-          <label style="display: block; font-size: 12px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 6px;">
-            SELECT
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Email
+          </label>
+          <input class="input" type="email" placeholder="email@example.com" />
+        </div>
+
+        <div>
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Number
+          </label>
+          <input class="input" type="number" placeholder="0" />
+        </div>
+
+        <div style="grid-column: span 2;">
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Select
           </label>
           <div style="position: relative;">
             <select class="input" style="appearance: none; padding-right: 36px;">
               <option>Выберите опцию</option>
               <option>Опция 1</option>
               <option>Опция 2</option>
+              <option>Опция 3</option>
             </select>
             <svg class="icon" viewBox="0 0 24 24" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); pointer-events: none;">
               <polyline points="6 9 12 15 18 9"/>
@@ -1895,65 +1968,228 @@
           </div>
         </div>
 
-        <div>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-            <input type="checkbox" checked style="width: 16px; height: 16px; cursor: pointer;" />
-            <span style="font-size: 13px;">Checkbox label</span>
+        <div style="grid-column: span 2;">
+          <label style="display: block; font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Textarea
           </label>
+          <textarea class="input" style="min-height: 70px; resize: vertical;" placeholder="Многострочный текст..."></textarea>
+        </div>
+
+        <div style="grid-column: span 2;">
+          <div style="font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.08em;">
+            Checkboxes & Radio
+          </div>
+          <div style="display: flex; gap: 20px;">
+            <label style="display: flex; align-items: center; gap: 7px; cursor: pointer;">
+              <input type="checkbox" checked style="width: 15px; height: 15px; cursor: pointer;" />
+              <span style="font-size: 12px;">Checkbox 1</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 7px; cursor: pointer;">
+              <input type="checkbox" style="width: 15px; height: 15px; cursor: pointer;" />
+              <span style="font-size: 12px;">Checkbox 2</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 7px; cursor: pointer;">
+              <input type="radio" name="radio-group" checked style="width: 15px; height: 15px; cursor: pointer;" />
+              <span style="font-size: 12px;">Radio 1</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 7px; cursor: pointer;">
+              <input type="radio" name="radio-group" style="width: 15px; height: 15px; cursor: pointer;" />
+              <span style="font-size: 12px;">Radio 2</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
+  </div>
+</section>
 
-    <!-- Бейджи и статусы -->
-    <div style="margin-bottom: 48px;">
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+<!-- ═══════════════════════════════════════════════════════════════════
+     СТРАНИЦА 8: КИТ – КОМПОНЕНТЫ
+     ═══════════════════════════════════════════════════════════════════ -->
+<section data-document-role="page" data-label="Кит: компоненты">
+  <div style="padding: 32px 40px; background: hsl(var(--background));">
+    <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 6px; color: hsl(var(--foreground));">
+      Дизайн-кит WebTerm
+    </h1>
+    <p style="color: hsl(var(--muted-foreground)); margin-bottom: 24px; font-size: 12px;">
+      Часть 3: Бейджи, карточки, таблицы и компоненты
+    </p>
+
+    <!-- Бейджи -->
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Бейджи и статусы
       </h2>
       
-      <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 20px;">
-        <span class="badge badge-primary">Primary</span>
-        <span class="badge badge-success">Success</span>
-        <span class="badge badge-warning">Warning</span>
-        <span class="badge badge-secondary">Secondary</span>
-        <span class="badge badge-secondary" style="text-transform: none;">No uppercase</span>
+      <div style="margin-bottom: 14px;">
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 8px;">
+          Бейджи
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 9px; align-items: center;">
+          <span class="badge badge-primary">Primary</span>
+          <span class="badge badge-success">Success</span>
+          <span class="badge badge-warning">Warning</span>
+          <span class="badge badge-secondary">Secondary</span>
+          <span class="badge badge-secondary" style="background: hsl(var(--destructive) / 0.12); border-color: hsl(var(--destructive) / 0.4); color: hsl(var(--destructive));">Error</span>
+          <span class="badge badge-secondary" style="text-transform: none;">No uppercase</span>
+        </div>
       </div>
 
-      <div style="display: flex; gap: 20px; align-items: center;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="status-dot status-online"></div>
-          <span style="font-size: 13px;">Онлайн</span>
+      <div>
+        <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 8px;">
+          Статусные индикаторы
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="status-dot status-offline"></div>
-          <span style="font-size: 13px;">Офлайн</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="status-dot status-unknown"></div>
-          <span style="font-size: 13px;">Неизвестно</span>
+        <div style="display: flex; gap: 18px; align-items: center;">
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div class="status-dot status-online"></div>
+            <span style="font-size: 12px;">Онлайн</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div class="status-dot status-offline"></div>
+            <span style="font-size: 12px;">Офлайн</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 7px;">
+            <div class="status-dot status-unknown"></div>
+            <span style="font-size: 12px;">Неизвестно</span>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- Карточки -->
-    <div>
-      <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 20px; color: hsl(var(--foreground));">
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
         Карточки
       </h2>
       
-      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
-        <div class="card">
-          <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Обычная карточка</h3>
-          <p style="font-size: 13px; color: hsl(var(--muted-foreground)); line-height: 1.6;">
-            Стандартная карточка с заголовком и текстом. Используется для группировки контента.
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+        <div class="card card-compact" style="padding: 14px;">
+          <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 9px;">
+            <div class="icon-box" style="width: 26px; height: 26px;">
+              <svg class="icon" viewBox="0 0 24 24" style="width: 13px; height: 13px;">
+                <rect x="2" y="2" width="20" height="8" rx="2"/>
+                <rect x="2" y="14" width="20" height="8" rx="2"/>
+              </svg>
+            </div>
+            <div style="font-weight: 600; font-size: 12px;">Сервер</div>
+          </div>
+          <p style="font-size: 11px; color: hsl(var(--muted-foreground)); line-height: 1.4;">
+            Карточка с иконкой
           </p>
         </div>
 
-        <div class="card card-compact">
-          <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 8px;">Компактная карточка</h3>
-          <p style="font-size: 13px; color: hsl(var(--muted-foreground)); line-height: 1.6;">
-            Карточка с меньшими отступами для плотного расположения элементов.
+        <div class="card card-compact" style="padding: 14px;">
+          <div style="font-weight: 600; font-size: 12px; margin-bottom: 7px;">Простая карточка</div>
+          <p style="font-size: 11px; color: hsl(var(--muted-foreground)); line-height: 1.4;">
+            Минималистичная карточка
           </p>
         </div>
+
+        <div class="card card-compact" style="padding: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px;">
+            <div style="font-weight: 600; font-size: 12px;">С бейджем</div>
+            <span class="badge badge-success" style="font-size: 8px; padding: 2px 5px;">Активно</span>
+          </div>
+          <p style="font-size: 11px; color: hsl(var(--muted-foreground)); line-height: 1.4;">
+            Карточка со статусом
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar Items -->
+    <div style="margin-bottom: 24px;">
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
+        Элементы сайдбара
+      </h2>
+      
+      <div style="max-width: 220px;">
+        <a class="sidebar-item" style="padding: 7px 10px; margin-bottom: 3px;">
+          <svg class="icon" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <span style="font-size: 12px;">Обычный пункт</span>
+        </a>
+        
+        <a class="sidebar-item active" style="padding: 7px 10px; margin-bottom: 3px;">
+          <svg class="icon" viewBox="0 0 24 24">
+            <rect x="2" y="2" width="20" height="8" rx="2"/>
+            <rect x="2" y="14" width="20" height="8" rx="2"/>
+          </svg>
+          <span style="font-size: 12px;">Активный пункт</span>
+        </a>
+        
+        <a class="sidebar-item" style="padding: 7px 10px;">
+          <svg class="icon" viewBox="0 0 24 24">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+          </svg>
+          <span style="font-size: 12px;">Обычный пункт</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div>
+      <h2 style="font-size: 14px; font-weight: 600; margin-bottom: 12px; color: hsl(var(--foreground));">
+        Таблица
+      </h2>
+      
+      <div style="border: 1px solid hsl(var(--border)); border-radius: var(--radius); overflow: hidden;">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="padding: 10px 14px; font-size: 10px;">Название</th>
+              <th style="padding: 10px 14px; font-size: 10px;">Статус</th>
+              <th style="padding: 10px 14px; font-size: 10px;">Значение</th>
+              <th style="padding: 10px 14px; font-size: 10px;">Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 9px 14px; font-weight: 600; font-size: 12px;">Элемент 1</td>
+              <td style="padding: 9px 14px;"><span class="badge badge-success" style="font-size: 8px; padding: 2px 5px;">Активен</span></td>
+              <td style="padding: 9px 14px; font-family: var(--font-mono); font-size: 11px;">42</td>
+              <td style="padding: 9px 14px;">
+                <button class="btn btn-ghost btn-icon btn-small" style="width: 28px; height: 28px;">
+                  <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 9px 14px; font-weight: 600; font-size: 12px;">Элемент 2</td>
+              <td style="padding: 9px 14px;"><span class="badge badge-warning" style="font-size: 8px; padding: 2px 5px;">Внимание</span></td>
+              <td style="padding: 9px 14px; font-family: var(--font-mono); font-size: 11px;">87</td>
+              <td style="padding: 9px 14px;">
+                <button class="btn btn-ghost btn-icon btn-small" style="width: 28px; height: 28px;">
+                  <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 9px 14px; font-weight: 600; font-size: 12px;">Элемент 3</td>
+              <td style="padding: 9px 14px;"><span class="badge badge-secondary" style="font-size: 8px; padding: 2px 5px;">Офлайн</span></td>
+              <td style="padding: 9px 14px; font-family: var(--font-mono); font-size: 11px;">—</td>
+              <td style="padding: 9px 14px;">
+                <button class="btn btn-ghost btn-icon btn-small" style="width: 28px; height: 28px;">
+                  <svg class="icon" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
